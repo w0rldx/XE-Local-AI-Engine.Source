@@ -4,14 +4,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.HostAgent;
 
+/// <summary>
+///     Application service for auto connect background behavior.
+/// </summary>
 public sealed class AutoConnectBackgroundService : BackgroundService
 {
     private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(2);
-    private readonly ConnectionState _connectionState;
-    private readonly IHostAgentReadinessClient _hostAgentReadinessClient;
 
     private readonly IWorkerHubConnection _hubConnection;
     private readonly ILogger<AutoConnectBackgroundService> _logger;
@@ -22,8 +23,6 @@ public sealed class AutoConnectBackgroundService : BackgroundService
 
     public AutoConnectBackgroundService(IWorkerHubConnection hubConnection,
         ITokenStore tokenStore,
-        IHostAgentReadinessClient hostAgentReadinessClient,
-        ConnectionState connectionState,
         IWorkerEventDispatcher workerEventDispatcher,
         IHostApplicationLifetime applicationLifetime,
         IOptions<CentralPlatformOptions> options,
@@ -31,8 +30,6 @@ public sealed class AutoConnectBackgroundService : BackgroundService
     {
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _hostAgentReadinessClient = hostAgentReadinessClient ?? throw new ArgumentNullException(nameof(hostAgentReadinessClient));
-        _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
         _workerEventDispatcher = workerEventDispatcher ?? throw new ArgumentNullException(nameof(workerEventDispatcher));
         ArgumentNullException.ThrowIfNull(applicationLifetime);
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -85,11 +82,6 @@ public sealed class AutoConnectBackgroundService : BackgroundService
         {
             try
             {
-                if (!await WaitForBootstrapModelAsync(retryPolicy, linkedToken).ConfigureAwait(false))
-                {
-                    return;
-                }
-
                 _logger.LogInformation("Connecting to Central Platform automatically (attempt {Attempt}{AttemptSuffix}).",
                     attempt + 1,
                     options.ReconnectMaxAttempts == 0 ? string.Empty : $"/{options.ReconnectMaxAttempts}");
@@ -130,34 +122,6 @@ public sealed class AutoConnectBackgroundService : BackgroundService
         }
 
         _logger.LogError("Auto-connect failed after exhausting the configured initial-connect retry policy. Connect manually via the dashboard.");
-    }
-
-    private async Task<bool> WaitForBootstrapModelAsync(WorkerReconnectPolicy retryPolicy, CancellationToken cancellationToken)
-    {
-        var attempt = 0;
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            if (await _hostAgentReadinessClient.IsBootstrapModelReadyAsync(cancellationToken).ConfigureAwait(false))
-            {
-                return true;
-            }
-
-            _connectionState.TransitionTo(WorkerConnectionState.PreparingModel, "Preparing bootstrap model before platform connection.");
-            var delay = retryPolicy.GetDelay(attempt);
-            if (delay is null)
-            {
-                _logger.LogError("Bootstrap model did not become ready before exhausting the configured startup-gate retry policy.");
-                return false;
-            }
-
-            _logger.LogInformation("Bootstrap model is not ready. WorkerHub connection remains gated; retrying in {DelayMilliseconds}ms.",
-                delay.Value.TotalMilliseconds);
-
-            await Task.Delay(delay.Value, cancellationToken).ConfigureAwait(false);
-            attempt++;
-        }
-
-        return false;
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

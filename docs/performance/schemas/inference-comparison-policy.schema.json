@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xe-local-ai-engine.local/schemas/inference-comparison-policy.schema.json",
+  "title": "Inference comparison policy",
+  "description": "Version 1 policy for gating trusted command aggregates in two inference benchmark evidence artifacts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "rules"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "policy_id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "allowed_identity_changes": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "enum": ["framework", "runtime"] }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command", "metric", "statistic", "kind", "threshold_percent"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+        },
+        "command": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+        },
+        "metric": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+        },
+        "statistic": { "enum": ["median", "p95"] },
+        "kind": {
+          "enum": ["minimum_improvement_percent", "maximum_regression_percent"]
+        },
+        "threshold_percent": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

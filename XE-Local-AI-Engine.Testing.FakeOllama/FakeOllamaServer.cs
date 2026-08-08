@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Testing.FakeOllama.Endpoints;
 
+/// <summary>
+///     Represents fake ollama server.
+/// </summary>
 public sealed class FakeOllamaServer : IAsyncDisposable
 {
     [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded", Justification = "The fake test server must bind to loopback on a dynamic port.")]
@@ -41,7 +44,7 @@ public sealed class FakeOllamaServer : IAsyncDisposable
         var builder = WebApplication.CreateSlimBuilder();
 
         builder.WebHost.UseKestrel().UseUrls(LoopbackDynamicPortUrl);
-        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.TypeInfoResolverChain.Insert(0, FakeOllamaJsonContext.Default));
+        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.TypeInfoResolverChain.Insert(index: 0, FakeOllamaJsonContext.Default));
 
         var app = builder.Build();
         app.MapFakeOllamaEndpoints(state);

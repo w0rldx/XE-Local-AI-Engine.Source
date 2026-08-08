@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "legal_notice": "This register and its automation record release inputs and check structure, completeness, evidence paths, and freshness. They are not legal advice and do not certify ownership, authority, or license sufficiency.",
+  "owner_confirmation_input": {
+    "status": "superseded_by_register",
+    "recorded_on": "2026-08-07",
+    "summary": "The owner's working-session confirmation is now superseded by the durable, named, dated, and evidenced approvals recorded directly in this register."
+  },
+  "decisions": [
+    {
+      "id": "project-rights-holder-apache-authority",
+      "scope": "Project rights holder and authority to publish project-authored material under Apache-2.0.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Project owner and sole copyright holder of the project-authored material, per repository git history." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "Apache-2.0 license grant for the project-authored material; sole authorship established by repository git history.", "repository_path": "LICENSE" }
+      ]
+    },
+    {
+      "id": "author-identities-aliases",
+      "scope": "Exactly two author identities or public aliases: repository owner identity/alias and second author identity/alias; do not add private identity data to this public register.",
+      "subjects": ["w0rldx", "WorlDXXXXX"],
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Sole author; both public aliases belong to the same person." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "Repository git history (git shortlog -sne) shows both public handles 'w0rldx' and 'WorlDXXXXX' bound to a single author identity; no second human author." }
+      ]
+    },
+    {
+      "id": "employer-contractor-predecessor-c0re-permissions",
+      "scope": "Employer, contractor, predecessor-project, and C0re permissions or documented non-applicability.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Project owner attestation of non-applicability." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "No employer IP-assignment, client/contractor agreement, predecessor-project, or C0re claim applies; authored on own time and equipment.", "repository_path": "docs/compliance/non-applicability.md" }
+      ]
+    },
+    {
+      "id": "copied-adapted-materials",
+      "scope": "Copied or adapted schemas, migrations, golden vectors, and templates, including documented non-applicability where appropriate.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Project owner attestation of original authorship, with the agency-agents carve-out handled separately." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "All schemas, migrations, golden/eval vectors, and templates are original authorship except the vendored agency-agents set accounted for under vendored-agency-agents.", "repository_path": "docs/compliance/non-applicability.md" }
+      ]
+    },
+    {
+      "id": "logos-media-branding",
+      "scope": "Logos, media, names, and branding rights and release permissions.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Project owner and creator of the branding assets and project name." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "Logo, favicon, and other media are self-created and owned; the name 'XE-Local-AI-Engine' is the owner's; no third-party brand or trademark conflict is known.", "repository_path": "XE-Local-AI-Engine.Client.React/public/logo.png" }
+      ]
+    },
+    {
+      "id": "vendored-agency-agents",
+      "scope": "Vendored agency-agents content provenance, modification rights, redistribution terms, or documented removal/non-applicability.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Project owner; redistribution under the upstream MIT license with attribution retained." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "Vendored from msitarzewski/agency-agents at pinned commit 783f6a72bfd7f3135700ac273c619d92821b419a; MIT, Copyright (c) 2025 AgentLand Contributors; upstream license and provenance retained in-repo.", "repository_path": "XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/PROVENANCE.md" },
+        { "reference": "Verbatim upstream MIT license copy retained for attribution.", "repository_path": "XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/LICENSE-agency-agents" }
+      ]
+    },
+    {
+      "id": "third-party-redistribution-terms",
+      "scope": "Third-party, native, WASM, .NET, and Velopack license and binary redistribution terms.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Project owner; redistribution terms bound to the release license inventory and corpus." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "UTF.Unknown 2.6.0 selected as MPL-1.1; redistributed unmodified with source-availability notice; upstream tag v2.6 verified to resolve to commit 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.", "repository_path": "docs/compliance/utf-unknown-mpl-source-availability.md" },
+        { "reference": "Third-party license and notice summary for shipped and runtime-obtained components, including the UTF.Unknown MPL-1.1 source-availability notice.", "repository_path": "NOTICE" },
+        { "reference": "Curated NuGet license override recording the UTF.Unknown MPL-1.1 basis and upstream license URL.", "repository_path": "scripts/compliance/nuget-license-overrides.json" }
+      ]
+    },
+    {
+      "id": "canonical-tag-binary-authority",
+      "scope": "Authority for the canonical repository tag and the portable binaries published through Velopack.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Repository owner; sole party authorized to create v* release tags and publish the portable binaries." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "The release workflow publishes only from an existing v* tag bound to the checked-out commit; the repository owner is the sole publisher.", "repository_path": ".github/workflows/release.yml" }
+      ]
+    },
+    {
+      "id": "signing-risk-decision",
+      "scope": "Named acceptance of the current unsigned portable-build risk and the later certificate/signing gate.",
+      "status": "approved",
+      "approver": { "name": "w0rldx", "authority_basis": "Publisher accepting the unsigned-delivery risk for this release." },
+      "decision_date": "2026-08-08",
+      "expires_on": "2027-08-08",
+      "evidence": [
+        { "reference": "Named, dated acceptance of unsigned portable-build delivery; a future signing certificate does not retroactively validate earlier artifacts.", "repository_path": "docs/compliance/unsigned-build-risk-acceptance.md" }
+      ]
+    }
+  ]
+}

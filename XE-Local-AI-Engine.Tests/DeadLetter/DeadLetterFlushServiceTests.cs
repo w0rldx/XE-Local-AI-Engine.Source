@@ -5,6 +5,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -38,7 +39,7 @@ public sealed class DeadLetterFlushServiceTests
 
         await service.FlushAsync();
 
-        AssertEx.Equal(2, sender.SentFailures.Count);
+        AssertEx.Equal(expected: 2, sender.SentFailures.Count);
     }
 
     [Test]
@@ -70,7 +71,7 @@ public sealed class DeadLetterFlushServiceTests
 
         await service.FlushAsync();
 
-        AssertEx.Equal(0, sender.SentFailures.Count);
+        AssertEx.Equal(expected: 0, sender.SentFailures.Count);
         await store.DidNotReceive().RemoveAsync(payloads[0].InvocationId, Arg.Any<CancellationToken>());
         await store.DidNotReceive().RemoveAsync(payloads[1].InvocationId, Arg.Any<CancellationToken>());
     }

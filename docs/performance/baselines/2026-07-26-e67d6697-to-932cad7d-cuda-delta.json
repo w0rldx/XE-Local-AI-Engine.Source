@@ -1,0 +1,1929 @@
+{
+  "baseline": "$REPO/docs/performance/baselines/2026-07-26-e67d6697-cuda.json",
+  "candidate": "$REPO/docs/performance/baselines/2026-07-26-932cad7d-cuda.json",
+  "commands": {
+    "chat-application-harness": {
+      "wall_elapsed_ms": {
+        "baseline_median": 974.778,
+        "candidate_median": 973.251,
+        "delta_percent": -0.1566510528551161
+      }
+    },
+    "chat-pp-tg": {
+      "generation_tokens_per_second": {
+        "baseline_median": 773.09471,
+        "candidate_median": 806.257587,
+        "delta_percent": 4.289626687524479
+      },
+      "prompt_tokens_per_second": {
+        "baseline_median": 33788.748914,
+        "candidate_median": 27353.405248,
+        "delta_percent": -19.045818128334396
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 854.434,
+        "candidate_median": 861.65,
+        "delta_percent": 0.8445356809303011
+      }
+    },
+    "embedding-pp": {
+      "embedding_tokens_per_second": {
+        "baseline_median": 64007.336841,
+        "candidate_median": 49628.537184,
+        "delta_percent": -22.464299198571926
+      },
+      "wall_elapsed_ms": {
+        "baseline_median": 659.993,
+        "candidate_median": 659.052,
+        "delta_percent": -0.14257726975892634
+      }
+    },
+    "invocation-streaming-token-contract": {
+      "wall_elapsed_ms": {
+        "baseline_median": 1076.08,
+        "candidate_median": 976.102,
+        "delta_percent": -9.290944911159018
+      }
+    },
+    "maf-approval-resume-contract": {
+      "wall_elapsed_ms": {
+        "baseline_median": 871.646,
+        "candidate_median": 875.079,
+        "delta_percent": 0.3938525502325477
+      }
+    },
+    "reranker-provider-contract": {
+      "wall_elapsed_ms": {
+        "baseline_median": 1076.539,
+        "candidate_median": 871.904,
+        "delta_percent": -19.008600710239016
+      }
+    }
+  },
+  "framework_identity": {
+    "baseline": {
+      "command_trees": [
+        {
+          "assemblies": [
+            {
+              "name": "XE_Local_AI_Engine.AI.Agent.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f3f82280db80fea51f95edc10d3fa127ed4e5cd4ada6e5931940e8815212b600",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "maf-approval-resume-contract",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "framework-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "invocation-streaming-token-contract",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "framework-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "chat-application-harness",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "application-harness",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "aed8231c99b3135401ba43fe7f0107c37de59860fbd3ee8e6e5481638c5bfb47",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "1d83d301a6ccce1e199da15349374dfacdb492676a3beb3763650c118b1a67c3",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "b59880481f2258c96caeb7a49155a5457e0303883ae9668afdfde12f34e5e756",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "fdeb22eaa6e23fb2d58a338b12b4f4941b7a164147e96e6486b28e2e12173994",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "feb8f2b8d8dbf42bb7358693278b4775d7dd57dd01c8a882c56f4bb153c3c291",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "3c7795d00f957ea2819dab5e7532de8f029257b0a0a75bbd9b77f1ba038853a8",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "0cbd391feeca90dac5d8f67ab1911f81ea053040597711b3dd688257fa847456",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f72bbbbeae7f959b336fa27b489d12a8432e0ce97311d49e1c97a7ee7c3706be",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "25e55312e27d859955d0a114a45d167e73632df72f4bbff56790e96224650022",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "96c5cf1455ee537453282b747abf0651b2076a0faddb7110bd19c2bfb4fa6ceb",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "dbe8cfae0e4b95a5a859f6ad7077078e99fda382a13262f4e50c3c61fd49f7a1",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "f7ab502d3307c721a62f8eb31f0a436595a01081d55db8940c3c5eca052d9bf4",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$BASELINE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "094d701bb2f70c02aa10ff44850c901ad364d7d38dd583f0832f3740eb6ea896",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$BASELINE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "8c2a73d1262fef64b9bb669e45065fe8e4c744f91348d6731bdb61b725e89729",
+            "sha256_verified": true
+          },
+          "command": "reranker-provider-contract",
+          "cwd": "$BASELINE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "e67d669709169fefc4cffab444af66654526a8d8",
+          "git_head_verified": true,
+          "git_root": "$BASELINE_REPO",
+          "partition": "provider-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.13.0",
+            "Microsoft.Extensions.AI": "10.7.0",
+            "ModelContextProtocol": "1.4.0",
+            "OpenAI": "2.11.0"
+          }
+        }
+      ],
+      "declaration": {
+        "maf_version": "1.13.0",
+        "mcp_version": "1.4.0",
+        "meai_version": "10.7.0",
+        "openai_version": "2.11.0",
+        "source_commit": "e67d669709169fefc4cffab444af66654526a8d8"
+      }
+    },
+    "candidate": {
+      "command_trees": [
+        {
+          "assemblies": [
+            {
+              "name": "XE_Local_AI_Engine.AI.Agent.Tests.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE_Local_AI_Engine.AI.Agent.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f7a5fb736fdd09793954f4f3e2500c9b89108e9be7387cc099918094374088cb",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f730f341d7072a60fe12b73d351c827e91dfacc6df80e4aee002d5e80f18c44c",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "c3cb3f7f94eeb70708a6ff14d95da00b8c531c371a9c4bdc5d0db3a8aec00e9f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "71f1cd831adddce1bcdf78d49f1896d8589992c41b923d84ebec9e3977fb680f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "176babe3f173691a839df9480efefb5eca6884642aa7ba1dc52ee93299d318d3",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "2fa6d2affbd17a1ffcf161317a6540bc50a3c30f786eaae7115e00267da949cd",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.AI.Agent.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "fb39cc7b83008994b9c3e3382e6fcb9e0d24807862ed02882058ed89f5004c6f",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$CANDIDATE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "d444837d5a73c6e98660728730425cbd785fd2b81c297aa4e366f52ae89e9d38",
+            "sha256_verified": true
+          },
+          "command": "maf-approval-resume-contract",
+          "cwd": "$CANDIDATE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61",
+          "git_head_verified": true,
+          "git_root": "$CANDIDATE_REPO",
+          "partition": "framework-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.15.0",
+            "Microsoft.Extensions.AI": "10.8.1",
+            "ModelContextProtocol": "1.4.1",
+            "OpenAI": "2.12.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "6d8bd72743324962e04d396d7ba5e5ec4511e468cbfedb15da9e08026c0b4fb2",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f3f3483eaf062741235c7ce798d8cc47309d401a97e12f2c7605efb11070b490",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "93d73708cff963eeddd5acc994afd388394b6f3e1ae992a36932886ac72d285a",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f730f341d7072a60fe12b73d351c827e91dfacc6df80e4aee002d5e80f18c44c",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "c3cb3f7f94eeb70708a6ff14d95da00b8c531c371a9c4bdc5d0db3a8aec00e9f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "71f1cd831adddce1bcdf78d49f1896d8589992c41b923d84ebec9e3977fb680f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "176babe3f173691a839df9480efefb5eca6884642aa7ba1dc52ee93299d318d3",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "2fa6d2affbd17a1ffcf161317a6540bc50a3c30f786eaae7115e00267da949cd",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "70870abd2b50c26f5b82b43d4dbabb2a2b18c0a1be97aff566623f941d72406a",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "fb39cc7b83008994b9c3e3382e6fcb9e0d24807862ed02882058ed89f5004c6f",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "cd434634473f1d6b945a5583d48782207a1e79b8202cf6adb174e41ed2ca4643",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "1f0760611e72588fbffe2c7bacfce55b9942d7ed5cb5cd4a3ded5d5f7600e930",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "27f62b4ffec4ad4701fa6baf0aaccb44de62908aab5759de40f165dcc6ab71d0",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$CANDIDATE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "d444837d5a73c6e98660728730425cbd785fd2b81c297aa4e366f52ae89e9d38",
+            "sha256_verified": true
+          },
+          "command": "invocation-streaming-token-contract",
+          "cwd": "$CANDIDATE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61",
+          "git_head_verified": true,
+          "git_root": "$CANDIDATE_REPO",
+          "partition": "framework-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.15.0",
+            "Microsoft.Extensions.AI": "10.8.1",
+            "ModelContextProtocol": "1.4.1",
+            "OpenAI": "2.12.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "6d8bd72743324962e04d396d7ba5e5ec4511e468cbfedb15da9e08026c0b4fb2",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f3f3483eaf062741235c7ce798d8cc47309d401a97e12f2c7605efb11070b490",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "93d73708cff963eeddd5acc994afd388394b6f3e1ae992a36932886ac72d285a",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f730f341d7072a60fe12b73d351c827e91dfacc6df80e4aee002d5e80f18c44c",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "c3cb3f7f94eeb70708a6ff14d95da00b8c531c371a9c4bdc5d0db3a8aec00e9f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "71f1cd831adddce1bcdf78d49f1896d8589992c41b923d84ebec9e3977fb680f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "176babe3f173691a839df9480efefb5eca6884642aa7ba1dc52ee93299d318d3",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "2fa6d2affbd17a1ffcf161317a6540bc50a3c30f786eaae7115e00267da949cd",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "70870abd2b50c26f5b82b43d4dbabb2a2b18c0a1be97aff566623f941d72406a",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "fb39cc7b83008994b9c3e3382e6fcb9e0d24807862ed02882058ed89f5004c6f",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "cd434634473f1d6b945a5583d48782207a1e79b8202cf6adb174e41ed2ca4643",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "1f0760611e72588fbffe2c7bacfce55b9942d7ed5cb5cd4a3ded5d5f7600e930",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "27f62b4ffec4ad4701fa6baf0aaccb44de62908aab5759de40f165dcc6ab71d0",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$CANDIDATE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "d444837d5a73c6e98660728730425cbd785fd2b81c297aa4e366f52ae89e9d38",
+            "sha256_verified": true
+          },
+          "command": "chat-application-harness",
+          "cwd": "$CANDIDATE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61",
+          "git_head_verified": true,
+          "git_root": "$CANDIDATE_REPO",
+          "partition": "application-harness",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.15.0",
+            "Microsoft.Extensions.AI": "10.8.1",
+            "ModelContextProtocol": "1.4.1",
+            "OpenAI": "2.12.0"
+          }
+        },
+        {
+          "assemblies": [
+            {
+              "name": "XE-Local-AI-Engine.Tests.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "6d8bd72743324962e04d396d7ba5e5ec4511e468cbfedb15da9e08026c0b4fb2",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Client.Application.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Client.Application.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f3f3483eaf062741235c7ce798d8cc47309d401a97e12f2c7605efb11070b490",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Providers.LlamaServer.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "93d73708cff963eeddd5acc994afd388394b6f3e1ae992a36932886ac72d285a",
+              "sha256_verified": true
+            },
+            {
+              "name": "XE-Local-AI-Engine.AI.Agent.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.AI.Agent.dll",
+              "runtime_local_dependencies": null,
+              "sha256": "f730f341d7072a60fe12b73d351c827e91dfacc6df80e4aee002d5e80f18c44c",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "c3cb3f7f94eeb70708a6ff14d95da00b8c531c371a9c4bdc5d0db3a8aec00e9f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.Workflows.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.Workflows.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "71f1cd831adddce1bcdf78d49f1896d8589992c41b923d84ebec9e3977fb680f",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Agents.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Agents.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "176babe3f173691a839df9480efefb5eca6884642aa7ba1dc52ee93299d318d3",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Abstractions.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Abstractions.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "2fa6d2affbd17a1ffcf161317a6540bc50a3c30f786eaae7115e00267da949cd",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.Evaluation.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.Evaluation.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "663a352e9f883aa229df0ad38a81ccb13512f0deccd6172d4a7c2c19c6aeccad",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.OpenAI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "70870abd2b50c26f5b82b43d4dbabb2a2b18c0a1be97aff566623f941d72406a",
+              "sha256_verified": true
+            },
+            {
+              "name": "Microsoft.Extensions.AI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/Microsoft.Extensions.AI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "fb39cc7b83008994b9c3e3382e6fcb9e0d24807862ed02882058ed89f5004c6f",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.Core.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.Core.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "cd434634473f1d6b945a5583d48782207a1e79b8202cf6adb174e41ed2ca4643",
+              "sha256_verified": true
+            },
+            {
+              "name": "ModelContextProtocol.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/ModelContextProtocol.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "1f0760611e72588fbffe2c7bacfce55b9942d7ed5cb5cd4a3ded5d5f7600e930",
+              "sha256_verified": true
+            },
+            {
+              "name": "OpenAI.dll",
+              "path": "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll",
+              "runtime_local_dependencies": {
+                "files": [],
+                "ldd": {
+                  "argv": [
+                    "ldd",
+                    "$CANDIDATE_REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/OpenAI.dll"
+                  ],
+                  "available": true,
+                  "exit_code": 1,
+                  "stderr": "not a dynamic executable",
+                  "stdout": ""
+                },
+                "manifest_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+              },
+              "sha256": "27f62b4ffec4ad4701fa6baf0aaccb44de62908aab5759de40f165dcc6ab71d0",
+              "sha256_verified": true
+            }
+          ],
+          "central_package_pins": {
+            "path": "$CANDIDATE_REPO/Directory.Packages.props",
+            "runtime_local_dependencies": null,
+            "sha256": "d444837d5a73c6e98660728730425cbd785fd2b81c297aa4e366f52ae89e9d38",
+            "sha256_verified": true
+          },
+          "command": "reranker-provider-contract",
+          "cwd": "$CANDIDATE_REPO",
+          "declared_versions_verified": true,
+          "git_clean": true,
+          "git_head": "932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61",
+          "git_head_verified": true,
+          "git_root": "$CANDIDATE_REPO",
+          "partition": "provider-contract",
+          "resolved_package_versions": {
+            "Microsoft.Agents.AI": "1.15.0",
+            "Microsoft.Extensions.AI": "10.8.1",
+            "ModelContextProtocol": "1.4.1",
+            "OpenAI": "2.12.0"
+          }
+        }
+      ],
+      "declaration": {
+        "maf_version": "1.15.0",
+        "mcp_version": "1.4.1",
+        "meai_version": "10.8.1",
+        "openai_version": "2.12.0",
+        "source_commit": "932cad7dad8f1c6ee0e715c9eb0de92f5dab9e61"
+      }
+    }
+  },
+  "framework_identity_equal": false,
+  "generated_at_utc": "2026-07-27T00:01:29Z",
+  "identity_equal": true,
+  "kind": "inference-benchmark-comparison",
+  "sanitization": {
+    "replacements": [
+      {
+        "label": "$REPO"
+      }
+    ],
+    "source_sha256": "1f698b4f11c37b2f069b02282838c7664266d8af912196bc06310523a25465bc"
+  },
+  "sanitized": true,
+  "schema_version": "1.0"
+}

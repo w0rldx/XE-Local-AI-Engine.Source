@@ -63,7 +63,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
                           {
                               webBuilder.UseKestrel(options =>
                               {
-                                  options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                                  options.Listen(IPAddress.Loopback, port: 0, listenOptions =>
                                   {
                                       listenOptions.UseHttps(ServerCert);
                                       listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -155,7 +155,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         return FixtureHubState.ReadAsync(_hubState.WorkerHelloReader, timeout);
     }
 
-    [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "The plan requires this exact test fixture contract.")]
+    [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Test fixture trigger method; an event would not fit the deterministic drive-the-hub contract callers rely on.")]
     public Task FireConnectionDropAsync()
     {
         _hubState.AbortAllConnections();
@@ -178,16 +178,28 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     {
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest("CN=127.0.0.1", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
-        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: false));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: false));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
 
         var sanBuilder = new SubjectAlternativeNameBuilder();
         sanBuilder.AddIpAddress(IPAddress.Loopback);
         sanBuilder.AddDnsName("localhost");
         request.CertificateExtensions.Add(sanBuilder.Build());
 
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        using var ephemeral = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        // The PKCS#12 round-trip is mandatory on Windows and must not be "simplified" back to returning `ephemeral`.
+        // CreateSelfSigned hands back a certificate whose private key lives only in this process's memory. OpenSSL —
+        // so, Linux — serves TLS from that happily. Windows serves TLS through SChannel, which can only use a private
+        // key it can reach through a CNG/CAPI key container, and an ephemeral key is in none. Kestrel accepts the
+        // certificate at UseHttps and then aborts every handshake, which reaches the client as the entirely unhelpful
+        // "The SSL connection could not be established ... Received an unexpected EOF or 0 bytes from the transport
+        // stream" — with nothing on the server side naming the cause.
+        //
+        // Exporting to PFX and loading it back is what gives the key a container Windows can open. EphemeralKeySet is
+        // deliberately NOT passed: that flag re-creates exactly the problem this works around.
+        return X509CertificateLoader.LoadPkcs12(ephemeral.Export(X509ContentType.Pfx), password: null);
     }
 
     [SuppressMessage("Sonar", "S1144:Unused private types or members should be removed", Justification = "SignalR invokes hub methods by name via reflection during integration tests.")]

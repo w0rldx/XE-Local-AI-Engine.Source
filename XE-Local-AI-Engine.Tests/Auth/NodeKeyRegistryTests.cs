@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 
 using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeKeyRegistryTests
@@ -9,7 +10,7 @@ public sealed class NodeKeyRegistryTests
     [Test]
     public void Rotate_WhenKeyRotates_PreviousActiveKeyRemainsAvailableDuringGraceWindow()
     {
-        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 4, day: 19, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
         using var registry = new NodeKeyRegistry(timeProvider);
         using var firstKey = Key.Create(KeyAgreementAlgorithm.X25519);
         using var secondKey = Key.Create(KeyAgreementAlgorithm.X25519);
@@ -34,7 +35,7 @@ public sealed class NodeKeyRegistryTests
     [Test]
     public void Resolve_WhenRetiredKeyGraceWindowExpires_ReturnsRetiredExpired()
     {
-        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 4, day: 19, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
         using var registry = new NodeKeyRegistry(timeProvider);
         using var firstKey = Key.Create(KeyAgreementAlgorithm.X25519);
         using var secondKey = Key.Create(KeyAgreementAlgorithm.X25519);
@@ -57,7 +58,7 @@ public sealed class NodeKeyRegistryTests
     [Test]
     public void Resolve_WhenNoMatchingKeyExists_ReturnsMissing()
     {
-        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 4, day: 19, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
         using var registry = new NodeKeyRegistry(timeProvider);
         using var activeKey = Key.Create(KeyAgreementAlgorithm.X25519);
 
@@ -74,7 +75,7 @@ public sealed class NodeKeyRegistryTests
     [Test]
     public void ResolveGraceEligible_WhenKeyRotates_ReturnsActiveThenRetiredKeys()
     {
-        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 4, day: 19, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
         using var registry = new NodeKeyRegistry(timeProvider);
         using var firstKey = Key.Create(KeyAgreementAlgorithm.X25519);
         using var secondKey = Key.Create(KeyAgreementAlgorithm.X25519);
@@ -84,7 +85,7 @@ public sealed class NodeKeyRegistryTests
 
         var resolutions = registry.ResolveGraceEligible();
 
-        AssertEx.Equal(2, resolutions.Count);
+        AssertEx.Equal(expected: 2, resolutions.Count);
         AssertEx.Equal(NodeKeyLookupStatus.Active, resolutions[0].Status);
         AssertEx.Equal("node-key-2", resolutions[0].KeyIdUsed);
         AssertEx.Equal(NodeKeyLookupStatus.Retired, resolutions[1].Status);
@@ -94,7 +95,7 @@ public sealed class NodeKeyRegistryTests
     [Test]
     public void ResolveGraceEligible_WhenRetiredGraceWindowExpires_ExcludesExpiredRetiredKeys()
     {
-        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(year: 2026, month: 4, day: 19, hour: 12, minute: 0, second: 0, TimeSpan.Zero));
         using var registry = new NodeKeyRegistry(timeProvider);
         using var firstKey = Key.Create(KeyAgreementAlgorithm.X25519);
         using var secondKey = Key.Create(KeyAgreementAlgorithm.X25519);
@@ -105,7 +106,7 @@ public sealed class NodeKeyRegistryTests
 
         var resolutions = registry.ResolveGraceEligible();
 
-        AssertEx.Equal(1, resolutions.Count);
+        AssertEx.Equal(expected: 1, resolutions.Count);
         AssertEx.Equal(NodeKeyLookupStatus.Active, resolutions[0].Status);
         AssertEx.Equal("node-key-2", resolutions[0].KeyIdUsed);
     }

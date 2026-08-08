@@ -31,6 +31,17 @@ internal static class ChatEndpoint
             return Results.Empty;
         }
 
+        // Check for a scripted tool call before falling through to text tokens.
+        if (state.ToolCallScript is not null)
+        {
+            var toolCall = state.ToolCallScript(messages);
+            if (toolCall is not null)
+            {
+                await WriteToolCallChunksAsync(context, model, toolCall, lastUserMessage.Length).ConfigureAwait(false);
+                return Results.Empty;
+            }
+        }
+
         var tokens = await ReadTokensAsync(state, model, messages, context.RequestAborted).ConfigureAwait(false);
         if (!FakeOllamaEndpointMapper.StreamEnabled(root))
         {
@@ -85,6 +96,64 @@ internal static class ChatEndpoint
         return Results.Empty;
     }
 
+    /// <summary>
+    ///     Emits the Ollama streaming wire format for a single tool call followed by a done chunk.
+    ///     OllamaSharp 5.x parses: <c>message.tool_calls[0].function.{name,arguments}</c>.
+    /// </summary>
+    private static async Task WriteToolCallChunksAsync(HttpContext context, string model, FakeOllamaToolCall toolCall, int promptEvalCount)
+    {
+        var argumentsJson = JsonSerializer.Serialize(toolCall.Arguments);
+
+        // Tool-call chunk: content empty, tool_calls present, done=false.
+        var toolCallChunk = new
+        {
+            model,
+            created_at = FakeOllamaEndpointMapper.NowString(),
+            message = new
+            {
+                role = "assistant",
+                content = string.Empty,
+                tool_calls = new[]
+                {
+                    new
+                    {
+                        function = new
+                        {
+                            name = toolCall.Name,
+                            arguments = JsonSerializer.Deserialize<JsonElement>(argumentsJson)
+                        }
+                    }
+                }
+            },
+            done = false
+        };
+
+        // Done chunk signals end of the tool-call turn.
+        var doneChunk = new
+        {
+            model,
+            created_at = FakeOllamaEndpointMapper.NowString(),
+            message = new
+            {
+                role = "assistant",
+                content = string.Empty
+            },
+            done = true,
+            done_reason = "stop",
+            total_duration = 1,
+            load_duration = 1,
+            prompt_eval_count = promptEvalCount,
+            eval_count = 1,
+            eval_duration = 1
+        };
+
+        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, new object[]
+        {
+            toolCallChunk,
+            doneChunk
+        }).ConfigureAwait(false);
+    }
+
     private static IEnumerable<Message> ReadMessages(JsonElement root)
     {
         if (!root.TryGetProperty("messages", out var messages) || messages.ValueKind != JsonValueKind.Array)
@@ -129,7 +198,7 @@ internal static class ChatEndpoint
 
     private static IReadOnlyList<string> SplitTokens(string value)
     {
-        return value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return value.Split(separator: ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select((token, index) => index == 0 ? token : " " + token)
                     .DefaultIfEmpty(string.Empty)
                     .ToArray();

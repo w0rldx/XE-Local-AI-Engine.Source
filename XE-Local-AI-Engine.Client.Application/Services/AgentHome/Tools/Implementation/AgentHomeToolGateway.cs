@@ -1,0 +1,116 @@
+namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
+
+using System.Globalization;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+
+/// <summary>
+///     Thin adapter between the <c>run_in_agent_home</c> tool handler and <see cref="IAgentHomeService" />. It maps
+///     the validated tool request onto the service's
+///     prepare/run phases, renders the run result into a compact model-facing string, and maps the two policy
+///     rejections raised before any provider call (unknown/invalid selected-folder id, disallowed runtime profile)
+///     onto a clear rejection message. Cancellation is allowed to propagate as cancellation.
+/// </summary>
+internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
+{
+    private readonly IAgentHomeService _service;
+    private readonly INodeRuntimeSettings _runtimeSettings;
+
+    public AgentHomeToolGateway(IAgentHomeService service, INodeRuntimeSettings runtimeSettings)
+    {
+        _service = service ?? throw new ArgumentNullException(nameof(service));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+    }
+
+    public async Task<string> ExecuteAsync(AgentHomeRunToolRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            // Single lifecycle entry (AgentHome gateway): the service resolves identity once, acquires the run-level single-flight
+            // guard, then runs Prepare + Run under it. The gateway no longer calls Prepare and Run separately.
+            // ConversationId is sourced from the ambient run context (seeded by the chat send at the root tool loop),
+            // NOT from the model-supplied tool args, so it cannot be forged or leak into the tool schema. It lets the
+            // service stage this conversation's uploaded attachments into the sandbox.
+            var run = await _service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
+                {
+                    SelectedFolderIds = request.SelectedFolderIds ?? [],
+                    RuntimeProfile = request.RuntimeProfile,
+                    ConversationId = AgentRunConversationContext.Current,
+                    Goal = request.Goal ?? string.Empty,
+                    AllowedActions = request.AllowedActions ?? []
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
+            // worker content-root structure. The
+            // workspace summary carries aliases and counts only — never host paths (workspace copy).
+            var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+            return string.Create(CultureInfo.InvariantCulture,
+                $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
+        }
+        catch (AgentHomeBusyException)
+        {
+            return "run_in_agent_home rejected: an AgentHome run is already in progress for this node.";
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            return $"run_in_agent_home rejected: {exception.Message}";
+        }
+        catch (AgentHomeRequestRejectedException exception)
+        {
+            return $"run_in_agent_home rejected: {exception.Message}";
+        }
+    }
+
+    private static string DescribeOutcome(AgentHomeRunResult run, int commandTimeoutSeconds)
+    {
+        if (run.TimedOut)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"did not complete (timed out after {commandTimeoutSeconds}s)");
+        }
+
+        return run.Completed ? "completed" : "did not complete";
+    }
+
+    private static string BuildWorkspaceSummary(IReadOnlyList<SelectedFolderSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return " Workspace: " + string.Join("; ", snapshots.Select(DescribeFolder)) + ".";
+    }
+
+    private static string DescribeFolder(SelectedFolderSnapshot snapshot)
+    {
+        return snapshot.Status == SelectedFolderCopyStatus.BlockedQuota
+            ? string.Create(CultureInfo.InvariantCulture, $"{snapshot.Alias} blocked (over size budget)")
+            : string.Create(CultureInfo.InvariantCulture, $"{snapshot.Alias} copied {snapshot.CopiedFileCount} file(s), excluded {snapshot.ExcludedFileCount}");
+    }
+
+    private static string BuildPatchSummary(AgentHomePatchExport patch)
+    {
+        if (patch.Failed)
+        {
+            return " Patch: export failed.";
+        }
+
+        if (patch.Blocked)
+        {
+            return string.Create(CultureInfo.InvariantCulture,
+                $" Patch: {patch.ChangedFileCount} file(s) changed; patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
+        }
+
+        if (patch.ChangedFileCount == 0)
+        {
+            return " Patch: no file changes.";
+        }
+
+        return string.Create(CultureInfo.InvariantCulture,
+            $" Patch: {patch.ChangedFileCount} file(s) changed -> {patch.PatchRelativePath}.");
+    }
+}

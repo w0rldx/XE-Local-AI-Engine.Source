@@ -1,0 +1,21 @@
+  Determining projects to restore...
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj (in 197 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.LlamaServer/XE-Local-AI-Engine.Providers.LlamaServer.csproj (in 195 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj (in 195 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.HuggingFace/XE-Local-AI-Engine.Providers.HuggingFace.csproj (in 196 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj (in 196 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AI.Contracts/XE-Local-AI-Engine.AI.Contracts.csproj (in 0.8 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj (in 2 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj (in 5 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.Abstractions/XE-Local-AI-Engine.Providers.Abstractions.csproj (in 1 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj (in 235 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Client.Application/XE-Local-AI-Engine.Client.Application.csproj (in 29 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.StableDiffusionCpp/XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj (in 27 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj (in 269 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.CodexOAuth/XE-Local-AI-Engine.Providers.CodexOAuth.csproj (in 4 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Providers.Capabilities/XE-Local-AI-Engine.Providers.Capabilities.csproj (in 1 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj (in 57 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj (in 58 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj (in 270 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj (in 44 ms).
+  Restored <ROLLBACK_WORKTREE>/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj (in 103 ms).

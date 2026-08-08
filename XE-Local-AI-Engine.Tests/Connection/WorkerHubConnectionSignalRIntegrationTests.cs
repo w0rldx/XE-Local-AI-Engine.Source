@@ -10,14 +10,27 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Tests.Fixtures;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+/// <summary>
+///     Each test here hosts a real TLS Kestrel worker-node fixture and drives genuine SignalR-over-WebSockets transport.
+///     The reconnect cases fire a transport-level drop and wait on automatic reconnect, whose exponential backoff starts
+///     at one second and doubles each attempt, so a handshake that is CPU-starved past its early retry windows can blow
+///     the thirty-second wait budget. Under the full module's parallel load that starvation is real and intermittent, so
+///     this heavy, timing-sensitive integration suite runs in isolation — the same keyless-NotInParallel idiom the CUDA
+///     build and stream-idle-watchdog suites use. Given the CPU to complete a reconnect on its first retry, the waits are
+///     never the bottleneck.
+/// </summary>
+[NotInParallel]
 public sealed class WorkerHubConnectionSignalRIntegrationTests
 {
     [Test]
@@ -86,12 +99,12 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         });
 
         var payload = await fixture.WaitForCapabilitiesAsync(TimeSpan.FromSeconds(5));
-        AssertEx.Equal(32000, payload.HardwareInfo.RamMb);
-        AssertEx.Equal(16000, payload.HardwareInfo.VramMb);
+        AssertEx.Equal(expected: 32000, payload.HardwareInfo.RamMb);
+        AssertEx.Equal(expected: 16000, payload.HardwareInfo.VramMb);
         AssertEx.True(payload.HardwareInfo.CudaAvailable);
         AssertEx.Equal("RTX", payload.HardwareInfo.GpuName);
         AssertEx.Equal("desktop", payload.HardwareInfo.CpuClass);
-        AssertEx.Equal(2, payload.Capabilities.SchemaVersion);
+        AssertEx.Equal(expected: 2, payload.Capabilities.SchemaVersion);
         AssertEx.Equal("High", payload.Capabilities.SystemScoreClass);
         AssertEx.True(payload.Capabilities.OllamaReachable == true);
         AssertEx.Equal("0.0.0-test", payload.Capabilities.OllamaVersion);
@@ -659,7 +672,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         await AssertEx.EventuallyAsync(() => connection.State == WorkerConnectionState.Error,
             TimeSpan.FromMilliseconds(500),
             "Connection did not settle in Error.");
-        AssertEx.Equal(0, Volatile.Read(ref reconnectAttemptsAfterError));
+        AssertEx.Equal(expected: 0, Volatile.Read(ref reconnectAttemptsAfterError));
     }
 
     [Test]

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Providers.CodexOAuth</RootNamespace>
+    <!-- The OpenAI 2.10.0 Responses surface (GetResponsesClient/CreateResponseOptions/AsIChatClient) is gated
+         behind the experimental OPENAI001 diagnostic. The Codex /responses transport is built entirely on it
+         so the diagnostic is suppressed solution-wide for this provider. -->
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.Extensions.AI.OpenAI brings OpenAI 2.10.0 transitively (the ResponsesClient adapter that
+         matches the Codex /responses wire shape). OpenAI is centrally pinned to 2.10.0 to avoid NU1605.
+         DO NOT reference Azure.AI.OpenAI here (plan C3/R9). -->
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IDataProtectionProvider / IDataProtector for the encrypted token store (mirrors CloudCredentialStore),
+         plus ILogger from the shared framework. No NuGet pin needed. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- INodeDataDirectory: the shared per-node runtime-state root. Lives in the lowest shared layer so this provider
+         can co-locate codex-oauth-tokens.enc under the per-user data dir instead of the shipped install/ContentRoot dir. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The store=false on-wire test constructs the internal CodexStoreDisabledChatClient directly
+         to prove the disabled-store flag reaches the request options, rather than trusting the wrapper name. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
+</Project>

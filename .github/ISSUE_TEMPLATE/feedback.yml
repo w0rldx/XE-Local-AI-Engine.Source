@@ -1,0 +1,64 @@
+name: 💬 Feedback, impressions or ideas
+description: Tell me what you think — including what confused you
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is the most valuable kind of report.** Honest impressions matter more than bug counts,
+        and "I got confused and gave up" is a real finding, not a failed test.
+
+        Answer whichever parts you feel like. All optional.
+
+  - type: textarea
+    id: confusing
+    attributes:
+      label: Where did you get stuck or confused?
+      description: |
+        Especially in the first ten minutes. I can't see this software with fresh eyes any more — you
+        can.
+    validations:
+      required: false
+
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked well?
+      description: Useful for knowing what not to break.
+    validations:
+      required: false
+
+  - type: textarea
+    id: blocker
+    attributes:
+      label: What would stop you using this for real work?
+      description: |
+        The honest blocker — missing feature, too slow, don't trust it, already use something better.
+        Blunt answers are the most useful ones and won't offend me.
+    validations:
+      required: false
+
+  - type: textarea
+    id: wrong-direction
+    attributes:
+      label: Anything heading in the wrong direction?
+      description: Overbuilt, pointless, or badly conceived — please say so.
+    validations:
+      required: false
+
+  - type: textarea
+    id: performance
+    attributes:
+      label: How did it perform on your hardware?
+      description: Please mention your CPU, GPU and RAM — I can't measure this myself.
+      placeholder: |
+        RTX 3060 12GB, 32GB RAM — an 8B model at Q4_K_M felt fast enough to use.
+    validations:
+      required: false
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+    validations:
+      required: false

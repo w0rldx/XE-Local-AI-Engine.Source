@@ -9,8 +9,8 @@ internal static class PsEndpoint
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(state);
 
-        FakeOllamaEndpointMapper.Record(context, state, null, 0, null);
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, null).ConfigureAwait(false))
+        FakeOllamaEndpointMapper.Record(context, state, model: null, messageCount: 0, prompt: null);
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model: null).ConfigureAwait(false))
         {
             return Results.Empty;
         }
@@ -22,7 +22,8 @@ internal static class PsEndpoint
                 name = model.Name,
                 model = model.Name,
                 expires_at = model.ExpiresAt,
-                size_vram = 0,
+                size = model.SizeBytes,
+                size_vram = model.SizeVramBytes,
                 context_length = 4096
             })
         }, FakeOllamaEndpointMapper.SerializerOptions);

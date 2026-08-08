@@ -1,0 +1,87 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Client</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI"/>
+    <PackageReference Include="Azure.Identity"/>
+    <PackageReference Include="BouncyCastle.Cryptography"/>
+    <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
+    <!-- Development Mode container sandbox (ADR 0004). See Directory.Packages.props for why the id is the `.Enhanced`
+         fork rather than the 2023-era original. -->
+    <PackageReference Include="Docker.DotNet.Enhanced"/>
+    <PackageReference Include="DocumentFormat.OpenXml"/>
+    <!-- Direct, not transitive-through-AI.Agent: this project calls AgentSkillFrontmatter.ValidateName/ValidateDescription
+         as the authority for skill validation (AgentSkillService, AgentDefinitionResolver) and constructs
+         AgentSkillsProvider in SubAgentSpawnService. A validation authority must not ride a transitive flow that a
+         future ProjectReference prune would silently remove. Version comes from CPM, so this adds no version surface. -->
+    <PackageReference Include="Microsoft.Agents.AI"/>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"/>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+    <PackageReference Include="Microsoft.Extensions.AI"/>
+    <!-- Microsoft.Extensions.AI.OpenAI brings the OpenAI SDK in transitively (pinned via CentralPackageTransitivePinningEnabled,
+         same as Providers.CodexOAuth): the plain OpenAI.OpenAIClient used by AzureFoundryChatClientFactory's v1 API
+         surface needs no direct PackageReference of its own. -->
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
+    <PackageReference Include="Microsoft.Extensions.DataIngestion.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
+    <!-- MSAL confidential-client for the Entra ID authorization-code sign-in flow (see Directory.Packages.props). -->
+    <PackageReference Include="Microsoft.Identity.Client"/>
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal"/>
+    <PackageReference Include="ModelContextProtocol"/>
+    <PackageReference Include="NSec.Cryptography"/>
+    <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="Quartz"/>
+    <PackageReference Include="Quartz.Extensions.Hosting"/>
+    <PackageReference Include="Quartz.Plugins"/>
+    <PackageReference Include="Quartz.Plugins.TimeZoneConverter"/>
+    <PackageReference Include="Quartz.Serialization.SystemTextJson"/>
+    <PackageReference Include="Serilog"/>
+    <PackageReference Include="System.Numerics.Tensors"/>
+    <PackageReference Include="PdfPig"/>
+    <PackageReference Include="UTF.Unknown"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Curated starter-pack templates, transformed once at build time from the vendored agency-agents source. The
+         catalog loads this by manifest-resource-name suffix at runtime, so no network egress occurs. -->
+    <EmbeddedResource Include="Services\Agents\Templates\agent-templates.seed.json"/>
+    <!-- Bundled model-recommendation catalog (schema v1) — every ggufRepo id is live-verified against the Hugging
+         Face API before being added. Loaded by manifest-resource-name suffix; the provider optionally replaces this
+         in-memory with a remote refresh, but the app always has a working catalog with zero configuration. -->
+    <EmbeddedResource Include="Services\ModelFit\Catalog\model-catalog.seed.json"/>
+    <!-- Bundled image-model catalog (schema v1). Every repo id, file name and per-file byte size was verified against
+         the live Hugging Face API before being added: a one-click install that 404s, or one whose declared size is
+         wrong, is worse than an absent row (the size drives the free-disk pre-flight AND the aggregate progress). -->
+    <EmbeddedResource Include="Services\Images\Catalog\image-model-catalog.seed.json"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Capabilities\XE-Local-AI-Engine.Providers.Capabilities.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
+    <Using Include="Microsoft.Extensions.Configuration"/>
+    <Using Include="Microsoft.Extensions.DependencyInjection"/>
+    <Using Include="Microsoft.Extensions.Hosting"/>
+    <Using Include="Microsoft.Extensions.Logging"/>
+    <Using Include="System.Net.Http.Json"/>
+  </ItemGroup>
+
+</Project>

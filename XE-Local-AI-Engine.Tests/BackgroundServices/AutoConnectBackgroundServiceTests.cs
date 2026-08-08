@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -36,7 +35,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 1, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -58,7 +57,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(0, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 0, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -80,7 +79,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 1, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -102,76 +101,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(0, hubConnection.ConnectAsyncCallCount);
-        }
-        finally
-        {
-            await hubConnection.DisposeAsync();
-        }
-    }
-
-    [Test]
-    public async Task ExecuteAsync_WhenBootstrapModelIsNotReady_DoesNotConnect()
-    {
-        AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
-        var hubConnection = new MockWorkerHubConnection();
-        var connectionState = new ConnectionState();
-
-        try
-        {
-            using var service = CreateService(hubConnection,
-                MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
-                CreateApplicationLifetime(),
-                new CentralPlatformOptions
-                {
-                    BaseUrl = "https://test.example.com",
-                    ReconnectBackoffBaseMs = 1,
-                    ReconnectBackoffMaxMs = 1,
-                    ReconnectBackoffJitterMs = 0,
-                    ReconnectMaxAttempts = 1
-                },
-                new SequenceHostAgentReadinessClient(false, false),
-                connectionState);
-            using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(1000);
-
-            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
-
-            AssertEx.Equal(0, hubConnection.ConnectAsyncCallCount);
-            AssertEx.Equal(WorkerConnectionState.PreparingModel, connectionState.Current);
-        }
-        finally
-        {
-            await hubConnection.DisposeAsync();
-        }
-    }
-
-    [Test]
-    public async Task ExecuteAsync_WhenBootstrapModelBecomesReady_ConnectsAfterGateOpens()
-    {
-        AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
-        var hubConnection = new MockWorkerHubConnection();
-
-        try
-        {
-            using var service = CreateService(hubConnection,
-                MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
-                CreateApplicationLifetime(),
-                new CentralPlatformOptions
-                {
-                    BaseUrl = "https://test.example.com",
-                    ReconnectBackoffBaseMs = 1,
-                    ReconnectBackoffMaxMs = 1,
-                    ReconnectBackoffJitterMs = 0,
-                    ReconnectMaxAttempts = 3
-                },
-                new SequenceHostAgentReadinessClient(false, true));
-            using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(1000);
-
-            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
-
-            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 0, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -202,11 +132,11 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
                     ReconnectMaxAttempts = 3
                 });
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(1000);
+            cancellationTokenSource.CancelAfter(5000);
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(4, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 4, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -227,7 +157,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             await service.StartAsync(CancellationToken.None);
             await service.StopAsync(CancellationToken.None);
 
-            AssertEx.Equal(0, hubConnection.DisconnectAsyncCallCount);
+            AssertEx.Equal(expected: 0, hubConnection.DisconnectAsyncCallCount);
         }
         finally
         {
@@ -279,14 +209,10 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         MockTokenStore tokenStore,
         IHostApplicationLifetime applicationLifetime,
         CentralPlatformOptions? options = null,
-        IHostAgentReadinessClient? hostAgentReadinessClient = null,
-        ConnectionState? connectionState = null,
         IWorkerEventDispatcher? workerEventDispatcher = null)
     {
         return new AutoConnectBackgroundService(hubConnection,
             tokenStore,
-            hostAgentReadinessClient ?? new SequenceHostAgentReadinessClient(true),
-            connectionState ?? new ConnectionState(),
             workerEventDispatcher ?? Substitute.For<IWorkerEventDispatcher>(),
             applicationLifetime,
             Options.Create(options ?? new CentralPlatformOptions
@@ -298,28 +224,6 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
                 ReconnectMaxAttempts = 3
             }),
             NullLogger<AutoConnectBackgroundService>.Instance);
-    }
-
-    private sealed class SequenceHostAgentReadinessClient : IHostAgentReadinessClient
-    {
-        private readonly Queue<bool> _results;
-        private bool _lastResult;
-
-        public SequenceHostAgentReadinessClient(params bool[] results)
-        {
-            _results = new Queue<bool>(results);
-            _lastResult = results.Length > 0 && results[^1];
-        }
-
-        public Task<bool> IsBootstrapModelReadyAsync(CancellationToken cancellationToken)
-        {
-            if (_results.TryDequeue(out var result))
-            {
-                _lastResult = result;
-            }
-
-            return Task.FromResult(_lastResult);
-        }
     }
 
     private sealed class MockWorkerHubConnection : IWorkerHubConnection

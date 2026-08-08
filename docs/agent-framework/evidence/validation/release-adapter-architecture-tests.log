@@ -1,0 +1,20 @@
+[guard] snapshot: 2911 assemblies across 8 root(s) -> $REPO/.tmp/assembly-guard-ADUfzU.state
+Running tests from $REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)
+skipped EmbeddingGenerator_RoundTrips_AgainstLocalLlamaServer
+  Set RUN_LLAMASERVER_INTEGRATION=true (and a live llama-server) to execute this integration test.
+  from $REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)
+skipped ChatClient_RoundTrips_AgainstLocalLlamaServer
+  Set RUN_LLAMASERVER_INTEGRATION=true (and a live llama-server) to execute this integration test.
+  from $REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64)
+$REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.dll (net10.0|x64) passed (374ms)
+
+  In process file artifacts produced:
+    - $REPO/XE-Local-AI-Engine.Tests/bin/Release/net10.0/TestResults/XE-Local-AI-Engine.Tests-linux-net10.0-report.html
+
+Test run summary: Passed!
+  total: 13
+  failed: 0
+  succeeded: 11
+  skipped: 2
+  duration: 507ms
+[guard] verify: build output unchanged during the run — result is trustworthy.

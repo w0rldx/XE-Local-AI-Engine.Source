@@ -1,8 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Integration;
 
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -50,7 +51,16 @@ public sealed class EmbeddingSmokeTests
                         });
                     });
 
-                    var generator = factory.Services.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
+                    // Embeddings are provider-routed now — there is no standalone DI IEmbeddingGenerator.
+                    // Resolve the embedding generator through ILocalModelProviderResolver exactly as the production
+                    // retrieval path does: pick the embedding model's provider (ollama here) and create its generator.
+                    var resolver = factory.Services.GetRequiredService<ILocalModelProviderResolver>();
+                    var embeddingProvider = await resolver.ResolveProviderForModelAsync(EmbeddingModel, CancellationToken.None).ConfigureAwait(false);
+                    using var generator = embeddingProvider.CreateEmbeddingGenerator(new LocalModelSelection
+                    {
+                        ModelName = EmbeddingModel,
+                        ProviderName = embeddingProvider.ProviderName
+                    });
 
                     var embeddings = await generator.GenerateAsync(["local embedding smoke test"]).ConfigureAwait(false);
                     var embedding = embeddings[0];
@@ -112,7 +122,7 @@ public sealed class EmbeddingSmokeTests
         if (!string.IsNullOrWhiteSpace(configuredConnectionString))
         {
             var endpointPrefix = "Endpoint=";
-            var endpoint = configuredConnectionString.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            var endpoint = configuredConnectionString.Split(separator: ';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                                                      .FirstOrDefault(part => part.StartsWith(endpointPrefix, StringComparison.OrdinalIgnoreCase));
 
             if (endpoint is not null)

@@ -33,8 +33,8 @@ internal static class FakeOllamaEndpointMapper
         app.MapDelete("/api/delete", (Delegate)((HttpContext context) => DeleteEndpoint.HandleAsync(context, state)));
         app.MapPost("/api/chat", (Delegate)((HttpContext context) => ChatEndpoint.HandleAsync(context, state)));
         app.MapPost("/api/generate", (Delegate)((HttpContext context) => GenerateEndpoint.HandleAsync(context, state)));
-        app.MapPost("/api/embed", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, false)));
-        app.MapPost("/api/embeddings", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, true)));
+        app.MapPost("/api/embed", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, legacy: false)));
+        app.MapPost("/api/embeddings", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, legacy: true)));
         app.MapPost("/test/failures", (Delegate)((HttpContext context) => TestControlEndpoints.EnqueueFailureAsync(context, state)));
         app.MapDelete("/test/failures", (HttpContext context) => TestControlEndpoints.ClearFailures(context, state));
         app.MapGet("/test/requests", (HttpContext context) => TestControlEndpoints.GetRequests(context, state));
@@ -131,14 +131,29 @@ internal static class FakeOllamaEndpointMapper
         }
     }
 
-    internal static void Record(HttpContext context, FakeOllamaState state, string? model, int messageCount, string? prompt)
+    internal static void Record(HttpContext context, FakeOllamaState state, string? model, int messageCount, string? prompt, string? keepAlive = null)
     {
         state.Record(new FakeOllamaRequest(context.Request.Method,
             context.Request.Path.Value ?? string.Empty,
             model,
             messageCount,
             prompt is null ? null : ComputePromptHash(prompt),
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow,
+            keepAlive));
+    }
+
+    /// <summary>
+    ///     Reads the request's <c>keep_alive</c> field as a normalized string, or <c>null</c> when the field is absent.
+    ///     Ollama accepts both string durations ("5m", "0") and bare numbers, so both JSON kinds are captured.
+    /// </summary>
+    internal static string? GetKeepAlive(JsonElement element)
+    {
+        if (!element.TryGetProperty("keep_alive", out var keepAlive))
+        {
+            return null;
+        }
+
+        return keepAlive.ValueKind == JsonValueKind.String ? keepAlive.GetString() : keepAlive.GetRawText();
     }
 
     internal static IReadOnlyList<double> Embed(string input, int dimensions)

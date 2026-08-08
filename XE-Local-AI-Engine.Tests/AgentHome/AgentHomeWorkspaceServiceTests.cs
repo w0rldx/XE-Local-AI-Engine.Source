@@ -1,0 +1,474 @@
+namespace XE_Local_AI_Engine.Tests.AgentHome;
+
+using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
+using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
+
+/// <summary>
+///     Workspace-copy coverage: the real <see cref="AgentHomeWorkspaceService" /> walks a real temp source
+///     tree and copies survivors into the <see cref="FakeSandboxRuntimeProvider" /> in-memory sandbox (no Docker). It
+///     proves exclusions, symlink-escape rejection, the per-folder byte budget, the git baseline, and the read-only
+///     mount copy fallback.
+/// </summary>
+public sealed class AgentHomeWorkspaceServiceTests : IDisposable
+{
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
+
+    private readonly List<string> _tempDirs = [];
+
+    public void Dispose()
+    {
+        foreach (var dir in _tempDirs)
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort temp cleanup.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Best-effort temp cleanup.
+            }
+        }
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_CopiesSurvivorsAndExcludesSecretsAndOutputs()
+    {
+        var source = NewTempDir();
+        Directory.CreateDirectory(Path.Combine(source, "src"));
+        Directory.CreateDirectory(Path.Combine(source, "node_modules"));
+        await File.WriteAllTextAsync(Path.Combine(source, "src", "App.cs"), "x");
+        await File.WriteAllTextAsync(Path.Combine(source, "README.md"), "x");
+        await File.WriteAllTextAsync(Path.Combine(source, ".env"), "SECRET=1");
+        await File.WriteAllTextAsync(Path.Combine(source, "node_modules", "lib.js"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
+
+        AssertEx.Equal(expected: 1, snapshots.Count);
+        var snapshot = snapshots[0];
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshot.Status);
+        AssertEx.Equal(expected: 2, snapshot.CopiedFileCount);
+        AssertEx.Equal(expected: 1, snapshot.ExcludedFileCount);
+        AssertEx.Equal(expected: 1, snapshot.ExcludedDirectoryCount);
+        AssertEx.Equal("workspace/selected/proj", snapshot.WorkspacePath);
+
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(paths, path => path == "/agent-home/workspace/selected/proj/src/App.cs");
+        AssertEx.Contains(paths, path => path == "/agent-home/workspace/selected/proj/README.md");
+        AssertEx.True(paths.All(path => !path.EndsWith("/.env", StringComparison.Ordinal)), ".env must be excluded");
+        AssertEx.True(paths.All(path => !path.Contains("node_modules", StringComparison.Ordinal)), "node_modules must be pruned");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenSymlinkEscapesRoot_Throws()
+    {
+        SymlinkSupport.EnsureSupported();
+
+        var source = NewTempDir();
+        var outside = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(outside, "secret.txt"), "leak");
+        Directory.CreateSymbolicLink(Path.Combine(source, "escape"), outside);
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenSymlinkStaysInsideRoot_CopiesRealFileAndSkipsLink()
+    {
+        SymlinkSupport.EnsureSupported();
+
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "real.txt"), "x");
+        File.CreateSymbolicLink(Path.Combine(source, "link.txt"), Path.Combine(source, "real.txt"));
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
+
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshots[0].Status);
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(paths, path => path.EndsWith("/real.txt", StringComparison.Ordinal));
+        AssertEx.True(paths.All(path => !path.EndsWith("/link.txt", StringComparison.Ordinal)), "an in-root symlink is not copied");
+    }
+
+    /// <summary>
+    ///     The junction twin of <see cref="PrepareSelectedFoldersAsync_WhenSymlinkEscapesRoot_Throws" />.
+    ///     <para>
+    ///         That test needs <c>SeCreateSymbolicLinkPrivilege</c>, so on a stock Windows 11 box (Developer Mode off,
+    ///         unelevated) it skips and this guard has no Windows coverage at all — measured on the machine this was
+    ///         written on. A junction is the same reparse point and needs no privilege, so it proves the same guard on
+    ///         exactly the hosts where the symbolic-link test cannot run. It is also the likelier real-world shape:
+    ///         <c>mklink /J</c> and most build tooling produce junctions, so a selected folder can contain one without
+    ///         anyone having arranged it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenJunctionEscapesRoot_Throws()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var source = NewTempDir();
+        var outside = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(outside, "secret.txt"), "leak");
+        AssertEx.True(JunctionSupport.TryCreate(Path.Combine(source, "escape"), outside),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+
+        // Nothing may reach the sandbox: a partial copy that stops at the escape is still a copy of whatever
+        // preceded it, and the caller cannot tell the difference from a clean refusal.
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    /// <summary>
+    ///     The junction twin of
+    ///     <see cref="PrepareSelectedFoldersAsync_WhenSymlinkStaysInsideRoot_CopiesRealFileAndSkipsLink" />.
+    ///     <para>
+    ///         The symbolic-link version links a FILE; a junction is a directory reparse point only, so the analogue
+    ///         plants a directory junction that stays inside the root. The guard must still decline to walk it — the
+    ///         file is copied once through its real path and never a second time through the link, which is what stops
+    ///         a contained listing from silently doubling or cycling.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenJunctionStaysInsideRoot_CopiesRealFileAndSkipsLink()
+    {
+        JunctionSupport.EnsureSupported();
+
+        var source = NewTempDir();
+        var real = Path.Combine(source, "real");
+        Directory.CreateDirectory(real);
+        await File.WriteAllTextAsync(Path.Combine(real, "file.txt"), "x");
+        AssertEx.True(JunctionSupport.TryCreate(Path.Combine(source, "link"), real),
+            "the fixture must be able to plant a junction once EnsureSupported has passed");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
+
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshots[0].Status);
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(paths, path => path.EndsWith("/real/file.txt", StringComparison.Ordinal));
+        AssertEx.True(paths.All(path => !path.Contains("/link/", StringComparison.Ordinal)),
+            "an in-root junction is not walked");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenHostPathMissingOrExtended_FailsClosed()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        var missing = Path.Combine(Path.GetTempPath(), "agenthome-missing-" + Guid.NewGuid().ToString("N"));
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", missing)]));
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", @"\\?\C:\windows")]));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenOverByteBudget_ClearsAndRejectsBeforeCopy()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "big.bin"), new string(c: 'a', count: 4096));
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider, maxBytes: 100);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_AfterCopy_IssuesHardenedGitBaselineInWorkspace()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
+
+        var gitCommands = provider.ExecutedCommands.Where(command => command.Executable == "git").ToArray();
+
+        // Every baseline command runs in the selected workspace with the byte-stabilizing git flags so a copied
+        // .gitattributes cannot perturb the baseline (and thus the later diff) bytes.
+        AssertEx.True(gitCommands.Length > 0, "the baseline must issue git commands");
+        AssertEx.True(gitCommands.All(command => command.WorkingDirectory == "/agent-home/workspace/selected"),
+            "every baseline command runs in the selected workspace");
+        AssertEx.True(gitCommands.All(command => HasHardenedFlags(command.Arguments)),
+            "every baseline command carries -c core.hooksPath=/dev/null and -c core.attributesfile=/dev/null");
+
+        AssertEx.True(IssuesArgument(gitCommands, "init"), "git init must run");
+        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("config")
+                                                 && command.Arguments.Contains("core.autocrlf")
+                                                 && command.Arguments.Contains("false")),
+            "core.autocrlf must be disabled");
+        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("config")
+                                                 && command.Arguments.Contains("core.filemode")
+                                                 && command.Arguments.Contains("false")),
+            "core.filemode must be disabled");
+        AssertEx.True(IssuesArgument(gitCommands, "add"), "git add -A must run");
+        AssertEx.True(IssuesArgument(gitCommands, "commit"), "git commit must run for the baseline");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenBaselineCommandFails_Throws()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        // git init returns a non-zero exit code; the baseline must fail the prepare rather than continue.
+        provider.RegisterCommand(BaselineCommandKey("init"), exitCode: 1, string.Empty, "fatal: cannot init");
+        var service = CreateService(provider);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_ReplacesSelectionAWithBWithoutResidue()
+    {
+        var sourceA = NewTempDir();
+        var sourceB = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(sourceA, "alpha.txt"), "a");
+        await File.WriteAllTextAsync(Path.Combine(sourceB, "bravo.txt"), "b");
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("a", sourceA)]);
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("b", sourceB)]);
+
+        var paths = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(paths, path => path.EndsWith("/b/bravo.txt", StringComparison.Ordinal));
+        AssertEx.True(paths.All(path => !path.Contains("/a/", StringComparison.Ordinal)), "selection A must be removed before B is copied");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_ReplacesSelectionWithEmptyRoot()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "alpha.txt"), "a");
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("a", source)]);
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle, []);
+
+        AssertEx.Empty(snapshots);
+        AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenResetCannotProveEmpty_KillsPoisonedSandbox()
+    {
+        var inner = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await inner.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(new ResetFailingProvider(inner));
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() => service.PrepareSelectedFoldersAsync(handle, []));
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => inner.ConnectAsync(CreateRequest().AttachKey));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenResetAndKillFail_MarksOwnerNodePoisoned()
+    {
+        var inner = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await inner.CreateOrAttachAsync(CreateRequest());
+        var leases = new AgentHomeExecutionLeaseManager();
+        var service = CreateService(new ResetFailingProvider(inner, failKill: true), leaseManager: leases);
+
+        await AssertEx.ThrowsAsync<AgentHomeWorkspacePoisonedException>(() => service.PrepareSelectedFoldersAsync(handle, []));
+
+        AssertEx.True(leases.IsPoisoned(new AgentHomeExecutionLeaseKey("owner", "node")));
+    }
+
+    private static string BaselineCommandKey(params string[] tail)
+    {
+        return AgentHomeGit.Executable + " " + string.Join(" ", AgentHomeGit.Arguments(tail));
+    }
+
+    /// <summary>
+    ///     <c>core.fsmonitor=</c> is a security pin, not a byte-stability one: git executes a configured
+    ///     <c>core.fsmonitor</c> value as a shell command on the first index refresh, so an unpinned invocation lets
+    ///     repository-local config run commands wherever git runs. It is asserted alongside the byte-stabilizing flags
+    ///     because the whole set has to stay identical between baseline creation and diff.
+    /// </summary>
+    private static bool HasHardenedFlags(IReadOnlyList<string> arguments)
+    {
+        return arguments.Contains("core.hooksPath=/dev/null")
+               && arguments.Contains("core.attributesfile=/dev/null")
+               && arguments.Contains("core.fsmonitor=");
+    }
+
+    private static bool IssuesArgument(IReadOnlyList<SandboxCommandRequest> commands, string argument)
+    {
+        return commands.Any(command => command.Arguments.Contains(argument));
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenReadOnlyMountMode_FallsBackToCopy()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle,
+            [Folder("proj", source, SelectedFolderMode.ReadOnlyMount)]);
+
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshots[0].Status);
+        AssertEx.True(snapshots[0].CopiedFileCount > 0, "a read-only mount folder is still copied in the MVP");
+    }
+
+    private static AgentHomeWorkspaceService CreateService(IAgentSandboxRuntimeProvider provider,
+        long maxBytes = 536870912,
+        IAgentHomeExecutionLeaseManager? leaseManager = null)
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithAgentHomeMaxSelectedFolderBytes(maxBytes)
+                                                     .Build();
+        var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
+        var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
+        return new AgentHomeWorkspaceService(provider,
+            isolation,
+            new SensitiveFileExclusionService(),
+            runtimeSettings,
+            NullLogger<AgentHomeWorkspaceService>.Instance);
+    }
+
+    private static ResolvedSelectedFolder Folder(string alias, string hostPath, SelectedFolderMode mode = SelectedFolderMode.Copy)
+    {
+        return new ResolvedSelectedFolder(Guid.NewGuid(), alias, hostPath, mode);
+    }
+
+    private static SandboxCreateRequest CreateRequest()
+    {
+        return new SandboxCreateRequest
+        {
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = "owner",
+                NodeId = "node",
+                ProviderName = "fake",
+                RuntimeProfile = "dotnet-agent-home",
+                ManifestVersion = AgentHomeManifest.CurrentVersion
+            },
+            RuntimeProfile = "dotnet-agent-home",
+            NetworkPolicy = SandboxNetworkPolicy.None
+        };
+    }
+
+    private string NewTempDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "agenthome-ws-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(dir);
+        return dir;
+    }
+
+    private sealed class FixedClock : TimeProvider
+    {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedClock(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
+    }
+
+    private sealed class ResetFailingProvider : IAgentSandboxRuntimeProvider
+    {
+        private readonly FakeSandboxRuntimeProvider _inner;
+        private readonly bool _failKill;
+
+        public ResetFailingProvider(FakeSandboxRuntimeProvider inner, bool failKill = false)
+        {
+            _inner = inner;
+            _failKill = failKill;
+        }
+
+        public string ProviderName => _inner.ProviderName;
+
+        public SandboxProviderCapabilities Capabilities => _inner.Capabilities;
+
+        public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default) =>
+            _inner.CreateOrAttachAsync(request, cancellationToken);
+
+        public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
+            _inner.ConnectAsync(attachKey, cancellationToken);
+
+        public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default) =>
+            _inner.ExecuteAsync(handle, request, cancellationToken);
+
+        public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            _inner.CopyIntoAsync(handle, request, cancellationToken);
+
+        public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            throw new IOException("injected reset failure");
+
+        public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            _inner.ReadFileAsync(handle, sandboxPath, cancellationToken);
+
+        public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            _inner.CopyOutAsync(handle, request, cancellationToken);
+
+        public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
+            _inner.CancelCommandAsync(handle, executionId, cancellationToken);
+
+        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
+            _failKill ? throw new IOException("injected kill failure") : _inner.KillAsync(handle, cancellationToken);
+    }
+}

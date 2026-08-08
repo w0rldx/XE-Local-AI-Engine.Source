@@ -48,13 +48,29 @@ public sealed class ModelNameValidatorTests
     [Test]
     public void IsValid_WhenNameExceedsMaxLength_ReturnsFalse()
     {
-        AssertEx.False(_validator.IsValid(new string('a', 101)));
+        AssertEx.False(_validator.IsValid(new string(c: 'a', count: 151)));
     }
 
     [Test]
-    public void IsValid_WhenNameContainsForwardSlash_ReturnsFalse()
+    [Arguments("hf.co/unsloth/gemma-3-12b-it-GGUF:Q8_0")]
+    [Arguments("huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M")]
+    [Arguments("hf.co/org/repo")]
+    // Bare org/repo[:quant] — what first-run provisioning and GGUF pulls produce (the hf.co/ prefix is optional).
+    [Arguments("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")]
+    [Arguments("foo/bar")]
+    [Arguments("org/repo:Q4_K_M")]
+    public void IsValid_WhenNameIsHuggingFaceGgufReference_ReturnsTrue(string modelName)
     {
-        AssertEx.False(_validator.IsValid("foo/bar"));
+        AssertEx.True(_validator.IsValid(modelName));
+    }
+
+    [Test]
+    [Arguments("hf.co/a/b/c")]
+    [Arguments("a/b/c")]
+    [Arguments("hf.co/../secret")]
+    public void IsValid_WhenNameContainsDisallowedSlashForm_ReturnsFalse(string modelName)
+    {
+        AssertEx.False(_validator.IsValid(modelName));
     }
 
     [Test]
@@ -73,6 +89,12 @@ public sealed class ModelNameValidatorTests
     public void IsValid_WhenNameContainsRemoteUri_ReturnsFalse()
     {
         AssertEx.False(_validator.IsValid("http://evil.com/model"));
+    }
+
+    [Test]
+    public void IsValid_WhenNameContainsFileUri_ReturnsFalse()
+    {
+        AssertEx.False(_validator.IsValid("file:///etc/passwd"));
     }
 
     [Test]

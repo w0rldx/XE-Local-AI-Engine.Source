@@ -1,0 +1,4256 @@
+{
+	"basicFormatOption": "de-DE",
+	"common": {
+		"loading": "Lädt...",
+		"refresh": "Aktualisieren",
+		"refreshing": "Aktualisiere...",
+		"filterReset": "Filter zurücksetzen",
+		"close": "Schließen",
+		"confirm": "Bestätigen",
+		"cancel": "Abbrechen",
+		"ok": "Ok",
+		"edit": "Bearbeiten",
+		"view": "Anzeigen",
+		"delete": "Löschen",
+		"density": "Dichte",
+		"densityCompact": "Kompakt",
+		"densityComfortable": "Komfortabel",
+		"densitySpacious": "Geräumig",
+		"create": "Erstellen",
+		"search": "Suchen",
+		"filters": "Filter",
+		"save": "Speichern",
+		"discard": "Verwerfen",
+		"keepEditing": "Weiter bearbeiten",
+		"noData": "Keine Einträge gefunden",
+		"entries": "Einträge",
+		"error": "Fehler",
+		"fetchError": "Beim Laden der Tabellendaten ist ein Problem aufgetreten.",
+		"providers": {
+			"cloudflareAccess": "Cloudflare Access"
+		},
+		"pagination": {
+			"rowsPerPage": "Zeilen pro Seite",
+			"showingRange": "{{from}}–{{to}} von {{total}}"
+		},
+		"confirmation": "Bestätigung",
+		"workerNode": "Worker-Node",
+		"hide": "Ausblenden"
+	},
+	"theme": {
+		"title": "Design",
+		"light": "Hell",
+		"dark": "Dunkel",
+		"switchToLight": "Zum hellen Modus wechseln",
+		"switchToDark": "Zum dunklen Modus wechseln",
+		"toggleColorScheme": "Farbschema umschalten"
+	},
+	"navigation": {
+		"home": "Start",
+		"chat": "Chat",
+		"development": "Entwicklung",
+		"knowledgeBase": "Wissensdatenbank",
+		"dashboard": "Dashboard",
+		"binding": "Node-Bindung",
+		"nodeSettings": "Node-Einstellungen",
+		"cloudSettings": "Cloud-Einstellungen",
+		"diagnostics": "Diagnose",
+		"settingsGroup": "Einstellungen",
+		"automationGroup": "Automatisierung",
+		"previewGroup": "Vorschau",
+		"models": "Modelle",
+		"modelsInstalled": "Installiert",
+		"recommendations": "Empfehlungen",
+		"loadedModels": "Geladen",
+		"tools": "Tools",
+		"commands": "Befehle",
+		"agents": "Agenten",
+		"mcp": "MCP",
+		"scheduler": "Planer",
+		"modelRecommendations": "Modellempfehlungen",
+		"invocations": "Aufrufe",
+		"usage": "Nutzung",
+		"schedule": "Terminplaner",
+		"user": "Benutzer",
+		"skills": "Skills",
+		"customTools": "Eigene Tools",
+		"preview": "Open Canvas",
+		"images": "Bildgenerierung"
+	},
+	"chat": {
+		"thoughts": "Gedanken",
+		"words": "Wörter",
+		"thinking": "denkt…",
+		"reasoningMode": "Reasoning-Modus",
+		"toolCall": {
+			"sending": "Sende",
+			"inFlight": "Aktiv",
+			"done": "Fertig",
+			"failed": "Fehlgeschlagen",
+			"thinkingLive": "Denke…",
+			"thoughtFor": "Gedacht für {{s}}s",
+			"name": "Tool",
+			"live": "live",
+			"argsLabel": "Argumente",
+			"resultLabel": "Ergebnis",
+			"errorLabel": "Fehler",
+			"noOutput": "(keine Ausgabe)",
+			"approvalPrompt": "Dieses Tool benötigt deine Freigabe zur Ausführung.",
+			"approve": "Freigeben",
+			"deny": "Ablehnen",
+			"approveSession": "Für diese Sitzung freigeben"
+		},
+		"askUser": {
+			"title": "Der Assistent braucht deine Eingabe",
+			"recommended": "Empfohlen",
+			"otherOption": "Andere…",
+			"otherPlaceholder": "Eigene Antwort eingeben",
+			"submit": "Antwort senden",
+			"answerAllHint": "Beantworte jede Frage, um fortzufahren."
+		},
+		"notices": {
+			"modelSubstituted": "Modell ersetzt",
+			"toolDisabled": "Tool deaktiviert",
+			"historyTruncated": "Verlauf gekürzt"
+		},
+		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
+	},
+	"pages": {
+		"development": {
+			"validation": {
+				"noReport": "Für diese Aufgabe wurde noch keine deterministische Validierung ausgeführt.",
+				"loading": "Validierungsbericht wird geladen",
+				"loadError": "Der Validierungsbericht konnte nicht geladen werden.",
+				"unreadable": "Der gespeicherte Validierungsbericht konnte nicht gelesen werden, daher ist sein Ergebnis nicht vertrauenswürdig.",
+				"passed": "Validierung bestanden",
+				"failed": "Validierung fehlgeschlagen",
+				"failedTitle": "Validierung fehlgeschlagen",
+				"noTestsTitle": "Die Validierung hat keine Tests ausgeführt",
+				"current": "Aktuell",
+				"invalidated": "Ungültig",
+				"supersededTitle": "Dieses Validierungsergebnis ist nicht mehr aktuell",
+				"supersededBody": "Ein Validierungslauf war gegen einen früheren Stand dieser Aufgabe erfolgreich, doch das Arbeitsverzeichnis hat sich seitdem geändert. Seine Zahlen sind nicht das aktuelle Ergebnis — führen Sie die deterministische Validierung erneut aus.",
+				"failedInvalidated": "Das fehlgeschlagene Gate hat die Freigabe-Nachweise dieser Aufgabe entwertet, deshalb ist der Bericht als ungültig markiert. Der Fehler unten ist dennoch das, was tatsächlich passiert ist.",
+				"base": "Basis",
+				"evidence": "Gespeicherte Nachweise",
+				"noEvidence": "Noch keine Validierungs- oder Review-Nachweise.",
+				"failure": {
+					"commandFailed": "Ein Validierungsbefehl wurde mit einem Fehlercode beendet.",
+					"commandDidNotComplete": "Ein Validierungsbefehl wurde nicht vollständig ausgeführt.",
+					"missingCommandEvidence": "Im Bericht fehlt der Nachweis für einen Befehl, den dieses Profil verlangt.",
+					"testResultsUnparsed": "Die Testergebnisse konnten nicht ausgewertet werden, daher ist keine Testzahl dieses Laufs vertrauenswürdig.",
+					"noTestsExecuted": "Die Suite lief, hat aber keine Tests ausgeführt — dieser Lauf belegt nur den Build, nicht das Verhalten.",
+					"testsFailed": "Mindestens ein Test ist fehlgeschlagen."
+				},
+				"parseFailure": {
+					"noTestProjects": "Dieses Repository enthält kein Testprojekt, es gibt also nichts zu validieren.",
+					"summaryNotFound": "In der Befehlsausgabe wurde keine Testzusammenfassung gefunden.",
+					"summaryIncomplete": "Die Testzusammenfassung war unvollständig.",
+					"summaryInconsistent": "Die Zahlen der Testzusammenfassung passen nicht zusammen.",
+					"outputTruncated": "Die Befehlsausgabe wurde abgeschnitten, bevor die Testzusammenfassung geschrieben wurde."
+				},
+				"tests": {
+					"noTestsTitle": "Keine Tests zum Ausführen",
+					"unparsedTitle": "Testergebnisse konnten nicht ausgewertet werden",
+					"noTestsConsequence": "Ein grüner Lauf belegt hier nur den Build — niemals das Verhalten.",
+					"unparsedConsequence": "Für diesen Lauf ist keine Zahl für ausgeführte, bestandene oder fehlgeschlagene Tests verfügbar.",
+					"discovered": "Tests gefunden",
+					"executed": "Tests ausgeführt",
+					"passed": "Tests bestanden",
+					"failed": "Tests fehlgeschlagen"
+				},
+				"command": {
+					"incomplete": "Nicht abgeschlossen",
+					"truncated": "Ausgabe abgeschnitten",
+					"exitCode": "Exit",
+					"capturedOutput": "Aufgezeichnete Ausgabe"
+				}
+			},
+			"form": {
+				"securityWarning": "Entwicklungsbefehle laufen unter Ihrem Host-Benutzer. Das verwaltete Arbeitsverzeichnis begrenzt anwendungsvermittelte Änderungen, ist aber keine Betriebssystem-Isolation — Repository-Code kann auf andere Host-Ressourcen zugreifen.",
+				"securityWarningContainer": "Entwicklungsbefehle laufen in einem gehärteten Container — schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces — in den nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse eingebunden sind. Repository-Code wird weiterhin ausgeführt; registrieren Sie daher nur Repositories, denen Sie vertrauen.",
+				"trustAcknowledgement": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle mit meinen Host-Benutzerrechten auszuführen.",
+				"trustAcknowledgementContainer": "Ich vertraue dem ausgewählten Repository, Entwicklungsbefehle in der Container-Sandbox dieses Knotens auszuführen.",
+				"repository": "Registriertes Repository",
+				"repositoryDescription": "Der Agent arbeitet in einem verwalteten Arbeitsverzeichnis, das an dieses registrierte Git-Repository gebunden ist.",
+				"repositoryPlaceholder": "Repository auswählen",
+				"registerRepository": "Repository registrieren",
+				"createFromTemplate": "Aus Vorlage erstellen",
+				"objective": "Projektziel",
+				"baseBranch": "Basis-Branch",
+				"taskTitle": "Titel der ersten Aufgabe",
+				"requirements": "Anforderungen",
+				"acceptanceCriteria": "Abnahmekriterien (JSON)",
+				"egressPolicy": "Cloud-Richtlinie",
+				"coderModel": "Modell-ID des Coders",
+				"reviewerModel": "Modell-ID des Reviewers",
+				"maxTokens": "Maximale Tokenzahl (optional)",
+				"maxDuration": "Maximale Dauer in Sekunden (optional)",
+				"create": "Entwicklungsprojekt erstellen"
+			},
+			"containerRuntime": {
+				"notYetInUse": "Container-gestützte Ausführung ist noch nicht aktiviert. Heutige Läufe nutzen weiterhin die überwachte Prozess-Sandbox; diese Vorprüfung meldet, ob die Container-Laufzeit verfügbar sein wird, wenn sie umgestellt werden.",
+				"inUse": "Entwicklungsbefehle auf diesem Knoten werden in dieser Container-Laufzeit ausgeführt. Ein hier gemeldeter Fehler stoppt Läufe; es gibt keinen Rückfall auf den Host.",
+				"title": "Container-Laufzeit",
+				"confirm": "Diese Container-Laufzeit bestätigen"
+			},
+			"title": "Entwicklungsmodus",
+			"subtitle": "Führen Sie außerhalb des Chats einen dauerhaften Ablauf aus Coder → Validierung → unabhängigem Review → ausdrücklichem Anwenden aus.",
+			"disabled": "Der Entwicklungsmodus ist durch die Laufzeitkonfiguration dieses Knotens deaktiviert.",
+			"newProject": "Neues Entwicklungsprojekt",
+			"projects": "Projekte",
+			"untitledProject": "Unbenanntes Projekt",
+			"cancelAttempt": "Versuch abbrechen",
+			"repositoryNotConnected": "Repository nicht verbunden",
+			"repositoryUnavailable": "nicht verfügbar",
+			"templateUnavailable": "nicht verfügbar",
+			"repositoryUnavailableDescription": "Das registrierte Repository ist nicht verfügbar oder passt nicht mehr zu diesem Projekt. Entwicklungsaktionen sind blockiert.",
+			"timeline": {
+				"title": "Dauerhafte Ereignis-Chronik"
+			},
+			"empty": {
+				"title": "Noch keine Entwicklungsprojekte",
+				"body": "Legen Sie oben das erste Projekt und die erste Aufgabe an. Dieser Ablauf führt nie in den Chat."
+			},
+			"loading": {
+				"capability": "Verfügbarkeit des Entwicklungsmodus wird geprüft",
+				"projects": "Entwicklungsprojekte werden geladen",
+				"project": "Entwicklungsprojekt wird geladen",
+				"repositories": "Registrierte Entwicklungs-Repositories werden geladen"
+			},
+			"errors": {
+				"create": "Das Entwicklungsprojekt konnte nicht erstellt werden.",
+				"profileDetection": "Das Repository konnte nicht auf ein Build-System untersucht werden."
+			},
+			"nextAction": {
+				"default": "Nächste Aktion starten",
+				"replacement": "Ersatzversuch starten",
+				"review": "Unabhängiges Review starten",
+				"revision": "Überarbeitung durch den Coder starten",
+				"validation": "Deterministische Validierung ausführen"
+			},
+			"attempts": {
+				"title": "Versuche",
+				"role": "Rolle",
+				"model": "Modell",
+				"provider": "Anbieter",
+				"status": "Status",
+				"tokens": "Tokens",
+				"predecessor": "Vorgänger"
+			},
+			"apply": {
+				"title": "Vom Menschen gesteuertes Anwenden des Patches",
+				"awaiting": "Wartet auf ausdrückliche Freigabe",
+				"preview": "Aktuellen Patch ansehen",
+				"apply": "Geprüften Patch anwenden",
+				"previewLabel": "Vorschau des geprüften Patches",
+				"applied": "Patch angewendet.",
+				"subject": "Subjekt",
+				"patch": "Patch",
+				"manifest": "Manifest"
+			},
+			"consent": {
+				"title": "Bevor Sie den Entwicklungsmodus nutzen",
+				"intro": "Im Entwicklungsmodus darf ein Modell Dateien in einem verwalteten Arbeitsverzeichnis ändern, und die Build-, Test- und Lint-Befehle Ihres Repositorys werden auf diesem Rechner ausgeführt. Lesen Sie dies einmal, bevor Sie beginnen.",
+				"container": "Auf diesem Knoten laufen diese Befehle in einem Container: schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces, und eingebunden sind nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse.",
+				"containerNetwork": "Das Netzwerk gehört nicht zu dieser Abschottung. Der Container hat ausgehenden Netzwerkzugriff, und nichts schränkt ein, was er erreichen kann — das Auflösen von Abhängigkeiten benötigt ihn.",
+				"processUser": "Auf diesem Knoten laufen diese Befehle unter dem angemeldeten Benutzerkonto, das die Engine ausführt — mit dessen Zugriff auf Ihre Dateien, nicht nur auf das Repository.",
+				"processNetwork": "Sie haben Netzwerkzugriff, und nichts schränkt ein, was sie erreichen können.",
+				"processLimits": "Grenzen für CPU, Arbeitsspeicher und Prozessanzahl werden nur unter Linux durchgesetzt. Unter Windows gibt es keine — ein außer Kontrolle geratener Befehl wird dort nur durch den Rechner selbst begrenzt.",
+				"trust": "Registrieren Sie nur Repositories, denen Sie vertrauen. Repository-Code wird in jedem Fall ausgeführt.",
+				"disclosureNote": "Dieser Hinweis ist eine Offenlegung, kein Schutz. Ihre Bestätigung wird nur in diesem Browser gespeichert und ändert nichts daran, was ein Entwicklungslauf tun darf.",
+				"checkbox": "Ich habe verstanden, was der Entwicklungsmodus auf diesem Rechner ausführt.",
+				"accept": "Weiter zum Entwicklungsmodus",
+				"decline": "Jetzt nicht"
+			},
+			"policy": {
+				"localOnly": "Nur lokal",
+				"cloudScoped": "Cloud-begrenzt"
+			},
+			"profile": {
+				"title": "Befehlsprofil bestätigen",
+				"detected": "Erkanntes Profil",
+				"detecting": "Das Repository wird auf ein Build-System untersucht …",
+				"detectingLabel": "Build-System wird erkannt",
+				"buildTarget": "Build-Ziel",
+				"buildTargetDescription": "Die Solution oder das Projekt, das das Validierungs-Gate wiederherstellt, baut und testet.",
+				"whitespaceOnly": "Kein Build-System erkannt — die Validierung prüft nur Leerraum. Es wird nichts wiederhergestellt, gebaut oder getestet; eine bestandene Validierung bedeutet also nicht, dass die Änderung kompiliert.",
+				"confirm": "Ich bestätige dieses Befehlsprofil für die gesamte Laufzeit dieses Projekts."
+			},
+			"reconnect": {
+				"description": "Dieses bestehende Projekt muss wieder mit seinem ursprünglich registrierten Repository verbunden werden, bevor Aktionen laufen können.",
+				"repository": "Ursprüngliches Repository",
+				"submit": "Repository neu verbinden"
+			},
+			"register": {
+				"title": "Lokales Git-Repository registrieren",
+				"description": "Geben Sie den absoluten Pfad einmalig ein. Der Server speichert ihn verschlüsselt und gibt nur diesen Alias und eine undurchsichtige Kennung zurück.",
+				"alias": "Alias",
+				"path": "Absoluter Repository-Pfad",
+				"submit": "Repository registrieren",
+				"error": "Das lokale Git-Repository konnte nicht registriert werden."
+			},
+			"template": {
+				"title": "Projekt-Repository aus Vorlage erstellen",
+				"description": "Das Vorlagen-Repository wird an einen neuen Ort auf diesem Host geklont und als Repository des Projekts registriert.",
+				"template": "Vorlagen-Repository",
+				"placeholder": "Vorlage auswählen",
+				"destination": "Absoluter Zielpfad",
+				"destinationDescription": "Wo der Klon angelegt wird. Es muss ein absoluter Pfad außerhalb des Knoten-Datenverzeichnisses sein.",
+				"alias": "Alias des neuen Projekts",
+				"submit": "Aus Vorlage erstellen",
+				"registry": "Registrierte Vorlagen",
+				"registryEmpty": "Es sind noch keine Vorlagen-Repositories registriert.",
+				"registryAlias": "Vorlagen-Alias",
+				"registryPath": "Absoluter Vorlagenpfad",
+				"add": "Vorlage hinzufügen",
+				"remove": "Entfernen",
+				"error": "Das Projekt-Repository konnte nicht aus der Vorlage erstellt werden.",
+				"registryError": "Das Vorlagen-Repository konnte nicht registriert werden.",
+				"removeError": "Das Vorlagen-Repository konnte nicht entfernt werden.",
+				"loadingLabel": "Registrierte Vorlagen werden geladen"
+			},
+			"live": {
+				"noAttempt": "Kein aktiver Versuch",
+				"idle": "Untätig",
+				"watermark": "Wasserzeichen",
+				"dropped": "zusammengefasst",
+				"model": "Modell",
+				"provider": "Anbieter",
+				"speed": "Ausgabe-Tokens/s",
+				"rounds": "Anbieter-Runden",
+				"tools": "Tool-Aufrufe",
+				"commands": "Befehle",
+				"files": "Geänderte Dateien",
+				"context": "Kontext-Reserve",
+				"noProgress": "Zeit ohne Fortschritt",
+				"inputTokens": "Eingabe-Tokens",
+				"outputTokens": "Ausgabe-Tokens",
+				"reasoningTokens": "Reasoning-Tokens",
+				"warning": "Warnung",
+				"noOutput": "Noch keine Live-Ausgabe.",
+				"activityUpdated": "Aktivität aktualisiert",
+				"noTools": "Noch keine Tool-Aktivität.",
+				"noCommands": "Noch keine Befehlsaktivität.",
+				"filesSummary": "{{files}} Datei(en) geändert; Patch-Größe {{bytes}} Bytes.",
+				"tabs": {
+					"live": "Live",
+					"tools": "Tools",
+					"commands": "Befehle",
+					"files": "Dateien",
+					"validation": "Validierung",
+					"details": "Details"
+				},
+				"details": {
+					"attempt": "Versuch",
+					"predecessor": "Vorgänger",
+					"activity": "Aktuelle Aktivität",
+					"subject": "Subjekt",
+					"events": "Dauerhafte Ereignisse"
+				}
+			}
+		},
+		"knowledgeBase": {
+			"title": "Wissensdatenbank",
+			"subtitle": "Dokumente hochladen, indexieren und fundiertes Wissen durchsuchen.",
+			"loadError": "Die Wissensdatenbank konnte nicht geladen werden.",
+			"upload": {
+				"heading": "Dokumente hinzufügen",
+				"prompt": "Dokumente hier ablegen oder zum Durchsuchen klicken",
+				"hint": "PDF, DOCX, Markdown, Text, CSV, JSON — bis zu {{limit}} MB pro Datei.",
+				"dropzoneAria": "Dokumente in die Wissensdatenbank hochladen",
+				"queued": "{{name}} wird indexiert.",
+				"deduplicated": "{{name}} ist bereits in der Wissensdatenbank.",
+				"failed": "{{name}} konnte nicht hochgeladen werden.",
+				"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
+				"unsupported": "{{name}} ist kein unterstützter Dokumenttyp."
+			},
+			"documents": {
+				"heading": "Dokumente",
+				"loading": "Dokumente werden geladen…",
+				"empty": "Noch keine Dokumente. Laden Sie oben eines hoch, um zu beginnen."
+			},
+			"status": {
+				"pending": "Ausstehend",
+				"extracting": "Extrahiere",
+				"chunking": "Zerlege",
+				"embedding": "Einbettung",
+				"indexed": "Indexiert",
+				"failed": "Fehlgeschlagen"
+			},
+			"lastKnownGood": {
+				"label": "Letzter gültiger Stand",
+				"tooltip": "Dieses Dokument wird neu indexiert oder die letzte Neuindexierung ist fehlgeschlagen. Die Ergebnisse stammen aus der zuvor indexierten Version und können veraltet sein."
+			},
+			"table": {
+				"name": "Name",
+				"status": "Status",
+				"chunks": "Segmente",
+				"embeddingModel": "Einbettungsmodell",
+				"size": "Größe",
+				"created": "Erstellt",
+				"actions": "Aktionen",
+				"stale": "Veraltet",
+				"staleTooltip": "Mit einem älteren Modell eingebettet — zum Aktualisieren neu indexieren."
+			},
+			"actions": {
+				"view": "Details anzeigen",
+				"viewAria": "Details von {{name}} anzeigen",
+				"reindex": "Neu indexieren",
+				"reindexAria": "{{name}} neu indexieren",
+				"delete": "Löschen",
+				"deleteAria": "{{name}} löschen"
+			},
+			"reindex": {
+				"success": "Neuindexierung gestartet.",
+				"error": "Neuindexierung konnte nicht gestartet werden."
+			},
+			"reindexCorpus": {
+				"action": "Veraltete neu indexieren",
+				"success": "{{count}} Dokument(e) werden neu indexiert.",
+				"error": "Neuindexierung konnte nicht gestartet werden."
+			},
+			"delete": {
+				"title": "Dokument löschen",
+				"description": "'{{name}}' und die zugehörigen indexierten Segmente aus der Wissensdatenbank löschen? Dies kann nicht rückgängig gemacht werden.",
+				"success": "Dokument aus der Wissensdatenbank entfernt.",
+				"error": "Das Dokument konnte nicht gelöscht werden."
+			},
+			"search": {
+				"heading": "Suche",
+				"placeholder": "Die Wissensdatenbank fragen…",
+				"aria": "Wissensdatenbank durchsuchen",
+				"submit": "Suchen",
+				"score": "Wert {{score}}",
+				"hint": "Die Suche läuft über jedes indexierte Dokument in dieser Wissensdatenbank.",
+				"noResults": "Kein indexierter Inhalt passt zu \"{{query}}\".",
+				"error": "Die Suche konnte nicht abgeschlossen werden."
+			},
+			"detail": {
+				"title": "Dokument",
+				"loading": "Dokument wird geladen…",
+				"updated": "Aktualisiert",
+				"chunks": "Segmente",
+				"chunkLabel": "Segment {{index}}",
+				"noChunks": "Dieses Dokument hat noch keine indexierten Segmente."
+			}
+		},
+		"about": {
+			"title": "Über",
+			"applicationTab": "Anwendung",
+			"licensesTab": "Lizenzen",
+			"version": "Version",
+			"website": "Webseite",
+			"repository": "Repository",
+			"licensesIntro": "Wichtige Drittanbieter-Pakete, die diese Anwendung verwendet.",
+			"searchPackages": "Pakete suchen",
+			"packageName": "Paket",
+			"packageVersion": "Version",
+			"packageLicense": "Lizenz",
+			"packageType": "Typ",
+			"sourceFrontend": "Frontend",
+			"sourceBackend": "Backend",
+			"noPackagesFound": "Keine Pakete gefunden.",
+			"appUpdate": {
+				"title": "Updates",
+				"checkForUpdates": "Nach Updates suchen",
+				"signInWithGitHub": "Mit GitHub anmelden",
+				"privacyNotice": "Die Update-Prüfung kontaktiert GitHub und identifiziert dich über dein GitHub-Konto.",
+				"enterCode": "Gib diesen Code bei GitHub ein:",
+				"openGitHub": "GitHub öffnen",
+				"waitingForAuth": "Warte auf Autorisierung…",
+				"signedIn": "Angemeldet",
+				"signedInAs": "Angemeldet als {{login}}",
+				"signOut": "Abmelden",
+				"signOutNote": "Das Abmelden entfernt das GitHub-Token von diesem Gerät. Um den Zugriff vollständig zu widerrufen, verwalte ihn in deinen GitHub-Einstellungen.",
+				"manageGitHubAccess": "GitHub-Zugriff verwalten",
+				"authFailedTitle": "Autorisierung fehlgeschlagen",
+				"authDenied": "Die Autorisierung wurde abgelehnt.",
+				"authExpired": "Der Code ist abgelaufen. Bitte erneut versuchen.",
+				"authError": "Bei der Autorisierung ist ein Fehler aufgetreten.",
+				"retry": "Erneut versuchen",
+				"reauthRequired": "Deine GitHub-Sitzung ist abgelaufen. Bitte melde dich erneut an.",
+				"noAccess": "Dein Konto hat keinen Zugriff auf dieses Release. Bitte um Aufnahme in das Repository.",
+				"updateNow": "Jetzt aktualisieren",
+				"restarting": "Neustart…",
+				"applyError": "Update fehlgeschlagen. Bitte erneut versuchen.",
+				"upToDate": "Du bist auf dem neuesten Stand.",
+				"availableVersion": "Verfügbar:",
+				"offline": "Der Update-Dienst konnte nicht erreicht werden. Prüfe deine Verbindung und versuche es erneut.",
+				"checkFailed": "Die Update-Informationen konnten nicht verarbeitet werden. Bitte versuche es später erneut.",
+				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell.",
+				"copyCode": "Code kopieren",
+				"copied": "Kopiert"
+			}
+		},
+		"chat": {
+			"windowTitle": "Chatfenster",
+			"lockedState": "Diese Unterhaltung ist gesperrt. Entsperre sie, um Nachrichten anzuzeigen.",
+			"inputPlaceholder": "Nachricht eingeben",
+			"commands": { "menuLabel": "Slash-Befehle" },
+			"send": "Senden",
+			"modelLabel": "Modell",
+			"modelPlaceholder": "Modell auswählen",
+			"modelLoaded": "Aktuell geladen",
+			"modelAvailable": "Verfügbar",
+			"modelUnloadingIn": "Entladen in {{time}}",
+			"modelExpired": "Nicht geladen",
+			"modelSelector": {
+				"availableModels": "Verfügbare Modelle",
+				"hint": "Wähle ein auf dem ausgewählten Node installiertes Modell.",
+				"noChatModels": "Keine chat-fähigen Modelle",
+				"search": "Modelle suchen...",
+				"noResults": "Keine Modelle gefunden",
+				"unavailableModels": "Nicht verfügbare Modelle",
+				"cloudGroup": "Cloud (Codex)",
+				"cloudEgressCue": "An OpenAI gesendet",
+				"cloudGroupAzure": "Cloud (Azure Foundry)",
+				"cloudEgressCueAzure": "An Azure gesendet"
+			},
+			"reasoningEffortLabel": "Reasoning-Effort",
+			"reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
+			"localToolsLabel": "Lokale Tools",
+			"localToolsEnabled": "Lokale Tools aktiviert",
+			"localToolsDisabled": "Lokale Tools deaktiviert",
+			"knowledgeBaseLabel": "Wissensdatenbank verwenden",
+			"knowledgeBaseEnabled": "Wissensdatenbank aktiviert",
+			"knowledgeBaseDisabled": "Wissensdatenbank deaktiviert",
+			"knowledgeBaseNoDocuments": "Keine indexierten Dokumente zum Durchsuchen",
+			"sources": {
+				"title": "Quellen",
+				"score": "Score {{value}}",
+				"open": "Quelle öffnen: {{title}}"
+			},
+			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
+			"cloudToolsLabel": "Cloud-Tools",
+			"cloudToolsEnabled": "Cloud-Tools aktiviert",
+			"cloudToolsDisabled": "Cloud-Tools deaktiviert",
+			"cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
+			"cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Provider senden",
+			"reasoningEffortOptions": {
+				"none": "Aus",
+				"on": "An",
+				"minimal": "Minimal",
+				"low": "Niedrig",
+				"medium": "Mittel",
+				"high": "Hoch",
+				"xhigh": "Höchste"
+			},
+			"newConversation": "Neuer normaler Chat",
+			"newEncryptedConversation": "Neuer verschlüsselter Chat",
+			"storageMode": {
+				"plain": "Normal",
+				"encrypted": "Verschlüsselt",
+				"plainTooltip": "Wird als lesbarer Chatverlauf für dein Konto gespeichert.",
+				"encryptedTooltip": "Wird verschlüsselt gespeichert. Mit deinem Passwort für verschlüsselte Synchronisierung entsperren."
+			},
+			"encryptedConversation": {
+				"lockedTitle": "Verschlüsselter Chat gesperrt",
+				"lockedDescription": "Gib dein Passwort für verschlüsselte Synchronisierung ein, um verschlüsselte Chats zu entsperren."
+			},
+			"activeNode": {
+				"label": "Aktiver Knoten",
+				"sessionHint": "Aktiv für diesen Browser-Tab/diese Sitzung. Freigeben, um zu wechseln.",
+				"rememberDefault": "Als Standard merken",
+				"release": "Aktiven Knoten freigeben"
+			},
+			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Kopple und verbinde zuerst einen Worker-Node, bevor du Unterhaltungen erstellst.",
+			"waitingForStreamedResponse": "Warte auf gestreamte Antwort",
+			"waitingForResponse": "Warte auf Antwort",
+			"queued": "In Warteschlange — warte auf aktuelle Aufgabe",
+			"loadingModel": "Modell wird geladen…",
+			"remoteViewOnlyTitle": "Remote-Unterhaltung",
+			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
+			"streamErrors": {
+				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuche es erneut.",
+				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuche es erneut oder aktualisiere die Unterhaltung."
+			},
+			"thoughts": "Gedanken",
+			"words": "Wörter",
+			"thinking": "denkt…",
+			"reasoningMode": "Reasoning-Modus",
+			"emptyState": "Erstelle oder wähle eine Unterhaltung, um zu chatten.",
+			"noMessages": "Noch keine Nachrichten.",
+			"noModelGuidance": {
+				"title": "Noch kein Chat-Modell installiert",
+				"body": "Installiere ein GGUF-Modell, um lokal zu chatten.",
+				"goToModels": "Zu den Modellen"
+			},
+			"pendingApprovalLabel": "Ausstehende Freigabe",
+			"activityTimeline": "Aktivitätsverlauf",
+			"activityDetails": {
+				"arguments": "Argumente",
+				"result": "Ergebnis"
+			},
+			"activityTimelineTypes": {
+				"ToolCall": "Tool-Aufruf",
+				"ToolResult": "Tool-Ergebnis",
+				"ContextRetrieval": "Kontextabruf",
+				"WorkflowStepStarted": "Workflow-Schritt gestartet",
+				"WorkflowStepCompleted": "Workflow-Schritt abgeschlossen",
+				"WorkflowStepFailed": "Workflow-Schritt fehlgeschlagen",
+				"AgentHandoff": "Agent-Übergabe",
+				"ContentGeneration": "Inhaltserstellung",
+				"Error": "Fehler",
+				"Unknown": "Typ {{type}}"
+			},
+			"roles": {
+				"system": "System",
+				"user": "Benutzer",
+				"assistant": "Assistent",
+				"tool": "Tool",
+				"unknown": "Rolle {{role}}"
+			},
+			"clientSelector": {
+				"label": "Client-Node",
+				"placeholder": "Einen Online-Client auswählen",
+				"activeSessionHint": "Durch die Auswahl wird der Node für diese Browser-Sitzung aktiv. Freigeben, um zu wechseln.",
+				"activeOnceChosen": "Aktiv für diesen Tab"
+			},
+			"conversationList": {
+				"title": "Unterhaltungen",
+				"show": "Seitenleiste ausklappen",
+				"hide": "Seitenleiste einklappen",
+				"expandAria": "Seitenleiste ausklappen",
+				"collapseAria": "Seitenleiste einklappen",
+				"untitled": "Unbenannte Unterhaltung",
+				"archived": "Archiviert",
+				"remote": "Remote",
+				"remoteTooltip": "Von einem gekoppelten Client gestartet. Auf diesem Knoten nur lesbar.",
+				"noClientAssigned": "Kein Client zugewiesen",
+				"empty": "Noch keine Unterhaltungen.",
+				"delete": "Löschen",
+				"deleteConfirm": "Diese Unterhaltung löschen? Das kann nicht rückgängig gemacht werden.",
+				"deleteSuccess": "Unterhaltung gelöscht.",
+				"deleteShiftHint": "Umschalt+Klick überspringt Bestätigung",
+				"actionsAria": "Unterhaltungsaktionen",
+				"archive": "Archivieren",
+				"noMatches": "Keine Unterhaltungen entsprechen deiner Suche.",
+				"pin": "Anheften",
+				"pinned": "Angeheftet",
+				"recent": "Kürzlich",
+				"rename": "Umbenennen",
+				"renameAria": "Unterhaltung umbenennen",
+				"searchAria": "Unterhaltungen durchsuchen",
+				"searchPlaceholder": "Suchen",
+				"showArchived": "Archivierte anzeigen",
+				"unarchive": "Aus Archiv holen",
+				"unpin": "Nicht mehr anheften"
+			},
+			"disconnect": {
+				"button": "Trennen",
+				"title": "Client-Node trennen",
+				"descriptionWithName": "\"{{name}}\" trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
+				"descriptionWithoutName": "Den ausgewählten Client-Node trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
+				"confirm": "Trennen"
+			},
+			"release": {
+				"button": "Freigeben",
+				"title": "Node freigeben",
+				"descriptionWithName": "\"{{name}}\" aus deiner aktiven Sitzung freigeben? Der Node bleibt online und kann anschließend wieder ausgewählt werden.",
+				"descriptionWithoutName": "Diesen Node aus deiner aktiven Sitzung freigeben? Der Node bleibt online.",
+				"confirm": "Freigeben"
+			},
+			"nodeInfo": {
+				"button": "Node-Informationen anzeigen",
+				"title": "Node-Informationen",
+				"empty": "Keine Online-Nodes verfügbar.",
+				"emptyTitle": "Keine Nodes verfügbar",
+				"emptyDescription": "Online-Client-Nodes werden hier angezeigt. Stellen Sie sicher, dass ein Node verbunden und online ist.",
+				"searchPlaceholder": "Nodes suchen…",
+				"nodeList": "Nodes",
+				"noMatch": "Keine passenden Nodes",
+				"selectPrompt": "Wählen Sie einen Node für Details",
+				"statusOnline": "Online",
+				"statusBusy": "Beschäftigt",
+				"statusError": "Fehler",
+				"statusOffline": "Offline",
+				"tabOverview": "Übersicht",
+				"tabHardware": "Hardware",
+				"tabModels": "Modelle",
+				"selectNode": "Diesen Node auswählen",
+				"currentNode": "Aktueller Node",
+				"copyInfo": "Info kopieren",
+				"copied": "Kopiert"
+			},
+			"followUpTitle": "Vorgeschlagene Anschlussfragen",
+			"toolApproval": {
+				"title": "Tool-Freigabe erforderlich",
+				"description": "Ein Worker benötigt eine Freigabe, bevor er fortfahren kann.",
+				"reject": "Ablehnen",
+				"approve": "Freigeben"
+			},
+			"sync": {
+				"enableStandard": "Sync aktivieren",
+				"enableEncrypted": "Verschlüsselten Sync aktivieren",
+				"standardEnabledSuccess": "Standard-Sync wurde für diese Unterhaltung aktiviert.",
+				"encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diese Unterhaltung aktiviert.",
+				"confirm": {
+					"keepLocalOnly": "Lokal behalten",
+					"continue": "Weiter",
+					"enableSync": "Sync aktivieren",
+					"enableStandardTitle": "Standard-Sync aktivieren?",
+					"enableEncryptedTitle": "Verschlüsselten Sync aktivieren?",
+					"standardDescription": "Dadurch kann diese TrustedLocal-Unterhaltung mit der Plattform synchronisiert werden. Fahre nur fort, wenn diese Unterhaltung von diesem Gerät hochgeladen werden soll.",
+					"encryptedDescription": "Dadurch wird diese TrustedLocal-Unterhaltung in verschlüsselten Sync umgewandelt. Du musst diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind."
+				}
+			},
+			"encryptedSync": {
+				"unlock": {
+					"title": "Verschlüsselten Sync entsperren",
+					"description": "Gib dein eigenes Sync-Passwort ein, um deine verschlüsselten Unterhaltungen auf diesem Gerät zu entsperren.",
+					"passwordDescription": "Dieses Passwort ist getrennt von deinem Kontopasswort.",
+					"passwordLabel": "Sync-Passwort",
+					"passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort eingeben",
+					"recoveryAction": "Passwort vergessen? Recovery-Key verwenden",
+					"submit": "Entsperren",
+					"errors": {
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"incorrectPassword": "Sync-Passwort ist falsch"
+					},
+					"unlockingTitle": "Verschlüsselter Chat wird entsperrt",
+					"unlockingSubtitle": "Dein Chat-Passwort wird überprüft.",
+					"preparingTitle": "Verschlüsselter Chat wird vorbereitet",
+					"preparingSubtitle": "Verschlüsselter Verlauf wird geladen.",
+					"errorTitle": "Verschlüsselter Chat nicht verfügbar",
+					"errorSubtitle": "Der verschlüsselte Chat konnte nicht vollständig vorbereitet werden."
+				},
+				"setup": {
+					"title": "Verschlüsselten Sync einrichten",
+					"description": "Dies ist ein separates Passwort zu deinem Kontopasswort. Die Plattform kann deine verschlüsselten Chats nicht lesen.",
+					"ssoPasswordDescription": "Dies ist ein separates Passwort zu deiner Kontoanmeldung.",
+					"passwordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"passwordLabel": "Sync-Passwort",
+					"passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort erstellen",
+					"passwordStrength": "Passwortstärke",
+					"strength": {
+						"empty": "Ein eigenes Sync-Passwort hinzufügen",
+						"weak": "Schwach",
+						"reasonable": "Akzeptabel",
+						"strong": "Stark"
+					},
+					"recoveryKeyTitle": "Recovery-Key",
+					"recoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
+					"copy": "Kopieren",
+					"copySuccess": "Recovery-Key wurde in die Zwischenablage kopiert.",
+					"acknowledgement": "Ich habe meinen Recovery-Key sicher notiert oder gespeichert. Mir ist klar, dass er nicht erneut angezeigt werden kann.",
+					"submit": "Recovery-Key generieren",
+					"complete": "Ich habe den Recovery-Key gespeichert",
+					"ready": "Verschlüsselter Sync ist bereit.",
+					"errors": {
+						"shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"setupFailed": "Die Einrichtung des verschlüsselten Syncs ist fehlgeschlagen. Bitte versuche es erneut."
+					}
+				},
+				"recovery": {
+					"title": "Verschlüsselten Sync wiederherstellen",
+					"description": "Verwende deinen einmaligen Recovery-Key, um ein neues Sync-Passwort festzulegen, ohne deine gespeicherten Chats neu zu verschlüsseln.",
+					"recoveryKeyDescription": "Leerzeichen und Bindestriche werden automatisch ignoriert.",
+					"recoveryKeyLabel": "Recovery-Key",
+					"recoveryKeyPlaceholder": "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z1234-56789",
+					"newPasswordDescription": "Verwende ein neues eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"newPasswordLabel": "Neues Sync-Passwort",
+					"newPasswordPlaceholder": "Neues verschlüsseltes Sync-Passwort erstellen",
+					"confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
+					"confirmPasswordPlaceholder": "Dein neues verschlüsseltes Sync-Passwort bestätigen",
+					"submit": "Sync-Passwort zurücksetzen",
+					"resetSuccess": "Dein Sync-Passwort wurde zurückgesetzt.",
+					"newRecoveryKeyTitle": "Dein neuer Recovery-Key",
+					"newRecoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
+					"acknowledgement": "Ich habe meinen neuen Recovery-Key sicher notiert oder gespeichert.",
+					"complete": "Ich habe den Recovery-Key gespeichert",
+					"validation": {
+						"tooShort": "Der Recovery-Key ist zu kurz.",
+						"invalidCharacters": "Der Recovery-Key enthält ungültige Zeichen.",
+						"missingCheckCharacter": "Dem Recovery-Key fehlt ein Prüfzeichen.",
+						"invalidCheckDigit": "Die Prüfziffer des Recovery-Keys ist ungültig.",
+						"invalidLength": "Der Recovery-Key hat eine ungültige Länge.",
+						"invalid": "Der Recovery-Key ist ungültig."
+					},
+					"errors": {
+						"shortPassword": "Dein neues Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"recoveryKeyIncorrect": "Der Recovery-Key ist falsch.",
+						"recoveryFailed": "Die Wiederherstellung ist fehlgeschlagen. Bitte prüfe deinen Recovery-Key und versuche es erneut."
+					}
+				},
+				"reset": {
+					"trigger": "Passwort und Recovery-Key verloren? Tresor löschen",
+					"title": "Verschlüsselten Tresor löschen?",
+					"description": "Dadurch werden dein verschlüsselter Tresor und ALLE Unterhaltungen auf allen Geräten dauerhaft gelöscht. Eine Wiederherstellung ist nicht möglich. Du musst den verschlüsselten Chat danach erneut einrichten.",
+					"confirm": "Alles löschen",
+					"success": "Verschlüsselter Tresor gelöscht. Richte den verschlüsselten Chat erneut ein, um fortzufahren.",
+					"errors": {
+						"apiFailed": "Der verschlüsselte Tresor konnte auf dem Server nicht gelöscht werden.",
+						"wrongPassword": "Falsches Konto-Passwort."
+					},
+					"passwordLabel": "Konto-Passwort",
+					"passwordDescription": "Gib dein Konto-Passwort ein, um die Löschung zu bestätigen.",
+					"passwordPlaceholder": "Dein Konto-Passwort"
+				},
+				"changePassword": {
+					"title": "Sync-Passwort ändern",
+					"description": "Ändere dein verschlüsseltes Sync-Passwort. Deine gespeicherten Chats bleiben weiterhin zugänglich.",
+					"button": "Sync-Passwort ändern",
+					"newPasswordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"newPasswordLabel": "Neues Sync-Passwort",
+					"newPasswordPlaceholder": "Dein neues Sync-Passwort eingeben",
+					"passwordStrength": "Passwortstärke",
+					"strength": {
+						"empty": "Neues Sync-Passwort hinzufügen",
+						"weak": "Schwach",
+						"reasonable": "Akzeptabel",
+						"strong": "Stark"
+					},
+					"confirmPasswordDescription": "Gib dein neues Sync-Passwort zur Bestätigung erneut ein.",
+					"confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
+					"confirmPasswordPlaceholder": "Neues Sync-Passwort bestätigen",
+					"submit": "Passwort ändern",
+					"success": "Sync-Passwort erfolgreich geändert.",
+					"errors": {
+						"shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"changeFailed": "Passwortänderung fehlgeschlagen. Bitte versuche es erneut."
+					}
+				}
+			},
+			"actions": {
+				"branch": "Unterhaltung verzweigen",
+				"branchSuccess": "Verzweigte Unterhaltung wurde erstellt.",
+				"copy": "Nachricht kopieren",
+				"copyCode": "Code kopieren",
+				"copyCodeSuccess": "Kopiert",
+				"copySuccess": "Nachricht wurde in die Zwischenablage kopiert.",
+				"feedback": "Feedback geben",
+				"regenerate": "Antwort neu generieren",
+				"regenerateUnavailable": "Diese Nachricht kann nicht neu generiert werden."
+			},
+			"feedback": {
+				"title": "Nachrichtenfeedback",
+				"description": "Hilf dabei, zukünftige Antworten zu verbessern, indem du diese Assistenten-Nachricht bewertest.",
+				"positive": "Positiv",
+				"negative": "Negativ",
+				"additionalFeedback": "Zusätzliches Feedback",
+				"additionalFeedbackPlaceholder": "Was war gut oder was sollte verbessert werden?",
+				"submit": "Feedback senden",
+				"success": "Feedback wurde erfolgreich gesendet.",
+				"commentAria": "Feedback-Kommentar",
+				"commentPlaceholder": "Kommentar hinzufügen (optional)",
+				"commentTitleDown": "Was ist schiefgelaufen?",
+				"commentTitleUp": "Was war hilfreich?",
+				"down": "Schlechte Antwort",
+				"up": "Gute Antwort"
+			},
+			"revisions": {
+				"position": "Revision {{current}} von {{total}}",
+				"previous": "Vorherige Revision",
+				"next": "Nächste Revision"
+			},
+			"streaming": "Antwort wird empfangen",
+			"defaultAgentName": "Standard-Assistent",
+			"agentSelector": {
+				"search": "Agenten suchen...",
+				"hint": "Einen auf diesem Knoten definierten Agenten auswählen.",
+				"noResults": "Keine Agenten gefunden",
+				"orchestratorBadge": "Orchestrator",
+				"pinnedModelHint": "Verwendet Modell: {{model}}",
+				"triggerLabel": "Agent",
+				"offOptionHint": "Kein Agent — verwendet die Knoten-Standardeinstellung"
+			},
+			"nodeReply": "Knoten-Antwort",
+			"error": {
+				"title": "Antwort fehlgeschlagen",
+				"modelNotInstalled": "Kein Chat-Modell installiert. Lade ein GGUF-Modell herunter, um zu chatten.",
+				"goToModels": "Zu Modelle"
+			},
+			"reasoning": {
+				"label": "Denken: {{effort}}",
+				"effort": {
+					"none": "Aus",
+					"on": "An",
+					"low": "Niedrig",
+					"medium": "Mittel",
+					"high": "Hoch"
+				}
+			},
+			"menu": {
+				"label": "Nachrichtenoptionen",
+				"showTokensPerSecond": "Tokens/Sek. anzeigen"
+			},
+			"tokensPerSecond": "{{value}} Tok/s",
+			"messageModelLabel": "Modell: {{model}}",
+			"samplingOptions": {
+				"title": "Erweiterte Sampling-Optionen",
+				"description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert und nicht pro Konversation persistiert.",
+				"groupSampling": "Sampling",
+				"groupPenalties": "Strafen",
+				"groupLimits": "Limits",
+				"temperature": "Temperatur",
+				"temperatureDescription": "Steuert die Zufälligkeit. Niedrigere Werte sind deterministischer; höhere Werte sind kreativer.",
+				"topP": "Top P",
+				"topPDescription": "Schwellenwert für Nucleus-Sampling. Nur Tokens, deren kumulierte Wahrscheinlichkeit diesen Wert erreicht, werden berücksichtigt.",
+				"topK": "Top K",
+				"topKDescription": "Begrenzt das Sampling auf die Top-K wahrscheinlichsten Tokens.",
+				"minP": "Min P",
+				"minPDescription": "Mindestwahrscheinlichkeit für ein Token relativ zum wahrscheinlichsten Token.",
+				"repeatPenalty": "Wiederholungsstrafe",
+				"repeatPenaltyDescription": "Bestraft Wiederholungen. Werte über 1 verhindern, dass das Modell sich wiederholt.",
+				"repeatLastN": "Letzte N wiederholen",
+				"repeatLastNDescription": "Anzahl der Tokens, die bei der Wiederholungsstrafe berücksichtigt werden. -1 verwendet den gesamten Kontext.",
+				"presencePenalty": "Präsenzstrafe",
+				"presencePenaltyDescription": "Bestraft Tokens, die bereits in der Ausgabe erschienen sind, unabhängig von der Häufigkeit.",
+				"frequencyPenalty": "Häufigkeitsstrafe",
+				"frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
+				"maxOutputTokens": "Max. Ausgabe-Tokens",
+				"maxOutputTokensDescription": "Maximale Anzahl der zu generierenden Tokens. Wird auf die Modellkontextlänge begrenzt, wenn gesetzt.",
+				"seed": "Seed",
+				"seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
+				"numCtx": "Kontextlänge (num_ctx)",
+				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens.",
+				"stop": "Stop-Sequenzen",
+				"stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
+				"modelDefault": "Modellstandard",
+				"reset": "Auf Standard zurücksetzen",
+				"close": "Schließen",
+				"resetField": "{{field}} zurücksetzen"
+			},
+			"composer": {
+				"samplingOptions": "Erweiterte Sampling-Optionen",
+				"size": {
+					"usage": "{{used}} KB / {{limit}} KB",
+					"overLimit": "Diese Nachricht ist {{used}} KB groß — über dem Limit von {{limit}} KB pro Nachricht. Kürzen Sie sie oder hängen Sie den Text als Datei an."
+				},
+				"attach": "Datei anhängen",
+				"dropToAttach": "Dateien zum Anhängen ablegen",
+				"image": "Bild anhängen",
+				"attachments": {
+					"remove": "{{name}} entfernen",
+					"uploadFailed": "{{name}} konnte nicht hochgeladen werden.",
+					"removeFailed": "Anhang konnte nicht entfernt werden.",
+					"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
+					"noConversation": "Für den Upload konnte keine Unterhaltung vorbereitet werden.",
+					"status": {
+						"extracted": "Extrahiert",
+						"pending": "Ausstehend",
+						"unsupported": "Nicht unterstützt",
+						"failed": "Fehlgeschlagen",
+						"unknown": "Unbekannt"
+					}
+				}
+			},
+			"temporaryChat": {
+				"label": "Temporärer Chat",
+				"tooltip": "Dieser Chat bringt dem Agenten kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt."
+			},
+			"connecting": "Verbinde mit lokalem Chat…",
+			"connectionFailed": "Verbindung zum lokalen Chat-Hub fehlgeschlagen.",
+			"connectionFailedTitle": "Lokaler Chat nicht verfügbar",
+			"conversations": "Unterhaltungen",
+			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
+			"loadingMessages": "Nachrichten werden geladen…",
+			"modelUnavailable": "Nicht verfügbar",
+			"nativeReasoningLabel": "Natives Reasoning",
+			"reasoningLabel": "Reasoning",
+			"retryConnection": "Erneut versuchen",
+			"stop": "Stopp",
+			"stopped": "Generierung gestoppt",
+			"loadError": {
+				"title": "Diese Unterhaltung konnte nicht geladen werden",
+				"body": "Beim Laden dieser Nachrichten ist ein Fehler aufgetreten.",
+				"retry": "Erneut versuchen"
+			},
+			"contextUsage": {
+				"localNode": "Lokaler Node",
+				"unknownModel": "Unbekannt",
+				"usedPending": "Der genutzte Kontext wird aktualisiert, sobald die Antwort des Assistenten abgeschlossen ist",
+				"usedAuthoritative": "Genutzter Kontext vom Modell gemeldet",
+				"usedNotAuthoritative": "Genutzter Kontext noch nicht maßgeblich",
+				"maxUnknown": "Maximaler Kontext für dieses Modell auf diesem Node unbekannt",
+				"maxKnown": "Maximaler Kontext vom ausgewählten Node gemeldet",
+				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Modell: {{model}}. Node: {{node}}.",
+				"srUnknown": "Kontextfenster-Nutzung unbekannt, {{used}} von {{max}} Tokens.",
+				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens."
+			},
+			"compact": {
+				"tooltip": "Ältere Nachrichten zu einer Zusammenfassung verdichten, um Kontext freizugeben",
+				"aria": "Unterhaltung verdichten",
+				"confirmTitle": "Unterhaltung verdichten",
+				"confirmDescription": "Fasse die älteren Nachrichten zu einer kompakten Übersicht zusammen, um das Kontextfenster zu entlasten. Deine ursprünglichen Nachrichten bleiben erhalten und in der Unterhaltung sichtbar.",
+				"confirm": "Verdichten",
+				"compacted": "{{count}} ältere Nachricht(en) zu einer Zusammenfassung verdichtet. Deine Originale bleiben erhalten.",
+				"nothing": "Noch nichts zu verdichten — die aktuellen Nachrichten passen weiterhin ins Kontextfenster.",
+				"noModel": "Es ist kein lokales Chat-Modell zum Zusammenfassen installiert, daher kann die Verdichtung nicht on-node laufen.",
+				"noSummary": "Die Verdichtung hat keine Zusammenfassung erzeugt. Bitte versuche es erneut.",
+				"error": "Die Unterhaltung konnte nicht verdichtet werden. Bitte versuche es erneut.",
+				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} verdichtet, damit dein Chat auf dem Gerät bleibt. Deine Originale bleiben erhalten.",
+				"aLocalModel": "einem lokalen Modell"
+			},
+			"remoteImage": {
+				"load": "Externes Bild laden"
+			}
+		},
+		"clientNodes": {
+			"fields": {
+				"hardware": "Hardware",
+				"systemScore": "System-Score",
+				"capabilities": "Fähigkeiten",
+				"models": "Installierte Modelle"
+			},
+			"settings": {
+				"title": "Node-Einstellungen",
+				"provider": "KI-Anbieter",
+				"providerNone": "Lokal (Ollama)",
+				"azureEndpoint": "Azure-Endpunkt",
+				"azureApiKey": "Azure-API-Schlüssel",
+				"azureDeploymentName": "Deployment-Name"
+			},
+			"none": "Keine angegeben"
+		},
+		"admin": {
+			"agentDefinitions": {
+				"title": "Agent-Definitionen",
+				"note": "Konfiguriere Anzeige-Metadaten, AI-Modell-Auswahl, Reasoning-Effort, Tools und Richtlinien für Agenten.",
+				"create": "Agent-Definition erstellen",
+				"edit": "Bearbeiten",
+				"save": "Speichern",
+				"setDefault": "Als Standard setzen",
+				"created": "Agent-Definition erfolgreich erstellt",
+				"updated": "Agent-Definition erfolgreich aktualisiert",
+				"deleted": "Agent-Definition erfolgreich gelöscht",
+				"defaultSet": "Standard-Agent-Definition erfolgreich aktualisiert",
+				"invalidPolicies": "Policies müssen gültiges JSON sein.",
+				"loadDetailsError": "Agent-Definition-Details konnten nicht geladen werden.",
+				"loadAiModelsError": "AI-Modelle konnten nicht geladen werden.",
+				"loadToolsError": "Tool-Definitionen konnten nicht geladen werden.",
+				"nameLabel": "Name",
+				"displayNameLabel": "Anzeigename",
+				"descriptionLabel": "Beschreibung",
+				"systemPromptLabel": "System-Prompt",
+				"aiModelLabel": "AI-Modell",
+				"aiModelPlaceholder": "AI-Modell auswählen",
+				"reasoningEffortLabel": "Reasoning-Effort",
+				"reasoningEffortPlaceholder": "Reasoning-Effort auswählen",
+				"workflowTypeLabel": "Workflow-Typ",
+				"workflowTypePlaceholder": "z. B. default, research, coding",
+				"defaultModelProfileLabel": "Modellprofil",
+				"defaultModelProfilePlaceholder": "z. B. llama3:8b",
+				"allowedToolsLabel": "Erlaubte Tools",
+				"policiesLabel": "Richtlinien (JSON)",
+				"policiesPlaceholder": "{\n  \"approvalMode\": \"manual\"\n}",
+				"reasoningEffortOptions": {
+					"low": "Niedrig",
+					"medium": "Mittel",
+					"high": "Hoch"
+				},
+				"defaultBadge": "Standard",
+				"createDialogTitle": "Agent-Definition erstellen",
+				"editDialogTitle": "Agent-Definition bearbeiten",
+				"deleteDialogTitle": "Agent-Definition löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"columns": {
+					"name": "Name",
+					"description": "Beschreibung",
+					"version": "Version",
+					"default": "Standard",
+					"actions": "Aktionen"
+				}
+			},
+			"toolDefinitions": {
+				"title": "Tool Definitions",
+				"note": "Bearbeiten wird verschoben, bis das Backend vollständige Tool-Definition-Details inklusive Endpoint/Handler bereitstellt.",
+				"create": "Tool Definition erstellen",
+				"created": "Tool Definition erfolgreich erstellt",
+				"deleted": "Tool Definition erfolgreich gelöscht",
+				"nameLabel": "Name",
+				"descriptionLabel": "Beschreibung",
+				"locationLabel": "Ort",
+				"endpointOrHandlerLabel": "Endpoint oder Handler",
+				"parameterSchemaLabel": "Parameter Schema",
+				"requiresApprovalLabel": "Benötigt Freigabe",
+				"createDialogTitle": "Tool Definition erstellen",
+				"deleteDialogTitle": "Tool Definition löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"apiSide": "API Side",
+				"clientLocal": "Client Local",
+				"columns": {
+					"name": "Name",
+					"description": "Beschreibung",
+					"location": "Ort",
+					"approval": "Freigabe",
+					"actions": "Aktionen"
+				}
+			},
+			"clientNodes": {
+				"title": "Client Nodes",
+				"deleted": "Client Node erfolgreich gelöscht",
+				"deleteDialogTitle": "Client Node löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"columns": {
+					"name": "Name",
+					"userId": "User ID",
+					"status": "Status",
+					"systemScore": "System Score",
+					"lastSeen": "Zuletzt gesehen",
+					"actions": "Aktionen"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Disconnecting",
+					"error": "Error"
+				}
+			},
+			"aiModels": {
+				"title": "KI-Modelle",
+				"create": "KI-Modell erstellen",
+				"save": "Speichern",
+				"edit": "Bearbeiten",
+				"created": "KI-Modell erfolgreich erstellt",
+				"updated": "KI-Modell erfolgreich aktualisiert",
+				"deleted": "KI-Modell erfolgreich gelöscht",
+				"modelIdLabel": "Modell-ID",
+				"displayNameLabel": "Anzeigename",
+				"descriptionLabel": "Beschreibung",
+				"typeLabel": "Modelltyp",
+				"typeOptions": {
+					"llm": "LLM",
+					"embedding": "Embedding"
+				},
+				"isReasoningModelLabel": "Reasoning-Modell",
+				"supportsToolCallingLabel": "Unterstützt Tool-Aufrufe",
+				"isPublicLabel": "Öffentlich für Chat-Nutzer",
+				"reasoningEffortNamesLabel": "Erlaubte Reasoning-Efforts",
+				"defaultReasoningEffortNameLabel": "Standard-Reasoning-Effort",
+				"createDialogTitle": "KI-Modell erstellen",
+				"editDialogTitle": "KI-Modell bearbeiten",
+				"deleteDialogTitle": "KI-Modell löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"activeBadge": "Aktiv",
+				"publicBadge": "Öffentlich",
+				"reasoningBadge": "Reasoning",
+				"toolCallingBadge": "Tools",
+				"columns": {
+					"modelId": "Modell-ID",
+					"displayName": "Anzeigename",
+					"type": "Typ",
+					"reasoning": "Reasoning",
+					"tools": "Tools",
+					"public": "Öffentlich",
+					"active": "Aktiv",
+					"actions": "Aktionen"
+				}
+			},
+			"feedback": {
+				"title": "Feedback",
+				"all": "Alle",
+				"solved": "Gelöst",
+				"unsolved": "Ungelöst",
+				"markSolved": "Als gelöst markieren",
+				"solvedSuccess": "Feedback als gelöst markiert",
+				"solveDialogTitle": "Feedback als gelöst markieren",
+				"solveNoteLabel": "Lösungsnotiz",
+				"columns": {
+					"conversation": "Konversation",
+					"message": "Nachrichtenvorschau",
+					"sentiment": "Stimmung",
+					"status": "Status",
+					"createdAt": "Erstellt",
+					"actions": "Aktionen"
+				},
+				"positive": "Positiv",
+				"negative": "Negativ",
+				"open": "Offen",
+				"resolved": "Gelöst"
+			},
+			"pairingTokens": {
+				"title": "Pairing Tokens",
+				"legacyNotice": "Pairing-Tokens sind für das normale Worker-Onboarding veraltet. Verwenden Sie standardmäßig die Gerätecode-Node-Bindung und erstellen Sie Tokens nur vorübergehend für Legacy-Kompatibilität.",
+				"labelLabel": "Bezeichnung",
+				"labelPlaceholder": "z. B. Arbeitsplatz Büro",
+				"create": "Pairing Token erstellen",
+				"created": "Pairing Token erfolgreich erstellt",
+				"rotated": "Pairing Token erfolgreich rotiert",
+				"revoked": "Pairing Token erfolgreich widerrufen",
+				"revokeDialogTitle": "Pairing Token widerrufen",
+				"revokeDialogText": "Möchten Sie '{{name}}' wirklich widerrufen?",
+				"rotate": "Rotieren",
+				"rotateConfirmTitle": "Pairing-Token rotieren?",
+				"rotateConfirmDescription": "Dies erzeugt ein neues Pairing-Geheimnis für diesen Token. Das alte Geheimnis funktioniert ab sofort nicht mehr. Bereits gekoppelte Clients behalten ihre Sitzungen — das neue Geheimnis wird nur beim nächsten Pairing oder Login benötigt. Diese Aktion kann nicht rückgängig gemacht werden.",
+				"rotateConfirmLabel": "Rotieren",
+				"secretModalTitle": "Diesen Pairing Token jetzt speichern",
+				"secretWarning": "Der Pairing Token wird nur einmal angezeigt. Bitte sicher speichern.",
+				"tokenLabel": "Pairing Token",
+				"copyToken": "Token kopieren",
+				"tokenCopied": "Pairing Token in Zwischenablage kopiert",
+				"expirationOption_one": "{{count}} Tag",
+				"expirationOption_other": "{{count}} Tage",
+				"durationBadge_one": "Gültig für {{count}} Tag",
+				"durationBadge_other": "Gültig für {{count}} Tage",
+				"statusOpen": "Offen",
+				"statusUsed": "Verwendet",
+				"statusExpired": "Abgelaufen",
+				"columns": {
+					"label": "Bezeichnung",
+					"duration": "Gültigkeitsdauer",
+					"status": "Status",
+					"assignedTo": "Zugewiesen an",
+					"usedBy": "Verwendet von Client",
+					"createdAt": "Erstellt",
+					"expiresAt": "Läuft ab",
+					"actions": "Aktionen"
+				}
+			},
+			"appKeys": {
+				"title": "App-Schlüssel",
+				"nameLabel": "Name",
+				"namePlaceholder": "z. B. API-Client Produktion",
+				"appsLabel": "Apps",
+				"create": "App Key erstellen",
+				"created": "App Key erfolgreich erstellt",
+				"deleted": "App Key erfolgreich gelöscht",
+				"enabled": "App Key aktiviert",
+				"disabled": "App Key deaktiviert",
+				"validation": "Name und mindestens eine App sind erforderlich",
+				"deleteDialogTitle": "App Key löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.",
+				"secretModalTitle": "Secret jetzt speichern",
+				"secretWarning": "Das Client Secret wird nur einmal angezeigt. Bitte sicher speichern.",
+				"copySecret": "Secret kopieren",
+				"secretCopied": "Secret in Zwischenablage kopiert",
+				"clientSecretLabel": "Client Secret",
+				"columns": {
+					"name": "Name",
+					"clientId": "Client ID",
+					"apps": "Apps",
+					"createdAt": "Erstellt",
+					"lastUsedAt": "Zuletzt verwendet",
+					"enabled": "Aktiv",
+					"actions": "Aktionen"
+				}
+			},
+			"permissions": {
+				"title": "Berechtigungen",
+				"tablePermissions": "Berechtigungen",
+				"permissionUpdated": "Berechtigung erfolgreich aktualisiert",
+				"noRolesAvailable": "Keine Rollen verfügbar"
+			},
+			"roles": {
+				"title": "Rollen",
+				"deleteDialogTitle": "Rolle löschen",
+				"deleteDialogText": "Möchten Sie diese Rolle wirklich löschen?",
+				"tableTooltipEdit": "Bearbeiten",
+				"tableTooltipDelete": "Löschen",
+				"protectedAdminRoleTooltip": "Die Administratorrolle kann weder umbenannt noch gelöscht werden.",
+				"protectedDefaultRoleTooltip": "Die Standardkontorolle kann weder umbenannt noch gelöscht werden.",
+				"administratorBadge": "Administrator",
+				"defaultAccountRoleBadge": "Standardkontorolle",
+				"createRole": "Rolle erstellen",
+				"roleDeleted": "Rolle erfolgreich gelöscht"
+			},
+			"users": {
+				"title": "Benutzer",
+				"tableHeaders": {
+					"username": "Benutzername",
+					"firstName": "Vorname",
+					"lastName": "Nachname"
+				},
+				"deleteDialogTitle": "Benutzer löschen",
+				"deleteDialogText": "Möchten Sie diesen Benutzer wirklich löschen?",
+				"tableTooltipEdit": "Bearbeiten",
+				"tableTooltipView": "Anzeigen",
+				"tableTooltipDelete": "Löschen",
+				"deleteSuccess": "Benutzer erfolgreich gelöscht",
+				"createUser": "Benutzer erstellen"
+			}
+		},
+		"home": {
+			"title": {
+				"welcome": "Willkommen!"
+			},
+			"loading": "Installierte Modelle werden geprüft",
+			"status": {
+				"ready": "{{installed}} lokale(s) Modell(e) auf diesem Knoten installiert.",
+				"empty": "Es ist noch kein lokales Modell installiert, daher kann dieser Knoten nichts beantworten. Installieren Sie eines, um zu starten."
+			},
+			"goToModels": "Modell installieren",
+			"goToChat": "Chat starten"
+		},
+		"dashboard": {
+			"placeholder": {
+				"title": "Dashboard",
+				"description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
+			},
+			"eyebrow": "Worker-Node",
+			"title": "Dashboard",
+			"subtitle": "Lokale Worker-Verbindung überwachen und Verbindungsverhalten beim Start steuern.",
+			"loadingStatus": "Verbindungsstatus wird geladen…",
+			"unexpectedError": "Unerwarteter Fehler bei der Verbindungsaktion",
+			"notPairedHint": "Binde diesen Node, bevor du dich mit der zentralen Plattform verbindest.",
+			"platformConnection": {
+				"title": "Plattformverbindung",
+				"connect": "Verbinden",
+				"disconnect": "Trennen",
+				"refresh": "Aktualisieren"
+			},
+			"startupConnection": {
+				"title": "Startverbindung",
+				"enabled": "Aktiviert",
+				"disabled": "Deaktiviert",
+				"hint": "Auto-Verbindung bleibt nach dem Binden standardmäßig deaktiviert, bis du sie explizit aktivierst.",
+				"enableAutoConnect": "Auto-Verbindung aktivieren",
+				"disableAutoConnect": "Auto-Verbindung deaktivieren"
+			},
+			"nodeCredentials": {
+				"title": "Node-Anmeldedaten",
+				"binding": "Bindung",
+				"paired": "Gebunden",
+				"notPaired": "Nicht gebunden",
+				"bindingMethod": "Bindungsmethode",
+				"nodeName": "Node-Name",
+				"tokenExpires": "Token läuft ab",
+				"notAvailable": "Nicht verfügbar",
+				"tokenExpiredBadge": "Abgelaufen"
+			},
+			"lastUpdate": {
+				"title": "Letzte Aktualisierung",
+				"privacyNote": "Verbindungssteuerung gibt keine Zugriffs- oder Refresh-Tokens an den Browser zurück."
+			},
+			"connectionStatus": {
+				"reconnecting": "Verbindet erneut",
+				"connecting": "Verbindet",
+				"connected": "Verbunden",
+				"disconnected": "Getrennt",
+				"pairing": "Koppelt",
+				"error": "Fehler",
+				"unknown": "Unbekannt"
+			},
+			"connectionHint": {
+				"reconnecting": "Deaktiviere Auto-Verbindung, um Wiederverbindungsversuche zu stoppen, oder warte, bis der Worker sich erholt.",
+				"autoConnectEnabled": "Auto-Verbindung ist aktiviert. Der Worker verbindet sich beim Start, sobald die Voraussetzungen erfüllt sind.",
+				"autoConnectDisabled": "Auto-Verbindung ist deaktiviert. Nutze Verbinden für eine manuelle Sitzung oder aktiviere die Startverbindung."
+			}
+		},
+		"nodeBinding": {
+			"placeholder": {
+				"title": "Node-Bindung",
+				"description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
+			}
+		},
+		"nodeSettings": {
+			"placeholder": {
+				"title": "Node-Einstellungen",
+				"description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden."
+			},
+			"mcpWorkspaces": {
+				"title": "MCP-Arbeitsbereichszugriff",
+				"description": "Erlaube externen MCP-Clients, Aufgaben zum Lesen von Code in ausgewählten Ordnern zu delegieren. Pfade bleiben auf diesem Node und werden niemals an Clients zurückgegeben.",
+				"readOnly": "Schreibgeschützt",
+				"formLabel": "Arbeitsbereichszugriff hinzufügen",
+				"aliasLabel": "Alias",
+				"aliasDescription": "Ein nicht vertraulicher Name, der MCP-Clients und in dieser Liste angezeigt wird.",
+				"aliasPlaceholder": "Quellcode-Repository",
+				"pathLabel": "Vertrauenswürdiger Host-Pfad",
+				"pathDescription": "Wird sicher auf diesem Node gespeichert. Der Pfad wird beim Absenden sofort aus diesem Formular entfernt.",
+				"pathPlaceholder": "Absoluten Ordnerpfad eingeben",
+				"add": "Schreibgeschützten Arbeitsbereich hinzufügen",
+				"added": "Arbeitsbereichszugriff hinzugefügt.",
+				"addError": "Arbeitsbereichszugriff konnte nicht hinzugefügt werden. Prüfe die Werte und versuche es erneut.",
+				"loading": "Arbeitsbereichszugriff wird geladen…",
+				"loadError": "Arbeitsbereichszugriff konnte nicht geladen werden.",
+				"empty": "Für delegierte MCP-Agenten sind keine Ordner verfügbar.",
+				"pending": "Arbeitsbereichszugriff wird aktualisiert…",
+				"aliasColumn": "Alias",
+				"idColumn": "Arbeitsbereichs-ID",
+				"accessColumn": "Zugriff",
+				"actionsColumn": "Aktionen",
+				"revoke": "Entziehen",
+				"revokeAria": "Zugriff auf {{alias}} entziehen",
+				"revokeTitle": "Arbeitsbereichszugriff entziehen",
+				"revokeDescription": "Schreibgeschützten Zugriff auf '{{alias}}' entziehen? Neue delegierte Aufgaben können ihn danach nicht mehr verwenden.",
+				"revoked": "Arbeitsbereichszugriff entzogen.",
+				"revokeError": "Arbeitsbereichszugriff konnte nicht entzogen werden."
+			},
+			"developerMode": {
+				"title": "Entwicklereinstellungen",
+				"label": "Entwicklermodus",
+				"description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen). Wird nur in diesem Browser gespeichert."
+			},
+			"llamaCpp": {
+				"title": "llama.cpp-Laufzeit",
+				"selectVariant": "Variante",
+				"ensure": "Bereitstellen / auswählen",
+				"ensured": "llama.cpp-Binärdatei bereit.",
+				"ensureError": "Die llama.cpp-Binärdatei konnte nicht bereitgestellt werden.",
+				"variants": {
+					"cpu": "CPU",
+					"cuda": "CUDA",
+					"vulkan": "Vulkan"
+				},
+				"updater": {
+					"refresh": "Nach Updates suchen",
+					"loading": "Laufzeitstatus wird ermittelt…",
+					"statusError": "Der llama.cpp-Laufzeitstatus konnte nicht ermittelt werden.",
+					"installed": "Installiert",
+					"recommended": "Empfohlen",
+					"upstream": "Aktuellste Upstream-Version",
+					"devBadge": "Dev",
+					"offline": "Offline — die zwischengespeicherte / fixierte Laufzeit wird verwendet. Update-Prüfungen sind erst verfügbar, wenn die GitHub-Release-API erreichbar ist.",
+					"updateAvailable": "Update verfügbar",
+					"upToDate": "Aktuell",
+					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
+					"installedSourceBuildNotice": "Entferne die installierte, aus Quellcode erstellte Laufzeit, bevor eine vorgefertigte Laufzeit installiert wird.",
+					"activeSourceBuildNotice": "Warte, bis der aktive Quellbuild abgeschlossen ist, oder brich ihn ab, bevor eine vorgefertigte Laufzeit installiert wird.",
+					"openLoadedModels": "Geladene Modelle öffnen",
+					"update": "Empfohlene Version installieren ({{tag}})",
+					"installUpstream": "Upstream-Version installieren ({{tag}})",
+					"toastTitle": "llama.cpp-Laufzeit wird aktualisiert",
+					"toastPreparing": "{{tag}} wird heruntergeladen und überprüft…",
+					"toastSuccess": "llama.cpp-Laufzeit auf {{tag}} aktualisiert.",
+					"toastSuccessTitle": "Laufzeit aktualisiert",
+					"toastError": "Die llama.cpp-Laufzeit konnte nicht aktualisiert werden.",
+					"toastErrorTitle": "Update fehlgeschlagen"
+				},
+				"updateBanner": {
+					"message": "Eine neuere llama.cpp-Laufzeit ({{tag}}) ist verfügbar.",
+					"review": "Update prüfen",
+					"dismiss": "Schließen"
+				},
+				"acquisition": {
+					"title": "Lokale KI-Laufzeit wird eingerichtet",
+					"detectingGpu": "Grafikhardware wird erkannt…",
+					"downloading": "llama.cpp-Laufzeit wird heruntergeladen…",
+					"verifying": "Heruntergeladene Laufzeit wird überprüft…",
+					"extracting": "Laufzeit wird installiert…",
+					"step": "Schritt {{index}} von {{count}}",
+					"progress": "{{completed}} von {{total}}",
+					"progressUnknownTotal": "{{completed}} heruntergeladen",
+					"rate": "{{rate}}/s",
+					"eta": "noch etwa {{eta}}",
+					"explainer": "Der Chat ist erst nach Abschluss verfügbar. Die übrige App kannst du weiter nutzen.",
+					"failedTitle": "Die lokale KI-Laufzeit konnte nicht installiert werden",
+					"failedFallback": "Die llama.cpp-Laufzeit konnte nicht heruntergeladen werden. Prüfe deine Internetverbindung und versuche es erneut.",
+					"retry": "Erneut versuchen",
+					"retrying": "Wird wiederholt…",
+					"dismiss": "Schließen"
+				},
+				"cudaBuild": {
+					"title": "CUDA (aus Quellcode erstellen)",
+					"devBadge": "Dev",
+					"description": "Erstellen Sie eine CUDA-beschleunigte llama.cpp-Laufzeit aus dem Quellcode auf diesem Linux-Host. Upstream liefert keine vorkompilierte Linux-CUDA-Version, daher ist dies der Weg zur GPU-Beschleunigung ohne Build-Kenntnisse.",
+					"loading": "Build-Voraussetzungen werden geprüft…",
+					"prereqError": "Die CUDA-Build-Voraussetzungen konnten nicht geprüft werden.",
+					"notLinux": "Der In-App-CUDA-Build ist nur unter Linux verfügbar. Die folgende Checkliste zeigt, was auf diesem Host fehlt.",
+					"build": "CUDA erstellen",
+					"rebuild": "Neu erstellen",
+					"remove": "Entfernen",
+					"cancel": "Build abbrechen",
+					"activeBadge": "Verwaltete CUDA-Laufzeit aktiv",
+					"rebuildAvailable": "Ein neuerer fixierter Quellcode-Tag ist verfügbar — erstellen Sie neu, um die verwaltete CUDA-Laufzeit zu aktualisieren.",
+					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit neu erstellen oder entfernen.",
+					"openLoadedModels": "Geladene Modelle öffnen",
+					"phaseLabel": "Phase",
+					"logEmpty": "Warten auf Build-Ausgabe…",
+					"startError": "Der CUDA-Build konnte nicht gestartet werden.",
+					"cancelError": "Der CUDA-Build konnte nicht abgebrochen werden.",
+					"removeError": "Der CUDA-Build konnte nicht entfernt werden.",
+					"removed": "Verwalteter CUDA-Build entfernt."
+				},
+				"sourceBuild": {
+					"title": "llama.cpp aus Quellcode bauen",
+					"description": "CPU-, Vulkan- oder CUDA-llama.cpp aus dem offiziellen Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen.",
+					"devBadge": "Entwicklung",
+					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"vulkan": "Vulkan",
+						"cuda": "CUDA"
+					},
+					"source": "Quelle",
+					"sources": {
+						"official": "Offizieller Upstream",
+						"custom": "Benutzerdefinierter öffentlicher Fork"
+					},
+					"revisions": {
+						"enginePinned": "Von der Engine festgelegte Revision",
+						"defaultBranch": "Standardbranch",
+						"explicitCommit": "Expliziter Commit"
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux-Host",
+						"cmake": "CMake",
+						"gcc": "C-Compiler",
+						"g++": "C++-Compiler",
+						"make-or-ninja": "Make oder Ninja",
+						"git": "Git",
+						"nvidia-gpu": "NVIDIA-GPU",
+						"nvcc": "CUDA-Compiler",
+						"nvidia-smi": "NVIDIA-Treiber",
+						"glslc": "Vulkan-Shader-Compiler",
+						"vulkaninfo": "Vulkan-Laufzeit",
+						"free-disk": "Freier Speicherplatz"
+					},
+					"prerequisiteAvailability": {
+						"available": "Verfügbar",
+						"missing": "Fehlt oder ist nicht verfügbar"
+					},
+					"repository": "GitHub-Repository",
+					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",
+					"riskAcknowledgement": "Ich vertraue diesem öffentlichen GitHub-Repository und akzeptiere das Risiko der Codeausführung.",
+					"commit": "Commit-SHA (optional)",
+					"active": "Aktive {{backend}}-Quellruntime",
+					"build": "Bauen",
+					"rebuild": "Neu bauen",
+					"cancel": "Abbrechen",
+					"remove": "Entfernen",
+					"startError": "Der Quellbuild konnte nicht gestartet werden.",
+					"removeError": "Die Quellruntime konnte nicht entfernt werden.",
+					"validation": {
+						"commit": "Der Commit muss eine vollständige hexadezimale SHA mit 40 Zeichen sein.",
+						"repository": "Verwende eine kanonische öffentliche GitHub-HTTPS-Repository-URL.",
+						"acknowledgement": "Bestätige, dass Code aus dem benutzerdefinierten Repository mit den Rechten der App ausgeführt wird."
+					},
+					"repositoryPlaceholder": "https://github.com/owner/llama.cpp"
+				}
+			},
+			"imageRuntime": {
+				"sourceBuild": {
+					"title": "stable-diffusion.cpp aus Quellcode bauen",
+					"description": "Die Bildlaufzeit aus dem offiziellen stable-diffusion.cpp-Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen und verwalten.",
+					"devBadge": "Entwicklung",
+					"recoveryBadge": "Wiederherstellung",
+					"recoveryDescription": "Die verwaltete Bildlaufzeit ist ungültig und bleibt gesperrt. Wirf alle aktiven Bildprozesse aus und entferne anschließend die ungültige Laufzeit, bevor die Bilderzeugung erneut verwendet wird.",
+					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"vulkan": "Vulkan",
+						"cuda": "CUDA"
+					},
+					"source": "Quelle",
+					"sources": {
+						"official": "Offizieller Upstream",
+						"custom": "Benutzerdefinierter öffentlicher Fork"
+					},
+					"revisions": {
+						"enginePinned": "Von der Engine festgelegte Revision",
+						"defaultBranch": "Standardbranch",
+						"explicitCommit": "Expliziter Commit"
+					},
+					"revisionBehavior": {
+						"enginePinned": "Offizielle Builds verwenden den vom Server ausgewählten, festgelegten Engine-Commit.",
+						"defaultBranch": "Ohne Commit-SHA verwendet ein benutzerdefinierter Build den Standardbranch des Repositorys.",
+						"explicitCommit": "Dieser benutzerdefinierte Build verwendet exakt die unten eingegebene 40-stellige Commit-SHA."
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux-Host",
+						"cmake": "CMake",
+						"gcc": "C-Compiler",
+						"g++": "C++-Compiler",
+						"make-or-ninja": "Make oder Ninja",
+						"git": "Git",
+						"nvidia-gpu": "NVIDIA-GPU",
+						"nvcc": "CUDA-Compiler",
+						"nvidia-smi": "NVIDIA-Treiber",
+						"glslc": "Vulkan-Shader-Compiler",
+						"vulkaninfo": "Vulkan-Laufzeit",
+						"free-disk": "Freier Speicherplatz"
+					},
+					"prerequisiteAvailability": {
+						"available": "Verfügbar",
+						"missing": "Fehlt oder ist nicht verfügbar"
+					},
+					"repository": "GitHub-Repository",
+					"repositoryPlaceholder": "https://github.com/owner/stable-diffusion.cpp",
+					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",
+					"riskAcknowledgement": "Ich vertraue diesem öffentlichen GitHub-Repository und akzeptiere das Risiko der Codeausführung.",
+					"commit": "Commit-SHA (optional)",
+					"validity": {
+						"active": "Aktive verwaltete {{backend}}-Bildlaufzeit",
+						"invalid": "Ungültige verwaltete {{backend}}-Bildlaufzeit"
+					},
+					"activity": {
+						"idle": "Bildlaufzeit im Leerlauf",
+						"busy": "Bildlaufzeit beschäftigt",
+						"detail": "{{jobs}} Auftrag/Aufträge, {{starting}} im Start, {{processes}} aktive(r) Prozess(e)"
+					},
+					"build": "Bauen",
+					"rebuild": "Neu bauen",
+					"cancel": "Abbrechen",
+					"eject": "Bildprozesse auswerfen",
+					"remove": "Entfernen",
+					"startError": "Der Quellbuild der Bildlaufzeit konnte nicht gestartet werden.",
+					"cancelError": "Der Quellbuild der Bildlaufzeit konnte nicht abgebrochen werden.",
+					"ejectError": "Die Prozesse der Bildlaufzeit konnten nicht ausgeworfen werden.",
+					"removeError": "Die verwaltete Bildlaufzeit konnte nicht entfernt werden.",
+					"validation": {
+						"commit": "Der Commit muss eine vollständige hexadezimale SHA mit 40 Zeichen sein.",
+						"repository": "Verwende eine kanonische öffentliche GitHub-HTTPS-Repository-URL.",
+						"acknowledgement": "Bestätige, dass Code aus dem benutzerdefinierten Repository mit den Rechten der App ausgeführt wird."
+					}
+				}
+			},
+			"hfToken": {
+				"title": "Hugging-Face-Token",
+				"configured": "Token konfiguriert",
+				"none": "Kein Token",
+				"description": "Für den Download gesperrter GGUF-Repositories ist ein Hugging-Face-Zugriffstoken erforderlich. Das Token wird verschlüsselt gespeichert und niemals angezeigt.",
+				"inputLabel": "Zugriffstoken",
+				"placeholder": "hf_…",
+				"save": "Token speichern",
+				"clear": "Token löschen",
+				"saved": "Token gespeichert.",
+				"saveError": "Das Token konnte nicht gespeichert werden.",
+				"cleared": "Token gelöscht.",
+				"clearError": "Das Token konnte nicht gelöscht werden."
+			},
+			"saved": "Knoteneinstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
+			"fields": {
+				"save": "Knoteneinstellungen speichern",
+				"validationError": "Einige Einstellungen sind ungültig. Bitte die markierten Felder korrigieren.",
+				"allowedRange": "Zulässiger Bereich",
+				"seconds": "Sekunden",
+				"minutes": "Minuten",
+				"bytesPositive": "Eine positive Anzahl an Bytes. Änderungen werden ohne Neustart des Knotens wirksam.",
+				"errors": {
+					"range": "Bitte eine ganze Zahl innerhalb des zulässigen Bereichs eingeben.",
+					"format": "Muss dem Format b<Zahl> entsprechen (z. B. b9692).",
+					"url": "Bitte eine gültige http:// oder https:// URL eingeben.",
+					"invalid": "Eine oder mehrere Eingaben sind ungültig.",
+					"positive": "Bitte eine positive ganze Zahl eingeben.",
+					"mode": "Unbekannter Modus für spekulatives Decoding.",
+					"required": "Wähle für diesen Modus ein Entwurfsmodell.",
+					"requiredKeepWarmModel": "Wähle ein Modell aus, das warmgehalten werden soll.",
+					"keepWarmCapacity": "Zum Warmhalten eines Modells sind mindestens zwei geladene Prozessplätze erforderlich.",
+					"belowIdleTtl": "Das Warmhalteintervall muss kürzer als die Leerlauf-Lebensdauer sein.",
+					"unavailableKeepWarmModel": "Das ausgewählte Modell {{model}} ist nicht mehr installiert.",
+					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte."
+				},
+				"localChat": {
+					"title": "Lokaler Chat"
+				},
+				"defaultModelName": {
+					"label": "Standardmodell",
+					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden. Wird nach einem Neustart des Knotens wirksam."
+				},
+				"enableTools": {
+					"label": "Tools aktivieren",
+					"description": "Lokale Chat-Agenten dürfen Tools aufrufen. Änderungen werden ohne Neustart des Knotens wirksam."
+				},
+				"customToolsEnabled": {
+					"label": "Benutzerdefinierte Tools aktivieren",
+					"description": "Erlaubt Agenten, benutzerdefinierte Tools auszuführen, die Host-Befehle ausführen, Programme starten und Netzwerkanfragen stellen. Standardmäßig deaktiviert. Jeder Aufruf erfordert weiterhin Ihre Genehmigung."
+				},
+				"toolCapableModels": {
+					"label": "Tool-fähige Modelle",
+					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen. Änderungen werden ohne Neustart des Knotens wirksam."
+				},
+				"runtime": {
+					"title": "Lokale Modell-Laufzeit",
+					"tagHint": "Die empfohlene llama.cpp-Version wird in der Karte für llama.cpp-Laufzeit-Updates oben verwaltet."
+				},
+				"llamaMaxLoadedProcesses": {
+					"label": "Max. geladene llama-server-Prozesse",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
+				},
+				"llamaIdleTimeToLiveSeconds": {
+					"label": "Leerlauf-Prozess-Lebensdauer",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
+				},
+				"keepModelWarm": {
+					"enabledLabel": "Modell warmhalten",
+					"enabledDescription": "Hält ein ausgewähltes llama.cpp-Chatmodell dauerhaft geladen. Änderungen werden ohne Neustart des Knotens wirksam.",
+					"modelLabel": "Warmzuhaltendes Modell",
+					"modelDescription": "Wähle ein installiertes llama.cpp-Chatmodell.",
+					"modelPlaceholder": "Modell auswählen",
+					"noModels": "Keine installierten llama.cpp-Chatmodelle",
+					"intervalLabel": "Warmhalteintervall",
+					"help": "Das Anheften belegt dauerhaft VRAM und einen der konfigurierten {{maxLoadedProcesses}} MaxLoadedProcesses-Plätze. Das Warmhalteintervall muss unter der Leerlauf-Lebensdauer bleiben, um ein Entladen zu verhindern.",
+					"unavailableOption": "{{model}} (nicht installiert)"
+				},
+				"ollamaEndpoint": {
+					"label": "Ollama-Endpunkt",
+					"description": "Die Basis-URL der Ollama-API. Gilt nach einem Neustart."
+				},
+				"huggingFace": {
+					"title": "Hugging Face"
+				},
+				"huggingFaceDefaultQuant": {
+					"label": "Standard-Quantisierung",
+					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M). Wird nach einem Neustart des Knotens wirksam."
+				},
+				"worker": {
+					"title": "Worker-Limits"
+				},
+				"maxResponseSizeMb": {
+					"label": "Maximale Antwortgröße",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
+				},
+				"advanced": {
+					"title": "Erweitert (Entwickler)",
+					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Der Orchestrierungs-Leerlauf-Timeout und die ausstehende Tool-Aufruf-Dauer werden nach einem Neustart wirksam; die AgentHome-Limits gelten sofort.",
+					"samplingNote": "Sampling-Standardwerte werden pro Nachricht im Chat konfiguriert."
+				},
+				"orchestrationIdleTimeoutSeconds": {
+					"label": "Orchestrierungs-Leerlauf-Timeout",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
+				},
+				"agentHomePrepareTimeoutSeconds": {
+					"label": "AgentHome-Vorbereitungs-Timeout",
+					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
+				},
+				"agentHomeCommandTimeoutSeconds": {
+					"label": "AgentHome-Befehls-Timeout",
+					"description": "Änderungen werden ohne Neustart des Knotens wirksam."
+				},
+				"agentHomeMaxSelectedFolderBytes": {
+					"label": "AgentHome max. ausgewählte Ordnergröße"
+				},
+				"agentHomeMaxPatchBytes": {
+					"label": "AgentHome max. Patch-Größe"
+				},
+				"maxPendingToolCallAgeMinutes": {
+					"label": "Max. ausstehende Tool-Aufruf-Dauer",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
+				},
+				"speculativeMode": {
+					"label": "Spekulatives Decoding",
+					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird. Wird nach einem Neustart des Knotens wirksam.",
+					"options": {
+						"off": "Aus",
+						"ngram-mod": "n-Gramm (kein Entwurfsmodell)",
+						"ngram-cache": "n-Gramm-Cache (kein Entwurfsmodell)",
+						"draft-simple": "Entwurfsmodell (einfach)",
+						"draft-eagle3": "Entwurfsmodell (EAGLE-3)",
+						"draft-mtp": "Entwurfsmodell (MTP)"
+					}
+				},
+				"speculativeDraftModel": {
+					"label": "Entwurfsmodell",
+					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen. Wird nach einem Neustart des Knotens wirksam.",
+					"placeholder": "Entwurfsmodell auswählen",
+					"empty": "Keine installierten Chat-Modelle"
+				},
+				"speculativeDraftMaxTokens": {
+					"label": "Entwurfstoken pro Schritt",
+					"description": "Wird nach einem Neustart des Knotens wirksam."
+				},
+				"chatCacheReuse": {
+					"label": "Prompt-Cache-Wiederverwendung",
+					"description": "Unveränderten Prompt-Präfix über Turns hinweg wiederverwenden (Token). 0 deaktiviert. Wird nach einem Neustart des Knotens wirksam."
+				},
+				"rerankerModel": {
+					"label": "Reranker-Modell",
+					"description": "Cross-Encoder-Reranker, der die Suchergebnisse der Wissensdatenbank nach Relevanz neu ordnet. Deaktiviert lassen, wenn kein Reranker-Modell installiert ist. Wird nach einem Neustart des Knotens wirksam. Verbraucht zusätzlichen VRAM, der von Kapazitätsprüfungen nicht berücksichtigt wird.",
+					"off": "Aus",
+					"empty": "Keine installierten Modelle",
+					"downloadRecommended": "Empfohlenen Reranker herunterladen",
+					"recommendedHelp": "Empfohlen: bge-reranker-v2-m3, der als eigener zusätzlicher Modellserver läuft.",
+					"downloadAlreadyInstalled": "Der empfohlene Reranker ({{model}}) ist bereits installiert.",
+					"downloadStarted": "Der empfohlene Reranker ({{model}}) wird heruntergeladen.",
+					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
+					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
+				},
+				"embeddingModel": {
+					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
+					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
+					"downloadAlreadyInstalled": "Das empfohlene Embedding-Modell ({{model}}) ist bereits installiert.",
+					"downloadStarted": "Das empfohlene Embedding-Modell ({{model}}) wird heruntergeladen.",
+					"downloadInFlight": "Das empfohlene Embedding-Modell ({{model}}) wird bereits heruntergeladen.",
+					"downloadError": "Der Download des empfohlenen Embedding-Modells konnte nicht gestartet werden."
+				},
+				"usageRates": {
+					"title": "Kostenraten der Nutzung",
+					"description": "Ungefähre Kostenraten pro Modell (USD pro 1 Mio. Tokens) zur Kostenschätzung im Nutzungs-Dashboard. Lokale und nicht bepreiste Modelle gelten als kostenlos. Dies sind Schätzungen in Ihrer Betreiberwährung (USD), keine Rechnung.",
+					"empty": "Keine Raten konfiguriert. Fügen Sie eine Rate hinzu, um die Kosten für ein Modell zu schätzen.",
+					"modelPlaceholder": "z. B. gpt-5",
+					"add": "Rate hinzufügen",
+					"remove": "Rate entfernen",
+					"columns": {
+						"model": "Modellname",
+						"input": "Eingabe $/1 Mio.",
+						"output": "Ausgabe $/1 Mio."
+					}
+				}
+			}
+		},
+		"cloudSettings": {
+			"placeholder": {
+				"title": "Cloud-Einstellungen",
+				"description": "Provider-Konfiguration nutzt geheimnissichere lokale API-Antworten."
+			},
+			"provider": {
+				"label": "Aktiver Cloud-Anbieter",
+				"none": "Keiner",
+				"azureFoundry": "Azure OpenAI (Foundry)",
+				"codexOAuth": "ChatGPT / Codex (OAuth)",
+				"egressNotice": "Nachrichten, die mit diesem Anbieter gesendet werden, verlassen dein Gerät in Richtung OpenAI.",
+				"activeEgressBanner": "Cloud (OpenAI) aktiv — deine Nachrichten verlassen dein Gerät. Melde dich ab, um zu lokalem Betrieb zurückzukehren."
+			},
+			"codex": {
+				"title": "Mit ChatGPT (Codex) anmelden",
+				"subtitle": "Authentifiziere dich mit deinem OpenAI-ChatGPT-Abonnement per OAuth, um Codex als Cloud-Chat-Anbieter zu nutzen.",
+				"badge": {
+					"signedIn": "Angemeldet",
+					"signedOut": "Nicht angemeldet"
+				},
+				"signIn": "Mit ChatGPT anmelden",
+				"signOut": "Abmelden",
+				"accountId": "Konto",
+				"unknownAccount": "Unbekannt",
+				"expires": "Sitzung läuft ab",
+				"pendingHint": "Schließe die Anmeldung im geöffneten Browser-Fenster ab oder nutze den Link unten.",
+				"authorizeUrlLabel": "Autorisierungs-URL",
+				"authorizeUrlDescription": "Falls kein Browser geöffnet wurde, klicke oder kopiere diesen Link zur Anmeldung.",
+				"copy": "Link kopieren",
+				"copied": "Kopiert!",
+				"openLink": "Im Browser öffnen",
+				"polling": "Warte auf den Abschluss der Anmeldung…",
+				"timeout": "Anmeldung abgelaufen. Das Autorisierungsfenster ist nicht mehr gültig.",
+				"retry": "Erneut versuchen",
+				"loginError": "Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.",
+				"statusError": "Anmeldestatus konnte nicht abgerufen werden.",
+				"egressNotice": "Nachrichten, die mit diesem Anbieter gesendet werden, verlassen dein Gerät in Richtung OpenAI. Die serverseitige Antwortspeicherung ist bei jedem Aufruf deaktiviert."
+			},
+			"azure": {
+				"title": "Azure OpenAI",
+				"configured": "Konfiguriert",
+				"notConfigured": "Nicht konfiguriert",
+				"description": "Cloud-Anmeldedaten werden auf diesem Worker verschlüsselt. Wähle einen Authentifizierungsmodus und füge die Deployments hinzu, die im Chat-Modellauswahlmenü verfügbar sein sollen.",
+				"endpointLabel": "Azure-OpenAI-Endpunkt",
+				"endpointPlaceholder": "https://example.openai.azure.com/",
+				"authModeLabel": "Authentifizierung",
+				"authModeApiKey": "API-Schlüssel",
+				"authModeManagedIdentity": "Verwaltete Identität",
+				"authModeEntraId": "Entra ID",
+				"apiSurfaceLabel": "API-Oberfläche",
+				"apiSurfaceAzureDeployments": "Azure-Bereitstellungen (Standard)",
+				"apiSurfaceOpenAiV1": "OpenAI v1 (Foundry / Gateway)",
+				"apiSurfaceHint": "Für Gateways, die /openai/v1/* mit dem Modell im Anfragetext bereitstellen.",
+				"managedIdentityHint": "Die verwaltete Identität nutzt DefaultAzureCredential und benötigt keinen Schlüssel — sie erfordert eine az-login-Sitzung oder eine Azure-gebundene Identität auf diesem Worker.",
+				"apiKeyLabel": "API-Schlüssel",
+				"apiKeyStoredHint": "Ein Schlüssel ist gespeichert. Gib einen Schlüssel ein, um die Cloud-Einstellungen zu speichern oder zu rotieren.",
+				"apiKeyHint": "Der Schlüssel wird nur an die lokale Worker-API gesendet.",
+				"modelsLabel": "Modelle",
+				"deploymentNameLabel": "Deployment-Name",
+				"deploymentNamePlaceholder": "gpt-4o",
+				"deploymentNameHelp": "Deployment-Name (wie im Foundry-Portal angezeigt — nicht die Modellfamilie).",
+				"displayLabelLabel": "Anzeigename (optional)",
+				"displayLabelPlaceholder": "GPT-4o",
+				"addModel": "Modell hinzufügen",
+				"removeModel": "Modell entfernen",
+				"save": "Cloud-Einstellungen speichern",
+				"clear": "Gespeicherte Anmeldedaten löschen",
+				"reload": "Neu laden",
+				"headers": {
+					"title": "Benutzerdefinierte Header",
+					"description": "Füge jeder Azure-Anfrage benutzerdefinierte HTTP-Header hinzu (zum Beispiel einen APIM-Gateway-Abonnementschlüssel). Markiere einen Wert als geheim, um ihn nur schreibbar zu speichern.",
+					"nameLabel": "Header-Name",
+					"namePlaceholder": "Ocp-Apim-Subscription-Key",
+					"valueLabel": "Wert",
+					"valuePlaceholder": "Wert",
+					"secretLabel": "Geheim",
+					"secretStoredHint": "Ein geheimer Wert ist gespeichert. Gib einen neuen Wert ein, um ihn zu ersetzen.",
+					"addHeader": "Header hinzufügen",
+					"removeHeader": "Header entfernen"
+				},
+				"hostSuffixes": {
+					"title": "Erlaubte Host-Suffixe",
+					"description": "Füge zusätzliche Host-Suffixe hinzu (zum Beispiel .azure-api.net), damit ein APIM-Gateway-Endpunkt die Host-Prüfung besteht. Integrierte Azure-Suffixe sind immer erlaubt.",
+					"label": "Host-Suffix",
+					"placeholder": ".azure-api.net",
+					"addHost": "Erlaubten Host hinzufügen",
+					"removeHost": "Erlaubten Host entfernen"
+				},
+				"managedIdentityEgressWarning": "Dieser Endpunkt-Host ist keine Microsoft-Azure-Domain. Ein Entra-ID-Token wird an diesen Nicht-Microsoft-Host gesendet."
+			},
+			"entra": {
+				"modeHint": "Entra ID fordert ein eigenes Bearer-Token an — anwendungsseitige Client-Credentials, wenn ein Geheimnis konfiguriert ist, sonst interaktive Benutzeranmeldung — und sendet es als Authorization-Header. Gedacht für Gateways (zum Beispiel ein Azure-APIM-KI-Gateway), die ein Entra-ID-Token validieren.",
+				"tenantIdLabel": "Mandanten-ID",
+				"tenantIdPlaceholder": "00000000-0000-0000-0000-000000000000",
+				"clientIdLabel": "Client-ID",
+				"clientIdPlaceholder": "00000000-0000-0000-0000-000000000000",
+				"clientSecretLabel": "Client-Geheimnis",
+				"clientSecretHint": "Leer lassen, um interaktiv anzumelden statt anwendungsseitige Client-Credentials zu verwenden.",
+				"clientSecretStoredHint": "Ein Geheimnis ist gespeichert. Gib einen neuen Wert ein, um es zu ersetzen, oder lasse das Feld leer, um es zu behalten.",
+				"tokenScopeLabel": "Token-Bereich",
+				"tokenScopePlaceholder": "api://<backend-app-id>/.default",
+				"tokenScopeHintClientCredentials": "Mit einem Client-Geheimnis den anwendungsseitigen Bereich verwenden, der auf /.default endet, z. B. api://<app-id-uri>/.default.",
+				"tokenScopeHintDelegated": "Ohne Client-Geheimnis (Gerätecode- oder Browser-Anmeldung) einen delegierten Bereich verwenden, z. B. api://<app-id-uri>/access_as_user.",
+				"signInMethodLabel": "Anmeldemethode",
+				"signInMethodDeviceCode": "Gerätecode",
+				"signInMethodInteractiveBrowser": "Interaktiver Browser",
+				"signInMethodClientSecret": "Anwendungsseitig (Client-Credentials)",
+				"signInMethodAuthorizationCode": "Autorisierungscode (Browser + Client-Geheimnis)",
+				"title": "Mit Entra ID anmelden",
+				"subtitle": "Schließe die interaktive Anmeldung für diese Entra-ID-Verbindung mit dem Gerätecode-Verfahren ab.",
+				"signIn": "Anmelden",
+				"pendingHint": "Gib den Gerätecode unten am Verifizierungslink ein, um die Anmeldung abzuschließen.",
+				"userCodeLabel": "Gerätecode",
+				"verificationUriLabel": "Verifizierungs-URL",
+				"verificationUriDescription": "Öffne diesen Link und gib den Gerätecode ein, um die Anmeldung abzuschließen.",
+				"copy": "Link kopieren",
+				"copied": "Kopiert!",
+				"openLink": "Im Browser öffnen",
+				"expires": "Code läuft ab",
+				"polling": "Warte auf Abschluss der Anmeldung…",
+				"timeout": "Zeitüberschreitung bei der Anmeldung. Der Gerätecode ist abgelaufen.",
+				"retry": "Erneut versuchen",
+				"signInError": "Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.",
+				"statusError": "Anmeldestatus konnte nicht geprüft werden.",
+				"signInSucceeded": "Mit Entra ID angemeldet.",
+				"signInFailed": "Entra-ID-Anmeldung fehlgeschlagen.",
+				"authCode": {
+					"title": "Mit Entra ID anmelden",
+					"subtitle": "Schließe die interaktive Anmeldung für diese Entra-ID-Verbindung in einem Browser-Tab ab.",
+					"redirectUriLabel": "Weiterleitungs-URI",
+					"redirectUriPlaceholder": "http://localhost:53682/signin-oidc",
+					"redirectUriHint": "Leer lassen, um die Standardeinstellung zu verwenden. Muss eine Loopback-Adresse (localhost oder 127.0.0.1) sein, die in der App-Registrierung eingetragen ist.",
+					"signIn": "Anmelden",
+					"pendingHint": "Ein Browser-Tab wurde geöffnet, um die Anmeldung abzuschließen. Warte auf Abschluss…",
+					"reopen": "Anmelde-Tab erneut öffnen",
+					"timeout": "Zeitüberschreitung bei der Anmeldung.",
+					"retry": "Erneut versuchen",
+					"signInError": "Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.",
+					"statusError": "Anmeldestatus konnte nicht geprüft werden.",
+					"signInSucceeded": "Mit Entra ID angemeldet.",
+					"signInFailed": "Entra-ID-Anmeldung fehlgeschlagen."
+				}
+			}
+		},
+		"models": {
+			"placeholder": {
+				"title": "Modelle",
+				"description": "Lokale Modellauflistung, Auswahl, Pull und Löschen werden hier ergänzt."
+			},
+			"type": {
+				"columnHeader": "Typ",
+				"kind": {
+					"chat": "Chat",
+					"embedding": "Embedding",
+					"reranker": "Reranker",
+					"draft": "Entwurf (spekulative Dekodierung)",
+					"unknown": "Unbekannt"
+				},
+				"capability": {
+					"tools": "Werkzeuge",
+					"vision": "Bild",
+					"thinking": "Denken",
+					"nativeReasoning": "Natives Denken"
+				},
+				"overrideLabel": "Typ überschreiben",
+				"reset": "Auf erkannt zurücksetzen"
+			},
+			"local": {
+				"setDefaultSuccess": "Standard-Lokalmodell auf {{name}} gesetzt.",
+				"deleteSuccess": "Modell {{name}} gelöscht.",
+				"title": "Modellverwaltung",
+				"subtitle": "Installierte lokale Modelle auflisten, auswählen und löschen.",
+				"loading": "Lokale Modelle werden geladen …",
+				"installedTitle": "Installierte Modelle",
+				"empty": "Keine lokalen Modelle gefunden."
+			},
+			"gguf": {
+				"browse": {
+					"title": "Hugging Face GGUF durchsuchen",
+					"searchLabel": "Repositories durchsuchen",
+					"searchPlaceholder": "z. B. llama 3.1 8b",
+					"search": "Suchen",
+					"loading": "Wird gesucht…",
+					"error": "Repositories konnten nicht durchsucht werden.",
+					"empty": "Keine GGUF-Repositories entsprachen der Suche.",
+					"gated": "Gesperrt",
+					"untrustedPublisher": "Nicht verifizierter Anbieter",
+					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download.",
+					"download": "Herunterladen",
+					"noGguf": "Kein GGUF",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Aktualisiert",
+						"license": "Lizenz",
+						"action": "Aktion"
+					}
+				},
+				"download": {
+					"title": "Laufende Downloads",
+					"inProgress": "Wird heruntergeladen…",
+					"cancel": "Abbrechen",
+					"started": "Download gestartet.",
+					"alreadyInFlight": "Dieser Download läuft bereits.",
+					"error": "Der Download konnte nicht gestartet werden.",
+					"cancelled": "Download abgebrochen.",
+					"cancelError": "Der Download konnte nicht abgebrochen werden.",
+					"selectQuant": "Quantisierung zum Herunterladen auswählen",
+					"confirm": "Herunterladen",
+					"inspecting": "Quantisierungen werden geladen…",
+					"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
+					"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
+					"dynamic": "Dynamisch",
+					"draft": "Entwurfsmodell",
+					"draftHint": "Entwurfsmodell für spekulative Dekodierung – kein Chat-Modell",
+					"recommended": "Empfohlen",
+					"columns": {
+						"quant": "Quantisierung",
+						"size": "Größe",
+						"fit": "Passung"
+					},
+					"fit": {
+						"fits": "Passt",
+						"tight": "Knapp",
+						"wontFit": "Passt nicht"
+					},
+					"quality": {
+						"nearLossless": "Höchste Qualität",
+						"sweetSpot": "Empfohlene Qualität",
+						"balanced": "Ausgewogen",
+						"small": "Kleiner / schneller",
+						"minimal": "Kleinste / geringste Qualität"
+					},
+					"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)",
+					"progressLabel": "{{pct}}%",
+					"bytesOf": "{{completed}} / {{total}}",
+					"speed": "{{value}}/s",
+					"eta": "~{{duration}} verbleibend",
+					"progressAriaLabel": "Downloadfortschritt",
+					"failedTitle": "Download fehlgeschlagen"
+				}
+			}
+		},
+		"invocations": {
+			"placeholder": {
+				"title": "Aufrufe",
+				"description": "Aktuelle und historische Aufrufüberwachung wird hier portiert."
+			},
+			"monitor": {
+				"title": "Aufrufüberwachung",
+				"subtitle": "Den aktiven Aufruf und den lokalen In-Memory-Verlauf des Workers einsehen.",
+				"loadError": "Die Daten der Aufrufüberwachung konnten nicht geladen werden.",
+				"loading": "Aufrufüberwachung wird geladen…",
+				"active": "Aktiv",
+				"idle": "Inaktiv",
+				"traceId": {
+					"label": "Trace: {{traceId}}",
+					"copy": "Trace-ID kopieren",
+					"copied": "Kopiert"
+				},
+				"summary": {
+					"pending": "Wartet auf den Start mit {{model}}.",
+					"running": "Läuft mit {{model}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning bisher ({{tools}}).",
+					"completed": "Abgeschlossen in {{duration}} mit {{model}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning, {{tools}}.",
+					"failed": "Fehlgeschlagen nach {{duration}} mit {{model}} — {{reason}}.",
+					"cancelled": "Abgebrochen nach {{duration}} mit {{model}}.",
+					"unknown": "Aufrufstatus ist unbekannt.",
+					"toolApproval": "wartet auf Tool-Freigabe",
+					"toolQuestion": "wartet auf eine Antwort auf eine Frage",
+					"toolPending": "{{count}} ausstehende(r) Tool-Aufruf(e)",
+					"toolNone": "keine Tool-Aufrufe"
+				},
+				"current": {
+					"title": "Aktueller Aufruf",
+					"empty": "Aktuell ist kein Aufruf zugewiesen oder aktiv.",
+					"model": "Modell: {{value}}",
+					"conversation": "Unterhaltung: {{value}}",
+					"started": "Gestartet: {{value}}",
+					"updated": "Aktualisiert: {{value}}",
+					"outputChunks": "Ausgabe-Chunks: {{value}}",
+					"thinkingChunks": "Denk-Chunks: {{value}}",
+					"pendingToolCalls": "Ausstehende Tool-Aufrufe: {{value}}",
+					"pendingApproval": "Genehmigung ausstehend: {{value}}",
+					"pendingQuestion": "Frage ausstehend: {{value}}",
+					"yes": "Ja",
+					"no": "Nein"
+				},
+				"history": {
+					"title": "Aufrufverlauf",
+					"subtitle": "Zeigt bis zu {{count}} der letzten abgeschlossenen Aufrufe.",
+					"empty": "Es sind noch keine abgeschlossenen Aufrufe erfasst.",
+					"columns": {
+						"invocation": "Aufruf",
+						"status": "Status",
+						"model": "Modell",
+						"completed": "Abgeschlossen",
+						"duration": "Dauer",
+						"chunks": "Chunks",
+						"thinking": "Denken",
+						"result": "Ergebnis"
+					}
+				}
+			}
+		},
+		"usage": {
+			"title": "Nutzungs-Dashboard",
+			"subtitle": "Agent-Token-Nutzung nach Modell und Anbieter. Daten werden {{days}} Tage lang aufbewahrt.",
+			"loadError": "Nutzungsübersicht konnte nicht geladen werden.",
+			"costDisclaimer": "Kosten sind ungefähre Schätzungen in USD, berechnet aus den in den Node-Einstellungen konfigurierten Raten pro Modell. Lokale und nicht bepreiste Nutzung gilt als kostenlos.",
+			"range": {
+				"from": "Von",
+				"to": "Bis"
+			},
+			"totals": {
+				"totalTokens": "Gesamt-Tokens",
+				"promptTokens": "Prompt-Tokens",
+				"completionTokens": "Antwort-Tokens",
+				"reasoningTokens": "Reasoning-Tokens",
+				"runCount": "Läufe",
+				"estimatedCost": "Gesch. Kosten"
+			},
+			"daily": {
+				"title": "Tägliche Token-Nutzung",
+				"seriesLabel": "Gesamt-Tokens",
+				"empty": "Keine tägliche Nutzung für diesen Zeitraum darstellbar."
+			},
+			"providers": {
+				"title": "Nutzung nach Anbieter",
+				"noTokens": "Für keinen Anbieter wurde in diesem Zeitraum Token-Nutzung erfasst.",
+				"local": "Lokal (llama.cpp)",
+				"ollama": "Ollama",
+				"codex": "Codex",
+				"azure": "Azure",
+				"unknown": "Unbekannt",
+				"columns": {
+					"provider": "Anbieter",
+					"runs": "Läufe",
+					"totalTokens": "Gesamt-Tokens",
+					"estimatedCost": "Gesch. Kosten"
+				}
+			},
+			"models": {
+				"title": "Nutzung nach Modell",
+				"empty": "Für diesen Zeitraum wurde keine Modellnutzung erfasst.",
+				"columns": {
+					"model": "Modell",
+					"providers": "Anbieter",
+					"runs": "Läufe",
+					"prompt": "Prompt",
+					"completion": "Antwort",
+					"total": "Gesamt",
+					"estimatedCost": "Gesch. Kosten"
+				}
+			},
+			"empty": {
+				"title": "Noch keine Nutzung erfasst",
+				"body": "In diesen Zeitraum fielen keine Agent-Läufe. Starten Sie einen Agenten über Chat oder den Scheduler und kehren Sie dann hierher zurück — die Token-Nutzung wird pro Modell und Anbieter erfasst, während Agenten laufen."
+			}
+		},
+		"agents": {
+			"eyebrow": "Worker-Node",
+			"title": "Agent-Definitionen",
+			"subtitle": "Lokale Agent-Personas erstellen: Anweisungen, Modell, Reasoning-Aufwand und die nutzbaren Tools.",
+			"createButton": "Neuer Agent",
+			"templatesButton": "Starter-Agenten hinzufügen",
+			"templates": {
+				"title": "Starter-Agenten hinzufügen",
+				"subtitle": "Importiere kuratierte Starter-Personas als bearbeitbare Agent-Definitionen. Sie kommen ohne Tools an — Tools nach dem Import vergeben.",
+				"loading": "Starter-Agenten werden geladen…",
+				"loadError": "Starter-Agenten konnten nicht geladen werden.",
+				"importError": "Die ausgewählten Agenten konnten nicht importiert werden.",
+				"empty": "Es sind keine Starter-Agenten verfügbar.",
+				"tokenBadge": "~{{count}} Tokens",
+				"tokenWarning": "Der geschätzte Prompt dieser Persona ist für lokale Modelle groß. Die Schätzung ist eine Zeichen/4-Heuristik.",
+				"alreadyImported": "Importiert",
+				"importButton": "Auswahl importieren ({{count}})",
+				"importSuccess": "{{imported}} hinzugefügt, {{skipped}} übersprungen."
+			},
+			"list": {
+				"loading": "Agent-Definitionen werden geladen…",
+				"empty": "Noch keine Agent-Definitionen. Erstelle eine, um zu beginnen.",
+				"nodeDefault": "Node-Standard",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"kind": "Typ",
+					"model": "Modell",
+					"tools": "Tools",
+					"version": "Version",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Neuer Agent",
+				"editTitle": "Agent bearbeiten"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Recherche-Assistent",
+					"required": "Name ist erforderlich"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"instructions": {
+					"label": "Anweisungen",
+					"description": "System-Prompt, der das Verhalten dieses Agenten definiert.",
+					"placeholder": "Du bist ein hilfreicher Assistent, der…",
+					"required": "Anweisungen sind erforderlich"
+				},
+				"kind": {
+					"label": "Typ",
+					"options": {
+						"Single": "Einzeln",
+						"Orchestrator": "Orchestrator"
+					}
+				},
+				"modelProfile": {
+					"label": "Modellprofil",
+					"nodeDefault": "Node-Standard"
+				},
+				"reasoningEffort": {
+					"label": "Reasoning-Aufwand",
+					"nodeDefault": "Node-Standard",
+					"options": {
+						"none": "Keiner",
+						"low": "Niedrig",
+						"medium": "Mittel",
+						"high": "Hoch"
+					}
+				},
+				"tools": {
+					"label": "Tools",
+					"requiresApproval": "Freigabe erforderlich",
+					"autoExecute": "automatisch",
+					"notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wähle ein tool-fähiges Modell, um Tools zu aktivieren.",
+					"loading": "Tools werden geladen…",
+					"loadError": "Der Tool-Katalog konnte nicht geladen werden.",
+					"empty": "Keine Tools verfügbar."
+				},
+				"orchestration": {
+					"label": "Orchestrierung",
+					"description": "Dieser Agent fungiert als Triage. Wähle die Spezialisten, an die er übergeben kann, und beschränke optional die Übergabewege.",
+					"thisAgent": "Dieser Agent",
+					"triageOptionLabel": "{{name}} (Triage)",
+					"degradeWarning": "Eines oder mehrere Modelle in dieser Orchestrierung sind nicht tool-fähig ({{models}}). Die Orchestrierungs-Weiterleitung erfordert Tool-Aufrufe, daher läuft diese Definition stattdessen als Einzelagent.",
+					"participants": {
+						"label": "Spezialist-Teilnehmer",
+						"placeholder": "Agenten zum Übergeben auswählen",
+						"empty": "Keine weiteren Agenten verfügbar. Erstelle weitere Agenten, um sie als Teilnehmer zu verwenden."
+					},
+					"handoffs": {
+						"label": "Übergabewege",
+						"add": "Übergabe hinzufügen",
+						"remove": "Übergabe entfernen",
+						"from": "Von",
+						"to": "An",
+						"reason": "Grund (optional)",
+						"meshHint": "Mesh (automatisch): Ohne explizite Wege kann jeder Agent an jeden anderen übergeben.",
+						"twoAgentHint": "Mesh-Routing ist erst ab 3 Agenten sinnvoll; füge bei 2 Agenten einen expliziten Übergabeweg hinzu."
+					},
+					"maxTurns": {
+						"label": "Max. Züge pro Agent",
+						"description": "Begrenzt, wie oft ein Agent erneut aufgerufen wird, bevor die Weiterleitung weitergehen muss."
+					},
+					"returnToPrevious": {
+						"label": "Zum vorherigen Spezialisten zurückkehren",
+						"description": "Leitet den nächsten Nutzer-Zug zurück an den Spezialisten, der den letzten Zug bearbeitet hat, statt über die Triage."
+					}
+				},
+				"playbookEnabled": {
+					"label": "Adaptives Gedächtnis aktivieren",
+					"description": "Hängt die aktivierten Playbook-Aktionen dieses Agenten zur Laufzeit an seine Anweisungen an."
+				},
+				"skills": {
+					"label": "Skills",
+					"privacyNote": "Zugewiesene Skills werden vom Modell dieses Agenten bei Bedarf geladen. Ist dieses Modell ein Cloud-Anbieter, verlässt der Skill-Inhalt diesen Knoten.",
+					"loading": "Skills werden geladen…",
+					"loadError": "Die Skill-Bibliothek konnte nicht geladen werden.",
+					"empty": "Noch keine Skills. Erstellen Sie Skills auf der Skills-Seite, um sie hier zuzuweisen.",
+					"disabledBadge": "deaktiviert"
+				},
+				"defaultTemporaryChat": {
+					"label": "Neue Chats standardmäßig temporär",
+					"description": "Neue Konversationen mit diesem Agenten bringen ihm standardmäßig kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt. Jeder Chat kann dies überschreiben."
+				},
+				"memoryExtractionEnabled": {
+					"label": "Neues Gedächtnis aus Läufen lernen",
+					"description": "Lässt diesen Agenten neues Gedächtnis aus seinen Läufen lernen. Aus = nur vorhandenes Gedächtnis nutzen (kein neues Gedächtnis wird gewonnen)."
+				},
+				"advanced": {
+					"label": "Erweitert"
+				},
+				"disableBaseScaffold": {
+					"label": "Basis-Anweisungsgerüst deaktivieren",
+					"description": "Überspringt die vom Knoten normalerweise vorangestellten Basis-Anweisungen für jeden Agenten – es werden nur die oben geschriebenen Anweisungen unverändert verwendet."
+				}
+			},
+			"playbook": {
+				"title": "Adaptives Gedächtnis",
+				"subtitle": "Playbook-Aktionen – manuell, analysevorgeschlagen oder aus Läufen gelernt – werden an die Anweisungen von {{name}} angehängt, wenn dessen Gedächtnis aktiviert ist.",
+				"addButton": "Aktion hinzufügen",
+				"analyzeButton": "Feedback analysieren",
+				"noSuggestions": "Keine neuen Vorschläge aus der letzten Analyse.",
+				"suggestedHeading": "Von der Analyse vorgeschlagen",
+				"confidenceLabel": "Konfidenz {{value}}",
+				"evidenceSummary": "Basierend auf {{count}} Feedback-Elementen",
+				"evidenceEmpty": "Keine zitierten Feedback-Elemente.",
+				"evidenceHint": "Prüfe diese Elemente im Feedback-Einblicke-Panel weiter unten.",
+				"approveButton": "Genehmigen",
+				"rejectButton": "Ablehnen",
+				"loading": "Playbook wird geladen…",
+				"empty": "Noch keine Playbook-Aktionen.",
+				"priorityLabel": "Priorität {{priority}}",
+				"triggerLabel": "Wenn: {{trigger}}",
+				"moveUpAria": "Nach oben",
+				"moveDownAria": "Nach unten",
+				"editAria": "Aktion bearbeiten",
+				"deleteAria": "Aktion löschen",
+				"source": {
+					"Manual": "Manuell",
+					"Analysis": "Analyse",
+					"Extracted": "Aus Lauf extrahiert"
+				},
+				"state": {
+					"enabled": "aktiviert",
+					"disabled": "deaktiviert"
+				},
+				"form": {
+					"behavior": {
+						"label": "Verhalten",
+						"description": "Anweisungstext, der an den System-Prompt des Agenten angehängt wird.",
+						"placeholder": "Gib immer deine Quellen an…",
+						"required": "Verhalten ist erforderlich"
+					},
+					"scope": {
+						"label": "Geltungsbereich",
+						"placeholder": "Optionales Thema/Tool-Tag"
+					},
+					"priority": {
+						"label": "Priorität",
+						"description": "Niedrigere Zahlen werden zuerst eingefügt."
+					},
+					"state": {
+						"label": "Status"
+					},
+					"triggerCondition": {
+						"label": "Auslösebedingung",
+						"description": "Optionaler Hinweis, wann dies gilt (in dieser Phase nur zur Anzeige).",
+						"placeholder": "Wenn der Nutzer nach… fragt"
+					}
+				},
+				"delete": {
+					"title": "Playbook-Aktion löschen",
+					"description": "Diese Playbook-Aktion löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"reject": {
+					"title": "Vorschlag ablehnen",
+					"description": "Diese vorgeschlagene Aktion ablehnen? Sie wird archiviert und nicht eingefügt.",
+					"confirm": "Ablehnen"
+				},
+				"errors": {
+					"load": "Das Playbook konnte nicht geladen werden.",
+					"save": "Die Playbook-Aktion konnte nicht gespeichert werden.",
+					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden.",
+					"analyze": "Feedback konnte nicht analysiert werden.",
+					"review": "Der Vorschlag konnte nicht aktualisiert werden."
+				},
+				"eval": {
+					"runButton": "Eval ausführen",
+					"passed": "Eval bestanden",
+					"failed": "Eval fehlgeschlagen",
+					"counts": "{{regressed}} verschlechtert / {{golden}} Golden-Fälle",
+					"truncated": "{{evaluated}} von {{total}} Golden-Fällen ausgewertet.",
+					"regressedToggle": "{{count}} verschlechterte Fälle anzeigen",
+					"regressedCase": "{{id}} (bewertet durch {{scoredBy}})",
+					"scoredBy": {
+						"assertion": "Assertion",
+						"judge": "Judge"
+					},
+					"gate": {
+						"needsEval": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
+						"stale": "Dieser Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus, bevor du genehmigst.",
+						"regressed": "Die Eval hat einen zuvor guten Fall verschlechtert. Behebe die Verschlechterung, bevor du genehmigst."
+					},
+					"conflict": {
+						"EvalRequired": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
+						"EvalRegressed": "Genehmigung blockiert: Die Eval hat einen zuvor guten Fall verschlechtert.",
+						"EvalStale": "Genehmigung blockiert: Der Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus.",
+						"CapReached": "Genehmigung blockiert: Dieser Agent hat sein Limit aktiver Aktionen erreicht. Archiviere oder deaktiviere zuerst eine aktive Aktion."
+					}
+				},
+				"monitor": {
+					"enabledCount": "{{count}} Aktionen aktiv",
+					"relevanceBanner": "Einfügung ist relevanzgesteuert: Top-{{topK}} von {{count}} Aktionen pro Zug.",
+					"rankerEmbedding": "Sortiert nach Embedding-Ähnlichkeit (Modell {{model}}).",
+					"rankerLexical": "Sortiert nach lexikalischer Überschneidung.",
+					"none": "—",
+					"downRateLabel": "Abwertungsrate",
+					"flag": "Prüfung nötig",
+					"status": {
+						"Improved": "Verbessert",
+						"Flat": "Unverändert",
+						"Regressed": "Verschlechtert",
+						"InsufficientData": "Unzureichende Daten"
+					}
+				},
+				"scope": {
+					"Procedural": "Prozedural",
+					"Failure": "Fehler",
+					"UserPreference": "Benutzervorliebe",
+					"Project": "Projekt"
+				},
+				"scopeFilter": {
+					"all": "Alle"
+				}
+			},
+			"golden": {
+				"title": "Golden-Konversationen",
+				"subtitle": "Erstelle Golden-Fälle, die die Beförderung absichern: Eine Kandidatenaktion darf sie nicht verschlechtern, bevor {{name}} sie aktivieren kann.",
+				"addButton": "Golden-Fall hinzufügen",
+				"loading": "Golden-Fälle werden geladen…",
+				"empty": "Noch keine Golden-Fälle. Füge einen hinzu, damit die Beförderung Eval-abgesichert werden kann.",
+				"turnCount": "{{count}} Eingabe-Turns",
+				"hasAssertion": "Assertion",
+				"hasRubric": "Rubric",
+				"disabledBadge": "deaktiviert",
+				"harvestedBadge": "geerntet",
+				"deleteAria": "Golden-Fall löschen",
+				"delete": {
+					"title": "Golden-Fall löschen",
+					"description": "'{{title}}' löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"harvest": {
+					"button": "Aus 👍 ernten",
+					"success": "{{created}} vorgeschlagen, {{duplicate}} bereits geerntet, {{skipped}} übersprungen."
+				},
+				"pending": {
+					"heading": "Geerntet (Prüfung ausstehend)",
+					"hint": "Prüfe jeden geernteten Kandidaten und genehmige ihn dann in das aktive Golden-Set oder lehne ihn ab.",
+					"turnsPreview": "{{count}} Turns · {{role}}: {{text}}",
+					"turnCount": "{{count}} Eingabe-Turns",
+					"rubric": "Rubric: {{rubric}}",
+					"approve": "Genehmigen",
+					"reject": "Ablehnen"
+				},
+				"form": {
+					"titleRequired": "Titel ist erforderlich.",
+					"turnsRequired": "Mindestens ein Eingabe-Turn ist erforderlich.",
+					"signalRequired": "Füge mindestens eine erforderliche/verbotene Phrase oder eine Rubric hinzu.",
+					"tooLong": {
+						"title": "Der Titel ist zu lang (max. {{max}} Zeichen).",
+						"inputTurns": "Die Eingabe-Turns sind zu lang (max. {{max}} Zeichen).",
+						"assertion": "Die erforderlichen/verbotenen Phrasen sind zu lang (max. {{max}} Zeichen).",
+						"rubric": "Die Rubric ist zu lang (max. {{max}} Zeichen)."
+					},
+					"title": {
+						"label": "Titel",
+						"placeholder": "Kurzes Bedienerlabel"
+					},
+					"turns": {
+						"label": "Eingabe-Turns",
+						"description": "Ein Turn pro Zeile als 'Rolle: Text'. Eine Zeile ohne Doppelpunkt wird als Nutzer-Turn behandelt.",
+						"placeholder": "user: Fasse das Dokument zusammen…"
+					},
+					"required": {
+						"label": "Erforderliche Phrasen",
+						"description": "Eine pro Zeile. Alle müssen vorhanden sein."
+					},
+					"forbidden": {
+						"label": "Verbotene Phrasen",
+						"description": "Eine pro Zeile. Keine darf vorhanden sein."
+					},
+					"rubric": {
+						"label": "Rubric",
+						"description": "Optionale Judge-Rubric (verwendet, wenn keine Assertion zutrifft)."
+					}
+				},
+				"errors": {
+					"load": "Golden-Fälle konnten nicht geladen werden.",
+					"save": "Der Golden-Fall konnte nicht gespeichert werden.",
+					"delete": "Der Golden-Fall konnte nicht gelöscht werden.",
+					"harvest": "Golden-Fälle konnten nicht geerntet werden.",
+					"approve": "Der Golden-Fall konnte nicht genehmigt werden."
+				}
+			},
+			"insights": {
+				"title": "Feedback-Einblicke",
+				"subtitle": "Schreibgeschützte Zusammenfassung des Daumen-hoch/runter-Feedbacks und der Kommentare für {{name}}.",
+				"loading": "Feedback-Einblicke werden geladen…",
+				"empty": "Für diesen Agenten wurde noch kein Feedback gesammelt.",
+				"up": "Positiv {{count}}",
+				"down": "Negativ {{count}}",
+				"downRate": "Negativ-Rate {{rate}}",
+				"perTool": "Nach Tool",
+				"toolsEmpty": "Noch kein tool-bezogenes Feedback.",
+				"toolHeader": "Tool",
+				"upHeader": "Positiv",
+				"downHeader": "Negativ",
+				"countHeader": "Gesamt",
+				"downRateHeader": "Negativ-Rate",
+				"exemplars": "Letzte Kommentare",
+				"exemplarsEmpty": "Noch keine Kommentare vorhanden.",
+				"ratingUp": "positiv",
+				"ratingDown": "negativ",
+				"notEnoughSignal": "nicht genug Signal (n < {{threshold}})",
+				"attributionFootnote": "Tool-Zählungen sind eine Zuordnung auf Konversationsebene: Feedback zu Nachrichten in Konversationen, in denen das Tool verwendet wurde, nicht zur konkreten Nachricht, die es aufgerufen hat.",
+				"errors": {
+					"load": "Feedback-Einblicke konnten nicht geladen werden."
+				}
+			},
+			"delete": {
+				"title": "Agent löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Agent-Definitionen konnten nicht geladen werden.",
+				"save": "Die Agent-Definition konnte nicht gespeichert werden.",
+				"delete": "Der Agent konnte nicht gelöscht werden."
+			},
+			"executionLog": {
+				"title": "Laufdiagnose",
+				"subtitle": "Letzte Läufe für {{name}} (nur Metadaten – kein Nachrichten- oder Fehlertext wird gespeichert).",
+				"loading": "Laufdiagnose wird geladen…",
+				"empty": "Noch keine Läufe aufgezeichnet.",
+				"latencyValue": "{{ms}} ms",
+				"errors": {
+					"load": "Laufdiagnose konnte nicht geladen werden."
+				},
+				"outcome": {
+					"success": "Erfolg",
+					"failed": "Fehlgeschlagen"
+				},
+				"columns": {
+					"outcome": "Ergebnis",
+					"when": "Wann",
+					"model": "Modell",
+					"latency": "Latenz",
+					"promptTokens": "Prompt",
+					"completionTokens": "Antwort",
+					"error": "Fehlerklasse"
+				}
+			}
+		},
+		"mcp": {
+			"eyebrow": "Worker-Node",
+			"title": "MCP-Server",
+			"subtitle": "Lokale MCP-Server registrieren, um den Node-Tool-Katalog zu erweitern. Server sind deaktiviert, bis du sie aktivierst, und jedes erkannte Tool erfordert standardmäßig eine Freigabe.",
+			"createButton": "Server registrieren",
+			"list": {
+				"loading": "MCP-Server werden geladen…",
+				"empty": "Noch keine MCP-Server registriert. Registriere einen, um zu beginnen.",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"enabledAria": "{{name}} umschalten",
+				"columns": {
+					"name": "Name",
+					"transport": "Transport",
+					"target": "Ziel",
+					"enabled": "Aktiviert",
+					"version": "Version",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "MCP-Server registrieren",
+				"editTitle": "MCP-Server bearbeiten"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Dateisystem-Tools",
+					"required": "Name ist erforderlich"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"transport": {
+					"label": "Transport",
+					"description": "Stdio startet einen lokalen Prozess; HTTP verbindet sich mit einem laufenden Loopback-Server.",
+					"options": {
+						"Stdio": "Stdio",
+						"Http": "HTTP"
+					}
+				},
+				"command": {
+					"label": "Befehl",
+					"placeholder": "/usr/bin/my-mcp-server"
+				},
+				"arguments": {
+					"label": "Argumente",
+					"description": "Ein Argument pro Zeile.",
+					"placeholder": "--stdio"
+				},
+				"workingDirectory": {
+					"label": "Arbeitsverzeichnis",
+					"placeholder": "/optional/cwd"
+				},
+				"env": {
+					"label": "Umgebungsvariablen",
+					"add": "Variable hinzufügen",
+					"empty": "Keine Umgebungsvariablen.",
+					"keyPlaceholder": "KEY",
+					"valuePlaceholder": "Wert",
+					"remove": "Variable entfernen"
+				},
+				"url": {
+					"label": "URL",
+					"description": "Nur Loopback (127.0.0.1 / localhost / ::1).",
+					"placeholder": "http://127.0.0.1:3001/sse"
+				}
+			},
+			"tools": {
+				"title": "Erkannte Tools",
+				"inspectLabel": "Erkannte Tools inspizieren",
+				"loading": "Erkannte Tools werden geladen…",
+				"loadError": "Erkannte Tools konnten nicht geladen werden.",
+				"empty": "Keine Tools erkannt. Aktiviere den Server, um ihn zu verbinden und seine Tools aufzulisten.",
+				"requiresApproval": "Freigabe erforderlich",
+				"autoExecute": "automatisch",
+				"status": {
+					"connected": "verbunden",
+					"disabled": "deaktiviert",
+					"error": "Fehler",
+					"connecting": "verbindet…"
+				}
+			},
+			"delete": {
+				"title": "MCP-Server löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "MCP-Server konnten nicht geladen werden.",
+				"save": "Der MCP-Server konnte nicht gespeichert werden.",
+				"delete": "Der MCP-Server konnte nicht gelöscht werden.",
+				"enable": "Der Serverstatus konnte nicht geändert werden."
+			}
+		},
+		"scheduler": {
+			"eyebrow": "Worker-Node",
+			"title": "Planer",
+			"subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Aufgaben sind deaktiviert, bis du sie aktivierst, und Parameter werden verschlüsselt gespeichert.",
+			"createButton": "Aufgabe erstellen",
+			"list": {
+				"loading": "Geplante Aufgaben werden geladen…",
+				"empty": "Noch keine geplanten Aufgaben. Erstelle eine, um zu beginnen.",
+				"hasParameters": "Ja",
+				"noParameters": "—",
+				"enabledAria": "{{name}} umschalten",
+				"triggerAria": "{{name}} jetzt ausführen",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"kind": "Art",
+					"schedule": "Zeitplan",
+					"parameters": "Parameter",
+					"enabled": "Aktiviert",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Geplante Aufgabe erstellen",
+				"editTitle": "Geplante Aufgabe bearbeiten"
+			},
+			"form": {
+				"template": {
+					"label": "Vorlage",
+					"description": "Die Aufgabenvorlage bestimmt, was diese Aufgabe tut.",
+					"placeholder": "Vorlage auswählen"
+				},
+				"displayName": {
+					"label": "Name",
+					"placeholder": "Nächtliche Bereinigung"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"scheduleKind": {
+					"label": "Zeitplanart",
+					"manualNote": "Wird nur bei manueller Auslösung ausgeführt.",
+					"options": {
+						"Cron": "Cron",
+						"OneShot": "Einmalig",
+						"SimpleInterval": "Intervall",
+						"Manual": "Bei Bedarf"
+					}
+				},
+				"cronExpression": {
+					"label": "Cron-Ausdruck",
+					"description": "Quartz-Cron-Syntax, z. B. 0 0 3 * * ?"
+				},
+				"intervalSeconds": {
+					"label": "Intervall (Sekunden)"
+				},
+				"repeatCount": {
+					"label": "Wiederholungen",
+					"description": "Leer lassen, um unbegrenzt zu wiederholen."
+				},
+				"startAtUtc": {
+					"label": "Startzeitpunkt"
+				},
+				"timeZoneId": {
+					"label": "Zeitzone"
+				},
+				"misfirePolicy": {
+					"label": "Verpasste-Auslösung-Richtlinie",
+					"description": "Wie eine verpasste Auslösung behandelt wird, wenn der Node nicht verfügbar war.",
+					"options": {
+						"Smart": "Intelligent",
+						"SkipMissed": "Verpasste überspringen",
+						"FireOnceNow": "Einmal jetzt auslösen"
+					}
+				},
+				"maxRuntimeSeconds": {
+					"label": "Maximale Laufzeit (Sekunden)",
+					"description": "Leer lassen für keine Laufzeitbegrenzung."
+				},
+				"preventOverlap": {
+					"label": "Überlappende Ausführungen verhindern"
+				},
+				"parameters": {
+					"label": "Parameter (JSON)",
+					"description": "Optionale Vorlagenparameter als JSON. Verschlüsselt gespeichert und nach dem Speichern nie wieder angezeigt."
+				}
+			},
+			"runs": {
+				"title": "Ausführungsverlauf",
+				"loading": "Ausführungsverlauf wird geladen…",
+				"empty": "Keine Ausführungen entsprechen den aktuellen Filtern.",
+				"viewAria": "Ausführung ansehen",
+				"cancelAria": "Ausführung abbrechen",
+				"columns": {
+					"status": "Status",
+					"trigger": "Auslöser",
+					"fired": "Ausgelöst",
+					"duration": "Dauer",
+					"summary": "Zusammenfassung",
+					"actions": "Aktionen"
+				},
+				"filters": {
+					"job": "Aufgabe",
+					"status": "Status",
+					"allJobs": "Alle Aufgaben",
+					"allStatuses": "Alle Status"
+				},
+				"status": {
+					"Queued": "In Warteschlange",
+					"Running": "Läuft",
+					"Succeeded": "Erfolgreich",
+					"Failed": "Fehlgeschlagen",
+					"Cancelled": "Abgebrochen",
+					"TimedOut": "Zeitüberschreitung",
+					"Skipped": "Übersprungen"
+				},
+				"trigger": {
+					"Schedule": "Zeitplan",
+					"Manual": "Manuell",
+					"Agent": "Agent",
+					"System": "System"
+				},
+				"detail": {
+					"loading": "Ausführung wird geladen…",
+					"empty": "Wähle eine Ausführung, um ihre Details anzuzeigen.",
+					"fired": "Ausgelöst",
+					"completed": "Abgeschlossen",
+					"duration": "Dauer",
+					"summary": "Zusammenfassung",
+					"title": "Ausführungsdetails"
+				}
+			},
+			"delete": {
+				"title": "Geplante Aufgabe löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Geplante Aufgaben konnten nicht geladen werden.",
+				"loadRuns": "Ausführungsverlauf konnte nicht geladen werden.",
+				"loadRun": "Die Ausführung konnte nicht geladen werden.",
+				"save": "Die geplante Aufgabe konnte nicht gespeichert werden.",
+				"delete": "Die geplante Aufgabe konnte nicht gelöscht werden.",
+				"enable": "Der Aufgabenstatus konnte nicht geändert werden.",
+				"trigger": "Die Aufgabe konnte nicht ausgelöst werden.",
+				"cancel": "Die Ausführung konnte nicht abgebrochen werden."
+			},
+			"toasts": {
+				"completedTitle": "Geplante Aufgabe abgeschlossen",
+				"completed": "Eine geplante Aufgabe wurde erfolgreich abgeschlossen.",
+				"failedTitle": "Geplante Aufgabe fehlgeschlagen",
+				"failedFallback": "Eine geplante Aufgabe wurde nicht erfolgreich abgeschlossen.",
+				"cancelledTitle": "Geplante Aufgabe abgebrochen",
+				"cancelled": "Eine geplante Aufgabe wurde abgebrochen."
+			}
+		},
+		"modelFit": {
+			"eyebrow": "Worker Node",
+			"recommendations": {
+				"title": "Lokaler Modell-Advisor",
+				"subtitle": "Hardware-bewusste lokale Modellempfehlungen für diesen Node. Hardware erkennen und Anwendungsfall auswählen, um bewertete, auf Eignung geprüfte Modellempfehlungen zu sehen.",
+				"refreshButton": "Jetzt aktualisieren",
+				"downloadHandoff": "Download gestartet. Auf der Seite Modellverwaltung verfolgen oder abbrechen.",
+				"schedulerLink": "Planer",
+				"modelsLink": "Modellverwaltung",
+				"openScheduler": "Planer öffnen",
+				"noJobGuidance": "Es existiert noch kein model-recommendation-check-Zeitplan. Erstellen Sie einen im Planer, um die Aktualisierung zu aktivieren.",
+				"useCaseLabel": "Anwendungsfall",
+				"lastRefreshed": "Zuletzt aktualisiert: {{time}}",
+				"loading": "Empfehlungen werden geladen…",
+				"noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeichertes Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie Jetzt aktualisieren, falls ein Zeitplan existiert.",
+				"emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
+				"installed": "Installiert",
+				"catalogOnly": "Nur Katalog",
+				"useCases": {
+					"general": "Allgemein",
+					"coding": "Programmierung",
+					"reasoning": "Schlussfolgern",
+					"chat": "Chat",
+					"multimodal": "Multimodal",
+					"embedding": "Embedding"
+				},
+				"snapshot": {
+					"status": "Status",
+					"useCase": "Anwendungsfall"
+				},
+				"columns": {
+					"rank": "Rang",
+					"model": "Modell",
+					"score": "Punktzahl",
+					"fit": "Eignung",
+					"tps": "Gesch. TPS",
+					"context": "Kontext",
+					"quantization": "Quant",
+					"released": "Veröffentlicht",
+					"installed": "Installiert",
+					"action": "Aktion",
+					"ram": "Erf. RAM",
+					"vram": "Erf. VRAM"
+				},
+				"errors": {
+					"load": "Empfehlungen konnten nicht geladen werden.",
+					"refresh": "Die Aktualisierung konnte nicht gestartet werden."
+				},
+				"toasts": {
+					"failTitle": "Aktualisierung fehlgeschlagen",
+					"failFallback": "Die Modellempfehlungs-Aktualisierung war nicht erfolgreich.",
+					"successTitle": "Empfehlungen aktualisiert",
+					"success": "Die neuesten Modellempfehlungen sind verfügbar.",
+					"cancelled": "Die Aktualisierung wurde abgebrochen.",
+					"startedTitle": "Aktualisierung gestartet",
+					"started": "Die neuesten Modellempfehlungen werden gesucht. Wir benachrichtigen Sie, sobald sie bereit sind."
+				},
+				"available": "Verfügbar",
+				"download": "Herunterladen",
+				"downloading": "Wird heruntergeladen…",
+				"cpuMode": "CPU-Modus",
+				"untrustedPublisher": "Nicht verifizierter Anbieter",
+				"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download.",
+				"sections": {
+					"recommended": "Empfohlen für Ihre Hardware",
+					"canRun": "Lauffähig (reduzierte Qualität)",
+					"canRunCount": "Lauffähig ({{count}})",
+					"explore": "Trends auf Hugging Face entdecken"
+				},
+				"tier": {
+					"s": "S",
+					"a": "A",
+					"b": "B"
+				},
+				"moeOffload": {
+					"badge": "Experten auf CPU – langsamer, höhere Qualität",
+					"breakdown": "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB"
+				},
+				"kvQuant": {
+					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
+					"tooltip": "Nur eine Schätzung – die angezeigte Passung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
+				},
+				"catalog": {
+					"version": "Katalog v{{version}}",
+					"source": {
+						"bundled": "Gebündelt",
+						"remote": "Live",
+						"remoteLastGood": "Zwischengespeichert (letzter bekannter Stand)"
+					},
+					"updatedAt": "Aktualisiert {{time}}",
+					"refreshButton": "Katalog aktualisieren",
+					"noRefreshSource": "Nur gebündelter Katalog – es ist keine Aktualisierungsquelle konfiguriert.",
+					"toasts": {
+						"refreshed": "Der Modellkatalog wurde aktualisiert.",
+						"refreshError": "Der Modellkatalog konnte nicht aktualisiert werden.",
+						"noRefreshSource": "Es ist keine Quelle für die Katalogaktualisierung konfiguriert. Der gebündelte Katalog wird verwendet, es gibt nichts abzurufen."
+					}
+				}
+			},
+			"hardware": {
+				"title": "Hardware-Profil",
+				"cpuMode": "CPU-Modus",
+				"cpuFallback": {
+					"message": "Keine unterstützte GPU erkannt — Ausführung auf der CPU. Antworten sind langsamer.",
+					"dismiss": "Schließen"
+				},
+				"cpuFallbackAlert": {
+					"title": "Ausführung auf der CPU trotz erkannter GPU",
+					"reason": "Die gewählte Inferenz-Laufzeit konnte die GPU dieses Rechners nicht nutzen, daher läuft die Inferenz auf der CPU."
+				},
+				"backendUndeterminedAlert": {
+					"title": "GPU-Backend konnte nicht ermittelt werden"
+				},
+				"partialOffloadAlert": {
+					"title": "Ein Teil dieses Modells läuft auf der CPU",
+					"reason": "Nur {{offloaded}} von {{total}} Schichten von {{model}} passen auf die GPU. Die restlichen {{remaining}} laufen aus dem Arbeitsspeicher, was deutlich langsamer ist — das Modell antwortet weiterhin korrekt, aber mit einem Bruchteil der Geschwindigkeit.",
+					"remediation": "Eine kleinere Quantisierung, ein kürzerer Kontext oder das Freigeben von VRAM anderer Prozesse lässt das Modell meist vollständig passen."
+				},
+				"thisModel": "dieses Modell",
+				"gpuLayers": "Schichten auf der GPU",
+				"gpuLayersUnknown": "Noch nicht gemessen",
+				"refresh": "Hardware aktualisieren",
+				"loading": "Hardware wird erkannt…",
+				"error": "Hardware konnte nicht erkannt werden.",
+				"totalRam": "Gesamter RAM",
+				"availableRam": "Verfügbarer RAM",
+				"vram": "VRAM",
+				"vramUnknown": "VRAM unbekannt",
+				"gpuVendor": "GPU-Hersteller",
+				"cpuCores": "CPU-Kerne",
+				"freeDisk": "Freier Speicher",
+				"vendors": {
+					"nvidia": "NVIDIA",
+					"amd": "AMD",
+					"intel": "Intel",
+					"none": "Keine",
+					"unknown": "Unbekannt"
+				}
+			},
+			"inferenceProfiles": {
+				"title": "Inferenzprofile",
+				"subtitle": "Optimierte Startprofile, die dieser Node erkundet, gemessen und für die Wiederverwendung eingefroren hat. Nur Ergebnisse — Tokens/Sekunde und VRAM.",
+				"loading": "Inferenzprofile werden geladen…",
+				"error": "Inferenzprofile konnten nicht geladen werden.",
+				"empty": "Noch keine Inferenzprofile. Erkunde ein Modell, um eines zu erstellen.",
+				"allowPreSpawnVramPressure": {
+					"label": "Benchmarks trotz bestehendem VRAM-Druck zulassen",
+					"description": "Operator-Override: Umgeht nur die Prüfung auf bestehenden VRAM-Druck vor dem Start. Neuer Druck während des Benchmarks macht den Lauf weiterhin ungültig."
+				},
+				"moe": "MoE",
+				"moeExperts": "MoE · {{count}} Experten",
+				"policyFingerprint": "Richtlinie v{{version}} · {{fingerprint}}",
+				"freezeVramSummary": "Global frei {{globalFree}} · Prozessbudget {{processBudget}}",
+				"explore": {
+					"modelLabel": "Modellname",
+					"modelPlaceholder": "z. B. unsloth/Qwen3-4B-GGUF",
+					"roleLabel": "Rolle",
+					"roleChat": "Chat",
+					"roleEmbedding": "Embedding",
+					"roleReranker": "Reranker",
+					"button": "Erkunden",
+					"success": "Optimiertes Profil für {{model}} wird erkundet.",
+					"error": "Erkundung konnte nicht gestartet werden."
+				},
+				"columns": {
+					"status": "Status",
+					"model": "Modell",
+					"outcome": "Ergebnis",
+					"action": "Aktion"
+				},
+				"status": {
+					"explored": "Erkundet",
+					"frozen": "Eingefroren",
+					"stale": "Veraltet"
+				},
+				"actions": {
+					"benchmark": "Benchmark",
+					"freeze": "Einfrieren",
+					"invalidate": "Verwerfen",
+					"freezeDisabledHint": "Führe einen Benchmark aus, bevor du dieses Profil einfrierst.",
+					"benchmarkSuccess": "{{model}} wurde gemessen.",
+					"benchmarkError": "Profil konnte nicht gemessen werden.",
+					"freezeSuccess": "{{model}} wurde eingefroren.",
+					"freezeError": "Profil konnte nicht eingefroren werden.",
+					"invalidateSuccess": "{{model}} wurde verworfen.",
+					"invalidateError": "Profil konnte nicht verworfen werden."
+				},
+				"metrics": {
+					"title": "Benchmark-Metriken",
+					"empty": "Dieser Lauf hat keine Metriken gemeldet.",
+					"ttft": "TTFT",
+					"promptTps": "Prompt Tok/s",
+					"genTps": "Generierung Tok/s",
+					"cacheHit": "Cache-Treffer",
+					"toolLoop": "Tool-Schleife",
+					"vramLoad": "VRAM beim Laden",
+					"vramAfter": "VRAM danach",
+					"role": "Rolle",
+					"itemsPerSecond": "Elemente/s",
+					"inputTokensPerSecond": "Eingabe-Tok/s",
+					"p50Latency": "P50-Latenz",
+					"p95Latency": "P95-Latenz",
+					"batchSize": "Batch-Größe",
+					"outputDimension": "Ausgabedimension",
+					"valuesFinite": "Endliche Werte",
+					"deterministicOutput": "Stabile Ausgabe",
+					"yes": "Ja",
+					"no": "Nein",
+					"unknown": "Unbekannt",
+					"globalFreeVramLoad": "Global frei beim Laden",
+					"globalFreeVramAfter": "Global frei danach",
+					"processBudgetVramLoad": "Prozessbudget beim Laden",
+					"processBudgetVramAfter": "Prozessbudget danach",
+					"minimumGlobalFreeVram": "Globales Minimum frei",
+					"minimumProcessBudgetVram": "Minimales Prozessbudget",
+					"peakProcessRam": "Maximaler Prozess-RAM",
+					"externalPressure": "Externer VRAM-Druck erkannt; dieser Benchmark ist ungültig."
+				}
+			}
+		},
+		"loadedModels": {
+			"eyebrow": "Worker-Node",
+			"title": "Geladene Modelle",
+			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei; läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss und unterbricht sie möglicherweise.",
+			"loading": "Geladene Modelle werden geladen…",
+			"empty": "Derzeit sind keine Modelle geladen.",
+			"unavailable": "Ollama ist derzeit nicht erreichbar. Es ist ein optionaler sekundärer Anbieter, daher gibt es hier möglicherweise nichts anzuzeigen. llama.cpp-Modelle erscheinen weiterhin unten.",
+			"cpuOnly": "Nur CPU",
+			"expired": "Abgelaufen",
+			"sizeUnknown": "Unbekannt",
+			"columns": {
+				"model": "Modell",
+				"memory": "Speicher (RAM)",
+				"vram": "VRAM",
+				"expiresIn": "Läuft ab in",
+				"action": "Aktion"
+			},
+			"errors": {
+				"load": "Geladene Modelle konnten nicht geladen werden."
+			},
+			"eject": {
+				"button": "Auswerfen",
+				"tooltip": "Gibt den Speicher des Modells frei; eine laufende Generierung wird möglicherweise unterbrochen",
+				"confirmTitle": "Modell auswerfen",
+				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss; das Auswerfen kann sie unterbrechen.",
+				"confirmAction": "Auswerfen",
+				"success": "'{{modelName}}' wird ausgeworfen — der Speicher wird in Kürze freigegeben.",
+				"error": "Das Modell konnte nicht ausgeworfen werden."
+			},
+			"ollama": {
+				"title": "Ollama (im Arbeitsspeicher)"
+			},
+			"llamaCpp": {
+				"title": "llama.cpp-Laufzeit",
+				"loading": "Laufende Modelle werden geladen…",
+				"error": "Laufende Modelle konnten nicht geladen werden.",
+				"empty": "Derzeit laufen keine Modelle.",
+				"responsive": "Reagiert",
+				"unresponsive": "Startet / reagiert nicht",
+				"eject": "Entladen",
+				"ejected": "Modell entladen.",
+				"ejectError": "Das Modell konnte nicht entladen werden.",
+				"ejectConfirm": {
+					"title": "Modell entladen",
+					"description": "'{{modelName}}' aus der llama.cpp-Laufzeit entladen? Der Speicher wird freigegeben, nachdem eine laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
+					"action": "Entladen"
+				},
+				"forceConfirm": {
+					"title": "Entladen erzwingen?",
+					"description": "'{{modelName}}' generiert noch. Trotzdem erzwingen und die laufende Antwort unterbrechen?",
+					"action": "Entladen erzwingen"
+				},
+				"ejectOutcome": {
+					"ejected": "Modell entladen.",
+					"forced": "Modell entladen — die laufende Generierung wurde unterbrochen.",
+					"notRunning": "Dieses Modell lief nicht.",
+					"timedOutStillBusy": "'{{modelName}}' beendet noch eine Antwort und wurde daher weiter ausgeführt."
+				},
+				"columns": {
+					"model": "Modell",
+					"role": "Rolle",
+					"status": "Status",
+					"action": "Aktion"
+				}
+			}
+		},
+		"schedule": {
+			"title": "Terminplaner",
+			"createAppointment": "Termin erstellen",
+			"viewAppointment": "Termindetails",
+			"editAppointment": "Termin bearbeiten",
+			"deleteAppointment": "Termin löschen",
+			"deleteConfirmTitle": "Termin löschen",
+			"deleteConfirmText": "Möchten Sie diesen Termin wirklich löschen?",
+			"viewOnlyNotice": "Sie können Termine ansehen, aber nicht verwalten.",
+			"fields": {
+				"title": "Titel",
+				"titlePlaceholder": "Titel eingeben",
+				"description": "Beschreibung",
+				"descriptionPlaceholder": "Beschreibung eingeben (optional)",
+				"start": "Beginn",
+				"end": "Ende",
+				"color": "Farbe",
+				"isShared": "Systemtermin (für alle Benutzer sichtbar)",
+				"user": "Benutzer zuweisen"
+			},
+			"validation": {
+				"titleRequired": "Titel ist erforderlich",
+				"titleMaxLength": "Titel darf maximal 200 Zeichen lang sein",
+				"titleTrimmed": "Titel darf nicht mit Leerzeichen beginnen oder enden.",
+				"endAfterStart": "Endzeit muss nach der Startzeit liegen"
+			},
+			"scheduler": {
+				"day": "Tag",
+				"week": "Woche",
+				"month": "Monat",
+				"year": "Jahr",
+				"today": "Heute",
+				"previous": "Zurück",
+				"next": "Weiter",
+				"more": "Mehr"
+			},
+			"adminPanel": {
+				"title": "Benutzertermine",
+				"searchPlaceholder": "Benutzer suchen...",
+				"loadError": "Benutzer konnten nicht geladen werden.",
+				"show": "Benutzertermine anzeigen",
+				"hide": "Benutzertermine ausblenden"
+			},
+			"systemBadge": "System",
+			"appointmentCreated": "Termin erfolgreich erstellt",
+			"appointmentUpdated": "Termin erfolgreich aktualisiert",
+			"appointmentDeleted": "Termin erfolgreich gelöscht"
+		},
+		"images": {
+			"eyebrow": "Worker-Knoten",
+			"title": "Bildgenerierung",
+			"subtitle": "Erzeugen Sie Bilder lokal mit stable-diffusion.cpp. Aufträge laufen einzeln und übertragen ihren groben Status während der Verarbeitung.",
+			"jobs": {
+				"title": "Aufträge",
+				"empty": "Noch keine Bildaufträge. Erzeugen Sie einen, um ihn hier zu sehen.",
+				"cancelError": "Der Auftrag konnte nicht abgebrochen werden."
+			},
+			"job": {
+				"elapsed": "{{seconds}} s",
+				"duration": "{{seconds}} s",
+				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}}",
+				"queuePosition": "Wartet — Position {{position}} in der Warteschlange",
+				"preparing": "Modell wird vorbereitet…",
+				"finishing": "Abschluss (Bild wird dekodiert)…",
+				"steps": "Schritt {{step}} von {{totalSteps}}",
+				"stepProgressLabel": "Fortschritt der Generierung",
+				"eta": "noch ca. {{seconds}} s"
+			},
+			"status": {
+				"Queued": "In Warteschlange",
+				"Generating": "Wird erzeugt",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"form": {
+				"model": {
+					"label": "Modell",
+					"placeholder": "Bildmodell auswählen"
+				},
+				"prompt": {
+					"label": "Prompt",
+					"placeholder": "Ein Aquarell-Fuchs in einem nebligen Wald"
+				},
+				"negativePrompt": {
+					"label": "Negativer Prompt",
+					"placeholder": "unscharf, geringe Qualität"
+				},
+				"width": {
+					"label": "Breite"
+				},
+				"height": {
+					"label": "Höhe"
+				},
+				"steps": {
+					"label": "Schritte"
+				},
+				"cfgScale": {
+					"label": "CFG-Skala"
+				},
+				"sampler": {
+					"label": "Sampler"
+				},
+				"seed": {
+					"label": "Seed",
+					"description": "-1 für einen zufälligen Seed"
+				},
+				"samplers": {
+					"euler": "Euler",
+					"euler_a": "Euler a",
+					"heun": "Heun",
+					"dpm2": "DPM2",
+					"dpmpp2m": "DPM++ 2M",
+					"dpmpp2s_a": "DPM++ 2S a",
+					"lcm": "LCM"
+				},
+				"noModels": "Installieren Sie unten ein Bildmodell, bevor Sie generieren.",
+				"submit": "Generieren",
+				"error": "Die Generierung konnte nicht gestartet werden."
+			},
+			"result": {
+				"error": "Das erzeugte Bild konnte nicht geladen werden.",
+				"viewFullSize": "In voller Größe anzeigen"
+			},
+			"models": {
+				"installedTitle": "Installierte Bildmodelle",
+				"empty": "Noch keine Bildmodelle installiert.",
+				"families": {
+					"Sd15": "Stable Diffusion 1.5",
+					"Sdxl": "Stable Diffusion XL",
+					"Sd3": "Stable Diffusion 3",
+					"Flux": "FLUX.1",
+					"QwenImage": "Qwen-Image"
+				},
+				"download": {
+					"title": "Modell herunterladen",
+					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
+					"failed": "Der Modell-Download ist fehlgeschlagen.",
+					"progress": "Wird heruntergeladen… {{percent}} %",
+					"error": "Der Modell-Download konnte nicht gestartet werden.",
+					"hint": "Eine Gewichtsdatei, für Einzeldatei-Modelle wie SD1.5. Für mehrteilige Modelle „Erweitert“ einschalten.",
+					"submit": "Herunterladen",
+					"repoId": {
+						"label": "Hugging-Face-Repository"
+					},
+					"fileName": {
+						"label": "Gewichtsdatei"
+					},
+					"modelName": {
+						"label": "Modellname"
+					},
+					"family": {
+						"label": "Familie"
+					},
+					"cancel": "Abbrechen",
+					"cancelError": "Der Download konnte nicht abgebrochen werden.",
+					"dismissError": "Schließen",
+					"part": "Teil {{index}} von {{count}}",
+					"speed": "{{value}}/s",
+					"eta": "noch ca. {{duration}}",
+					"transferred": "{{completed}} übertragen",
+					"starting": "Wird gestartet…",
+					"bytesOf": "{{completed}} / {{total}}",
+					"progressAriaLabel": "Download-Fortschritt",
+					"advanced": {
+						"toggle": "Erweitert: mehrteiliger Dateisatz",
+						"toggleDescription": "SDXL, SD3, FLUX und Qwen-Image bestehen aus mehreren Dateien (Diffusionsgewichte, VAE, Textencoder) statt aus einer.",
+						"addPart": "Datei hinzufügen",
+						"removePart": "Datei entfernen",
+						"diffusionRequired": "Ein Dateisatz braucht eine Diffusionsdatei.",
+						"hint": "Repository einer Datei leer lassen, um das obige zu verwenden — ein Satz kann sich über mehrere Repositories erstrecken. Größen sind optional, aktivieren aber die Speicherplatzprüfung und einen gemeinsamen Fortschrittsbalken.",
+						"role": {
+							"label": "Rolle"
+						},
+						"fileName": {
+							"label": "Datei"
+						},
+						"repoId": {
+							"label": "Repository (optional)",
+							"placeholder": "Wie oben"
+						},
+						"sizeBytes": {
+							"label": "Größe in Bytes (optional)"
+						},
+						"sha256": {
+							"label": "SHA-256 (optional)"
+						}
+					}
+				},
+				"delete": {
+					"action": "Modell löschen",
+					"title": "Bildmodell löschen",
+					"description": "'{{modelName}}' samt Gewichtsdateien löschen? Das kann nicht rückgängig gemacht werden.",
+					"confirm": "Löschen",
+					"cancel": "Abbrechen",
+					"deleted": "Modell gelöscht.",
+					"error": "Das Modell konnte nicht gelöscht werden."
+				},
+				"partRoles": {
+					"Diffusion": "Diffusionsgewichte",
+					"Vae": "VAE",
+					"ClipL": "CLIP-L-Textencoder",
+					"ClipG": "CLIP-G-Textencoder",
+					"T5": "T5-XXL-Textencoder",
+					"Llm": "LLM-Textencoder",
+					"LlmVision": "LLM-Vision-Turm"
+				},
+				"tabs": {
+					"catalog": "Empfohlen",
+					"browse": "Hugging Face",
+					"manual": "Erweitert"
+				},
+				"catalog": {
+					"title": "Empfohlene Bildmodelle",
+					"description": "Geprüfte Modellsätze, die sich mit einem Klick installieren lassen. Größen und Hardware-Eignung gelten für diesen Rechner.",
+					"empty": "In diesem Build sind keine Katalogeinträge verfügbar.",
+					"error": "Der Modellkatalog konnte nicht geladen werden.",
+					"recommended": "Empfohlen",
+					"installed": "Installiert",
+					"install": "Installieren",
+					"parts_one": "{{count}} Datei",
+					"parts_other": "{{count}} Dateien",
+					"multiRepo": "Erstreckt sich über {{count}} Repositories",
+					"diskWarning": "Nicht genug freier Speicherplatz für diesen Download.",
+					"fit": {
+						"Fits": "Passt",
+						"Tight": "Knapp",
+						"WontFit": "Zu groß",
+						"Unknown": "Eignung unbekannt",
+						"FitsHint": "Die dauerhaft benötigten Gewichte ({{resident}}) passen in das gemessene Budget ({{budget}}).",
+						"TightHint": "Die dauerhaft benötigten Gewichte ({{resident}}) passen nur knapp in das gemessene Budget ({{budget}}). Es wird langsam laufen.",
+						"WontFitHint": "Die dauerhaft benötigten Gewichte ({{resident}}) überschreiten das gemessene Budget ({{budget}}).",
+						"UnknownHint": "Das Speicherbudget dieses Rechners konnte nicht gemessen werden — daher wird keine Aussage getroffen, ob dieses Modell läuft."
+					}
+				},
+				"browse": {
+					"title": "Hugging Face durchsuchen",
+					"description": "Text-zu-Bild-Repositories durchsuchen und anschließend die Gewichtsdateien des Modells auswählen.",
+					"searchLabel": "Repositories suchen",
+					"searchPlaceholder": "z. B. flux schnell",
+					"search": "Suchen",
+					"searching": "Wird gesucht…",
+					"empty": "Keine Bild-Repositories für diese Suche gefunden.",
+					"error": "Die Repositories konnten nicht durchsucht werden.",
+					"gated": "Zugangsbeschränkt",
+					"gatedHint": "Dieses Repository erfordert eine akzeptierte Lizenz und ein Hugging-Face-Token — eine Ein-Klick-Installation schlägt sonst mit 401 fehl.",
+					"untrustedPublisher": "Unbestätigter Anbieter",
+					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter Packager — prüfen Sie das Repository vor dem Download.",
+					"noWeights": "Keine Gewichte",
+					"select": "Öffnen",
+					"back": "Zurück zu den Ergebnissen",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Aktualisiert",
+						"license": "Lizenz",
+						"action": "Aktion"
+					},
+					"files": {
+						"title": "Gewichtsdateien in {{repoId}}",
+						"loading": "Dateien werden geladen…",
+						"empty": "Dieses Repository enthält keine installierbaren Gewichtsdateien.",
+						"error": "Die Dateien dieses Repositories konnten nicht gelesen werden.",
+						"hint": "Jede benötigte Datei ankreuzen und ihre Rolle prüfen. Aufgeteilte Dateien (…-00001-of-00003) werden nicht aufgeführt: ein Teil ist genau eine Datei.",
+						"columns": {
+							"select": "Nutzen",
+							"file": "Datei",
+							"role": "Rolle",
+							"size": "Größe"
+						}
+					},
+					"modelName": {
+						"label": "Installieren als",
+						"placeholder": "flux.1-schnell"
+					},
+					"family": {
+						"label": "Familie"
+					},
+					"nameTaken": "Ein Modell mit diesem Namen ist bereits installiert.",
+					"diffusionRequired": "Vor der Installation eine Diffusionsdatei auswählen.",
+					"duplicateRole": "Jede Rolle kann nur von einer Datei belegt werden.",
+					"install": "Ausgewählte Dateien installieren"
+				}
+			},
+			"viewer": {
+				"title": "Erzeugtes Bild",
+				"download": "PNG herunterladen",
+				"seed": "Seed",
+				"seedRandom": "Zufällig — von der Laufzeit nicht gemeldet",
+				"copySeed": "Seed kopieren",
+				"seedCopied": "Seed kopiert",
+				"settings": "Einstellungen",
+				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}} · CFG {{cfgScale}}",
+				"duration": "Dauer"
+			}
+		},
+		"preview": {
+			"eyebrow": "Worker-Knoten",
+			"title": "Open Canvas",
+			"subtitle": "Ziehen Sie Start-, Agent-, Debug-, Pause- und End-Blöcke auf die Arbeitsfläche, verbinden Sie sie zu einer linearen Kette und führen Sie den Workflow mit Live-Ausgabe pro Knoten aus.",
+			"createButton": "Neuer Workflow",
+			"back": "Zurück zur Liste",
+			"saved": "Workflow gespeichert.",
+			"defaultName": "Unbenannter Workflow",
+			"deleteHint": "Tipp: Block oder Verbindung auswählen und Entf (oder Rücktaste) drücken, um ihn zu entfernen. Start und Ende können nicht entfernt werden.",
+			"runs": {
+				"title": "Läufe auf diesem Knoten",
+				"description": "Läufe werden auf dem Knoten gehalten, nicht in diesem Browser-Tab. Verbinden Sie sich nach einem Neuladen erneut mit einem Lauf oder brechen Sie ihn ab, um seinen Platz freizugeben.",
+				"cancelAll": "Alle Läufe abbrechen",
+				"cancelledCount": "{{count}} Lauf/Läufe abgebrochen.",
+				"reattachAria": "Erneut mit Lauf verbinden",
+				"cancelAria": "Lauf abbrechen"
+			},
+			"list": {
+				"empty": "Noch keine gespeicherten Workflows. Erstellen Sie einen, um zu beginnen.",
+				"openAria": "Workflow öffnen",
+				"deleteAria": "Workflow löschen",
+				"columns": {
+					"name": "Name",
+					"version": "Version",
+					"updated": "Aktualisiert",
+					"actions": "Aktionen"
+				}
+			},
+			"nodes": {
+				"start": "Start",
+				"agent": "Agent",
+				"debug": "Debug",
+				"pause": "Pause",
+				"end": "Ende",
+				"agentNeedsModel": "Modell festlegen",
+				"debugHint": "Live-Ausgabe des vorgelagerten Knotens",
+				"pausedHere": "Pausiert – über die Symbolleiste fortsetzen"
+			},
+			"startText": {
+				"label": "Start-Eingabe",
+				"placeholder": "Ausgangstext, den der Start-Knoten ausgibt…"
+			},
+			"toolbar": {
+				"execute": "Ausführen",
+				"cancel": "Abbrechen",
+				"continue": "Fortsetzen"
+			},
+			"agentForm": {
+				"label": {
+					"label": "Bezeichnung",
+					"placeholder": "Agent"
+				},
+				"import": {
+					"label": "Aus Agent importieren",
+					"placeholder": "Anweisungen kopieren…",
+					"empty": "Keine Agent-Definitionen"
+				},
+				"model": {
+					"label": "Modell",
+					"placeholder": "Chat-fähiges Modell auswählen",
+					"empty": "Keine chat-fähigen Modelle"
+				},
+				"reasoning": {
+					"label": "Denkaufwand",
+					"placeholder": "Anbieter-Standard",
+					"options": {
+						"none": "Keiner",
+						"low": "Niedrig",
+						"medium": "Mittel",
+						"high": "Hoch"
+					}
+				},
+				"instructions": {
+					"label": "Anweisungen",
+					"placeholder": "Systemanweisungen für diesen Agenten…"
+				},
+				"autosaveHint": "Änderungen werden sofort auf die Arbeitsfläche angewendet"
+			},
+			"validation": {
+				"empty": "Der Workflow muss mindestens einen Start- und einen End-Knoten enthalten.",
+				"emptyId": "Jeder Knoten muss eine nicht-leere ID haben.",
+				"duplicateId": "Knoten-IDs müssen eindeutig sein.",
+				"startCount": "Der Workflow muss genau einen Start-Knoten haben.",
+				"endCount": "Der Workflow muss genau einen End-Knoten haben.",
+				"unknownEdge": "Eine Kante verweist auf einen unbekannten Knoten.",
+				"notLinear": "Der Workflow muss eine lineare Kette sein (eine Verbindung ein- und ausgehend pro Knoten).",
+				"agentModel": "Jeder Agent-Knoten muss ein Modell angeben.",
+				"agentInstructions": "Jeder Agent-Knoten muss Anweisungen angeben.",
+				"startText": "Der Start-Knoten muss einen Eingabetext haben, bevor der Workflow ausgeführt werden kann.",
+				"endUnreachable": "Der End-Knoten muss vom Start-Knoten aus erreichbar sein.",
+				"noAgent": "Der Workflow muss mindestens einen Agent-Knoten zwischen Start und Ende enthalten."
+			},
+			"delete": {
+				"title": "Workflow löschen",
+				"description": "Diesen Workflow löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"save": "Der Workflow konnte nicht gespeichert werden.",
+				"delete": "Der Workflow konnte nicht gelöscht werden.",
+				"execute": "Der Lauf konnte nicht gestartet werden.",
+				"continue": "Der Lauf konnte nicht fortgesetzt werden.",
+				"cancel": "Der Lauf konnte nicht abgebrochen werden.",
+				"cancelAll": "Die Läufe konnten nicht abgebrochen werden.",
+				"conflict": "Dieser Workflow wurde an anderer Stelle geändert. Laden Sie neu und wenden Sie Ihre Änderungen erneut an."
+			}
+		},
+		"notFound": {
+			"subtitleSecret": "Du hast einen geheimen Bereich gefunden.",
+			"subtitleNotFound": "Die Seite, die sie suchen, existiert nicht.",
+			"backToHomeText": "Zurück zur Startseite"
+		},
+		"deviceBinding": {
+			"title": "Gerät freigeben",
+			"description": "Prüfe den Gerätecode deines Worker-Nodes, bevor du den Zugriff auf dein Konto freigibst.",
+			"userCodeLabel": "Gerätecode",
+			"userCodePlaceholder": "Gib den auf deinem Gerät angezeigten Code ein",
+			"approve": "Gerät freigeben",
+			"deny": "Ablehnen",
+			"completeTitle": "Anfrage abgeschlossen",
+			"approvedMessage": "Gerät '{{nodeName}}' wurde freigegeben.",
+			"deniedMessage": "Die Geräteanfrage wurde abgelehnt.",
+			"approvedToast": "Gerät freigegeben.",
+			"deniedToast": "Gerät abgelehnt.",
+			"errorToast": "Geräteanfrage konnte nicht abgeschlossen werden. Prüfe den Code und versuche es erneut."
+		},
+		"userSettings": {
+			"title": "Benutzereinstellungen",
+			"changePassword": "Passwort ändern",
+			"accountInformation": "Account Informationen",
+			"myNodes": {
+				"title": "Meine Nodes",
+				"supportText": "Prüfe gebundene lokale Worker, Verbindungsstatus, aktive Modellnutzung und widerrufe eine Node, wenn sie keinen Kontozugriff mehr haben soll.",
+				"emptyTitle": "Keine Nodes gebunden",
+				"emptyText": "Binde einen lokalen Worker, damit er hier angezeigt wird.",
+				"errorTitle": "Nodes konnten nicht geladen werden",
+				"errorText": "Aktualisiere die Liste oder versuche es später erneut.",
+				"disconnected": "Trennungsanfrage gesendet.",
+				"deleted": "Node erfolgreich entbunden.",
+				"disconnectDialogTitle": "Node trennen",
+				"disconnectDialogText": "'{{name}}' von der aktiven Sitzung trennen? Die Node bleibt gebunden und kann sich erneut verbinden.",
+				"deleteDialogTitle": "Node entbinden",
+				"deleteDialogText": "'{{name}}' entbinden und Worker-Anmeldedaten widerrufen? Danach ist erneutes Binden erforderlich.",
+				"actions": {
+					"settings": "Einstellungen",
+					"disconnect": "Trennen",
+					"unbind": "Entbinden"
+				},
+				"settings": {
+					"title": "Node-Einstellungen",
+					"description": "Konfiguriere die Anfrageverarbeitung für '{{name}}'. Weitere Node-Einstellungen erscheinen später hier.",
+					"maxTimeoutLabel": "Maximales Timeout für Nachrichtenanfragen",
+					"maxTimeoutDescription": "Beendet hängende Nachrichtenanfragen nach der konfigurierten Anzahl von Sekunden.",
+					"maxTimeoutError": "Gib einen Wert zwischen 5 und 3600 Sekunden ein.",
+					"saved": "Node-Einstellungen gespeichert."
+				},
+				"columns": {
+					"name": "Name",
+					"status": "Status",
+					"systemScore": "System-Score",
+					"lastSeen": "Zuletzt gesehen",
+					"activeModel": "Aktives Modell",
+					"keyStatus": "Schlüsselstatus",
+					"actions": "Aktionen"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Wird getrennt",
+					"error": "Fehler"
+				},
+				"keyStatus": {
+					"active": "Aktiver Schlüssel",
+					"missing": "Schlüssel fehlt",
+					"unbound": "Nicht gebunden"
+				}
+			},
+			"themeConfigurator": {
+				"title": "Theme Konfigurator",
+				"description": "Aktives Theme temporär anpassen, direkt in der Anwendung testen und als JSON exportieren.",
+				"developerHint": "Entwickler können die exportierte JSON in src/theme/theme.json ersetzen und deployen.",
+				"generatorHint": "Generiere komplette Primär- und Sekundär-Farbskalen aus einer Basisfarbe.",
+				"mode": "Modus",
+				"fontFamily": "Schriftfamilie",
+				"breakpoints": "Umbruchpunkte",
+				"baseColor": "Basisfarbe",
+				"generatedScale": "Generierte Skala",
+				"invalidColor": "Bitte eine gültige Farbe eingeben (#RRGGBB oder rgb(r,g,b)).",
+				"primaryPalette": "Primärpalette",
+				"primaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Primärabstufungen automatisch.",
+				"secondaryPalette": "Sekundärpalette",
+				"secondaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Sekundärabstufungen automatisch.",
+				"primaryMain": "Primärfarbe",
+				"primaryHover": "Primärfarbe Hover",
+				"secondaryMain": "Sekundärfarbe",
+				"secondaryHover": "Sekundärfarbe Hover",
+				"variantsPreview": "Variantenvorschau",
+				"variantsPrimary": "Primäre Button-Varianten",
+				"variantsSecondary": "Sekundäre Button-Varianten",
+				"variantFilled": "Gefüllt",
+				"variantLight": "Leicht",
+				"variantOutline": "Outline",
+				"variantSubtle": "Subtil",
+				"applyPreview": "Vorschau anwenden",
+				"resetToSource": "Auf Quelle zurücksetzen",
+				"exportJson": "JSON exportieren",
+				"importJson": "JSON importieren",
+				"previewApplied": "Theme Vorschau angewendet",
+				"previewReset": "Theme Vorschau auf Quelle zurückgesetzt",
+				"exported": "Theme JSON exportiert",
+				"imported": "Theme JSON importiert und angewendet",
+				"importError": "Ungültige JSON Datei"
+			},
+			"passwordAndSecurity": "Passwort und Sicherheit",
+			"deviceSessions": "Gerätesitzungen",
+			"editProfile": "Profil bearbeiten",
+			"saveEdit": "Speichern",
+			"cancelEdit": "Abbrechen",
+			"profileInformationUpdated": "Profil erfolgreich aktualisiert",
+			"labels": {
+				"firstName": "Vorname",
+				"lastName": "Nachname",
+				"email": "Email"
+			}
+		},
+		"commands": {
+			"eyebrow": "Worker-Node",
+			"title": "Befehle",
+			"subtitle": "Erstellen Sie knotenweite Slash-Befehle, die im aktuellen Chat einen konfigurierten Prompt senden. Befehle können nur vom Benutzer aufgerufen werden.",
+			"createButton": "Neuer Befehl",
+			"capacity": "Das Limit von 100 benutzerdefinierten Befehlen ist erreicht. Löschen Sie einen, bevor Sie einen neuen erstellen.",
+			"list": {
+				"loading": "Befehle werden geladen…",
+				"empty": "Keine Befehle verfügbar.",
+				"command": "Befehl",
+				"action": "Aktion",
+				"builtIn": "Integriert"
+			},
+			"editor": { "createTitle": "Neuer Befehl", "editTitle": "Befehl bearbeiten" },
+			"delete": { "title": "Befehl löschen", "description": "'/{{name}}' löschen? Dies kann nicht rückgängig gemacht werden." },
+			"errors": {
+				"load": "Befehle konnten nicht geladen werden.",
+				"save": "Der Befehl konnte nicht gespeichert werden.",
+				"delete": "Der Befehl konnte nicht gelöscht werden."
+			},
+			"form": {
+				"name": {
+					"label": "Befehlsname",
+					"description": "Kleinbuchstaben, Zahlen und einzelne Bindestriche. Ohne / eingeben.",
+					"placeholder": "review",
+					"invalid": "Geben Sie einen gültigen kleingeschriebenen Befehlsnamen ein."
+				},
+				"description": { "label": "Beschreibung", "placeholder": "Optionale Zusammenfassung für die Autovervollständigung" },
+				"action": { "label": "Aktion", "sendPrompt": "Prompt senden" },
+				"prompt": {
+					"label": "Prompt",
+					"description": "Wird beim Aufruf des Befehls im aktuellen Chat an den Agenten gesendet.",
+					"placeholder": "Prüfe die aktuelle Arbeit und melde Probleme nach Schweregrad.",
+					"required": "Ein Prompt ist erforderlich."
+				}
+			}
+		},
+		"skills": {
+			"eyebrow": "Worker-Node",
+			"title": "Skills",
+			"subtitle": "Erstellen Sie eine knotenweite Bibliothek wiederverwendbarer Skills. Weisen Sie einem Agenten Skills zu, damit sein Modell das passende Fachwissen bei der Arbeit bei Bedarf laden kann.",
+			"createButton": "Neuer Skill",
+			"list": {
+				"loading": "Skills werden geladen…",
+				"empty": "Noch keine Skills. Erstellen Sie einen, um Ihren Agenten wiederverwendbares Wissen zu geben.",
+				"enabledBadge": "Aktiviert",
+				"disabledBadge": "Deaktiviert",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"enabled": "Aktiviert",
+					"version": "Version",
+					"actions": "Aktionen"
+				},
+				"importedBadge": "Importiert · {{source}}",
+				"importedUnknownSource": "unbekannte Quelle",
+				"invalidNameBadge": "Name unbrauchbar",
+				"invalidNameTooltip": "Dieser Name ist für einen Agenten ungültig, daher wird der Skill beim Aufbau eines Agenten übersprungen. Benennen Sie ihn in Kleinbuchstaben und Ziffern um, getrennt durch einzelne Bindestriche."
+			},
+			"editor": {
+				"createTitle": "Neuer Skill",
+				"editTitle": "Skill bearbeiten",
+				"loading": "Skill wird geladen…"
+			},
+			"form": {
+				"privacyNote": "Skills werden an das Modell des Agenten gesendet, wenn es sie lädt. Ist dieses Modell ein Cloud-Anbieter, verlässt der Skill-Inhalt diesen Knoten.",
+				"name": {
+					"label": "Name",
+					"description": "Kleingeschriebener Bezeichner (z. B. invoice-review).",
+					"placeholder": "invoice-review",
+					"required": "Name ist erforderlich.",
+					"invalid": "Nur Kleinbuchstaben und Ziffern, getrennt durch einzelne Bindestriche (kein führender, abschließender oder doppelter Bindestrich)."
+				},
+				"description": {
+					"label": "Beschreibung",
+					"description": "Kurze Zusammenfassung, die das Modell sieht, um zu entscheiden, ob dieser Skill geladen wird.",
+					"placeholder": "So prüfen Sie Lieferantenrechnungen.",
+					"required": "Beschreibung ist erforderlich."
+				},
+				"body": {
+					"label": "Inhalt",
+					"description": "Die vollständigen Skill-Anweisungen, vom Modell des Agenten bei Bedarf geladen.",
+					"placeholder": "# So prüfen Sie eine Rechnung\n\n1. …",
+					"required": "Inhalt ist erforderlich.",
+					"budget": "{{lines}} Zeilen · ~{{tokens}} Tokens",
+					"overGuidance": "die Spezifikation empfiehlt unter {{lines}} Zeilen und {{tokens}} Tokens zu bleiben"
+				},
+				"enabled": {
+					"label": "Aktiviert",
+					"description": "Deaktivierte Skills werden nie von einem Agenten geladen, auch wenn sie weiterhin zugewiesen sind."
+				},
+				"importedNote": "Dieser Skill wurde aus {{source}} importiert. Seine Anweisungen sind fremde Inhalte, die dieser Knoten nie geprüft hat, und laufen nach dem Aktivieren mit den Tool-Rechten Ihres Agenten.",
+				"frontmatterSection": "Frontmatter",
+				"license": {
+					"label": "Lizenz"
+				},
+				"compatibility": {
+					"label": "Kompatibilität"
+				},
+				"allowedTools": {
+					"label": "Erlaubte Tools",
+					"description": "Durch Leerzeichen getrennte Liste, die der Autor des Skills angegeben hat. Wird nur zur Information angezeigt — dieser Knoten gewährt oder beschränkt dadurch kein einziges Tool."
+				},
+				"metadata": {
+					"label": "Metadaten",
+					"readOnly": "Unverändert aus dem Frontmatter des Skills übernommen."
+				}
+			},
+			"delete": {
+				"title": "Skill löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Skills konnten nicht geladen werden.",
+				"save": "Skill konnte nicht gespeichert werden.",
+				"delete": "Skill konnte nicht gelöscht werden."
+			},
+			"importButton": "Skills importieren",
+			"resources": {
+				"title": "Mitgelieferte Ressourcen ({{count}})",
+				"error": "Die mitgelieferten Ressourcen konnten nicht geladen werden."
+			},
+			"import": {
+				"title": "Skills importieren",
+				"previewButton": "Vorschau",
+				"importButton": "{{count}} ausgewählte importieren",
+				"back": "Andere Quelle wählen",
+				"acknowledge": "Ich verstehe, dass diese Inhalte nicht vertrauenswürdig sind und dass ich selbst für ihre Prüfung verantwortlich bin.",
+				"warning": {
+					"title": "Importierte Skills sind nicht vertrauenswürdige Inhalte",
+					"untrusted": "Skills, die Sie importieren, sind fremde Anweisungen. Dieser Knoten prüft, scannt und isoliert sie nicht. Der Inhalt eines Skills wird wortwörtlich in den Kontext Ihres Agenten eingefügt und kann versuchen, den Agenten zu etwas anderem zu bewegen als dem, was seine Beschreibung angibt.",
+					"consequence": "Die Anweisungen eines aktivierten Skills laufen mit den Tool-Rechten Ihres Agenten — er kann damit ohne weitere Rückfrage Ihre Wissensdatenbank und lokale Dateien in Ihrem Arbeitsverzeichnis lesen.",
+					"posture": "Skripte werden nie importiert. Alles andere wird Ihnen genau so angezeigt, wie es gespeichert wird — lesen Sie unten den vollständigen Inhalt und jede Ressource, und entscheiden Sie dann.",
+					"disabled": "Importierte Skills sind zunächst deaktiviert. Sie zu aktivieren ist ein eigener, bewusster Schritt."
+				},
+				"tabs": {
+					"upload": "Hochladen",
+					"github": "GitHub",
+					"paste": "Einfügen"
+				},
+				"upload": {
+					"label": "Skill-Archiv (.zip)",
+					"description": "Eine .zip mit einer oder mehreren SKILL.md-Dateien samt ihrer mitgelieferten Ressourcen.",
+					"placeholder": "Eine .zip-Datei auswählen"
+				},
+				"github": {
+					"description": "Erreichbar ist ausschließlich github.com, und nur über Eigentümer und Repository — eine eingefügte URL wird nie akzeptiert.",
+					"owner": "Eigentümer",
+					"repository": "Repository"
+				},
+				"paste": {
+					"label": "SKILL.md",
+					"description": "Fügen Sie eine vollständige SKILL.md ein, einschließlich ihres YAML-Frontmatters."
+				},
+				"report": {
+					"summary": "Quelle {{source}} · {{found}} Skills gefunden · {{selected}} ausgewählt",
+					"empty": "Diese Quelle enthält keine Skills."
+				},
+				"conflict": {
+					"label": "Ein ausgewählter Skill existiert auf diesem Knoten bereits",
+					"skip": "Überspringen und behalten, was auf diesem Knoten liegt",
+					"replace": "Ersetzen — dabei wird der vorhandene Skill überschrieben und alle lokalen Änderungen gehen verloren"
+				},
+				"candidate": {
+					"size": "{{bytes}} Bytes · {{lines}} Zeilen",
+					"overGuidance": "über der Empfehlung von {{lines}} Zeilen",
+					"allowedTools": "Angegebene erlaubte Tools: {{tools}}",
+					"problemsTitle": "Kann nicht importiert werden",
+					"refusedTitle": "Abgelehnt — Skripte werden nie importiert",
+					"conflict": "Ein Skill namens '{{name}}' existiert auf diesem Knoten bereits.",
+					"resources": "Mitgelieferte Ressourcen ({{count}})",
+					"showBody": "Vollständigen Inhalt anzeigen",
+					"hideBody": "Vollständigen Inhalt ausblenden"
+				},
+				"outcomes": {
+					"title": "Import-Ergebnis",
+					"disabledNote": "Importierte Skills sind deaktiviert. Öffnen Sie einen, um ihn zu prüfen, und aktivieren Sie ihn dann bewusst."
+				},
+				"errors": {
+					"preview": "Diese Quelle konnte nicht gelesen werden.",
+					"commit": "Die ausgewählten Skills konnten nicht importiert werden."
+				}
+			}
+		},
+		"tools": {
+			"title": "Lokale Werkzeuge",
+			"subtitle": "Werkzeuge, die dem lokalen Node-Agenten zur Verfügung stehen: integrierte In-Process-Werkzeuge sowie Werkzeuge aus aktivierten MCP-Servern."
+		}
+	},
+	"components": {
+		"loginCard": {
+			"signIn": "Anmelden",
+			"noAccount": "Kein Konto? Registrieren",
+			"labels": {
+				"email": "Email",
+				"password": "Passwort"
+			}
+		},
+		"roleCreateModal": {
+			"createRole": "Rolle erstellen",
+			"roleName": "Rollenname",
+			"roleNamePlaceholder": "Rollenname eingeben",
+			"roleCreated": "Rolle erfolgreich erstellt",
+			"create": "Erstellen",
+			"cancel": "Abbrechen"
+		},
+		"roleEditModal": {
+			"editRole": "Rolle bearbeiten",
+			"roleName": "Rollenname",
+			"roleNamePlaceholder": "Rollenname eingeben",
+			"protectedRoleHint": "Geschützte Rollen können nicht umbenannt werden.",
+			"protectedRoleSubmitError": "Geschützte Rollen können nicht umbenannt werden.",
+			"roleUpdated": "Rolle erfolgreich aktualisiert",
+			"save": "Speichern",
+			"cancel": "Abbrechen"
+		},
+		"userCreateModal": {
+			"createUser": "Benutzer erstellen",
+			"username": "Benutzername",
+			"usernamePlaceholder": "Benutzername eingeben",
+			"firstName": "Vorname",
+			"firstNamePlaceholder": "Vornamen eingeben",
+			"lastName": "Nachname",
+			"lastNamePlaceholder": "Nachnamen eingeben",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"roles": "Rollen",
+			"create": "Erstellen",
+			"cancel": "Abbrechen",
+			"createSuccess": "Benutzer erfolgreich erstellt"
+		},
+		"userEditModal": {
+			"editUser": "Benutzer bearbeiten",
+			"username": "Benutzername",
+			"usernamePlaceholder": "Benutzername eingeben",
+			"firstName": "Vorname",
+			"firstNamePlaceholder": "Vornamen eingeben",
+			"lastName": "Nachname",
+			"lastNamePlaceholder": "Nachnamen eingeben",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"passwordHelperText": "Leer lassen, um das Passwort nicht zu ändern",
+			"loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
+			"disabled": "Deaktiviert",
+			"roles": "Rollen",
+			"save": "Speichern",
+			"cancel": "Abbrechen",
+			"userUpdated": "Benutzer erfolgreich aktualisiert"
+		},
+		"userViewModal": {
+			"viewUser": "Benutzer anzeigen",
+			"username": "Benutzername",
+			"firstName": "Vorname",
+			"lastName": "Nachname",
+			"email": "Email",
+			"roles": "Rollen",
+			"loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
+			"ok": "Ok"
+		},
+		"userChangePasswordDialog": {
+			"changePassword": "Passwort ändern",
+			"oldPassword": "Altes Passwort",
+			"oldPasswordPlaceholder": "Altes Passwort eingeben",
+			"currentPassword": "Aktuelles Passwort",
+			"currentPasswordPlaceholder": "Aktuelles Passwort eingeben",
+			"newPassword": "Neues Passwort",
+			"newPasswordPlaceholder": "Neues Passwort eingeben",
+			"confirmPassword": "Passwort bestätigen",
+			"confirmPasswordPlaceholder": "Passwort bestätigen",
+			"passwordChanged": "Passwort erfolgreich geändert",
+			"change": "Ändern",
+			"cancel": "Abbrechen"
+		},
+		"registerCard": {
+			"title": "Registrieren",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"confirmPassword": "Passwort bestätigen",
+			"confirmPasswordPlaceholder": "Passwort bestätigen",
+			"register": "Registrieren",
+			"alreadyHaveAccount": "Bereits ein Konto? Anmelden",
+			"labels": {
+				"email": "Email",
+				"password": "Passwort"
+			}
+		},
+		"sideNavigationBar": {
+			"tooltip": {
+				"collapse": "Einklappen",
+				"expand": "Ausklappen"
+			},
+			"ariaCollapse": "Seitenleiste einklappen",
+			"ariaExpand": "Seitenleiste ausklappen"
+		},
+		"headerBar": {
+			"logout": "Abmelden",
+			"openDrawer": "Navigation öffnen"
+		},
+		"tables": {
+			"button": {
+				"resetFilters": "Filter zurücksetzen"
+			}
+		},
+		"dialogTextTitleBar": {
+			"tooltip": {
+				"close": "Schließen"
+			}
+		},
+		"dialogShell": {
+			"fullscreen": "Vollbild",
+			"exitFullscreen": "Vollbild beenden",
+			"unsavedTitle": "Nicht gespeicherte Änderungen verwerfen?",
+			"unsavedDescription": "Es gibt nicht gespeicherte Änderungen. Wenn Sie jetzt verlassen, gehen sie verloren."
+		},
+		"chatConnectionStatus": {
+			"reconnecting": "Verbindung wird wiederhergestellt…",
+			"offline": "Offline"
+		},
+		"markdownEditor": {
+			"edit": "Bearbeiten",
+			"preview": "Vorschau"
+		},
+		"userDeviceSessions": {
+			"deviceSessions": "Gerätesitzungen",
+			"activeSessions": "Aktive Sitzungen",
+			"terminateSession": "Sitzung beenden",
+			"terminateSessionConfirmation": "Möchten Sie diese Sitzung wirklich beenden? Sie werden von diesem Gerät abgemeldet.",
+			"terminateAllSessions": "Alle Sitzungen beenden",
+			"terminateOtherSessions": "Andere Sitzungen beenden",
+			"terminateAllSessionsConfirmation": "Möchten Sie wirklich alle anderen Sitzungen beenden? Sie werden von allen anderen Geräten abgemeldet.",
+			"currentSession": "Aktuelle Sitzung",
+			"lastLogin": "Letzter Login",
+			"firstLogin": "Erster Login",
+			"loginProvider": "Login-Anbieter",
+			"manageDeviceSessions": "Gerätesitzungen verwalten",
+			"cannotLogoutCurrentDevice": "Sie können sich nicht von diesem Gerät abmelden, da es Ihre aktuelle Sitzung ist."
+		},
+		"mobileNavigation": {
+			"languageTitle": "Sprache",
+			"userAvatarMenu": {
+				"title": "Benutzer",
+				"signedInAs": "Angemeldet als",
+				"userSettings": "Benutzereinstellungen",
+				"logout": "Abmelden"
+			}
+		},
+		"desktopNavigation": {
+			"userAvatarMenu": {
+				"title": "Benutzer",
+				"signedInAs": "Angemeldet als",
+				"userSettings": "Benutzereinstellungen",
+				"logout": "Abmelden"
+			}
+		},
+		"languageMenu": {
+			"tooltip": "Sprache ändern"
+		},
+		"toolCategoryBadge": {
+			"label": {
+				"ReadLocal": "nur lesend",
+				"WriteExecute": "schreiben/ausführen",
+				"Orchestration": "Orchestrierung",
+				"Network": "Netzwerk",
+				"Unknown": "nicht kategorisiert"
+			},
+			"meaning": {
+				"ReadLocal": "Nur lesende, knotenlokale Tools ohne Nebenwirkungen.",
+				"WriteExecute": "Kann Dateien schreiben oder Befehle auf dem Knoten ausführen.",
+				"Orchestration": "Kann andere Agenten oder Modelle starten oder steuern.",
+				"Network": "Greift auf einen externen Dienst außerhalb des Knotens zu.",
+				"Unknown": "Nicht kategorisiertes Tool mit unbekannter Risikoklasse."
+			},
+			"approval": {
+				"byPolicy": "Erfordert eine Freigabe gemäß der aktuellen Knotenrichtlinie.",
+				"always": "Nicht kategorisierte Tools erfordern immer eine Freigabe (fail-closed).",
+				"auto": "Wird gemäß der aktuellen Knotenrichtlinie automatisch ausgeführt."
+			}
+		},
+		"toolSourceBadge": {
+			"builtin": "integriert",
+			"mcp": "MCP",
+			"mcpServer": "MCP · {{server}}"
+		}
+	},
+	"onboarding": {
+		"welcome": {
+			"title": "Willkommen — los geht's zu deiner ersten Antwort",
+			"body": "Dieser Knoten hat noch kein Chat-Modell und kann daher erst antworten, wenn du eines installierst. Mach eine kurze geführte Tour: Installiere ein empfohlenes Chat-Modell, lege es als Standard fest und sende deine erste Nachricht. Du kannst jederzeit abbrechen.",
+			"start": "Tour starten",
+			"skip": "Überspringen",
+			"languageLabel": "Sprache"
+		},
+		"controls": {
+			"back": "Zurück",
+			"close": "Schließen",
+			"last": "Fertig",
+			"next": "Weiter",
+			"nextWithProgress": "Weiter ({current} von {total})",
+			"open": "Dialog öffnen",
+			"skip": "Überspringen"
+		},
+		"restart": "Tutorial neu starten",
+		"steps": {
+			"navModels": {
+				"title": "Hier findest du deine Modelle",
+				"content": "Öffne den Bereich Modelle. Hier entdeckst, installierst und verwaltest du die lokalen Modelle, die den Chat antreiben."
+			},
+			"recommendationInstall": {
+				"title": "Ein empfohlenes Chat-Modell installieren",
+				"content": "Wähle ein empfohlenes Chat-Modell und starte den Download – mit der Installation geht die Tour automatisch weiter. Noch kein Modell? Klicke einfach auf Weiter."
+			},
+			"setDefaultModel": {
+				"title": "Als Standard festlegen",
+				"content": "Lege dein installiertes Chat-Modell als Standard fest, damit neue Unterhaltungen es automatisch verwenden. Mit dem Festlegen geht die Tour weiter, oder klicke auf Weiter."
+			},
+			"navChat": {
+				"title": "Chat öffnen",
+				"content": "Wechsle nun in den Bereich Chat, um mit deinem Modell zu sprechen."
+			},
+			"chatInput": {
+				"title": "Schreibe deine erste Nachricht",
+				"content": "Gib ein, was du fragen möchtest — zum Beispiel: \"Hallo, kannst du dich vorstellen?\""
+			},
+			"chatSend": {
+				"title": "Absenden",
+				"content": "Sende deine Nachricht. Das Modell beginnt, eine Antwort zu generieren."
+			},
+			"firstResponse": {
+				"title": "Deine erste Antwort",
+				"content": "Die Antwort des Assistenten erscheint hier nach und nach. Das war's — du bist startklar. Frag als Nächstes, was du möchtest."
+			},
+			"reasoningEffort": {
+				"title": "Einstellbare Denktiefe",
+				"content": "Wenn du ein reasoning-fähiges Modell verwendest, erscheint hier ein Low / Medium / High-Regler. Mehr Aufwand liefert gründlichere Antworten, braucht aber etwas länger."
+			},
+			"reasoningTrace": {
+				"title": "Dem Modell beim Denken zusehen",
+				"content": "Ist ein reasoning-fähiges Modell aktiv, erscheint sein interner Denkprozess vor der Antwort in einem ausklappbaren Block – so kannst du seiner Logik folgen."
+			},
+			"toolCall": {
+				"title": "Tool-Aufrufe im Kontext",
+				"content": "Agent-fähige Modelle können Tools aufrufen (Suche, Code-Ausführung u. v. m.). Jeder Aufruf zeigt den Tool-Namen, die Argumente und das Ergebnis direkt im Gespräch."
+			},
+			"agentMode": {
+				"title": "Spezialisierte Agenten",
+				"content": "Wechsle vom Standard-Assistenten zu einem spezialisierten Agenten – jeder ist mit einem anderen System-Prompt und eigenen Fähigkeiten für bestimmte Aufgaben ausgestattet."
+			},
+			"knowledgeBase": {
+				"title": "Wissensdatenbank",
+				"content": "Lade eigene Dokumente hoch und lass das Modell daraus antworten. Die Wissensdatenbank verarbeitet Dateien lokal und stützt Chat-Antworten auf deine Inhalte."
+			},
+			"imageGeneration": {
+				"title": "Bildgenerierung",
+				"content": "Erzeuge Bilder lokal aus einem Text-Prompt mit stable-diffusion.cpp – ohne Cloud, ohne Konto. Zu finden in der Navigation unter Bildgenerierung."
+			},
+			"agents": {
+				"title": "Agenten",
+				"content": "Erstelle und verwalte wiederverwendbare Agenten – jeder mit eigenen Anweisungen, Modell und Fähigkeiten – auf der Agenten-Seite und wähle sie dann pro Nachricht im Chat."
+			}
+		},
+		"notes": {
+			"offline": "Du scheinst offline zu sein. Die Modellsuche benötigt eine Internetverbindung — du kannst die Tour überspringen und es später erneut versuchen.",
+			"emptyRecommendations": "Es wurden keine installierbaren Modelle zurückgegeben. Du kannst die Tour überspringen und die Empfehlungen erneut aufrufen, sobald Modelle verfügbar sind."
+		},
+		"showcase": {
+			"reasoningEffort": {
+				"label": "Denktiefe",
+				"low": "Niedrig",
+				"medium": "Mittel",
+				"high": "Hoch",
+				"description": "Wenn du ein reasoning-fähiges Modell verwendest, bestimmt dieser Regler, wie intensiv es vor der Antwort nachdenkt."
+			},
+			"reasoningTrace": {
+				"label": "Denkprozess",
+				"sample": "Ich gehe das Schritt für Schritt durch. Zunächst sollte ich die Rahmenbedingungen berücksichtigen…",
+				"description": "Das interne Reasoning des Modells erscheint hier vor der endgültigen Antwort – nur bei reasoning-fähigen Modellen."
+			},
+			"toolCall": {
+				"label": "Tool-Aufruf",
+				"sample": "search_web({ query: \"neuestes llama.cpp-Release\" })\n→ Ergebnis: \"b4567 vor 2 Tagen veröffentlicht…\"",
+				"description": "Wenn ein agent-fähiges Modell ein Tool nutzt, erscheinen Aufruf und Ergebnis inline wie hier."
+			},
+			"agentMode": {
+				"label": "Agentenmodus",
+				"defaultAssistant": "Standard-Assistent",
+				"sampleAgent": "Code-Reviewer",
+				"description": "Wähle in der Chat-Toolbar einen spezialisierten Agenten aus, um Fokus und Anweisungen des Modells anzupassen."
+			},
+			"knowledgeBase": {
+				"label": "Wissensdatenbank",
+				"description": "Lade Dokumente hoch und das Modell antwortet daraus – die Suche läuft lokal auf deinem Node."
+			},
+			"imageGeneration": {
+				"label": "Bildgenerierung",
+				"description": "Erzeuge Bilder lokal aus einem Text-Prompt mit stable-diffusion.cpp – ohne Cloud."
+			},
+			"agents": {
+				"label": "Agenten",
+				"description": "Erstelle wiederverwendbare Agenten mit eigenen Anweisungen, Modell und Fähigkeiten – und nutze sie im Chat."
+			}
+		}
+	},
+	"auth": {
+		"login": {
+			"title": "Anmelden",
+			"subtitle": "Gib das lokale Node-Admin-Passwort ein.",
+			"passwordLabel": "Passwort",
+			"signInButton": "Anmelden",
+			"errorIncorrectPassword": "Falsches Passwort. Bitte erneut versuchen.",
+			"errorNodeUnreachable": "Node nicht erreichbar. Prüfe, ob sie läuft, und versuche es erneut.",
+			"errorGeneric": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+		},
+		"setup": {
+			"title": "Lokalen Admin einrichten",
+			"subtitle": "Erstelle das einmalige Admin-Konto für diesen Node.",
+			"emailLabel": "E-Mail",
+			"emailLocalOnlyNote": "Wird nur auf diesem Gerät gespeichert. Ihre E-Mail verlässt diesen Node nie.",
+			"passwordLabel": "Passwort",
+			"confirmPasswordLabel": "Passwort bestätigen",
+			"createButton": "Admin erstellen",
+			"errorNodeUnreachable": "Node nicht erreichbar. Prüfe, ob sie läuft, und versuche es erneut.",
+			"errorGeneric": "Einrichtung fehlgeschlagen. Bitte Eingaben prüfen und erneut versuchen.",
+			"validationEmail": "Bitte eine gültige E-Mail-Adresse eingeben.",
+			"validationPasswordRequired": "Passwort ist erforderlich.",
+			"validationPasswordWeak": "Das Passwort benötigt {{unmet}}.",
+			"validationPasswordsNoMatch": "Passwörter stimmen nicht überein.",
+			"passwordRuleLength": "Mindestens 12 Zeichen",
+			"passwordRuleUppercase": "Mindestens ein Großbuchstabe (A–Z)",
+			"passwordRuleLowercase": "Mindestens ein Kleinbuchstabe (a–z)",
+			"passwordRuleDigit": "Mindestens eine Ziffer (0–9)",
+			"passwordRuleSymbol": "Mindestens ein Sonderzeichen (z. B. !@#$%)"
+		}
+	},
+	"errorMessages": {
+		"roleNameAlreadyExists": "Der Rollenname existiert bereits",
+		"emailAlreadyInUse": "Die Email wird bereits verwendet",
+		"usernameAlreadyInUse": "Der Benutzername wird bereits verwendet",
+		"requiredField": "Dieses Feld ist erforderlich",
+		"minLength": "Mindestens {{min}} Zeichen erforderlich",
+		"invalidEmail": "Ungültige Email",
+		"invalidName": "Nur Buchstaben, Leerzeichen, Bindestriche und Apostrophe erlaubt",
+		"invalidEmailOrPassword": "Ungültige Email oder Passwort",
+		"loginWithDisabledUser": "Benutzer ist deaktiviert. Wenn Sie denken dass das ein Versehen ist, wenden Sie sich bitte an den Administrator.",
+		"passwordsDoNotMatch": "Passwörter stimmen nicht überein",
+		"passwordIncorrect": "Passwort ist falsch",
+		"onlyAlphanumeric": "Nur alphanumerische Zeichen erlaubt",
+		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
+		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
+		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
+		"nodeUnreachable": "Der Knoten ist nicht erreichbar. Prüfen Sie, ob er läuft, und versuchen Sie es erneut."
+	},
+	"diagnostics": {
+		"title": "Diagnose",
+		"description": "Nur lokal gespeicherte Fehler-Snapshots aus diesem Browser. Es wird nichts an den Server gesendet.",
+		"reportProblem": "Problem melden",
+		"reportProblemTooltip": "Einen Diagnose-Snapshot des aktuellen App-Zustands erstellen",
+		"reportSuccess": "Diagnose-Snapshot erstellt.",
+		"reportError": "Diagnose-Snapshot konnte nicht erstellt werden.",
+		"import": "Importieren",
+		"importSuccess": "Snapshot importiert.",
+		"importError": "Die Snapshot-Datei konnte nicht importiert werden.",
+		"clearAll": "Alle löschen",
+		"clearAllConfirm": "Alle gespeicherten Snapshots entfernen? Dies kann nicht rückgängig gemacht werden.",
+		"privacyNote": "Snapshots bleiben in diesem Browser. Exportierte Dateien können App-Zustände enthalten — teilen Sie sie mit Bedacht.",
+		"loading": "Snapshots werden geladen…",
+		"loadError": "Snapshots konnten nicht geladen werden.",
+		"empty": {
+			"title": "Noch keine Snapshots",
+			"description": "Snapshots erscheinen hier, wenn ein Fehler auftritt oder wenn Sie ein Problem melden."
+		},
+		"columns": {
+			"time": "Zeit",
+			"kind": "Art",
+			"route": "Route",
+			"error": "Fehler",
+			"actions": "Aktionen"
+		},
+		"kind": {
+			"error": "Fehler",
+			"manual": "Manuell"
+		},
+		"actions": {
+			"view": "Ansehen",
+			"export": "Exportieren",
+			"delete": "Löschen",
+			"back": "Zurück"
+		},
+		"detail": {
+			"title": "Snapshot-Details",
+			"capturedAt": "Erfasst {{time}}",
+			"error": "Fehler",
+			"message": "Nachricht",
+			"source": "Quelle",
+			"componentStack": "Komponenten-Stack",
+			"noError": "Kein Fehler — dies ist ein manueller Snapshot.",
+			"breadcrumbs": "Verlauf",
+			"network": "Netzwerk",
+			"environment": "Umgebung",
+			"route": "Route",
+			"appVersion": "App-Version",
+			"locale": "Sprache",
+			"viewport": "Ansichtsfenster",
+			"userAgent": "User-Agent",
+			"state": "Zustand",
+			"noState": "Kein Zustand erfasst.",
+			"rawJson": "Roh-JSON"
+		},
+		"breadcrumbs": {
+			"empty": "Keine Verlaufseinträge aufgezeichnet."
+		},
+		"network": {
+			"empty": "Keine Netzwerkaktivität aufgezeichnet.",
+			"method": "Methode",
+			"url": "URL",
+			"status": "Status",
+			"duration": "Dauer",
+			"transport": "Transport",
+			"traceId": "Trace-ID"
+		},
+		"replay": {
+			"title": "DOM-Wiedergabe",
+			"masked": "Angezeigter Text ist aus Datenschutzgründen maskiert; die Wiedergabe zeigt nur Layout und Interaktionen.",
+			"segmentPresent": "DOM-Wiedergabesegment vorhanden ({{count}} Ereignisse).",
+			"play": "Wiedergabe abspielen",
+			"unavailable": "Die Wiedergabe konnte nicht initialisiert werden; das erfasste Segment ist weiterhin gespeichert."
+		}
+	},
+	"voice": {
+		"composer": {
+			"label": "Sprachausgabe",
+			"enabledTooltip": "Sprachausgabe ist aktiviert",
+			"disabledTooltip": "Sprachausgabe ist deaktiviert",
+			"enableLabel": "Antworten vorlesen",
+			"autoPlayLabel": "Assistenten-Antworten automatisch vorlesen",
+			"profileLabel": "Stimme",
+			"rateLabel": "Sprechgeschwindigkeit"
+		},
+		"message": {
+			"play": "Diese Antwort vorlesen",
+			"stop": "Vorlesen stoppen"
+		},
+		"settings": {
+			"title": "Sprachausgabe (Text-to-Speech)",
+			"operatorGate": "Sprachfunktion des Knotens:",
+			"gateOn": "Aktiviert",
+			"gateOff": "Deaktiviert",
+			"enableLabel": "Antworten auf diesem Gerät vorlesen",
+			"enableDescription": "Wird nur in diesem Browser gespeichert. Die Sprachausgabe übernimmt der Browser oder das Betriebssystem.",
+			"autoPlayLabel": "Assistenten-Antworten automatisch vorlesen",
+			"profileLabel": "Stimme",
+			"rateLabel": "Sprechgeschwindigkeit",
+			"disabledOnNode": "Die Sprachausgabe ist für diesen Knoten vom Betreiber deaktiviert.",
+			"operatorSectionTitle": "Betreibersteuerung (dieser Knoten)",
+			"operatorEnableLabel": "Sprachfunktion auf diesem Knoten aktivieren",
+			"operatorEnableDescription": "Hauptschalter für alle Benutzer auf diesem Knoten. Wird er deaktiviert, ist die Sprachausgabe überall ausgeschaltet.",
+			"operatorDefaultProfileLabel": "Standardstimme",
+			"operatorDefaultProfileDescription": "Die Stimme, mit der neue Benutzer auf diesem Knoten starten.",
+			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden.",
+			"previewLabel": "Stimme anhören",
+			"systemVoiceGroupLabel": "Systemstimmen ({{language}})"
+		}
+	},
+	"notifications": {
+		"emptyMessage": "Fertig."
+	}
+}

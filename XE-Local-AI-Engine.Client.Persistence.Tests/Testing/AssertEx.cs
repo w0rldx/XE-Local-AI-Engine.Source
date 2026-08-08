@@ -70,6 +70,24 @@ internal static class AssertEx
         throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
     }
 
+    public static async Task<TException> ThrowsAsync<TException>(Func<Task> action, string? message = null) where TException : Exception
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (TException exception)
+        {
+            return exception;
+        }
+        catch (Exception exception)
+        {
+            throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but caught {exception.GetType().Name}: {exception.Message}");
+        }
+
+        throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
+    }
+
     private static string FormatValue(object? value)
     {
         return value switch

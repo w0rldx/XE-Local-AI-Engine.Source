@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "pkg:npm/%40microsoft/signalr@10.0.0": {
+      "license": "MIT",
+      "basis": "The exact v10.0.0 source tag and npm package metadata both declare MIT; the npm tarball omits the license file.",
+      "files": [
+        {
+          "path": "third-party/npm/microsoft-signalr-10.0.0-LICENSE.txt",
+          "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
+          "source": "https://raw.githubusercontent.com/dotnet/aspnetcore/v10.0.0/LICENSE.txt"
+        }
+      ]
+    },
+    "pkg:npm/%40t3-oss/env-core@0.13.11": {
+      "license": "MIT",
+      "basis": "The exact package tag resolves to the pinned source commit and its repository license; the npm tarball omits the license file.",
+      "files": [
+        {
+          "path": "third-party/npm/t3-env-core-0.13.11-LICENSE.txt",
+          "sha256": "a45df7d7f8a36144864a3ac08a25be6856d455239dfcbf502519245e1e1f87df",
+          "source": "https://raw.githubusercontent.com/t3-oss/t3-env/23ddb79a92800665daa54b90c99f7c1099eeb6fb/LICENSE"
+        }
+      ]
+    },
+    "pkg:npm/react-remove-scroll-bar@2.3.8": {
+      "license": "MIT",
+      "basis": "The signed npm metadata declares MIT but its recorded gitHead is no longer reachable and the tarball omits the license. This is the current hash-pinned MIT notice from the declared upstream repository and requires release-authority review.",
+      "files": [
+        {
+          "path": "third-party/npm/react-remove-scroll-bar-2.3.8-LICENSE.txt",
+          "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84",
+          "source": "https://raw.githubusercontent.com/theKashey/react-remove-scroll-bar/8ca9ba5ea52de03308fe8ced94f7b159a44d28ff/LICENSE"
+        }
+      ]
+    },
+    "pkg:npm/rrweb@2.0.1": {
+      "license": "MIT",
+      "basis": "The signed npm provenance identifies the pinned upstream gitHead; the exact source license and npm metadata both declare MIT while the npm tarball omits the file.",
+      "files": [
+        {
+          "path": "third-party/npm/rrweb-2.0.1-LICENSE.txt",
+          "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c",
+          "source": "https://raw.githubusercontent.com/rrweb-io/rrweb/a9198e65069f0c741789842106a419210775074d/LICENSE"
+        }
+      ]
+    },
+    "pkg:npm/victory-vendor@37.3.6": {
+      "license": "MIT AND ISC",
+      "basis": "Signed npm provenance resolves to the pinned upstream commit. Its MIT project license supplements the ISC/MIT/BSD notices already embedded beside the vendored D3 sources in the npm payload.",
+      "files": [
+        {
+          "path": "third-party/npm/victory-vendor-37.3.6-LICENSE.txt",
+          "sha256": "34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4",
+          "source": "https://raw.githubusercontent.com/FormidableLabs/victory/d9d9ca2d5038d6ef9de91f2cef39e6fb2733baa6/LICENSE.txt"
+        }
+      ]
+    }
+  }
+}
