@@ -50,7 +50,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         )
         self.assertIsNotNone(build_job)
         body = build_job.group("body")
-        setup = "uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0"
+        setup = "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
         self.assertIn(setup, body)
         self.assertIn("python-version: '3.13'", body)
         self.assertNotIn("python3", body)
