@@ -57,3 +57,16 @@ components detected in a particular build.
    publisher the user selects, and are governed by whatever license or usage
    terms that publisher attaches to them. Neither LICENSE nor this NOTICE grants
    any right in them.
+
+6. Weak-copyleft shipped component — UTF.Unknown (MPL-1.1)
+
+   The application bundles UTF.Unknown, a managed charset-detection library, as
+   a DLL inside the artifacts. Its selected license basis is MPL-1.1. The
+   library is redistributed unmodified; the corresponding source is available
+   at the exact pinned upstream commit, satisfying the MPL-1.1 source-
+   availability obligation.
+
+   - UTF.Unknown 2.6.0 — MPL-1.1 — https://github.com/CharsetDetector/UTF-unknown
+     Source at tag v2.6 = commit 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.
+     License: https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt
+     See docs/compliance/utf-unknown-mpl-source-availability.md.
