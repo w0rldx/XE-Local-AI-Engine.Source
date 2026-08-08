@@ -11,8 +11,7 @@ public sealed class FrameworkDependentVelopackBootstrapTests
         var baseDirectory = Path.Combine(Path.GetTempPath(), "xe-launcher-tests", "current");
         var launcher = Path.Combine(baseDirectory, FrameworkDependentVelopackBootstrap.WindowsLauncherFileName);
 
-        var resolved = FrameworkDependentVelopackBootstrap.ResolveLauncherPath(
-            isWindows: true,
+        var resolved = FrameworkDependentVelopackBootstrap.ResolveLauncherPath(isWindows: true,
             processPath: Path.Combine("C:\\Program Files\\dotnet", "dotnet.exe"),
             baseDirectory,
             _ => true);
@@ -25,18 +24,15 @@ public sealed class FrameworkDependentVelopackBootstrapTests
     {
         var baseDirectory = Path.Combine(Path.GetTempPath(), "xe-launcher-tests", "current");
 
-        AssertEx.Null(FrameworkDependentVelopackBootstrap.ResolveLauncherPath(
-            isWindows: false,
+        AssertEx.Null(FrameworkDependentVelopackBootstrap.ResolveLauncherPath(isWindows: false,
             processPath: "/usr/bin/dotnet",
             baseDirectory,
             _ => true));
-        AssertEx.Null(FrameworkDependentVelopackBootstrap.ResolveLauncherPath(
-            isWindows: true,
+        AssertEx.Null(FrameworkDependentVelopackBootstrap.ResolveLauncherPath(isWindows: true,
             processPath: Path.Combine(baseDirectory, FrameworkDependentVelopackBootstrap.WindowsLauncherFileName),
             baseDirectory,
             _ => true));
-        AssertEx.Null(FrameworkDependentVelopackBootstrap.ResolveLauncherPath(
-            isWindows: true,
+        AssertEx.Null(FrameworkDependentVelopackBootstrap.ResolveLauncherPath(isWindows: true,
             processPath: "C:\\Program Files\\dotnet\\dotnet.exe",
             baseDirectory,
             _ => false));

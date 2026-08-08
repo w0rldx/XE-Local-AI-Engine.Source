@@ -24,15 +24,15 @@ public sealed class WindowsLauncherApplicationTests
     public void ResolveRequiredAspNetCoreRuntime_ReadsTheManagedApplicationRuntimeConfig()
     {
         const string runtimeConfig = """
-            {
-              "runtimeOptions": {
-                "frameworks": [
-                  { "name": "Microsoft.NETCore.App", "version": "10.0.10" },
-                  { "name": "Microsoft.AspNetCore.App", "version": "10.0.10" }
-                ]
-              }
-            }
-            """;
+                                     {
+                                       "runtimeOptions": {
+                                         "frameworks": [
+                                           { "name": "Microsoft.NETCore.App", "version": "10.0.10" },
+                                           { "name": "Microsoft.AspNetCore.App", "version": "10.0.10" }
+                                         ]
+                                       }
+                                     }
+                                     """;
 
         AssertEx.Equal(new Version(10, 0, 10), WindowsLauncherApplication.ResolveRequiredAspNetCoreRuntime(runtimeConfig));
     }
@@ -40,8 +40,7 @@ public sealed class WindowsLauncherApplicationTests
     [Test]
     public async Task ResolveRequiredAspNetCoreRuntime_MissingFrameworksArrayFailsWithAnActionableError()
     {
-        var exception = await AssertEx.ThrowsAsync<InvalidDataException>(() => Task.FromResult(
-            WindowsLauncherApplication.ResolveRequiredAspNetCoreRuntime("{ \"runtimeOptions\": {} }")));
+        var exception = await AssertEx.ThrowsAsync<InvalidDataException>(() => Task.FromResult(WindowsLauncherApplication.ResolveRequiredAspNetCoreRuntime("{ \"runtimeOptions\": {} }")));
 
         AssertEx.Contains(exception.Message, "frameworks array");
     }
@@ -68,8 +67,7 @@ public sealed class WindowsLauncherApplicationTests
     [Test]
     public void CreateManagedArguments_PreservesEveryVelopackArgument()
     {
-        var arguments = WindowsLauncherApplication.CreateManagedArguments(
-            "C:\\portable current\\XE-Local-AI-Engine.Client.dll",
+        var arguments = WindowsLauncherApplication.CreateManagedArguments("C:\\portable current\\XE-Local-AI-Engine.Client.dll",
             ["--veloapp-obsolete", "1.2.3", "value with spaces"]);
 
         AssertEx.Equal(expected: 4, arguments.Count);
