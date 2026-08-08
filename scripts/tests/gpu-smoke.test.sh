@@ -393,6 +393,16 @@ exit 1
 FAKE_NO_GPU
 chmod 700 "${TEMP_ROOT}/bin/nvidia-smi"
 
+# The preflight tool-loop also requires `aspire` on PATH before it reaches the no-GPU check.
+# A CI runner has no `aspire` global tool installed, so without this stub the run would fail on
+# "aspire is not on PATH" (also exit 2) and never print the no-GPU message under test. The later
+# gates overwrite this with behavior-specific fakes.
+cat >"${TEMP_ROOT}/bin/aspire" <<'FAKE_ASPIRE_STUB'
+#!/usr/bin/env bash
+exit 0
+FAKE_ASPIRE_STUB
+chmod 700 "${TEMP_ROOT}/bin/aspire"
+
 out="$(PATH="${TEMP_ROOT}/bin:${PATH}" NO_BUILD_LOCK=1 "${SMOKE}" 2>&1)"; status=$?
 check "no GPU => exit 2" "2" "${status}"
 check_contains "no-GPU message explains why a pass would be meaningless" "nothing to prove" "${out}"
