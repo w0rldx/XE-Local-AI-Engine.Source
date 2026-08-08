@@ -1,0 +1,1102 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false
+	},
+	"formatter": {
+		"enabled": true,
+		"formatWithErrors": false,
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineEnding": "lf",
+		"lineWidth": 130,
+		"attributePosition": "auto",
+		"bracketSameLine": false,
+		"bracketSpacing": true,
+		"expand": "auto",
+		"useEditorconfig": true,
+		"includes": [
+			"**",
+			"!**/package-lock.json",
+			"!**/pnpm-lock.yaml",
+			"!**/yarn.lock"
+		]
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": false,
+			"complexity": {
+				"noAdjacentSpacesInRegex": "error",
+				"noExtraBooleanCast": "error",
+				"noForEach": "error",
+				"noStaticOnlyClass": "error",
+				"noUselessCatch": "error",
+				"noUselessEscapeInRegex": "error",
+				"noUselessSwitchCase": "error",
+				"noVoid": "error",
+				"useDateNow": "error",
+				"useFlatMap": "error",
+				"useIndexOf": "error"
+			},
+			"correctness": {
+				"noConstAssign": "error",
+				"noConstantCondition": "error",
+				"noEmptyCharacterClassInRegex": "error",
+				"noEmptyPattern": "error",
+				"noGlobalDirnameFilename": "error",
+				"noGlobalObjectCalls": "error",
+				"noInvalidBuiltinInstantiation": "error",
+				"noInvalidConstructorSuper": "error",
+				"noNonoctalDecimalEscape": "error",
+				"noPrecisionLoss": "error",
+				"noSelfAssign": "error",
+				"noSetterReturn": "error",
+				"noSwitchDeclarations": "error",
+				"noUndeclaredVariables": "error",
+				"noUnreachable": "error",
+				"noUnreachableSuper": "error",
+				"noUnsafeFinally": "error",
+				"noUnsafeOptionalChaining": "error",
+				"noUnusedImports": "error",
+				"noUnusedLabels": "error",
+				"noUnusedPrivateClassMembers": "error",
+				"noUnusedVariables": "error",
+				"useIsNan": "error",
+				"useValidForDirection": "error",
+				"useValidTypeof": "error",
+				"useYield": "error"
+			},
+			"style": {
+				"noNegationElse": "off",
+				"noNestedTernary": "off",
+				"noSubstr": "error",
+				"useAtIndex": "error",
+				"useBlockStatements": "off",
+				"useCollapsedIf": "error",
+				"useComponentExportOnlyModules": "error",
+				"useConsistentArrayType": "off",
+				"useExplicitLengthCheck": "error",
+				"useFilenamingConvention": {
+					"level": "error",
+					"options": {
+						"filenameCases": [
+							"PascalCase"
+						]
+					}
+				},
+				"useForOf": "error",
+				"useNodejsImportProtocol": "error",
+				"useNumberNamespace": "error",
+				"useNumericSeparators": "off",
+				"useThrowNewError": "error",
+				"useTrimStartEnd": "error",
+				"useImportType": "error"
+			},
+			"suspicious": {
+				"noAssignInExpressions": "error",
+				"noAsyncPromiseExecutor": "error",
+				"noBitwiseOperators": "off",
+				"noCatchAssign": "error",
+				"noClassAssign": "error",
+				"noCompareNegZero": "error",
+				"noConstantBinaryExpressions": "error",
+				"noControlCharactersInRegex": "error",
+				"noDebugger": "error",
+				"noDocumentCookie": "error",
+				"noDuplicateCase": "error",
+				"noDuplicateClassMembers": "error",
+				"noDuplicateElseIf": "error",
+				"noDuplicateObjectKeys": "error",
+				"noDuplicateParameters": "error",
+				"noEmptyBlockStatements": "error",
+				"noFallthroughSwitchClause": "error",
+				"noFunctionAssign": "error",
+				"noGlobalAssign": "error",
+				"noImportAssign": "error",
+				"noIrregularWhitespace": "error",
+				"noMisleadingCharacterClass": "error",
+				"noPrototypeBuiltins": "error",
+				"noRedeclare": "error",
+				"noShadowRestrictedNames": "error",
+				"noSparseArray": "error",
+				"noThenProperty": "error",
+				"noUnsafeNegation": "error",
+				"noUselessRegexBackrefs": "error",
+				"noWith": "error",
+				"useErrorMessage": "error",
+				"noConsole": {
+					"level": "error",
+					"options": {
+						"allow": ["warn", "error", "info"]
+					}
+				},
+				"useGetterReturn": "error",
+				"useNumberToFixedDigitsArgument": "error",
+				"noExplicitAny": "error"
+			},
+			"nursery": {
+				"useExhaustiveSwitchCases": "error"
+			}
+		},
+		"includes": [
+			"**",
+			"!**/logs",
+			"!**/*.log",
+			"!**/npm-debug.log*",
+			"!**/yarn-debug.log*",
+			"!**/yarn-error.log*",
+			"!**/pnpm-debug.log*",
+			"!**/lerna-debug.log*",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/dist-ssr",
+			"!**/*.local",
+			"!.vscode/*",
+			".vscode/extensions.json",
+			".vscode/launch.json",
+			".vscode/settings.json",
+			"!**/.idea",
+			"!**/.DS_Store",
+			"!**/*.suo",
+			"!**/*.ntvs*",
+			"!**/*.njsproj",
+			"!**/*.sln",
+			"!**/dist",
+			"!**/dist-ssr",
+			"!**/*.local",
+			"!node_modules",
+			"!.pnp",
+			"!**/.pnp.js",
+			"!coverage",
+			"!.next/",
+			"!out/",
+			"!build",
+			"!**/.DS_Store",
+			"!**/*.pem",
+			"!**/npm-debug.log*",
+			"!**/yarn-debug.log*",
+			"!**/yarn-error.log*",
+			"!**/.env",
+			"!**/.env.local",
+			"!**/.env.development.local",
+			"!**/.env.test.local",
+			"!**/.env.production.local",
+			"!**/.vercel",
+			"!test-results/",
+			"!playwright-report/",
+			"!blob-report/",
+			"!playwright/.cache/",
+			"!**/.sonarqube/",
+			"!**/.scannerwork/",
+			"!tests/setup/storageState.json",
+			"!**/.tanstack",
+			"!**/dist/**",
+			"!**/vite.config.ts",
+			"!**/node_modules/**",
+			"!**/out/**",
+			"!**/.gitignore",
+			"!**/.eslintrc",
+			"!**/*.d.ts",
+			"!**/*.gen.ts",
+			"!src/core/api/generated/**",
+			"!**/uno.config.ts",
+			"!**/playwright-report/**",
+			"!**/test-results/**",
+			"!**/postcss.config.cjs",
+			"!**/.dependency-cruiser.cjs"
+		]
+	},
+	"javascript": {
+		"formatter": {
+			"jsxQuoteStyle": "double",
+			"quoteProperties": "asNeeded",
+			"trailingCommas": "all",
+			"semicolons": "always",
+			"arrowParentheses": "always",
+			"bracketSameLine": false,
+			"quoteStyle": "double",
+			"attributePosition": "auto",
+			"bracketSpacing": true
+		},
+		"globals": []
+	},
+	"html": {
+		"formatter": {
+			"indentScriptAndStyle": false,
+			"selfCloseVoidElements": "always"
+		}
+	},
+	"overrides": [
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noCommaOperator": "error",
+						"noExcessiveCognitiveComplexity": "off",
+						"noImplicitCoercions": "off",
+						"noUselessCatch": "error",
+						"noUselessEscapeInRegex": "error",
+						"noUselessLabel": "error",
+						"noUselessLoneBlockStatements": "error",
+						"noUselessStringConcat": "error",
+						"noVoid": "error",
+						"useLiteralKeys": "off",
+						"useRegexLiterals": "error"
+					},
+					"correctness": {
+						"noConstructorReturn": "error",
+						"noEmptyPattern": "error",
+						"noNonoctalDecimalEscape": "error",
+						"noSelfAssign": "error",
+						"noSwitchDeclarations": "error",
+						"noUnusedLabels": "error",
+						"useParseIntRadix": "error"
+					},
+					"security": {
+						"noGlobalEval": "error"
+					},
+					"style": {
+						"noParameterAssign": "error",
+						"noUselessElse": "error",
+						"noYodaExpression": "error",
+						"useBlockStatements": "error",
+						"useConsistentBuiltinInstantiation": "error",
+						"useDefaultParameterLast": "error",
+						"useDefaultSwitchClause": "error",
+						"useGroupedAccessorPairs": "error",
+						"useThrowOnlyError": "error",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noAlert": "error",
+						"noConfusingLabels": "error",
+						"noDoubleEquals": "error",
+						"noEmptyBlockStatements": "error",
+						"noFallthroughSwitchClause": "error",
+						"noGlobalAssign": "error",
+						"noOctalEscape": "error",
+						"noPrototypeBuiltins": "error",
+						"noRedeclare": "error",
+						"noSelfCompare": "error",
+						"noWith": "error",
+						"useAwait": "off",
+						"useDefaultSwitchClauseLast": "error",
+						"useGuardForIn": "error",
+						"useIterableCallbackReturn": "error",
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noAdjacentSpacesInRegex": "error",
+						"noExtraBooleanCast": "error"
+					},
+					"correctness": {
+						"noConstantCondition": "error",
+						"noEmptyCharacterClassInRegex": "error",
+						"noGlobalObjectCalls": "error",
+						"noInnerDeclarations": "error",
+						"noInvalidBuiltinInstantiation": "error",
+						"noPrecisionLoss": "error",
+						"noSetterReturn": "error",
+						"noUnreachable": "error",
+						"noUnsafeFinally": "error",
+						"noUnsafeOptionalChaining": "error",
+						"noUnusedPrivateClassMembers": "off",
+						"useIsNan": "error",
+						"useValidForDirection": "error",
+						"useValidTypeof": "error"
+					},
+					"performance": {
+						"noAwaitInLoops": "error"
+					},
+					"suspicious": {
+						"noAssignInExpressions": "error",
+						"noAsyncPromiseExecutor": "error",
+						"noCatchAssign": "error",
+						"noCompareNegZero": "error",
+						"noConsole": {
+							"level": "error",
+							"options": {
+								"allow": ["warn", "error", "info"]
+							}
+						},
+						"noConstantBinaryExpressions": "off",
+						"noControlCharactersInRegex": "error",
+						"noDebugger": "error",
+						"noDuplicateCase": "error",
+						"noDuplicateElseIf": "error",
+						"noDuplicateObjectKeys": "error",
+						"noDuplicateParameters": "error",
+						"noEmptyBlockStatements": "error",
+						"noFunctionAssign": "error",
+						"noImportAssign": "error",
+						"noIrregularWhitespace": "error",
+						"noMisleadingCharacterClass": "error",
+						"noPrototypeBuiltins": "error",
+						"noSparseArray": "error",
+						"noTemplateCurlyInString": "error",
+						"noUnsafeNegation": "error",
+						"noUselessRegexBackrefs": "error",
+						"useGetterReturn": "error",
+						"noExplicitAny": "error"
+					},
+					"style": {
+						"useImportType": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"javascript": {
+				"globals": []
+			},
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noArguments": "error",
+						"noUselessConstructor": "error",
+						"noUselessRename": "error",
+						"useArrowFunction": "error",
+						"useLiteralKeys": "off",
+						"useNumericLiterals": "error"
+					},
+					"correctness": {
+						"noConstAssign": "error",
+						"noInvalidConstructorSuper": "error",
+						"noUnreachableSuper": "error",
+						"useYield": "error"
+					},
+					"style": {
+						"noRestrictedImports": "off",
+						"useConsistentObjectDefinitions": "error",
+						"useConst": "error",
+						"useSymbolDescription": "error",
+						"useTemplate": "error",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noClassAssign": "error",
+						"noDuplicateClassMembers": "error",
+						"noVar": "error",
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveLinesPerFunction": "off",
+						"noUselessTernary": "error"
+					},
+					"style": {
+						"noNegationElse": "off",
+						"noNestedTernary": "off",
+						"useArrayLiterals": "error",
+						"useCollapsedElseIf": "error",
+						"useExponentiationOperator": "error",
+						"useObjectSpread": "error",
+						"useShorthandAssign": "error",
+						"useSingleVarDeclarator": "error",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noUselessUndefinedInitialization": "error"
+					},
+					"correctness": {
+						"noInvalidUseBeforeDeclaration": "error",
+						"noUndeclaredVariables": "error",
+						"noUnusedVariables": "error"
+					},
+					"style": {
+						"noRestrictedGlobals": {
+							"level": "error",
+							"options": {
+								"deniedGlobals": {
+									"defaultStatus": "Use window.defaultStatus instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"status": "Use window.status instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"scroll": "Use window.scroll instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"outerHeight": "Use window.outerHeight instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"screenX": "Use window.screenX instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"opener": "Use window.opener instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"onfocus": "Use window.onfocus instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"pageYOffset": "Use window.pageYOffset instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"addEventListener": "Use window.addEventListener instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"defaultstatus": "Use window.defaultstatus instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"history": "Use window.history instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"frames": "Use window.frames instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"screenY": "Use window.screenY instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"focus": "Use window.focus instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"outerWidth": "Use window.outerWidth instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"opera": "Use window.opera instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"external": "Use window.external instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"innerHeight": "Use window.innerHeight instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"closed": "Use window.closed instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"isFinite": "Use Number.isFinite instead https://github.com/airbnb/javascript#standard-library--isfinite",
+									"frameElement": "Use window.frameElement instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"scrollY": "Use window.scrollY instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"self": "Use window.self instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"onblur": "Use window.onblur instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"find": "Use window.find instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"parent": "Use window.parent instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"top": "Use window.top instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"moveBy": "Use window.moveBy instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"menubar": "Use window.menubar instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"length": "Use window.length instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"onerror": "Use window.onerror instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"onresize": "Use window.onresize instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"removeEventListener": "Use window.removeEventListener instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"onload": "Use window.onload instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"scrollTo": "Use window.scrollTo instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"moveTo": "Use window.moveTo instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"scrollX": "Use window.scrollX instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"name": "Use window.name instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"toolbar": "Use window.toolbar instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"innerWidth": "Use window.innerWidth instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"location": "Use window.location instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"locationbar": "Use window.locationbar instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"scrollBy": "Use window.scrollBy instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"resizeTo": "Use window.resizeTo instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"stop": "Use window.stop instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"scrollbars": "Use window.scrollbars instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"blur": "Use window.blur instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"screenTop": "Use window.screenTop instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"confirm": "Use window.confirm instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"screen": "Use window.screen instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"screenLeft": "Use window.screenLeft instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"event": "Use window.event instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"onunload": "Use window.onunload instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"pageXOffset": "Use window.pageXOffset instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"resizeBy": "Use window.resizeBy instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"statusbar": "Use window.statusbar instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"isNaN": "Use Number.isNaN instead https://github.com/airbnb/javascript#standard-library--isnan",
+									"close": "Use window.close instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"open": "Use window.open instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md",
+									"print": "Use window.print instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md"
+								}
+							}
+						},
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noLabelVar": "error",
+						"noShadowRestrictedNames": "error",
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"javascript": {
+				"globals": [
+					"onanimationend",
+					"ongamepadconnected",
+					"onlostpointercapture",
+					"onanimationiteration",
+					"onkeyup",
+					"onmousedown",
+					"onanimationstart",
+					"onslotchange",
+					"onprogress",
+					"ontransitionstart",
+					"onpause",
+					"onended",
+					"onpointerover",
+					"onscrollend",
+					"onformdata",
+					"ontransitionrun",
+					"onanimationcancel",
+					"ondrag",
+					"onchange",
+					"onbeforeinstallprompt",
+					"onbeforexrselect",
+					"onmessage",
+					"ontransitioncancel",
+					"onpointerdown",
+					"onabort",
+					"onpointerout",
+					"oncuechange",
+					"ongotpointercapture",
+					"onscrollsnapchanging",
+					"onsearch",
+					"onsubmit",
+					"onstalled",
+					"onsuspend",
+					"onreset",
+					"onerror",
+					"onmouseenter",
+					"ongamepaddisconnected",
+					"onresize",
+					"ondragover",
+					"onbeforetoggle",
+					"onmouseover",
+					"onpagehide",
+					"onmousemove",
+					"onratechange",
+					"oncommand",
+					"onmessageerror",
+					"onwheel",
+					"ondevicemotion",
+					"onauxclick",
+					"ontransitionend",
+					"onpaste",
+					"onpageswap",
+					"ononline",
+					"ondeviceorientationabsolute",
+					"onkeydown",
+					"onclose",
+					"onselect",
+					"onpageshow",
+					"onpointercancel",
+					"onbeforematch",
+					"onpointerrawupdate",
+					"ondragleave",
+					"onscrollsnapchange",
+					"onseeked",
+					"onwaiting",
+					"onbeforeunload",
+					"onplaying",
+					"onvolumechange",
+					"ondragend",
+					"onstorage",
+					"onloadeddata",
+					"onfocus",
+					"onoffline",
+					"onplay",
+					"onafterprint",
+					"onclick",
+					"oninvalid",
+					"ontimeupdate",
+					"ondurationchange",
+					"onselectionchange",
+					"onmouseup",
+					"location",
+					"onkeypress",
+					"onpointerleave",
+					"oncontextlost",
+					"ondrop",
+					"onsecuritypolicyviolation",
+					"oncontentvisibilityautostatechange",
+					"ondeviceorientation",
+					"onseeking",
+					"onrejectionhandled",
+					"onunload",
+					"onmouseleave",
+					"onhashchange",
+					"onpointerenter",
+					"onmousewheel",
+					"onunhandledrejection",
+					"ondragenter",
+					"onpopstate",
+					"onpagereveal",
+					"onemptied"
+				]
+			},
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useButtonType": "error"
+					},
+					"complexity": {
+						"noUselessFragments": "error"
+					},
+					"correctness": {
+						"noChildrenProp": "error",
+						"noRestrictedElements": "off",
+						"noVoidElementsWithChildren": "error",
+						"useJsxKeyInIterable": "off"
+					},
+					"security": {
+						"noBlankTarget": "error",
+						"noDangerouslySetInnerHtml": "error",
+						"noDangerouslySetInnerHtmlWithChildren": "error"
+					},
+					"style": {
+						"noImplicitBoolean": "error",
+						"useConsistentCurlyBraces": "error",
+						"useFragmentSyntax": "error",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noArrayIndexKey": "error",
+						"noCommentText": "error",
+						"noDuplicateJsxProps": "error",
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"javascript": {
+				"globals": []
+			},
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noAccessKey": "error",
+						"noAriaHiddenOnFocusable": "off",
+						"noAriaUnsupportedElements": "error",
+						"noAutofocus": "error",
+						"noDistractingElements": "error",
+						"noHeaderScope": "error",
+						"noInteractiveElementToNoninteractiveRole": "error",
+						"noLabelWithoutControl": "error",
+						"noNoninteractiveElementInteractions": "error",
+						"noNoninteractiveElementToInteractiveRole": "error",
+						"noNoninteractiveTabindex": "error",
+						"noPositiveTabindex": "error",
+						"noRedundantAlt": "error",
+						"noRedundantRoles": "error",
+						"noStaticElementInteractions": "error",
+						"useAltText": "error",
+						"useAnchorContent": "error",
+						"useAriaActivedescendantWithTabindex": "error",
+						"useAriaPropsForRole": "error",
+						"useAriaPropsSupportedByRole": "error",
+						"useFocusableInteractive": "error",
+						"useHeadingContent": "error",
+						"useHtmlLang": "error",
+						"useIframeTitle": "error",
+						"useKeyWithClickEvents": "error",
+						"useKeyWithMouseEvents": "error",
+						"useMediaCaption": "error",
+						"useSemanticElements": "off",
+						"useValidAnchor": "error",
+						"useValidAriaProps": "error",
+						"useValidAriaRole": {
+							"level": "error",
+							"options": {
+								"ignoreNonDom": false
+							}
+						},
+						"useValidAriaValues": "error",
+						"useValidAutocomplete": "error",
+						"useValidLang": "error"
+					},
+					"style": {
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"javascript": {
+				"globals": []
+			},
+			"linter": {
+				"rules": {
+					"correctness": {
+						"useExhaustiveDependencies": "error",
+						"useHookAtTopLevel": "error"
+					},
+					"style": {
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"useSelfClosingElements": "off",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noConstAssign": "off",
+						"noGlobalObjectCalls": "off",
+						"noInvalidConstructorSuper": "off",
+						"noSetterReturn": "off",
+						"noUndeclaredVariables": "off",
+						"noUnreachable": "off",
+						"noUnreachableSuper": "off",
+						"useValidTypeof": "off"
+					},
+					"suspicious": {
+						"noClassAssign": "off",
+						"noDuplicateClassMembers": "off",
+						"noDuplicateObjectKeys": "off",
+						"noDuplicateParameters": "off",
+						"noFunctionAssign": "off",
+						"noImportAssign": "off",
+						"noRedeclare": "off",
+						"noUnsafeNegation": "off",
+						"noWith": "off",
+						"useGetterReturn": "off",
+						"noExplicitAny": "error"
+					},
+					"style": {
+						"useImportType": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
+			"javascript": {
+				"globals": []
+			},
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noBannedTypes": "error",
+						"noStaticOnlyClass": "off",
+						"noUselessConstructor": "error",
+						"noUselessEmptyExport": "off",
+						"noUselessThisAlias": "error",
+						"noUselessTypeConstraint": "error",
+						"useLiteralKeys": "off",
+						"useOptionalChain": "error"
+					},
+					"correctness": {
+						"noInvalidUseBeforeDeclaration": "error",
+						"noUnusedPrivateClassMembers": "off",
+						"noUnusedVariables": "error"
+					},
+					"style": {
+						"noCommonJs": "error",
+						"noInferrableTypes": "error",
+						"noMagicNumbers": "off",
+						"noNamespace": "error",
+						"noNonNullAssertion": "off",
+						"noParameterProperties": "off",
+						"noRestrictedImports": "off",
+						"noRestrictedTypes": "off",
+						"useArrayLiterals": "error",
+						"useAsConstAssertion": "error",
+						"useConsistentArrayType": {
+							"level": "error",
+							"options": {
+								"syntax": "shorthand"
+							}
+						},
+						"useConsistentMemberAccessibility": "off",
+						"useConsistentTypeDefinitions": "error",
+						"useDefaultParameterLast": "error",
+						"useEnumInitializers": "off",
+						"useExportType": "off",
+						"useForOf": "off",
+						"useImportType": "error",
+						"useLiteralEnumMembers": "off",
+						"useNamingConvention": {
+							"level": "error",
+							"options": {
+								"strictCase": false,
+								"requireAscii": false,
+								"conventions": [
+									{
+										"selector": {
+											"kind": "function"
+										},
+										"formats": [
+											"camelCase",
+											"PascalCase"
+										]
+									},
+									{
+										"selector": {
+											"kind": "variable"
+										},
+										"formats": [
+											"camelCase",
+											"PascalCase",
+											"CONSTANT_CASE"
+										]
+									},
+									{
+										"selector": {
+											"kind": "typeLike"
+										},
+										"formats": [
+											"PascalCase"
+										]
+									},
+									{
+										"selector": {
+											"kind": "objectLiteralProperty"
+										},
+										"formats": [
+											"camelCase",
+											"snake_case",
+											"PascalCase"
+										]
+									}
+								]
+							}
+						},
+						"useReadonlyClassProperties": "off",
+						"useShorthandFunctionType": "error",
+						"useThrowOnlyError": "error",
+						"useUnifiedTypeSignatures": "off"
+					},
+					"suspicious": {
+						"noConfusingVoidType": "off",
+						"noDuplicateClassMembers": "off",
+						"noEmptyBlockStatements": "error",
+						"noExplicitAny": "error",
+						"noExtraNonNullAssertion": "error",
+						"noMisleadingInstantiator": "error",
+						"noNonNullAssertedOptionalChain": "off",
+						"noRedeclare": "off",
+						"noTsIgnore": "off",
+						"noUnsafeDeclarationMerging": "error",
+						"useAdjacentOverloadSignatures": "off",
+						"useAwait": "off",
+						"useNamespaceKeyword": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx"
+			],
+			"javascript": {
+				"globals": []
+			},
+			"linter": {
+				"rules": {
+					"complexity": {
+						"useLiteralKeys": "off",
+						"useOptionalChain": "error"
+					},
+					"style": {
+						"useExportType": "off",
+						"useNamingConvention": {
+							"level": "off",
+							"options": {
+								"strictCase": false,
+								"requireAscii": false
+							}
+						},
+						"useReadonlyClassProperties": "off",
+						"useThrowOnlyError": "off"
+					},
+					"suspicious": {
+						"useAwait": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/**/use*.{ts,tsx,js,jsx}"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"useFilenamingConvention": {
+							"level": "error",
+							"options": {
+								"filenameCases": [
+									"camelCase"
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/**/routeTree.gen.ts",
+				"src/**/i18n.ts",
+				"src/**/routes/**",
+				"tests/**"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"useFilenamingConvention": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"vite.config.*",
+				"vitest.config.*",
+				"eslint.config.*",
+				"vite-plugins/**"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"useFilenamingConvention": "off",
+						"useNamingConvention": "off"
+					}
+				}
+			}
+		}
+	],
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": {
+					"level": "on",
+					"options": {
+						"groups": [
+							":PACKAGE:",
+							":BLANK_LINE:",
+							":ALIAS:",
+							":BLANK_LINE:",
+							":PATH:"
+						]
+					}
+				}
+			}
+		}
+	}
+}

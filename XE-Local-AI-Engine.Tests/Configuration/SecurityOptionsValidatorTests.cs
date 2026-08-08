@@ -12,7 +12,7 @@ public sealed class SecurityOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(null, CreateValidOptions());
+        var result = _validator.Validate(name: null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -24,7 +24,7 @@ public sealed class SecurityOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxSystemPromptSizeKb = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxSystemPromptSizeKb");
     }
@@ -35,7 +35,7 @@ public sealed class SecurityOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxMessageSizeKb = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxMessageSizeKb");
     }

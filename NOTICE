@@ -1,0 +1,72 @@
+XE Local AI Engine
+Copyright 2026 w0rldx
+
+Licensed under the Apache License, Version 2.0 (see LICENSE). This file records
+the principal third-party material used by the product and points to the
+machine-generated inventories and exact license corpus shipped with each
+official binary. Those release artifacts, rather than this summary, define the
+components detected in a particular build.
+
+1. Shipped component evidence and license corpus
+
+   The application's About dialog uses the broad transitive dependency list in
+   XE-Local-AI-Engine.Client.React/src/features/about/data/third-party-licenses.generated.json
+   for convenient disclosure. It is generated and drift-gated, but it is not
+   the authoritative inventory of a particular binary.
+
+   Official release payloads instead carry build-derived component evidence,
+   exact license and notice files, and a per-platform SPDX document. The final
+   GitHub release also carries detached SPDX, manifest, and checksum metadata
+   generated from the verified draft assets. Release verification reconciles
+   detected shipped components with the curated license decisions in both
+   directions and fails on missing, unknown, or stale entries.
+
+2. Platform-specific .NET components
+
+   The Linux AppImage is self-contained and carries the applicable Microsoft
+   .NET and ASP.NET Core MIT licenses and ThirdPartyNotices under
+   `licenses/dotnet/`. The Windows Portable ZIP is framework-dependent: it does
+   not redistribute the .NET runtime. Its C# launcher uses Microsoft's Windows
+   apphost, licensed under MIT, and carries the exact host-pack license and
+   ThirdPartyNotices under the same directory. The installed ASP.NET Core/.NET
+   runtime remains the user's separately installed system component.
+
+3. Inference runtimes obtained on the user's machine
+
+   These are not shipped inside the product's artifacts. The application
+   downloads a prebuilt binary, or builds from pinned upstream source, at
+   runtime; each remains under its own upstream license.
+
+   - llama.cpp — MIT — https://github.com/ggml-org/llama.cpp
+     Supervised as `llama-server`; the default local chat runtime.
+   - stable-diffusion.cpp — MIT — https://github.com/leejet/stable-diffusion.cpp
+     Supervised as `sd-server` for local image generation.
+
+4. Vendored agent persona templates
+
+   The seeded agent definitions derive from `msitarzewski/agency-agents`
+   (MIT, Copyright (c) 2025 AgentLand Contributors). The upstream license copy,
+   the raw vendored sources, and the pinned commit are kept under
+   XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/ — see
+   LICENSE-agency-agents and PROVENANCE.md in that folder.
+
+5. Model weights
+
+   Model weights (for example GGUF files fetched from Hugging Face) are not
+   distributed with the product. They are downloaded by the user, from the
+   publisher the user selects, and are governed by whatever license or usage
+   terms that publisher attaches to them. Neither LICENSE nor this NOTICE grants
+   any right in them.
+
+6. Weak-copyleft shipped component — UTF.Unknown (MPL-1.1)
+
+   The application bundles UTF.Unknown, a managed charset-detection library, as
+   a DLL inside the artifacts. Its selected license basis is MPL-1.1. The
+   library is redistributed unmodified; the corresponding source is available
+   at the exact pinned upstream commit, satisfying the MPL-1.1 source-
+   availability obligation.
+
+   - UTF.Unknown 2.6.0 — MPL-1.1 — https://github.com/CharsetDetector/UTF-unknown
+     Source at tag v2.6 = commit 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.
+     License: https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt
+     See docs/compliance/utf-unknown-mpl-source-availability.md.

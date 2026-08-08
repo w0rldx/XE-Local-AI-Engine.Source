@@ -174,9 +174,15 @@ csharp_style_prefer_local_over_anonymous_function = true:suggestion
 csharp_style_implicit_object_creation_when_type_is_apparent = false
 csharp_style_prefer_tuple_swap = true:suggestion
 csharp_style_prefer_utf8_string_literals = true:suggestion
+# Application-specific exception types are not a public reusable framework and intentionally expose only the
+# constructors their call sites use; DI/reflection-created implementation types are not visible to CA1812.
 dotnet_diagnostic.CA1032.severity = none
 dotnet_diagnostic.CA1812.severity = none
+# Catch blocks sometimes translate or aggregate failures for a caller that owns the final log entry; requiring every
+# catch to log the exception would duplicate operator-visible errors.
 dotnet_diagnostic.S6667.severity = none
+# Rider Code Cleanup reorders type members and splits overloads apart; let the layout win instead of fighting S4136 every build.
+dotnet_diagnostic.S4136.severity = none
 
 # ReSharper properties
 resharper_enforce_line_ending_style = true
@@ -185,6 +191,13 @@ resharper_formatter_on_tag = @formatter:on
 resharper_formatter_tags_enabled = true
 
 # ReSharper inspection severities
+# DTOs/options/payloads are populated by reflection (System.Text.Json, SignalR, model/config binding), which the
+# analyzer can't see, so it wrongly thinks the init accessor is unused. Disabling stops Cleanup from stripping
+# `init` and turning the property get-only, which breaks deserialization and the E2E tests that assert on it.
+resharper_auto_property_can_be_made_get_only_global_highlighting = none
+resharper_auto_property_can_be_made_get_only_local_highlighting = none
+resharper_unused_auto_property_accessor_global_highlighting = none
+resharper_unused_auto_property_accessor_local_highlighting = none
 resharper_arrange_redundant_parentheses_highlighting = hint
 resharper_arrange_this_qualifier_highlighting = hint
 resharper_arrange_type_member_modifiers_highlighting = hint
@@ -244,6 +257,10 @@ resharper_wrap_property_pattern = wrap_if_long
 resharper_place_expr_method_on_single_line = false
 resharper_wrap_array_initializer_style = chop_always
 resharper_wrap_list_pattern = chop_always
+resharper_csharp_arguments_skip_single = true
+resharper_csharp_arguments_literal = named
+resharper_csharp_arguments_string_literal = positional
+resharper_arguments_style_literal_highlighting = warning
 
 # Naming rules
 dotnet_naming_rule.types_and_namespaces_should_be_pascalcase.severity = suggestion
@@ -430,9 +447,32 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator =
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
-dotnet_style_namespace_match_folder = true:suggestion
+# A type's namespace must match its folder path — prevents files drifting into the wrong folder.
+# The pre-existing backlog has been cleared, so this is enforced as an error (no carve-out remains
+# in Directory.Build.props): a file whose namespace drifts from its folder breaks the build.
+dotnet_style_namespace_match_folder = true
+dotnet_diagnostic.IDE0130.severity = error
 
-# SonarLint Rules Override
+# Parameter names in overrides/interfaces should match.
+# Important when callers use named arguments.
+dotnet_diagnostic.CA1725.severity = warning
+
+# Correct ArgumentException / ArgumentNullException parameter names.
+dotnet_diagnostic.CA2208.severity = warning
+
+# Unused parameters.
+dotnet_diagnostic.IDE0060.severity = warning
+
+dotnet_naming_style.camel_case.capitalization = camel_case
+
+dotnet_naming_rule.parameters_should_be_camel_case.symbols = parameters
+dotnet_naming_rule.parameters_should_be_camel_case.style = camel_case
+dotnet_naming_rule.parameters_should_be_camel_case.severity = warning
+
+# Application-wide analyzer calibration. These disabled CA/Sonar rules are library-design prescriptions, duplicate
+# another enforced project rule, or produce reflection/DI/serializer false positives in this application. Code-specific
+# exceptions (ownership transfer, fixed SQL, experimental SDKs) stay locally scoped and justified instead of being added
+# to this list. Re-enable entries only as a separate rule-by-rule cleanup with the full solution build and tests.
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA2217.severity = none
 dotnet_diagnostic.CA1724.severity = none
@@ -466,7 +506,41 @@ dotnet_diagnostic.S2068.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
 dotnet_diagnostic.S4487.severity = suggestion
 
+# Meziantou.Analyzer (MA####) calibration.
+# All Meziantou rules NOT listed here keep their default severity (warning) and are promoted to
+# build errors by TreatWarningsAsErrors — i.e. correctness/security/quality rules (e.g. MA0009 regex
+# ReDoS, MA0002 StringComparer, MA0015, MA0158, MA0144, MA0023, MA0099, MA0132, MA0008) are ENFORCED.
+# The rules below are deliberately turned off because they are stylistic or duplicate an existing,
+# already-made repo decision — NOT to make the build pass:
+# MA0048: file name must match type name — repo intentionally groups related contracts/DTOs per file.
+dotnet_diagnostic.MA0048.severity = none
+# MA0051: method too long — already governed by SonarAnalyzer S138 and the repo <100-line standard.
+dotnet_diagnostic.MA0051.severity = none
+# MA0006: string.Equals vs ==/!= — == / != on strings is idiomatic C#; ordinal intent is covered by MA0002.
+dotnet_diagnostic.MA0006.severity = none
+# MA0004: ConfigureAwait(false) — consistent with the existing CA2007=none decision above. This is an
+#         application (ASP.NET Core + Avalonia desktop), not a published library.
+dotnet_diagnostic.MA0004.severity = none
+# MA0016: prefer collection abstraction over implementation — consistent with the existing CA1002=none.
+dotnet_diagnostic.MA0016.severity = none
+# MA0011: IFormatProvider on TryParse — consistent with the existing CA1305=none decision above.
+dotnet_diagnostic.MA0011.severity = none
+
 # Ignore paths
 [**/Migrations/*.cs]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
+
+# ---------------------------------------------------------------------------
+# Endpoint DTO folders: files are organized into a Dtos/ subfolder for
+# navigability, but their namespace is deliberately kept flat (the parent
+# Endpoints/{Area}/V1 namespace). Reason: FastEndpoints/NSwag derives OpenAPI
+# schema IDs from the full type namespace (e.g. XE_..EndpointsSkillsV1SkillResponse).
+# Nesting a `.Dtos` segment would rename ~361 schema keys and churn the entire
+# generated hey-api client with zero behavioural gain. Flat namespaces keep the
+# contract stable, so IDE0130 (namespace-must-match-folder) is intentionally
+# disabled for these folders only. Mappers/ and Validators/ are NOT serialized
+# and keep folder-matching namespaces (IDE0130 stays enforced there).
+[**/Endpoints/**/V1/Dtos/*.cs]
+dotnet_style_namespace_match_folder = false
+dotnet_diagnostic.IDE0130.severity = none

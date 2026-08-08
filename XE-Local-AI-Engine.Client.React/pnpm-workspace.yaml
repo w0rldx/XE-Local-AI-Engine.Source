@@ -1,0 +1,46 @@
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+
+# Force the transitive nanoid (via rrweb > postcss) off the <3.3.17 line that carries
+# GHSA-2v37-7h3g-55p8 (zero-size custom generators loop). 3.3.17 is a compatible patch.
+overrides:
+  'nanoid@<3.3.17': '^3.3.17'
+
+allowBuilds:
+  msgpackr-extract: true
+
+trustPolicyExclude:
+  - 'semver@6.3.1'
+
+minimumReleaseAgeExclude:
+  # Security patch for GHSA-2v37-7h3g-55p8; wanted fresh, so exempt from the 7-day maturity hold.
+  - 'nanoid@3.3.17'
+  - '@xyflow/react@12.11.0'
+  - '@xyflow/system@0.0.77'
+  - '@mantine/colors-generator@9.3.0'
+  - '@mantine/core@9.3.0'
+  - '@mantine/hooks@9.3.0'
+  - '@mantine/notifications@9.3.0'
+  - '@mantine/store@9.3.0'
+  - '@tanstack/form-core@1.32.1'
+  - '@tanstack/form-devtools@0.2.28'
+  - '@tanstack/query-core@5.100.14'
+  - '@tanstack/query-devtools@5.100.14'
+  - '@tanstack/react-form-devtools@0.2.28'
+  - '@tanstack/react-form@1.32.1'
+  - '@tanstack/react-query-devtools@5.100.14'
+  - '@tanstack/react-query@5.100.14'
+  - '@tanstack/router-core@1.171.6'
+  - '@tanstack/router-generator@1.167.10'
+  - '@tanstack/router-plugin@1.168.11'
+  - '@tanstack/router-utils@1.162.1'
+  - '@vitest/coverage-v8@4.1.7'
+  - '@vitest/expect@4.1.7'
+  - '@vitest/mocker@4.1.7'
+  - '@vitest/pretty-format@4.1.7'
+  - '@vitest/runner@4.1.7'
+  - '@vitest/snapshot@4.1.7'
+  - '@vitest/spy@4.1.7'
+  - '@vitest/ui@4.1.7'
+  - '@vitest/utils@4.1.7'
+  - vitest@4.1.7

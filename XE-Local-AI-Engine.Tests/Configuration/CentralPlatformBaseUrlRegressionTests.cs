@@ -37,7 +37,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
         var options = CreateValidOptions();
         options.BaseUrl = "central-platform/api";
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "BaseUrl");
     }
@@ -48,7 +48,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
         var options = CreateValidOptions();
         options.HubPath = "hub/worker";
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "HubPath");
     }
@@ -59,7 +59,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
         var options = CreateValidOptions();
         options.HubPath = "https://evil.example.com/hub/worker";
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "HubPath");
     }
@@ -70,7 +70,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
         var options = CreateValidOptions();
         options.HubPath = "//evil.example.com/hub/worker";
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "HubPath");
     }
@@ -81,7 +81,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
         AssertEx.True(File.Exists(path), $"Expected Client app settings at '{path}'.");
 
         var configuration = new ConfigurationBuilder()
-                            .AddJsonFile(path, false)
+                            .AddJsonFile(path, optional: false)
                             .Build();
 
         var options = new CentralPlatformOptions
@@ -96,22 +96,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
 
     private static string GetClientAppSettingsPath(string appSettingsFileName)
     {
-        return Path.Combine(GetRepositoryRoot(),
-            "Apps",
-            "XE-Local-AI-Engine",
-            "XE-Local-AI-Engine.Client",
-            appSettingsFileName);
-    }
-
-    private static string GetRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "C0re.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("Unable to locate repository root.");
+        return RepositoryPaths.ClientProject(appSettingsFileName);
     }
 
     private static CentralPlatformOptions CreateValidOptions()

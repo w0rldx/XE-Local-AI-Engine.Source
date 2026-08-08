@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -51,7 +52,7 @@ public sealed class RuntimePackageValidatorTests
     public void Validate_WhenSystemPromptExceedsLimit_ReturnsError()
     {
         var package = RuntimePackageBuilder.Valid()
-                                           .WithSystemPrompt(new string('a', 1025))
+                                           .WithSystemPrompt(new string(c: 'a', count: 1025))
                                            .Build();
 
         var result = _validator.Validate(package);
@@ -110,7 +111,29 @@ public sealed class RuntimePackageValidatorTests
     [Test]
     public void Validate_WhenMessageExceedsLimit_ReturnsError()
     {
-        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string('b', 1025)).Build());
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string(c: 'b', count: 1025)).Build());
+
+        AssertErrorContains(result, "conversation message");
+    }
+
+    [Test]
+    public void Validate_WhenMessageExceedsLimit_AndTheSizeCapIsNotEnforced_ReturnsValid()
+    {
+        // The per-turn re-validation path. An over-cap message here is a message the node already stored, so failing the
+        // package would fail every remaining turn of that conversation — the poisoning this carve-out removes. The
+        // context budgeter trims oversized history downstream.
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string(c: 'b', count: 1025)).Build(),
+            enforceMessageSizeCap: false);
+
+        AssertEx.True(result.IsValid);
+        AssertEx.Empty(result.Errors);
+    }
+
+    [Test]
+    public void Validate_WhenMessageContainsNullByte_AndTheSizeCapIsNotEnforced_StillReturnsError()
+    {
+        // The carve-out is scoped to the SIZE cap only: a null byte is an integrity fault whoever produced it.
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage("abc\0def").Build(), enforceMessageSizeCap: false);
 
         AssertErrorContains(result, "conversation message");
     }
@@ -219,6 +242,36 @@ public sealed class RuntimePackageValidatorTests
 
         AssertEx.False(result.IsValid);
         AssertEx.True(result.Errors.Count >= 5);
+    }
+
+    [Test]
+    [Arguments("on")]
+    [Arguments("On")]
+    [Arguments("ON")]
+    public void Validate_WhenReasoningEffortIsBinaryOn_ReturnsValid(string reasoningEffort)
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ReasoningEffort = reasoningEffort
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertEx.True(result.IsValid);
+        AssertEx.False(result.Errors.Any(error => error.Contains("reasoning effort", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Test]
+    public void Validate_WhenReasoningEffortIsInvalid_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ReasoningEffort = "bogus"
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "reasoning effort");
     }
 
     private static void AssertErrorContains(RuntimePackageValidationResult result, string expectedText)

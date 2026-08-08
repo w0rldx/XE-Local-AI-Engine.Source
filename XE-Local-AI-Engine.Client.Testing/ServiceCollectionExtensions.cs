@@ -4,6 +4,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Represents service collection extensions.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddHubMessageRecording(this IServiceCollection services, IConfiguration configuration)

@@ -1,0 +1,322 @@
+# Hosting, AppHost & Deployment
+
+> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+
+This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
+
+There are **two distinct ways the node runs**:
+
+| Mode | Entry point | Used for | HTTP/HTTPS | DB + secrets source |
+|------|-------------|----------|------------|---------------------|
+| **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via the worktree-scoped `scripts/dev-*.sh` helpers | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
+| **Packaged desktop** | Linux self-contained AppImage or Windows framework-dependent C# launcher + client DLL | Shipped portable app a user double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
+
+The two paths are deliberately kept **byte-behaviour-identical when the desktop flag is off** — every desktop branch in `Program.cs` is gated and skipped in Aspire/CI/headless runs.
+
+---
+
+## 1. Aspire AppHost (dev/integration)
+
+`XE-Local-AI-Engine.AppHost/AppHost.cs` is a thin Aspire orchestration host (`IsAspireHost=true`). The AppHost SDK is 13.4.6. It references only the `Client` project and four hosting packages: `Aspire.Hosting.AppHost` 13.4.6, `Aspire.Hosting.JavaScript` 13.4.6, `Aspire.Hosting.Browsers` 13.4.6-preview.1.26319.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0.
+
+From the repository root, use the worktree-scoped lifecycle wrappers:
+
+```bash
+scripts/dev-start.sh
+scripts/dev-status.sh
+scripts/dev-stop.sh
+```
+
+Start always uses Aspire isolated mode, so parallel worktrees receive randomized ports and isolated
+user secrets. Status output is an allowlisted projection: resource state/health and query-free URLs,
+not raw environment/properties or dashboard login tokens. Stop is AppHost-qualified and contains a
+bounded Aspire 13.4 snapshot fallback. It anchors the DCP sibling by its exact
+`--monitor <AppHost PID>` token pair, follows the complete descendant closure regardless of process
+name, and revalidates each PID's kernel start time before signalling. Unrelated processes are
+untouched and do not invalidate successful teardown of the selected graph; Aspire
+query/malformed-JSON failures remain nonzero rather than being treated as stopped. For a live
+integration probe, `scripts/aspire-readiness-smoke.sh` starts a fresh instance, uses `aspire wait app`
+for readiness, and traps cleanup through that scoped stop path.
+
+What it wires (`AppHost.cs`):
+
+- **`node-sqlite-key`** — an Aspire parameter marked sensitive (`builder.AddParameter("node-sqlite-key", secret: true)`). **No value is tracked.** The AppHost's `appsettings.Development.json` used to commit one shared development-only default, which meant anyone with the source could derive keys for data created under it; that default was removed. Seeding is now the dev scripts' job: `dev_ensure_node_operator_secret` (`scripts/dev-aspire-common.sh`) mints a per-checkout base64 32-byte secret at `XE-Local-AI-Engine.AppHost/.data/node.key` (owner-only, `.gitignore`d) on first use and reuses it afterwards, and `scripts/dev-start.sh` hands it to Aspire as the environment variable `Parameters__node-sqlite-key` — the env form of the `Parameters:node-sqlite-key` configuration key Aspire resolves the parameter from. `--non-interactive` rules out a prompt and `--isolated` rules out the normal user-secrets store, so configuration is the only route. The value never reaches a command line, only process environments. A developer starting the AppHost some other way (IDE F5, bare `aspire run`) is prompted for the parameter instead, or can set it with `dotnet user-secrets set "Parameters:node-sqlite-key" <base64-32-byte> --project XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj`.
+- **`node-sqlite`** — a SQLite resource (`builder.AddSqlite(...)`) backed by a file under `.data/node-sqlite/node-chat.db`. In Development it also enables `WithSqliteWeb()` (a browser DB inspector).
+- **`app`** — the node web server (`AddProject<XE_Local_AI_Engine_Client>("app", "https")`) with external HTTP endpoints, `ASPIRE_ENABLED=true`, `ASPNETCORE_ENVIRONMENT=Development`, the SQLite key piped in as `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*` issuer/audience, a `WithReference`/`WaitFor` dependency on the SQLite resource, and two health checks (`/health/live`, `/health/ready`). Extra development URLs are surfaced for `/scalar` and `/openapi/local/v1/v1.json`.
+- **`client-react`** — the Vite dev server (`AddViteApp(...)` with `WithPnpm()`), HTTPS endpoint on port **5175**, proxying to the `app` HTTPS endpoint via `VITE_PROXY_TARGET`, `WaitFor(app)`, and isolated Chromium browser logs.
+
+> **No HostAgent, and no Docker resource in the AppHost.** The old in-Aspire `HostAgent.Linux` (Docker) sandbox/runtime resource and the HostAgent gRPC client are **gone** — the AppHost contains an explicit comment to that effect. Inference and the AgentHome sandbox run as **host processes** now (see [Local Runtime & Providers](03-local-runtime-and-providers.md)). The **Ollama** provider still exists in the codebase but was **de-orchestrated** from the AppHost — `llama.cpp` is the dev runtime and there is no Ollama resource in `AppHost.cs`.
+>
+> [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) does **not** change this list: it permits Docker for **Development Mode build/test/lint execution only**, where the engine talks to the daemon itself at runtime. Aspire orchestrates no container, and reintroducing a Docker-backed AppHost resource is still out of scope. What it does add is a **packaging and quality-gate requirement** — the release machine needs a daemon, because Development Mode's real-daemon integration tests must run, and *daemon unavailable* is reported as blocked or skipped-with-reason, never as a pass.
+
+---
+
+## 2. ServiceDefaults
+
+`XE-Local-AI-Engine.ServiceDefaults/Extensions.cs` provides the `AddServiceDefaults()` / `ConfigureOpenTelemetry()` extension over `IHostApplicationBuilder`. The key seam:
+
+```csharp
+builder.ConfigureOpenTelemetry();
+var aspireEnabled = string.Equals(builder.Configuration["ASPIRE_ENABLED"], "true", ...);
+if (aspireEnabled) { /* service discovery + resilience/discovery HTTP defaults */ }
+```
+
+OpenTelemetry logging, metrics, and tracing instrumentation is registered in **every** hosting mode. An
+OTLP exporter is attached only when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured; Aspire normally
+injects that endpoint, while a default desktop/headless run records in-process without an exporter.
+Only service discovery and the standard resilience/discovery HTTP defaults remain gated on
+`ASPIRE_ENABLED=true` (which the AppHost sets). Tracing sources include
+`XE.LocalAiEngine.AI.Agent`, `Microsoft.Agents.AI*`, and `Microsoft.Extensions.AI*`; the metrics meter
+`XE.Node` is added by literal string because ServiceDefaults cannot reference the Client project.
+
+---
+
+## 3. The node host pipeline (`Program.cs`)
+
+`XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. Startup order matters:
+
+1. **Resolve desktop mode early** — `var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());`. If desktop, it (a) resolves the per-user data directory, (b) acquires the single-instance lease, (c) binds through `DesktopPortStore.ResolveBindUrl(...)` using the remembered loopback port or `127.0.0.1:0`, and (d) synthesizes config via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices` reads configuration.
+2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
+3. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
+4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 9 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
+5. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
+
+See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Privacy](12-security-and-privacy.md) for the loopback / `LocalApiSecurityMiddleware` invariants.
+
+### Background (hosted) services
+
+Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServices.cs`. These are the always-on workers inside the node process:
+
+| Service | Role |
+|---------|------|
+| `HeartbeatBackgroundService` | platform WorkerHub heartbeat |
+| `AutoConnectBackgroundService` | establishes/maintains the single WorkerHub connection |
+| `RetentionSweeperService`, `SchedulerHistoryRetentionService`, `AgentExecutionLogRetentionService` | data retention sweeps |
+| `SchedulerJobDetailReconciliationService` | reconcile Quartz scheduler job detail (see [Scheduler](06-scheduler.md)) |
+| `ModelRecommendationScheduleSeeder` | seeds the model-fit recommendation schedule (see [Model-Fit](07-model-fit.md)) |
+| `DefaultAgentSeeder`, `CoderAgentSeeder` | seed built-in agent definitions (see [Agent Mode](04-agent-mode.md)) |
+| `ToolCallCleanupService` | clears stale tool-call state |
+| `NodeChatContentEncryptionBackfillService` | one-shot backfill upgrading legacy plaintext message/metadata rows to the encrypted at-rest envelope |
+| `KnowledgeVectorNormalizationBackfillService` | one-shot backfill L2-normalizing legacy (pre-normalization) KB chunk vectors so cosine search can score with a plain dot product |
+| `NodeChatTitleEncryptionBackfillService`, `OllamaProviderMapBackfillService` | one-shot data backfills |
+| `FirstRunModelProvisioningService` | desktop first-run GGUF starter-model download |
+| `LlamaCppUpdateCheckService` | periodic llama.cpp runtime update check (see [Local Runtime & Providers](03-local-runtime-and-providers.md)) |
+
+---
+
+## 4. Configuration layering
+
+Configuration resolves through several layers (later wins where noted):
+
+1. **`appsettings.json` + `appsettings.Development.json`** (in `XE-Local-AI-Engine.Client/`) — static defaults shipped with the binary.
+2. **Environment / Aspire parameters** — e.g. `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*`, the node-sqlite connection string. In Aspire these come from `AppHost.cs`; the operator-secret parameter has the tracked shared development default described in §1 unless a developer supplies a confidential override.
+3. **Desktop in-memory overrides** (`DesktopBootstrap`, desktop mode only — added last so they intentionally win over `appsettings`, but only reached behind the desktop flag). See §5.
+4. **`node-settings.json`** — a **user-editable, cached** settings file (not env/appsettings). `NodeSettingsStore` (`Client.Application/Services/NodeSettings/Implementation/NodeSettingsStore.cs`) reads/writes `node-settings.json` under the node data directory, with both an async and a sync (startup/DI factory) load path, tolerant JSON deserialize, and a `SemaphoreSlim` write lock. The shape is `StoredNodeSettings`. This is the runtime-editable settings store that supersedes baking values only into `appsettings`.
+5. **`hf-token.enc`** — the optional Hugging Face access token, encrypted at rest. `HfTokenStore` (`Client.Application/Services/HuggingFace/HfTokenStore.cs`) uses an `IDataProtector` (`WorkerNode.HfTokenStore.v1`) to write `hf-token.enc` under the node data dir. The token is exposed **only** to the download client, **never** logged, never put in exceptions, never indexed — the same `IDataProtector` pattern as the cloud credential / worker token stores. See [Security & Privacy](12-security-and-privacy.md).
+
+All per-node runtime artifacts (settings, encrypted credential stores, cert pins, the AgentHome workspace, the hardware-profile cache, the GGUF model cache) live under the **node data directory** (`INodeDataDirectory`), which defaults to `ContentRootPath` but is redirected to a per-user data dir in desktop mode (§5). See [Data & Persistence](08-data-and-persistence.md).
+
+---
+
+## 5. Packaged desktop mode
+
+Desktop mode turns the node host into a double-click app. It is **opt-in** and resolved by `DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged())` from env `XE_LAUNCH_MODE=desktop`, CLI `--desktop`, or a **Velopack-managed portable install**. `FrameworkDependentVelopackBootstrap.Run(args)` establishes the locator. On Windows, it identifies the adjacent `XE-Local-AI-Engine.WindowsLauncher.exe` while the actual host runs through `dotnet.exe`; Linux uses Velopack's default AppImage locator. With none of those signals present, Aspire, CI, and headless behavior is unchanged.
+
+```
+ launcher/package selects desktop mode
+            │
+            ▼
+ Program.cs: isDesktop = true
+   ├─ Kestrel binds DesktopPortStore.ResolveBindUrl(dir)   (remembered port, else 127.0.0.1:0)
+   ├─ DesktopBootstrap.EnsureLocalDataConfiguration(config)
+   │     • NodeData:Directory   → %LOCALAPPDATA%/XE-Local-AI-Engine  (or $XDG_DATA_HOME)
+   │     • ConnectionStrings:node-sqlite → Data Source=<dir>/node.sqlite   (if absent)
+   │     • operator secret      → generated once, persisted to <dir>/node.key  (if absent)
+   │     • HuggingFace:ModelsDirectory → <dir>/models                  (if absent)
+   │     • Agent:LocalChat:DefaultModel → FirstRunModel repo:quant     (if configured)
+   │     (each key filled ONLY when not already supplied → env/Aspire always wins)
+   │
+   ├─ HTTPS redirect + HSTS bypassed  (loopback HTTP is safe)
+   │
+   └─ ActivateDesktopLifecycle(app)  (DesktopLifecycle)
+         ├─ on ApplicationStarted → resolve bound URL → open default browser
+         └─ console-close → graceful StopApplication() (→ llama-server child reaped)
+```
+
+**Text fallback:** desktop mode selects a per-user data directory, fills only absent local configuration,
+binds Kestrel to a remembered/free loopback port, skips HTTPS redirect/HSTS for that loopback HTTP
+listener, opens the browser after startup, and requests graceful application stop when its console
+closes. Real-desktop behavior still requires observation on the target OS; this flow description is
+not a retained smoke-test transcript.
+
+### Loopback auto-port + persisted port + browser open
+
+- The bind URL comes from `DesktopPortStore.ResolveBindUrl(dataDirectory)` (`Client/Hosting/DesktopPortStore.cs`, used at `Program.cs:58`), **not** a hard-coded `:0`. `DesktopPortStore` **remembers the last loopback port** in a `desktop-port.txt` file under the per-user data dir and re-binds it when it is still free; only when there is no remembered port (or it is taken/invalid) does it fall back to the dynamic `http://127.0.0.1:0`. This matters because a fresh OS-assigned port every launch changes the browser **origin** (scheme+host+port) and silently resets every `localStorage`-backed user preference between runs — pinning the port keeps preferences alive. The store writes via temp-file+move (no torn file), probes availability with a throwaway `TcpListener`, and is best-effort: any IO/parse failure resolves to a dynamic bind rather than throwing.
+- Kestrel still binds loopback only. The concrete URL is known **post-bind**, so `LoopbackUrlResolver.Resolve` (`Client/Hosting/LoopbackUrlResolver.cs`) reads `IServerAddressesFeature.Addresses`, prefers an explicit `127.0.0.1`/`localhost` address, and **rewrites any wildcard host (`0.0.0.0`/`::`) back to `127.0.0.1`** so the browser never targets a routable interface.
+- `DesktopLifecycle.OnApplicationStarted` resolves that URL and calls `BrowserLauncher.OpenBrowser` (`Client/Hosting/BrowserLauncher.cs`): `explorer <url>` on Windows, `xdg-open <url>` on Linux, **never via a shell** (`UseShellExecute = false`). Browser launch is strictly non-fatal — failure logs the URL and the server keeps serving.
+
+### Persistent per-user data + operator key
+
+`DesktopBootstrap` (`Client/Hosting/DesktopBootstrap.cs`) exists because a double-click launch supplies neither a DB connection string nor the operator secret. It targets `Environment.SpecialFolder.LocalApplicationData` (Windows `%LOCALAPPDATA%`, Linux `$XDG_DATA_HOME`/`~/.local/share`) so portable application replacement and Linux single-file extraction never relocate persistent data. The operator key is **generated once and persisted** to `node.key` (atomic temp-file write, `0600` on non-Windows); a torn/corrupt or wrong-length key **fails loudly** rather than regenerating (regenerating would brick the encrypted DB).
+
+### No-orphan shutdown (the load-bearing invariant)
+
+`DesktopLifecycle` (`Client/Hosting/DesktopLifecycle.cs`) fills the two OS gaps `ConsoleLifetime` doesn't cover, so a closed window drains gracefully and the singleton `LlamaServerProcessSupervisor` disposes & tree-kills its `llama-server` child (no orphan):
+
+- **Linux `SIGHUP`** (terminal close) → a `PosixSignalRegistration` with `context.Cancel = true` → `StopApplication()`.
+- **Windows `CTRL_CLOSE_EVENT` / logoff / shutdown** → a `SetConsoleCtrlHandler` callback (kept rooted so the GC can't reclaim the native delegate) that calls `StopApplication()` then **blocks up to ~4s** (`ConsoleCloseDrainBudget`, safely under Windows' ~5s force-kill window) for the drain.
+
+The **Windows Job Object is the source-defined hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.LlamaServer/WindowsJobObjectProcessHandle.cs`) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) is designed to terminate the whole process tree. This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it must be verified on real Windows 11; the WSL build cannot exercise it, and this baseline review does not include an operating transcript. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
+
+---
+
+## 6. Publish profiles, launchers & RC packaging
+
+### Publish profiles
+
+Publishing is deliberately platform-specific:
+
+| Payload | `SelfContained` | `PublishSingleFile` | `UseAppHost` | Contract |
+|---|---:|---:|---:|---|
+| Linux client | `true` | `true` | default | Self-contained AppImage payload; runtime/native libraries are bundled; no system .NET prerequisite |
+| Windows client | `false` | `false` | `false` | Managed DLL/deps/runtimeconfig and application dependencies only |
+| Windows C# launcher | `false` | `false` | `true` | MIT Microsoft apphost plus launcher DLL/deps/runtimeconfig; validates ASP.NET Core 10.0.10+ and starts the client DLL |
+
+The two Windows projects publish into the same payload directory before Velopack packs it. No Windows runtime pack,
+`coreclr.dll`, `hostfxr.dll`, or .NET Library License may appear. Trimming remains off for the reflection-heavy client.
+
+### Official Windows launcher and legacy scripts
+
+`XE-Local-AI-Engine.WindowsLauncher` is the official Windows entry point. Its apphost provides Microsoft's standard
+missing-.NET behavior; once running, the C# code validates architecture, required adjacent files, and the ASP.NET Core
+runtime floor, forwards all Velopack arguments to `dotnet XE-Local-AI-Engine.Client.dll`, sets desktop mode, waits, and
+propagates the child exit code. The main host wraps Velopack's process locator so an update waits for both the managed
+host and launcher to exit before replacing the current directory.
+
+For deprecated manually unzipped self-contained builds, the old scripts remain under `publish/`:
+
+- `publish/linux/run-xe-local-ai-engine.sh` — sets `XE_LAUNCH_MODE=desktop`, resolves its own dir (symlink-safe), and `exec`s the binary **in the foreground** so closing the terminal delivers `SIGHUP` to the process group → graceful teardown.
+- `publish/windows/run-xe-local-ai-engine.cmd` — sets `XE_LAUNCH_MODE=desktop` and runs the exe **in the current console window** (no `START`/`Start-Process`); a new/detached window would break the `CTRL_CLOSE_EVENT` → graceful-shutdown chain.
+
+Both scripts carry an explicit **single-instance caveat**: only one instance per user-data dir (the auto-port avoids a listener collision but not SQLite contention — a second instance can corrupt the DB).
+
+### RC bundle packaging
+
+`publish/package-tester-win.ps1` was the Windows tester RC path from `0.1.0-rc.4.0` through `0.1.0-rc.5.1` and is now
+**deprecated, reference-only** — the tag-triggered `.github/workflows/release.yml` is the canonical release path (§8).
+`publish/package-rc.sh` is likewise deprecated and reference-only. Their private tester-repository, GitHub App,
+manual-draft, and Linux-ZIP behavior describes superseded distribution and must not be applied to official releases.
+Both remain covered by `scripts/lint-release-scripts.sh`.
+
+Official release payloads include the Apache-2.0 license, third-party license disclosures, and a validated payload SPDX
+manifest. Detached checksum, release-manifest, and SPDX evidence is attached after remote draft-byte verification.
+
+### Changelog automation & release notes
+
+Release notes are generated from conventional-commit history rather than hand-written:
+
+- `cliff.toml` (repo root) configures **git-cliff** to render an auto-grouped changelog from the commits between the previous release tag and HEAD. The output is a `RELEASE_NOTES.md`, fed to **`vpk pack --releaseNotes <file>`** to embed the notes into the Velopack package; `vpk upload github` then publishes them as the GitHub release body.
+- **Two producers of `RELEASE_NOTES.md`, and they are not the same code path.** `scripts/generate-release-notes.sh` is the standalone/manual helper. `publish/package-tester-win.ps1` — the deprecated manual packaging path — **does not call that script**: it downloads a checksum-pinned git-cliff and invokes it directly. They also disagree on the empty-range case: the shell script falls back to writing a `## <version>` / "Maintenance release — no user-facing changelog entries." body (`scripts/generate-release-notes.sh:62-65`), while the packaging script **hard-throws** rather than shipping a release with no notes. Both share the one rule that matters: `--latest` when HEAD is already tagged, `--unreleased --tag` otherwise (a tagged HEAD makes `--unreleased` empty).
+- The repo-root `CHANGELOG.md` is **not** generated. git-cliff writes `RELEASE_NOTES.md` only; `CHANGELOG.md` is hand-maintained in Keep-a-Changelog form, which is why it drifts from the tags if nobody updates it at release time.
+- **Tags are standardised on a `v` prefix.** All six source tags carry it (`v0.1.0-rc.1.0` … `v0.1.0-rc.4.0`) — there are **no unprefixed tags in this repository**. Bare tags exist only on the **tester artifact repo** (`0.1.0-rc.4.1` and earlier; see §8), which is a different repository. `cliff.toml`'s `tag_pattern = "v?[0-9]*"` therefore accepts either spelling defensively, but it only ever parses *this* repo's tags: git-cliff runs against the local working tree, `origin` is the source repo, and no tester ref is ever fetched here. The range is driven by `--latest`/`--unreleased` rather than by the pattern alone. **The code that genuinely must handle both spellings is `package-tester-win.ps1`'s `Find-GitHubRelease`**, which queries the tester repo over the GitHub API — not git-cliff.
+- **`vpk pack` (1.2.0) has no `--pre` flag** — passing it fails with `'--pre' was not matched`. Prerelease state rides on the **SemVer suffix in `--packVersion`** (`0.1.0-rc.1.0` *is* a prerelease); the GitHub-release prerelease marker is set with `--pre` only on `vpk upload github` (`.github/workflows/release.yml:363-371`).
+
+### In-app self-update (Velopack)
+
+The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack updater to the public GitHub release
+feed with a null access token. Update checks are anonymous; no GitHub device flow or stored update token remains. The
+update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under
+`XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed configuration lives in
+`appsettings.AppUpdate.{main,tester}.json`, selected at publish time by `-p:UpdateChannel=tester|main` (default `main`).
+
+The two flavor files differ only in release-track visibility:
+
+| File | `GitHubRepositoryUrl` | `ReleaseTrack` | Status |
+|---|---|---|---|
+| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Rc` | live |
+| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Stable` | live |
+
+Both flavors point at the same public repository. `ReleaseTrack` controls stable-versus-RC visibility; Velopack's
+independent package metadata selects the `win` or `linux` OS feed. These URLs are public configuration, not secrets,
+and must not be replaced with placeholders. The manual packagers are deprecated, reference-only, and not release
+alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
+
+---
+
+## 7. Installers & uninstaller
+
+**OS-native installers (MSI / DEB / RPM) are deferred.** Official binaries are Velopack-managed portable applications:
+Windows `Portable.zip` produced with `--noInst` (no `Setup.exe`) and a Linux AppImage. Both self-update. Windows requires
+the separately installed x64 ASP.NET Core Runtime 10.0.10+; Linux bundles .NET. The application still self-provisions
+its llama.cpp binary and GGUF models into the per-user data directory.
+
+### Legacy manual-bundle cleanup scripts
+
+Two cleanup scripts remain for deprecated manual bundle layouts; they are **not** user-facing assets in the official
+Windows Portable ZIP or Linux AppImage:
+
+- `publish/windows/uninstall-xe-local-ai-engine.ps1` (packaged as `Uninstall-XE-Local-AI-Engine.ps1`) — PowerShell 5.1-compatible.
+- `publish/linux/uninstall-xe-local-ai-engine.sh` (packaged as `uninstall-xe-local-ai-engine.sh`) — plain POSIX `sh`.
+
+Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring `StaleLlamaServerReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. They then branch:
+
+- **Velopack-managed install detected** (a `current/` dir or `Update`/`Update.exe` helper at the data-dir root — on the default Windows layout the managed install root *is* the data dir): the script **does not delete** the tree. It delegates to Velopack (on Windows it can best-effort invoke `Update.exe --uninstall`; otherwise it points at the OS "Apps & features" uninstall) and stops. This is the safety valve that prevents brute-force-deleting a live managed install.
+- **Portable / manual install** (no Velopack tree present): after an **explicit confirmation** (typed `y`; `--yes`/`-Yes` skips it for automation), it deletes **only** the per-user data dir (`%LOCALAPPDATA%\XE-Local-AI-Engine` / `$XDG_DATA_HOME/XE-Local-AI-Engine`) — `node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, the downloaded `llama.cpp`/`stable-diffusion.cpp` binaries, `models/`, and the AgentHome workspace.
+
+Both refuse to run elevated/as-root (a per-user data dir would resolve to the wrong profile), support `--dry-run` and `--keep-data`, and never delete anything outside that exact directory. Portable-zip users delete the unzipped app folder by hand afterward.
+
+> **Do not resurrect the old HostAgent-era uninstaller.** A prior install-type-aware teardown existed but predates the runtime re-architecture — it referenced a WSL managed distro (`wsl --unregister xe-engine-runtime`), Docker containers/volumes/network, and `HostAgent.Windows`, **all removed** when Docker/HostAgent were torn down (see [Architecture Overview](01-architecture-overview.md)). The current scripts deliberately target **only** the per-user data dir + child runtimes. [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)'s Development-Mode Docker permission revives none of that — there is still no managed WSL distro, no `HostAgent.Windows`, and no engine-owned Docker network or volume set for the uninstaller to reason about. Whether teardown should also remove Development Mode's engine-created containers is a follow-up for that feature's own lifecycle work, not a reason to restore the old script.
+
+---
+
+## 8. Release channels, consolidation, and CI status
+
+### Distribution was split across two GitHub repositories — now consolidated
+
+| Role | Repository | What lives there |
+|---|---|---|
+| **Source** | `w0rldx/XE-Local-AI-Engine.Source` | the code, and the `v<version>` release tags |
+| **Tester artifacts (retired)** | `w0rldx/XE-Local-AI-Engine.Tester-App` | tester releases published under the historical manual flow, through `0.1.0-rc.5.1` |
+
+Historically these shared a version *string* but nothing else: the `v<version>` git tag was created on **HEAD of the
+source repo**, and `vpk upload github --tag` then created a same-named release on the **tester repo**, whose commits
+were unrelated. So a tester release's tag never appeared in this repo's `git tag -l`, and the source tag never
+appeared on the tester repo. That two-repo split is now retired — the tag-triggered `.github/workflows/release.yml`
+publishes both `win-x64` and `linux-x64` Velopack packages to **this repo's** GitHub Releases using the built-in
+`GITHUB_TOKEN`, so a CI-cut release has no separate tester-repo counterpart.
+
+**Tag-form convention changed mid-flight (historical).** The seven tester releases published 2026-06-26 → 2026-07-07 carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release *names*. The packaging script then started passing `--tag v<version>`, so releases from `0.1.0-rc.4.2` onward were v-prefixed on both sides. Source-repo tags were always v-prefixed; there are no bare tags here.
+
+### GitHub Actions and the release workflow
+
+`.github/workflows/release.yml` is the canonical tag-triggered release path. It validates the exact tagged commit,
+binds SemVer/tag/source identity, and gives matrix jobs build-only responsibility. The serialized
+`prepare-release-draft` job receives write access only after approval through the `open-source-release` environment;
+it creates the Velopack draft, merges the Windows and Linux channels, verifies the remote bytes, uploads detached
+SPDX/release-manifest/checksum evidence, and re-verifies the complete draft. A separately approved `publish-release`
+job re-downloads and verifies that same draft, then promotes it without rebuilding, repacking, re-uploading, or
+replacing any asset before anonymous public-feed verification. Windows packing is `--noInst`; Linux packing produces
+an AppImage. The workflow uses the built-in `GITHUB_TOKEN`, not a maintainer PAT.
+
+The manual packagers are now deprecated, reference-only material: `publish/package-tester-win.ps1` was the RC path
+from `0.1.0-rc.4.0` through `0.1.0-rc.5.1`, run by hand on Windows against the tester repo; `publish/package-rc.sh`
+remains a historical manual portable-zip helper. Both still carry static analysis via `scripts/lint-release-scripts.sh`. See
+[Testing & Validation](13-testing-and-validation.md) for where the quality gates run, and
+[`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md) for the full release story.
+
+The presence and content of these workflow and scripts files is repository design evidence, not evidence that a
+particular release ran them successfully. A release claim needs the matching retained transcript, hashes, tag,
+and target-OS smoke evidence; this page does not assert those artifacts are available.
+
+---
+
+## Related pages
+
+- [Architecture Overview](01-architecture-overview.md) — where hosting sits in the whole node
+- [Project Layout](02-project-layout.md) — the 20 solution projects, including AppHost and ServiceDefaults
+- [Local Runtime & Providers](03-local-runtime-and-providers.md) — llama.cpp supervisor, process reaping, the Job Object's counterpart
+- [Data & Persistence](08-data-and-persistence.md) — node data directory, SQLite, selected per-column encryption, EF migrations
+- [API & Hubs](09-api-and-hubs.md) — endpoints, SignalR hubs, OpenAPI/Scalar
+- [React Client](10-react-client.md) — the SPA served from `wwwroot`
+- [Security & Privacy](12-security-and-privacy.md) — loopback-only, `LocalApiSecurityMiddleware`, secret stores
+- [Scheduler](06-scheduler.md), [Model-Fit](07-model-fit.md), [Agent Mode](04-agent-mode.md) — features driven by the background hosted services

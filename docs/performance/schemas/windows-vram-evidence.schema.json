@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xe-local-ai-engine.local/schemas/windows-vram-evidence.schema.json",
+  "title": "Native-Windows global/process-visible VRAM evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "scenario", "workload_label", "started_at_utc", "completed_at_utc", "interval_seconds", "host", "llama_server", "interpretation", "samples"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "kind": { "const": "windows-vram-evidence" },
+    "scenario": { "enum": ["idle", "game", "custom"] },
+    "workload_label": { "type": "string" },
+    "started_at_utc": { "type": "string", "format": "date-time" },
+    "completed_at_utc": { "type": "string", "format": "date-time" },
+    "interval_seconds": { "type": "integer", "minimum": 1 },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "processor"],
+      "properties": {
+        "os": { "type": "string" },
+        "processor": { "type": "string" }
+      }
+    },
+    "llama_server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_name", "sha256"],
+      "properties": {
+        "file_name": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["global_reader", "process_budget_reader", "divergence_rule"],
+      "properties": {
+        "global_reader": { "type": "string" },
+        "process_budget_reader": { "type": "string" },
+        "divergence_rule": { "type": "string" }
+      }
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["captured_at_utc", "global_vram", "process_budget_probe", "compute_apps"],
+        "properties": {
+          "captured_at_utc": { "type": "string", "format": "date-time" },
+          "global_vram": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["index", "name", "driver_version", "total_mib", "free_mib", "used_mib", "utilization_percent"],
+              "properties": {
+                "index": { "type": "integer", "minimum": 0 },
+                "name": { "type": "string" },
+                "driver_version": { "type": "string" },
+                "total_mib": { "type": "integer", "minimum": 0 },
+                "free_mib": { "type": "integer", "minimum": 0 },
+                "used_mib": { "type": "integer", "minimum": 0 },
+                "utilization_percent": { "type": "integer", "minimum": 0, "maximum": 100 }
+              }
+            }
+          },
+          "process_budget_probe": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["argv", "exit_code", "timed_out", "raw_output"],
+            "properties": {
+              "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+              "exit_code": { "type": "integer" },
+              "timed_out": { "type": "boolean" },
+              "raw_output": { "type": "string" }
+            }
+          },
+          "compute_apps": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["exit_code", "timed_out", "raw_output"],
+            "properties": {
+              "exit_code": { "type": "integer" },
+              "timed_out": { "type": "boolean" },
+              "raw_output": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

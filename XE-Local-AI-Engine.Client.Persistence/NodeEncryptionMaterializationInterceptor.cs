@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Represents node encryption materialization interceptor.
+/// </summary>
 public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationInterceptor
 {
     public object InitializedInstance(MaterializationInterceptionData materializationData, object entity)
@@ -15,13 +18,119 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
 
         switch (entity)
         {
+            case NodeConversation conversation:
+                conversation.Title = DecryptIfPresent(conversation.Title, context.NodeEncryptionKey.Span, conversation.ConversationId, conversation.ConversationId, "title");
+                break;
             case NodeMessage message:
-                message.Content = NodePayloadProtector.Decrypt(message.Content, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "content");
-                message.MetadataJson = DecryptIfPresent(message.MetadataJson, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "metadata_json");
+                // Content and metadata use the read-both envelope (they have legacy plaintext rows on disk), so an EF
+                // read of a raw-path-written or legacy row decrypts identically to the raw read path.
+                message.Content = NodeChatContentProtection.Unprotect(message.Content, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "content");
+                message.MetadataJson = message.MetadataJson is null
+                    ? null
+                    : NodeChatContentProtection.Unprotect(message.MetadataJson, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "metadata_json");
                 break;
             case NodeToolEvent toolEvent:
                 toolEvent.PlaintextArgs = DecryptIfPresent(toolEvent.PlaintextArgs, context.NodeEncryptionKey.Span, toolEvent.ConversationId, toolEvent.ToolCallId, "plaintext_args");
                 toolEvent.PlaintextResult = DecryptIfPresent(toolEvent.PlaintextResult, context.NodeEncryptionKey.Span, toolEvent.ConversationId, toolEvent.ToolCallId, "plaintext_result");
+                break;
+            case NodeSelectedFolder selectedFolder:
+                selectedFolder.HostPath = NodePayloadProtector.Decrypt(selectedFolder.HostPath, context.NodeEncryptionKey.Span, Guid.Empty, selectedFolder.Id, "host_path");
+                break;
+            case DevelopmentTemplate template:
+                template.HostPath = NodePayloadProtector.Decrypt(template.HostPath, context.NodeEncryptionKey.Span, Guid.Empty, template.Id, "host_path");
+                break;
+            case DevelopmentTemplateMaterialization materialization:
+                materialization.TemplatePath =
+                    NodePayloadProtector.Decrypt(materialization.TemplatePath, context.NodeEncryptionKey.Span, Guid.Empty, materialization.SelectedFolderId, "template_path");
+                break;
+            case AgentDefinition definition:
+                definition.Instructions = NodePayloadProtector.Decrypt(definition.Instructions, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "instructions");
+                definition.Description = DecryptIfPresent(definition.Description, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "description");
+                break;
+            case CanvasWorkflow canvas:
+                canvas.GraphJson = NodePayloadProtector.Decrypt(canvas.GraphJson, context.NodeEncryptionKey.Span, Guid.Empty, canvas.Id, "graph_json");
+                break;
+            case AgentSkill skill:
+                skill.Description = NodePayloadProtector.Decrypt(skill.Description, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "description");
+                skill.Body = NodePayloadProtector.Decrypt(skill.Body, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "body");
+                skill.FrontmatterJson = DecryptIfPresent(skill.FrontmatterJson, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "frontmatter_json");
+                break;
+            case AgentSkillResource resource:
+                // Skill id in the conversation slot and the resource name in the column name — see the matching block in
+                // NodeEncryptionSaveChangesInterceptor. A row re-parented onto another skill, or renamed underneath its
+                // ciphertext, fails the tag check here rather than reaching a model as that skill's content.
+                resource.Content = NodePayloadProtector.Decrypt(resource.Content, context.NodeEncryptionKey.Span, resource.SkillId, resource.Id,
+                    AgentSkillResource.ContentColumnName(resource.Name));
+                break;
+            case CustomTool customTool:
+                customTool.Description = NodePayloadProtector.Decrypt(customTool.Description, context.NodeEncryptionKey.Span, Guid.Empty, customTool.Id, "description");
+                customTool.ConfigJson = NodePayloadProtector.Decrypt(customTool.ConfigJson, context.NodeEncryptionKey.Span, Guid.Empty, customTool.Id, "custom_tool_config_json");
+                break;
+            case PlaybookAction action:
+                action.Behavior = NodePayloadProtector.Decrypt(action.Behavior, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "behavior");
+                action.TriggerCondition = DecryptIfPresent(action.TriggerCondition, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "trigger_condition");
+                break;
+            case GoldenConversation golden:
+                golden.InputTurns = NodePayloadProtector.Decrypt(golden.InputTurns, context.NodeEncryptionKey.Span, Guid.Empty, golden.Id, "input_turns");
+                golden.Assertion = DecryptIfPresent(golden.Assertion, context.NodeEncryptionKey.Span, Guid.Empty, golden.Id, "assertion");
+                golden.Rubric = DecryptIfPresent(golden.Rubric, context.NodeEncryptionKey.Span, Guid.Empty, golden.Id, "rubric");
+                break;
+            case McpServerRegistration registration:
+                registration.ArgumentsJson = DecryptIfPresent(registration.ArgumentsJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "arguments");
+                registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");
+                registration.Description = DecryptIfPresent(registration.Description, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "description");
+                break;
+            case SlashCommand command:
+                command.Description = DecryptIfPresent(command.Description, context.NodeEncryptionKey.Span, Guid.Empty, command.Id, SlashCommand.DescriptionColumnName(command.Name));
+                command.ActionConfiguration = NodePayloadProtector.Decrypt(command.ActionConfiguration, context.NodeEncryptionKey.Span, Guid.Empty, command.Id,
+                    SlashCommand.ActionConfigurationColumnName(command.Name));
+                break;
+            case McpServerApiKey apiKey:
+                apiKey.KeyHash = NodePayloadProtector.Decrypt(apiKey.KeyHash, context.NodeEncryptionKey.Span, Guid.Empty, apiKey.Id, "mcp_api_key_hash");
+                break;
+            case ScheduledJobDefinition jobDefinition:
+                jobDefinition.ParameterJson = DecryptIfPresent(jobDefinition.ParameterJson, context.NodeEncryptionKey.Span, Guid.Empty, jobDefinition.Id, "parameter_json");
+                break;
+            case ScheduledJobRun run:
+                run.DetailsJson = DecryptIfPresent(run.DetailsJson, context.NodeEncryptionKey.Span, Guid.Empty, run.Id, "details_json");
+                break;
+            case ScheduledJobRunEvent runEvent:
+                runEvent.DataJson = DecryptIfPresent(runEvent.DataJson, context.NodeEncryptionKey.Span, Guid.Empty, runEvent.Id, "data_json");
+                break;
+            case ModelFitSnapshot snapshot:
+                snapshot.RawJson = DecryptIfPresent(snapshot.RawJson, context.NodeEncryptionKey.Span, Guid.Empty, snapshot.Id, "raw_json");
+                snapshot.StderrExcerpt = DecryptIfPresent(snapshot.StderrExcerpt, context.NodeEncryptionKey.Span, Guid.Empty, snapshot.Id, "stderr_excerpt");
+                snapshot.DiagnosticsJson = DecryptIfPresent(snapshot.DiagnosticsJson, context.NodeEncryptionKey.Span, Guid.Empty, snapshot.Id, "diagnostics_json");
+                break;
+            case ModelFitBenchmark benchmark:
+                benchmark.RawJson = DecryptIfPresent(benchmark.RawJson, context.NodeEncryptionKey.Span, Guid.Empty, benchmark.Id, "bench_raw_json");
+                benchmark.DiagnosticsJson = DecryptIfPresent(benchmark.DiagnosticsJson, context.NodeEncryptionKey.Span, Guid.Empty, benchmark.Id, "bench_diagnostics_json");
+                break;
+            case ConversationUploadedFile uploaded:
+                uploaded.OriginalFileName = NodePayloadProtector.Decrypt(uploaded.OriginalFileName, context.NodeEncryptionKey.Span, uploaded.ConversationId, uploaded.FileId, "original_file_name");
+                break;
+            case ImageJob imageJob:
+                imageJob.Prompt = NodePayloadProtector.Decrypt(imageJob.Prompt, context.NodeEncryptionKey.Span, Guid.Empty, imageJob.Id, "image_prompt");
+                imageJob.NegativePrompt = DecryptIfPresent(imageJob.NegativePrompt, context.NodeEncryptionKey.Span, Guid.Empty, imageJob.Id, "image_negative_prompt");
+                break;
+            case DevelopmentProject project:
+                project.Objective = NodePayloadProtector.Decrypt(project.Objective, context.NodeEncryptionKey.Span, project.Id, project.Id, "development_objective");
+                break;
+            case DevelopmentTask task:
+                task.Title = NodePayloadProtector.Decrypt(task.Title, context.NodeEncryptionKey.Span, task.ProjectId, task.Id, "development_task_title");
+                task.Requirements = NodePayloadProtector.Decrypt(task.Requirements, context.NodeEncryptionKey.Span, task.ProjectId, task.Id, "development_task_requirements");
+                task.AcceptanceCriteriaJson =
+                    NodePayloadProtector.Decrypt(task.AcceptanceCriteriaJson, context.NodeEncryptionKey.Span, task.ProjectId, task.Id, "development_acceptance_criteria_json");
+                break;
+            case DevelopmentArtifact artifact:
+                artifact.ContentJson = DecryptIfPresent(artifact.ContentJson, context.NodeEncryptionKey.Span, artifact.ProjectId, artifact.Id, "development_artifact_content_json");
+                artifact.InputArtifactIdsJson = DecryptIfPresent(artifact.InputArtifactIdsJson, context.NodeEncryptionKey.Span, artifact.ProjectId, artifact.Id, "development_artifact_input_ids_json");
+                break;
+            case DevelopmentEvent developmentEvent:
+                developmentEvent.DetailJson = DecryptIfPresent(developmentEvent.DetailJson, context.NodeEncryptionKey.Span, developmentEvent.ProjectId, developmentEvent.Id,
+                    "development_event_detail_json");
+                developmentEvent.ResultMetadataJson = DecryptIfPresent(developmentEvent.ResultMetadataJson, context.NodeEncryptionKey.Span, developmentEvent.ProjectId, developmentEvent.Id,
+                    "development_event_result_json");
                 break;
         }
 

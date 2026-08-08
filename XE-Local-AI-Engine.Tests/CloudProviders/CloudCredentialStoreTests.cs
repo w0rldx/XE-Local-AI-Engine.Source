@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -18,7 +18,7 @@ public sealed class CloudCredentialStoreTests : IDisposable
     {
         if (Directory.Exists(_contentRootPath))
         {
-            Directory.Delete(_contentRootPath, true);
+            Directory.Delete(_contentRootPath, recursive: true);
         }
     }
 
@@ -62,6 +62,56 @@ public sealed class CloudCredentialStoreTests : IDisposable
         await store.SaveAsync(CreateCredentials());
 
         AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(GetCredentialsPath()));
+    }
+
+    /// <summary>
+    ///     The save now creates the file 0600 in the same syscall that creates it, instead of writing at the process
+    ///     umask (0644 on a default box) and narrowing afterwards. <c>UnixCreateMode</c> applies only on create, so the
+    ///     narrowing pass still has to run for a file an older build already left behind at 0644 — this pins that the
+    ///     rewrite did not drop it.
+    ///     <para>
+    ///         The window this fix closes is a race and is therefore not directly observable from a test; what is
+    ///         asserted here is the end state on both the create and the overwrite path.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task SaveAsync_WhenCredentialFileWasLeftWorldReadable_NarrowsItBackToUserReadWrite()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        using var store = CreateStore();
+        await store.SaveAsync(CreateCredentials());
+
+        // Exactly the mode a pre-fix build's umask-created file carried.
+        File.SetUnixFileMode(GetCredentialsPath(),
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+
+        await store.SaveAsync(CreateCredentials(endpoint: "https://second.openai.azure.com/"));
+
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(GetCredentialsPath()));
+    }
+
+    /// <summary>
+    ///     The save switched from <c>File.WriteAllBytesAsync</c> to an explicit <see cref="FileStream" />. A stream
+    ///     opened without <see cref="FileMode.Create" /> would leave the tail of a longer previous payload behind, and
+    ///     the residue would be a decryptable fragment of the credentials it was meant to replace.
+    /// </summary>
+    [Test]
+    public async Task SaveAsync_WhenReplacingALongerPayload_LeavesNoResidueFromIt()
+    {
+        using var store = CreateStore();
+        await store.SaveAsync(CreateCredentials(endpoint: "https://a-very-much-longer-endpoint-host-name.openai.azure.com/"));
+        var longLength = new FileInfo(GetCredentialsPath()).Length;
+
+        await store.SaveAsync(CreateCredentials(endpoint: "https://s.openai.azure.com/"));
+
+        AssertEx.True(new FileInfo(GetCredentialsPath()).Length < longLength,
+            "the shorter payload must truncate the file rather than overwrite its head");
+        var reloaded = AssertEx.NotNull(await store.LoadAsync());
+        AssertEx.Equal("https://s.openai.azure.com/", reloaded.Endpoint);
     }
 
     [Test]
@@ -110,15 +160,186 @@ public sealed class CloudCredentialStoreTests : IDisposable
         AssertEx.False(File.Exists(GetCredentialsPath()));
     }
 
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdConnectionIsValid_PersistsAndLoadsConfig()
+    {
+        using var store = CreateStore();
+
+        await store.SaveConfigAsync(CreateEntraIdConfig());
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(AssertEx.NotNull(loaded).AzureFoundry);
+        AssertEx.Equal(AzureFoundryAuthMode.EntraId, connection.AuthMode);
+        AssertEx.Equal("tenant-id", connection.EntraTenantId);
+        AssertEx.Equal("client-id", connection.EntraClientId);
+        AssertEx.Equal("api://backend/.default", connection.EntraTokenScope);
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdMissingTenantId_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraTenantId = " "
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdMissingTokenScope_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraTokenScope = null
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdSignInMethodIsUndefined_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = (EntraSignInMethod)99
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeMissingSecret_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraClientSecret = null,
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsNotLoopback_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = "http://example.com/signin-oidc"
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsNotAbsolute_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = "not-a-uri"
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsBlank_PersistsConfig()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = null
+            }
+        };
+
+        await store.SaveConfigAsync(config);
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(AssertEx.NotNull(loaded).AzureFoundry);
+        AssertEx.Equal(EntraSignInMethod.AuthorizationCode, connection.EntraSignInMethod);
+        AssertEx.Null(connection.EntraAuthCodeRedirectUri);
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsLoopback_PersistsConfig()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = "http://127.0.0.1:53682/signin-oidc"
+            }
+        };
+
+        await store.SaveConfigAsync(config);
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(AssertEx.NotNull(loaded).AzureFoundry);
+        AssertEx.Equal("http://127.0.0.1:53682/signin-oidc", connection.EntraAuthCodeRedirectUri);
+    }
+
+    private static StoredCloudProviderConfig CreateEntraIdConfig()
+    {
+        return new StoredCloudProviderConfig
+        {
+            ProviderName = "AzureFoundry",
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = "https://example.openai.azure.com/",
+                AuthMode = AzureFoundryAuthMode.EntraId,
+                EntraTenantId = "tenant-id",
+                EntraClientId = "client-id",
+                EntraClientSecret = "client-secret",
+                EntraTokenScope = "api://backend/.default",
+                EntraSignInMethod = EntraSignInMethod.ClientSecret,
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ]
+            }
+        };
+    }
+
     private CloudCredentialStore CreateStore(IDataProtectionProvider? dataProtectionProvider = null)
     {
         Directory.CreateDirectory(_contentRootPath);
 
-        var hostEnvironment = Substitute.For<IHostEnvironment>();
-        hostEnvironment.ContentRootPath.Returns(_contentRootPath);
-
         return new CloudCredentialStore(dataProtectionProvider ?? new MockDataProtector(),
-            hostEnvironment,
+            new FakeNodeDataDirectory(_contentRootPath),
             NullLogger<CloudCredentialStore>.Instance);
     }
 

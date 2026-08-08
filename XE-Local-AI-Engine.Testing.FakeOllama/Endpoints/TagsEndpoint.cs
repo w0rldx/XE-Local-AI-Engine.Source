@@ -6,9 +6,9 @@ internal static class TagsEndpoint
 {
     public static async Task<IResult> HandleAsync(HttpContext context, FakeOllamaState state)
     {
-        FakeOllamaEndpointMapper.Record(context, state, null, 0, null);
+        FakeOllamaEndpointMapper.Record(context, state, model: null, messageCount: 0, prompt: null);
 
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, null).ConfigureAwait(false))
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model: null).ConfigureAwait(false))
         {
             return Results.Empty;
         }

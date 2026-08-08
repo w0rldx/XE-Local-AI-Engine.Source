@@ -1,0 +1,26 @@
+// Banned APIs — hard wall enforced by Microsoft.CodeAnalysis.BannedApiAnalyzers (RS0030).
+// Applied to PRODUCTION projects only; test/tooling projects are exempt (see Directory.Build.props,
+// IsTestOrToolingProject). RS0030 is a Warning by default and is promoted to a build error by the
+// repo-wide <TreatWarningsAsErrors>true</TreatWarningsAsErrors>.
+//
+// Format: {Documentation Comment ID};{message shown on violation}
+// Scope = the "safe set": APIs with zero current production usage, so the build stays green while the
+// wall blocks NEW occurrences. Ambient time, blocking sleeps, and forced GC are the targets here.
+// NOTE: DateTimeOffset.UtcNow and sync-over-async (.Result/.Wait/.GetAwaiter().GetResult) are NOT yet
+// banned — they still have legitimate production usage and need a dedicated refactor first.
+
+// --- Ambient time: inject TimeProvider and use GetUtcNow()/GetLocalNow() instead ---
+P:System.DateTime.Now;Do not read ambient time. Inject TimeProvider and call GetLocalNow() (or GetUtcNow()).
+P:System.DateTime.UtcNow;Do not read ambient time. Inject TimeProvider and call GetUtcNow().
+P:System.DateTimeOffset.Now;Do not read ambient time. Inject TimeProvider and call GetLocalNow().
+
+// --- Blocking sleeps: await Task.Delay(..., cancellationToken) instead ---
+M:System.Threading.Thread.Sleep(System.Int32);Do not block the thread with Thread.Sleep. Await Task.Delay with a CancellationToken.
+M:System.Threading.Thread.Sleep(System.TimeSpan);Do not block the thread with Thread.Sleep. Await Task.Delay with a CancellationToken.
+
+// --- Forced garbage collection: let the runtime manage GC ---
+M:System.GC.Collect;Do not force garbage collection; let the runtime manage GC.
+M:System.GC.Collect(System.Int32);Do not force garbage collection; let the runtime manage GC.
+M:System.GC.Collect(System.Int32,System.GCCollectionMode);Do not force garbage collection; let the runtime manage GC.
+M:System.GC.Collect(System.Int32,System.GCCollectionMode,System.Boolean);Do not force garbage collection; let the runtime manage GC.
+M:System.GC.Collect(System.Int32,System.GCCollectionMode,System.Boolean,System.Boolean);Do not force garbage collection; let the runtime manage GC.

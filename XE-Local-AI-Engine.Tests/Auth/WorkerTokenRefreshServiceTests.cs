@@ -8,6 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -22,7 +23,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.CredentialsRevoked, outcome);
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -34,7 +35,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.CredentialsRevoked, outcome);
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -46,7 +47,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.CredentialsRevoked, outcome);
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -69,7 +70,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.TransientFailure, outcome);
-        AssertEx.Equal(0, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 0, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -81,7 +82,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.TransientFailure, outcome);
-        AssertEx.Equal(0, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 0, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -117,7 +118,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.Success, outcome);
-        AssertEx.Equal(1, tokenStore.StoreTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.StoreTokensAsyncCallCount);
         AssertEx.Equal("new-access-token", await tokenStore.GetAccessTokenAsync());
     }
 

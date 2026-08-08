@@ -1,0 +1,692 @@
+name: release
+
+# Builds the official Velopack-managed portable artifacts:
+#   Windows: framework-dependent VPK Portable.zip (`--noInst`) with a repository-owned C# prerequisite launcher.
+#   Linux:   AppImage (Velopack's portable Linux format).
+# Matrix jobs build and retain assets; protected serialized jobs prepare/verify the draft, then promote it separately.
+# Artifacts are currently unsigned. Publication therefore requires the dated
+# unsigned-risk decision in docs/compliance/release-authority-register.json.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One repository-wide lane: different tags must not publish out of order or derive deltas from the same predecessor.
+  group: official-release-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VPK_VERSION: "1.2.0"
+
+jobs:
+  validate:
+    uses: ./.github/workflows/build-and-test.yml
+    permissions:
+      contents: read
+
+  version:
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      pack-version: ${{ steps.compose.outputs.pack-version }}
+      is-prerelease: ${{ steps.compose.outputs.is-prerelease }}
+      update-channel: ${{ steps.compose.outputs.update-channel }}
+      source-sha: ${{ steps.compose.outputs.source-sha }}
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify supported .NET runtime floor
+        run: scripts/compliance/verify-dotnet-runtime-floor.py
+
+      - name: Compose and bind release identity
+        id: compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK_VERSION="$(scripts/read-release-version.py)"
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
+            echo "ERROR: official releases must run from an existing v* tag, including workflow_dispatch runs." >&2
+            exit 1
+          fi
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$TAG" != "v$PACK_VERSION" ]]; then
+            echo "ERROR: tag '$TAG' does not match release manifest version 'v$PACK_VERSION'." >&2
+            exit 1
+          fi
+          if [[ "$(git rev-parse "$TAG^{commit}")" != "$GITHUB_SHA" ]]; then
+            echo "ERROR: tag '$TAG' is not bound to checked-out commit '$GITHUB_SHA'." >&2
+            exit 1
+          fi
+          echo "pack-version=$PACK_VERSION" >> "$GITHUB_OUTPUT"
+          echo "source-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          if [[ "$PACK_VERSION" == *-* ]]; then
+            echo "is-prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "update-channel=tester" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "update-channel=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install git-cliff (pinned)
+        shell: bash
+        env:
+          GIT_CLIFF_VERSION: "2.13.1"
+          GIT_CLIFF_SHA256: "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546"
+        run: |
+          set -euo pipefail
+          TARBALL="git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          URL="https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/${TARBALL}"
+          curl -fsSL "$URL" -o "$TARBALL"
+          echo "${GIT_CLIFF_SHA256}  ${TARBALL}" | sha256sum -c -
+          tar xzf "$TARBALL"
+          sudo install -m 0755 "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
+          git-cliff --version
+
+      - name: Generate release notes
+        run: scripts/generate-release-notes.sh "${{ steps.compose.outputs.pack-version }}" RELEASE_NOTES.md
+
+      - name: Retain release notes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 30
+          if-no-files-found: error
+
+  build-pack:
+    needs: [validate, version]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            vpk-channel: win
+            main-exe: XE-Local-AI-Engine.WindowsLauncher.exe
+            publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/win-x64/publish
+            pack-args: "--noInst"
+            icon-args: ""
+          - rid: linux-x64
+            os: ubuntu-latest
+            vpk-channel: linux
+            main-exe: XE-Local-AI-Engine.Client
+            publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/linux-x64/publish
+            pack-args: ""
+            icon-args: "--icon XE-Local-AI-Engine.Client.React/public/logo.png"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup pinned Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.13'
+
+      - name: Verify checked-out source binding
+        shell: bash
+        run: |
+          test "$GITHUB_SHA" = "${{ needs.version.outputs.source-sha }}"
+          test "$GITHUB_REF" = "refs/tags/v${{ needs.version.outputs.pack-version }}"
+
+      - name: Setup .NET 8 runtime for pinned SBOM tooling
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore pinned repository tools
+        run: dotnet tool restore --tool-manifest dotnet-tools.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Build SPA and fail-closed license disclosure
+        working-directory: XE-Local-AI-Engine.Client.React
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.template .env
+          pnpm install --frozen-lockfile
+          pnpm run licenses:check
+          pnpm run build
+          test -f dist/index.html
+
+      - name: Publish (${{ matrix.rid }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_BUNDLE_INPUTS="$RUNNER_TEMP/bundle-inputs-${{ matrix.rid }}.raw"
+          dotnet publish XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj \
+            --configuration Release \
+            -p:PublishProfile=${{ matrix.rid }} \
+            -p:UpdateChannel=${{ needs.version.outputs.update-channel }} \
+            -p:CustomAfterMicrosoftCommonTargets="$GITHUB_WORKSPACE/scripts/compliance/capture_bundle_inputs.targets" \
+            -p:XeBundleInputEvidenceRaw="$RAW_BUNDLE_INPUTS"
+          python scripts/compliance/create_bundle_input_manifest.py \
+            --rid "${{ matrix.rid }}" \
+            --raw "$RAW_BUNDLE_INPUTS" \
+            --output "${{ matrix.publish-dir }}/bundle-inputs.json"
+
+      - name: Build and test Windows framework launcher
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          dotnet publish XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj `
+            --configuration Release `
+            -p:PublishProfile=win-x64 `
+            --output '${{ matrix.publish-dir }}'
+          scripts/tests/windows-framework-launcher-smoke.ps1 -PublishDirectory '${{ matrix.publish-dir }}'
+
+      - name: Verify packaged update release track
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads((Path("${{ matrix.publish-dir }}") / "appsettings.AppUpdate.json").read_text(encoding="utf-8"))
+          expected_channel = "${{ needs.version.outputs.update-channel }}"
+          expected_track = "Rc" if "${{ needs.version.outputs.is-prerelease }}" == "true" else "Stable"
+          actual = config["AppUpdate"]
+          if actual.get("Channel") != expected_channel or actual.get("ReleaseTrack") != expected_track:
+              raise SystemExit(
+                  f"packaged update policy mismatch: expected {expected_channel}/{expected_track}, "
+                  f"got {actual.get('Channel')}/{actual.get('ReleaseTrack')}"
+              )
+          PY
+
+      - name: Generate exact backend NuGet legal corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_METADATA="$RUNNER_TEMP/nuget-license-${{ matrix.rid }}.raw"
+          JSON_METADATA="$RUNNER_TEMP/nuget-license-${{ matrix.rid }}.json"
+          dotnet nuget-license \
+            --input XE-Local-AI-Engine.slnx \
+            --output Json \
+            --include-transitive \
+            --exclude-publish-false \
+            --override-package-information scripts/compliance/nuget-license-overrides.json \
+            --exclude-projects-matching '*Tests*;*Testing*;*AppHost*' \
+            --ignored-packages 'Meziantou.Analyzer;SonarAnalyzer.CSharp;Microsoft.CodeAnalysis.BannedApiAnalyzers;NetArchTest.Rules' \
+            > "$RAW_METADATA"
+          python - "$RAW_METADATA" "$JSON_METADATA" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+
+          raw = Path(sys.argv[1]).read_text(encoding="utf-8")
+          start = raw.find("[")
+          if start < 0:
+              raise SystemExit("nuget-license produced no JSON array")
+          payload, _ = json.JSONDecoder().raw_decode(raw[start:])
+          if not isinstance(payload, list) or not payload:
+              raise SystemExit("nuget-license produced an empty or invalid package array")
+          Path(sys.argv[2]).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+          python scripts/compliance/generate_backend_license_corpus.py \
+            --rid "${{ matrix.rid }}" \
+            --deps-json "XE-Local-AI-Engine.Client/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Client.deps.json" \
+            --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
+            --metadata-json "$JSON_METADATA" \
+            --output-directory "${{ matrix.publish-dir }}"
+
+      - name: Generate and validate payload SPDX
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDOWS_APPHOST_ARGS=()
+          if [[ "${{ matrix.rid }}" == "win-x64" ]]; then
+            WINDOWS_APPHOST_ARGS+=(
+              --windows-apphost-version "$(python scripts/read-release-version.py --dotnet-runtime)"
+              --windows-apphost-license "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt"
+              --windows-apphost-notices "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt"
+            )
+          fi
+          scripts/compliance/sbom-tool.sh Generate \
+            -b "${{ matrix.publish-dir }}" \
+            -bc "${{ matrix.publish-dir }}" \
+            -pn "XE-Local-AI-Engine-${{ matrix.rid }}" \
+            -pv "${{ needs.version.outputs.pack-version }}" \
+            -ps "XE Local AI Engine contributors" \
+            -pm true \
+            -D true
+          python scripts/compliance/reconcile_payload_spdx.py \
+            --rid "${{ matrix.rid }}" \
+            --spdx "${{ matrix.publish-dir }}/_manifest/spdx_2.2/manifest.spdx.json" \
+            --deps-json "XE-Local-AI-Engine.Client/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Client.deps.json" \
+            --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
+            --backend-manifest "${{ matrix.publish-dir }}/backend-components.json" \
+            --frontend-manifest "${{ matrix.publish-dir }}/wwwroot/component-manifest.json" \
+            "${WINDOWS_APPHOST_ARGS[@]}"
+          scripts/compliance/sbom-tool.sh Validate \
+            -b "${{ matrix.publish-dir }}" \
+            -n true \
+            -mi SPDX:2.2 \
+            -o "$RUNNER_TEMP/payload-sbom-validation-${{ matrix.rid }}.json"
+
+      - name: Install pinned Velopack CLI
+        shell: bash
+        run: dotnet tool install -g vpk --version "${{ env.VPK_VERSION }}"
+
+      - name: Download release notes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-notes
+
+      - name: Download previous release for deltas
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SEED_DIR="ReleaseSeed-${{ matrix.rid }}"
+          OUTPUT_DIR="Releases-${{ matrix.rid }}"
+          mkdir -p "$SEED_DIR" "$OUTPUT_DIR"
+          PRE_ARGS=()
+          INCLUDE_PRERELEASE=false
+          if [[ "${{ needs.version.outputs.is-prerelease }}" == "true" ]]; then
+            PRE_ARGS+=(--pre)
+            INCLUDE_PRERELEASE=true
+          fi
+          FEED_NAME="releases.${{ matrix.vpk-channel }}.json"
+          RELEASE_INDEX="$RUNNER_TEMP/published-releases-${{ matrix.rid }}.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s 'add' > "$RELEASE_INDEX"
+          if jq -e --arg feed "$FEED_NAME" --argjson include_pre "$INCLUDE_PRERELEASE" \
+              'map(select(.draft == false and ($include_pre or (.prerelease == false)) and any(.assets[]?; .name == $feed))) | length > 0' \
+              "$RELEASE_INDEX" >/dev/null; then
+            vpk download github \
+              --outputDir "$SEED_DIR" \
+              --repoUrl "https://github.com/${{ github.repository }}" \
+              --token "${{ secrets.GITHUB_TOKEN }}" \
+              --channel "${{ matrix.vpk-channel }}" \
+              "${PRE_ARGS[@]}"
+            mapfile -d '' PREVIOUS_FULL < <(find "$SEED_DIR" -type f -name '*-full.nupkg' -print0)
+            if [[ "${#PREVIOUS_FULL[@]}" -ne 1 ]]; then
+              echo "ERROR: expected exactly one previous full package, found ${#PREVIOUS_FULL[@]}." >&2
+              exit 1
+            fi
+            PREVIOUS_NAME="$(basename "${PREVIOUS_FULL[0]}")"
+            cp -- "${PREVIOUS_FULL[0]}" "$OUTPUT_DIR/$PREVIOUS_NAME"
+            printf '%s\n' "$PREVIOUS_NAME" > "$RUNNER_TEMP/previous-package-${{ matrix.rid }}.txt"
+          else
+            echo "No published ${{ matrix.vpk-channel }} feed exists; packing the first release without a delta base."
+          fi
+
+      - name: Pack portable artifact with Velopack
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA_ARGS=()
+          if [[ -n '${{ matrix.pack-args }}' ]]; then
+            EXTRA_ARGS+=(${{ matrix.pack-args }})
+          fi
+          if [[ -n '${{ matrix.icon-args }}' ]]; then
+            EXTRA_ARGS+=(${{ matrix.icon-args }})
+          fi
+          vpk pack \
+            --outputDir "Releases-${{ matrix.rid }}" \
+            --packId XE-Local-AI-Engine \
+            --packVersion "${{ needs.version.outputs.pack-version }}" \
+            --packDir "${{ matrix.publish-dir }}" \
+            --mainExe "${{ matrix.main-exe }}" \
+            --runtime "${{ matrix.rid }}" \
+            --channel "${{ matrix.vpk-channel }}" \
+            --releaseNotes RELEASE_NOTES.md \
+            "${EXTRA_ARGS[@]}"
+          PREVIOUS_MARKER="$RUNNER_TEMP/previous-package-${{ matrix.rid }}.txt"
+          if [[ -f "$PREVIOUS_MARKER" ]]; then
+            PREVIOUS_NAME="$(cat "$PREVIOUS_MARKER")"
+            test -f "Releases-${{ matrix.rid }}/$PREVIOUS_NAME"
+            rm -- "Releases-${{ matrix.rid }}/$PREVIOUS_NAME"
+          fi
+
+      - name: Verify final portable artifact contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/compliance/verify_release_artifacts.py \
+            --rid "${{ matrix.rid }}" \
+            --version "${{ needs.version.outputs.pack-version }}" \
+            --publish-dir "${{ matrix.publish-dir }}" \
+            --release-dir "Releases-${{ matrix.rid }}"
+
+      - name: Hash retained release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd "Releases-${{ matrix.rid }}" && find . -type f ! -name 'CHECKSUMS.sha256' -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
+
+      - name: Retain packed release and compliance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: velopack-${{ matrix.vpk-channel }}
+          path: Releases-${{ matrix.rid }}
+          retention-days: 30
+          if-no-files-found: error
+
+  prepare-release-draft:
+    needs: [version, build-pack]
+    runs-on: ubuntu-latest
+    environment: open-source-release
+    permissions:
+      contents: write
+    outputs:
+      release-id: ${{ steps.draft.outputs.release-id }}
+      checksum-digest: ${{ steps.final.outputs.checksum-digest }}
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8 runtime for pinned release tooling
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Download Windows Velopack evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: velopack-win
+          path: release/win
+
+      - name: Download Linux Velopack evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: velopack-linux
+          path: release/linux
+
+      - name: Verify retained hashes and exact portable asset policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd release/win && sha256sum --check CHECKSUMS.sha256)
+          (cd release/linux && sha256sum --check CHECKSUMS.sha256)
+          test "$(find release/win -maxdepth 1 -type f -iname '*Portable.zip' | wc -l)" -eq 1
+          test "$(find release/win -maxdepth 1 -type f -iname '*Setup.exe' | wc -l)" -eq 0
+          test "$(find release/linux -maxdepth 1 -type f -iname '*.AppImage' | wc -l)" -eq 1
+
+      - name: Install pinned Velopack CLI
+        run: dotnet tool install -g vpk --version "${{ env.VPK_VERSION }}"
+
+      - name: Create one draft and merge both Velopack channels
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK_VERSION="${{ needs.version.outputs.pack-version }}"
+          PRE_ARGS=()
+          if [[ "${{ needs.version.outputs.is-prerelease }}" == "true" ]]; then
+            PRE_ARGS+=(--pre)
+          fi
+          vpk upload github \
+            --outputDir release/win \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --channel win \
+            --tag "v$PACK_VERSION" \
+            --targetCommitish "$GITHUB_SHA" \
+            "${PRE_ARGS[@]}"
+          vpk upload github \
+            --outputDir release/linux \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --channel linux \
+            --tag "v$PACK_VERSION" \
+            --targetCommitish "$GITHUB_SHA" \
+            --merge \
+            "${PRE_ARGS[@]}"
+
+      - name: Download and verify complete remote draft primary assets
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACK_VERSION: ${{ needs.version.outputs.pack-version }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.version.outputs.pack-version }}"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s --arg tag "$TAG" \
+              'add | map(select(.tag_name == $tag)) | if length == 1 then .[0] else error("expected exactly one release for tag") end' \
+              > draft.json
+          jq -e --arg sha "$GITHUB_SHA" '.draft == true and .target_commitish == $sha' draft.json >/dev/null
+          echo "release-id=$(jq -r .id draft.json)" >> "$GITHUB_OUTPUT"
+          mkdir remote-primary
+          jq -r '.assets[] | [.url, .name] | @tsv' draft.json \
+            | while IFS=$'\t' read -r asset_url asset_name; do
+                gh api -H 'Accept: application/octet-stream' "$asset_url" > "remote-primary/$asset_name"
+              done
+          scripts/compliance/verify_remote_velopack_assets.py \
+            --version "$PACK_VERSION" \
+            --local win=release/win \
+            --local linux=release/linux \
+            --remote-dir remote-primary
+
+      - name: Generate detached release envelope from verified remote bytes
+        shell: bash
+        env:
+          PACK_VERSION: ${{ needs.version.outputs.pack-version }}
+        run: |
+          set -euo pipefail
+          dotnet tool restore --tool-manifest dotnet-tools.json
+          scripts/compliance/sbom-tool.sh Generate \
+            -b remote-primary \
+            -bc remote-primary \
+            -m release-envelope \
+            -pn XE-Local-AI-Engine-portable-release \
+            -pv "$PACK_VERSION" \
+            -ps "XE Local AI Engine contributors" \
+            -pm true \
+            -D true
+          scripts/compliance/sbom-tool.sh Validate \
+            -b remote-primary \
+            -m release-envelope \
+            -n true \
+            -mi SPDX:2.2 \
+            -o "$RUNNER_TEMP/release-envelope-validation.json"
+          cp release-envelope/_manifest/spdx_2.2/manifest.spdx.json remote-primary/RELEASE.spdx.json
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json
+          import os
+
+          root = Path("remote-primary")
+          assets = []
+          for path in sorted(root.iterdir(), key=lambda item: item.name):
+              if path.is_file() and path.name not in {"RELEASE-MANIFEST.json", "CHECKSUMS.sha256"}:
+                  data = path.read_bytes()
+                  assets.append({"name": path.name, "size": len(data), "sha256": sha256(data).hexdigest()})
+          manifest = {
+              "schemaVersion": 1,
+              "tag": f"v{os.environ['PACK_VERSION']}",
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "assets": assets,
+              "signing": {
+                  "state": "unsigned",
+                  "decisionGate": "signing-risk-decision",
+                  "certificatePlanned": True,
+              },
+              "selfExclusions": ["RELEASE-MANIFEST.json", "CHECKSUMS.sha256"],
+          }
+          (root / "RELEASE-MANIFEST.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Add checksums derived from verified remote bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.version.outputs.pack-version }}"
+          (cd remote-primary && find . -maxdepth 1 -type f ! -name 'CHECKSUMS.sha256' -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
+          gh release upload "$TAG" \
+            remote-primary/RELEASE.spdx.json \
+            remote-primary/RELEASE-MANIFEST.json \
+            remote-primary/CHECKSUMS.sha256 \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Download and verify complete remote draft including metadata
+        id: final
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.version.outputs.pack-version }}"
+          gh api "repos/$GITHUB_REPOSITORY/releases/${{ steps.draft.outputs.release-id }}" > final-draft.json
+          jq -e --arg tag "$TAG" --arg sha "$GITHUB_SHA" \
+            '.draft == true and .tag_name == $tag and .target_commitish == $sha' final-draft.json >/dev/null
+          mkdir remote-final
+          jq -r '.assets[] | [.url, .name] | @tsv' final-draft.json \
+            | while IFS=$'\t' read -r asset_url asset_name; do
+                gh api -H 'Accept: application/octet-stream' "$asset_url" > "remote-final/$asset_name"
+              done
+          test -f remote-final/CHECKSUMS.sha256
+          test -f remote-final/RELEASE.spdx.json
+          test -f remote-final/RELEASE-MANIFEST.json
+          test "$(find remote-final -maxdepth 1 -type f | wc -l)" -eq \
+               "$(( $(wc -l < remote-final/CHECKSUMS.sha256) + 1 ))"
+          (cd remote-final && sha256sum --check CHECKSUMS.sha256)
+          python3 scripts/release/verify-release-envelope.py \
+            --directory remote-final \
+            --tag "$TAG" \
+            --source-sha "$GITHUB_SHA"
+          CHECKSUM_DIGEST="$(sha256sum remote-final/CHECKSUMS.sha256 | cut -d ' ' -f1)"
+          echo "checksum-digest=$CHECKSUM_DIGEST" >> "$GITHUB_OUTPUT"
+
+  publish-release:
+    needs: [version, prepare-release-draft]
+    runs-on: ubuntu-latest
+    environment: open-source-release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify release authority and unsigned-risk decision again
+        run: python3 scripts/release/verify-release-authority.py
+
+      - name: Verify anonymous repository availability before promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY" \
+            > anonymous-repository.json
+          jq -e --arg repository "$GITHUB_REPOSITORY" \
+            '.private == false and .full_name == $repository' anonymous-repository.json >/dev/null
+          curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=1" \
+            > anonymous-releases.json
+          jq -e 'type == "array"' anonymous-releases.json >/dev/null
+
+      - name: Re-download and verify the protected draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare-release-draft.outputs.release-id }}
+          EXPECTED_CHECKSUM_DIGEST: ${{ needs.prepare-release-draft.outputs.checksum-digest }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.version.outputs.pack-version }}"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > protected-draft.json
+          jq -e --arg tag "$TAG" --arg sha "$GITHUB_SHA" \
+            '.draft == true and .tag_name == $tag and .target_commitish == $sha' protected-draft.json >/dev/null
+          mkdir protected-remote
+          jq -r '.assets[] | [.url, .name] | @tsv' protected-draft.json \
+            | while IFS=$'\t' read -r asset_url asset_name; do
+                gh api -H 'Accept: application/octet-stream' "$asset_url" > "protected-remote/$asset_name"
+              done
+          test -f protected-remote/CHECKSUMS.sha256
+          test -f protected-remote/RELEASE.spdx.json
+          test -f protected-remote/RELEASE-MANIFEST.json
+          test "$(find protected-remote -maxdepth 1 -type f | wc -l)" -eq \
+               "$(( $(wc -l < protected-remote/CHECKSUMS.sha256) + 1 ))"
+          (cd protected-remote && sha256sum --check CHECKSUMS.sha256)
+          python3 scripts/release/verify-release-envelope.py \
+            --directory protected-remote \
+            --tag "$TAG" \
+            --source-sha "$GITHUB_SHA"
+          ACTUAL_CHECKSUM_DIGEST="$(sha256sum protected-remote/CHECKSUMS.sha256 | cut -d ' ' -f1)"
+          if [[ "$ACTUAL_CHECKSUM_DIGEST" != "$EXPECTED_CHECKSUM_DIGEST" ]]; then
+            echo "ERROR: protected draft checksum digest changed; expected \"$EXPECTED_CHECKSUM_DIGEST\"." >&2
+            exit 1
+          fi
+
+      - name: Publish the already verified draft without replacing assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare-release-draft.outputs.release-id }}
+        run: |
+          set -euo pipefail
+          PRERELEASE="${{ needs.version.outputs.is-prerelease }}"
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false \
+            -F prerelease="$PRERELEASE" \
+            > published.json
+          jq -e --arg tag "v${{ needs.version.outputs.pack-version }}" --arg sha "$GITHUB_SHA" \
+            '.draft == false and .tag_name == $tag and .target_commitish == $sha' published.json >/dev/null
+
+      - name: Verify anonymous canonical release and feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.version.outputs.pack-version }}"
+          curl -fsSL "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > public-release.json
+          jq -e '.draft == false' public-release.json >/dev/null
+          for channel in win linux; do
+            feed_url=$(jq -r --arg name "releases.$channel.json" '.assets[] | select(.name == $name) | .browser_download_url' public-release.json)
+            test -n "$feed_url"
+            curl -fsSL "$feed_url" | grep -F "${{ needs.version.outputs.pack-version }}" >/dev/null
+          done
+
+      - name: Record publication summary
+        shell: bash
+        run: |
+          {
+            echo "## Portable release published"
+            echo "- Tag: v${{ needs.version.outputs.pack-version }}"
+            echo "- Source: $GITHUB_SHA"
+            echo "- Windows: framework-dependent Velopack Portable.zip (ASP.NET Core Runtime 10.0.10+ x64 required; no Setup.exe)"
+            echo "- Linux: Velopack AppImage"
+            echo "- Signing: unsigned; approved risk record required by publication gate"
+          } >> "$GITHUB_STEP_SUMMARY"

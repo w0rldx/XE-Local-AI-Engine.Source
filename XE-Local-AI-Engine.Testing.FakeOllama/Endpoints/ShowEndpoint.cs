@@ -10,7 +10,7 @@ internal static class ShowEndpoint
         var root = body?.RootElement;
         var model = root is null ? null : FakeOllamaEndpointMapper.GetString(root.Value, "model");
 
-        FakeOllamaEndpointMapper.Record(context, state, model, 0, model);
+        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, model);
 
         if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
         {
@@ -43,7 +43,10 @@ internal static class ShowEndpoint
             capabilities = new[]
             {
                 "completion",
-                "embedding"
+                "embedding",
+                // The default fake chat model advertises Ollama `tools` so capability-gated UI (the
+                // chat local-tools toggle) renders, mirroring a real tool-capable model (e.g. qwen).
+                "tools"
             },
             modified_at = FakeOllamaEndpointMapper.NowString()
         }, FakeOllamaEndpointMapper.SerializerOptions);

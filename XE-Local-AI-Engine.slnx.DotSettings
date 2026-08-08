@@ -1,0 +1,19 @@
+<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<!--
+		Team-shared ReSharper / Rider settings.
+
+		"BuildSafe" code-cleanup profile: reformats and tidies code (whitespace, usings, qualifiers,
+		built-in type refs) but deliberately DOES NOT reorder type members. ReSharper's member-layout
+		reordering can move a static field above another static member it reads, which breaks C# static
+		initialization order (initializers run in textual order) — see CodexModelCatalog, where the
+		default "Full Cleanup" once moved a derived HashSet above the array it was built from, producing
+		a null-argument type-init failure. Run cleanup with this
+		profile (profile "BuildSafe", excluding props/targets/csproj). The exact command line lives in
+		tools/code-cleanup.md and is kept OUT of this comment on purpose: a literal double-dash flag is
+		illegal inside an XML comment and silently corrupts the whole settings file (jb then reports the
+		profile as missing).
+		To extend it (e.g. add named-argument insertion), duplicate it in Rider's Code Cleanup options,
+		toggle the extra tasks, leave "Reorder type members" OFF, and re-save to team-shared settings.
+	-->
+	<s:String x:Key="/Default/CodeStyle/CodeCleanup/Profiles/=BuildSafe/@EntryIndexedValue">&lt;?xml version="1.0" encoding="utf-16"?&gt;&lt;Profile name="BuildSafe"&gt;&lt;CSReformatCode&gt;True&lt;/CSReformatCode&gt;&lt;CSReorderTypeMembers&gt;False&lt;/CSReorderTypeMembers&gt;&lt;CSOptimizeUsings&gt;&lt;OptimizeUsings&gt;True&lt;/OptimizeUsings&gt;&lt;/CSOptimizeUsings&gt;&lt;CSShortenReferences&gt;True&lt;/CSShortenReferences&gt;&lt;CSArrangeQualifiers&gt;True&lt;/CSArrangeQualifiers&gt;&lt;CSFixBuiltinTypeReferences&gt;True&lt;/CSFixBuiltinTypeReferences&gt;&lt;/Profile&gt;</s:String>
+</wpf:ResourceDictionary>

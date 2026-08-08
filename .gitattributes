@@ -1,0 +1,15 @@
+# Normalise every text file to LF in the repository and in the working tree.
+#
+# Why: without this, only *.sh and scripts/* were pinned — 57 of 4271 tracked files — and an editor
+# that writes CRLF (which is what most tooling does on Windows) turned a one-line change into a
+# whole-file diff. Measured on Windows 11 2026-08-03 with core.autocrlf=false: a one-line version
+# bump in Directory.Build.props reported 104 changed lines, and a 16-line edit to
+# XEReactClientFixture.cs reported 486. Both were caught only by reading `git diff --stat` and
+# disbelieving it; uncaught, 590 lines of pure whitespace churn would have ridden into RC commits.
+# `text=auto` lets git detect binaries, so images and archives are unaffected.
+* text=auto eol=lf
+
+# Keep shell scripts LF-only so they run under bash on Windows checkouts
+# (CRLF makes bash fail with "set: invalid option name pipefail").
+*.sh text eol=lf
+scripts/* text eol=lf

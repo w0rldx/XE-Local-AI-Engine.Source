@@ -5,12 +5,14 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 public sealed class PersistenceEncryptionTests : IDisposable
 {
@@ -20,7 +22,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -46,7 +48,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             writeContext.Conversations.Add(new NodeConversation
             {
                 ConversationId = conversationId,
-                Title = "Encrypted chat",
+                Title = Encoding.UTF8.GetBytes("Encrypted chat"),
                 UserId = "worker-node",
                 CreatedAtUtc = 1,
                 LastSeenUtc = 2,
@@ -127,16 +129,110 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await context.SaveChangesAsync();
         }
 
-        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
 
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(messageContentText)), "The SQLite file should not contain plaintext message content.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(metadataText)), "The SQLite file should not contain plaintext metadata.");
     }
 
     [Test]
+    public async Task ConversationTitle_WhenSavedViaEfInterceptor_IsNotPlaintextAtRest()
+    {
+        // Arrange — write a conversation with a known title via EF (the interceptor path).
+        var databasePath = GetDatabasePath("title-ef.sqlite");
+        var conversationId = Guid.NewGuid();
+        const string titleText = "ef-path-title-sentinel";
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            context.Conversations.Add(new NodeConversation
+            {
+                ConversationId = conversationId,
+                Title = Encoding.UTF8.GetBytes(titleText),
+                UserId = "worker-node",
+                CreatedAtUtc = 1,
+                LastSeenUtc = 2,
+                Purged = false
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        // Assert — raw file bytes must not contain the plaintext title sentinel.
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
+            "The SQLite file should not contain the plaintext conversation title (EF interceptor path).");
+
+        // Assert — reading back via the materialization interceptor must decrypt correctly.
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var saved = await readContext.Conversations.SingleAsync();
+        AssertEx.NotNull(saved.Title, "Title should not be null after round-trip.");
+        AssertEx.True(Encoding.UTF8.GetString(saved.Title!) == titleText,
+            "Title should round-trip correctly through EF encrypt/decrypt.");
+    }
+
+    [Test]
+    public async Task ConversationTitle_WhenSavedViaRawSql_IsNotPlaintextAtRest()
+    {
+        // Arrange — write a conversation title via the raw-SQL path (NodeChatDbContext.EncryptConversationTitle),
+        // then assert the file bytes do not contain the plaintext sentinel.
+        var databasePath = GetDatabasePath("title-rawsql.sqlite");
+        var conversationId = Guid.NewGuid();
+        const string titleText = "raw-sql-path-title-sentinel";
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            // Insert the conversation row first (no title).
+            await context.Database.ExecuteSqlRawAsync("INSERT INTO conversations (conversation_id, user_id, created_at_utc, last_seen_utc, purged, origin) VALUES ({0}, {1}, {2}, {3}, 0, {4});",
+                conversationId, "worker-node", 1L, 2L, "local");
+
+            // Encrypt the title exactly as the raw-SQL write path does.
+            var encryptedTitle = context.EncryptConversationTitle(titleText, conversationId);
+
+            await context.Database.ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1};", encryptedTitle is null ? DBNull.Value : encryptedTitle, conversationId);
+        }
+
+        // Assert — raw file bytes must not contain the plaintext title sentinel.
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
+            "The SQLite file should not contain the plaintext conversation title (raw-SQL path).");
+
+        // Assert — reading back via DecryptConversationTitle must decrypt correctly.
+        // Use raw ADO.NET to read the BLOB column — EF's SqlQueryRaw cannot materialize scalar byte[] values.
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        await readContext.Database.OpenConnectionAsync();
+        byte[]? raw;
+        await using (var cmd = readContext.Database.GetDbConnection().CreateCommand())
+        {
+            cmd.CommandText = "SELECT title FROM conversations WHERE conversation_id = $id;";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "$id";
+            p.Value = conversationId;
+            cmd.Parameters.Add(p);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            await reader.ReadAsync();
+            raw = await reader.IsDBNullAsync(0) ? null : (byte[])reader.GetValue(0);
+        }
+
+        var decrypted = readContext.DecryptConversationTitle(raw, conversationId);
+        AssertEx.True(decrypted == titleText,
+            "Title should decrypt correctly via DecryptConversationTitle (raw-SQL path).");
+    }
+
+    [Test]
     public void NodeSqliteKeyHolder_WhenConfigured_DerivesExpectedHkdfKey()
     {
-        var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         const string nodeName = "worker-node-alpha";
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -149,13 +245,13 @@ public sealed class PersistenceEncryptionTests : IDisposable
             {
                 NodeName = nodeName
             }),
-            configuration);
+            new NodeOperatorSecretProvider(configuration));
 
         var actual = keyHolder.Key.ToArray();
         var expected = HkdfSha256(operatorSecret,
             [],
             Encoding.UTF8.GetBytes($"c0re-node-sqlite|v1|{nodeName}"),
-            32);
+            outputLength: 32);
 
         AssertBytesEqual(expected, actual, "Derived key should match the HKDF-SHA256 reference implementation.");
     }
@@ -163,7 +259,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public void NodeSqliteKeyHolder_WhenDisposed_ThrowsOnSubsequentAccess()
     {
-        var operatorSecret = Enumerable.Range(100, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 100, count: 32).Select(static value => (byte)value).ToArray();
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
                             {
@@ -175,7 +271,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             {
                 NodeName = "worker-node-beta"
             }),
-            configuration);
+            new NodeOperatorSecretProvider(configuration));
 
         _ = keyHolder.Key.Span[0];
         keyHolder.Dispose();
@@ -194,12 +290,45 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 {
                     NodeName = "worker-node-gamma"
                 }),
-                configuration);
+                new NodeOperatorSecretProvider(configuration));
         });
 
         AssertEx.True(exception.Message.Contains("Parameters:node-sqlite-key", StringComparison.Ordinal));
         AssertEx.True(exception.Message.Contains("dotnet user-secrets set", StringComparison.Ordinal));
         AssertEx.True(exception.Message.Contains("XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void NodeJwtKeyProvider_WhenConfigured_DerivesSeparateExpectedHkdfKey()
+    {
+        var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
+        const string nodeName = "worker-node-alpha";
+        var configuration = new ConfigurationBuilder()
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(operatorSecret)
+                            })
+                            .Build();
+
+        using var sqliteKeyHolder = new NodeSqliteKeyHolder(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = nodeName
+            }),
+            new NodeOperatorSecretProvider(configuration));
+        using var jwtKeyProvider = new NodeJwtKeyProvider(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = nodeName
+            }),
+            new NodeOperatorSecretProvider(configuration));
+
+        var actual = jwtKeyProvider.SigningKey.ToArray();
+        var expected = HkdfSha256(operatorSecret,
+            [],
+            Encoding.UTF8.GetBytes($"c0re-node-jwt|v1|{nodeName}"),
+            outputLength: 32);
+
+        AssertBytesEqual(expected, actual, "JWT signing key should match the HKDF-SHA256 reference implementation.");
+        AssertEx.False(sqliteKeyHolder.Key.Span.SequenceEqual(jwtKeyProvider.SigningKey.Span), "JWT and SQLite keys must use separate HKDF info strings.");
     }
 
     [Test]
@@ -258,6 +387,10 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
                       .UseSqlite($"Data Source={databasePath}")
                       .AddInterceptors(new NodeEncryptionSaveChangesInterceptor(), new NodeEncryptionMaterializationInterceptor())
+                      // Fresh per-test options create a new EF internal service provider; in a FULL-SUITE run the
+                      // process-wide count crosses EF's 20-provider threshold and the warning (an error in this solution)
+                      // throws. The established repo-wide test pattern is to ignore it on throwaway options.
+                      .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                       .Options;
 
         return new NodeChatDbContext(options, keyHolder);
@@ -289,7 +422,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static void AssertBytesEqual(byte[] expected, byte[] actual, string message)
@@ -340,12 +473,12 @@ public sealed class PersistenceEncryptionTests : IDisposable
         while (output.Length < outputLength)
         {
             var input = new byte[previousBlock.Length + info.Length + 1];
-            Buffer.BlockCopy(previousBlock, 0, input, 0, previousBlock.Length);
-            Buffer.BlockCopy(info, 0, input, previousBlock.Length, info.Length);
+            Buffer.BlockCopy(previousBlock, srcOffset: 0, input, dstOffset: 0, previousBlock.Length);
+            Buffer.BlockCopy(info, srcOffset: 0, input, previousBlock.Length, info.Length);
             input[^1] = counter;
 
             previousBlock = expandHmac.ComputeHash(input);
-            output.Write(previousBlock, 0, previousBlock.Length);
+            output.Write(previousBlock, offset: 0, previousBlock.Length);
             counter++;
         }
 

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>XE_Local_AI_Engine.WindowsLauncher</RootNamespace>
+    <AssemblyName>XE-Local-AI-Engine.WindowsLauncher</AssemblyName>
+  </PropertyGroup>
+
+  <Target Name="ValidateWindowsApphostLicenseAssets"
+          BeforeTargets="ComputeFilesToPublish"
+          Condition="'$(UseAppHost)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))">
+    <PropertyGroup>
+      <_WindowsApphostPackDirectory>$(NuGetPackageRoot)microsoft.netcore.app.host.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_WindowsApphostPackDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_WindowsApphostPackDirectory)/LICENSE.TXT')"
+           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) apphost MIT license is missing from the restored host pack."/>
+    <Error Condition="!Exists('$(_WindowsApphostPackDirectory)/THIRD-PARTY-NOTICES.TXT')"
+           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) apphost third-party notices are missing from the restored host pack."/>
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/LICENSE.TXT">
+        <RelativePath>licenses/dotnet/DOTNET-APPHOST-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/LICENSE.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_WindowsApphostPackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

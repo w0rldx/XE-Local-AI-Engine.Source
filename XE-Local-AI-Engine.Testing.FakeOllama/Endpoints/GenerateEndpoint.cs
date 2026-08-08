@@ -21,7 +21,7 @@ internal static class GenerateEndpoint
         var response = $"[fake-ollama] {prompt}";
         var tokens = SplitTokens(response);
 
-        FakeOllamaEndpointMapper.Record(context, state, model, 0, prompt);
+        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, prompt, FakeOllamaEndpointMapper.GetKeepAlive(root));
 
         if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
         {
@@ -73,7 +73,7 @@ internal static class GenerateEndpoint
 
     private static IReadOnlyList<string> SplitTokens(string value)
     {
-        return value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return value.Split(separator: ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select((token, index) => index == 0 ? token : " " + token)
                     .DefaultIfEmpty(string.Empty)
                     .ToArray();

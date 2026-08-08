@@ -10,11 +10,15 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -60,7 +64,7 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var assembler = Substitute.For<IRuntimePackageEnvelopeAssembler>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var dispatcher = CreateDispatcher(runner, assembler, new MockHubMessageSender(), nodeKeyRegistry);
@@ -91,13 +95,23 @@ public sealed class WorkerEventDispatcherTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var first = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
         var second = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
-              .Returns(call => ((InvocationExecutionContext)call[0]).Package.InvocationId == first.InvocationId ? gate.Task : Task.CompletedTask);
+              .Returns(call =>
+              {
+                  if (((InvocationExecutionContext)call[0]).Package.InvocationId == first.InvocationId)
+                  {
+                      firstEntered.TrySetResult();
+                      return gate.Task;
+                  }
+
+                  return Task.CompletedTask;
+              });
 
         var dispatcher = CreateDispatcher(runner);
 
         var firstDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(first));
-        await Task.Delay(20);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var secondDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(second));
 
         await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
@@ -109,6 +123,137 @@ public sealed class WorkerEventDispatcherTests
         await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>());
         await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == second.InvocationId), Arg.Any<CancellationToken>());
         AssertEx.Equal(second.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhenSlotFree_SetsCurrentInvocationAndReturnsLease()
+    {
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        var lease = await dispatcher.ReportInvocationAssignedAsync(package);
+
+        AssertEx.Equal(package.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+        await lease.DisposeAsync();
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhenRemoteRunning_QueuesUntilRemoteSlotReleased()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var remoteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var remoteEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  remoteEntered.TrySetResult();
+                  return remoteGate.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+
+        // Remote invocation starts and holds the shared slot.
+        var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
+        await remoteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Local assignment must QUEUE (not throw) while the remote holds the slot: the returned task cannot complete
+        // until the remote releases the slot, so it is observably incomplete with no wall-clock wait.
+        var localAssign = dispatcher.ReportInvocationAssignedAsync(local);
+        AssertEx.False(localAssign.IsCompleted);
+        AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+
+        // Releasing the remote lets the queued local assignment proceed.
+        remoteGate.SetResult();
+        await remoteDispatch;
+        var lease = await localAssign;
+
+        AssertEx.Equal(local.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+        await lease.DisposeAsync();
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhileRemoteHoldsCollisionQueue_BlocksUntilRemoteReleasesThenProceeds()
+    {
+        // Deterministic collision-queue test: the remote run is gated on a TaskCompletionSource the test owns, and
+        // we synchronize on the runner actually entering (remoteEntered) before starting the local turn, so there
+        // is no sleep-before-dispatch race. The local turn's blocked/unblocked transition is observed via the
+        // returned ReportInvocationAssignedAsync task plus CurrentInvocation ordering, not timing.
+        var runner = Substitute.For<IInvocationRunner>();
+        var remoteEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRemote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  remoteEntered.TrySetResult();
+                  return releaseRemote.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+
+        // Remote invocation starts and holds the shared _remoteInvocationQueue lease.
+        var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
+        await remoteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The local send must WAIT on the same gate before claiming the slot: its task does not complete and the
+        // current invocation stays the remote one.
+        var localAssign = dispatcher.ReportInvocationAssignedAsync(local);
+
+        // The local send queues behind the remote lease: its task cannot complete until the remote releases, so it is
+        // observably incomplete without a wall-clock race window.
+        AssertEx.False(localAssign.IsCompleted, "The local send must queue behind the remote invocation and not acquire the slot while the remote holds it.");
+        AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+
+        // No spurious failed/persisted noise while queued: the local turn never reached the runner and the tracked
+        // invocation is still the running remote one (not a failed local one).
+        await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+        AssertEx.NotEqual(InvocationStatus.Failed, dispatcher.CurrentInvocation?.Status ?? InvocationStatus.Failed);
+
+        // Releasing the remote lease lets the queued local turn acquire the slot and become current.
+        releaseRemote.SetResult();
+        await remoteDispatch;
+        var lease = await localAssign.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(local.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+        // The local turn does not drive the agent runner, so no additional RunAsync call was made for it.
+        await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+        await lease.DisposeAsync();
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhenCancelledWhileQueued_AbortsWaitWithoutAssigning()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var remoteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var remoteEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  remoteEntered.TrySetResult();
+                  return remoteGate.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+        var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
+        await remoteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The local assignment queues behind the remote lease; cancelling its token must abort the queued wait. The
+        // wait honours the token whenever the cancel lands, so no delay is needed to "arm" the wait first.
+        using var localCancellation = new CancellationTokenSource();
+        var localAssign = dispatcher.ReportInvocationAssignedAsync(local, localCancellation.Token);
+
+        await localCancellation.CancelAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => localAssign);
+        AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+
+        remoteGate.SetResult();
+        await remoteDispatch;
     }
 
     [Test]
@@ -137,7 +282,13 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(gate.Task);
+        var runnerEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  runnerEntered.TrySetResult();
+                  return gate.Task;
+              });
         var dispatcher = CreateDispatcher(runner);
         var package = RuntimePackageBuilder.Valid().Build();
 
@@ -148,13 +299,62 @@ public sealed class WorkerEventDispatcherTests
             Encrypted = null
         });
 
-        await Task.Delay(20);
+        await runnerEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         dispatcher.StopAcceptingRemoteInvocations();
         gate.SetResult();
         await dispatch;
 
         await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == package.InvocationId), Arg.Any<CancellationToken>());
         AssertEx.Equal(InvocationStatus.Completed, dispatcher.CurrentInvocation?.Status ?? InvocationStatus.Failed);
+    }
+
+    [Test]
+    public async Task StopAcceptingRemoteInvocations_AbandonsAnAssignmentBlockedOnTheInvocationSlot()
+    {
+        // AUD4-18: a second remote assignment BLOCKED waiting for the invocation slot (held by a running one) must be
+        // released by the drain instead of hanging forever on the previously-uncancelable slot wait — and it must never
+        // start. The already-running first assignment is unaffected.
+        var runner = Substitute.For<IInvocationRunner>();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var second = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+
+        runner.RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  firstEntered.TrySetResult();
+                  return firstGate.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+
+        var firstDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = first,
+            Encrypted = null
+        });
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The second assignment passes the accept-guard, then blocks on the slot the running first assignment holds.
+        var secondDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = second,
+            Encrypted = null
+        });
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+
+        dispatcher.StopAcceptingRemoteInvocations();
+
+        // The blocked second assignment is released (does not hang) and never runs; the first is still running.
+        await secondDispatch.WaitAsync(TimeSpan.FromSeconds(5));
+        await runner.DidNotReceive().RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == second.InvocationId), Arg.Any<CancellationToken>());
+
+        firstGate.SetResult();
+        await firstDispatch;
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -172,9 +372,70 @@ public sealed class WorkerEventDispatcherTests
 
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal("Let me think... more thought", current.StreamedThinkingContent);
-        AssertEx.Equal(2, current.StreamedThinkingChunkCount);
+        AssertEx.Equal(expected: 2, current.StreamedThinkingChunkCount);
         AssertEx.Equal("Hello world", current.StreamedContent);
-        AssertEx.Equal(2, current.StreamedChunkCount);
+        AssertEx.Equal(expected: 2, current.StreamedChunkCount);
+    }
+
+    [Test]
+    public async Task ReportInvocationStreamChunkAsync_LongResponse_KeepsContentCorrectWithBoundedAllocations()
+    {
+        // AUD4-10: every streamed chunk clones the invocation snapshot. Content is now backed by an immutable
+        // StreamingText copied by REFERENCE on clone, so a clone no longer materializes the whole accumulated response
+        // per chunk (the old O(n^2) hot path). Assert (a) the final content is exactly the concatenation and (b)
+        // streaming 20k chunks stays far below the allocation the old per-chunk ToString would have cost.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        const int chunkCount = 20_000;
+        const string chunk = "0123456789"; // 10 chars/chunk -> a ~200k-char final response
+
+        // Warm up the JIT and the first-chunk allocations outside the measured window.
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < chunkCount; i++)
+        {
+            await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk);
+        }
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        // Correctness read happens AFTER measuring so the one-time final materialization is not counted against the bound.
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal((chunkCount + 1) * chunk.Length, current.StreamedContent.Length);
+        AssertEx.Equal(chunkCount + 1, current.StreamedChunkCount);
+
+        // The old clone materialized ~i*10 chars on chunk i -> ~sum(i)*10*2 bytes ~= 4 GB over 20k chunks. The immutable
+        // accumulator makes per-chunk clone work O(1); assert well under a ceiling the O(n^2) path could never meet.
+        AssertEx.True(allocatedBytes < 64L * 1024 * 1024,
+            $"Streaming {chunkCount:N0} chunks allocated {allocatedBytes:N0} bytes; expected < 64 MiB (the old O(n^2) clone would allocate multiple GB).");
+    }
+
+    [Test]
+    public async Task ReportInvocationCompletedAsync_PreservesGenerationDurationMsThroughSnapshotClone()
+    {
+        // Regression: Clone() copied the token fields but dropped GenerationDurationMs, so the cloned snapshot
+        // delivered to the chat pump (both via the CurrentInvocation getter and the InvocationStateChanged event)
+        // persisted a null duration even though the runner reported one. Assert both clone paths carry it.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        InvocationState? lastEventState = null;
+        dispatcher.InvocationStateChanged += (_, args) => lastEventState = args.State;
+
+        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1, generationDurationMs: 1234);
+
+        // The getter returns Clone(CurrentInvocation): the duration must survive that copy.
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(expected: 1234L, current.GenerationDurationMs);
+        AssertEx.Equal(expected: 3, current.OutputTokens);
+
+        // The event payload is also a Clone of the state; the pump consumes this snapshot.
+        var eventState = AssertEx.NotNull(lastEventState);
+        AssertEx.Equal(expected: 1234L, eventState.GenerationDurationMs);
     }
 
     [Test]
@@ -194,9 +455,9 @@ public sealed class WorkerEventDispatcherTests
 
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal("Hello world", current.StreamedContent);
-        AssertEx.Equal(3, current.StreamedChunkCount);
+        AssertEx.Equal(expected: 3, current.StreamedChunkCount);
         AssertEx.Equal("Think\nagain", current.StreamedThinkingContent);
-        AssertEx.Equal(3, current.StreamedThinkingChunkCount);
+        AssertEx.Equal(expected: 3, current.StreamedThinkingChunkCount);
     }
 
     [Test]
@@ -246,7 +507,7 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
-        var evt = new ApprovalResolvedEvent("req-1", true);
+        var evt = new ApprovalResolvedEvent("req-1", Approved: true);
 
         await dispatcher.DispatchApprovalResolvedAsync(evt);
 
@@ -306,7 +567,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenAadMismatch_EmitsInvocationKeyMismatch()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -318,6 +579,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -333,7 +595,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenRetiredKeyExpired_EmitsInvocationKeyMismatch()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry(new NodeKeyResolution
         {
             RequestedKeyId = "retired-key-1",
@@ -349,6 +611,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -362,7 +625,7 @@ public sealed class WorkerEventDispatcherTests
 
     private static WorkerEventDispatcher CreateDispatcher(IInvocationRunner runner)
     {
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The returned dispatcher retains this registry; it has no disposal contract, and the isolated NSec key is process-scoped test data.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -388,14 +651,36 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => hubMessageSender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
+    }
+
+    private static INodeChatRemotePersistenceCoordinator CreateRemotePersistenceCoordinator()
+    {
+        // A real session over a substitute pump that returns benign results, so the dispatcher's persistence
+        // drain runs without NPEs while these tests focus on the agent-run wiring.
+        var pump = Substitute.For<INodeChatInvocationPump>();
+        pump.FlushDeltaAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<InvocationState>(), Arg.Any<NodeChatPumpCursor>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted: null, ContentDelta: null, ReasoningDelta: null));
+
+        var coordinator = Substitute.For<INodeChatRemotePersistenceCoordinator>();
+        coordinator.BeginAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo =>
+                   {
+                       var package = callInfo.ArgAt<RuntimePackage>(0);
+                       return new NodeChatRemotePersistenceSession(pump,
+                           new NodeChatMessageCorrelation(package.ConversationId, Guid.NewGuid(), package.InvocationId),
+                           package.ModelProfile);
+                   });
+
+        return coordinator;
     }
 
     [Test]
     public async Task DispatchInvocationAssignedAsync_WhenConfigHashMismatch_SendsEncryptedFailure()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -405,6 +690,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -421,7 +707,7 @@ public sealed class WorkerEventDispatcherTests
     public async Task DispatchInvocationAssignedAsync_WhenHistoryHashMismatch_SendsEncryptedFailure()
     {
         var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher retains this test registry; it has no disposal contract, and its isolated NSec key lives only for this test process.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
@@ -431,6 +717,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -457,14 +744,14 @@ public sealed class WorkerEventDispatcherTests
                   return Task.CompletedTask;
               });
 
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The dispatcher and real assembler share this registry for the test; neither owns the other's dependency, so process teardown releases the isolated key.
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
-        var historyEntryOne = CreateHistoryEntry(MessageRole.System, 10);
-        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, 20);
+        var historyEntryOne = CreateHistoryEntry(MessageRole.System, sortOrder: 10);
+        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, sortOrder: 20);
         var encryptedPackage = CreateMixedEnvelopePackage([historyEntryOne, historyEntryTwo]);
-        var expectedEpochKey = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var expectedEpochKey = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(encryptedPackage.ConversationId, historyEntryOne, Arg.Any<Key>())
                              .Returns(_ => new EnvelopeDecryptionResult("system guidance"u8.ToArray(), new byte[32]));
@@ -494,23 +781,23 @@ public sealed class WorkerEventDispatcherTests
         AssertEx.Equal(encryptedPackage.Timeouts.InvocationTimeoutSeconds, context.Package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(encryptedPackage.Timeouts.ToolCallTimeoutSeconds, context.Package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(encryptedPackage.Timeouts.StreamIdleTimeoutSeconds, context.Package.Timeouts.StreamIdleTimeoutSeconds);
-        AssertEx.Equal(1, context.Package.AllowedTools.Count);
+        AssertEx.Equal(expected: 1, context.Package.AllowedTools.Count);
         AssertEx.Equal("open_url", context.Package.AllowedTools[0].Name);
         AssertEx.Equal(ToolLocation.ApiSide, context.Package.AllowedTools[0].Location);
         AssertEx.Equal("{\"type\":\"object\"}", context.Package.AllowedTools[0].ParameterSchema);
-        AssertEx.Equal(3, context.Package.ConversationContext.Count);
+        AssertEx.Equal(expected: 3, context.Package.ConversationContext.Count);
         AssertEx.Equal(historyEntryOne.Id, context.Package.ConversationContext[0].Id);
         AssertEx.Equal(MessageRole.System, context.Package.ConversationContext[0].Role);
         AssertEx.Equal("system guidance", context.Package.ConversationContext[0].Content);
-        AssertEx.Equal(10, context.Package.ConversationContext[0].SortOrder);
+        AssertEx.Equal(expected: 10, context.Package.ConversationContext[0].SortOrder);
         AssertEx.Equal(historyEntryTwo.Id, context.Package.ConversationContext[1].Id);
         AssertEx.Equal(MessageRole.Assistant, context.Package.ConversationContext[1].Role);
         AssertEx.Equal("assistant reply", context.Package.ConversationContext[1].Content);
-        AssertEx.Equal(20, context.Package.ConversationContext[1].SortOrder);
+        AssertEx.Equal(expected: 20, context.Package.ConversationContext[1].SortOrder);
         AssertEx.Equal(encryptedPackage.MessageId, context.Package.ConversationContext[2].Id);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[2].Role);
         AssertEx.Equal("latest user message", context.Package.ConversationContext[2].Content);
-        AssertEx.Equal(21, context.Package.ConversationContext[2].SortOrder);
+        AssertEx.Equal(expected: 21, context.Package.ConversationContext[2].SortOrder);
         AssertEx.Equal(encryptedPackage.MessageId, context.MessageId);
         AssertEx.Equal(encryptedPackage.EpochVersion, context.EpochVersion);
         AssertEx.True((capturedEpochKey ?? []).SequenceEqual(expectedEpochKey));

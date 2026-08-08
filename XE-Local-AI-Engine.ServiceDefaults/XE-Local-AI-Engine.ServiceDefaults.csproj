@@ -15,4 +15,8 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>
+  </ItemGroup>
+
 </Project>

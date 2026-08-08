@@ -1,0 +1,3 @@
+Source: https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/text/MIT.txt
+Retrieved: 2026-08-07
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5

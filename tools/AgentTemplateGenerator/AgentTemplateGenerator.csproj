@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AgentTemplateGenerator</RootNamespace>
+    <AssemblyName>AgentTemplateGenerator</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- No Version: CPM (root Directory.Packages.props) supplies the pinned YamlDotNet 18.0.0. -->
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+</Project>

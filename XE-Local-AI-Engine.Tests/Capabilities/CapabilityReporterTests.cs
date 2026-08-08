@@ -2,16 +2,22 @@ namespace XE_Local_AI_Engine.Tests.Capabilities;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using OllamaSharp;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class CapabilityReporterTests
 {
@@ -24,7 +30,7 @@ public sealed class CapabilityReporterTests
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
         AssertEx.NotNull(result);
-        AssertEx.Equal(2, result.SchemaVersion);
+        AssertEx.Equal(expected: 2, result.SchemaVersion);
         AssertEx.True(result.OllamaReachable == true);
         AssertEx.Equal("0.0.0-fake", result.OllamaVersion);
         AssertEx.Equal("unmanaged", result.ManagementMode);
@@ -42,6 +48,41 @@ public sealed class CapabilityReporterTests
         AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Contains(result.InstalledModels, "llava:latest");
         AssertEx.Contains(result.SupportedCapabilities, "vision");
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenAgentHomeEnabled_AdvertisesAgentHomeCapabilities()
+    {
+        await using var context = await CreateContextAsync(configurationOverrides: new Dictionary<string, string?>
+        {
+            ["AgentHome:Enabled"] = "true"
+        });
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.SupportedCapabilities, "text");
+        AssertEx.Contains(result.SupportedCapabilities, "agent-home");
+        AssertEx.Contains(result.SupportedCapabilities, "sandbox-process");
+        AssertEx.Contains(result.SupportedCapabilities, "runtime-dotnet-agent-home");
+        AssertEx.Contains(result.SupportedCapabilities, "workspace-copy");
+        AssertEx.Contains(result.SupportedCapabilities, "patch-export");
+        AssertEx.Contains(result.SupportedCapabilities, "memory-proposals");
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenAgentHomeDisabledByDefault_OmitsAgentHomeCapabilities()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.SupportedCapabilities, "text");
+        AssertEx.False(result.SupportedCapabilities.Contains("agent-home"),
+            "AgentHome capabilities must not be advertised when AgentHome:Enabled is false.");
+        AssertEx.False(result.SupportedCapabilities.Contains("sandbox-process"));
+        AssertEx.False(result.SupportedCapabilities.Contains("memory-proposals"));
     }
 
     [Test]
@@ -97,9 +138,9 @@ public sealed class CapabilityReporterTests
         context.ClearRecordedRequests();
         var secondResult = await context.Reporter.DetectCapabilitiesAsync();
 
-        AssertEx.Equal(131072, firstResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
-        AssertEx.Equal(131072, secondResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
-        AssertEx.Equal(0, context.ShowRequestCount);
+        AssertEx.Equal(expected: 131072, firstResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
+        AssertEx.Equal(expected: 131072, secondResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
+        AssertEx.Equal(expected: 0, context.ShowRequestCount);
     }
 
     [Test]
@@ -219,6 +260,42 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
+    public async Task VerifyOllamaAndModelAsync_WhenDefaultModelIsStored_UsesTheStoredValueNotTheAppsettingsSeed()
+    {
+        // The reporter used to read Agent:LocalChat:DefaultModel straight from IConfiguration in its constructor, which
+        // meant a stored default model was never consulted — the appsettings seed always won, forever. Here the ONLY
+        // installed model is the stored default, so this can only pass if the stored value is what gets resolved.
+        await using var context = await CreateContextAsync(nodeSettings: new StoredNodeSettings
+        {
+            DefaultModelName = "unsloth/gemma-4-12b-it-GGUF:Q5_K_M"
+        });
+        context.SetModelsResponse("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
+
+        var result = await context.Reporter.VerifyOllamaAndModelAsync("some-unrequested-model");
+
+        AssertEx.True(result, "The stored default model is installed, so the node can fall back to it.");
+    }
+
+    [Test]
+    public async Task VerifyOllamaAndModelAsync_WhenStoredDefaultIsAbsent_DoesNotFallBackToTheSeed()
+    {
+        // The discriminating case. The appsettings seed ("qwen3.5:0.8b") IS installed and the stored default is NOT, so
+        // the two possible implementations give OPPOSITE answers: reading the seed returns true, reading the stored
+        // value returns false. Anything but false here means the stored setting is being ignored again.
+        await using var context = await CreateContextAsync(nodeSettings: new StoredNodeSettings
+        {
+            DefaultModelName = "an-uninstalled-stored-default"
+        });
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        var result = await context.Reporter.VerifyOllamaAndModelAsync("some-unrequested-model");
+
+        AssertEx.False(result,
+            "The operator's stored default model is not installed, so the node must NOT report a usable fallback just "
+            + "because the appsettings seed happens to be installed.");
+    }
+
+    [Test]
     public async Task VerifyOllamaAndModelAsync_WhenOllamaListFailsAndModelConfigured_ReturnsTrue()
     {
         await using var context = await CreateContextAsync();
@@ -240,7 +317,7 @@ public sealed class CapabilityReporterTests
 
         AssertEx.True(firstResult);
         AssertEx.True(secondResult);
-        AssertEx.Equal(1, context.TagsRequestCount);
+        AssertEx.Equal(expected: 1, context.TagsRequestCount);
     }
 
     [Test]
@@ -255,7 +332,7 @@ public sealed class CapabilityReporterTests
 
         AssertEx.True(firstResult);
         AssertEx.True(secondResult);
-        AssertEx.Equal(2, context.TagsRequestCount);
+        AssertEx.Equal(expected: 2, context.TagsRequestCount);
     }
 
     [Test]
@@ -266,11 +343,25 @@ public sealed class CapabilityReporterTests
 
         await context.Reporter.ReportToApiAsync();
 
-        AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(expected: 1, context.HubConnection.SendCapabilitiesCallCount);
         AssertEx.NotNull(context.HubConnection.LastCapabilities);
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
-        AssertEx.Equal(300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
         AssertEx.True(context.HubConnection.LastCapabilities.LastCapabilityReportAt.HasValue);
+    }
+
+    [Test]
+    public async Task CapabilityReporter_WhenNotPaired_SkipsOllamaProbeAndHubSend()
+    {
+        // Standalone/desktop mode (unpaired): ReportToApiAsync must short-circuit BEFORE the capability probe, so it
+        // neither probes Ollama (no /api/tags request) nor attempts the hub send. This is the CL-6 latency/noise fix.
+        await using var context = await CreateContextAsync(paired: false);
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        await context.Reporter.ReportToApiAsync();
+
+        AssertEx.Equal(expected: 0, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(expected: 0, context.TagsRequestCount);
     }
 
     [Test]
@@ -282,7 +373,7 @@ public sealed class CapabilityReporterTests
         await context.Reporter.ReportToApiAsync();
         await context.Reporter.ReportToApiAsync();
 
-        AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(expected: 1, context.HubConnection.SendCapabilitiesCallCount);
     }
 
     [Test]
@@ -296,7 +387,7 @@ public sealed class CapabilityReporterTests
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
-        AssertEx.Equal(120, result.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 120, result.MaxMessageRequestTimeoutSeconds);
     }
 
     [Test]
@@ -320,12 +411,13 @@ public sealed class CapabilityReporterTests
         AssertEx.True(result.LastCapabilityReportAt.HasValue);
         AssertEx.Contains(result.InstalledModels, "gpt-4o");
         AssertEx.Contains(result.SupportedCapabilities, "cloud");
-        AssertEx.Equal(0, context.TagsRequestCount);
+        AssertEx.Equal(expected: 0, context.TagsRequestCount);
     }
 
     private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null,
         StoredNodeSettings? nodeSettings = null,
-        Dictionary<string, string?>? configurationOverrides = null)
+        Dictionary<string, string?>? configurationOverrides = null,
+        bool paired = true)
     {
         var configurationValues = new Dictionary<string, string?>
         {
@@ -346,28 +438,48 @@ public sealed class CapabilityReporterTests
 
         var server = await FakeOllamaServer.StartAsync();
         var chatClient = new OllamaApiClient(server.BaseAddress);
-        var modelService = new OllamaModelService(chatClient);
+        var capabilityClient = new OllamaModelCapabilityClient(chatClient);
 
         var hubConnection = new MockWorkerHubConnection();
         var cloudCredentialStore = new StubCloudCredentialStore(cloudCredentials);
         var nodeSettingsStore = new StubNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
         var timeProvider = new FakeTimeProvider();
-        var reporter = new CapabilityReporter(chatClient, modelService, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
-        return new CapabilityReporterTestContext(server, chatClient, modelService, hubConnection, reporter, timeProvider);
+        var prober = new ModelCapabilityProber(capabilityClient, configuration, timeProvider, NullLogger<ModelCapabilityProber>.Instance);
+        var composer = new CapabilityReportComposer(configuration, NullLogger<CapabilityReportComposer>.Instance);
+        // Default to a paired token store so the existing report tests exercise the real probe-and-send path. The
+        // standalone short-circuit test requests the unpaired store to assert no probe and no hub send.
+        var tokenStore = paired
+            ? MockTokenStore.Paired("test-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1))
+            : MockTokenStore.Unpaired();
+        // The REAL NodeRuntimeSettings over the same store, so the reporter resolves its default model through the
+        // stored > seed precedence exactly as it does in production. LocalChatAgentOptions.DefaultModel defaults to
+        // "qwen3.5:0.8b", the same value these tests put in Ollama:ChatModel, so the seed path is unchanged; what is now
+        // additionally honoured is a StoredNodeSettings.DefaultModelName, which the reporter previously ignored outright.
+        var runtimeSettings = new NodeRuntimeSettings(nodeSettingsStore,
+            configuration,
+            Options.Create(new LocalChatAgentOptions()),
+            Options.Create(new AgentHomeOptions()),
+            Options.Create(new WorkerNodeOptions
+            {
+                NodeName = "test-node"
+            }));
+        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, runtimeSettings, hubConnection, tokenStore, timeProvider,
+            NullLogger<CapabilityReporter>.Instance);
+        return new CapabilityReporterTestContext(server, chatClient, capabilityClient, hubConnection, reporter, timeProvider);
     }
 
     private sealed class CapabilityReporterTestContext : IAsyncDisposable
     {
         public CapabilityReporterTestContext(FakeOllamaServer server,
             OllamaApiClient chatClient,
-            OllamaModelService modelService,
+            OllamaModelCapabilityClient capabilityClient,
             MockWorkerHubConnection hubConnection,
             CapabilityReporter reporter,
             FakeTimeProvider timeProvider)
         {
             Server = server;
             ChatClient = chatClient;
-            ModelService = modelService;
+            CapabilityClient = capabilityClient;
             HubConnection = hubConnection;
             Reporter = reporter;
             TimeProvider = timeProvider;
@@ -381,7 +493,7 @@ public sealed class CapabilityReporterTests
 
         public OllamaApiClient ChatClient { get; }
 
-        public OllamaModelService ModelService { get; }
+        public OllamaModelCapabilityClient CapabilityClient { get; }
 
         public MockWorkerHubConnection HubConnection { get; }
 
@@ -391,8 +503,6 @@ public sealed class CapabilityReporterTests
 
         public async ValueTask DisposeAsync()
         {
-            ModelService.Dispose();
-
             if (ChatClient is IDisposable disposableChatClient)
             {
                 disposableChatClient.Dispose();
@@ -451,7 +561,41 @@ public sealed class CapabilityReporterTests
             return Task.FromResult(_credentials);
         }
 
+        public Task<StoredCloudProviderConfig?> LoadConfigAsync(CancellationToken cancellationToken = default)
+        {
+            if (_credentials is null)
+            {
+                return Task.FromResult<StoredCloudProviderConfig?>(null);
+            }
+
+            var config = new StoredCloudProviderConfig
+            {
+                ProviderName = _credentials.ProviderName,
+                AzureFoundry = new StoredAzureFoundryConnection
+                {
+                    Endpoint = _credentials.Endpoint,
+                    AuthMode = AzureFoundryAuthMode.ApiKey,
+                    ApiKey = _credentials.ApiKey,
+                    Models =
+                    [
+                        new StoredAzureFoundryModel
+                        {
+                            DeploymentName = _credentials.DeploymentName,
+                            DisplayLabel = _credentials.DeploymentName
+                        }
+                    ],
+                },
+            };
+
+            return Task.FromResult<StoredCloudProviderConfig?>(config);
+        }
+
         public Task SaveAsync(StoredCloudCredentials credentials, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveConfigAsync(StoredCloudProviderConfig config, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
@@ -474,6 +618,11 @@ public sealed class CapabilityReporterTests
         public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_settings);
+        }
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return _settings;
         }
 
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)

@@ -12,7 +12,7 @@ public sealed class WorkerNodeOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(null, CreateValidOptions());
+        var result = _validator.Validate(name: null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -23,7 +23,37 @@ public sealed class WorkerNodeOptionsValidatorTests
     {
         var options = CreateValidOptions();
 
-        AssertEx.Equal(10, options.MaxPendingToolCallAgeMinutes);
+        AssertEx.Equal(expected: 10, options.MaxPendingToolCallAgeMinutes);
+    }
+
+    [Test]
+    public void Defaults_UseFiveMinuteDisconnectGrace()
+    {
+        AssertEx.Equal(expected: 300, CreateValidOptions().DetachedGraceSeconds);
+    }
+
+    [Test]
+    public void Validate_WhenDetachedGraceIsNegative_ReturnsFailure()
+    {
+        // 0 is legal (never cancel); negative is not, and must be rejected at the boundary rather than reaching the
+        // reaper as an always-expired grace that would cancel every detached run on its first tick.
+        var options = CreateValidOptions();
+        options.DetachedGraceSeconds = -1;
+
+        var result = _validator.Validate(name: null, options);
+
+        AssertFailureContains(result, "DetachedGraceSeconds");
+    }
+
+    [Test]
+    public void Validate_WhenDetachedGraceIsZero_ReturnsSuccess()
+    {
+        var options = CreateValidOptions();
+        options.DetachedGraceSeconds = 0;
+
+        var result = _validator.Validate(name: null, options);
+
+        AssertEx.False(result.Failed, "0 disables reaping and is a supported operator choice");
     }
 
     [Test]
@@ -32,7 +62,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.NodeName = string.Empty;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "NodeName");
     }
@@ -43,7 +73,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxResponseSizeMb = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxResponseSizeMb");
     }
@@ -54,7 +84,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxPendingToolCallAgeMinutes = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }
@@ -65,7 +95,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxPendingToolCallAgeMinutes = 61;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }

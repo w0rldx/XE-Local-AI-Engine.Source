@@ -1,0 +1,254 @@
+namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+
+using System.Diagnostics;
+using System.Text;
+using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Events;
+
+public sealed partial class InvocationRunner
+{
+    // The mutable streaming accumulator shared by the single-agent and orchestration paths: the response/reasoning
+    // builders, the byte totals (against _maxResponseSizeBytes), the monotonic sequence counters the transport sends,
+    // and the terminal usage snapshot. Carried by reference into the branch methods so the post-stream completion
+    // block in RunAsync reads the final state.
+    private sealed class StreamState
+    {
+        // Wall-clock generation timer for the whole turn (prompt-eval through final token), started at state
+        // construction so it covers both the single-agent and orchestration branches. Read once in the completion
+        // block to stamp the persisted tokens-per-second duration.
+        public Stopwatch GenerationStopwatch { get; } = Stopwatch.StartNew();
+
+        // Time-to-first-token (AUD4-19) inputs, seeded by the readiness phase before the watched stream begins:
+        // ModelReadyTimestamp is the Stopwatch.GetTimestamp() baseline the first output is measured from (the local
+        // warm phase's completion, or turn start for a runtime with no cold load); ProviderTag is the metric dimension
+        // (local | remote). FirstOutputRecorded gates the one-shot histogram record on the very first emitted chunk.
+        public long? ModelReadyTimestamp { get; set; }
+
+        public string ProviderTag { get; set; } = "remote";
+
+        public bool FirstOutputRecorded { get; set; }
+
+        public StringBuilder ResponseBuilder { get; } = new();
+
+        public StringBuilder ReasoningBuilder { get; } = new();
+
+        public UsageSnapshot? UsageSnapshot { get; set; }
+
+        public long Sequence { get; set; }
+
+        public long ReasoningSequence { get; set; }
+
+        public int TotalResponseBytes { get; set; }
+
+        public int TotalReasoningBytes { get; set; }
+    }
+
+    // The single emit path both branches use: it appends to the accumulator, enforces the response/reasoning byte
+    // caps, advances the sequence counter, reports the chunk to the dispatcher, and sends it over the encrypted or
+    // plain hub transport. Keeping this one place guarantees the orchestration path streams byte-for-byte like the
+    // single-agent path.
+    private sealed class StreamTransport
+    {
+        private readonly InvocationExecutionContext _context;
+        private readonly RuntimePackage _package;
+        private readonly InvocationRunner _runner;
+        private readonly bool _sendEncrypted;
+        private readonly bool _sendPlain;
+        private readonly IHubMessageSender _sender;
+
+        public StreamTransport(InvocationRunner runner,
+            IHubMessageSender sender,
+            IWorkerEventDispatcher dispatcher,
+            InvocationExecutionContext context,
+            RuntimePackage package,
+            bool sendEncrypted,
+            bool sendPlain)
+        {
+            _runner = runner;
+            _sender = sender;
+            Dispatcher = dispatcher;
+            _context = context;
+            _package = package;
+            _sendEncrypted = sendEncrypted;
+            _sendPlain = sendPlain;
+        }
+
+        public IWorkerEventDispatcher Dispatcher { get; }
+
+        /// <summary>
+        ///     Reports a non-fatal turn notice (model substitution, tool disabled, history truncated) for this
+        ///     invocation. Unlike <see cref="EmitReasoningAsync" />/<see cref="EmitTextAsync" /> this does not touch
+        ///     <see cref="StreamState" /> or the byte-size caps — a notice is metadata about the turn, not streamed
+        ///     model output — and reports through the SAME dispatcher every notice-emitting caller already holds, so
+        ///     it needs no separate wiring.
+        /// </summary>
+        public Task EmitNoticeAsync(TurnNoticeKind kind, string message, string? detail = null)
+        {
+            return Dispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+            {
+                InvocationId = _package.InvocationId,
+                Kind = kind,
+                Message = message,
+                Detail = detail
+            });
+        }
+
+        // Records time-to-first-token exactly once per turn, on the first emitted reasoning OR text chunk, measured from
+        // the model-ready baseline the readiness phase seeded (AUD4-19). Tagged by provider (local | remote), no model
+        // identity. A no-op after the first chunk and when no baseline was seeded.
+        private static void RecordFirstOutputLatency(StreamState stream)
+        {
+            if (stream.FirstOutputRecorded || stream.ModelReadyTimestamp is not { } readyTimestamp)
+            {
+                return;
+            }
+
+            stream.FirstOutputRecorded = true;
+            NodeMetrics.ModelReadyToFirstOutputMs.Record(Stopwatch.GetElapsedTime(readyTimestamp).TotalMilliseconds,
+                new KeyValuePair<string, object?>("provider", stream.ProviderTag));
+        }
+
+        public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)
+        {
+            RecordFirstOutputLatency(stream);
+
+            // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
+            // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
+            // allocation-free GetByteCount.
+            var thinkingBytes = _sendEncrypted ? Encoding.UTF8.GetBytes(thinkingChunk) : null;
+            stream.TotalReasoningBytes += thinkingBytes?.Length ?? Encoding.UTF8.GetByteCount(thinkingChunk);
+            if (stream.TotalReasoningBytes > _runner._maxResponseSizeBytes)
+            {
+                throw new InvalidOperationException($"Reasoning size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
+            }
+
+            stream.ReasoningSequence++;
+            stream.ReasoningBuilder.Append(thinkingChunk);
+
+            await Dispatcher.ReportInvocationThinkingChunkAsync(_package.InvocationId, thinkingChunk).ConfigureAwait(false);
+
+            if (_sendEncrypted)
+            {
+                await _sender.SendEncryptedChunkAsync(_runner._envelopeCryptoService.EncryptChunk(_package.ConversationId,
+                        _context.MessageId,
+                        _context.EpochVersion,
+                        _context.EpochKey.Span,
+                        thinkingBytes!,
+                        stream.ReasoningSequence,
+                        EncryptedChunkEnvelopeV1.ReasoningKind),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else if (_sendPlain)
+            {
+                await _sender.SendReasoningStreamChunkAsync(_package.InvocationId,
+                    thinkingChunk,
+                    isComplete: false,
+                    stream.ReasoningSequence,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public async Task EmitTextAsync(StreamState stream, string textChunk, CancellationToken cancellationToken)
+        {
+            RecordFirstOutputLatency(stream);
+
+            stream.Sequence++;
+
+            // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
+            // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
+            // allocation-free GetByteCount.
+            var textBytes = _sendEncrypted ? Encoding.UTF8.GetBytes(textChunk) : null;
+            stream.TotalResponseBytes += textBytes?.Length ?? Encoding.UTF8.GetByteCount(textChunk);
+
+            if (stream.TotalResponseBytes > _runner._maxResponseSizeBytes)
+            {
+                throw new InvalidOperationException($"Response size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
+            }
+
+            stream.ResponseBuilder.Append(textChunk);
+
+            await Dispatcher.ReportInvocationStreamChunkAsync(_package.InvocationId, textChunk).ConfigureAwait(false);
+
+            if (_sendEncrypted)
+            {
+                await _sender.SendEncryptedChunkAsync(_runner._envelopeCryptoService.EncryptChunk(_package.ConversationId,
+                        _context.MessageId,
+                        _context.EpochVersion,
+                        _context.EpochKey.Span,
+                        textBytes!,
+                        stream.Sequence),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else if (_sendPlain)
+            {
+                await _sender.SendTokenStreamChunkAsync(_package.InvocationId,
+                    textChunk,
+                    isComplete: false,
+                    stream.Sequence,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private sealed record UsageSnapshot(int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? TotalTokens)
+    {
+        public static UsageSnapshot From(UsageDetails usage)
+        {
+            var inputTokens = ToNullableInt(usage.InputTokenCount);
+            var outputTokens = ToNullableInt(usage.OutputTokenCount);
+            var reasoningTokens = ToNullableInt(usage.ReasoningTokenCount);
+            var totalTokens = ToNullableInt(usage.TotalTokenCount)
+                              ?? SumIfAny(inputTokens, outputTokens, reasoningTokens);
+
+            return new UsageSnapshot(inputTokens, outputTokens, reasoningTokens, totalTokens);
+        }
+
+        public Dictionary<string, long> ToTokenCounts()
+        {
+            var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+            AddIfPresent(counts, "inputTokens", InputTokens);
+            AddIfPresent(counts, "outputTokens", OutputTokens);
+            AddIfPresent(counts, "reasoningTokens", ReasoningTokens);
+            AddIfPresent(counts, "totalTokens", TotalTokens);
+            return counts;
+        }
+
+        private static void AddIfPresent(Dictionary<string, long> counts, string key, int? value)
+        {
+            if (value is not null)
+            {
+                counts[key] = value.Value;
+            }
+        }
+
+        private static int? SumIfAny(params int?[] values)
+        {
+            return values.Any(static value => value is not null)
+                ? values.Sum(static value => value ?? 0)
+                : null;
+        }
+
+        private static int? ToNullableInt(long? value)
+        {
+            if (value is null)
+            {
+                return null;
+            }
+
+            // Token counts are non-negative and effectively always in int range, but a provider reporting a count past
+            // int.MaxValue must not fault the whole stream mid-flight: saturate at int.MaxValue instead of throwing.
+            return value.Value > int.MaxValue ? int.MaxValue : (int)value.Value;
+        }
+    }
+
+    private sealed record PendingToolCall(
+        Guid InvocationId,
+        DateTimeOffset CreatedAt,
+        TaskCompletionSource<bool> ApprovalCompletion,
+        TaskCompletionSource<ToolCallResultEvent> ResultCompletion);
+}

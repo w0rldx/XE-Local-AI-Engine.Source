@@ -1,0 +1,26 @@
+{
+	"palette": {
+		"mode": "light",
+		"primary": {
+			"main": "rgb(222, 10, 27)",
+			"hover": "rgb(196, 42, 53)"
+		},
+		"secondary": {
+			"main": "rgb(204, 30, 37)",
+			"hover": "rgb(240, 62, 62)",
+			"outline": "rgb(204, 30, 37)"
+		}
+	},
+	"typography": {
+		"fontFamily": "\"Roboto\", \"Helvetica\", \"Arial\", sans-serif"
+	},
+	"breakpoints": {
+		"values": {
+			"xs": 0,
+			"sm": 640,
+			"md": 768,
+			"lg": 1024,
+			"xl": 1280
+		}
+	}
+}

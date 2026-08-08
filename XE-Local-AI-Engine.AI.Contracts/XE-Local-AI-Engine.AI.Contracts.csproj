@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.AI.Contracts</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -1,5 +1,6 @@
 <!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
 <Project>
+  <Import Project="eng/ReleaseVersion.props" />
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -12,7 +13,38 @@
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
+
+  <!-- Test/tooling projects are exempt from the extra banned-API + Meziantou guardrails: they
+       legitimately use ambient time, Thread.Sleep, and sync-over-async in fixtures/harnesses.
+       Product runtime code is held to the strict wall. (tools/AgentTemplateGenerator is already
+       isolated by its own Directory.Build.props, so it is not matched here.) -->
+  <PropertyGroup>
+    <IsTestOrToolingProject>false</IsTestOrToolingProject>
+    <IsTestOrToolingProject
+      Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.')) Or $(MSBuildProjectName.Contains('.Testing')) Or $(MSBuildProjectName.EndsWith('.AppHost'))">
+      true
+    </IsTestOrToolingProject>
+  </PropertyGroup>
+
+  <!-- Bridge so `dotnet test` (the VSTest entrypoint used in CI) actually runs the
+       Microsoft.Testing.Platform / TUnit suites instead of silently reporting "Zero tests ran".
+       Scoped to MTP test projects only. Without this the CI quality gate is hollow. -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.'))">
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="all" Condition="$(MSBuildProjectExtension) == '.csproj'"/>
+    <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="all" Condition="$(MSBuildProjectExtension) == '.csproj'" />
+  </ItemGroup>
+
+  <!-- Extra static-analysis guardrails — production projects only.
+       NOTE: .Trim() is deliberate. XML reformatters (e.g. `jb cleanupcode`) pretty-print the
+       IsTestOrToolingProject element value onto its own line, and MSBuild preserves that surrounding
+       whitespace — so a bare '$(IsTestOrToolingProject)' != 'true' would be true even for test projects.
+       Trimming keeps the production-only scoping correct regardless of how the property is formatted. -->
+  <ItemGroup Condition="$(MSBuildProjectExtension) == '.csproj' And '$(IsTestOrToolingProject.Trim())' != 'true'">
+    <PackageReference Include="Meziantou.Analyzer" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" Visible="false" />
   </ItemGroup>
 </Project>

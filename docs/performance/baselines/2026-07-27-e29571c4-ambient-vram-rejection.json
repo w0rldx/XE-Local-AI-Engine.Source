@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-07-26T23:23:51.615Z",
+  "sourceCommit": "e29571c4",
+  "backend": "cuda",
+  "profile": {
+    "launchPolicyFingerprintVersion": 3,
+    "stateBeforeBenchmark": "Explored"
+  },
+  "thresholds": {
+    "absoluteBytes": 536870912,
+    "ratio": 0.05
+  },
+  "preSpawn": {
+    "globalFreeBytes": 30150754304,
+    "processBudgetBytes": 32429309952,
+    "processBudgetExcessBytes": 2278555648,
+    "processBudgetExcessRatio": 0.0702622304135545
+  },
+  "result": {
+    "status": "rejected",
+    "httpStatus": 400,
+    "workloadStarted": false,
+    "externalPressureDetected": true,
+    "failureReason": "Benchmark invalid: material VRAM divergence indicates external GPU pressure before or during measurement."
+  },
+  "reviewCorrection": {
+    "classification": "historical-idle-wddm-false-positive",
+    "ambientBaselineBytes": 1073741824,
+    "pressureAboveBaselineBytes": 1204813824,
+    "pressureAboveBaselineRatio": 0.03715200310408381,
+    "correctedExternalPressureDetected": false,
+    "note": "The original result applied the incremental 512 MiB / 5% rule to the full WDDM ambient offset. The corrected pre-spawn classifier subtracts the ambient baseline before applying materiality thresholds."
+  }
+}

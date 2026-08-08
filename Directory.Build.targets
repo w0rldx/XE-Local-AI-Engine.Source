@@ -1,0 +1,33 @@
+<!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
+<Project>
+
+  <!--
+    Local Debug builds skip analyzer EXECUTION. Release does not.
+
+    Directory.Build.props sets AnalysisMode=All + EnforceCodeStyleInBuild=true and adds SonarAnalyzer to every
+    project (plus Meziantou + BannedApiAnalyzers to production ones). That rule density is applied to ~350k lines
+    including XE-Local-AI-Engine.Tests, and analyzer execution dominates Csc time on a build of that shape — a
+    cost the inner dev loop pays on every iteration for feedback that the gate does not actually depend on.
+
+    Release keeps the full strict wall, and Release is what every gate builds: the AGENTS.md validation commands,
+    .opencode/scripts/project-validate.sh, and publish/package-tester-win.ps1 all build in Release configuration.
+    So the S1135 "no bare TODO/FIXME" rule, the banned-API wall and the Sonar rules still fail the build before
+    anything ships — they just no longer fail a local `dotnet build` that specifies no configuration.
+
+    This must live in Directory.Build.targets, NOT Directory.Build.props: Microsoft.Common.props imports
+    Directory.Build.props BEFORE it defaults $(Configuration), so a Configuration condition evaluated there sees
+    an empty string and silently misfires in both directions.
+
+    Safety notes:
+      - RunAnalyzers=false maps to csc -skipanalyzers, which skips diagnostic analyzers only. Source generators
+        still run, so TUnit test discovery is unaffected (a silent zero-test run is the failure mode this repo
+        has already paid for once — see docs/agent-knowledge.md).
+      - TreatWarningsAsErrors stays on, so genuine compiler warnings still fail a Debug build.
+      - Set XE_FULL_ANALYSIS=1 to force the full analyzer pass in Debug, and $(CI) is honoured so any automated
+        build gets it regardless of configuration.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' And '$(CI)' == '' And '$(XE_FULL_ANALYSIS)' == ''">
+    <RunAnalyzers>false</RunAnalyzers>
+  </PropertyGroup>
+
+</Project>

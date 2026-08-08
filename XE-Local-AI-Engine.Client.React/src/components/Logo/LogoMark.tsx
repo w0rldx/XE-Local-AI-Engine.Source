@@ -1,0 +1,36 @@
+interface LogoMarkProperties {
+	className?: string;
+}
+
+// Inline SVG (not <img>) so the mark inherits `currentColor`; color is set to the
+// Mantine primary so the logo always matches the active theme's primary color.
+export function LogoMark({ className = "object-contain h-full w-full" }: LogoMarkProperties) {
+	return (
+		<svg
+			className={className}
+			xmlns="http://www.w3.org/2000/svg"
+			width="363"
+			height="391"
+			viewBox="0 0 363 391"
+			fill="currentColor"
+			role="img"
+			aria-label="logo"
+			style={{ color: "var(--mantine-primary-color-filled)" }}
+		>
+			<g transform="translate(-140 -352)">
+				<path
+					d="M 333 415 L 332 677 L 334 678 L 449 609 L 449 582 L 447 581 L 360 633 L 357 631 L 357 562 L 359 560 L 421 559 L 420 534 L 359 534 L 357 532 L 357 462 L 361 461 L 447 513 L 449 512 L 449 484 Z"
+					fillRule="evenodd"
+				/>
+				<path
+					d="M 309 415 L 284 432 L 284 512 L 252 532 L 218 511 L 217 471 L 192 485 L 193 526 L 224 546 L 221 550 L 192 568 L 192 608 L 217 624 L 218 582 L 250 561 L 256 563 L 285 582 L 284 661 L 309 678 L 310 568 L 278 547 L 310 524 Z"
+					fillRule="evenodd"
+				/>
+				<path
+					d="M 320 362 L 150 463 L 150 631 L 322 732 L 491 631 L 492 514 L 491 462 Z M 321 377 L 478 471 L 478 622 L 322 716 L 179 633 L 164 622 L 164 471 Z"
+					fillRule="evenodd"
+				/>
+			</g>
+		</svg>
+	);
+}

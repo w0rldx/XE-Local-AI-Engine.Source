@@ -1,5 +1,5 @@
 <Project>
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.2.4"/>
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6"/>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -10,12 +10,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Linux\XE-Local-AI-Engine.HostAgent.Linux.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost"/>
-    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama"/>
+    <PackageReference Include="Aspire.Hosting.Browsers"/>
+    <PackageReference Include="Aspire.Hosting.JavaScript"/>
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Sqlite"/>
   </ItemGroup>
 </Project>

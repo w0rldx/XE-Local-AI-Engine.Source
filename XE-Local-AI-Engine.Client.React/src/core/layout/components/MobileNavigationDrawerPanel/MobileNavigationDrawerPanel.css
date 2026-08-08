@@ -1,0 +1,15 @@
+.mobile-navigation-drawer-panel {
+	position: fixed;
+	top: 0;
+	left: 0;
+	box-sizing: border-box;
+	z-index: 301;
+	overflow-y: auto;
+}
+
+.mobile-navigation-drawer-scrim {
+	position: fixed;
+	inset: 0;
+	z-index: 300;
+	background-color: rgb(0 0 0 / 50%);
+}

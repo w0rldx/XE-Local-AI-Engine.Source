@@ -4,6 +4,8 @@
     <AssemblyName>XE_Local_AI_Engine.AI.Agent.Tests</AssemblyName>
     <OutputType>Exe</OutputType>
     <RootNamespace>XE_Local_AI_Engine.AI.Agent.Tests</RootNamespace>
+    <!-- ApprovalRequiredAIFunction / FunctionApproval*Content are [Experimental] (MEAI001); adopted deliberately. -->
+    <NoWarn>$(NoWarn);MEAI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,10 +14,19 @@
     <PackageReference Include="Microsoft.Testing.Platform"/>
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="TUnit"/>
+    <PackageReference Include="Microsoft.Agents.AI"/>
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.AI"/>
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions"/>
+    <!-- Explicit: BuildServiceProvider lives here; in Debug it arrives transitively via the
+         Debug-only Microsoft.Agents.AI.Hosting preview package, so Release needs it directly. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
+    <PackageReference Include="OllamaSharp"/>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertionException.cs" Link="Testing\AssertionException.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
   </ItemGroup>

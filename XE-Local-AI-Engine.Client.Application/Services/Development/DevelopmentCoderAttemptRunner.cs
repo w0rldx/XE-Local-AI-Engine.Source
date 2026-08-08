@@ -1,0 +1,374 @@
+namespace XE_Local_AI_Engine.Client.Services.Development;
+
+using System.Text.Json;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+
+internal sealed record DevelopmentCoderAttemptResult(
+    Guid AttemptId,
+    string BaseCommit,
+    string SubjectHash,
+    string PatchHash,
+    string ManifestHash,
+    IReadOnlyList<string> ChangedFiles);
+
+internal interface IDevelopmentCoderAttemptRunner
+{
+    Task<DevelopmentCoderAttemptResult> RunAsync(Guid attemptId,
+        DevelopmentRepositoryBinding repository,
+        CancellationToken cancellationToken = default);
+}
+
+internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRunner
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly IDevelopmentArtifactBlobStore _blobStore;
+    private readonly IDevelopmentCloudAttemptContextService _cloudContext;
+    private readonly IDevelopmentCoderModel _coderModel;
+    private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
+    private readonly DevelopmentOptions _options;
+    private readonly IDevelopmentPatchEvidenceService _patchEvidence;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentStore _store;
+    private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentCoderAttemptRunner(IDevelopmentStore store,
+        IDevelopmentWorkspaceProvider workspaceProvider,
+        IDevelopmentSandboxRuntimeProvider sandbox,
+        IDevelopmentPatchEvidenceService patchEvidence,
+        IDevelopmentArtifactBlobStore blobStore,
+        IDevelopmentCoderModel coderModel,
+        IDevelopmentCloudAttemptContextService cloudContext,
+        IOptions<DevelopmentOptions> options,
+        IDevelopmentAttemptLiveBroker? liveBroker = null,
+        TimeProvider? timeProvider = null)
+    {
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
+        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
+        _patchEvidence = patchEvidence ?? throw new ArgumentNullException(nameof(patchEvidence));
+        _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
+        _coderModel = coderModel ?? throw new ArgumentNullException(nameof(coderModel));
+        _cloudContext = cloudContext ?? throw new ArgumentNullException(nameof(cloudContext));
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        _liveBroker = liveBroker;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public async Task<DevelopmentCoderAttemptResult> RunAsync(Guid attemptId,
+        DevelopmentRepositoryBinding repository,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
+        EnsureRunnable(snapshot);
+        var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
+            _options.MaxAttemptDurationSeconds)));
+
+        try
+        {
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token).ConfigureAwait(false);
+            var maxOutputTokens = Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens);
+            var liveProgress = _liveBroker is null
+                ? null
+                : new DevelopmentAttemptLiveProgress(snapshot,
+                    _liveBroker,
+                    Options.Create(_options),
+                    _timeProvider,
+                    maxOutputTokens,
+                    _options.MaxToolCalls);
+            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile, liveProgress);
+            var prompt = BuildPrompt(snapshot, session, profile);
+            var cloudContext = await CreateCloudContextAsync(snapshot, tools, timeout.Token).ConfigureAwait(false);
+            var model = await _coderModel.RunAsync(snapshot.ModelId,
+                prompt,
+                tools,
+                maxOutputTokens,
+                _options.MaxToolCalls,
+                liveProgress,
+                cloudContext?.Route,
+                timeout.Token).ConfigureAwait(false);
+            var evidence = await _patchEvidence.ExportAsync(session, timeout.Token).ConfigureAwait(false);
+            liveProgress?.PatchObserved(evidence.ChangedFiles.Select(static item => item.Path).ToArray(),
+                evidence.PatchBytes.LongLength,
+                evidence.SubjectHash);
+            ValidateSubmission(model.Submission, evidence, tools.CommandEvidence);
+            DevelopmentTestWritePolicy.Ensure(evidence, profile);
+            await PersistEvidenceAsync(snapshot,
+                model.Submission,
+                evidence,
+                tools.CommandEvidence,
+                cloudContext?.ArtifactId,
+                profile,
+                timeout.Token).ConfigureAwait(false);
+
+            _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
+                                    Guid.NewGuid(),
+                                    DevelopmentAttemptStatus.Succeeded,
+                                    snapshot.AttemptVersion,
+                                    InputTokens: model.InputTokens,
+                                    OutputTokens: model.OutputTokens),
+                                CancellationToken.None)
+                            .ConfigureAwait(false);
+            return new DevelopmentCoderAttemptResult(snapshot.AttemptId,
+                evidence.BaseCommit,
+                evidence.SubjectHash,
+                evidence.PatchHash,
+                evidence.ManifestHash,
+                evidence.ChangedFiles.Select(static item => item.Path).ToArray());
+        }
+        catch (Exception exception)
+        {
+            var status = exception is OperationCanceledException ? DevelopmentAttemptStatus.Cancelled : DevelopmentAttemptStatus.Failed;
+            try
+            {
+                _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
+                                        Guid.NewGuid(),
+                                        status,
+                                        snapshot.AttemptVersion,
+                                        SanitizedReason(exception)),
+                                    CancellationToken.None)
+                                .ConfigureAwait(false);
+            }
+            catch (DevelopmentInvalidTransitionException)
+            {
+                // A concurrent terminal action already won; preserve the original coder failure.
+            }
+
+            throw;
+        }
+    }
+
+    private async Task PersistEvidenceAsync(DevelopmentExecutionSnapshot snapshot,
+        DevelopmentCoderSubmission submission,
+        DevelopmentPatchEvidence evidence,
+        IReadOnlyList<DevelopmentCommandEvidence> commands,
+        Guid? cloudContextArtifactId,
+        DevelopmentCommandProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var profileDigest = profile.ComputeDigest();
+        IReadOnlyList<Guid>? cloudContextInputs = cloudContextArtifactId is { } contextArtifactId
+            ? [contextArtifactId]
+            : null;
+        var patchId = await PersistArtifactAsync(snapshot,
+            DevelopmentArtifactKind.Patch,
+            evidence.PatchBytes,
+            evidence,
+            inputIds: cloudContextInputs,
+            profileDigest,
+            cancellationToken).ConfigureAwait(false);
+        var manifestId = await PersistArtifactAsync(snapshot,
+            DevelopmentArtifactKind.ChangedFilesManifest,
+            evidence.ManifestBytes,
+            evidence,
+            inputIds: cloudContextInputs,
+            profileDigest,
+            cancellationToken).ConfigureAwait(false);
+        var commandId = await PersistArtifactAsync(snapshot,
+            DevelopmentArtifactKind.CommandResult,
+            JsonSerializer.SerializeToUtf8Bytes(commands, JsonOptions),
+            evidence,
+            [patchId, manifestId],
+            profileDigest,
+            cancellationToken).ConfigureAwait(false);
+        var workspaceId = await PersistArtifactAsync(snapshot,
+            DevelopmentArtifactKind.WorkspaceManifest,
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                evidence.BaseCommit,
+                evidence.PatchHash,
+                evidence.ManifestHash,
+                evidence.SubjectHash,
+                evidence.ExpectedResultHash,
+
+                // The artifact protocol version, unchanged. The command profile that produced this workspace is
+                // recorded separately below, because the two answer different questions.
+                commandProfileVersion = DevelopmentWorkspaceTools.ProfileVersion,
+                commandProfileId = profile.ProfileId,
+                commandProfileDigest = profileDigest,
+                changeIsolationOnly = true,
+                osIsolationClaimed = false
+            }, JsonOptions),
+            evidence,
+            [patchId, manifestId, commandId],
+            profileDigest,
+            cancellationToken).ConfigureAwait(false);
+        _ = await PersistArtifactAsync(snapshot,
+            DevelopmentArtifactKind.CoderSubmission,
+            JsonSerializer.SerializeToUtf8Bytes(submission, JsonOptions),
+            evidence,
+            [patchId, manifestId, commandId, workspaceId],
+            profileDigest,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Guid> PersistArtifactAsync(DevelopmentExecutionSnapshot snapshot,
+        DevelopmentArtifactKind kind,
+        byte[] content,
+        DevelopmentPatchEvidence evidence,
+        IReadOnlyList<Guid>? inputIds,
+        string profileDigest,
+        CancellationToken cancellationToken)
+    {
+        var artifactId = Guid.NewGuid();
+        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
+                                snapshot.ProjectId,
+                                snapshot.TaskId,
+                                snapshot.AttemptId,
+                                Guid.NewGuid(),
+                                kind,
+                                SchemaVersion: 1,
+                                written.ContentHash,
+                                written.ByteCount,
+                                ManagedReference: written.OpaqueReference,
+                                BaseCommit: evidence.BaseCommit,
+                                SubjectHash: evidence.SubjectHash,
+                                ChangedFilesManifestHash: evidence.ManifestHash,
+                                InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
+                                CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion,
+                                CommandProfileDigest: profileDigest),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+        return artifactId;
+    }
+
+    private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(DevelopmentExecutionSnapshot snapshot,
+        IDevelopmentWorkspaceTools tools,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(snapshot.Provider, "local", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var files = await tools.ListFilesAsync(path: null, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var currentDiff = await tools.GetDiffAsync(cancellationToken).ConfigureAwait(false);
+        return await _cloudContext.CreateAsync(snapshot,
+            [
+                new DevelopmentCloudContextExcerpt("workspace-files.txt", files),
+                new DevelopmentCloudContextExcerpt("workspace-diff.patch", currentDiff)
+            ],
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void EnsureRunnable(DevelopmentExecutionSnapshot snapshot)
+    {
+        if (snapshot.AttemptRole != DevelopmentAttemptRole.Coder
+            || snapshot.AttemptStatus != DevelopmentAttemptStatus.Running
+            || snapshot.EgressPolicy is not (DevelopmentEgressPolicy.LocalOnly or DevelopmentEgressPolicy.CloudScoped)
+            || string.IsNullOrWhiteSpace(snapshot.ModelId)
+            || string.IsNullOrWhiteSpace(snapshot.Provider)
+            || (snapshot.EgressPolicy == DevelopmentEgressPolicy.LocalOnly
+                && !string.Equals(snapshot.Provider, "local", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DevelopmentInvalidTransitionException("Only one running coder attempt with a valid egress policy and explicit model/provider can execute.");
+        }
+    }
+
+    private static void ValidateSubmission(DevelopmentCoderSubmission submission,
+        DevelopmentPatchEvidence evidence,
+        IReadOnlyList<DevelopmentCommandEvidence> commands)
+    {
+        if (string.IsNullOrWhiteSpace(submission.Summary))
+        {
+            throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSummary,
+                "The Development coder's submit_implementation call had an empty summary.");
+        }
+
+        var actualFiles = evidence.ChangedFiles.Select(static item => item.Path).ToHashSet(StringComparer.Ordinal);
+        var submittedFiles = submission.ChangedFiles.Select(path => DevelopmentWorkspaceSecurity.Confine(path, allowRoot: false))
+                                       .Where(static path => path.IsAccepted)
+                                       .Select(static path => path.RelativePath)
+                                       .ToHashSet(StringComparer.Ordinal);
+        if (!actualFiles.SetEquals(submittedFiles))
+        {
+            // Naming the difference is the whole point. The generic message this replaced left the operator unable to
+            // tell "the model under-reported" from "an earlier failed attempt left files in this task's preserved
+            // workspace" — which is a real and common cause, because the workspace is per task, not per attempt.
+            throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch,
+                "The Development coder's submitted changed-file list is not exactly the workspace's changed files. "
+                + Describe("Changed but not submitted", actualFiles.Except(submittedFiles, StringComparer.Ordinal))
+                + Describe("Submitted but not changed", submittedFiles.Except(actualFiles, StringComparer.Ordinal))
+                + "The workspace is shared by every attempt on this task, so files a previous attempt left behind also count as changed.");
+        }
+
+        var executed = commands.Select(static command => command.CommandId).ToHashSet(StringComparer.Ordinal);
+        var unexecuted = submission.CommandIds.Where(commandId => !executed.Contains(commandId)).ToArray();
+        if (unexecuted.Length != 0)
+        {
+            throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.UnexecutedCommandClaimed,
+                "The Development coder claimed command evidence it never produced. "
+                + Describe("Claimed but not run", unexecuted));
+        }
+    }
+
+    /// <summary>
+    ///     Renders one side of a set difference for an operator reason, bounded so a large diff cannot overrun the
+    ///     persisted terminal-reason column.
+    /// </summary>
+    private static string Describe(string label, IEnumerable<string> paths)
+    {
+        var bounded = paths.Order(StringComparer.Ordinal).ToArray();
+        if (bounded.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var shown = string.Join(", ", bounded.Take(MaxDescribedPaths));
+        var remainder = bounded.Length - MaxDescribedPaths;
+        return remainder > 0
+            ? $"{label}: {shown} (+{remainder} more). "
+            : $"{label}: {shown}. ";
+    }
+
+    private const int MaxDescribedPaths = 5;
+
+    private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
+        DevelopmentWorkspaceSession session,
+        DevelopmentCommandProfile profile)
+    {
+        // The valid run_command ids are per-project now, so they are named here rather than in the tool's
+        // [Description] attribute, which cannot interpolate them. The model still only ever sees a closed set.
+        return string.Concat("Task: ", snapshot.Title,
+            "\nRequirements:\n", snapshot.Requirements,
+            "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
+            "\nBase commit: ", session.BaseCommit,
+            "\nCommand profile: ", profile.ProfileId,
+            "\nValid run_command ids: ", string.Join(", ", profile.Commands.Select(static command => command.CommandId)),
+            "\nUse only the fixed tools. The worktree is detached change isolation, not an OS security boundary.",
+
+            // The submission contract is stated here because ValidateSubmission enforces it exactly, and until now
+            // nothing told the model what it was. Measured live on 2026-07-31: a capable model produced a correct fix,
+            // also wrote two incidental files, listed only the fix in changedFiles, and the whole attempt — including
+            // the correct fix — was discarded for a rule it had never been given.
+            "\n\nSubmission contract, enforced exactly:",
+            "\n- Close the attempt with exactly one submit_implementation call, after all edits are done.",
+            "\n- changedFiles must list every workspace file that differs from the base commit, and nothing else.",
+            "\n  It is compared as a set against `git status`, so check get_status before submitting. Files an earlier",
+            "\n  attempt on this task left behind are still changed files and must be listed.",
+            "\n- commandIds must contain only ids you actually ran with run_command in this attempt.",
+            "\n- summary must be non-empty.");
+    }
+
+    private static string SanitizedReason(Exception exception)
+    {
+        return exception switch
+        {
+            OperationCanceledException => "The bounded Development coder attempt was cancelled or timed out.",
+            DevelopmentWorkspaceSecurityException => "The Development coder attempt violated a workspace security policy.",
+
+            // Authored here, never assembled from model output or an absolute host path, which is what makes it safe
+            // to surface verbatim. Everything else still falls through to the generic reason.
+            DevelopmentAttemptEvidenceException evidence => evidence.TerminalReason,
+            _ => "The bounded Development coder attempt failed before producing valid exact evidence."
+        };
+    }
+}

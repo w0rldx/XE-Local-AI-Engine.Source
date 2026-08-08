@@ -31,7 +31,7 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
     {
         var messages = new[]
         {
-            MakeMsg(Id1, 1, MessageRole.User, 3, Ct, Iv, Aad)
+            MakeMsg(Id1, sortOrder: 1, MessageRole.User, epochVersion: 3, Ct, Iv, Aad)
         };
         var hash = RuntimePackageHistoryHash.Compute(messages);
         AssertEx.Equal("590c171df8f08be690bef534a1f224a66df4c4c53ecd7e357dea5755271ee9fc", hash);
@@ -42,7 +42,7 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
     {
         var messages = new[]
         {
-            MakeMsg(Id2, 0, MessageRole.Assistant, 0, Ct, Iv, Aad)
+            MakeMsg(Id2, sortOrder: 0, MessageRole.Assistant, epochVersion: 0, Ct, Iv, Aad)
         };
         var hash = RuntimePackageHistoryHash.Compute(messages);
         AssertEx.Equal("bea716b80f646f05de320d61207bda21df1710a0403c6ac46687ecb9a7064c21", hash);
@@ -58,13 +58,13 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
 
         var inOrder = new[]
         {
-            MakeMsg(IdA, 1, MessageRole.User, 1, ctA, ivSmall, aadSmall),
-            MakeMsg(IdB, 2, MessageRole.Assistant, 1, ctB, ivSmall, aadSmall)
+            MakeMsg(IdA, sortOrder: 1, MessageRole.User, epochVersion: 1, ctA, ivSmall, aadSmall),
+            MakeMsg(IdB, sortOrder: 2, MessageRole.Assistant, epochVersion: 1, ctB, ivSmall, aadSmall)
         };
         var reversed = new[]
         {
-            MakeMsg(IdB, 2, MessageRole.Assistant, 1, ctB, ivSmall, aadSmall),
-            MakeMsg(IdA, 1, MessageRole.User, 1, ctA, ivSmall, aadSmall)
+            MakeMsg(IdB, sortOrder: 2, MessageRole.Assistant, epochVersion: 1, ctB, ivSmall, aadSmall),
+            MakeMsg(IdA, sortOrder: 1, MessageRole.User, epochVersion: 1, ctA, ivSmall, aadSmall)
         };
 
         var h1 = RuntimePackageHistoryHash.Compute(inOrder);
@@ -77,21 +77,21 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
     [Test]
     public void Hash_RoleSystem_MatchesC0reGoldenVector()
     {
-        var hash = RuntimePackageHistoryHash.Compute([MakeMsg(Id1, 1, MessageRole.System, 1, Ct, Iv, Aad)]);
+        var hash = RuntimePackageHistoryHash.Compute([MakeMsg(Id1, sortOrder: 1, MessageRole.System, epochVersion: 1, Ct, Iv, Aad)]);
         AssertEx.Equal("64a1ae0b8e0184eed328da1c59883b2d4acda7d2e3f310e27635fd08f59ea34e", hash);
     }
 
     [Test]
     public void Hash_RoleAssistant_MatchesC0reGoldenVector()
     {
-        var hash = RuntimePackageHistoryHash.Compute([MakeMsg(Id1, 1, MessageRole.Assistant, 1, Ct, Iv, Aad)]);
+        var hash = RuntimePackageHistoryHash.Compute([MakeMsg(Id1, sortOrder: 1, MessageRole.Assistant, epochVersion: 1, Ct, Iv, Aad)]);
         AssertEx.Equal("e46b44affd75a45fcd89383f0ef2f5d6d64c0a9f6b7721ea1281c74e2773f6eb", hash);
     }
 
     [Test]
     public void Hash_RoleTool_MatchesC0reGoldenVector()
     {
-        var hash = RuntimePackageHistoryHash.Compute([MakeMsg(Id1, 1, MessageRole.Tool, 1, Ct, Iv, Aad)]);
+        var hash = RuntimePackageHistoryHash.Compute([MakeMsg(Id1, sortOrder: 1, MessageRole.Tool, epochVersion: 1, Ct, Iv, Aad)]);
         AssertEx.Equal("d7646bed0dea9c0259d0b2750194b22af4f5e41ed77335f001056e4684f55310", hash);
     }
 

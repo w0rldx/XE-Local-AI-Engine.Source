@@ -3,21 +3,81 @@
   <PropertyGroup>
     <UserSecretsId>31bd0c1c-d903-4e54-bae9-df0140eb36bd</UserSecretsId>
     <RootNamespace>XE_Local_AI_Engine.Client</RootNamespace>
+    <!--
+      Disable the SDK StaticWebAssets pipeline for this host. After the /app→root cutover the React
+      shell lives at wwwroot\index.html and the host serves the React shell + assets via
+      app.UseStaticFiles() + MapFallbackToFile("index.html") (physical wwwroot files), not via a
+      StaticWebAssets manifest. Blazor endpoints are removed, so nothing depends on the SWA pipeline.
+      Keeping it off also makes the wwwroot copy idempotent across rebuilds. wwwroot content publishes via the default
+      <Content Include="wwwroot\**"> (CopyToPublishDirectory) for UseStaticFiles.
+    -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <NodeReactClientDir>$(MSBuildProjectDirectory)\..\XE-Local-AI-Engine.Client.React\</NodeReactClientDir>
+    <NodeReactBuildDir>$(NodeReactClientDir)dist\</NodeReactBuildDir>
+    <!-- The React build is copied to the wwwroot root (Vite base "/"),
+         not the transition wwwroot\app\ sub-directory. -->
+    <NodeReactWebRootDir>$(MSBuildProjectDirectory)\wwwroot\</NodeReactWebRootDir>
   </PropertyGroup>
+
+  <!--
+    node-settings.json is RUNTIME state: NodeSettingsStore writes it to ContentRootPath at runtime (e.g. the selected
+    default model). The Web SDK's default content globbing would otherwise pick up a dev-created copy and PUBLISH it,
+    shipping a stale "defaultModelName" into the bundle — which makes first-run model provisioning think a model is
+    already selected and skip the GGUF download (empty model store). Exclude it from content/publish so it can never
+    ship; a fresh install must start with no settings file. (It is also .gitignored.)
+  -->
+  <ItemGroup>
+    <Content Remove="node-settings.json"/>
+    <None Remove="node-settings.json"/>
+    <!-- Repository scaffolding keeps wwwroot tracked but is not part of the executable web payload. -->
+    <Content Update="wwwroot/.gitignore" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never"/>
+  </ItemGroup>
+
+  <!--
+    The runtime-written per-node directories, removed from EVERY default glob including Compile.
+
+    node-settings.json above covers one file against one glob. These directories need the wider treatment because
+    Development Mode clones REGISTERED REPOSITORIES into `development/workspaces/`, and in a source checkout
+    INodeDataDirectory resolves to ContentRootPath — this directory. The Web SDK then globs the cloned repository's
+    own source into this project.
+
+    Measured on 2026-07-31, after three Development Mode tasks against a small C# repository, `dotnet build` of this
+    project failed with CS0101/CS0579 duplicate-definition errors from `development/workspaces/**/Calculator.cs` and
+    from the workspaces' own obj/ trees. The host application stopped compiling because an agent wrote a file in a
+    sandbox.
+
+    The build break is the loud half. The quiet half is worse and is why this is a Compile exclusion and not just a
+    Content one: without it, C# written by a model into an untrusted repository's workspace is a source file of this
+    application, compiled into its assembly on publish.
+
+    Keep this list in step with .gitignore's entries for the same paths — they exist for the same reason, and "gitignored"
+    and "not globbed" are different guarantees.
+  -->
+  <ItemGroup>
+    <Compile Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+    <Content Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+    <None Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+    <EmbeddedResource Remove="development/**;generated-images/**;logs/**;backups/**;dp-keys/**;models/**;uploaded-files/**;agent-home-state/**;knowledge-base/**"/>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
-    <PackageReference Include="Grpc.Net.Client"/>
+    <PackageReference Include="FastEndpoints"/>
+    <PackageReference Include="FastEndpoints.Swagger"/>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+    <PackageReference Include="ModelContextProtocol.AspNetCore"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
-    <PackageReference Include="MudBlazor"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="Scalar.AspNetCore"/>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="Serilog.AspNetCore"/>
     <PackageReference Include="Serilog.Enrichers.Environment"/>
@@ -26,21 +86,191 @@
     <PackageReference Include="Serilog.Expressions"/>
     <PackageReference Include="Serilog.Settings.Configuration"/>
     <PackageReference Include="Serilog.Sinks.Console"/>
+    <PackageReference Include="Serilog.Sinks.File"/>
+    <PackageReference Include="Velopack"/>
+  </ItemGroup>
+
+  <!--
+    App self-update build flavor (decision #12). UpdateChannel selects, at publish time, the baked-in public update repo
+    URL and stable/RC release track consumed by AppUpdateChannelOptions. There is no runtime
+    switch: a tester build can never point at the main repo and vice-versa. The active flavor's
+    appsettings.AppUpdate.{flavor}.json is copied to the output as appsettings.AppUpdate.json so the host loads exactly
+    one channel file regardless of UpdateChannel. Default flavor is main.
+  -->
+  <PropertyGroup>
+    <UpdateChannel Condition="'$(UpdateChannel)' == ''">main</UpdateChannel>
+  </PropertyGroup>
+
+  <Target Name="ValidateAppUpdateChannel"
+          BeforeTargets="PrepareForBuild;ComputeFilesToPublish">
+    <Error Condition="'$(UpdateChannel)' != 'main' and '$(UpdateChannel)' != 'tester'"
+           Text="Unsupported UpdateChannel '$(UpdateChannel)'. Expected 'main' or 'tester'."/>
+    <Error Condition="!Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
+           Text="App-update configuration not found: appsettings.AppUpdate.$(UpdateChannel).json"/>
+  </Target>
+
+  <ItemGroup>
+    <!-- The artifact must carry its license terms (Apache-2.0 requires shipping them). Both packaging paths
+         (the Velopack pack step and publish/package-rc.sh) stage from this publish directory,
+         so shipping them here covers every channel. Output stays clean for dev/test runs. -->
+    <Content Include="$(MSBuildProjectDirectory)/../LICENSE"
+             Link="LICENSE"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
+    <Content Include="$(MSBuildProjectDirectory)/../NOTICE"
+             Link="NOTICE"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
+    <Content Include="$(MSBuildProjectDirectory)/../third-party/nuget/**"
+             Link="licenses/nuget/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
+  </ItemGroup>
+
+  <Target Name="ValidateDotNetRuntimeLicenseAssets"
+          BeforeTargets="ComputeFilesToPublish"
+          Condition="'$(SelfContained)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_DotNetRuntimePackDirectory>$(NuGetPackageRoot)microsoft.netcore.app.runtime.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_DotNetRuntimePackDirectory>
+      <_AspNetCoreRuntimePackDirectory>$(NuGetPackageRoot)microsoft.aspnetcore.app.runtime.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_AspNetCoreRuntimePackDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT')"
+           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) third-party notices are missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(_DotNetRuntimePackDirectory)/LICENSE.TXT')"
+           Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) MIT license is missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(_AspNetCoreRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT')"
+           Text="The ASP.NET Core $(DotNetRuntimeVersion) $(RuntimeIdentifier) third-party notices are missing from the restored runtime pack."/>
+    <Error Condition="!Exists('$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt')"
+           Text="The ASP.NET Core $(DotNetRuntimeVersion) $(RuntimeIdentifier) MIT license is missing from the restored runtime pack."/>
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/LICENSE.TXT">
+        <RelativePath>licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_DotNetRuntimePackDirectory)/LICENSE.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT">
+        <RelativePath>wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-THIRD-PARTY-NOTICES.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt">
+        <RelativePath>licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(_AspNetCoreRuntimePackDirectory)/LICENSE.txt">
+        <RelativePath>wwwroot/licenses/dotnet/ASPNETCORE-RUNTIME-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!-- Keep both flavor sources out of default content globbing so only the active one ships (renamed) below. -->
+    <Content Remove="appsettings.AppUpdate.main.json"/>
+    <Content Remove="appsettings.AppUpdate.tester.json"/>
+    <None Include="appsettings.AppUpdate.main.json"/>
+    <None Include="appsettings.AppUpdate.tester.json"/>
+    <!--
+      Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel.
+
+      Always, NOT PreserveNewest, records the required copy policy. MSBuild's incremental publish pipeline can still
+      leave a manually disturbed destination missing until the source changes, so release packaging must verify that
+      the renamed file exists and contains the selected source policy before accepting an artifact.
+    -->
+    <Content Include="appsettings.AppUpdate.$(UpdateChannel).json"
+             Condition="Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
+             Link="appsettings.AppUpdate.json"
+             CopyToOutputDirectory="Always"
+             CopyToPublishDirectory="Always"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Development-only config must never ship in release/publish artifacts.
+         The Web SDK auto-publishes appsettings.{Environment}.json; remove it explicitly. -->
+    <Content Remove="appsettings.Development.json"/>
+    <None Include="appsettings.Development.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never"/>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
-    <ProjectReference Include="..\..\..\C0re.AI.Shared.Contracts\C0re.AI.Shared.Contracts.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
-    <Using Include="C0re.AI.Shared.Contracts.Events"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
   </ItemGroup>
+
+  <!--
+    Copy the node React build (dist) into wwwroot root for the host to serve via UseStaticFiles +
+    MapFallbackToFile("index.html"). The target deletes the previously copied React outputs (root files +
+    assets/) before re-copying so it is hygienic across rebuilds. Idempotency across consecutive
+    rebuilds is provided by removing these outputs from SDK static-web-asset discovery (the
+    Content Remove / None Include block above) so a populated wwwroot does not produce a duplicate
+    or conflicting logical asset for /index.html on the second build.
+    Only the React build outputs are removed; the tracked wwwroot\.gitignore is preserved.
+  -->
+  <Target Name="CopyNodeReactBuildToWwwroot"
+          BeforeTargets="Build;ComputeFilesToPublish"
+          Condition="Exists('$(NodeReactBuildDir)index.html')">
+    <ItemGroup>
+      <NodeReactBuildFiles Include="$(NodeReactBuildDir)**\*.*"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)index.html"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)favicon.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)logo.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)logo192.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)logo512.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)manifest.json"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)robots.txt"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)staticwebapp.config.json"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)web.config"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)app.css"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_mark.svg"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_wordmark.svg"/>
+    </ItemGroup>
+
+    <MakeDir Directories="$(NodeReactWebRootDir)"/>
+    <RemoveDir Directories="$(NodeReactWebRootDir)assets"/>
+    <!-- Remove the transition-era wwwroot\app\ tree so stale prefixed assets/shell are not served after cutover. -->
+    <RemoveDir Directories="$(NodeReactWebRootDir)app"/>
+    <Delete Files="@(NodeReactStaleRootFiles)"/>
+    <Copy SourceFiles="@(NodeReactBuildFiles)"
+          DestinationFiles="@(NodeReactBuildFiles->'$(NodeReactWebRootDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"/>
+    <Message Importance="high" Text="Copied node React build from $(NodeReactBuildDir) to $(NodeReactWebRootDir)."/>
+  </Target>
+
+  <!--
+    Fail a publish loudly when the React SPA has not been built. wwwroot\** is gitignored (only .gitignore is
+    tracked), so a fresh checkout has an empty wwwroot, and CopyNodeReactBuildToWwwroot above only runs when
+    dist\index.html exists. Without this guard a publish whose React build was skipped ships an empty wwwroot and
+    the host serves 404 for index.html (a blank app) with no build-time signal — exactly how a packaged build can
+    look "started" yet render nothing. Publish-only (BeforeTargets=ComputeFilesToPublish, same phase as the copy
+    above): dotnet build / CI / unit tests never run this, so they are unaffected and need no pnpm build.
+  -->
+  <Target Name="GuardNodeReactBuildPresentOnPublish"
+          BeforeTargets="ComputeFilesToPublish"
+          Condition="!Exists('$(NodeReactBuildDir)index.html')">
+    <Error Text="React SPA build not found at $(NodeReactBuildDir)index.html. Run 'pnpm build' in XE-Local-AI-Engine.Client.React before publishing — otherwise the host ships an empty wwwroot and serves 404 for index.html (a blank app)." />
+  </Target>
 
 </Project>

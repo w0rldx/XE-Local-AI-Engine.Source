@@ -1,0 +1,3 @@
+Source: https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/text/Apache-2.0.txt
+Retrieved: 2026-08-07
+SHA-256: 074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff

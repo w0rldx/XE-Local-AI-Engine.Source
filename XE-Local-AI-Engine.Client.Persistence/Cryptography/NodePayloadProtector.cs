@@ -5,9 +5,9 @@ using System.Text;
 
 internal static class NodePayloadProtector
 {
-    private const int NonceLength = 12;
-    private const int TagLength = 16;
     private const string SchemaVersion = "v1";
+
+    private static readonly INodeAeadCipher Cipher = new AesGcmNodeAeadCipher();
 
     public static byte[] Encrypt(ReadOnlySpan<byte> plaintext,
         ReadOnlySpan<byte> key,
@@ -17,20 +17,17 @@ internal static class NodePayloadProtector
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(columnName);
 
-        var nonce = new byte[NonceLength];
-        var ciphertext = new byte[plaintext.Length];
-        var tag = new byte[TagLength];
+        var nonce = new byte[Cipher.NonceSize];
         var aad = BuildAssociatedData(conversationId, recordId, columnName);
 
         RandomNumberGenerator.Fill(nonce);
 
-        using var aesGcm = new AesGcm(key, TagLength);
-        aesGcm.Encrypt(nonce, plaintext, ciphertext, tag, aad);
+        var (ciphertext, tag) = Cipher.Encrypt(key, nonce, plaintext, aad);
 
-        var payload = new byte[NonceLength + ciphertext.Length + TagLength];
-        nonce.CopyTo(payload, 0);
-        ciphertext.CopyTo(payload, NonceLength);
-        tag.CopyTo(payload, NonceLength + ciphertext.Length);
+        var payload = new byte[Cipher.NonceSize + ciphertext.Length + Cipher.TagSize];
+        nonce.CopyTo(payload, index: 0);
+        ciphertext.CopyTo(payload, Cipher.NonceSize);
+        tag.CopyTo(payload, Cipher.NonceSize + ciphertext.Length);
         return payload;
     }
 
@@ -42,22 +39,18 @@ internal static class NodePayloadProtector
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(columnName);
 
-        if (encryptedPayload.Length < NonceLength + TagLength)
+        if (encryptedPayload.Length < Cipher.NonceSize + Cipher.TagSize)
         {
             throw new InvalidOperationException($"Encrypted payload for column '{columnName}' is too short.");
         }
 
-        var ciphertextLength = encryptedPayload.Length - NonceLength - TagLength;
-        var plaintext = new byte[ciphertextLength];
+        var ciphertextLength = encryptedPayload.Length - Cipher.NonceSize - Cipher.TagSize;
         var aad = BuildAssociatedData(conversationId, recordId, columnName);
-        var nonce = encryptedPayload[..NonceLength];
-        var ciphertext = encryptedPayload.Slice(NonceLength, ciphertextLength);
-        var tag = encryptedPayload[^TagLength..];
+        var nonce = encryptedPayload[..Cipher.NonceSize];
+        var ciphertext = encryptedPayload.Slice(Cipher.NonceSize, ciphertextLength);
+        var tag = encryptedPayload[^Cipher.TagSize..];
 
-        using var aesGcm = new AesGcm(key, TagLength);
-        aesGcm.Decrypt(nonce, ciphertext, tag, plaintext, aad);
-
-        return plaintext;
+        return Cipher.Decrypt(key, nonce, ciphertext, tag, aad);
     }
 
     private static byte[] BuildAssociatedData(Guid conversationId, Guid recordId, string columnName)
@@ -68,7 +61,7 @@ internal static class NodePayloadProtector
         var schemaVersionBytes = Encoding.UTF8.GetBytes(SchemaVersion);
         var aad = new byte[conversationBytes.Length + recordBytes.Length + columnBytes.Length + schemaVersionBytes.Length];
 
-        conversationBytes.CopyTo(aad, 0);
+        conversationBytes.CopyTo(aad, index: 0);
         recordBytes.CopyTo(aad, conversationBytes.Length);
         columnBytes.CopyTo(aad, conversationBytes.Length + recordBytes.Length);
         schemaVersionBytes.CopyTo(aad, conversationBytes.Length + recordBytes.Length + columnBytes.Length);

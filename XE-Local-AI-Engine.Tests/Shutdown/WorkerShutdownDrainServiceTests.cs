@@ -11,9 +11,11 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
+using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class WorkerShutdownDrainServiceTests
@@ -47,13 +49,13 @@ public sealed class WorkerShutdownDrainServiceTests
         var drainTask = service.DrainAsync();
 
         await components.InvocationRunner.DrainStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        AssertEx.Equal(0, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 0, components.WorkerHubConnection.DisconnectAsyncCallCount);
 
         components.InvocationRunner.CompleteDrain(true);
         var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(2));
 
         AssertEx.True(result.Succeeded);
-        AssertEx.Equal(1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
         AssertEx.Equal("stop-accepting|await-active-invocations|active-invocations-drained|disconnect-worker-hub",
             components.Operations.ToDelimitedString());
     }
@@ -69,7 +71,7 @@ public sealed class WorkerShutdownDrainServiceTests
         AssertEx.True(result.Succeeded);
         AssertEx.Empty(components.DeadLetterStore.Enqueued);
         AssertEx.Empty(components.DeadLetterStore.Pending);
-        AssertEx.Equal(1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
     }
 
     [Test]
@@ -97,7 +99,28 @@ public sealed class WorkerShutdownDrainServiceTests
         var result = await service.DrainAsync();
 
         AssertEx.True(result.Succeeded);
-        AssertEx.Equal(1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+    }
+
+    [Test]
+    public async Task DrainAsync_WhenFlushAndDisconnectNeverComplete_CompletesWithinDeadlineAndLogsDrops()
+    {
+        var components = RecordingShutdownComponents.Create(hasPendingDeadLetter: true);
+        components.HubMessageSender.BlockUntilCancelled = true; // dead-letter flush never completes on its own
+        components.WorkerHubConnection.BlockUntilCancelled = true; // hub disconnect never completes on its own
+
+        var service = components.CreateService(TimeSpan.FromMilliseconds(200));
+
+        // If the whole-drain deadline is honored, DrainAsync returns near the 200ms deadline. If it were unbounded (the
+        // pre-fix behavior), the blocking fakes would hang and this WaitAsync would throw — the test would fail.
+        var result = await service.DrainAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Contains(result.Diagnostics, entry => entry == "flush-dead-letter-outbox:deadline-exceeded");
+        AssertEx.Contains(result.Diagnostics, entry => entry == "disconnect-worker-hub:deadline-exceeded");
+        // The unflushed dead-letter entry was never removed — it stays queued for a later run.
+        AssertEx.NotEmpty(components.DeadLetterStore.Pending);
+        AssertEx.Empty(components.DeadLetterStore.Removed);
     }
 
     private static void ReplaceShutdownComponents(IServiceCollection services, RecordingShutdownComponents components)
@@ -163,17 +186,24 @@ public sealed class WorkerShutdownDrainServiceTests
 #pragma warning restore CA2000
         }
 
-        public WorkerShutdownDrainService CreateService()
+        public WorkerShutdownDrainService CreateService(TimeSpan? drainTimeout = null)
         {
             var deadLetterFlushService = new DeadLetterFlushService(DeadLetterStore,
                 new Lazy<IHubMessageSender>(() => HubMessageSender),
                 NullLogger<DeadLetterFlushService>.Instance);
 
+            var options = drainTimeout is { } timeout
+                ? new WorkerShutdownDrainOptions
+                {
+                    DrainTimeout = timeout
+                }
+                : new WorkerShutdownDrainOptions();
+
             return new WorkerShutdownDrainService(Dispatcher,
                 InvocationRunner,
                 deadLetterFlushService,
                 WorkerHubConnection,
-                Options.Create(new WorkerShutdownDrainOptions()),
+                Options.Create(options),
                 NullLogger<WorkerShutdownDrainService>.Instance);
         }
 
@@ -204,7 +234,7 @@ public sealed class WorkerShutdownDrainServiceTests
         {
             lock (_sync)
             {
-                return string.Join('|', _items);
+                return string.Join(separator: '|', _items);
             }
         }
     }
@@ -216,6 +246,30 @@ public sealed class WorkerShutdownDrainServiceTests
         public bool IsAcceptingRemoteInvocations { get; private set; } = true;
 
         event EventHandler<InvocationStateChangedEventArgs>? IWorkerEventDispatcher.InvocationStateChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
+        event EventHandler<ToolCallLifecycleChangedEventArgs>? IWorkerEventDispatcher.ToolCallLifecycleChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
+        event EventHandler<TurnNoticeChangedEventArgs>? IWorkerEventDispatcher.TurnNoticeChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
+        event EventHandler<ApprovalRequestedChangedEventArgs>? IWorkerEventDispatcher.ApprovalRequestedChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
+        event EventHandler<UserQuestionRequestedChangedEventArgs>? IWorkerEventDispatcher.UserQuestionRequestedChanged
         {
             add => _ = value;
             remove => _ = value;
@@ -247,7 +301,7 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt)
+        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
             return Task.CompletedTask;
         }
@@ -257,9 +311,9 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationAssignedAsync(RuntimePackage package)
+        public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<IAsyncDisposable>(NoopLease.Instance);
         }
 
         public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)
@@ -272,7 +326,13 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationCompletedAsync(Guid invocationId)
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
+            long? generationDurationMs = null)
         {
             return Task.CompletedTask;
         }
@@ -290,6 +350,41 @@ public sealed class WorkerShutdownDrainServiceTests
         public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
         {
             return Task.CompletedTask;
+        }
+
+        public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt)
+        {
+            return Task.CompletedTask;
+        }
+
+        private sealed class NoopLease : IAsyncDisposable
+        {
+            public static readonly NoopLease Instance = new();
+
+            public ValueTask DisposeAsync()
+            {
+                return ValueTask.CompletedTask;
+            }
         }
     }
 
@@ -333,6 +428,10 @@ public sealed class WorkerShutdownDrainServiceTests
         {
         }
 
+        public void CancelDetached(Guid invocationId)
+        {
+        }
+
         public void CancelAll()
         {
         }
@@ -341,7 +440,11 @@ public sealed class WorkerShutdownDrainServiceTests
         {
         }
 
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
+        {
+        }
+
+        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
         {
         }
 
@@ -397,6 +500,8 @@ public sealed class WorkerShutdownDrainServiceTests
     {
         public int DisconnectAsyncCallCount { get; private set; }
 
+        public bool BlockUntilCancelled { get; set; }
+
         public WorkerConnectionState State => WorkerConnectionState.Disconnected;
 
         event EventHandler<WorkerConnectionStateChangedEventArgs>? IWorkerHubConnection.StateChanged
@@ -446,11 +551,15 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task DisconnectAsync(CancellationToken cancellationToken = default)
+        public async Task DisconnectAsync(CancellationToken cancellationToken = default)
         {
             DisconnectAsyncCallCount++;
             operations.Add("disconnect-worker-hub");
-            return Task.CompletedTask;
+            if (BlockUntilCancelled)
+            {
+                // Model a hub disconnect that never completes on its own — only the drain's end-to-end deadline unblocks it.
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
@@ -543,7 +652,9 @@ public sealed class WorkerShutdownDrainServiceTests
     {
         public bool ThrowOnFailedSend { get; set; }
 
-        public Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
+        public bool BlockUntilCancelled { get; set; }
+
+        public async Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
         {
             operations.Add("flush-dead-letter");
             if (ThrowOnFailedSend)
@@ -551,7 +662,11 @@ public sealed class WorkerShutdownDrainServiceTests
                 throw new InvalidOperationException("Simulated dead-letter send failure.");
             }
 
-            return Task.CompletedTask;
+            if (BlockUntilCancelled)
+            {
+                // Model a dead-letter resend that never completes on its own — only the drain deadline unblocks it.
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)

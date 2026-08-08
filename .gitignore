@@ -93,6 +93,9 @@ StyleCopReport.xml
 *.tmp
 *.tmp_proj
 *.log
+!docs/agent-framework/evidence/validation/debug-devui-registration-contract.log
+!docs/agent-framework/evidence/validation/debug-devui-route-contract.log
+!docs/agent-framework/evidence/validation/release-adapter-architecture-tests.log
 *.vspscc
 *.vssscc
 .builds
@@ -348,6 +351,28 @@ ASALocalRun/
 *.db-shm
 *.db-wal
 *.db
+# The node database is named *.sqlite, which the *.db rules above do not cover. A headless/Aspire run resolves
+# INodeDataDirectory to the content root, so these land in the repo tree and `git add -A` would commit the chat
+# database and every encrypted column in it.
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# The node operator secret. 32 bytes from which the SQLite column key, the node JWT signing key and the Data
+# Protection key-ring KEK are all derived — committing it forges node JWTs and decrypts every .enc blob.
+node.key
+
+# AppHost runtime data dir — node.key, the node SQLite DB, and its migration lock are all runtime state,
+# never product content. A headless/Aspire run writes them here under the content root.
+/XE-Local-AI-Engine.AppHost/.data/
+
+# Runtime per-conversation uploaded-file blobs (INodeDataDirectory data root; created
+# under the content root in headless/dev mode)
+uploaded-files/
+
+# Runtime AgentHome sandbox/workspace state (manifest, run logs, scratchpads, memory
+# proposals) materialized under the data root in headless/dev mode
+agent-home-state/
 
 # Sonarqube files
 .sonarqube/
@@ -358,6 +383,13 @@ repomix-output.*
 # AI Coding files
 **/*.omc/**
 **/*.omx/**
+.testagent/
+# Redundant per-tool agent skill mirrors — canonical copy lives under .claude/ only.
+**/.agents/**
+**/.junie/**
+# Per-user editor state — share only .vscode/extensions.json.
+**/.vscode/settings.json
+**/.vscode/launch.json
 
 # Repomix files
 repomix-output.*
@@ -372,5 +404,57 @@ tmp/
 # C# Dev Kit for Visual Studio Code
 *.lscache
 
-# Worker Credentials
+# Encrypted runtime secret files — OAuth tokens, cloud credentials, worker creds. NEVER commit these.
+*.enc
 *worker-credentials.enc
+codex-oauth-tokens.enc
+cloud-credentials.enc
+
+# Local runtime artifacts (machine-specific, not for version control)
+.claude/scheduled_tasks.lock
+.codegraph/daemon.pid
+
+# --- Self-contained desktop launcher sources (override the Click-Once `publish/` and `*.pubxml` ignores above) ---
+# These are tracked SOURCE artifacts, not build output: the per-RID single-file publish profiles and the
+# desktop launcher scripts shipped beside the binary. The real publish output goes to bin/<config>/<rid>/publish/
+# (set by each profile's PublishDir), so the repo-root publish/ dir only holds these intentional sources.
+# Our pubxml carry no connection strings/secrets — only RuntimeIdentifier + single-file flags — so the security
+# rationale behind the default `*.pubxml` ignore does not apply here.
+!/publish/
+!/XE-Local-AI-Engine.Client/Properties/PublishProfiles/*.pubxml
+
+# Packaged RC bundles (build output, not source)
+/publish/dist/
+
+# Runtime node settings (written to ContentRootPath at runtime; must never be committed or shipped)
+node-settings.json
+
+# Generated at release time by scripts/generate-release-notes.sh (vpk --releaseNotes)
+RELEASE_NOTES.md
+
+# git-cliff downloaded into the repo root by Plans/2026-06-25-velopack-operator-setup-runbook.md:118-121.
+# publish/package-tester-win.ps1 caches it under %TEMP% instead and never writes here, but the older manual
+# runbook drops ~13 files in the working tree — which the packager's clean-tree gate then refuses to build on.
+/gc-tmp/
+/git-cliff-*-x86_64-pc-windows-msvc.zip
+
+# DataProtection key-ring (runtime; per-user data dir in prod, content-root fallback in dev/test)
+dp-keys/
+
+# Dev-runtime knowledge-base document store (encrypted uploads land here when running from the repo)
+XE-Local-AI-Engine.Client/knowledge-base/
+
+# Dev-runtime node-DB backup snapshots (NodeDbBackupService writes here when NodeData:Directory is content-root-relative)
+XE-Local-AI-Engine.Client/backups/
+
+# Runtime state written next to the app during local runs (never product content).
+XE-Local-AI-Engine.Client/generated-images/
+XE-Local-AI-Engine.Client/development/
+XE-Local-AI-Engine.Client/logs/
+XE-Local-AI-Engine.Client/models/
+
+# Internal agent tooling + planning archive — untracked pending migration to the
+# universal harness at .agent-harness. Kept locally, not shipped/open-sourced.
+/.opencode/
+/opencode.jsonc
+/Plans/

@@ -19,7 +19,7 @@ public sealed class RuntimePackageHistoryHashTests
     {
         var actual = RuntimePackageHistoryHash.BuildExpectedAad(Guid.Parse("22222222-2222-2222-2222-222222222222"),
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            7);
+            epochVersion: 7);
 
         AssertEx.Equal("message|22222222-2222-2222-2222-222222222222|11111111-1111-1111-1111-111111111111|7", actual);
     }
@@ -29,7 +29,7 @@ public sealed class RuntimePackageHistoryHashTests
     {
         var actual = RuntimePackageHistoryHash.BuildExpectedAad(Guid.Parse("22222222-2222-2222-2222-222222222222"),
             Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            9);
+            epochVersion: 9);
 
         AssertEx.Equal("message|22222222-2222-2222-2222-222222222222|33333333-3333-3333-3333-333333333333|9", actual);
     }

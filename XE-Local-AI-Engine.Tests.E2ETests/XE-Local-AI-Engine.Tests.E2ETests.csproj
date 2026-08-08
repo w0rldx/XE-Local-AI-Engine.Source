@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>XE_Local_AI_Engine.Tests.E2ETests</RootNamespace>
+    <UseAppHost Condition="'$(OS)' == 'Windows_NT'">false</UseAppHost>
+  </PropertyGroup>
+
+  <!-- E2E needs Playwright browsers + builds the SPA in-fixture; exclude it from the solution-wide
+       unit `dotnet test` (it is otherwise collected because the name contains '.Tests.'). The repo's
+       global.json pins the Microsoft.Testing.Platform runner, which rejects ANY project it sees as a
+       test project unless that project is an MTP app — so it is not enough to drop just one flag:
+       leaving IsTestProject=true while IsTestingPlatformApplication=false makes dotnet test treat E2E as
+       a (forbidden) VSTest project and abort the whole run. By default we therefore demote E2E to a
+       plain library (no Main needed, still compiled by the PR build for a real compile-check) that the
+       MTP runner ignores entirely. The dedicated e2e workflow opts back in with -p:RunE2ETests=true,
+       restoring the Exe MTP test app. -->
+  <PropertyGroup Condition="'$(RunE2ETests)' != 'true'">
+    <IsTestProject>false</IsTestProject>
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
+    <PackageReference Include="Microsoft.Playwright"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
+    <PackageReference Include="Microsoft.Testing.Platform"/>
+    <PackageReference Include="NSubstitute"/>
+    <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="TUnit"/>
+    <PackageReference Include="TUnit.Playwright"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Testing\XE-Local-AI-Engine.Client.Testing.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
+  </ItemGroup>
+
+</Project>
