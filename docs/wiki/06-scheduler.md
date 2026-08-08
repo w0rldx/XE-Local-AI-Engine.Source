@@ -1,6 +1,6 @@
 # Scheduler
 
-> Last reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 
@@ -19,7 +19,7 @@ This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Applicat
 | SignalR hub + publisher | `XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`, `…/Hubs/SchedulerEventPublisher.cs` |
 | Retention sweep | `XE-Local-AI-Engine.Client/BackgroundServices/SchedulerHistoryRetentionService.cs` |
 | REST endpoints (FastEndpoints) | `XE-Local-AI-Engine.Client/Endpoints/Scheduler/V1/` |
-| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs:203` (`Scheduler`) |
+| Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`Scheduler`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/scheduler/` |
 
 ---
@@ -49,7 +49,7 @@ Operator (React) ──REST /api/local/v1/scheduler/* ──▶ FastEndpoints
                             SchedulerHub (IHubContext) ──push──▶ React useSchedulerHub → invalidate TanStack Query
 ```
 
-The invariant: **the store is written first, then Quartz is reconciled to match.** The store owns id/timestamp stamping and the soft-delete/enable lifecycle; the management service never re-implements them (`IScheduledJobManagementService` docstring, `IScheduledJobManagementService.cs:6-14`).
+The invariant: **the store is written first, then Quartz is reconciled to match.** The store owns id/timestamp stamping and the soft-delete/enable lifecycle; the management service never re-implements them (`IScheduledJobManagementService` docstring, `IScheduledJobManagementService.cs`).
 
 ---
 
@@ -57,17 +57,17 @@ The invariant: **the store is written first, then Quartz is reconciled to match.
 
 A **template** is a server-defined job type. Each is an `IScheduledJobHandler` exposing a `TemplateId`, a `ScheduledJobTemplateDescriptor` (display name, JSON-Schema parameter contract, default parameters, supported `ScheduleKind`s, default kind, misfire policy, default max-runtime, manual/agent-creation flags, history detail level), and an `ExecuteAsync(context, ct)`.
 
-`ScheduledJobTemplateRegistry` (`Implementation/ScheduledJobTemplateRegistry.cs:19`) is a **singleton built at startup** from every DI-registered `IScheduledJobHandler`. It snapshots handlers into a `FrozenDictionary` keyed case-sensitively by `TemplateId` and **throws `InvalidOperationException` at construction on a duplicate `TemplateId`** — a programming error deliberately caught at startup, not suppressed at runtime.
+`ScheduledJobTemplateRegistry` (`Implementation/ScheduledJobTemplateRegistry.cs`) is a **singleton built at startup** from every DI-registered `IScheduledJobHandler`. It snapshots handlers into a `FrozenDictionary` keyed case-sensitively by `TemplateId` and **throws `InvalidOperationException` at construction on a duplicate `TemplateId`** — a programming error deliberately caught at startup, not suppressed at runtime.
 
 ### Shipped templates
 
-`ModelRecommendationCheckHandler` (`Handlers/ModelRecommendationCheckHandler.cs:29`), template id `model-recommendation-check`, runs the box-aware GGUF Model Advisor and refreshes the cached recommendation snapshot. See [Model Fit](07-model-fit.md) for what it computes. Maintainer-relevant details:
+`ModelRecommendationCheckHandler` (`Handlers/ModelRecommendationCheckHandler.cs`), template id `model-recommendation-check`, runs the box-aware GGUF Model Advisor and refreshes the cached recommendation snapshot. See [Model Fit](07-model-fit.md) for what it computes. Maintainer-relevant details:
 
-- **It is a singleton** (the registry captures handlers in a `FrozenDictionary`), so it **cannot inject scoped services**. It injects `IServiceScopeFactory` and resolves the scoped `IModelFitRefreshService` inside a per-fire scope (lines 70-103).
+- **It is a singleton** (the registry captures handlers in a `FrozenDictionary`), so it **cannot inject scoped services**. It injects `IServiceScopeFactory` and resolves the scoped `IModelFitRefreshService` inside a per-fire scope (the scoped-resolution block in `ModelRecommendationCheckHandler.HandleAsync`).
 - It owns **no scheduler state**: it never touches run rows or SignalR — the dispatcher does. It forwards `context.ReportProgressAsync`, lets `OperationCanceledException` propagate (→ dispatcher records *Cancelled*), and throws a `ScheduledJobExecutionException` carrying the refresh result's contractually-sanitized `SanitizedError` on failure (→ dispatcher records *Failed* with that exact reason).
 - Parameters are validated against a draft-07 JSON-Schema (`operation`/`useCase`/`limit`/`quantOverride`/`ctxTarget`) and re-validated through the shared `ModelFitRequestValidator`; raw parameter values are never echoed into error text.
 
-`RunSavedAgentHandler` (`Handlers/RunSavedAgentHandler.cs:48`), template id `run-agent`, executes a
+`RunSavedAgentHandler` (`Handlers/RunSavedAgentHandler.cs`), template id `run-agent`, executes a
 saved agent headlessly with a fixed prompt. It supports Cron, one-shot, simple-interval, and manual
 schedules; defaults to Cron; permits manual triggering and agent-created definitions; and defaults to
 a 600-second runtime limit. Its parameters are `agentDefinitionId`, `prompt`, and an optional
@@ -98,18 +98,18 @@ Two Quartz `IJob` types, both deliberately trivial — all logic lives in the ex
 | Job | Used when | File |
 |---|---|---|
 | `SchedulerDispatchJob` | `PreventOverlap == false` | `Implementation/SchedulerDispatchJob.cs` |
-| `NonOverlappingSchedulerDispatchJob` | `PreventOverlap == true` | `Implementation/NonOverlappingSchedulerDispatchJob.cs:14` |
+| `NonOverlappingSchedulerDispatchJob` | `PreventOverlap == true` | `Implementation/NonOverlappingSchedulerDispatchJob.cs` |
 
 The only difference is `[DisallowConcurrentExecution]` on the non-overlapping variant. That attribute is **keyed per `JobKey`**, so distinct definitions still run concurrently — only re-entrant fires of the *same* definition are serialized. Both delegate to `SchedulerDispatchJobRunner.RunAsync(executor, logger, context)`.
 
-The management service stamps the definition id into the `JobDataMap` under `SchedulerJobKeys.ScheduledJobIdKey = "scheduledJobId"`, and every job lives in the Quartz group `SchedulerJobKeys.Group = "scheduled-jobs"` (`SchedulerJobKeys.cs:14,20`). With `UseProperties = true` the data map is string-only, so the `Guid` is stored as its string form.
+The management service stamps the definition id into the `JobDataMap` under `SchedulerJobKeys.ScheduledJobIdKey = "scheduledJobId"`, and every job lives in the Quartz group `SchedulerJobKeys.Group = "scheduled-jobs"` (`SchedulerJobKeys.cs`). With `UseProperties = true` the data map is string-only, so the `Guid` is stored as its string form.
 
 ### `SchedulerDispatchExecutor.DispatchAsync`
 
-`Implementation/SchedulerDispatchExecutor.cs:73` (interface `ISchedulerDispatchExecutor`) is the heart of a fire:
+`Implementation/SchedulerDispatchExecutor.cs` (interface `ISchedulerDispatchExecutor`) is the heart of a fire:
 
 1. Load the definition by id; **skip silently** if missing, disabled, soft-deleted, or its template is no longer registered (a faulting/absent handler must never fault the scheduler).
-2. `RecordAndRunAsync` (`:112`): **idempotently upsert** the run row keyed on the Quartz `FireInstanceId` via `IScheduledJobRunStore.UpsertByFireInstanceAsync`. If the row is already terminal (a refire / recovery callback re-using the same instance id) the work has run before → skip re-execution.
+2. `RecordAndRunAsync`: **idempotently upsert** the run row keyed on the Quartz `FireInstanceId` via `IScheduledJobRunStore.UpsertByFireInstanceAsync`. If the row is already terminal (a refire / recovery callback re-using the same instance id) the work has run before → skip re-execution.
 3. Publish `RunStarted`, build the `ScheduledJobExecutionContext`, invoke the handler.
 4. Record the terminal lifecycle state (`Succeeded` / `Failed` / `Cancelled`) and publish the matching hub event.
 
@@ -117,7 +117,7 @@ The management service stamps the definition id into the `JobDataMap` under `Sch
 
 ### `ScheduledJobExecutionContext`
 
-`Services/Scheduler/ScheduledJobExecutionContext.cs:9` carries everything a handler needs for one invocation: `ScheduledJobId`, `TemplateId`, `DisplayName`, **decrypted plaintext `Parameters`** (treat as untrusted — validate against the descriptor's `ParameterSchema`), `FireInstanceId`, scheduled/actual fire times, `TriggeredBy`, and an optional `ReportProgressAsync(message, percent, ct)` callback (defaults to no-op; null means progress events are silently dropped — acceptable for Summary-level templates).
+`Services/Scheduler/ScheduledJobExecutionContext.cs` carries everything a handler needs for one invocation: `ScheduledJobId`, `TemplateId`, `DisplayName`, **decrypted plaintext `Parameters`** (treat as untrusted — validate against the descriptor's `ParameterSchema`), `FireInstanceId`, scheduled/actual fire times, `TriggeredBy`, and an optional `ReportProgressAsync(message, percent, ct)` callback (defaults to no-op; null means progress events are silently dropped — acceptable for Summary-level templates).
 
 ---
 
@@ -129,7 +129,7 @@ Run history is owned by `IScheduledJobRunStore` (`XE-Local-AI-Engine.Client.Pers
 - Runs have **no enforced FK to their definition** so history outlives the definition; their *events* cascade-delete.
 - The store owns: id/timestamp stamping, `UpsertByFireInstanceAsync` (idempotent fire-instance open), `UpdateLifecycleAsync` (terminal transitions), `RequestCancellationAsync` (stamp `CancellationRequestedAtUtc` without changing status), `MarkStaleActiveRunsAsync` (startup reconciliation of orphaned `Queued`/`Running` runs to a terminal state), and `SweepOlderThanAsync` (retention deletes by `CreatedAtUtc`, cascade removes events).
 
-`SchedulerHistoryRetentionService` (`XE-Local-AI-Engine.Client/BackgroundServices/SchedulerHistoryRetentionService.cs:13`) is a `BackgroundService` that periodically calls the sweep using `SchedulerOptions.HistoryRetentionDays` (default 30) on a `RetentionSweepIntervalMinutes` cadence (default 60).
+`SchedulerHistoryRetentionService` (`XE-Local-AI-Engine.Client/BackgroundServices/SchedulerHistoryRetentionService.cs`) is a `BackgroundService` that periodically calls the sweep using `SchedulerOptions.HistoryRetentionDays` (default 30) on a `RetentionSweepIntervalMinutes` cadence (default 60).
 
 ---
 
@@ -137,7 +137,7 @@ Run history is owned by `IScheduledJobRunStore` (`XE-Local-AI-Engine.Client.Pers
 
 There are **two ways** a run reaches the handler's `CancellationToken`:
 
-1. **Operator cancel** — `IScheduledJobManagementService.CancelRunAsync(runId)` (`Implementation/ScheduledJobManagementService.cs:315`). It records intent first (`RequestCancellationAsync` stamps `CancellationRequestedAtUtc`), *then* `scheduler.Interrupt(QuartzFireInstanceId)`. Recording intent first lets the dispatcher distinguish an operator cancel (→ `Cancelled`) from an auto-interrupt timeout (→ `TimedOut`) when the token trips. The method returns a `RunCancellationOutcome`:
+1. **Operator cancel** — `IScheduledJobManagementService.CancelRunAsync(runId)` (`Implementation/ScheduledJobManagementService.cs`). It records intent first (`RequestCancellationAsync` stamps `CancellationRequestedAtUtc`), *then* `scheduler.Interrupt(QuartzFireInstanceId)`. Recording intent first lets the dispatcher distinguish an operator cancel (→ `Cancelled`) from an auto-interrupt timeout (→ `TimedOut`) when the token trips. The method returns a `RunCancellationOutcome`:
 
    | Outcome | Meaning |
    |---|---|
@@ -146,9 +146,9 @@ There are **two ways** a run reaches the handler's `CancellationToken`:
    | `Requested` | Quartz interrupt was active (run is currently executing) |
    | `RequestedButNotRunning` | intent recorded, but no live fire instance to interrupt |
 
-   (`Services/Scheduler/RunCancellationOutcome.cs:7`)
+   (`Services/Scheduler/RunCancellationOutcome.cs`)
 
-2. **Auto-interrupt (timeout)** — opt-in **per job**. `AddNodeScheduler` registers `q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = options.DefaultMaxRuntimeMinutes)` (`NodeSchedulerServiceCollectionExtensions.cs:50`), but Quartz's auto-interrupt plugin only acts on jobs that **opt in**. A job's effective max-runtime comes from its descriptor / definition (`DefaultMaxRuntimeSeconds`, e.g. 600 for the model-fit template; `MaxRuntimeSeconds` on `ScheduledJobManagementInput`). **Gotcha:** auto-interrupt is *not* applied globally to every job — it is per-job opt-in, so a template/definition that doesn't carry a runtime budget will never be auto-interrupted regardless of the configured default.
+2. **Auto-interrupt (timeout)** — opt-in **per job**. `AddNodeScheduler` registers `q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = options.DefaultMaxRuntimeMinutes)` (`NodeSchedulerServiceCollectionExtensions.cs`), but Quartz's auto-interrupt plugin only acts on jobs that **opt in**. A job's effective max-runtime comes from its descriptor / definition (`DefaultMaxRuntimeSeconds`, e.g. 600 for the model-fit template; `MaxRuntimeSeconds` on `ScheduledJobManagementInput`). **Gotcha:** auto-interrupt is *not* applied globally to every job — it is per-job opt-in, so a template/definition that doesn't carry a runtime budget will never be auto-interrupted regardless of the configured default.
 
 Either way, the handler must actually *observe* the token. The dispatcher records the terminal state once the handler throws `OperationCanceledException`.
 
@@ -156,12 +156,12 @@ Either way, the handler must actually *observe* the token. The dispatcher record
 
 ## DI registration & two key gotchas
 
-`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs:18`) wires the whole subsystem behind `SchedulerOptions.Enabled`. When disabled, the Quartz hosted service never starts (no jobs fire) but persistence tables and DI registrations remain. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, and `AddQuartzHostedService(WaitForJobsToComplete = true)`. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators.
+`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs`) wires the whole subsystem behind `SchedulerOptions.Enabled`. When disabled, the Quartz hosted service never starts (no jobs fire) but persistence tables and DI registrations remain. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, and `AddQuartzHostedService(WaitForJobsToComplete = true)`. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators.
 
 ### Gotcha 1 — Quartz `ConnectionStringName` is resolved lazily, by name
 
 ```csharp
-// NodeSchedulerServiceCollectionExtensions.cs:39-45
+// NodeSchedulerServiceCollectionExtensions.cs
 db.ConnectionStringName = "node-sqlite"; // looked up in IConfiguration's ConnectionStrings at scheduler start
 ```
 
@@ -169,11 +169,11 @@ Quartz resolves the connection **by name at scheduler start (post-config-build)*
 
 ### Gotcha 2 — `AddJob`/durable reconcile with `replace: true` self-heals a stale `JOB_CLASS_NAME`
 
-`ReconcileDurableJobsAsync` (`IScheduledJobManagementService.cs:71-78`) re-adds the durable Quartz `JobDetail` **with `replace=true`** for every persisted, enabled, non-deleted definition that already has a Quartz job. This heals a stale persisted `JOB_CLASS_NAME` — e.g. one written before the dispatch job changed namespaces/type. It never changes a trigger's schedule and never fires a job; unknown-template definitions are skipped. It is intended to run **once at startup**. Without this, a persisted Quartz row pointing at a moved/renamed `IJob` type would fail to materialize at fire time.
+`ReconcileDurableJobsAsync` (`IScheduledJobManagementService.cs`) re-adds the durable Quartz `JobDetail` **with `replace=true`** for every persisted, enabled, non-deleted definition that already has a Quartz job. This heals a stale persisted `JOB_CLASS_NAME` — e.g. one written before the dispatch job changed namespaces/type. It never changes a trigger's schedule and never fires a job; unknown-template definitions are skipped. It is intended to run **once at startup**. Without this, a persisted Quartz row pointing at a moved/renamed `IJob` type would fail to materialize at fire time.
 
 ### `SchedulerOptions`
 
-`Services/Scheduler/SchedulerOptions.cs:8` (section `"Scheduler"`), validated by `SchedulerOptionsValidator`:
+`Services/Scheduler/SchedulerOptions.cs` (section `"Scheduler"`), validated by `SchedulerOptionsValidator`:
 
 | Option | Default | Notes |
 |---|---|---|
@@ -189,11 +189,11 @@ Quartz resolves the connection **by name at scheduler start (post-config-build)*
 
 ## SignalR hub (live run updates)
 
-`SchedulerHub` (`XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs:14`) is a **server-push-only** hub: it has no client-callable server methods. It is mapped via `MapHub` at the full path `/api/local/v1/scheduler/hub` (`LocalApiRoutes.cs:226`) and is `[Authorize]`d under the JWT bearer scheme with the `NodeAuthorizationPolicies.Operator` policy — the same operator gate as the other local hubs. See [API & Hubs](09-api-and-hubs.md).
+`SchedulerHub` (`XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`) is a **server-push-only** hub: it has no client-callable server methods. It is mapped via `MapHub` at the full path `/api/local/v1/scheduler/hub` (`LocalApiRoutes.cs`) and is `[Authorize]`d under the JWT bearer scheme with the `NodeAuthorizationPolicies.Operator` policy — the same operator gate as the other local hubs. See [API & Hubs](09-api-and-hubs.md).
 
-`SchedulerEventPublisher` (`Hubs/SchedulerEventPublisher.cs:12`) implements `ISchedulerEventPublisher` over `IHubContext<SchedulerHub>` and broadcasts each event to `Clients.All` using the event's `EventType` as the SignalR method name. **Payloads are already sanitized by callers** (no parameters, details, or stack traces). In Application-only/test hosts a no-op `NullSchedulerEventPublisher` is registered (`TryAddSingleton`) and superseded by the hub-backed publisher in the Client host.
+`SchedulerEventPublisher` (`Hubs/SchedulerEventPublisher.cs`) implements `ISchedulerEventPublisher` over `IHubContext<SchedulerHub>` and broadcasts each event to `Clients.All` using the event's `EventType` as the SignalR method name. **Payloads are already sanitized by callers** (no parameters, details, or stack traces). In Application-only/test hosts a no-op `NullSchedulerEventPublisher` is registered (`TryAddSingleton`) and superseded by the hub-backed publisher in the Client host.
 
-Event names (`SchedulerHubEvents`, `ISchedulerEventPublisher.cs:28`) and their hub method strings consumed by React:
+Event names (`SchedulerHubEvents`, `ISchedulerEventPublisher.cs`) and their hub method strings consumed by React:
 
 | `SchedulerHubEvents` constant | React method name |
 |---|---|
@@ -208,7 +208,7 @@ Event names (`SchedulerHubEvents`, `ISchedulerEventPublisher.cs:28`) and their h
 
 ## REST surface
 
-All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Scheduler` (`LocalApiRoutes.cs:203`), one endpoint class per file in `Endpoints/Scheduler/V1/`. DTOs in `SchedulerEndpointDtos.cs`, mapping in `Mappers/SchedulerMapper.cs`.
+All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Scheduler` (`LocalApiRoutes.cs`), one endpoint class per file in `Endpoints/Scheduler/V1/`. DTOs in `SchedulerEndpointDtos.cs`, mapping in `Mappers/SchedulerMapper.cs`.
 
 | Route (relative to `scheduler/`) | Endpoint |
 |---|---|
@@ -223,7 +223,7 @@ All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Sch
 
 These endpoints are local/loopback, operator-authenticated, and strict on Host/Origin like the rest of the local admin surface ([Security & Privacy](12-security-and-privacy.md)). The OpenAPI document generated from them is the single source for the React REST clients (hey-api) — see [React Client](10-react-client.md).
 
-> **Body-less POST → 415 fix.** The route-only action POSTs (`enable`, `disable`, `trigger`, run `cancel`) bind their id from the route, so a well-behaved client sends no body and therefore no `Content-Type`. FastEndpoints' default POST `Accepts` metadata only allows `application/json` and answers a missing header with **415**. Each action endpoint overrides this with `Description(x => x.Accepts<ScheduledJobActionRequest>())` so the body-less "Run now"/enable/disable/cancel request goes through (`TriggerScheduledJobEndpoint.cs:20`). No request body or OpenAPI shape change is implied. See [API & Hubs](09-api-and-hubs.md).
+> **Body-less POST → 415 fix.** The route-only action POSTs (`enable`, `disable`, `trigger`, run `cancel`) bind their id from the route, so a well-behaved client sends no body and therefore no `Content-Type`. FastEndpoints' default POST `Accepts` metadata only allows `application/json` and answers a missing header with **415**. Each action endpoint overrides this with `Description(x => x.Accepts<ScheduledJobActionRequest>())` so the body-less "Run now"/enable/disable/cancel request goes through (`TriggerScheduledJobEndpoint.cs`). No request body or OpenAPI shape change is implied. See [API & Hubs](09-api-and-hubs.md).
 
 ---
 

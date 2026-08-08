@@ -8,7 +8,7 @@ Everything here runs **on your own computer** unless you deliberately connect an
 
 **Jump to:** [Chat](#chat) · [Finding & choosing models](#finding-and-choosing-models) ·
 [Managing models](#managing-models) · [Your documents](#your-own-documents) ·
-[Agents](#agents) · [Automation](#automation) · [Voice](#voice) · [Images](#image-generation) ·
+[Agents](#agents) · [Custom tools](#custom-tools) · [Automation](#automation) · [Voice](#voice) · [Images](#image-generation) ·
 [Development Mode](#development-mode) · [Advanced](#advanced)
 
 ---
@@ -163,6 +163,23 @@ Registered servers have their tools offered to your agents.
 > and it runs as you, with your permissions.** That is the same boundary as Development Mode. Only
 > register servers you'd be willing to install and run yourself.
 > [More](privacy-and-data.md#what-connects-to-the-internet)
+
+### Custom tools
+
+**Automation → Custom tools** lets you author either an HTTP fetch or a direct host-program launch and
+assign it to an agent. A tool can be fixed or expose a declared set of model-filled parameters.
+
+> ⚠️ **These tools run with your access.** HTTP tools can send data to allowed network hosts, and
+> command tools launch a program directly on this machine. The node-wide switch is off by default,
+> the built-in authoring form initializes a new tool as disabled, saving requires an explicit danger
+> acknowledgement, and every call remains approval-wrapped. An API caller can request enablement when
+> creating an acknowledged definition. A fixed tool can reuse an explicit session approval until the
+> tool is edited; a parameterized tool asks again for every model-selected argument set. Those gates
+> reduce accidental use; they do not turn an untrusted command or remote service into a sandboxed one.
+
+Secret HTTP headers and command environment values are stored encrypted and are masked when you edit
+the tool later. Parameterized HTTP tools require explicit allowed hosts; command tools require an
+absolute, non-shell executable path.
 
 ---
 

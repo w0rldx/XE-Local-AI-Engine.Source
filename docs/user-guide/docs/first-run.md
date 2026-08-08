@@ -178,6 +178,7 @@ click the item.
 | **Generate an image** | **Preview → Image Generation** | Local image generation |
 | **Run an agent on a schedule** | **Automation → Scheduler** | Unattended, repeating tasks |
 | **Give agents extra abilities** | **Automation → Skills** | Loadable capabilities |
+| **Create a local HTTP or command tool** | **Automation → Custom tools** | Advanced and high-risk — approval-wrapped; parameterized tools ask every call |
 | **Connect external tools** | **Automation → MCP** | Advanced — see the [Glossary](glossary.md#mcp) |
 | **Try the visual workflow builder** | **Preview → Open Canvas** | Experimental |
 | **See what's using memory** | **Models → Loaded** | Freeing up VRAM |
@@ -187,8 +188,9 @@ click the item.
 > **Development Mode** lets an agent edit a real code repository of yours. It is powerful and
 > **genuinely risky**.
 >
-> Note there is **no switch to leave off** — it ships enabled. What gates it is that it only touches a
-> repository once *you register one and start a run*. Please read
+> It ships enabled, but an operator can turn the whole feature off with
+> `Development:Enabled=false`. When enabled, it only touches a repository once *you register one and
+> start a run*. Please read
 > [its security boundary](privacy-and-data.md#development-mode-and-its-limits) **before you register a
 > repository**, and never point it at code you do not trust.
 

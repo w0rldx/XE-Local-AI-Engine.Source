@@ -1,6 +1,7 @@
 # Linux CUDA bring-your-own llama-server — operator runbook
 
 **Date:** 2026-06-29
+**Last validated against the repository:** 2026-08-08 (`50cae141`)
 **Audience:** operator running the engine on a Linux + NVIDIA host who wants the **CUDA** inference path (not the default Vulkan fallback).
 **Feature:** `[[linux-cuda-byo-override]]` — see plan `2026-06-29-linux-cuda-byo-override-plan.md`. Code committed `e59cbc43`.
 
@@ -12,7 +13,18 @@ Upstream llama.cpp (`ggml-org/llama.cpp`) ships **no Linux CUDA prebuilt** — o
 
 It is **off by default**. When the override env var is unset, acquisition behaves exactly as today (pinned download + SHA256 verify). The override **skips** the download + hash step (an operator-built binary has no publisher digest) and instead validates the binary you supply.
 
-> **No-build-knowledge alternative — in-app CUDA build.** If you have the toolchain installed (nvcc/cmake/gcc/g++/make-or-ninja/git + an NVIDIA driver + free disk) but do not want to hand-build llama.cpp, the engine can build it for you: **Node Settings ▸ llama.cpp runtime ▸ "CUDA (build from source)"** (developer-mode / opt-in gated, Linux only). It clones the engine's **pinned** llama.cpp tag, verifies the checked-out commit equals the pinned SHA, builds a CUDA `llama-server` under a scrubbed environment, validates it, and **adopts it as a managed CUDA runtime** that is then selected automatically — no env var, survives restart, removable/rebuildable from the same card. The build option is disabled with an itemized checklist when any prerequisite is missing. See plan `2026-06-29-linux-cuda-inapp-build-plan.md`. The bring-your-own override below remains the manual alternative (and the fallback when the in-app build is too fragile across distros).
+> **Preferred managed alternative — in-app CUDA build.** If you have the toolchain installed (nvcc/cmake/gcc/g++/make-or-ninja/git + an NVIDIA driver + free disk) but do not want to hand-build llama.cpp, use **Node Settings ▸ llama.cpp runtime ▸ "CUDA (build from source)"** (developer-mode / opt-in gated, Linux only). It clones the engine's pinned tag, verifies the checked-out commit equals `LlamaCppReleasePins.PinnedSourceCommitSha`, builds under a scrubbed environment, validates the result, and adopts it as a managed CUDA runtime. It needs no environment override, survives restart, appears in runtime status, and can be removed or rebuilt from the same card. The build option shows an itemized prerequisite checklist when unavailable. The bring-your-own override below remains the operator-managed alternative.
+
+### Choose one ownership model
+
+| | Managed in-app source build | Bring-your-own override (this runbook) |
+|---|---|---|
+| Selection | Installed runtime record; selected automatically | `XE_LLAMACPP_SERVER_PATH` process environment |
+| Source/version | Engine pin and verified source commit | Operator chooses and builds, preferably from the engine pin |
+| Integrity | Source identity plus managed install validation | Filesystem trust checks and runtime self/device probes; no publisher digest |
+| Updates | Remove/rebuild from Node Settings when the engine pin changes | Operator replaces the binary; in-app runtime updates return 409 while override is active |
+| Removal | Eject/remove from the runtime card | Unset the environment variable and restart |
+| Orphan cleanup | Engine-owned runtime paths participate in managed cleanup | An externally located orphan may require operator cleanup after an unclean host termination |
 
 > **WSL caveat:** a WSL2 instance with **no GPU passthrough cannot run this path** — the `--list-devices` GPU check will (correctly) reject the binary. You need a real Linux+NVIDIA host, or WSL2 with NVIDIA GPU passthrough configured.
 
@@ -126,7 +138,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 ## Behavior notes & gotchas
 
 - **Runtime updates are disabled under the override.** The "update llama.cpp" endpoint returns **409** with "Runtime updates are disabled while a bring-your-own llama-server override is active; the operator manages the binary." Unset the override to manage pinned runtimes again.
-- **Hard-killed override server is NOT auto-reaped.** The startup orphan reaper only matches binaries under the engine's own cache root. An override `llama-server` left running after a hard stop (e.g. `aspire stop`, see `[[aspire-stop-hang-llama-orphan]]`) holds its port + VRAM — **kill it manually**: `pkill -f /opt/llama-cuda/bin/llama-server`.
+- **An externally located orphan is not covered by the startup path-based reaper.** Normal supervised shutdown still owns the launched child, but an override `llama-server` left running after an unclean host termination can hold its port and VRAM. Identify the exact PID, verify both `/proc/<pid>/exe` and `/proc/<pid>/cmdline` point to the abandoned override process, then terminate only that verified PID with `kill -- <pid>`. Never use a substring-wide `pkill -f`; it can terminate unrelated shells, test harnesses, or runtime processes.
 - **Do not run the engine elevated** (root / privileged service account) while an override is set — the override binary executes at the engine's privilege and inherits its full environment (`LD_LIBRARY_PATH`, `LD_PRELOAD`, …).
 - **glibc < 2.33:** the ownership check degrades to the managed permission checks only (ownership not enforced); the non-world-writable + exec + smoke + GPU-device checks still apply.
 - **Off by default:** unset `XE_LLAMACPP_SERVER_PATH` and the engine reverts to pinned download/verify with zero behavioral change.
@@ -165,5 +177,8 @@ nvidia-smi                                            # host GPU present
 $XE_LLAMACPP_SERVER_PATH --version                    # binary runs
 $XE_LLAMACPP_SERVER_PATH --list-devices               # CUDA device listed
 ls -ld $XE_LLAMACPP_SERVER_PATH "$(dirname $XE_LLAMACPP_SERVER_PATH)"   # perms: not o+w, exec bit, owner
-pkill -f "$XE_LLAMACPP_SERVER_PATH"                   # manual cleanup of a stuck override server
+ps -eo pid=,args= | grep '[l]lama-server'             # identify candidates; do not kill by substring
+readlink -f /proc/<verified-pid>/exe                  # must equal the configured override binary
+tr '\0' ' ' < /proc/<verified-pid>/cmdline; echo     # verify the full command line
+kill -- <verified-pid>                                # terminate only the verified abandoned process
 ```

@@ -1,6 +1,6 @@
 # Agent Mode & the AI Agent Runtime
 
-> Last reviewed: 2026-08-05 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
 `XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`
@@ -8,7 +8,7 @@ Agent Mode is XE Local AI Engine's governed agentic layer. It is split across tw
 multi-agent handoff orchestration — while `XE-Local-AI-Engine.Client.Application/Services/*` owns the
 *application* decisions: agent definitions, the AgentHome write-back loop, the governed Playbook
 lifecycle (manual → feedback → analysis → eval gate → monitoring/retrieval), adaptive memory, capacity
-gating, sub-agent spawn, and read-only Coder mode. The seam between them is deliberate: all
+gating, sub-agent spawn, the node-local Custom Tools library, and read-only Coder mode. The seam between them is deliberate: all
 `Microsoft.Agents.AI.Workflows` types stay confined behind interfaces so the application layer never
 references MAF workflow primitives directly.
 
@@ -19,7 +19,7 @@ references MAF workflow primitives directly.
 ### 1.1 `AddLocalAiAgentRuntime` — the composition root
 
 `AgentServiceCollectionExtensions.AddLocalAiAgentRuntime` is the single registration entry point
-(`XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs:37`). It does
+(`XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs`). It does
 five things, in order:
 
 1. **Binds + validates options** — `LocalChatAgentOptions`, `InvocationAgentOptions`,
@@ -28,7 +28,7 @@ five things, in order:
    key is `"Agent"` (`AgentRuntimeOptions.Section`).
 2. **Decorates the `IChatClient` pipeline** via `DecorateChatClientPipeline` (see §1.2). The host
    **must** register a base `IChatClient` *before* calling this method — the decorator wraps it.
-3. **Registers the three tool registries** as singletons (see §1.3):
+3. **Registers the three in-memory tool registries** as singletons (see §1.3):
    `IAgentToolRegistry → LocalAgentToolRegistry`, `IClientLocalToolRegistry → ClientLocalToolRegistry`,
    `IMcpToolRegistry → McpToolRegistry`.
 4. **Registers the agent factories** — `IInvocationAgentFactory → InvocationAgentFactory` (single
@@ -38,7 +38,7 @@ five things, in order:
 
 ### 1.2 The chat-client decorator pipeline
 
-`DecorateChatClientPipeline` (`AgentServiceCollectionExtensions.cs:95`) decorates the registered
+`DecorateChatClientPipeline` (`AgentServiceCollectionExtensions.cs`) decorates the registered
 `IChatClient` so that **every** code path — local chat, platform invocations, ClientLocal tools, MCP
 tools — shares one execution pipeline:
 
@@ -58,9 +58,9 @@ FakeOllama) can re-apply the full pipeline after their `RemoveAll`/`AddSingleton
 > `AdditionalTools` rather than re-wrapping. This is what lets the handoff builder inject bodyless
 > `handoff_to_*` declarations that the outer FICC leaves unserviced (the workflow executor routes them).
 
-### 1.3 Tool registries — three sources, one offer
+### 1.3 Tool registries and catalog — four sources, one offer
 
-All three resolve to `Microsoft.Extensions.AI.AITool` and are model-agnostic so the agent factories
+All four resolve to `Microsoft.Extensions.AI.AITool` and are model-agnostic so the agent factories
 treat them uniformly.
 
 | Registry | Interface / impl | Source of tools | Notes |
@@ -68,8 +68,9 @@ treat them uniformly.
 | Built-in catalog | `IAgentToolRegistry` / `Tools/Implementation/LocalAgentToolRegistry.cs` | `AIFunctionFactory.Create` over in-process methods (`GetCurrentTime`, `Calculate`) | Descriptors are derived **from** the generated `AIFunction.JsonSchema` so the offered contract can't drift from what executes. Their catalog approval default is false, but the effective node policy can tighten it. |
 | ClientLocal (server-driven) | `IClientLocalToolRegistry` / `Tools/Implementation/ClientLocalToolRegistry.cs` | `IClientLocalToolHandler` implementations registered by the application layer (e.g. `run_in_agent_home`, `spawn_subagent`) | In-process handlers, **not** SignalR. The registry holds the handler-backed tools; the worker app layer registers the handlers. |
 | MCP | `IMcpToolRegistry` / `Tools/Implementation/McpToolRegistry.cs` | An immutable `AITool` snapshot pushed in by the MCP connection manager as servers connect | The registry is MCP-agnostic (only holds `AITool`); the application layer owns the MCP client lifecycle. See [Chat](05-chat.md) and [API & Hubs](09-api-and-hubs.md). |
+| Custom Tools | `ICustomToolCatalog` / `Services/CustomTools/Implementation/CustomToolCatalog.cs` | Enabled, acknowledged `custom__*` definitions read live from SQLite on every offer/resolve | HTTP-fetch and host-command tools. The node kill-switch defaults off, each tool must be assigned to the agent, and every executable is unconditionally wrapped in `ApprovalRequiredAIFunction`. |
 
-`InvocationToolResolver` (`Tools/InvocationToolResolver.cs`) merges the three registries into the
+`InvocationToolResolver` (`Tools/InvocationToolResolver.cs`) merges the three registries plus the asynchronous custom-tool catalog into the
 concrete tool list passed to each agent; `InvocationToolBridge` adapts metadata tool functions
 (`Tools/Implementation/MetadataToolFunction.cs`).
 
@@ -91,6 +92,24 @@ auto-executes. The structural floor remains independent: MCP tools and `run_in_a
 approval-wrapped at their registries. Persisted category/name rules are loaded when the node composes
 the runtime, so operator changes take effect after the next node restart.
 
+#### Custom Tools execution boundary
+
+Custom Tools are operator-authored node-local definitions with two kinds: `HttpFetch` and `Command`, each either
+`Fixed` or `Parameterized`. `CustomToolService` owns CRUD validation and masks secret header/environment values on
+reads; `CustomToolCatalog` reads the encrypted store live so an edit affects the next turn without a restart. The
+model-facing schema is compiled by `CustomToolSchemaCompiler`; fixed tools expose no model parameters, while
+parameterized tools reject undeclared properties and substitute only declared, type-checked placeholders.
+
+Execution is guarded below the catalog. `HttpFetchExecutor` uses `CustomToolSsrfGuard`, a proxy-disabled dedicated
+client, address pinning, and no redirects. `HostProcessExecutor` uses `HostExecutableGuard`, a scrubbed environment,
+timeout, tree-kill, output cap, and a process-wide concurrency limiter. Both use the shared argument-repair and result-
+budget wrappers, and approval remains an unconditional outer wrapper. The offer therefore requires **all** of: the
+node setting `CustomToolsEnabled` (default `false`), an enabled + acknowledged stored definition, model tool capability,
+and the agent's `AllowedToolNames`. A `Fixed` tool may reuse an explicit conversation-scoped approval, keyed to the
+tool version so any edit re-prompts. A `Parameterized` tool is never memoized: every model-selected argument set prompts
+again. Scheduler, spawned sub-agent, and inbound-MCP unattended paths strip approval-required tools before execution,
+so they cannot run a Custom Tool or reuse a session approval.
+
 The same policy is applied to the seeded Default Assistant, bound agents, orchestration participants,
 and regeneration. Approval decisions are recorded through `IToolApprovalAuditRecorder` as
 content-free operational metadata; arguments and tool results do not enter that audit record.
@@ -99,16 +118,16 @@ approval-required tool from their offer before execution. See [Scheduler](06-sch
 
 ### 1.4 Single-agent invocation — `InvocationAgentFactory`
 
-`InvocationAgentFactory.CreateAsync` (`Invocation/Implementation/InvocationAgentFactory.cs:71`) builds
+`InvocationAgentFactory.CreateAsync` (`Invocation/Implementation/InvocationAgentFactory.cs`) builds
 an `InvocationAgentContext` from an `InvocationAgentDefinition`. It:
 
-- resolves executable tools from the three registries (`ResolveExecutableTools`),
+- resolves executable tools from the registries and custom-tool catalog (`ResolveExecutableTools`),
 - builds the `ChatClientAgent` (`BuildAgent`) with resolved skills (MAF progressive disclosure),
 - builds seed messages (`BuildSeedMessages` — a leading `System(instructions)` message), and
 - assembles a `ChatOptions` carrying `ModelId` and a reasoning `think` option computed from the
   model's thinking capability.
 
-> **Reasoning gotcha (documented in-code, lines ~84–125):** for a **thinking-capable** model the
+> **Reasoning gotcha (`InvocationAgentFactory.BuildAgent`):** for a **thinking-capable** model the
 > requested effort is honored (`think: false|low|medium|high`); for a **non-thinking** model that has
 > reasoning *requested* the `think` field is **omitted entirely** (Ollama returns HTTP 400 for an
 > unknown think level, but omission lets chat-template-baked reasoning through); only "none"/unspecified
@@ -118,7 +137,7 @@ an `InvocationAgentContext` from an `InvocationAgentDefinition`. It:
 
 ### 1.5 Multi-agent handoff orchestration — `OrchestrationAgentFactory` + `OrchestrationRunSession`
 
-`OrchestrationAgentFactory.CreateAsync` (`Invocation/Orchestration/Implementation/OrchestrationAgentFactory.cs:42`)
+`OrchestrationAgentFactory.CreateAsync` (`Invocation/Orchestration/Implementation/OrchestrationAgentFactory.cs`)
 builds **one `ChatClientAgent` per participant** over the shared decorated `IChatClient` and the same
 tool registries, then assembles a MAF handoff `Workflow`:
 
@@ -175,11 +194,12 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 | **Capacity** | `CapacityService`, `ModelFootprintProvider`, `PendingFootprintLedger`, `SpawnSerializer`, `SpawnContext` | Capacity gate for spawning a model process (Allow / QueueSameModel / reject). |
 | **Capacity/Sub-agent** | `SubAgentSpawnService` + `Tools/SpawnSubAgentToolHandler` | The `spawn_subagent` tool: capacity-gated, depth- and fan-out-capped child agents. |
 | **Coder** | `CoderWorkspaceReader`, `Tools/{ListFiles,ReadFile,SearchText}ToolHandler`, `WorkspacePathGuard` | Read-only "coder mode": list/read/search files behind a path guard. |
+| **Custom Tools** | `CustomToolService`, `CustomToolCatalog`, `HttpFetchExecutor`, `HostProcessExecutor` | Operator-authored HTTP/command tools; live SQLite catalog, author-time validation, secret masking, execution guards, forced approval. |
 
 ### 2.1 Per-message agent selection & attribution
 
 `AgentDefinitionResolver.ResolveAsync`
-(`Services/Agents/Implementation/AgentDefinitionResolver.cs:36`) is the per-turn entry point:
+(`Services/Agents/Implementation/AgentDefinitionResolver.cs`) is the per-turn entry point:
 
 - **Unbound conversation ⇒ `null`** → the default persona (embedded prompt, full offer, version 1).
 - A binding to a **deleted** definition degrades to the default persona (logged) rather than failing
@@ -197,7 +217,7 @@ per-message attribution.
 
 ### 2.2 The AgentHome write-back loop
 
-`AgentHomeService.RunLifecycleAsync` (`Services/AgentHome/Implementation/AgentHomeService.cs:99`)
+`AgentHomeService.RunLifecycleAsync` (`Services/AgentHome/Implementation/AgentHomeService.cs`)
 drives a sandboxed workspace lifecycle through `ISandboxRuntimeProvider` — for AgentHome that is the
 **process-jail provider**, and it stays that way: [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
 selects a provider **per feature**, giving the container provider to Development Mode only (see
@@ -211,7 +231,7 @@ are secret-scanned (`MemoryProposalSecretScanner`) before they can be exported. 
 
 **Conversation-attachment staging** (`IConversationSandboxStager`,
 `Services/AgentHome/IConversationSandboxStager.cs`). `AgentHomeService` also implements this narrow public
-seam (`AgentHomeService.cs:28`, `PrepareConversationAttachmentsAsync` at `:244`) so the public
+seam (`AgentHomeService.PrepareConversationAttachmentsAsync`) so the public
 `NodeChatStreamService` can stage a chat conversation's uploaded attachments into the per-turn sandbox
 without an inconsistent-accessibility error. When an agent-mode turn offers file tools, the stream
 service re-stages the owner-node sandbox to hold **only** that conversation's extracted attachments under
@@ -224,7 +244,7 @@ contrasting plain-chat path that *inlines* extracted text instead of staging —
 
 ### 2.3 Capacity gate & sub-agent spawn
 
-`SubAgentSpawnService.SpawnAsync` (`Services/Capacity/SubAgentSpawnService.cs:87`) implements the
+`SubAgentSpawnService.SpawnAsync` (`Services/Capacity/SubAgentSpawnService.cs`) implements the
 `spawn_subagent` tool with layered safety:
 
 1. **Validation** — non-blank task and exactly one binding.
@@ -286,7 +306,7 @@ prompt. Their promotion is governed so that nothing reaches the live prompt with
 
 ### 3.1 Relevance retrieval at prompt-compose time
 
-In `AgentDefinitionResolver.ComposePromptAsync` (line ~115): when the playbook is **disabled** the
+In `AgentDefinitionResolver.ComposePromptAsync`: when the playbook is **disabled** the
 base instructions flow through unchanged (keeping the runtime config hash byte-identical). When
 enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
 
@@ -337,7 +357,7 @@ reuses the repo's own hardened path helpers rather than inventing new ones.
 
 ### 4.2 Resolution — the single choke point
 
-`AgentDefinitionResolver.ProjectSkill` (`Services/Agents/Implementation/AgentDefinitionResolver.cs:205`)
+`AgentDefinitionResolver.ProjectSkill` (`Services/Agents/Implementation/AgentDefinitionResolver.cs`)
 is the **only** place a stored `AgentSkill` becomes a `ResolvedSkill` that reaches an agent, for both the
 invocation path and the sub-agent spawn path. Three things happen there, all load-bearing:
 
@@ -367,7 +387,7 @@ invocation path and the sub-agent spawn path. Three things happen there, all loa
    a cloud model but says nothing about local data already read being forwarded as text.
 
    The nonce seed is `agent-skill:{id:N}:{version}` (`BuildFenceNonceSeed`,
-   `AgentDefinitionResolver.cs:284`) — the id is a server-minted GUID that never appears in the skill
+   `AgentDefinitionResolver.cs`) — the id is a server-minted GUID that never appears in the skill
    file, so a body author cannot derive the nonce and forge a closing marker, and the seed is
    deterministic so the fenced text — and therefore the config hash — stays byte-stable across resolves.
    Local, operator-authored skills are **not** fenced; only `Origin == Imported` rows pay this cost.
@@ -419,7 +439,7 @@ is never disabled, on any path, including the sub-agent waiver below.
 Because these three tools are injected by the context provider rather than resolved through
 `InvocationToolResolver`, they never appear in the ordinary tool catalog and would otherwise audit as
 `ToolCategory.Unknown`. `InvocationRunner` carries its own `SkillToolCategories` map
-(`InvocationRunner.cs:82`) — `load_skill`/`read_skill_resource → ReadLocal`, `run_skill_script →
+(`InvocationRunner.cs`) — `load_skill`/`read_skill_resource → ReadLocal`, `run_skill_script →
 WriteExecute` — consulted **before** the normal offer-based category lookup in
 `ResolveApprovalToolCategory`, purely so the approval audit trail can tell a skill-tool decision apart
 from a genuinely uncategorized one. This does not put the tools under `IToolApprovalPolicy` (OPP-03):
@@ -438,7 +458,7 @@ rides `AIContextProviders` and bypasses `CurateChildTools` entirely — so **a s
 child could never be loaded** (defect D7).
 
 The fix constructs the child's provider with `DisableLoadSkillApproval = true` and
-`DisableReadSkillResourceApproval = true` (`SubAgentSpawnService.cs:417-418`). The justification is the
+`DisableReadSkillResourceApproval = true` (`SubAgentSpawnService.cs`). The justification is the
 same one that already governs every other capability a child inherits: **the operator already approved
 the spawn**, and there is no human downstream of that decision to ask. This is a security-relevant
 deviation, made deliberately and logged, not a silent default. `run_skill_script`'s approval is **never**
@@ -535,7 +555,7 @@ resolved in `InvocationRunner.RequestToolApprovalAsync`:
 - **`Once`** — today's behaviour, unchanged.
 - **`Session`** — remembered for the rest of the conversation, keyed by
   `ApprovalMemoKey(ConversationId, ToolName, SkillName, SkillVersion, ResourceName)`
-  (`TryResolveSessionApprovalKey`, `InvocationRunner.cs:1519`). Every field is load-bearing:
+  (`TryResolveSessionApprovalKey`, `InvocationRunner.cs`). Every field is load-bearing:
   - **`SkillVersion`** binds the approval to *content* — an edit, or a re-import that replaces the
     skill, bumps `agent_skills.version` (§4.1) and silently invalidates the memo rather than letting new
     content ride an old consent.
