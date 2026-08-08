@@ -1,6 +1,6 @@
 # XE Local AI Engine — Developer Wiki
 
-> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform. A single
 **Node Web Server process** (`XE-Local-AI-Engine.Client`) serves the React management UI, owns the one
@@ -65,6 +65,11 @@ worktree — 21 `development/*` endpoints, a live-attempt hub, its own React fea
 see [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree)
 for the source/worktree flow and [Security & Privacy](12-security-and-privacy.md) for the host-user execution boundary.
 
+**Operator-authored Custom Tools** extend the local agent tool catalog with acknowledged, approval-required HTTP-fetch
+or host-program definitions. Their CRUD surface, generated React client, secret masking, SSRF/executable guards, and
+execution trust boundary are documented in [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md), and
+[Security & Privacy](12-security-and-privacy.md).
+
 **In-app llama.cpp source builds.** Upstream ships no prebuilt Linux CUDA `llama-server`, so the node can
 compile one itself and adopt it as a managed runtime — an explicit, Operator-gated, prerequisite-checked
 action, never implicit. Prebuilt download stays the default. If you read anywhere that this engine has
@@ -83,8 +88,8 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 06 | [Scheduler](06-scheduler.md) | Quartz.NET jobs, run history, cancellation, live hub, encoded gotchas |
 | 07 | [Model-fit / Advisor](07-model-fit.md) | Cache-read vs scheduler refresh, `MemoryFitEstimator`, hardware profiler, sanitization |
 | 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, migration timeline |
-| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (23 route families), 10 possible local SignalR hubs (9 unconditional plus conditional Development), WorkerHub, OpenAPI→hey-api |
-| 10 | [React Client](10-react-client.md) | 25 features, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
+| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (24 route families), 11 possible local SignalR hubs (10 unconditional plus conditional Development), WorkerHub, OpenAPI→hey-api |
+| 10 | [React Client](10-react-client.md) | 27 features, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
 | 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, legacy/manual cleanup |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, loopback/Host-Origin, redaction, node-local AI ops, Development Mode execution boundary |
 | 13 | [Testing & Validation](13-testing-and-validation.md) | Test topology, validation commands, E2E, RC evidence |

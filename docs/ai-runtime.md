@@ -1,6 +1,6 @@
 # AI runtime developer notes
 
-Last reviewed: 2026-06-24
+Last reviewed: 2026-08-08 against repository base `50cae141`
 
 > For the full, current runtime architecture (host llama.cpp supervisor, provider seams, agent mode),
 > see the [Developer Wiki](wiki/Home.md) — especially
@@ -16,7 +16,7 @@ For comment cleanup and AI-agent retrieval, use stable runtime terms instead of 
 - agent definition resolution;
 - orchestration topology, handoffs, checkpoints, and tool approval;
 - playbook actions, feedback insights, golden conversations, eval gates, relevance retrieval, and cohort monitoring;
-- MCP tool registry and offered-tool resolution;
+- built-in, MCP, and operator-authored custom-tool registries and offered-tool resolution;
 - local model/provider seams, embeddings, and provider-neutral chat clients.
 
 
@@ -33,22 +33,23 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 
 | Area | Current repository usage | Upstream reference |
 | --- | --- | --- |
-| Microsoft.Extensions.AI | Provider-neutral `IChatClient` and `IEmbeddingGenerator<string, Embedding<float>>` abstractions. | <https://learn.microsoft.com/dotnet/ai/ai-extensions> |
-| Microsoft Agent Framework | `AIAgent`, `ChatClientAgent`, handoff workflows, tool invocation, and workflow event streaming. | <https://learn.microsoft.com/agent-framework/overview/> |
-| llama.cpp (`llama-server`) | Primary local runtime: host child process supervised in-process; GGUF chat + embeddings via an OpenAI-compatible endpoint (`XE-Local-AI-Engine.Providers.LlamaServer`). | <https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md> |
+| Microsoft.Extensions.AI 10.8.3 | Provider-neutral `IChatClient` and `IEmbeddingGenerator<string, Embedding<float>>` abstractions. The repository composes `IChatClient` decorators for tool invocation and observability. | <https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai> and the official [10.8.3 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.extensions.ai/10.8.3/microsoft.extensions.ai.nuspec) |
+| Microsoft Agent Framework 1.17.0 | `AIAgent` / `ChatClientAgent` integration, handoff workflows, tool invocation, approval, and workflow-event streaming. Framework types remain behind this repository's orchestration-session boundary. | <https://learn.microsoft.com/en-us/agent-framework/> and the official [1.17.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.agents.ai/1.17.0/microsoft.agents.ai.nuspec) |
+| llama.cpp `llama-server` b10201 | Primary local runtime, supervised as a host child process. The provider uses its `/v1/chat/completions` and `/v1/embeddings` OpenAI-compatible endpoints; compatibility is endpoint/feature-specific, not a guarantee for arbitrary OpenAI clients. | The pinned [b10201 server README](https://github.com/ggml-org/llama.cpp/blob/8f4646a63ee29f2e0ab971b0290b141938769762/tools/server/README.md) and [release](https://github.com/ggml-org/llama.cpp/releases/tag/b10201) |
 | HuggingFace | GGUF model discovery + download (`XE-Local-AI-Engine.Providers.HuggingFace`). | <https://huggingface.co/docs/hub/gguf> |
 | Ollama | Optional/legacy local provider (present but de-orchestrated from Aspire dev): inventory, pull/delete/warm/unload, chat, embeddings via OllamaSharp. | <https://docs.ollama.com/api> and <https://docs.ollama.com/capabilities/embeddings> |
-| Codex OAuth (cloud) | ChatGPT-subscription OAuth chat provider used as the cloud option (`XE-Local-AI-Engine.Providers.CodexOAuth`). | <https://platform.openai.com/docs/api-reference/responses> |
+| Codex OAuth (cloud; integration-sensitive) | Optional cloud chat adapter using the ChatGPT-login Codex Responses endpoint used by Codex CLI. It is distinct from the public API-key Responses endpoint; revalidate this transport whenever the provider changes. | OpenAI's [Codex agent-loop engineering article](https://openai.com/index/unrolling-the-codex-agent-loop/) distinguishes the ChatGPT-login and public API-key endpoints. |
 
 ## Maintenance rules
 
 1. Keep the base `IChatClient` registration in the host composition root, then decorate it through `AddLocalAiAgentRuntime`.
-2. Resolve offered tools by name through the built-in, ClientLocal, and MCP registries before an agent run starts. Unknown offered names must be dropped, not executed.
+2. Resolve offered tools by name through the built-in, ClientLocal, MCP, and custom-tool registries before an agent run starts. Unknown offered names must be dropped, not executed. Custom tools additionally remain behind the node-wide off-by-default switch, their per-tool enabled/acknowledged state, node-local model gating, and approval wrapping.
 3. Keep executable tool schemas derived from the executable or registered descriptor; do not hand-copy model-visible JSON schemas into unrelated DTOs.
 4. Keep Agent Framework workflow types behind the `IOrchestrationRunSession` / factory boundary so `.Client.Application` stays framework-type-agnostic.
 5. Treat Ollama model names, context-length metadata, and embedding dimensions as provider observations, not hard-coded invariants.
 6. Treat cloud-provider credentials (Codex OAuth tokens) and the HuggingFace token as local secrets. They may configure a chat client or download path but must not be logged, returned to the browser, or included in transcripts.
 7. Preserve cancellation-token flow through chat, embedding, tool, MCP, and sandbox operations.
+8. Treat current online snippets as version-sensitive. At the repository's MAF 1.17.0 / MEAI 10.8.3 pins, verify approval and workflow types against the resolved package artifacts before copying framework examples.
 
 ## Validation after AI changes
 

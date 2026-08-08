@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
@@ -78,7 +78,7 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
 1. **Resolve desktop mode early** — `var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());`. If desktop, it (a) resolves the per-user data directory, (b) acquires the single-instance lease, (c) binds through `DesktopPortStore.ResolveBindUrl(...)` using the remembered loopback port or `127.0.0.1:0`, and (d) synthesizes config via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices` reads configuration.
 2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
 3. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
-4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 9 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
+4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 10 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
 5. **Desktop only**: `ActivateDesktopLifecycle(app)` installs the console-close → graceful-stop triggers and the on-started browser launch.
 
 See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Privacy](12-security-and-privacy.md) for the loopback / `LocalApiSecurityMiddleware` invariants.
@@ -151,7 +151,7 @@ not a retained smoke-test transcript.
 
 ### Loopback auto-port + persisted port + browser open
 
-- The bind URL comes from `DesktopPortStore.ResolveBindUrl(dataDirectory)` (`Client/Hosting/DesktopPortStore.cs`, used at `Program.cs:58`), **not** a hard-coded `:0`. `DesktopPortStore` **remembers the last loopback port** in a `desktop-port.txt` file under the per-user data dir and re-binds it when it is still free; only when there is no remembered port (or it is taken/invalid) does it fall back to the dynamic `http://127.0.0.1:0`. This matters because a fresh OS-assigned port every launch changes the browser **origin** (scheme+host+port) and silently resets every `localStorage`-backed user preference between runs — pinning the port keeps preferences alive. The store writes via temp-file+move (no torn file), probes availability with a throwaway `TcpListener`, and is best-effort: any IO/parse failure resolves to a dynamic bind rather than throwing.
+- The bind URL comes from `DesktopPortStore.ResolveBindUrl(dataDirectory)` (`Client/Hosting/DesktopPortStore.cs`, called by the desktop Kestrel branch in `Program.cs`), **not** a hard-coded `:0`. `DesktopPortStore` **remembers the last loopback port** in a `desktop-port.txt` file under the per-user data dir and re-binds it when it is still free; only when there is no remembered port (or it is taken/invalid) does it fall back to the dynamic `http://127.0.0.1:0`. This matters because a fresh OS-assigned port every launch changes the browser **origin** (scheme+host+port) and silently resets every `localStorage`-backed user preference between runs — pinning the port keeps preferences alive. The store writes via temp-file+move (no torn file), probes availability with a throwaway `TcpListener`, and is best-effort: any IO/parse failure resolves to a dynamic bind rather than throwing.
 - Kestrel still binds loopback only. The concrete URL is known **post-bind**, so `LoopbackUrlResolver.Resolve` (`Client/Hosting/LoopbackUrlResolver.cs`) reads `IServerAddressesFeature.Addresses`, prefers an explicit `127.0.0.1`/`localhost` address, and **rewrites any wildcard host (`0.0.0.0`/`::`) back to `127.0.0.1`** so the browser never targets a routable interface.
 - `DesktopLifecycle.OnApplicationStarted` resolves that URL and calls `BrowserLauncher.OpenBrowser` (`Client/Hosting/BrowserLauncher.cs`): `explorer <url>` on Windows, `xdg-open <url>` on Linux, **never via a shell** (`UseShellExecute = false`). Browser launch is strictly non-fatal — failure logs the URL and the server keeps serving.
 
@@ -193,6 +193,12 @@ runtime floor, forwards all Velopack arguments to `dotnet XE-Local-AI-Engine.Cli
 propagates the child exit code. The main host wraps Velopack's process locator so an update waits for both the managed
 host and launcher to exit before replacing the current directory.
 
+The launcher is a first-class solution project, not a packaging-script shim. `Program.Main` must remain synchronous
+with `VelopackApp.Build().Run()` as its first statement because `vpk pack` verifies the packaged main executable's
+lifecycle-hook entry point. `.github/workflows/release.yml` publishes the Client and WindowsLauncher separately into
+one framework-dependent Windows payload, selects `XE-Local-AI-Engine.WindowsLauncher.exe` as the Velopack main exe,
+and verifies that exactly one `Portable.zip` was produced.
+
 For deprecated manually unzipped self-contained builds, the old scripts remain under `publish/`:
 
 - `publish/linux/run-xe-local-ai-engine.sh` — sets `XE_LAUNCH_MODE=desktop`, resolves its own dir (symlink-safe), and `exec`s the binary **in the foreground** so closing the terminal delivers `SIGHUP` to the process group → graceful teardown.
@@ -216,10 +222,10 @@ manifest. Detached checksum, release-manifest, and SPDX evidence is attached aft
 Release notes are generated from conventional-commit history rather than hand-written:
 
 - `cliff.toml` (repo root) configures **git-cliff** to render an auto-grouped changelog from the commits between the previous release tag and HEAD. The output is a `RELEASE_NOTES.md`, fed to **`vpk pack --releaseNotes <file>`** to embed the notes into the Velopack package; `vpk upload github` then publishes them as the GitHub release body.
-- **Two producers of `RELEASE_NOTES.md`, and they are not the same code path.** `scripts/generate-release-notes.sh` is the standalone/manual helper. `publish/package-tester-win.ps1` — the deprecated manual packaging path — **does not call that script**: it downloads a checksum-pinned git-cliff and invokes it directly. They also disagree on the empty-range case: the shell script falls back to writing a `## <version>` / "Maintenance release — no user-facing changelog entries." body (`scripts/generate-release-notes.sh:62-65`), while the packaging script **hard-throws** rather than shipping a release with no notes. Both share the one rule that matters: `--latest` when HEAD is already tagged, `--unreleased --tag` otherwise (a tagged HEAD makes `--unreleased` empty).
+- **Two producers of `RELEASE_NOTES.md`, and they are not the same code path.** `scripts/generate-release-notes.sh` is the standalone/manual helper. `publish/package-tester-win.ps1` — the deprecated manual packaging path — **does not call that script**: it downloads a checksum-pinned git-cliff and invokes it directly. They also disagree on the empty-range case: the shell script falls back to writing a `## <version>` / "Maintenance release — no user-facing changelog entries." body (the fallback containing the quoted phrase `Maintenance release — no user-facing changelog entries.` in `scripts/generate-release-notes.sh`), while the packaging script **hard-throws** rather than shipping a release with no notes. Both share the one rule that matters: `--latest` when HEAD is already tagged, `--unreleased --tag` otherwise (a tagged HEAD makes `--unreleased` empty).
 - The repo-root `CHANGELOG.md` is **not** generated. git-cliff writes `RELEASE_NOTES.md` only; `CHANGELOG.md` is hand-maintained in Keep-a-Changelog form, which is why it drifts from the tags if nobody updates it at release time.
-- **Tags are standardised on a `v` prefix.** All six source tags carry it (`v0.1.0-rc.1.0` … `v0.1.0-rc.4.0`) — there are **no unprefixed tags in this repository**. Bare tags exist only on the **tester artifact repo** (`0.1.0-rc.4.1` and earlier; see §8), which is a different repository. `cliff.toml`'s `tag_pattern = "v?[0-9]*"` therefore accepts either spelling defensively, but it only ever parses *this* repo's tags: git-cliff runs against the local working tree, `origin` is the source repo, and no tester ref is ever fetched here. The range is driven by `--latest`/`--unreleased` rather than by the pattern alone. **The code that genuinely must handle both spellings is `package-tester-win.ps1`'s `Find-GitHubRelease`**, which queries the tester repo over the GitHub API — not git-cliff.
-- **`vpk pack` (1.2.0) has no `--pre` flag** — passing it fails with `'--pre' was not matched`. Prerelease state rides on the **SemVer suffix in `--packVersion`** (`0.1.0-rc.1.0` *is* a prerelease); the GitHub-release prerelease marker is set with `--pre` only on `vpk upload github` (`.github/workflows/release.yml:363-371`).
+- **Release tags are standardised on a `v` prefix.** All nine historical source release tags carry it (`v0.1.0-rc.1.0` … `v0.1.0-rc.5.1`) — there are **no unprefixed release/version tags in this repository**. The separate non-release tag `codex/rollback-prior-ai-pins` is outside this release convention. Bare release tags exist only on the historical **tester artifact repo** (`0.1.0-rc.4.1` and earlier; see §8), which is a different repository. `cliff.toml`'s `tag_pattern = "v?[0-9]*"` therefore accepts either release spelling defensively, but it only ever parses *this* repo's matching release tags: git-cliff runs against the local working tree, `origin` is the source repo, and no tester ref is ever fetched here. The range is driven by `--latest`/`--unreleased` rather than by the pattern alone. **The code that genuinely must handle both release spellings is `package-tester-win.ps1`'s `Find-GitHubRelease`**, which queries the tester repo over the GitHub API — not git-cliff.
+- **`vpk pack` (1.2.0) has no `--pre` flag** — passing it fails with `'--pre' was not matched`. Prerelease state rides on the **SemVer suffix in `--packVersion`** (`0.1.0-rc.1.0` *is* a prerelease); the GitHub-release prerelease marker is set with `--pre` only on `vpk upload github` (the `vpk upload github` invocation in `.github/workflows/release.yml`).
 
 ### In-app self-update (Velopack)
 
@@ -285,7 +291,7 @@ appeared on the tester repo. That two-repo split is now retired — the tag-trig
 publishes both `win-x64` and `linux-x64` Velopack packages to **this repo's** GitHub Releases using the built-in
 `GITHUB_TOKEN`, so a CI-cut release has no separate tester-repo counterpart.
 
-**Tag-form convention changed mid-flight (historical).** The seven tester releases published 2026-06-26 → 2026-07-07 carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release *names*. The packaging script then started passing `--tag v<version>`, so releases from `0.1.0-rc.4.2` onward were v-prefixed on both sides. Source-repo tags were always v-prefixed; there are no bare tags here.
+**Tag-form convention changed mid-flight (historical).** The seven tester releases published 2026-06-26 → 2026-07-07 carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release *names*. The later tester releases, `0.1.0-rc.5.0` and `0.1.0-rc.5.1`, were v-prefixed on both sides after the packaging script started passing `--tag v<version>`. Source-repo release/version tags were always v-prefixed; there are no bare release/version tags here.
 
 ### GitHub Actions and the release workflow
 
@@ -313,7 +319,7 @@ and target-OS smoke evidence; this page does not assert those artifacts are avai
 ## Related pages
 
 - [Architecture Overview](01-architecture-overview.md) — where hosting sits in the whole node
-- [Project Layout](02-project-layout.md) — the 20 solution projects, including AppHost and ServiceDefaults
+- [Project Layout](02-project-layout.md) — the 21 solution projects, including AppHost, ServiceDefaults, and WindowsLauncher
 - [Local Runtime & Providers](03-local-runtime-and-providers.md) — llama.cpp supervisor, process reaping, the Job Object's counterpart
 - [Data & Persistence](08-data-and-persistence.md) — node data directory, SQLite, selected per-column encryption, EF migrations
 - [API & Hubs](09-api-and-hubs.md) — endpoints, SignalR hubs, OpenAPI/Scalar

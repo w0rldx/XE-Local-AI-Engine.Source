@@ -1,6 +1,6 @@
 # Solution & Project Layout
 
-> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 This page is the inventory and dependency map of the .NET side of XE Local AI Engine. It lists every `.csproj` registered in `XE-Local-AI-Engine.slnx`, explains each project's role, draws the project reference graph (who references whom), and states the layering rule that keeps the runtime, applications, and providers decoupled. The React client (`XE-Local-AI-Engine.Client.React`) is a separate Vite/pnpm tree wired in by Aspire and is documented on [10-react-client.md](10-react-client.md).
 
@@ -10,7 +10,7 @@ The solution is an `.slnx` (XML-format) file, not a classic `.sln`. Source: `XE-
 
 | Solution folder | Contents |
 |---|---|
-| `/Src/` | The core product projects: AI agent, contracts, the Node Web Server (`Client`), its application layer (`Client.Application`), and persistence. |
+| `/Src/` | The core product projects: AI agent, contracts, the Node Web Server (`Client`), its application layer (`Client.Application`), persistence, shared test fixtures, and the packaged Windows launcher. |
 | `/Src/Aspire/` | `AppHost` (dev orchestration) and `ServiceDefaults` (shared telemetry/resilience). |
 | `/Src/Providers/` | All model/provider projects behind a shared abstraction. |
 | `/Tests/` | Unit + E2E test projects. |
@@ -31,9 +31,10 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 |---|---|---|
 | `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, owns the single platform WorkerHub connection, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
 | `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
-| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, 45 migration implementations (43 timestamped + 2 untimestamped), and 2 model snapshots. References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
+| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, 53 migration implementations (51 timestamped + 2 untimestamped), and 2 model snapshots. References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
 | `XE-Local-AI-Engine.AI.Agent` | `Microsoft.NET.Sdk`, `net10.0` | Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI (MEAI) wiring: agents, tools, playbooks, the AgentHome write-back loop. See [04-agent-mode.md](04-agent-mode.md). |
 | `XE-Local-AI-Engine.AI.Contracts` | `Microsoft.NET.Sdk` | Shared, dependency-free contract types — `Enums/` and `Events/` only (verified). Referenced by both `Client` and `Client.Application` so transport DTOs/events are defined once. Note: despite the name this is an in-tree project, **not** a git submodule (no `.gitmodules` entry matches). |
+| `XE-Local-AI-Engine.WindowsLauncher` | `Microsoft.NET.Sdk`, `Exe` | Packaged Windows entry point. Runs `VelopackApp.Build().Run()` before application code, then launches the published `Client` host in desktop mode through `WindowsLauncherApplication`. It has no project references; the boundary is a child-process handoff rather than an assembly dependency. See [Hosting & Deployment](11-hosting-and-deployment.md). |
 
 ### Aspire (`/Src/Aspire/`)
 
@@ -53,14 +54,14 @@ All provider projects reference **only** `Providers.Abstractions`. SDK-specific 
 | `XE-Local-AI-Engine.Providers.HuggingFace` | HuggingFace GGUF discovery + download store (feeds the Model Advisor). See [07-model-fit.md](07-model-fit.md). | — |
 | `XE-Local-AI-Engine.Providers.Ollama` | Ollama provider — still **present** as an `ILocalModelProvider` implementation, but **de-orchestrated** from Aspire dev (llama.cpp is the dev runtime; `AppHost.cs` has no Ollama resource). | — |
 | `XE-Local-AI-Engine.Providers.CodexOAuth` | ChatGPT/Codex OAuth cloud chat provider. | — |
-| `XE-Local-AI-Engine.Providers.Capabilities` | Model-capability detection (thinking/tools/vision) shared across providers. | — |
+| `XE-Local-AI-Engine.Providers.Capabilities` | Sanitized hardware profiling (CPU/RAM/GPU/VRAM/disk) behind `IHardwareProfiler`, consumed by model-fit and runtime auditing. | `HardwareProfiler`, `CapabilitiesServiceCollectionExtensions` |
 | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | Local image-generation provider and supervised `sd-server` runtime. | — |
 
 ### Tests & support
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `Client.Application`, all of `Capabilities/CodexOAuth/HuggingFace/LlamaServer/Ollama`, and `Testing.FakeOllama`. |
+| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Client.Application`, `ServiceDefaults`, all six concrete provider projects, and `Testing.FakeOllama`. |
 | `XE-Local-AI-Engine.Tests.E2ETests` | `Exe`, MTP | End-to-end suite. References `Client`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, plus `Testing.FakeOllama` and `Client.Testing` fixtures. See [13-testing-and-validation.md](13-testing-and-validation.md). |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | `Exe`, MTP | Unit suite scoped to `AI.Agent`. |
 | `XE-Local-AI-Engine.Client.Persistence.Tests` | `Exe`, MTP | Persistence/migration suite. References `Client.Application`, `Client.Persistence`, `Client`. |
@@ -92,6 +93,7 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
                        (each references ONLY Abstractions)
 
 AppHost ──► Client            (orchestrates; not referenced back)
+WindowsLauncher ── child process ──► published Client executable
 ```
 
 **Text fallback:** `Client` is the composition root. It references `Client.Application`, persistence,
@@ -106,6 +108,7 @@ Notable edges:
 - **Every provider references only `Providers.Abstractions`** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, and `StableDiffusionCpp`). `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
 - **`Client.Persistence` and `Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering.
 - **`AppHost` references `Client`** for dev orchestration but nothing references `AppHost`.
+- **`WindowsLauncher` is an assembly leaf.** It references no product project; the packaged launcher starts the published `Client` executable as a child process after Velopack lifecycle handling.
 
 ## The layering rule
 

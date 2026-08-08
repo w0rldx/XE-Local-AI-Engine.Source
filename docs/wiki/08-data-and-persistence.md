@@ -1,10 +1,10 @@
 # Data Model & Persistence
 
-> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration timeline.
 
-> **Important correction to common assumptions:** there is **no SQLCipher / no full-database `PRAGMA key` encryption** in this codebase — `grep` for `PRAGMA`/`SQLCipher` returns nothing. At-rest secrecy is achieved by encrypting **individual columns** (stored as `BLOB`) via the `NodeEncryptionSaveChangesInterceptor` + `NodePayloadProtector`. Likewise, **cloud-provider credentials are NOT stored in SQLite** — they live in a separate ASP.NET Core DataProtection-encrypted file (`cloud-credentials.enc`) owned by `CloudCredentialStore` (see [Security & Privacy](12-security-and-privacy.md)).
+> **Important correction to common assumptions:** there is **no SQLCipher / no full-database `PRAGMA key` encryption** in this codebase. At-rest secrecy is achieved by encrypting **individual columns** (stored as `BLOB`) via the `NodeEncryptionSaveChangesInterceptor` + `NodePayloadProtector`. Likewise, **cloud-provider credentials are NOT stored in SQLite** — they live in a separate ASP.NET Core DataProtection-encrypted file (`cloud-credentials.enc`) owned by `CloudCredentialStore` (see [Security & Privacy](12-security-and-privacy.md)).
 
 ## Project shape
 
@@ -23,7 +23,7 @@ XE-Local-AI-Engine.Client.Persistence/
 ├── Configurations/                    # IEntityTypeConfiguration per entity (table/column/index mapping)
 ├── Implementation/                    # store classes (the persistence boundary the app calls)
 ├── Stores/                            # store interfaces
-└── Migrations/                        # 43 implementations + 2 model snapshots (+ per-migration .Designer.cs)
+└── Migrations/                        # 53 implementations + 2 model snapshots (+ per-migration .Designer.cs)
 ```
 
 The key-holder **implementation** that actually derives the key (`NodeSqliteKeyHolder`) lives one project up in `XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeSqliteKeyHolder.cs`; the Persistence project only owns the `INodeSqliteKeyHolder` contract and a zero-key null object. This keeps the operator-secret dependency out of the schema project.
@@ -35,9 +35,9 @@ The key-holder **implementation** that actually derives the key (`NodeSqliteKeyH
 | `NodeChatDbContext` | `DbContext` | `__EFMigrationsHistory` (default) | All app data: chat, agents, playbook, golden conversations, MCP, model classifications, scheduler, model-fit, adaptive memory, uploaded files, inference profiles, knowledge, images, and development-mode state |
 | `NodeIdentityDbContext` | `IdentityDbContext<NodeUser>` | `__EFMigrationsHistory_Identity` | ASP.NET Identity tables for `NodeUser` (incl. the `tutorial_state` onboarding column), plus `node_refresh_tokens` |
 
-`NodeChatDbContext` (`NodeChatDbContext.cs:12`) takes an `INodeSqliteKeyHolder` in its constructor and exposes the derived key via `NodeEncryptionKey` (`:65`). `OnModelCreating` (`:109`) applies one `IEntityTypeConfiguration` per entity from `Configurations/`. The context also exposes raw-SQL crypto helpers used by the chat write path: `EncryptConversationTitle` / `DecryptConversationTitle` / `DecryptMessageContent` (`:72`–`:107`) — these mirror the interceptor's AAD exactly so titles written via raw SQL round-trip with titles written via the change tracker.
+`NodeChatDbContext` (`NodeChatDbContext.cs`) takes an `INodeSqliteKeyHolder` in its constructor and exposes the derived key via `NodeEncryptionKey`. `OnModelCreating` applies one `IEntityTypeConfiguration` per entity from `Configurations/`. The context also exposes raw-SQL crypto helpers used by the chat write path, including `EncryptConversationTitle`, `DecryptConversationTitle`, `DecryptMessageContent`, and the compaction-summary helpers; these mirror the interceptor's AAD scheme so raw-SQL writes round-trip with change-tracker writes.
 
-`NodeIdentityDbContext` (`NodeIdentityDbContext.cs:11`) deliberately uses a **separate migrations-history table** (`IdentityMigrationsHistoryTable`, `:13`) so identity and app schemas migrate independently even when they share one physical SQLite file. The unique filtered index on `node_refresh_tokens.user_id` `WHERE revoked_at_utc IS NULL` (`:75`) enforces "at most one live refresh token per user". See [API & Hubs](09-api-and-hubs.md) for how auth consumes these.
+`NodeIdentityDbContext` (`NodeIdentityDbContext.cs`) deliberately uses a **separate migrations-history table** (`IdentityMigrationsHistoryTable`) so identity and app schemas migrate independently even when they share one physical SQLite file. The unique filtered index on `node_refresh_tokens.user_id` `WHERE revoked_at_utc IS NULL` enforces "at most one live refresh token per user". See [API & Hubs](09-api-and-hubs.md) for how auth consumes these.
 
 ### Design-time factories
 
@@ -45,20 +45,20 @@ Both contexts ship `IDesignTimeDbContextFactory` implementations (`NodeChatDbCon
 
 ## Encryption: how at-rest secrecy actually works
 
-There are **two distinct crypto layers** that both delegate to the same AES-GCM primitive (`AesGcmNodeAeadCipher` implementing `INodeAeadCipher`, `Cryptography/AesGcmNodeAeadCipher.cs:10`):
+There are **two distinct crypto layers** that both delegate to the same AES-GCM primitive (`AesGcmNodeAeadCipher` implementing `INodeAeadCipher`, `Cryptography/AesGcmNodeAeadCipher.cs`):
 
-1. **At-rest column encryption** — `NodePayloadProtector` (`Cryptography/NodePayloadProtector.cs`) wraps plaintext as `nonce(12) ‖ ciphertext ‖ tag(16)` and binds **Associated Data** = `conversationId ‖ recordId ‖ columnName ‖ "v1"` (`BuildAssociatedData`, `:56`). This is what the SaveChanges interceptor uses. The AAD binding means a ciphertext copied to a different row/column/conversation fails authentication on decrypt.
+1. **At-rest column encryption** — `NodePayloadProtector` (`Cryptography/NodePayloadProtector.cs`) wraps plaintext as `nonce(12) ‖ ciphertext ‖ tag(16)` and binds **Associated Data** = `conversationId ‖ recordId ‖ columnName ‖ "v1"` (`BuildAssociatedData`). This is what the SaveChanges interceptor uses. The AAD binding means a ciphertext copied to a different row/column/conversation fails authentication on decrypt.
 2. **Streaming envelope crypto** — `EnvelopeCryptoService` (`Client.Application/.../Envelope/Implementation/EnvelopeCryptoService.cs`) reuses the same `INodeAeadCipher` for the encrypted chunk/completed message envelopes exchanged with the browser/platform. It is **not** a persistence concern but shares the primitive so there is one `AesGcm` owner. (Covered in [Chat](05-chat.md).)
 
 ### The key
 
-`NodeSqliteKeyHolder` derives a 32-byte key with **HKDF-SHA256** from the operator secret, using `info = "c0re-node-sqlite|v1|{NodeName}"` and an empty salt (`NodeSqliteKeyHolder.cs:62`). The operator secret is zeroed immediately after derivation (`CryptographicOperations.ZeroMemory`), and the derived key is zeroed on `Dispose`. The key holder throws at construction if `WorkerNode:NodeName` is unset. The key never leaves the node; see [Security & Privacy](12-security-and-privacy.md).
+`NodeSqliteKeyHolder` derives a 32-byte key with **HKDF-SHA256** from the operator secret, using `info = "c0re-node-sqlite|v1|{NodeName}"` and an empty salt (`NodeSqliteKeyHolder.cs`). The operator secret is zeroed immediately after derivation (`CryptographicOperations.ZeroMemory`), and the derived key is zeroed on `Dispose`. The key holder throws at construction if `WorkerNode:NodeName` is unset. The key never leaves the node; see [Security & Privacy](12-security-and-privacy.md).
 
 ### The SaveChanges interceptor
 
-`NodeEncryptionSaveChangesInterceptor` (`NodeEncryptionSaveChangesInterceptor.cs:13`, extends `SaveChangesInterceptor`) is the heart of the scheme:
+`NodeEncryptionSaveChangesInterceptor` (`NodeEncryptionSaveChangesInterceptor.cs`, extends `SaveChangesInterceptor`) is the heart of the scheme:
 
-- On `SavingChanges` / `SavingChangesAsync` it walks the change tracker and **encrypts** the registered plaintext properties in place (`EncryptTrackedPayloads`, `:59`), remembering the originals.
+- On `SavingChanges` / `SavingChangesAsync` it walks the change tracker and **encrypts** the registered plaintext properties in place (`EncryptTrackedPayloads`), remembering the originals.
 - On `SavedChanges*` (and on `SaveChangesFailed*`) it **restores** the in-memory plaintext (`RestoreTrackedPayloads`) so the tracked entity instances stay usable after the round-trip and a failed save doesn't leave ciphertext in the graph.
 
 Each entity's encrypted columns are registered explicitly with their AAD identity. From the interceptor source:
@@ -72,47 +72,65 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 | `AgentDefinition` | `instructions` (required), `description` (optional) | (`Guid.Empty`, Id, …) — node-scoped |
 | `CanvasWorkflow` | `graph_json` (required) | (`Guid.Empty`, Id, `graph_json`) — node-scoped |
 | `AgentSkill` | `description`, `body` (both required) | (`Guid.Empty`, Id, …) — node-scoped |
+| `AgentSkillResource` | `content` | (SkillId, Id, name-derived column) — moving or renaming a resource fails authentication |
+| `CustomTool` | `description`, secret-bearing `config_json` | (`Guid.Empty`, Id, `description` / `custom_tool_config_json`) |
 | `PlaybookAction` | behavior (required), trigger condition (optional) | (`Guid.Empty`, Id, …) — node-scoped |
+| `GoldenConversation` | input turns, assertion, rubric | (`Guid.Empty`, Id, …) — node-scoped |
+| `McpServerRegistration` | arguments, environment, description | (`Guid.Empty`, Id, …) — node-scoped |
+| `SlashCommand` | description, action configuration | (`Guid.Empty`, Id, name-derived column) |
+| `McpServerApiKey` | one-way key hash | (`Guid.Empty`, singleton Id, `mcp_api_key_hash`) |
+| Scheduler / model-fit rows | parameters/details/event data; raw output/diagnostics | (`Guid.Empty`, row Id, entity-specific column) |
 | `ConversationUploadedFile` | `original_file_name` (required) | (ConversationId, FileId, `original_file_name`) |
+| `ImageJob` | prompt, negative prompt | (`Guid.Empty`, Id, image-specific column) |
+| Development rows/templates | objectives, task text/criteria, artifact/event payloads, template host paths | project/row-scoped or node-scoped AAD, by entity |
 
-Encrypted columns are mapped as `BLOB` in the entity configurations and model snapshot (e.g. `AgentDefinition.Instructions`/`Description` are `byte[]` → `BLOB`, see `NodeChatDbContextModelSnapshot.cs:49`,`:53`). **Golden conversations** carry an encrypted payload too (the `GoldenConversation` entity), which is why eval data is privacy-clean at rest — see [Agent Mode](04-agent-mode.md) for the harvest/eval flow. Node-scoped entities use `Guid.Empty` as the conversation component of the AAD by convention. A companion read-side `NodeEncryptionMaterializationInterceptor` (`NodeEncryptionMaterializationInterceptor.cs`) decrypts the registered columns when entities are materialized from a query, mirroring the save-side interceptor's AAD.
+Encrypted columns are mapped as `BLOB` in the entity configurations and model snapshot (e.g. `AgentDefinition.Instructions`/`Description` are `byte[]` → `BLOB`, see `NodeChatDbContextModelSnapshot.cs`). **Golden conversations** carry an encrypted payload too (the `GoldenConversation` entity), which is why eval data is privacy-clean at rest — see [Agent Mode](04-agent-mode.md) for the harvest/eval flow. Node-scoped entities use `Guid.Empty` as the conversation component of the AAD by convention. A companion read-side `NodeEncryptionMaterializationInterceptor` (`NodeEncryptionMaterializationInterceptor.cs`) decrypts the registered columns when entities are materialized from a query, mirroring the save-side interceptor's AAD.
 
 > **Uploaded-file blobs are encrypted off the column path.** The `ConversationUploadedFile` row only encrypts the display name (`original_file_name`) through the interceptor; the bulk payloads — the raw file bytes and the cached extracted Markdown — are **too large for the column path** and live on disk under `INodeDataDirectory.Root/uploaded-files/conversations/{conversation_id}/`, AES-256-GCM-encrypted by `UploadedFileBlobProtector` (`Client.Application/Services/DocumentIngestion/UploadedFileBlobProtector.cs`). That protector lives in the application layer (the DB-column `NodePayloadProtector` is `internal` to Persistence), so it re-uses the public `AesGcmNodeAeadCipher` primitive and replicates the exact `nonce ‖ ciphertext ‖ tag` framing + AAD layout, binding each blob with a distinct column name (`file_bytes`, `file_md`) so a bytes blob can never be swapped for an extracted-text blob under the same key. See [Security & Privacy](12-security-and-privacy.md).
 
 ## Entity inventory
 
-Entities live in `Entities/` (POCO, one type per file) with mapping in the matching `Configurations/*Configuration.cs`. `NodeChatDbContext` exposes these `DbSet`s (`NodeChatDbContext.cs:21`–`:63`):
+Entities live in `Entities/` with mapping in the matching `Configurations/*Configuration.cs`. `NodeChatDbContext` exposes 44 internal `DbSet`s; `NodeIdentityDbContext` exposes refresh tokens in addition to the Identity sets:
 
 | Entity | Table | Area | Notes |
 |---|---|---|---|
-| `NodeConversation` | `conversations` | Chat ([05](05-chat.md)) | `title` encrypted; pin/archive/selected-path columns added by later migrations |
+| `NodeConversation` | `conversations` | Chat ([05](05-chat.md)) | `title` and compaction summary encrypted; pin/archive/selected-path + compaction coverage columns added by later migrations |
 | `NodeMessage` | messages | Chat | `content` encrypted (BLOB); `metadata_json` encrypted; lifecycle + branch/variant + `agent_definition_id` columns |
 | `NodeToolEvent` | tool events | Chat | encrypted tool args/result |
 | `NodeMessageFeedback` | feedback | Chat | 👍/👎 per message; carries agent attribution |
 | `NodePurgedTombstone` | tombstones | Chat | records purges for the platform sync |
-| `NodeSelectedFolder` | selected folders | Agent Mode ([04](04-agent-mode.md)) | encrypted `host_path` |
+| `NodeSelectedFolder` | selected folders | Agent Mode ([04](04-agent-mode.md)) | encrypted `host_path`; revocation preserves historical bindings while the live-alias unique index excludes revoked rows |
 | `AgentDefinition` | `agent_definitions` | Agent Mode | encrypted instructions/description; `seed_slug` unique-filtered; memory/playbook flags |
-| `AgentExecutionLog` | `agent_execution_logs` | Agent Mode | **not encrypted** (content-free telemetry). Dual producer via `record_kind`: 0 = adaptive-memory diagnostics, 1 = durable per-invocation run envelope (terminal status, usage/timing counters, correlation + trace ids). `error_class`/failure category is a type/enum name only — never a message or transcript text |
+| `AgentExecutionLog` | `agent_execution_logs` | Agent Mode | **not encrypted** (content-free telemetry). Three record kinds share the table: 0 = adaptive-memory diagnostics, 1 = durable per-invocation run envelope (terminal status, usage/timing counters, correlation + trace ids), 2 = content-free approval-decision audit. Every reader and aggregate must filter by `record_kind`; columns are overloaded across kinds. `error_class`/failure category is a type/enum name only — never a message or transcript text |
 | `AgentSkill` | skills | Agent Mode | encrypted description + SKILL.md body |
+| `AgentSkillResource` | `agent_skill_resources` | Agent Mode | encrypted imported resource content; cascade FK to `agent_skills` |
+| `CustomTool` | `custom_tools` | Agent Mode / Custom Tools | `custom__*` name; encrypted model description + secret-bearing configuration; structural kind/mode/parameters/enabled/acknowledged/version |
 | `CanvasWorkflow` | workflows | Open Canvas | encrypted `graph_json` (carries agent instructions) |
 | `PlaybookAction` | playbook actions | Agent Mode | encrypted behavior; analysis/eval staging + `enabled_at_utc` |
 | `GoldenConversation` | golden conversations | Agent Mode eval | encrypted payload; harvest provenance |
 | `McpServerRegistration` | mcp servers | MCP | transport kind, registration metadata |
+| `McpServerApiKey` | `mcp_server_api_keys` | Inbound MCP | singleton bearer-key hash/fingerprint state; raw key material is not readable back |
+| `McpAgentRun` / `McpAgentRunLedger` | `mcp_agent_runs` / `mcp_agent_run_ledger` | Inbound MCP | durable idempotent request lifecycle + singleton quota/accounting ledger; payload columns encrypted |
+| `SlashCommand` | `slash_commands` | Chat | case-insensitive command name; encrypted description + action configuration |
 | `ModelClassification` | model classifications | Models | persisted `ModelKind` + override |
 | `ModelProviderMap` | `model_provider_map` | Models | **not encrypted**; PK `model_name` with `NOCASE` collation |
 | `ScheduledJobDefinition` / `ScheduledJobRun` / `ScheduledJobRunEvent` | scheduler tables | Scheduler ([06](06-scheduler.md)) | Quartz-adjacent app metadata |
 | `ModelFitSnapshot` / `ModelFitRecommendation` / `ModelFitBenchmark` | model-fit tables | Model-Fit | box-aware GGUF fit + benchmark results (benchmark metric columns extended by `AddInferenceProfilesAndBenchmarkMetrics`) |
 | `InferenceProfile` | `inference_profiles` | Inference ([03](03-local-runtime-and-providers.md)) | **not encrypted**; one live launch-profile per `(machine_key, model_name, role, backend)` natural key; frozen launch args (`-c`/`-ngl`/`-ts`/`-ot`/`-ctk`/`-ctv`) + MoE attrs + `Explored`/`Frozen`/`Stale` status (`InferenceProfileStatus`) |
 | `ConversationUploadedFile` | `conversation_uploaded_files` | Chat ([05](05-chat.md)) | encrypted `original_file_name`; metadata only — bulk bytes/extracted Markdown encrypted on disk (`UploadedFileBlobProtector`); cascade FK to `conversations` |
+| `KnowledgeDocument` / `KnowledgeDocumentSection` / `KnowledgeDocumentChunk` / `KnowledgeChunkVector` | knowledge-base tables | Knowledge / RAG | document hierarchy, extracted/chunk metadata, and model/version-bound vector projections |
+| `ImageJob` / `GeneratedImage` / `ImageModelProfile` | image-runtime tables | Images | encrypted prompts; generated PNG bytes live encrypted outside SQLite while rows hold metadata/status/profile state |
+| `DevelopmentProject` / `DevelopmentTask` / `DevelopmentAttempt` / `DevelopmentArtifact` / `DevelopmentEvent` | development tables | Development Mode | encrypted objective/task/artifact/event payloads plus command-profile/evidence/recovery state |
+| `DevelopmentTemplate` / `DevelopmentTemplateMaterialization` | development-template tables | Development Mode | reusable template definitions and selected-folder materialization provenance; host/template paths encrypted |
 | `ChatMaintenanceState` | `chat_maintenance_state` | Persistence | **not encrypted**; PK `name`, opaque `value`. Durable key/value flags for one-shot DB maintenance. Currently holds the content-encryption backfill's `content_encryption_reclaim_pending` marker: set before the legacy rows are re-encrypted and cleared only after the post-backfill `checkpoint → VACUUM → checkpoint` residue-reclamation succeeds, so a failed/interrupted cleanup is retried on the next startup (`NodeChatContentEncryptionBackfillService`). A plain table (not `PRAGMA user_version`) so `VACUUM` preserves it. |
 | `NodeUser` *(NodeIdentity ctx)* | Identity tables | Auth | `setup_completed`, `created_at_utc`, `tutorial_state` (onboarding-tour state JSON) |
 | `NodeRefreshToken` *(NodeIdentity ctx)* | `node_refresh_tokens` | Auth | hashed token, one-live-per-user filtered unique index |
 
-The **adaptive agent memory** tables were added later (migration `20260622215652_AddAdaptiveAgentMemory`); their entities surface through the same context and the `MemoryScope` enum.
+Adaptive agent memory was added by migration `20260622215652_AddAdaptiveAgentMemory`: it adds memory flags/scope to conversations, agent definitions, and playbook actions, plus the `agent_execution_logs` table (later shared with durable run envelopes). It does not create a separate family of memory entity tables.
 
 ### Stores are the boundary
 
-Application code never touches `DbSet`s directly — it calls **store** classes in `Implementation/` behind interfaces in `Stores/` (e.g. `AgentDefinitionStore`, `GoldenConversationStore`, `ModelProviderMapStore`, `ScheduledJobRunStore`, and the newer `InferenceProfileStore`/`IInferenceProfileStore` for launch profiles). The chat upload store is the one exception that lives **above** the schema project: `ConversationUploadedFileStore` (`Client.Application/Services/DocumentIngestion/`) owns both the DB row and the encrypted on-disk blobs, so it sits in the application layer rather than `Persistence/Implementation/`. Read queries use `AsNoTracking()` (e.g. `ModelProviderMapStore.GetProviderForModelAsync`, `:21`) and flow `CancellationToken` to every EF async call. This is the one-way dependency the schema project enforces: callers depend on store contracts, not on EF or on entity internals (most `DbSet`s are `internal`).
+Application code never touches `DbSet`s directly — it calls **store** classes in `Implementation/` behind interfaces in `Stores/` (e.g. `AgentDefinitionStore`, `GoldenConversationStore`, `ModelProviderMapStore`, `ScheduledJobRunStore`, and the newer `InferenceProfileStore`/`IInferenceProfileStore` for launch profiles). The chat upload store is the one exception that lives **above** the schema project: `ConversationUploadedFileStore` (`Client.Application/Services/DocumentIngestion/`) owns both the DB row and the encrypted on-disk blobs, so it sits in the application layer rather than `Persistence/Implementation/`. Read queries use `AsNoTracking()` (e.g. `ModelProviderMapStore.GetProviderForModelAsync`) and flow `CancellationToken` to every EF async call. This is the one-way dependency the schema project enforces: callers depend on store contracts, not on EF or on entity internals (most `DbSet`s are `internal`).
 
 ## Migration timeline (forward-only)
 
@@ -146,7 +164,7 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260608093959_AddMessageAgentDefinitionId` | Per-message agent attribution |
 | `20260610165152_EncryptConversationTitle` | Migrate conversation `title` → encrypted BLOB (backfill from first message) |
 | `20260617222625_AddModelProviderMap` | `model_provider_map` (NOCASE PK; unencrypted) — runtime re-arch routing |
-| `20260622215652_AddAdaptiveAgentMemory` | Adaptive agent memory tables + retention/extraction |
+| `20260622215652_AddAdaptiveAgentMemory` | Memory flags/scope, retention/extraction metadata, and `agent_execution_logs` |
 | `20260624184036_AddTutorialState` | **NodeIdentity** context: `tutorial_state` column on `AspNetUsers` (onboarding-tour progress) |
 | `20260626104651_AddConversationUploadedFiles` | `conversation_uploaded_files` (chat upload attachments; encrypted display name, cascade FK) |
 | `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
@@ -165,16 +183,26 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260726192021_AddLaunchPolicyFingerprintAndBenchmarkResources` | Adds launch-policy fingerprinting and measured benchmark resource fields used to detect stale inference evidence |
 | `20260726203016_AddKnowledgeVectorIdentity` | Canonical knowledge vector identity (`resolved model + transform/version + width`) on documents/vectors; all pre-existing projections are explicitly tagged `legacy:unversioned` so they remain source-preserved but stale until reindexed |
 | `20260728184839_AddDevelopmentCommandProfile` | Snapshots the code-owned Development command profile on each project and binds artifacts to its digest |
+| `20260728200837_AddDevelopmentAttemptCommandProfile` | Captures the effective command-profile snapshot/digest on each Development attempt |
+| `20260728202003_AddDevelopmentTemplates` | Adds reusable Development templates and their materialization records |
+| `20260803153806_AddMcpServerApiKey` | Adds the singleton inbound-MCP bearer credential record |
+| `20260803163513_HashMcpServerApiKey` | Replaces stored inbound-MCP key material with hash/fingerprint fields |
+| `20260804215531_AddConversationCompactionSummary` | Adds encrypted conversation compaction summary + covered-sequence/update metadata |
+| `20260804220941_AddAgentSkillImportProvenance` | Adds skill import provenance/frontmatter and encrypted `agent_skill_resources` |
+| `20260806181000_AddMcpAgentRunLedger` | Adds durable inbound-MCP agent runs plus singleton accounting/quota ledger |
+| `20260806201500_AddSelectedFolderRevocation` | Adds selected-folder revocation and makes alias uniqueness apply only to live registrations |
+| `20260807130219_AddSlashCommands` | Adds operator-authored slash commands with encrypted description/configuration |
+| `20260807193324_AddCustomTools` | Adds the Custom Tools library with encrypted description/configuration and case-insensitive unique names |
 
-(Counted on disk: **45 migration implementation files** — 43 timestamped plus 2
+(Counted on disk: **53 migration implementation files** — 51 timestamped plus 2
 untimestamped chat-schema migrations — and **2 model snapshots**. Per-migration `.Designer.cs` files
 are not included in that implementation count.)
 
 ### Notable migration mechanics
 
 - **`EncryptConversationTitle` (`20260610165152`)** is the one migration that changes a column from plaintext to ciphertext. `NodeChatDbContext.DecryptMessageContent` exists specifically so a backfill service can re-derive each conversation's title from the (already-encrypted) first user message after this migration. The AAD layout for `title` deliberately uses `conversationId` as **both** the conversation and record component so the column is self-consistent across raw-SQL and change-tracker writes.
-- **`ModelProviderMap`** is the canonical example of an **un-encrypted** table — its configuration documents the `NOCASE` collation on the `model_name` primary key so provider routing is case-insensitive without a LINQ comparer (`ModelProviderMapConfiguration.cs:18`).
-- **Run envelope shares `agent_execution_logs`.** Rather than a new table, the durable per-invocation run envelope (a content-free lifecycle record written when a chat invocation terminalizes) reuses `agent_execution_logs` with a `record_kind` discriminator (`1` = envelope, `0` = adaptive-memory diagnostics). `AddAgentRunEnvelopeColumns` adds the envelope fields and `AddRunEnvelopeDurabilityColumns` adds usage/timing columns plus the `record_kind = 1`-filtered unique index on `message_id`. The whole row is plaintext structural telemetry (never encrypted, no message content), and it is covered by the conversation footprint purge (see [Security & Privacy](12-security-and-privacy.md)). The read-only `GET agents/run-envelopes` endpoint projects these rows (see [API & Hubs](09-api-and-hubs.md)). **Durability guarantee:** the envelope is written **atomically inside the terminalize transaction** — the same SQLite transaction that commits the terminal message row — so the two commit or roll back together; and the startup restart-recovery reconcile backfills an envelope for any terminal assistant row lacking one across all four terminal states (completed, failed, cancelled, interrupted), keyed on `message_id` so it can never duplicate.
+- **`ModelProviderMap`** is the canonical example of an **un-encrypted** table — its configuration documents the `NOCASE` collation on the `model_name` primary key so provider routing is case-insensitive without a LINQ comparer (`ModelProviderMapConfiguration.cs`).
+- **Run envelope shares `agent_execution_logs`.** Rather than a new table, the durable per-invocation run envelope (a content-free lifecycle record written when a chat invocation terminalizes) reuses `agent_execution_logs` with a `record_kind` discriminator (`0` = adaptive-memory diagnostics, `1` = envelope, `2` = approval-decision audit). `AddAgentRunEnvelopeColumns` adds the envelope fields and `AddRunEnvelopeDurabilityColumns` adds usage/timing columns plus the `record_kind = 1`-filtered unique index on `message_id`. The whole row is plaintext structural telemetry (never encrypted, no message content), and it is covered by the conversation footprint purge (see [Security & Privacy](12-security-and-privacy.md)). The read-only `GET agents/run-envelopes` endpoint projects kind-1 rows (see [API & Hubs](09-api-and-hubs.md)). **Every read and aggregate must filter by `record_kind`** because column meanings are overloaded across the three producers. **Durability guarantee:** the envelope is written **atomically inside the terminalize transaction** — the same SQLite transaction that commits the terminal message row — so the two commit or roll back together; and the startup restart-recovery reconcile backfills an envelope for any terminal assistant row lacking one across all four terminal states (completed, failed, cancelled, interrupted), keyed on `message_id` so it can never duplicate.
 
 ## The persistence test project
 
@@ -200,7 +228,7 @@ Tests use `NullNodeSqliteKeyHolder` (a fixed zero key) plus a non-encrypting mig
 - [Architecture Overview](01-architecture-overview.md)
 - [Project Layout](02-project-layout.md)
 - [Chat](05-chat.md) — conversation/message persistence + streaming envelope crypto
-- [Agent Mode](04-agent-mode.md) — agent definitions, playbook, golden conversations, adaptive memory tables
+- [Agent Mode](04-agent-mode.md) — agent definitions, playbook, golden conversations, and adaptive-memory state/logging
 - [Scheduler](06-scheduler.md) — scheduler tables
 - [Model Fit](07-model-fit.md) — model-fit snapshot/recommendation/benchmark tables
 - [API & Hubs](09-api-and-hubs.md) — auth/identity consumers

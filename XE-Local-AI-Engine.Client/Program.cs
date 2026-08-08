@@ -29,6 +29,12 @@ using XE_Local_AI_Engine.Client.Services.Shutdown;
 // hosts retain the default locator. Hook-driven exits must not be logged as startup failures.
 FrameworkDependentVelopackBootstrap.Run(args);
 
+// Tracks whether Serilog's real sink (console + rolling file) has been installed yet. Everything above and the desktop
+// data-dir / operator-key bootstrap below run while Log.Logger is still the silent default, so an exception there would
+// be caught but never written to disk — the "flashes then closes, empty logs folder" report. The top-level catch uses
+// this to fall back to StartupCrashLog for that pre-logger window.
+var startupLoggerReady = false;
+
 try
 {
     // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
@@ -67,6 +73,7 @@ try
         if (instanceLease is null)
         {
             Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+            startupLoggerReady = true;
             Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
                       + "Close the other instance before starting a new one.", desktopDataDirectory);
             await Log.CloseAndFlushAsync().ConfigureAwait(false);
@@ -95,6 +102,7 @@ try
     });
 
     Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+    startupLoggerReady = true;
 
     // Aspire services
     builder.AddServiceDefaults();
@@ -403,6 +411,15 @@ catch (HostAbortedException)
 }
 catch (Exception ex)
 {
+    // Before the startup logger is installed, Log.Fatal writes nothing (silent default logger), so a crash in the
+    // Velopack / desktop bootstrap window would vanish with no console and no log file. Capture it directly to the
+    // per-user logs directory so the failure is always diagnosable; once the logger is ready this is redundant with the
+    // rolling file and is skipped.
+    if (!startupLoggerReady)
+    {
+        StartupCrashLog.Record("The application failed during early startup, before logging was initialized", ex);
+    }
+
     Log.Fatal(ex, "The Application failed to start");
     throw;
 }

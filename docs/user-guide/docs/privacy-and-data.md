@@ -129,6 +129,13 @@ platform implementation, not this repository.
   Development Mode, and with the same consequence: registering one is trusting its author with your
   machine, not just with a network connection. Only register servers you'd be willing to install and
   run yourself.
+- **Custom tools you enable.** An HTTP custom tool sends its rendered request to the hosts you allow;
+  a command custom tool launches a direct executable as your user. The node feature starts disabled,
+  the built-in form initializes new definitions as disabled, and every call remains approval-wrapped.
+  A fixed tool can reuse an explicit session approval until an edit changes its version; a parameterized
+  tool asks again for every model-selected argument set. An API caller can request enablement for an
+  acknowledged definition, and approval is not containment. Only enable definitions whose complete
+  behavior and destination you trust.
 - **OpenTelemetry export** — only if you deliberately configure an endpoint.
 - **A dormant connection to an older platform this project grew from** — disabled on a fresh install
   and only active if explicitly enabled.
@@ -168,11 +175,10 @@ guard. A misconfiguration that would expose it stops the app instead.
 
 ## Development Mode and its limits
 
-> ### There is no switch to leave off
+> ### Enabled by default, with an operator off switch
 >
-> Development Mode is **active as soon as the app starts** — it ships enabled, and its pages are
-> available on a stock install. If you assumed you were protected by simply not turning it on, you
-> were not.
+> Development Mode ships enabled, and its pages are available on a stock install. An operator can
+> remove the feature's services and surface with `Development:Enabled=false` before launch.
 >
 > What it **cannot** do is act on its own. It only touches a Git repository once **you register that
 > repository and start a run**. Registering a repository is the real decision point.
@@ -200,10 +206,12 @@ containment.
 On Linux several optional best-effort mechanisms exist. Neither platform denies network access, because
 operations like package restore legitimately need it.
 
-A stronger, container-based execution mode exists in the code, but **it is not available to you in this
-build** — it needs hand-edited configuration and a correctly set-up Docker daemon, and that's not
-something I'm asking users to do. (On Linux, Docker socket access is also effectively root-equivalent,
-so it is not a free win.) **Assume the application-level protections above are all you have.**
+A stronger, container-based execution provider is available as an **advanced opt-in** through
+`Development:Sandbox:Provider=docker`. It requires a correctly configured Docker daemon and fails
+closed rather than falling back to the process provider. The shipped configuration leaves it off;
+on Linux, Docker socket access is also effectively root-equivalent, so it is not a free win. Unless
+an operator has deliberately enabled and verified that provider, **assume the application-level
+protections above are all you have.**
 
 ### The right mental model
 

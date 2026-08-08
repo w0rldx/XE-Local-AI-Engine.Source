@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Baseline: `7e64ed589e14eecc0e522e807d2e531a1095d19a` · Reviewed: 2026-07-28 · Code-grounded.
+> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
@@ -45,12 +45,12 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 | Cloud chat provider (ChatGPT OAuth) | `XE-Local-AI-Engine.Providers.CodexOAuth` | `CodexOAuthChatClientFactory.cs` |
 | Hardware probing | `XE-Local-AI-Engine.Providers.Capabilities` | `HardwareProfiler.cs` |
 | SQLite persistence with selected per-column AEAD encryption | `XE-Local-AI-Engine.Client.Persistence` | `Client/Program.cs` migration runners; `NodeEncryptionSaveChangesInterceptor.cs` |
-| React management UI (25 features) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
+| React management UI (27 feature directories) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
 | Dev orchestration only | `XE-Local-AI-Engine.AppHost` | `AppHost/AppHost.cs` |
+| Packaged Windows bootstrap | `XE-Local-AI-Engine.WindowsLauncher` | `WindowsLauncherApplication.RunAsync`; hands off to the `Client` host after Velopack lifecycle handling |
 
 > Aspire (`AppHost.cs`) is a **development-only** orchestrator (`app` project + Vite `client-react` + a
-> dev SQLite resource). It is not part of the shipped runtime — production/desktop launches `Client`
-> directly. See [Hosting & Deployment](11-hosting-and-deployment.md). For the full project inventory see
+> dev SQLite resource). It is not part of the shipped runtime — production/desktop launches the `Client` host directly on non-Windows packages; the packaged Windows path enters through `WindowsLauncher`, which then starts `Client`. See [Hosting & Deployment](11-hosting-and-deployment.md). For the full project inventory see
 > [Project Layout](02-project-layout.md).
 
 ---
@@ -84,10 +84,11 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 - REST endpoints (FastEndpoints) under the prefix `LocalApiRoutes.Prefix` (`/api/local/v1`), with a
   global operationId name generator feeding the OpenAPI doc that generates the hey-api React SDK
   (`Program.cs`, `config.Endpoints.NameGenerator`).
-- **Ten possible** local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`
-  (`Program.cs:341-361`): nine are unconditional (`LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`,
-  `GgufDownloadHub`, `CudaBuildHub`, `LlamaCppSourceBuildHub`, `KnowledgeBaseHub`, `ImageJobHub`, and
-  `StableDiffusionCppSourceBuildHub`); `DevelopmentAttemptHub` is the tenth and is mapped only when
+- **Eleven possible** local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`
+  (the `MapHub` block in `Client/Program.cs`): ten are unconditional (`LocalChatHub`, `SchedulerHub`,
+  `PreviewWorkflowHub`, `GgufDownloadHub`, `CudaBuildHub`, `LlamaCppSourceBuildHub`,
+  `RuntimeAcquisitionHub`, `KnowledgeBaseHub`, `ImageJobHub`, and
+  `StableDiffusionCppSourceBuildHub`); `DevelopmentAttemptHub` is the eleventh and is mapped only when
   `Development:Enabled` (default `true`).
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture
@@ -150,7 +151,7 @@ result. Three accepted ADRs record the non-obvious decisions:
   base commit + workspace subject hash + changed-files manifest hash.
 - [ADR 0002 — cloud authorization uses `ChatOptions.AdditionalProperties`](../adr/0002-development-cloud-egress-carrier.md): the
   carrier that authorizes every raw cloud round, including the function-result follow-up round created inside
-  `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.7.0 — re-verify it when that pin moves.
+  `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.8.3 — re-verify it when that pin moves.
 - [ADR 0004 — Development Mode container execution (Docker stopgap)](../adr/0004-development-mode-container-execution-docker-stopgap.md):
   the scoped Docker permission described above, as a stopgap ahead of MXC. Its living implementation-status companion is
   [Development Mode container implementation status](../roadmaps/development-mode-container-status.md).
@@ -195,7 +196,7 @@ does not re-read the repository import file as its command source
 
 Inside the single host the code is layered so dependencies flow **one way** (host → application →
 agent/providers → persistence). The host only wires web-framework concerns; all node logic is registered
-through `AddNodeApplication`, which composes 23 `AddNode*` feature modules
+through `AddNodeApplication`, which composes 26 `AddNode*` feature modules
 (`NodeApplicationServiceCollectionExtensions.cs`).
 
 ```
@@ -207,7 +208,7 @@ through `AddNodeApplication`, which composes 23 `AddNode*` feature modules
   └────────────┘  node)  │  └───────────────────────┬────────────────────────┘  │
                          │                          │ AddNodeApplication         │
    Browser SPA           │  ┌───────────────────────▼────────────────────────┐  │
-  ┌────────────┐  REST + │  │ Client.Application  (36 service areas)          │  │
+  ┌────────────┐  REST + │  │ Client.Application  (38 service areas)          │  │
   │  React UI  │◀──hubs──┼─▶│ chat · agents · scheduler · model-fit · capacity│  │
   │ (loopback) │ (local) │  │ connection · mcp · eval · adaptive-memory …     │  │
   └────────────┘         │  └───────┬───────────────────────────┬────────────┘  │
@@ -286,7 +287,7 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 
 | # | Decision | Reality in code |
 |---|---|---|
-| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as an interim step ahead of MXC. The epic's `:29` grep-clean acceptance criterion was amended in the same change. |
+| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as an interim step ahead of MXC. The epic's grep-clean acceptance criterion was amended in the same change. |
 | 5/6 | Hybrid spawn-per-model lifecycle; app-controlled HF download + local store | `LlamaServerProcessSupervisor`, `LlamaServerLocalModelProvider`, `Providers.HuggingFace`. |
 | 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). **Amended since the lock:** prebuilt download is still the default and the only *automatic* path, but two opt-in operator paths now sit ahead of it in `EnsureBinaryAsync` — an environment-variable bring-your-own binary override, and an in-app **source build** (`ILlamaCppSourceBuildService`, `LlamaCppSourceBuildService.cs`) that closes the missing-Linux-CUDA-prebuilt gap. Neither ever runs implicitly. See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux). |
 | 14 | **Ollama kept as optional native secondary** (no Docker) | `Providers.Ollama` still exists; **de-orchestrated** from Aspire dev — `AppHost.cs` orchestrates only `app` + Vite + SQLite, llama.cpp is the dev runtime. |
@@ -333,7 +334,7 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
    Launch args follow an **explore → freeze → replay** lifecycle: the supervisor no longer forces
    `--n-gpu-layers 999` — placement comes from `IInferenceProfileResolver` (explore-mode auto-fit, or a frozen
    per-machine profile replayed verbatim), and every spawn pins `--parallel 1` + `--no-warmup`
-   (`LlamaServerProcessSupervisor.cs:466,473,477`). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
+   (the `BuildLaunchSpec` path in `LlamaServerProcessSupervisor.cs`). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 8. **Privacy-sensitive AI ops run node-local models only** (playbook analysis, eval). Cloud providers are
    never used for those paths. See [Agent Mode](04-agent-mode.md).
 9. **OpenAPI is the single source of truth for all React REST clients** (hey-api generation off the
@@ -359,7 +360,7 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
 4. Build the HTTP pipeline: exception handler (RFC7807), HTTPS/HSTS (skipped in desktop), antiforgery,
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar, SPA fallback.
 
-Persistence specifics (selected per-column encryption, 45 migration implementations plus 2 model
+Persistence specifics (selected per-column encryption, 53 migration implementations plus 2 model
 snapshots, and recovery services) are covered in
 [Data & Persistence](08-data-and-persistence.md).
 

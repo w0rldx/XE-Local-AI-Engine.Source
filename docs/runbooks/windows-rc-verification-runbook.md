@@ -1,5 +1,9 @@
 # Windows 11 RC verification runbook
 
+**Status:** Living Windows procedure with dated verification evidence retained in place.
+
+**Last audited:** 2026-08-08 against code baseline `50cae141`.
+
 Target: a tester RC portable build (Velopack, `--noInst`) on real Windows 11 with x64 ASP.NET Core Runtime
 10.0.10 or a newer .NET 10 servicing patch installed. Nine checks, risk-ordered.
 Budget ~1 hour. Everything below covers a code path that **cannot be exercised on the Linux/WSL dev box**, which
@@ -21,7 +25,7 @@ function llama  { Get-Process llama-server -ErrorAction SilentlyContinue | Selec
 ```
 
 Note `llama-server` — the OS process table carries no extension on Windows, even though the file on disk is
-`llama-server.exe` (`OsStaleLlamaServerProcessScanner.cs:17`).
+`llama-server.exe` (`OsStaleLlamaServerProcessScanner.LlamaServerProcessName`).
 
 ### What changed since the last revision of this runbook
 
@@ -94,7 +98,7 @@ box: an orphan holding 8–14 GB of VRAM and a loopback port forever.
 >
 > `DesktopLifecycle` installs a `SetConsoleCtrlHandler` that intercepts `CTRL_CLOSE_EVENT` / `CTRL_LOGOFF_EVENT` /
 > `CTRL_SHUTDOWN_EVENT`, calls `StopApplication()`, then **blocks up to 4000 ms** waiting for `ApplicationStopped`
-> (`DesktopLifecycle.cs:39`, `:153-181`). That runs the full graceful supervisor teardown and proves nothing about
+> (`DesktopLifecycle.ConsoleCloseDrainBudget` and `DesktopLifecycle.HandleConsoleCtrl`). That runs the full graceful supervisor teardown and proves nothing about
 > the Job Object. `publish/TESTER-QUICKSTART.md` tells testers to stop the app exactly that way — correct advice
 > for a tester, wrong for this check.
 >
@@ -194,12 +198,14 @@ unambiguously ours.
 ## 3. First-run `node.key` generation + DPAPI wrap
 
 **What it proves.** That `ProtectedData.Protect(..., DataProtectionScope.CurrentUser)` actually runs on Windows
-(`DesktopBootstrap.cs:393-402`). **This branch is completely untested** — the only OS-conditional test
-(`DesktopBootstrapTests.cs:201-221`) returns early `if (OperatingSystem.IsWindows())`, and `ProtectedData`
-appears in no test file. A regression here writes the SQLite operator secret to disk in plaintext.
+(`DesktopBootstrap.ProtectSecretForAtRest`). **This branch is completely untested** —
+`DesktopBootstrapTests.EnsureLocalDataConfiguration_OnNonWindows_PersistsKeyFileWithOwnerOnlyPermissions`
+returns early `if (OperatingSystem.IsWindows())`, and `ProtectedData` appears in no test file. A regression here
+writes the SQLite operator secret to disk in plaintext.
 
-**There is no log line for any of this.** `DesktopBootstrap` runs at `Program.cs:92`, before the logger exists at
-`:104`, and has no `ILogger`/`Console` call anywhere. Verification is filesystem-only.
+**There is no log line for any of this.** The desktop setup branch calls
+`DesktopBootstrap.EnsureLocalDataConfiguration` before `CreateStartupLogger`, and `DesktopBootstrap` has no
+`ILogger`/`Console` call anywhere. Verification is filesystem-only.
 
 **Do this.** Full reset first, so this is a genuine first run:
 
@@ -227,11 +233,12 @@ Then close the console, relaunch, and re-run `Get-FileHash`.
 - `$b.Length` is **> 32** (a few hundred) — wrapped.
 - `Unprotect(...).Length` is **exactly 32**, no exception.
 - `Get-FileHash` identical before and after the restart (key reused, not regenerated —
-  `DesktopBootstrap.cs:207-218` cannot regenerate while the file exists).
+  `DesktopBootstrap.EnsureOperatorSecret` reads the existing winner while the file exists).
 
 **Fail looks like / next step.**
 - `$b.Length` is **exactly 32** → the secret is on disk in plaintext; the DPAPI branch did not run. P0.
-  (This is the product's own discriminator: `UnwrapSecretBytes` + the length gate at `DesktopBootstrap.cs:253-259`.)
+  (This is the product's own discriminator: `DesktopBootstrap.UnwrapSecretBytes` plus the
+  `NodeOperatorSecretProvider.ExpectedSecretLength` gate in `ReadAndValidateExistingSecret`.)
 - `Unprotect` throws `CryptographicException` → the blob is not CurrentUser-scoped for this account.
 - Hash changes across restart → regeneration; the previous `node.sqlite` is now unreadable.
 
@@ -496,7 +503,7 @@ timed out, provider cannot survey), and which one appears is the whole diagnosti
 ## 6. Development Mode: consent disclosure + containment probe
 
 **What it proves.** That the Windows disclosure is truthful. On Windows the process sandbox provider contains
-**nothing** — `HostSandboxContainmentProbe.cs:72-83` returns `SandboxContainment.None` (*"the Windows Job Object
+**nothing** — `HostSandboxContainmentProbe.MeasureCore` returns `SandboxContainment.None` (*"the Windows Job Object
 path is not implemented"*), so there is no process group, no cgroup CPU/mem/PID ceiling, no network isolation, no
 `O_NOFOLLOW`, and no orphan reaping. The consent dialog is the only place the user is told.
 
@@ -545,9 +552,9 @@ restricts what they can reach."* No container-runtime panel is rendered anywhere
 > **This half of the check was never answerable, and two earlier corrections both missed why.** The first said
 > the line is emitted lazily; the second said the `/development` visit is not enough and you must run a real
 > Development task. Both are wrong on Windows for the same reason: `HostSandboxContainmentProbe.MeasureCore()`
-> **returns at its `if (!OperatingSystem.IsLinux())` guard** (`HostSandboxContainmentProbe.cs:72-83`), and the
-> `_logger.LogInformation("Sandbox containment probe: …")` call sits *below* that guard, at `:108`. Only one
-> `ISandboxContainmentProbe` is registered (`AddNodeAgentHomeExtensions.cs:70`). So on Windows the line is
+> **returns at its `if (!OperatingSystem.IsLinux())` guard**, and the
+> `_logger.LogInformation("Sandbox containment probe: …")` call sits *below* that guard. `AddNodeAgentHome`
+> registers exactly one `ISandboxContainmentProbe`, backed by `HostSandboxContainmentProbe`. So on Windows the line is
 > **structurally unreachable** — no launch, no page visit, no Development task, and no amount of waiting will
 > ever produce it.
 >
@@ -557,7 +564,8 @@ restricts what they can reach."* No container-runtime panel is rendered anywhere
 > and do not spend a session on it.**
 >
 > What the Windows containment posture actually is remains exactly as documented above: `SandboxContainment.None`
-> with reason *"the host is not Linux (the Windows Job Object path is not implemented)"*, returned at `:77-82`.
+> with reason *"the host is not Linux (the Windows Job Object path is not implemented)"*, returned by
+> `HostSandboxContainmentProbe.MeasureCore`.
 > That posture is worth verifying — but through the **dialog** (closed above) and through the *absence* of any
 > containment claim, not through a log line. If you want the reason string observed at runtime, it reaches the UI
 > via the capability/consent payload, not the log.
@@ -594,7 +602,7 @@ Sandbox containment probe: process group False, resource limits False (the host 
 `gpuOffloadedLayers 33 / gpuTotalLayers 33` for `unsloth/Qwen3.5-9B-GGUF:Q5_K_M`, matching llama.cpp's own
 `offloaded 33/33 layers to GPU` banner). **The partial path is not**, and on 16 GB it is the routine case, not an
 edge case. It also proves partial-offload and CPU-fallback are surfaced as *distinct* states —
-`LlamaLayerPlacement.cs:20-24`: *"This is NOT a CPU fallback — the GPU is in use, just not for the whole model."*
+`LlamaLayerPlacement.IsPartial`: *"This is NOT a CPU fallback — the GPU is in use, just not for the whole model."*
 
 **Do this.** Load a model that cannot fit 16 GB (a Q5_K_M / Q6_K quant in the 24–32B class). Watch the console
 during load, then open the Model Recommendations page → Hardware profile card. Then eject the model and re-check
@@ -782,8 +790,9 @@ tester runs and it is documented above as passing.
 
 > **The string to match changed in `9f189ab0` — do not grep for the old one.** The wedged-driver wording quoted
 > in the evidence block above (*"the probe timed out or the binary could not be started"* / *"A wedged or busy
-> GPU driver is the usual cause"*) was **deleted**, and `RuntimeDeviceAuditServiceTests.cs:115` now asserts it is
-> absent. The current text (`RuntimeDeviceAuditService.cs:212-217`) lists causes instead of asserting one:
+> GPU driver is the usual cause"*) was **deleted**, and
+> `RuntimeDeviceAuditServiceTests.BuildState_UndeterminedReason_NamesTheOverrideCause_AndAssertsNoSingleCause`
+> now asserts it is absent. `RuntimeDeviceAuditService.BuildUndeterminedText` lists causes instead of asserting one:
 >
 > ```
 > …but its GPU devices could not be listed… Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override
@@ -796,7 +805,7 @@ tester runs and it is documented above as passing.
 
 Capture whether the probe genuinely overran or ran and returned nothing — those must not collapse to the same
 verdict. Also note the `cpuFallbackReason` remediation is still Linux/WSL-flavoured (*"commonly a missing Vulkan
-ICD under WSL2"*, `RuntimeDeviceAuditService.cs:246`) and is shown verbatim to a Windows operator.
+ICD under WSL2"*, `RuntimeDeviceAuditService.BuildFallbackText`) and is shown verbatim to a Windows operator.
 
 ---
 
@@ -872,9 +881,8 @@ degraded state, now with a truthful vendor.
   > **Two different deadlines, and the runbook previously named only the looser one.** The adapter query feeds
   > two independent consumers: `HardwareProfiler` (the hardware-profile card) bounds each native probe by
   > `HardwareProfilerOptions.HardwareProbeTimeoutSeconds`, which **defaults to 5 s**
-  > (`HardwareProfilerOptions.cs:10`, read at `HardwareProfiler.cs:240`) and which the host wires without
-  > overriding (`CapabilitiesServiceCollectionExtensions.cs:27-33`). The 8 s figure belongs to
-  > `ProcessGpuVendorProbe.DefaultProbeTimeout` (`:41`), which selects the llama.cpp *variant*. So the card
+  > (read by `HardwareProfiler.ResolveProbeTimeout`) and which `AddHardwareProfiler` wires without overriding.
+  > The 8 s figure belongs to `ProcessGpuVendorProbe.DefaultProbeTimeout`, which selects the llama.cpp *variant*. So the card
   > degrades at **5 s**, the variant selector at 8 s. Judge against **5 s**. The measured 1.3 s clears both, so
   > no previously recorded pass is affected — only the threshold to fail against was wrong.
 
@@ -895,7 +903,7 @@ measured on Windows.
   the raw `vramBytes` number. Model-fit sizing is continuous arithmetic (768 MB runtime overhead, 0.12 safety
   margin), not bucketed.
 - **The only tiered ladder is context tokens**, not VRAM:
-  `[65536, 32768, 16384, 8192, 4096, 2048]` (`LlamaServerLaunchPolicyOptions.cs:25`). On 16 GB expect the OOM
+  `[65536, 32768, 16384, 8192, 4096, 2048]` (`LlamaServerLaunchPolicyOptions.ChatContextTiers`). On 16 GB expect the OOM
   classifier to walk it down during load and log
   `llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier <N>`.
   **That is normal on this box, not a failure.** A classified OOM also triggers a one-shot safe-config retry
