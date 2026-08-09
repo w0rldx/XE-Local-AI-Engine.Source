@@ -7,6 +7,7 @@ Thanks for your interest in XE Local AI Engine. This is an early-stage, Apache-2
 - For anything non-trivial, open an issue first to discuss the approach.
 - **Security issues:** do not open a public issue — see [SECURITY.md](SECURITY.md).
 - Read [`AGENTS.md`](AGENTS.md) for the repo's conventions and the authoritative validation commands, and [`docs/agent-knowledge.md`](docs/agent-knowledge.md) for the hard-won invariants (build/analyzer rules, runtime traps) that reading the code won't tell you.
+- **Adding a language?** See [`docs/translating.md`](docs/translating.md) — translating the UI is data plus three small wiring edits, no code changes.
 
 ## Development setup
 
