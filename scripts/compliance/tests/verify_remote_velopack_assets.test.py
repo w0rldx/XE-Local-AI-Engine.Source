@@ -61,7 +61,10 @@ class RemoteVelopackAssetTests(unittest.TestCase):
             (local / policy.feed).write_text(json.dumps({"Assets": assets}), encoding="utf-8")
             (remote / policy.feed).write_text(json.dumps({"Assets": assets}), encoding="utf-8")
             (local / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
-            (remote / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
+            # vpk only publishes the legacy feed for the default (win) channel; the linux legacy feed is retained
+            # locally but never uploaded, so it must not appear among the remote assets.
+            if policy.legacy_feed_published:
+                (remote / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
             (local / f"assets.{channel}.json").write_text("[]", encoding="utf-8")
             (local / "CHECKSUMS.sha256").write_text("retained evidence", encoding="utf-8")
         return root, local_roots, remote
@@ -94,6 +97,20 @@ class RemoteVelopackAssetTests(unittest.TestCase):
     def test_unexpected_remote_asset_fails_closed(self) -> None:
         _, local_roots, remote = self.make_fixture()
         (remote / "unexpected.zip").write_bytes(b"unexpected")
+        with self.assertRaisesRegex(ValueError, "remote asset set mismatch"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_only_the_win_legacy_feed_is_published_remotely(self) -> None:
+        # Baseline passes with the linux legacy feed retained locally but absent from the release (vpk never uploads it).
+        _, local_roots, remote = self.make_fixture()
+        MODULE.verify(self.VERSION, local_roots, remote)
+        # A linux legacy feed appearing in the release would be an unexpected remote asset.
+        (remote / MODULE.POLICIES["linux"].legacy_feed).write_bytes(b"unexpected legacy feed")
+        with self.assertRaisesRegex(ValueError, "remote asset set mismatch"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+        # The win legacy feed, by contrast, IS published and required in the release.
+        _, local_roots, remote = self.make_fixture()
+        (remote / MODULE.POLICIES["win"].legacy_feed).unlink()
         with self.assertRaisesRegex(ValueError, "remote asset set mismatch"):
             MODULE.verify(self.VERSION, local_roots, remote)
 

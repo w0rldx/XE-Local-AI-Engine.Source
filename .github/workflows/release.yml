@@ -453,6 +453,11 @@ jobs:
           if [[ "${{ needs.version.outputs.is-prerelease }}" == "true" ]]; then
             PRE_ARGS+=(--pre)
           fi
+          # Upload order is load-bearing: win (the default channel) goes FIRST and UNMERGED, so its unsuffixed legacy
+          # Squirrel `RELEASES` feed is the one published; linux then merges in and publishes no legacy feed.
+          # scripts/compliance/verify_remote_velopack_assets.py encodes this (win legacy published, linux not) — do not
+          # reorder these two uploads (or make win --merge) without updating that policy, or the reconciler can pass a
+          # release whose asset set is wrong.
           vpk upload github \
             --outputDir release/win \
             --repoUrl "https://github.com/${{ github.repository }}" \
