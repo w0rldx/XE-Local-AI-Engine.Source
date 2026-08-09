@@ -7,6 +7,7 @@ import { languageData } from "@/data/language/LanguageMenuData";
 
 export interface WelcomeTourDialogProps {
 	opened: boolean;
+	hasProgress: boolean;
 	// Start runs the controlled tour from the first step. Skip records the tour as skipped (so it never re-prompts).
 	onStart: () => void;
 	onSkip: () => void;
@@ -15,7 +16,7 @@ export interface WelcomeTourDialogProps {
 // Opt-in gate for the first-response tour (not a Joyride step itself). Built on the shared DialogShell so it
 // matches every other modal. Copy is fully i18n-keyed. Closing via the title bar is treated as Skip so a dismiss still
 // records a terminal outcome and the dialog never re-prompts.
-export function WelcomeTourDialog({ opened, onStart, onSkip }: WelcomeTourDialogProps) {
+export function WelcomeTourDialog({ opened, hasProgress, onStart, onSkip }: WelcomeTourDialogProps) {
 	const { i18n, t } = useTranslation();
 	const { selectedApplicationLanguage, changeLanguage } = useUserLanguageStore();
 
@@ -59,7 +60,7 @@ export function WelcomeTourDialog({ opened, onStart, onSkip }: WelcomeTourDialog
 						{t("onboarding.welcome.skip")}
 					</Button>
 					<Button onClick={onStart} data-testid="onboarding-welcome-start">
-						{t("onboarding.welcome.start")}
+						{hasProgress ? t("onboarding.actions.resume") : t("onboarding.welcome.start")}
 					</Button>
 				</Group>
 			</Stack>

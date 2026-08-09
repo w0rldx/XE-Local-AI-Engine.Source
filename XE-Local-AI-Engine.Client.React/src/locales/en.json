@@ -438,6 +438,7 @@
 		"about": {
 			"title": "About",
 			"applicationTab": "Application",
+			"tutorialsTab": "Tutorials",
 			"licensesTab": "Licenses",
 			"version": "Version",
 			"website": "Website",
@@ -3975,7 +3976,7 @@
 	"onboarding": {
 		"welcome": {
 			"title": "Welcome — let's get you to your first answer",
-			"body": "This node has no chat model yet, so it can't reply until you install one. Take a short guided tour: install a recommended chat model, make it the default, then send your first message. You can skip any time.",
+			"body": "Take an optional Quick Start tailored to the models already available on this node, then send your first message. Nothing starts until you choose Start, and you can leave at any time.",
 			"start": "Start tour",
 			"skip": "Skip",
 			"languageLabel": "Language"
@@ -3990,6 +3991,64 @@
 			"skip": "Skip"
 		},
 		"restart": "Restart tutorial",
+		"actions": {
+			"openTutorials": "Open Tutorials",
+			"start": "Start",
+			"resume": "Resume",
+			"restart": "Restart",
+			"notNow": "Not now"
+		},
+		"status": {
+			"notStarted": "Not started",
+			"inProgress": "In progress",
+			"skipped": "Skipped",
+			"completed": "Completed",
+			"unavailable": "Unavailable"
+		},
+		"catalog": {
+			"intro": "Choose a short tutorial whenever it is useful. Tutorials are optional and never start automatically.",
+			"minutes_one": "About {{count}} minute",
+			"minutes_other": "About {{count}} minutes"
+		},
+		"tutorials": {
+			"quick-start": {
+				"title": "Quick Start",
+				"description": "Set up chat only when needed and reach your first answer.",
+				"steps": {
+					"navModels": { "title": "Your local models", "content": "Models power local chat. If this node still needs one, the next steps show where to install and select it." },
+					"recommendationInstall": { "title": "Install a chat model if needed", "content": "Choose a recommended chat model when none is available. If provisioning is still resolving, you can safely return here later." },
+					"setDefaultModel": { "title": "Choose the default model", "content": "Select an installed chat-capable model as the default for new conversations." },
+					"navChat": { "title": "Open Chat", "content": "Chat is ready for your first conversation." },
+					"chatInput": { "title": "Write your first message", "content": "Ask anything useful to you — for example, request a short introduction." },
+					"chatSend": { "title": "Send your message", "content": "Use the send button to begin local generation." },
+					"firstResponse": { "title": "Your first answer", "content": "The response appears in the conversation. You are ready; more optional tutorials are available under Information → Tutorials." }
+				}
+			},
+			"agents-basics": {
+				"title": "Agents Basics",
+				"description": "Learn what agents, starter templates, and definitions are without changing anything.",
+				"invitationTitle": "New: Agents Basics tutorial",
+				"invitationBody": "Take a short optional tour of this page. It only explains the controls and never creates or changes an agent.",
+				"steps": {
+					"agentsOverview": { "title": "Reusable agent definitions", "content": "Agents combine instructions, a model, tools, and skills into reusable assistants." },
+					"agentsTemplates": { "title": "Starter templates", "content": "Browse starter agents when you want a guided starting point. This tutorial does not open or install them." },
+					"agentsCreate": { "title": "Create an agent", "content": "Start a custom definition here when you are ready. Nothing is created during the tutorial." },
+					"agentsList": { "title": "Manage definitions", "content": "Saved agents appear here for later editing and use in Chat." }
+				}
+			},
+			"knowledge-base-basics": {
+				"title": "Knowledge Base Basics",
+				"description": "See how local documents become searchable knowledge for grounded chat.",
+				"invitationTitle": "New: Knowledge Base Basics tutorial",
+				"invitationBody": "Take a short optional tour of upload, indexing, and search. It never uploads or changes your documents.",
+				"steps": {
+					"knowledgeOverview": { "title": "Ground chat in your documents", "content": "The Knowledge Base keeps document ingestion and retrieval local to this node." },
+					"knowledgeUpload": { "title": "Add documents", "content": "When you choose files, the node extracts, chunks, embeds, and indexes them. This tutorial does not upload anything." },
+					"knowledgeDocuments": { "title": "Follow indexing", "content": "Document status and maintenance actions appear here after an upload." },
+					"knowledgeSearch": { "title": "Test retrieval", "content": "Search indexed content here before opting to use the Knowledge Base in Chat." }
+				}
+			}
+		},
 		"steps": {
 			"navModels": {
 				"title": "Find your models here",

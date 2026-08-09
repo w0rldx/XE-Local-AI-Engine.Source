@@ -48,9 +48,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     public const string AdminPassword = "E2eAdminPassw0rd!";
 
     /// <summary>
-    ///     The single onboarding tour key the React client persists. Mirrors <c>MAIN_APP_TOUR_KEY</c> in
-    ///     <c>XE-Local-AI-Engine.Client.React/src/features/onboarding/hooks/useTourState.ts</c>; the two must
-    ///     stay in step or the seeded state below stops suppressing the welcome prompt.
+    ///     Tutorial persistence keys mirrored from the central React <c>TutorialRegistry</c>. They must stay in step
+    ///     or the seeded state below stops suppressing first-use invitations.
     ///     <para>
     ///         Enforced, not merely documented: <c>XE-Local-AI-Engine.Tests/Onboarding/OnboardingTourKeyDriftTests</c>
     ///         reads the TypeScript source and fails if either side moves. That guard lives in the UNIT suite so
@@ -59,9 +58,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     /// </summary>
     public const string MainAppTourKey = "main-app-v1";
 
+    public const string AgentsTourKey = "agents-v1";
+
+    public const string KnowledgeBaseTourKey = "knowledge-base-v1";
+
     /// <summary>
-    ///     The browser localStorage key holding the in-progress tour step index. Mirrors the DERIVED
-    ///     <c>TOUR_PROGRESS_STORAGE_KEY</c> in <c>useTourState.ts</c> (<c>xe-onboarding-${MAIN_APP_TOUR_KEY}-step</c>).
+    ///     The browser localStorage key holding the versioned in-progress tour step id. Mirrors
+    ///     <c>tutorialProgressStorageKey</c> in <c>useTourState.ts</c>.
     ///     Derived here from <see cref="MainAppTourKey" /> for the same reason it is derived there — so the tour key
     ///     exists in exactly one place per language, and the drift guard has one prefix left to check rather than a
     ///     second flattened copy of the key.
@@ -249,6 +252,18 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             new StoredTutorialEntry
             {
                 Key = MainAppTourKey,
+                Status = "completed",
+                AtUtc = new DateTime(year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, DateTimeKind.Utc)
+            },
+            new StoredTutorialEntry
+            {
+                Key = AgentsTourKey,
+                Status = "completed",
+                AtUtc = new DateTime(year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, DateTimeKind.Utc)
+            },
+            new StoredTutorialEntry
+            {
+                Key = KnowledgeBaseTourKey,
                 Status = "completed",
                 AtUtc = new DateTime(year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, DateTimeKind.Utc)
             }
