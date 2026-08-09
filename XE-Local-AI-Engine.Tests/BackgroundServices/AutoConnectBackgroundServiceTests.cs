@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -22,6 +23,8 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
     }
 
     [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal",
+        Justification = "executeTask is explicitly awaited before the using-scoped service/cancellationTokenSource go out of scope.")]
     public async Task ExecuteAsync_WhenPaired_CallsConnectAsync()
     {
         AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
@@ -31,10 +34,23 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         {
             using var service = CreateService(hubConnection, MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)), CreateApplicationLifetime());
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(1000);
+            // Safety-net upper bound only, not the pass/fail signal: under thread-pool contention on a loaded parallel
+            // run, the startup Task.Delay's resumption can be starved well past a short cancel window, so racing it
+            // against ConnectAsync here was flaky (confirmed by synthesizing CPU-bound pool saturation: 15/15 failed).
+            // Assert on the real event ConnectAsync raises instead — see ConnectedSignal on MockWorkerHubConnection.
+            cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(30));
 
-            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
+            var executeTask = BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
+            var winner = await Task.WhenAny(hubConnection.ConnectedSignal, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (winner != hubConnection.ConnectedSignal)
+            {
+                await cancellationTokenSource.CancelAsync();
+            }
+
+            await executeTask;
+
+            AssertEx.True(winner == hubConnection.ConnectedSignal, "ConnectAsync was not called within 10s.");
             AssertEx.Equal(expected: 1, hubConnection.ConnectAsyncCallCount);
         }
         finally
@@ -66,6 +82,8 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
     }
 
     [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal",
+        Justification = "executeTask is explicitly awaited before the using-scoped service/cancellationTokenSource go out of scope.")]
     public async Task ExecuteAsync_WhenTokenExpired_CallsConnectSoConnectionCanRefresh()
     {
         AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
@@ -75,10 +93,21 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         {
             using var service = CreateService(hubConnection, MockTokenStore.WithExpiredToken(), CreateApplicationLifetime());
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(1000);
+            // Same starvation exposure and fix as ExecuteAsync_WhenPaired_CallsConnectAsync above: this window is a
+            // leak-prevention safety net only, not the pass/fail signal.
+            cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(30));
 
-            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
+            var executeTask = BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
+            var winner = await Task.WhenAny(hubConnection.ConnectedSignal, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (winner != hubConnection.ConnectedSignal)
+            {
+                await cancellationTokenSource.CancelAsync();
+            }
+
+            await executeTask;
+
+            AssertEx.True(winner == hubConnection.ConnectedSignal, "ConnectAsync was not called within 10s.");
             AssertEx.Equal(expected: 1, hubConnection.ConnectAsyncCallCount);
         }
         finally
@@ -236,11 +265,20 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
         private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
 
+        private readonly TaskCompletionSource<bool> _connectedSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public int ConnectAsyncCallCount { get; private set; }
 
         public int DisconnectAsyncCallCount { get; private set; }
 
         public Exception? ConnectException { get; init; }
+
+        // Raised the first time ConnectAsync is invoked, regardless of outcome. Tests await this (with their own
+        // bounded-but-generous timeout) instead of racing the CancellationTokenSource passed into ExecuteAsync — under
+        // thread-pool contention the startup Task.Delay's resumption can be starved well past a short cancel window,
+        // which raced the two timers against each other and made the assertion flaky (see docs/agent-knowledge.md and
+        // the ExecuteAsync_WhenPaired_CallsConnectAsync / ExecuteAsync_WhenTokenExpired_... tests below).
+        public Task ConnectedSignal => _connectedSignal.Task;
 
         public WorkerConnectionState State => WorkerConnectionState.Disconnected;
 
@@ -289,6 +327,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
             ConnectAsyncCallCount++;
+            _connectedSignal.TrySetResult(true);
             cancellationToken.ThrowIfCancellationRequested();
             if (ConnectException is not null)
             {
