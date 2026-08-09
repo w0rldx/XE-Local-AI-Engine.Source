@@ -30,12 +30,15 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     {
         Factory.FakeOllamaState.Models = [DefaultChatModel, DefaultEmbeddingModel];
         await Factory.SetAdminTutorialStateAsync(null);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.Commit });
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.Commit
+        });
         await Page.EvaluateAsync($$"""
-            globalThis.localStorage.removeItem('{{QuickStartProgressKey}}');
-            globalThis.localStorage.removeItem('{{AgentsProgressKey}}');
-            globalThis.localStorage.removeItem('{{KnowledgeBaseProgressKey}}');
-            """);
+                                   globalThis.localStorage.removeItem('{{QuickStartProgressKey}}');
+                                   globalThis.localStorage.removeItem('{{AgentsProgressKey}}');
+                                   globalThis.localStorage.removeItem('{{KnowledgeBaseProgressKey}}');
+                                   """);
     }
 
     [After(Test)]
@@ -52,9 +55,12 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     public async Task QuickStart_WithSavedProgress_OffersResumeButNeverAutoStarts()
     {
         await Page.AddInitScriptAsync($$"""
-            globalThis.localStorage.setItem('{{XENodeE2EWebApplicationFactory.TourProgressStorageKey}}', '{"format":1,"stepId":"chatInput"}');
-            """);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+                                        globalThis.localStorage.setItem('{{XENodeE2EWebApplicationFactory.TourProgressStorageKey}}', '{"format":1,"stepId":"chatInput"}');
+                                        """);
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
 
         await Expect(WelcomeDialog).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("onboarding-welcome-start")).ToHaveTextAsync("Resume");
@@ -66,7 +72,10 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     public async Task QuickStart_StartsOnlyOnClick_AndPersistsVersionedStepId()
     {
         await Page.SetViewportSizeAsync(640, 800);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
         await Expect(WelcomeDialog).ToBeVisibleAsync();
         await Expect(Page.Locator("[id^='react-joyride-step-']")).ToHaveCountAsync(0);
 
@@ -90,7 +99,10 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         var replyGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         Factory.FakeOllamaState.ChatScript = _ => GatedTutorialReplyAsync(replyGate.Task);
         await Page.SetViewportSizeAsync(390, 844);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
 
         await Expect(WelcomeDialog).ToBeVisibleAsync();
         await Expect(ActiveTooltip).ToHaveCountAsync(0);
@@ -114,8 +126,7 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
             await PrimaryTourAction.ClickAsync();
             await AssertTourStepAsync("firstResponse", "[data-testid='chat-input-area']", QuickStartProgressKey);
 
-            await Page.RunAndWaitForResponseAsync(
-                () =>
+            await Page.RunAndWaitForResponseAsync(() =>
                 {
                     replyGate.TrySetResult(true);
                     return Task.CompletedTask;
@@ -123,10 +134,15 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
                 response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                             && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
-            await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 10000 });
-            await Expect(Page.GetByText("Node reply")).ToHaveCountAsync(
-                replyCountBefore + 1,
-                new LocatorAssertionsToHaveCountOptions { Timeout = 10000 });
+            await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 10000
+            });
+            await Expect(Page.GetByText("Node reply")).ToHaveCountAsync(replyCountBefore + 1,
+                new LocatorAssertionsToHaveCountOptions
+                {
+                    Timeout = 10000
+                });
             await Expect(Page.GetByText("Tutorial reply from FakeOllama")).ToBeVisibleAsync();
 
             await Expect(ActiveTooltip).ToHaveCountAsync(0);
@@ -145,15 +161,17 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         Factory.FakeOllamaState.Models = [];
         await SetDefaultModelAsync(null);
         await Page.SetViewportSizeAsync(390, 844);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
 
         await Page.GetByTestId("onboarding-welcome-start").ClickAsync();
         await AssertTourStepAsync("navModels", "[data-tour='models-overview']", QuickStartProgressKey);
         await PrimaryTourAction.ClickAsync();
         await AssertTourStepAsync("recommendationInstall", "[data-tour='recommendation-install']", QuickStartProgressKey);
 
-        await Page.RunAndWaitForResponseAsync(
-            async () => await ActiveTooltip.Locator("[data-action='skip']").ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await ActiveTooltip.Locator("[data-action='skip']").ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
         await AssertTutorialStatusAsync("main-app-v1", "skipped");
@@ -165,12 +183,14 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     {
         await SetDefaultModelAsync("e2e-not-installed");
         await Page.SetViewportSizeAsync(390, 844);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
 
         await Page.GetByTestId("onboarding-welcome-start").ClickAsync();
         await AssertTourStepAsync("setDefaultModel", "[data-tour='set-default-model']", QuickStartProgressKey);
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        await Page.RunAndWaitForResponseAsync(async () => await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
             {
                 Name = $"Set {DefaultChatModel} as default"
             }).ClickAsync(),
@@ -178,8 +198,7 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
                         && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase));
 
         await AssertTourStepAsync("navChat", "[data-tour='chat-overview']", QuickStartProgressKey);
-        await Page.RunAndWaitForResponseAsync(
-            async () => await ActiveTooltip.Locator("[data-action='skip']").ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await ActiveTooltip.Locator("[data-action='skip']").ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
         await AssertTutorialStatusAsync("main-app-v1", "skipped");
@@ -191,7 +210,10 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     {
         await PrepareReadyQuickStartAsync();
         await Page.SetViewportSizeAsync(390, 844);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
         await Page.GetByTestId("onboarding-welcome-start").ClickAsync();
         await AssertTourStepAsync("navChat", "[data-tour='chat-overview']", QuickStartProgressKey);
         await PrimaryTourAction.ClickAsync();
@@ -205,14 +227,18 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         var sendButton = Page.GetByTestId("chat-send-button");
         var replyCountBefore = await Page.GetByText("Node reply").CountAsync();
         await sendButton.ClickAsync();
-        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 10000 });
-        await Expect(Page.GetByText("Node reply")).ToHaveCountAsync(
-            replyCountBefore + 1,
-            new LocatorAssertionsToHaveCountOptions { Timeout = 10000 });
+        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        {
+            Timeout = 10000
+        });
+        await Expect(Page.GetByText("Node reply")).ToHaveCountAsync(replyCountBefore + 1,
+            new LocatorAssertionsToHaveCountOptions
+            {
+                Timeout = 10000
+            });
         await Expect(Page.GetByText("[fake-ollama] Complete after this fast FakeOllama reply")).ToBeVisibleAsync();
 
-        await Page.RunAndWaitForResponseAsync(
-            async () => await PrimaryTourAction.ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await PrimaryTourAction.ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
@@ -236,8 +262,7 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         await AssertTourStepAsync("agentsCreate", "[data-tour='agents-create']", AgentsProgressKey);
         await PrimaryTourAction.ClickAsync();
         await AssertTourStepAsync("agentsList", "[data-tour='agents-list']", AgentsProgressKey);
-        await Page.RunAndWaitForResponseAsync(
-            async () => await PrimaryTourAction.ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await PrimaryTourAction.ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
@@ -263,8 +288,7 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         await AssertTourStepAsync("knowledgeDocuments", "[data-tour='knowledge-documents']", KnowledgeBaseProgressKey);
         await PrimaryTourAction.ClickAsync();
         await AssertTourStepAsync("knowledgeSearch", "[data-tour='knowledge-search']", KnowledgeBaseProgressKey);
-        await Page.RunAndWaitForResponseAsync(
-            async () => await PrimaryTourAction.ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await PrimaryTourAction.ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
@@ -279,19 +303,26 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     [Category("Onboarding")]
     public async Task AgentsInvitation_NotNowPersistsSkipped_WithoutStartingTutorial()
     {
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("onboarding-welcome-skip").ClickAsync(),
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
+        await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("onboarding-welcome-skip").ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
-        await Page.GotoAsync($"{NodeAppUrl}/agents", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await Page.GotoAsync($"{NodeAppUrl}/agents", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
         var invitation = Page.GetByTestId("tutorial-invitation-agents-basics");
         await Expect(invitation).ToBeVisibleAsync();
         await Expect(Page.Locator("[id^='react-joyride-step-']")).ToHaveCountAsync(0);
 
-        await Page.RunAndWaitForResponseAsync(
-            async () => await invitation.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Not now" }).ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await invitation.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions
+            {
+                Name = "Not now"
+            }).ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
@@ -303,17 +334,28 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     private async Task StartCatalogTutorialAsync(string tutorialId)
     {
         await Page.SetViewportSizeAsync(1440, 900);
-        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("onboarding-welcome-skip").ClickAsync(),
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
+        await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("onboarding-welcome-skip").ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
 
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "About" }).ClickAsync();
-        await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Tutorials" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "About"
+        }).ClickAsync();
+        await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+        {
+            Name = "Tutorials"
+        }).ClickAsync();
         var card = Page.GetByTestId($"tutorial-card-{tutorialId}");
         await Expect(card).ToBeVisibleAsync();
-        await card.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Start" }).ClickAsync();
+        await card.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions
+        {
+            Name = "Start"
+        }).ClickAsync();
     }
 
     private async Task AssertTourStepAsync(string stepId, string targetSelector, string progressKey)
@@ -328,29 +370,27 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
         await Expect(PrimaryTourAction).ToBeEnabledAsync();
 
         var targetIntersectsViewport = await target.EvaluateAsync<bool>("""
-            element => {
-                const bounds = element.getBoundingClientRect();
-                return bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
-                    && bounds.left < globalThis.innerWidth && bounds.top < globalThis.innerHeight;
-            }
-            """);
+                                                                        element => {
+                                                                            const bounds = element.getBoundingClientRect();
+                                                                            return bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
+                                                                                && bounds.left < globalThis.innerWidth && bounds.top < globalThis.innerHeight;
+                                                                        }
+                                                                        """);
         await Assert.That(targetIntersectsViewport).IsTrue();
 
         var tooltipFitsViewport = await ActiveTooltip.EvaluateAsync<bool>("""
-            element => {
-                const bounds = element.getBoundingClientRect();
-                return bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
-                    && bounds.right <= globalThis.innerWidth && bounds.bottom <= globalThis.innerHeight;
-            }
-            """);
+                                                                          element => {
+                                                                              const bounds = element.getBoundingClientRect();
+                                                                              return bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
+                                                                                  && bounds.right <= globalThis.innerWidth && bounds.bottom <= globalThis.innerHeight;
+                                                                          }
+                                                                          """);
         await Assert.That(tooltipFitsViewport).IsTrue();
 
-        var hasNoHorizontalOverflow = await Page.EvaluateAsync<bool>(
-            "() => document.documentElement.scrollWidth <= globalThis.innerWidth");
+        var hasNoHorizontalOverflow = await Page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= globalThis.innerWidth");
         await Assert.That(hasNoHorizontalOverflow).IsTrue();
 
-        var progress = await Page.EvaluateAsync<string?>(
-            $"() => globalThis.localStorage.getItem('{progressKey}')");
+        var progress = await Page.EvaluateAsync<string?>($"() => globalThis.localStorage.getItem('{progressKey}')");
         await Assert.That(progress).IsEqualTo($"{{\"format\":1,\"stepId\":\"{stepId}\"}}");
     }
 
@@ -358,15 +398,18 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     {
         var settingsStore = Factory.Services.GetRequiredService<INodeSettingsStore>();
         var settings = await settingsStore.LoadAsync();
-        await settingsStore.SaveAsync(settings with { DefaultModelName = modelName });
+        await settingsStore.SaveAsync(settings with
+        {
+            DefaultModelName = modelName
+        });
     }
 
     private async Task PrepareReadyQuickStartAsync()
     {
         await SetDefaultModelAsync(DefaultChatModel);
         await Page.AddInitScriptAsync($$"""
-            globalThis.localStorage.setItem('xe-node-chat-selected-model', '{{DefaultChatModel}}');
-            """);
+                                        globalThis.localStorage.setItem('xe-node-chat-selected-model', '{{DefaultChatModel}}');
+                                        """);
     }
 
     private async Task AssertTutorialStatusAsync(string key, string status)
