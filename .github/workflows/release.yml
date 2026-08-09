@@ -509,6 +509,10 @@ jobs:
         run: |
           set -euo pipefail
           dotnet tool restore --tool-manifest dotnet-tools.json
+          # sbom-tool's -m (ManifestDirPath) must already exist; it writes _manifest/ under it but does not create the
+          # root. Unlike the build-pack SBOM step (which omits -m and defaults under -b), this envelope uses a distinct
+          # manifest dir, so create it first.
+          mkdir -p release-envelope
           scripts/compliance/sbom-tool.sh Generate \
             -b remote-primary \
             -bc remote-primary \
