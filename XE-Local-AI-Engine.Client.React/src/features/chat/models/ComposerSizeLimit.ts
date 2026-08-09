@@ -6,7 +6,7 @@
 
 // Fraction of the limit a draft must pass before the size readout appears. Below it the number is noise — nobody
 // pasting a paragraph wants a byte counter.
-export const composerSizeIndicatorThreshold = 0.8;
+const composerSizeIndicatorThreshold = 0.8;
 
 // UTF-8 costs at most 3 bytes per UTF-16 code unit (an astral code point is 4 bytes across 2 units, so 2 per unit),
 // which makes `text.length * 3` an exact upper bound on the encoded size. Every ordinary-length draft fails this

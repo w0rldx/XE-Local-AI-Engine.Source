@@ -15,12 +15,12 @@ export const CUSTOM_TOOL_NAME_PREFIX = "custom__";
 
 // Slug rule mirrors the backend regex `^custom__[a-z0-9](?:[a-z0-9_]{0,48}[a-z0-9])?$` minus the prefix: lowercase,
 // starts and ends alphanumeric, underscores allowed inside, 1–50 chars.
-export const CUSTOM_TOOL_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9_]{0,48}[a-z0-9])?$/;
+const CUSTOM_TOOL_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9_]{0,48}[a-z0-9])?$/;
 // Parameter names are `[A-Za-z_][A-Za-z0-9_]*` identifiers (CustomToolService.IdentifierRegex).
-export const CUSTOM_TOOL_PARAM_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const CUSTOM_TOOL_PARAM_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-export const CUSTOM_TOOL_DESCRIPTION_MAX = 1024;
-export const CUSTOM_TOOL_PARAM_NAME_MAX = 64;
+const CUSTOM_TOOL_DESCRIPTION_MAX = 1024;
+const CUSTOM_TOOL_PARAM_NAME_MAX = 64;
 // HostProcessExecutor.MaxTimeoutSeconds; 0 means "use the executor default".
 export const CUSTOM_TOOL_TIMEOUT_MAX = 300;
 
