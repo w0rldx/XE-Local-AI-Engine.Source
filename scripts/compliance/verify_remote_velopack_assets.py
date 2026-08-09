@@ -18,12 +18,17 @@ FEED_FILES = {"releases.win.json", "releases.linux.json", "RELEASES", "RELEASES-
 class ChannelPolicy(NamedTuple):
     feed: str
     legacy_feed: str
+    legacy_feed_published: bool
     portable_suffix: str
 
 
+# vpk publishes the modern per-channel JSON feed for every channel, but only uploads the legacy Squirrel `RELEASES`
+# feed for the default (win) channel. The non-default channel's legacy feed (RELEASES-linux) is retained locally as
+# build evidence and never lands in the GitHub release (Linux has no legacy Squirrel client). Confirmed against the
+# pinned velopack-1.2.0 upload manifest and live vpk upload output.
 POLICIES = {
-    "win": ChannelPolicy("releases.win.json", "RELEASES", "Portable.zip"),
-    "linux": ChannelPolicy("releases.linux.json", "RELEASES-linux", ".AppImage"),
+    "win": ChannelPolicy("releases.win.json", "RELEASES", True, "Portable.zip"),
+    "linux": ChannelPolicy("releases.linux.json", "RELEASES-linux", False, ".AppImage"),
 }
 
 
@@ -139,14 +144,22 @@ def verify_legacy_feed(feed_path: Path, packages: dict[str, Path]) -> None:
 
 def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> None:
     expected: dict[str, Path] = {}
-    per_channel_names: dict[str, set[str]] = {}
+    per_channel_files: dict[str, dict[str, Path]] = {}
     for channel, root in local_roots.items():
         channel_files = expected_channel_assets(channel, root, version)
-        duplicates = set(expected).intersection(channel_files)
+        policy = POLICIES[channel]
+        # Reconcile the remote against only the assets vpk actually publishes: drop the unpublished legacy feed
+        # (retained locally, never uploaded) so its absence from the release is not flagged as a mismatch.
+        published = {
+            name: path
+            for name, path in channel_files.items()
+            if policy.legacy_feed_published or name != policy.legacy_feed
+        }
+        duplicates = set(expected).intersection(published)
         if duplicates:
             raise ValueError(f"channel outputs contain duplicate remote asset names: {sorted(duplicates)}")
-        expected.update(channel_files)
-        per_channel_names[channel] = set(channel_files)
+        expected.update(published)
+        per_channel_files[channel] = channel_files
 
     remote = files_by_name(remote_root, ignore_internal=False)
     if set(expected) != set(remote):
@@ -158,11 +171,13 @@ def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> Non
         if name not in FEED_FILES and sha256(local_path) != sha256(remote[name]):
             raise ValueError(f"remote asset bytes differ from retained build: {name}")
 
-    for channel, names in per_channel_names.items():
+    for channel, channel_files in per_channel_files.items():
         policy = POLICIES[channel]
-        packages = {name: remote[name] for name in names if name.endswith(".nupkg")}
+        packages = {name: remote[name] for name in channel_files if name.endswith(".nupkg")}
         verify_json_feed(remote[policy.feed], version, packages)
-        verify_legacy_feed(remote[policy.legacy_feed], packages)
+        # Verify the published legacy feed from the release; the unpublished one from its retained local copy.
+        legacy_feed_path = remote[policy.legacy_feed] if policy.legacy_feed_published else channel_files[policy.legacy_feed]
+        verify_legacy_feed(legacy_feed_path, packages)
 
 
 def parse_local(value: str) -> tuple[str, Path]:
