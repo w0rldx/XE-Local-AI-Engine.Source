@@ -257,7 +257,7 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.stepIndex).toBe(expectedIndex);
 	});
 
-	it("completes only when a new assistant reply arrives on the final step", () => {
+	it("completes when a slow assistant reply arrives after entering the final step", () => {
 		modelsRef.current = {
 			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
@@ -275,6 +275,35 @@ describe("frozen Quick Start readiness", () => {
 			[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }],
 			[["conversations", "new"], { messages: [{ role: "assistant", content: "Hello!" }] }],
 		]);
+
+		expect(markDoneMock).toHaveBeenCalledWith(
+			"main-app-v1",
+			"completed",
+			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+		);
+		expect(joyrideProps.current?.run).toBe(false);
+	});
+
+	it("completes when a fast assistant reply arrives before entering the final step", () => {
+		modelsRef.current = {
+			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			isSuccess: true,
+		};
+		conversationsRef.current = [[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }]];
+		const view = renderProvider();
+		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+		for (let index = 0; index < 2; index += 1) {
+			act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index, status: STATUS.RUNNING }));
+		}
+		expect(joyrideProps.current?.stepIndex).toBe(2);
+
+		applyConversations(view, [
+			[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }],
+			[["conversations", "new"], { messages: [{ role: "assistant", content: "Hello!" }] }],
+		]);
+		expect(markDoneMock).not.toHaveBeenCalled();
+
+		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 2, status: STATUS.RUNNING }));
 
 		expect(markDoneMock).toHaveBeenCalledWith(
 			"main-app-v1",
