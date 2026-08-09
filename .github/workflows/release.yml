@@ -371,9 +371,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Invoke via `python` like the sibling compliance steps (create_bundle_input_manifest / legal-corpus /
-          # reconcile_payload_spdx): a bare-path call relies on the `#!/usr/bin/env python3` shebang, and the Windows
-          # runner exposes `python`, not reliably `python3`.
+          # Call through `python` like the sibling compliance steps (create_bundle_input_manifest / legal-corpus /
+          # reconcile_payload_spdx); a bare-path call would use the script's versioned shebang, but the Windows runner
+          # only ships the unversioned `python`. (Enforced by scripts/tests/release-workflow-contract.test.py.)
           python scripts/compliance/verify_release_artifacts.py \
             --rid "${{ matrix.rid }}" \
             --version "${{ needs.version.outputs.pack-version }}" \
