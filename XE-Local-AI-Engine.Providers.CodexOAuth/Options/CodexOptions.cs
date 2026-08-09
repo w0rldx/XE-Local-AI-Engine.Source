@@ -100,14 +100,15 @@ public sealed class CodexOptions
     ///     Default / selected Codex model id (account-scoped <c>gpt-5.x</c> family). The non-secret selected model is
     ///     persisted by the node's selection store; this is the fallback default.
     ///     <para>
-    ///         LIVE-CORRECTNESS: must be a model the ChatGPT-subscription Responses backend accepts. The working opencode
-    ///         reference client's allow-list is <c>gpt-5.5 / gpt-5.4 / gpt-5.4-mini / gpt-5.3-codex-spark</c>; the earlier
-    ///         default <c>gpt-5-codex</c> is NOT in that set and is rejected with HTTP 400 (unknown model). <c>gpt-5.5</c>
-    ///         is the strongest model in the set and the chosen default; operators can override via the <c>CodexOAuth</c>
-    ///         config section.
+    ///         LIVE-CORRECTNESS: must be a model the ChatGPT-subscription Responses backend accepts. The offered set
+    ///         (<see cref="Implementation.CodexModelCatalog.ModelIds" />) is
+    ///         <c>gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5 / gpt-5.4 / gpt-5.4-mini / gpt-5.3-codex-spark</c>;
+    ///         any id outside that set (e.g. the earlier default <c>gpt-5-codex</c>) is rejected with HTTP 400 (unknown
+    ///         model). <c>gpt-5.6-sol</c> is the frontier (strongest) model and leads the catalog, but the chosen
+    ///         default is <c>gpt-5.6-terra</c>; operators can override either via the <c>CodexOAuth</c> config section.
     ///     </para>
     /// </summary>
-    public string DefaultModel { get; set; } = "gpt-5.5";
+    public string DefaultModel { get; set; } = "gpt-5.6-terra";
 
     /// <summary>Maximum time to wait for the user to complete the browser authorization.</summary>
     public TimeSpan LoginTimeout { get; set; } = TimeSpan.FromMinutes(5);

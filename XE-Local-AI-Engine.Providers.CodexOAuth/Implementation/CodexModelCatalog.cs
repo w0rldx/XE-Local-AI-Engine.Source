@@ -21,11 +21,14 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 public static class CodexModelCatalog
 {
     /// <summary>
-    ///     The offered Codex model ids, strongest-first (the default, <see cref="CodexOptions.DefaultModel" />, is the
-    ///     first entry). Mirrors the opencode reference allow-list.
+    ///     The offered Codex model ids, strongest-first (<c>gpt-5.6-sol</c>, the frontier model, leads). The node
+    ///     default (<see cref="CodexOptions.DefaultModel" />) is <c>gpt-5.6-terra</c>, not necessarily the first entry.
     /// </summary>
     public static IReadOnlyList<string> ModelIds { get; } =
     [
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
         "gpt-5.5",
         "gpt-5.4",
         "gpt-5.4-mini",
@@ -38,7 +41,7 @@ public static class CodexModelCatalog
     /// </summary>
     public static bool IsCodexModel(string? modelId)
     {
-        // Linear scan over the tiny (4-item) allow-list with an ordinal, case-insensitive comparer. Avoiding a
+        // Linear scan over the tiny allow-list with an ordinal, case-insensitive comparer. Avoiding a
         // cached HashSet means there is no static-field init-order dependency for a member reformatter to break.
         return !string.IsNullOrWhiteSpace(modelId)
                && ModelIds.Contains(modelId, StringComparer.OrdinalIgnoreCase);
