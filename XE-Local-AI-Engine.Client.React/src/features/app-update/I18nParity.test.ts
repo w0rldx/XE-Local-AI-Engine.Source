@@ -1,10 +1,10 @@
-// Verifies that all appUpdate i18n keys added to en.json exist in de.json with matching paths.
+// Verifies that appUpdate and voice i18n keys stay in parity between en.json and every other locale.
 // This test is intentionally not jsdom-scoped — it operates purely on the JSON locale files.
 
 import { describe, expect, it } from "vitest";
 
 import en from "@/locales/en.json";
-import de from "@/locales/de.json";
+import { nonEnglishLocales } from "@/test/Locales";
 
 type LocaleShape = Record<string, unknown>;
 
@@ -30,74 +30,32 @@ function resolvePath(obj: LocaleShape, path: string): unknown {
 	}, obj);
 }
 
-const enPages = (en as LocaleShape)["pages"] as LocaleShape;
-const dePages = (de as LocaleShape)["pages"] as LocaleShape;
+// Collects the fully-qualified key paths of one translation section (e.g. "voice", or the
+// "about.appUpdate." subtree under "pages"). Returns them prefixed so they resolve against the
+// locale root.
+function sectionKeys(resource: LocaleShape, rootSection: string, subPrefix = ""): string[] {
+	const root = resource[rootSection] as LocaleShape | undefined;
+	if (!root) {
+		return [];
+	}
+	return collectKeys(root)
+		.filter((k) => k.startsWith(subPrefix))
+		.map((k) => `${rootSection}.${k}`);
+}
 
-describe("app-update i18n key parity (en ↔ de)", () => {
-	const appUpdateEnKeys = collectKeys(enPages)
-		.filter((k) => k.startsWith("about.appUpdate."))
-		.map((k) => `pages.${k}`);
+// Each section that had a dedicated parity guard, now checked against every non-English locale.
+const sections = [
+	{ name: "appUpdate", enKeys: sectionKeys(en as LocaleShape, "pages", "about.appUpdate.") },
+	{ name: "voice", enKeys: sectionKeys(en as LocaleShape, "voice") },
+] as const;
 
-	it("has at least one appUpdate key in en.json", () => {
-		expect(appUpdateEnKeys.length).toBeGreaterThan(0);
+describe.each(sections)("$name i18n key parity (en ↔ every locale)", ({ name, enKeys }) => {
+	it(`has at least one ${name} key in en.json`, () => {
+		expect(enKeys.length).toBeGreaterThan(0);
 	});
 
-	it("every en.json appUpdate key exists in de.json", () => {
-		const missing: string[] = [];
-		for (const key of appUpdateEnKeys) {
-			const value = resolvePath(de as LocaleShape, key);
-			if (value === undefined) {
-				missing.push(key);
-			}
-		}
-		expect(missing, `Keys present in en.json but missing in de.json: ${missing.join(", ")}`).toHaveLength(0);
-	});
-
-	it("every de.json appUpdate key exists in en.json", () => {
-		const deAppUpdateKeys = collectKeys(dePages)
-			.filter((k) => k.startsWith("about.appUpdate."))
-			.map((k) => `pages.${k}`);
-
-		const missing: string[] = [];
-		for (const key of deAppUpdateKeys) {
-			const value = resolvePath(en as LocaleShape, key);
-			if (value === undefined) {
-				missing.push(key);
-			}
-		}
-		expect(missing, `Keys present in de.json but missing in en.json: ${missing.join(", ")}`).toHaveLength(0);
-	});
-
-	it("en and de appUpdate key counts are equal", () => {
-		const deAppUpdateKeys = collectKeys(dePages).filter((k) =>
-			k.startsWith("about.appUpdate."),
-		);
-		expect(appUpdateEnKeys.length).toBe(deAppUpdateKeys.length);
-	});
-});
-
-const enVoice = (en as LocaleShape)["voice"] as LocaleShape;
-const deVoice = (de as LocaleShape)["voice"] as LocaleShape;
-
-describe("voice i18n key parity (en ↔ de)", () => {
-	const voiceEnKeys = collectKeys(enVoice).map((k) => `voice.${k}`);
-	const voiceDeKeys = collectKeys(deVoice).map((k) => `voice.${k}`);
-
-	it("has at least one voice key in en.json", () => {
-		expect(voiceEnKeys.length).toBeGreaterThan(0);
-	});
-
-	it("every en.json voice key exists in de.json", () => {
-		const missing = voiceEnKeys.filter((key) => resolvePath(de as LocaleShape, key) === undefined);
-		expect(missing, `Keys present in en.json but missing in de.json: ${missing.join(", ")}`).toHaveLength(0);
-	});
-
-	it("every de.json voice key exists in en.json", () => {
-		const missing = voiceDeKeys.filter((key) => resolvePath(en as LocaleShape, key) === undefined);
-		expect(missing, `Keys present in de.json but missing in en.json: ${missing.join(", ")}`).toHaveLength(0);
-	});
-
-	it("en and de voice key counts are equal", () => {
-		expect(voiceEnKeys.length).toBe(voiceDeKeys.length);
+	it.each(nonEnglishLocales)(`every en.json ${name} key exists in $code`, ({ resource }) => {
+		const missing = enKeys.filter((key) => resolvePath(resource as LocaleShape, key) === undefined);
+		expect(missing, `Missing in locale: ${missing.join(", ")}`).toHaveLength(0);
 	});
 });

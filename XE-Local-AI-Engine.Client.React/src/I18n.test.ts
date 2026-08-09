@@ -1,8 +1,8 @@
 import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
 
-import de from "@/locales/de.json";
 import en from "@/locales/en.json";
+import { nonEnglishLocales } from "@/test/Locales";
 
 // Regression for the toast HTML-entity bug: i18next core defaults `interpolation.escapeValue` to true,
 // which HTML-escapes interpolated values ("/" → "&#x2F;") and made model names like "hf.co/unsloth/…"
@@ -50,19 +50,22 @@ function collectKeyPaths(node: unknown, prefix = ""): string[] {
 }
 
 describe("i18n locale parity", () => {
-	it("has an identical set of translation keys in en and de", () => {
-		const enKeys = collectKeyPaths(en).sort();
-		const deKeys = collectKeyPaths(de).sort();
+	const enKeys = collectKeyPaths(en).sort();
 
-		expect(enKeys.length).toBe(deKeys.length);
-		expect(enKeys).toEqual(deKeys);
+	it("discovers at least one non-English locale to check", () => {
+		// Guards against the glob silently matching nothing (e.g. a moved locales dir), which would make
+		// every parity assertion below vacuously pass.
+		expect(nonEnglishLocales.length).toBeGreaterThan(0);
 	});
 
-	it("has no orphaned approved-image keys in either locale", () => {
-		const enKeys = collectKeyPaths(en);
-		const deKeys = collectKeyPaths(de);
-
-		expect(enKeys.some((key) => key.includes("approvedImages"))).toBe(false);
-		expect(deKeys.some((key) => key.includes("approvedImages"))).toBe(false);
+	it.each(nonEnglishLocales)("has an identical set of translation keys in en and $code", ({ resource }) => {
+		expect(collectKeyPaths(resource).sort()).toEqual(enKeys);
 	});
+
+	it.each([{ code: "en", resource: en as unknown as Record<string, unknown> }, ...nonEnglishLocales])(
+		"has no orphaned approved-image keys in $code",
+		({ resource }) => {
+			expect(collectKeyPaths(resource).some((key) => key.includes("approvedImages"))).toBe(false);
+		},
+	);
 });
