@@ -154,6 +154,9 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          # pnpm version is pinned via `packageManager` in the React subdir, not the (absent) repo-root package.json.
+          package_json_file: XE-Local-AI-Engine.Client.React/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
