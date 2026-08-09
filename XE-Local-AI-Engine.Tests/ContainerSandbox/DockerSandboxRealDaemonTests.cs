@@ -462,9 +462,8 @@ public sealed class DockerSandboxRealDaemonTests
         }
         catch (DockerRuntimeException dockerException) when (dockerException.InnerException is DockerApiException { StatusCode: HttpStatusCode.NotFound })
         {
-            throw new SkipTestException(
-                $"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
-                + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
+            throw new SkipTestException($"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
+                                        + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
         }
 
         var exception = AssertEx.NotNull(refusal);
@@ -767,9 +766,8 @@ public sealed class DockerSandboxRealDaemonTests
                 // (production assumes a pre-provisioned image). A hard failure here would mean CI on any daemon
                 // without the image reds instead of skipping — the same class as RequireDaemonAsync's no-daemon skip.
                 workspace.Dispose();
-                throw new SkipTestException(
-                    $"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
-                    + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
+                throw new SkipTestException($"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
+                                            + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
             }
 
             var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));

@@ -23,9 +23,9 @@ public sealed class OnboardingTourKeyDriftTests
             "Infrastructure", "XENodeE2EWebApplicationFactory.cs"));
 
         var registryPattern = "id:\\s*\\\"" + Regex.Escape(tutorialId)
-            + "\\\"[\\s\\S]*?persistenceKey:\\s*\\\"(?<value>[^\\\"]+)\\\"";
+                                            + "\\\"[\\s\\S]*?persistenceKey:\\s*\\\"(?<value>[^\\\"]+)\\\"";
         var factoryPattern = "public const string " + Regex.Escape(factoryConstant)
-            + "\\s*=\\s*\\\"(?<value>[^\\\"]+)\\\"\\s*;";
+                                                    + "\\s*=\\s*\\\"(?<value>[^\\\"]+)\\\"\\s*;";
 
         var registryKey = Capture(registrySource, registryPattern, $"registry entry {tutorialId}");
         var fixtureKey = Capture(factorySource, factoryPattern, $"fixture constant {factoryConstant}");
@@ -63,8 +63,10 @@ public sealed class OnboardingTourKeyDriftTests
             {
                 return candidate;
             }
+
             directory = directory.Parent;
         }
+
         throw new FileNotFoundException($"Could not locate {Path.Combine(relativeSegments)}.");
     }
 }
