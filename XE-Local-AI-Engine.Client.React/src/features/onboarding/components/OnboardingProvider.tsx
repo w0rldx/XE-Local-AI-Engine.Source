@@ -197,7 +197,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			}
 			targetRetryCountRef.current = 0;
 			autoAdvanceArmedRef.current = false;
-			replyCountBaselineRef.current = null;
+			const preservesPendingReply =
+				active.tutorialId === "quick-start" && active.stepId === "chatSend" && relevantStepId === "firstResponse";
+			if (!preservesPendingReply) {
+				replyCountBaselineRef.current = null;
+			}
 			navigateToStep(active.tutorialId, relevantStepId);
 			writeTutorialProgress(getTutorialDefinition(active.tutorialId).persistenceKey, relevantStepId);
 			setActive({ ...active, stepId: relevantStepId });
@@ -259,10 +263,13 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 	const replyCount = useVisibleAssistantReplyCount(
 		queryClient,
-		active?.tutorialId === "quick-start" && active.stepId === "firstResponse",
+		active?.tutorialId === "quick-start" && (active.stepId === "chatSend" || active.stepId === "firstResponse"),
 	);
 	useEffect(() => {
-		if (active?.tutorialId !== "quick-start" || active.stepId !== "firstResponse") {
+		if (
+			active?.tutorialId !== "quick-start" ||
+			(active.stepId !== "chatSend" && active.stepId !== "firstResponse")
+		) {
 			replyCountBaselineRef.current = null;
 			return;
 		}
@@ -270,7 +277,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			replyCountBaselineRef.current = replyCount;
 			return;
 		}
-		if (replyCount > replyCountBaselineRef.current) {
+		if (active.stepId === "firstResponse" && replyCount > replyCountBaselineRef.current) {
 			finish("completed");
 		}
 	}, [active?.stepId, active?.tutorialId, finish, replyCount]);
