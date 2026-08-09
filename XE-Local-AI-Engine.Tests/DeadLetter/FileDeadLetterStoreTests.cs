@@ -126,13 +126,43 @@ public sealed class FileDeadLetterStoreTests : IDisposable
         AssertEx.True(Directory.Exists(_queuePath));
     }
 
+    [Test]
+    public void RelativeQueuePath_ResolvesUnderNodeDataDirectory_NotBaseDirectory()
+    {
+        var dataRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var store = new FileDeadLetterStore(Options.Create(new WorkerNodeOptions
+                {
+                    NodeName = "worker",
+                    DeadLetterQueuePath = "dead-letter-queue"
+                }),
+                new FakeNodeDataDirectory(dataRoot),
+                NullLogger<FileDeadLetterStore>.Instance);
+
+            // The relative default must land under the writable node data dir — the regression guard for the AppImage
+            // read-only-mount crash, where it resolved against AppContext.BaseDirectory instead.
+            AssertEx.True(Directory.Exists(Path.Combine(dataRoot, "dead-letter-queue")));
+        }
+        finally
+        {
+            if (Directory.Exists(dataRoot))
+            {
+                Directory.Delete(dataRoot, recursive: true);
+            }
+        }
+    }
+
     private FileDeadLetterStore CreateStore()
     {
+        // The configured queue path here is absolute, so the injected data root is not consulted for resolution;
+        // a throwaway root keeps the ctor happy. Relative-path resolution is covered by the regression test above.
         return new FileDeadLetterStore(Options.Create(new WorkerNodeOptions
             {
                 NodeName = "worker",
                 DeadLetterQueuePath = _queuePath
             }),
+            new FakeNodeDataDirectory(Path.GetTempPath()),
             NullLogger<FileDeadLetterStore>.Instance);
     }
 

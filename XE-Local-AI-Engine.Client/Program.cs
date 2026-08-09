@@ -40,7 +40,26 @@ try
     // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
     SingleInstanceLease? instanceLease = null;
 
-    var builder = WebApplication.CreateBuilder(args);
+    // Desktop mode (packaged double-click launch) is enabled by env XE_LAUNCH_MODE=desktop / --desktop, AND is
+    // implied by a Velopack-managed install (installer or portable): that packaged flavor IS the desktop app — its in-app
+    // updater is desktop-only — but the Velopack stub launches the managed entry point without the env/arg a manual
+    // launcher sets, so the install itself is the opt-in signal. FrameworkDependentVelopackBootstrap.Run(args) above
+    // established the locator this reads. Resolved once, early — BEFORE the builder — so it can pin the content root just
+    // below, gate the loopback bind, and gate the HTTPS pipeline further down. A raw DLL/dev/Aspire/CI run is not a
+    // Velopack install and sets no env/arg, so every desktop-gated call is skipped and the pipeline is byte-identical.
+    var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());
+
+    // In desktop mode the app is launched from an arbitrary working directory (a double-click, or the documented
+    // `cd ~/Applications && ./XE-Local-AI-Engine.AppImage`), so pin the content root to the executable's own directory —
+    // where the shipped appsettings.json and wwwroot live — instead of the default current directory. Windows was masked
+    // by its C# launcher forcing WorkingDirectory to the base dir; the Linux AppImage has no launcher, so without this the
+    // shipped appsettings.json is never found and startup fails on WorkerNode:NodeName. Off the flag we leave the default
+    // current-directory content root so headless/Aspire/CI/dev behavior is byte-identical.
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = isDesktop ? AppContext.BaseDirectory : null,
+    });
 
     // App self-update build flavor: layer the baked, channel-specific update config (repo URL +
     // stable/RC release track) over the appsettings defaults. The publish output renames the active
@@ -49,14 +68,6 @@ try
     // the empty appsettings.json defaults leave the updater inert.
     builder.Configuration.AddJsonFile("appsettings.AppUpdate.json", optional: true, reloadOnChange: false);
 
-    // Desktop mode (packaged double-click launch) is enabled by env XE_LAUNCH_MODE=desktop / --desktop, AND is
-    // implied by a Velopack-managed install (installer or portable): that packaged flavor IS the desktop app — its in-app
-    // updater is desktop-only — but the Velopack stub launches the managed entry point without the env/arg a manual
-    // launcher sets, so the install itself is the opt-in signal. FrameworkDependentVelopackBootstrap.Run(args) above
-    // established the locator this reads. Resolved once, early, so it can gate the loopback bind below and the HTTPS
-    // pipeline further down. A raw DLL/dev/Aspire/CI run is not a Velopack install and sets no env/arg, so every call
-    // below is skipped and the pipeline is byte-identical to before.
-    var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());
     if (isDesktop)
     {
         // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.

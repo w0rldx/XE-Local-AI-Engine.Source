@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Persistence boundary for file dead letter data.
@@ -18,9 +19,11 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
     private readonly string _queueDirectoryPath;
 
     public FileDeadLetterStore(IOptions<WorkerNodeOptions> workerNodeOptions,
+        INodeDataDirectory nodeDataDirectory,
         ILogger<FileDeadLetterStore> logger)
     {
         ArgumentNullException.ThrowIfNull(workerNodeOptions);
+        ArgumentNullException.ThrowIfNull(nodeDataDirectory);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         var configuredPath = workerNodeOptions.Value.DeadLetterQueuePath;
@@ -29,7 +32,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
             throw new InvalidOperationException("WorkerNode:DeadLetterQueuePath must be configured.");
         }
 
-        _queueDirectoryPath = ResolveQueueDirectoryPath(configuredPath);
+        _queueDirectoryPath = ResolveQueueDirectoryPath(configuredPath, nodeDataDirectory.Root);
         Directory.CreateDirectory(_queueDirectoryPath);
     }
 
@@ -189,12 +192,14 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
         return $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{invocationId:N}.json";
     }
 
-    private static string ResolveQueueDirectoryPath(string configuredPath)
+    private static string ResolveQueueDirectoryPath(string configuredPath, string dataRoot)
     {
-        var baseDirectory = AppContext.BaseDirectory;
+        // A relative path resolves under the per-node data directory (writable, per-user) — NOT AppContext.BaseDirectory,
+        // which for a single-file AppImage / portable build is the read-only bundle mount and made startup crash with a
+        // read-only-filesystem IOException. An absolute configured path is honored as-is.
         var candidatePath = Path.IsPathRooted(configuredPath)
             ? configuredPath
-            : Path.Combine(baseDirectory, configuredPath);
+            : Path.Combine(dataRoot, configuredPath);
 
         return Path.GetFullPath(candidatePath);
     }
