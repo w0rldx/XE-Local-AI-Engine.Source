@@ -125,14 +125,17 @@ public sealed class ToolInvocationObservabilityChatClientTests
         using var innerClient = new FakeChatClient(callId, "approve-job");
         var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
-        var stoppedActivities = new List<(string OperationName, string? CallId, string? ToolName)>();
+        // The production ActivitySource is process-static and TUnit runs tests in parallel, so this listener sees EVERY
+        // test's spans on other threads too — a ConcurrentQueue is required, a plain List corrupts under concurrent Add
+        // (see sibling tests below, which filter by CallId and use ConcurrentQueue for the same reason).
+        var stoppedActivities = new ConcurrentQueue<(string OperationName, string? CallId, string? ToolName)>();
 
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
             Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => stoppedActivities.Add((
+            ActivityStopped = activity => stoppedActivities.Enqueue((
                 activity.OperationName,
                 activity.GetTagItem("tool.call_id")?.ToString(),
                 activity.GetTagItem("tool.name")?.ToString()))
@@ -166,15 +169,16 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
         // Filter by this test's unique CallId: the production ActivitySource is static, so a parallel test's spans
-        // would otherwise be captured here too.
-        var stoppedActivities = new List<(string OperationName, string? CallId)>();
+        // would otherwise be captured here too. A ConcurrentQueue is required (not a plain List): other tests' spans
+        // stop concurrently on other threads and race a non-thread-safe Add.
+        var stoppedActivities = new ConcurrentQueue<(string OperationName, string? CallId)>();
 
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
             Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => stoppedActivities.Add((activity.OperationName, activity.GetTagItem("tool.call_id")?.ToString()))
+            ActivityStopped = activity => stoppedActivities.Enqueue((activity.OperationName, activity.GetTagItem("tool.call_id")?.ToString()))
         };
 
         ActivitySource.AddActivityListener(listener);
