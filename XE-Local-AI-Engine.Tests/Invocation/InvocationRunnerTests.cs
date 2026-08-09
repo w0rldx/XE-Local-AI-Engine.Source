@@ -2527,6 +2527,37 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenModelRoutesToCloud_DoesNotWarmALocalProvider()
+    {
+        // Regression: a cloud model id (e.g. "gpt-5.6-terra") has no entry in the model→provider map, so the resolver
+        // defaults it to the local llama.cpp provider. The warm path then tried to cold-load llama-server and failed with
+        // "model not installed" for what is actually a cloud send. The warm must honour the same cloud-vs-local routing
+        // decision the send makes, so a cloud-selected model warms nothing local.
+        var sender = new MockHubMessageSender();
+
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(true);
+
+        var runner = CreateRunner(sender,
+            providerResolver: resolver,
+            activeCloudFactory: cloudFactory,
+            agentUpdates: CreateUpdates("ok"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        // The bug was the cold-load attempt itself; assert the warm never reached a local provider at all.
+        await provider.DidNotReceive().WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RunAsync_WhenRequestedModelCannotBeVerified_SurfacesAModelSubstitutedNotice()
     {
         var sender = new MockHubMessageSender();
@@ -2746,6 +2777,7 @@ public sealed class InvocationRunnerTests
         IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null,
         IOrchestrationAgentFactory? orchestrationAgentFactory = null,
         ILocalModelProviderResolver? providerResolver = null,
+        IActiveCloudChatClientFactory? activeCloudFactory = null,
         IProviderStreamResilience? providerStreamResilience = null,
         ConversationContextBudgetOptions? contextBudgetOptions = null,
         UserQuestionAnswerStash? userQuestionAnswerStash = null,
@@ -2777,6 +2809,10 @@ public sealed class InvocationRunnerTests
             resolvedProviderResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                                     .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
         }
+
+        // Default: no cloud provider selected (IsCloudProviderSelected returns false), so the warm path resolves the
+        // local provider exactly as before. A cloud-routing test injects one that returns true to prove the warm is skipped.
+        var resolvedActiveCloudFactory = activeCloudFactory ?? Substitute.For<IActiveCloudChatClientFactory>();
 
         var resolvedEventDispatcher = eventDispatcher ?? Substitute.For<IWorkerEventDispatcher>();
 
@@ -2814,6 +2850,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
+            resolvedActiveCloudFactory,
             Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
             new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
