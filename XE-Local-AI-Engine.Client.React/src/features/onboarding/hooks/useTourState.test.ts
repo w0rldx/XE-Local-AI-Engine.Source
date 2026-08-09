@@ -4,132 +4,92 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-	clearTourProgress,
-	MAIN_APP_TOUR_KEY,
-	readTourProgress,
-	TOUR_PROGRESS_STORAGE_KEY,
-	useTourState,
-	writeTourProgress,
+	clearTutorialProgress,
+	readTutorialProgress,
+	tutorialProgressStorageKey,
+	useTutorialState,
+	writeTutorialProgress,
 } from "@/features/onboarding/hooks/useTourState";
 
-// Drives the generated GET hook's return so we can assert how shouldPrompt is derived from the persisted entries.
-const { useQueryMock, useMutationMock, invalidateQueriesMock, mutateMock } = vi.hoisted(() => ({
+const { useQueryMock, useMutationMock, mutateMock } = vi.hoisted(() => ({
 	useQueryMock: vi.fn(),
 	useMutationMock: vi.fn(),
-	invalidateQueriesMock: vi.fn(),
 	mutateMock: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
 	useQuery: useQueryMock,
 	useMutation: useMutationMock,
-	useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }),
+	useQueryClient: () => ({ invalidateQueries: vi.fn().mockResolvedValue(undefined) }),
 }));
-
-// The generated options factories are not exercised here — only that useTourState passes their result through. Stub
-// them so importing the hook doesn't pull the real generated client.
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
-	getTutorialStateOptions: () => ({ queryKey: ["getTutorialState"] }),
-	getTutorialStateQueryKey: () => ["getTutorialState"],
-	saveTutorialStateMutation: () => ({ mutationKey: ["saveTutorialState"] }),
+	getTutorialStateOptions: () => ({}),
+	getTutorialStateQueryKey: () => ["tutorial-state"],
+	saveTutorialStateMutation: () => ({}),
 }));
 
-interface TutorialEntry {
-	key?: string;
-	status?: string;
-	atUtc?: string;
-}
-
-function primeQuery(entries: TutorialEntry[] | undefined, overrides: { isSuccess?: boolean; isError?: boolean } = {}) {
-	useQueryMock.mockReturnValue({
-		data: entries === undefined ? undefined : { entries },
-		isSuccess: overrides.isSuccess ?? true,
-		isError: overrides.isError ?? false,
-	});
+function prime(entries: { key: string; status: string }[]) {
+	useQueryMock.mockReturnValue({ data: { entries }, isSuccess: true, isError: false });
 	useMutationMock.mockReturnValue({ mutate: mutateMock });
 }
 
 afterEach(() => {
+	localStorage.clear();
 	vi.clearAllMocks();
 });
 
-describe("useTourState", () => {
-	it("prompts when the GET returns no entry for the main-app tour key", () => {
-		primeQuery([]);
-
-		const { result } = renderHook(() => useTourState());
-
-		expect(result.current.shouldPrompt).toBe(true);
-		expect(result.current.isResolved).toBe(true);
+describe("tutorial progress", () => {
+	it("round-trips the versioned step-id payload per tutorial key", () => {
+		writeTutorialProgress("agents-v1", "agentsCreate");
+		expect(readTutorialProgress("agents-v1", ["agentsOverview", "agentsCreate"])).toEqual({
+			format: 1,
+			stepId: "agentsCreate",
+		});
 	});
 
-	it("does not prompt when the main-app entry is completed", () => {
-		primeQuery([{ key: MAIN_APP_TOUR_KEY, status: "completed", atUtc: "2026-06-24T00:00:00Z" }]);
+	it.each(["3", "not-json", '{"format":2,"stepId":"chatInput"}', '{"format":1,"stepId":"removed"}'])(
+		"clears legacy, malformed, unsupported, or unknown progress: %s",
+		(raw) => {
+			const key = tutorialProgressStorageKey("main-app-v1");
+			localStorage.setItem(key, raw);
+			expect(readTutorialProgress("main-app-v1", ["chatInput"])).toBeNull();
+			expect(localStorage.getItem(key)).toBeNull();
+		},
+	);
 
-		const { result } = renderHook(() => useTourState());
-
-		expect(result.current.shouldPrompt).toBe(false);
-	});
-
-	it("does not prompt when the main-app entry is skipped", () => {
-		primeQuery([{ key: MAIN_APP_TOUR_KEY, status: "skipped", atUtc: "2026-06-24T00:00:00Z" }]);
-
-		const { result } = renderHook(() => useTourState());
-
-		expect(result.current.shouldPrompt).toBe(false);
-	});
-
-	it("does not prompt while the persisted state has not resolved (purely additive — never gate on a pending read)", () => {
-		primeQuery(undefined, { isSuccess: false, isError: false });
-
-		const { result } = renderHook(() => useTourState());
-
-		expect(result.current.shouldPrompt).toBe(false);
-		expect(result.current.isResolved).toBe(false);
-	});
-
-	it("markDone upserts the entry by key and status, then invalidates the GET", () => {
-		primeQuery([]);
-
-		const { result } = renderHook(() => useTourState());
-		result.current.markDone("skipped");
-
-		expect(mutateMock).toHaveBeenCalledWith(
-			{ body: { key: MAIN_APP_TOUR_KEY, status: "skipped" } },
-			expect.objectContaining({ onSuccess: expect.any(Function) }),
-		);
+	it("clears only the selected tutorial progress", () => {
+		writeTutorialProgress("agents-v1", "agentsCreate");
+		writeTutorialProgress("knowledge-base-v1", "knowledgeSearch");
+		clearTutorialProgress("agents-v1");
+		expect(readTutorialProgress("agents-v1", ["agentsCreate"])).toBeNull();
+		expect(readTutorialProgress("knowledge-base-v1", ["knowledgeSearch"])?.stepId).toBe("knowledgeSearch");
 	});
 });
 
-describe("tour progress persistence (Bug B resume-on-reload)", () => {
-	afterEach(() => {
-		globalThis.localStorage?.removeItem(TOUR_PROGRESS_STORAGE_KEY);
+describe("tutorial terminal state", () => {
+	it("maps independent backend entries by persistence key", () => {
+		prime([
+			{ key: "main-app-v1", status: "completed" },
+			{ key: "agents-v1", status: "skipped" },
+		]);
+		const { result } = renderHook(() => useTutorialState());
+		expect(result.current.statusByKey).toEqual({ "main-app-v1": "completed", "agents-v1": "skipped" });
 	});
 
-	it("returns null when no progress is stored", () => {
-		expect(readTourProgress()).toBeNull();
+	it("preserves completed when a replay is skipped", () => {
+		prime([{ key: "agents-v1", status: "completed" }]);
+		const { result } = renderHook(() => useTutorialState());
+		result.current.markDone("agents-v1", "skipped");
+		expect(mutateMock).not.toHaveBeenCalled();
 	});
 
-	it("round-trips a written index through localStorage", () => {
-		writeTourProgress(4);
-		expect(readTourProgress()).toBe(4);
-		expect(globalThis.localStorage?.getItem(TOUR_PROGRESS_STORAGE_KEY)).toBe("4");
-	});
-
-	it("clear removes the stored index so a finished tour cannot resurrect", () => {
-		writeTourProgress(2);
-		clearTourProgress();
-		expect(readTourProgress()).toBeNull();
-	});
-
-	it("returns null for a non-integer / negative stored value (defensive)", () => {
-		globalThis.localStorage?.setItem(TOUR_PROGRESS_STORAGE_KEY, "not-a-number");
-		expect(readTourProgress()).toBeNull();
-		globalThis.localStorage?.setItem(TOUR_PROGRESS_STORAGE_KEY, "-1");
-		expect(readTourProgress()).toBeNull();
-	});
-
-	it("uses a stable namespaced key bound to the tour key", () => {
-		expect(TOUR_PROGRESS_STORAGE_KEY).toBe(`xe-onboarding-${MAIN_APP_TOUR_KEY}-step`);
+	it("promotes absent or skipped state to completed", () => {
+		prime([{ key: "agents-v1", status: "skipped" }]);
+		const { result } = renderHook(() => useTutorialState());
+		result.current.markDone("agents-v1", "completed");
+		expect(mutateMock).toHaveBeenCalledWith(
+			{ body: { key: "agents-v1", status: "completed" } },
+			expect.objectContaining({ onSuccess: expect.any(Function) }),
+		);
 	});
 });

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 
 import {
 	getTutorialStateOptions,
@@ -9,90 +9,88 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
-// The single tour key shipped today. The persistence shape is an array keyed by tour key so a future second tour can
-// reuse the same column/endpoint without a migration, but only this one is built.
-export const MAIN_APP_TOUR_KEY = "main-app-v1";
+export type TutorialStatus = "completed" | "skipped";
 
-// Namespaced localStorage key holding the in-progress step index so a reload mid-tour resumes instead of restarting
-// (Bug B). Client-only and best-effort: the backend still records the TERMINAL status; this only carries transient
-// progress and is always cleared on finish(). Follows the `xe-` key convention used by the other client stores.
-export const TOUR_PROGRESS_STORAGE_KEY = `xe-onboarding-${MAIN_APP_TOUR_KEY}-step`;
+export interface TutorialProgress {
+	format: 1;
+	stepId: string;
+}
 
-// Reads the persisted in-progress step index, or null when none is stored / storage is unavailable / the value is
-// not a non-negative integer. Range-validity against the live step count is the caller's responsibility (the step
-// array length is owned by the provider, not this hook).
-export function readTourProgress(): number | null {
+export function tutorialProgressStorageKey(persistenceKey: string): string {
+	// Keep the original key so legacy numeric values are encountered and actively cleared instead of becoming orphaned.
+	return `xe-onboarding-${persistenceKey}-step`;
+}
+
+export function readTutorialProgress(persistenceKey: string, knownStepIds: readonly string[]): TutorialProgress | null {
+	const storageKey = tutorialProgressStorageKey(persistenceKey);
 	try {
-		const raw = globalThis.localStorage?.getItem(TOUR_PROGRESS_STORAGE_KEY);
+		const raw = globalThis.localStorage?.getItem(storageKey);
 		if (raw === null || raw === undefined) {
 			return null;
 		}
-		const parsed = Number.parseInt(raw, 10);
-		return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+		const parsed = JSON.parse(raw) as Partial<TutorialProgress>;
+		if (parsed.format !== 1 || typeof parsed.stepId !== "string" || !knownStepIds.includes(parsed.stepId)) {
+			globalThis.localStorage?.removeItem(storageKey);
+			return null;
+		}
+		return { format: 1, stepId: parsed.stepId };
 	} catch {
+		try {
+			globalThis.localStorage?.removeItem(storageKey);
+		} catch {
+			// Storage is best-effort; an unavailable store must not prevent a tutorial from running.
+		}
 		return null;
 	}
 }
 
-// Persists the in-progress step index. Best-effort: storage failures (quota / unavailable) are swallowed so the tour
-// still runs in-memory.
-export function writeTourProgress(index: number): void {
+export function writeTutorialProgress(persistenceKey: string, stepId: string): void {
 	try {
-		globalThis.localStorage?.setItem(TOUR_PROGRESS_STORAGE_KEY, String(index));
+		globalThis.localStorage?.setItem(tutorialProgressStorageKey(persistenceKey), JSON.stringify({ format: 1, stepId }));
 	} catch {
-		// Ignore unavailable storage or quota errors; the tour continues from in-memory state.
+		// Storage is best-effort; the active tutorial continues in memory.
 	}
 }
 
-// Clears the in-progress step index. Called on every finish() (completed or skipped) so a terminated tour can never
-// resurrect on the next reload.
-export function clearTourProgress(): void {
+export function clearTutorialProgress(persistenceKey: string): void {
 	try {
-		globalThis.localStorage?.removeItem(TOUR_PROGRESS_STORAGE_KEY);
+		globalThis.localStorage?.removeItem(tutorialProgressStorageKey(persistenceKey));
 	} catch {
-		// Ignore unavailable storage errors.
+		// Storage is best-effort.
 	}
 }
 
-// A recorded tour outcome suppresses the welcome prompt regardless of which terminal status it carries.
-export type TourStatus = "completed" | "skipped";
-
-export interface UseTourStateResult {
-	// True only when the GET succeeded and carries no recorded entry for this tour key (neither completed nor skipped).
-	// While the query is loading or errored we do NOT prompt — the tour is purely additive and must never gate the app
-	// on a failed read.
-	shouldPrompt: boolean;
-	// True once the GET has resolved (success or error) so the provider can decide whether to surface the welcome dialog
-	// without flashing it before the persisted state is known.
+export interface UseTutorialStateResult {
 	isResolved: boolean;
-	// Persists a terminal outcome for this tour key (upsert) and invalidates the GET so a reload reflects it.
-	markDone: (status: TourStatus) => void;
+	isSuccess: boolean;
+	statusByKey: Readonly<Record<string, TutorialStatus | undefined>>;
+	markDone: (persistenceKey: string, status: TutorialStatus) => void;
 }
 
-// Reads the authenticated user's recorded tour entries through the generated hey-api hooks (never a hand-rolled fetch)
-// and derives whether the welcome dialog should be offered. The mutation upserts one entry by key; the
-// backend merges it into the JSON array so other tour keys are preserved.
-export function useTourState(tourKey: string = MAIN_APP_TOUR_KEY): UseTourStateResult {
+export function useTutorialState(): UseTutorialStateResult {
 	const queryClient = useQueryClient();
-	// The provider is mounted globally (outside the auth-gated routes), so without this gate the GET fires pre-login
-	// with an empty bearer → 401 → the query sticks in `error` and the welcome dialog never surfaces even after login.
-	// Enabling only once an access token exists makes it fire post-login with a valid bearer.
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
 	const stateQuery = useQuery(withResponseValidation({ ...getTutorialStateOptions(), enabled: isAuthenticated }));
 	const saveMutation = useMutation(withResponseValidation(saveTutorialStateMutation()));
 
-	const entries = stateQuery.data?.entries ?? [];
-	const hasRecordedEntry = entries.some(
-		(entry) => entry.key === tourKey && (entry.status === "completed" || entry.status === "skipped"),
-	);
-
-	const isResolved = stateQuery.isSuccess || stateQuery.isError;
-	const shouldPrompt = stateQuery.isSuccess && !hasRecordedEntry;
+	const statusByKey = useMemo(() => {
+		const result: Record<string, TutorialStatus | undefined> = {};
+		for (const entry of stateQuery.data?.entries ?? []) {
+			if (entry.status === "completed" || entry.status === "skipped") {
+				result[entry.key] = entry.status;
+			}
+		}
+		return result;
+	}, [stateQuery.data?.entries]);
 
 	const markDone = useCallback(
-		(status: TourStatus) => {
+		(persistenceKey: string, status: TutorialStatus) => {
+			// Completion is monotonic. A user may replay and close a completed tutorial without losing that achievement.
+			if (status === "skipped" && statusByKey[persistenceKey] === "completed") {
+				return;
+			}
 			saveMutation.mutate(
-				{ body: { key: tourKey, status } },
+				{ body: { key: persistenceKey, status } },
 				{
 					onSuccess: () => {
 						queryClient.invalidateQueries({ queryKey: getTutorialStateQueryKey() }).catch(() => undefined);
@@ -100,8 +98,13 @@ export function useTourState(tourKey: string = MAIN_APP_TOUR_KEY): UseTourStateR
 				},
 			);
 		},
-		[queryClient, saveMutation, tourKey],
+		[queryClient, saveMutation, statusByKey],
 	);
 
-	return { shouldPrompt, isResolved, markDone };
+	return {
+		isResolved: stateQuery.isSuccess || stateQuery.isError,
+		isSuccess: stateQuery.isSuccess,
+		statusByKey,
+		markDone,
+	};
 }

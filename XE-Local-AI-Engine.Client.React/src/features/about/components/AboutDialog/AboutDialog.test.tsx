@@ -15,6 +15,7 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 }));
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
+import { OnboardingContext, type OnboardingContextValue } from "@/features/onboarding/context/OnboardingContext";
 import {
 	applicationInfo,
 	runtimeLegalDocumentsForUserAgent,
@@ -32,6 +33,26 @@ function renderWithProviders(ui: ReactElement) {
 		);
 	}
 	return render(ui, { wrapper: Wrapper });
+}
+
+function renderWithOnboarding(ui: ReactElement, onboarding: OnboardingContextValue) {
+	return renderWithProviders(<OnboardingContext.Provider value={onboarding}>{ui}</OnboardingContext.Provider>);
+}
+
+function createOnboardingContext(): OnboardingContextValue {
+	return {
+		isStateResolved: true,
+		isStateSuccessful: true,
+		tutorials: {
+			"quick-start": { isAvailable: true, hasProgress: false },
+			"agents-basics": { isAvailable: true, hasProgress: true },
+			"knowledge-base-basics": { isAvailable: true, hasProgress: false, status: "completed" },
+		},
+		start: vi.fn(),
+		resume: vi.fn(),
+		restart: vi.fn(),
+		dismiss: vi.fn(),
+	};
 }
 
 describe("AboutDialog", () => {
@@ -93,6 +114,28 @@ describe("AboutDialog", () => {
 		expect(screen.getByText("Serilog")).toBeTruthy();
 		expect(screen.getAllByText("Frontend").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Backend").length).toBeGreaterThan(0);
+	});
+
+	it("shows exactly the three optional tutorials in a dedicated tab", () => {
+		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		fireEvent.click(screen.getByRole("tab", { name: "Tutorials" }));
+		expect(screen.getByTestId("tutorial-card-quick-start")).toBeTruthy();
+		expect(screen.getByTestId("tutorial-card-agents-basics")).toBeTruthy();
+		expect(screen.getByTestId("tutorial-card-knowledge-base-basics")).toBeTruthy();
+		expect(screen.getAllByTestId(/^tutorial-card-/)).toHaveLength(3);
+	});
+
+	it("opens the controlled Tutorials tab from Application and uses the state-derived action", () => {
+		const onboarding = createOnboardingContext();
+		const onClose = vi.fn();
+		renderWithOnboarding(<AboutDialog opened={true} onClose={onClose} />, onboarding);
+
+		fireEvent.click(screen.getByTestId("about-open-tutorials"));
+		expect(screen.getByRole("tab", { name: "Tutorials" }).getAttribute("aria-selected")).toBe("true");
+		const agentsCard = screen.getByTestId("tutorial-card-agents-basics");
+		fireEvent.click(within(agentsCard).getByRole("button", { name: "Resume" }));
+		expect(onboarding.resume).toHaveBeenCalledWith("agents-basics");
+		expect(onClose).toHaveBeenCalledOnce();
 	});
 
 	it("links every bundled runtime license and notice from the Licenses tab", () => {

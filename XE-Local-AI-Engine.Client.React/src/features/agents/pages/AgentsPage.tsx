@@ -37,6 +37,7 @@ import {
 	useUpdateAgentDefinition,
 } from "@/features/agents/queries/useAgentDefinitions";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
+import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
 
 const emptyFormValues: AgentDefinitionFormValues = {
 	name: "",
@@ -201,7 +202,8 @@ export function AgentsPage() {
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
+				<TutorialInvitation tutorialId="agents-basics" />
+				<Group justify="space-between" align="flex-start" data-tour="agents-overview">
 					<Stack gap={4}>
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
 							{t("pages.agents.eyebrow", "Worker Node")}
@@ -223,17 +225,23 @@ export function AgentsPage() {
 							leftSection={<IconSparkles size={16} />}
 							onClick={() => setGalleryOpen(true)}
 							data-testid="agent-templates-button"
+							data-tour="agents-templates"
 						>
 							{t("pages.agents.templatesButton", "Add starter agents")}
 						</Button>
-						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="agent-create-button">
+						<Button
+							leftSection={<IconPlus size={16} />}
+							onClick={openCreate}
+							data-testid="agent-create-button"
+							data-tour="agents-create"
+						>
 							{t("pages.agents.createButton", "New agent")}
 						</Button>
 					</Group>
 				</Group>
 
 				{/* The list always renders underneath; the editor opens as a dialog on top (no more page-takeover). */}
-				<Card withBorder={true} radius="md" p="lg">
+				<Card withBorder={true} radius="md" p="lg" data-tour="agents-list">
 					<Stack gap="md">
 						{definitionsQuery.isLoading ? (
 							<Group gap="sm">

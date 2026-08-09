@@ -22,6 +22,7 @@ import {
 } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useKnowledgeSearch } from "@/features/knowledge/queries/useKnowledgeSearch";
 import { useKnowledgeUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
+import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Mutation callbacks must coordinate the drawer selection and server-result notifications after each user action. */
 
@@ -121,7 +122,8 @@ export function KnowledgeBase() {
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
+				<TutorialInvitation tutorialId="knowledge-base-basics" />
+				<Group justify="space-between" align="flex-start" data-tour="knowledge-overview">
 					<Stack gap={4}>
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
 							{t("common.workerNode", "Worker Node")}
@@ -161,14 +163,14 @@ export function KnowledgeBase() {
 					</Alert>
 				) : null}
 
-				<Card withBorder={true} radius="md" p="lg">
+				<Card withBorder={true} radius="md" p="lg" data-tour="knowledge-upload">
 					<Stack gap="md">
 						<Title order={3}>{t("pages.knowledgeBase.upload.heading", "Add documents")}</Title>
 						<KnowledgeUploadPanel pendingUploads={upload.pendingUploads} onUpload={upload.uploadFiles} />
 					</Stack>
 				</Card>
 
-				<Card withBorder={true} radius="md" p="lg">
+				<Card withBorder={true} radius="md" p="lg" data-tour="knowledge-documents">
 					<Stack gap="md">
 						<Group justify="space-between">
 							<Title order={3}>{t("pages.knowledgeBase.documents.heading", "Documents")}</Title>
@@ -196,7 +198,7 @@ export function KnowledgeBase() {
 					</Stack>
 				</Card>
 
-				<Card withBorder={true} radius="md" p="lg">
+				<Card withBorder={true} radius="md" p="lg" data-tour="knowledge-search">
 					<Stack gap="md">
 						<Title order={3}>{t("pages.knowledgeBase.search.heading", "Search")}</Title>
 						<KnowledgeSearchPanel search={search} documents={documentList} />

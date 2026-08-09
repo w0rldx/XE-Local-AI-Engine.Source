@@ -1,4 +1,4 @@
-import { Anchor, Badge, Button, Group, ScrollArea, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
+import { Anchor, Badge, Button, Card, Group, ScrollArea, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
 import { IconExternalLink, IconRoute, IconSearch } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
 import { useMemo, useState } from "react";
@@ -13,6 +13,7 @@ import {
 } from "@/features/about/data/AboutData";
 import { AppUpdateSection } from "@/features/app-update/components/AppUpdateSection";
 import { useOnboarding } from "@/features/onboarding/context/OnboardingContext";
+import { tutorialRegistry, type TutorialId } from "@/features/onboarding/data/TutorialRegistry";
 
 export interface IAboutDialogProps {
 	opened: boolean;
@@ -27,12 +28,21 @@ export interface IAboutDialogProps {
 export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 	const { t } = useTranslation();
 	const [licenseFilter, setLicenseFilter] = useState("");
-	// Restart the onboarding tour on demand. The control hides when no OnboardingProvider is mounted so the
-	// dialog stays usable in isolation (e.g. tests) — the tour is purely additive.
+	const [activeTab, setActiveTab] = useState<string | null>("application");
 	const onboarding = useOnboarding();
 
-	const handleRestartTutorial = () => {
-		onboarding?.start();
+	const handleTutorialAction = (tutorialId: TutorialId) => {
+		if (!onboarding) {
+			return;
+		}
+		const state = onboarding.tutorials[tutorialId];
+		if (state.status !== undefined) {
+			onboarding.restart(tutorialId);
+		} else if (state.hasProgress) {
+			onboarding.resume(tutorialId);
+		} else {
+			onboarding.start(tutorialId);
+		}
 		onClose();
 	};
 
@@ -60,9 +70,10 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 
 	return (
 		<DialogShell opened={opened} onClose={onClose} title={t("pages.about.title", "About")} size="xl" keepMounted={true}>
-			<Tabs defaultValue="application" px="md" pb="md">
+			<Tabs value={activeTab} onChange={setActiveTab} px="md" pb="md">
 				<Tabs.List>
 					<Tabs.Tab value="application">{t("pages.about.applicationTab", "Application")}</Tabs.Tab>
+					<Tabs.Tab value="tutorials">{t("pages.about.tutorialsTab", "Tutorials")}</Tabs.Tab>
 					<Tabs.Tab value="licenses">{t("pages.about.licensesTab", "Licenses")}</Tabs.Tab>
 				</Tabs.List>
 
@@ -100,14 +111,55 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 								<Button
 									variant="light"
 									leftSection={<IconRoute size={16} />}
-									onClick={handleRestartTutorial}
-									data-testid="about-restart-tutorial"
+									onClick={() => setActiveTab("tutorials")}
+									data-testid="about-open-tutorials"
 								>
-									{t("onboarding.restart")}
+									{t("onboarding.actions.openTutorials")}
 								</Button>
 							</Group>
 						) : null}
 						<AppUpdateSection />
+					</Stack>
+				</Tabs.Panel>
+
+				<Tabs.Panel value="tutorials" pt="md">
+					<Stack gap="md">
+						<Text c="dimmed">{t("onboarding.catalog.intro")}</Text>
+						{tutorialRegistry.map((tutorial) => {
+							const state = onboarding?.tutorials[tutorial.id];
+							const action = state?.status !== undefined ? "restart" : state?.hasProgress ? "resume" : "start";
+							return (
+								<Card key={tutorial.id} withBorder={true} radius="md" data-testid={`tutorial-card-${tutorial.id}`}>
+									<Stack gap="xs">
+										<Group justify="space-between" align="flex-start">
+											<Stack gap={2}>
+												<Text fw={700}>{t(`onboarding.tutorials.${tutorial.id}.title`)}</Text>
+												<Text size="sm" c="dimmed">
+													{t(`onboarding.tutorials.${tutorial.id}.description`)}
+												</Text>
+											</Stack>
+											<Badge variant="light">
+												{t("onboarding.catalog.minutes", { count: tutorial.estimatedMinutes })}
+											</Badge>
+										</Group>
+										<Group justify="space-between">
+											<Badge color={state?.status === "completed" ? "green" : state?.status === "skipped" ? "gray" : "blue"}>
+												{!tutorial.isAvailable
+													? t("onboarding.status.unavailable")
+													: t(`onboarding.status.${state?.status ?? (state?.hasProgress ? "inProgress" : "notStarted")}`)}
+											</Badge>
+											<Button
+												size="xs"
+												disabled={!onboarding || !tutorial.isAvailable}
+												onClick={() => handleTutorialAction(tutorial.id)}
+											>
+												{t(`onboarding.actions.${action}`)}
+											</Button>
+										</Group>
+									</Stack>
+								</Card>
+							);
+						})}
 					</Stack>
 				</Tabs.Panel>
 
