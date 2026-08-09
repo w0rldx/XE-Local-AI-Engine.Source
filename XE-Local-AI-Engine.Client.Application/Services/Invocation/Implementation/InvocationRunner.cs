@@ -163,6 +163,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly IActiveCloudChatClientFactory _activeCloudFactory;
     private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
 
@@ -221,6 +222,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
         ILocalModelProviderResolver providerResolver,
+        IActiveCloudChatClientFactory activeCloudFactory,
         IDeadLetterStore deadLetterStore,
         IProviderStreamResilience providerStreamResilience,
         IConversationContextBudgeter contextBudgeter,
@@ -247,6 +249,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+        _activeCloudFactory = activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
         _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
@@ -795,6 +798,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
     /// </summary>
     private async Task<ILocalModelProvider?> ResolveWarmableProviderAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
     {
+        // A cloud-routed model (Codex/Azure) must never trigger a local warm. The provider resolver maps any UNMAPPED
+        // model name to the default local provider (llamacpp), so a cloud model id like "gpt-5.6-terra" would otherwise
+        // resolve to llama-server and fail its cold-load with "model not installed". This is the SAME per-request routing
+        // decision RuntimeChatClient makes for the send, so warm and send stay consistent (see IsCloudProviderSelected).
+        if (_activeCloudFactory.IsCloudProviderSelected(resolvedModel))
+        {
+            return null;
+        }
+
         try
         {
             var provider = await _providerResolver.ResolveProviderForModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
