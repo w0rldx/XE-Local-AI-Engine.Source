@@ -43,6 +43,7 @@ function createOnboardingContext(): OnboardingContextValue {
 	return {
 		isStateResolved: true,
 		isStateSuccessful: true,
+		activeTutorialId: null,
 		tutorials: {
 			"quick-start": { isAvailable: true, hasProgress: false },
 			"agents-basics": { isAvailable: true, hasProgress: true },
@@ -136,6 +137,40 @@ describe("AboutDialog", () => {
 		fireEvent.click(within(agentsCard).getByRole("button", { name: "Resume" }));
 		expect(onboarding.resume).toHaveBeenCalledWith("agents-basics");
 		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("resumes interrupted progress even when the tutorial was completed before the replay", () => {
+		const baseOnboarding = createOnboardingContext();
+		const onboarding: OnboardingContextValue = {
+			...baseOnboarding,
+			tutorials: {
+				...baseOnboarding.tutorials,
+				"knowledge-base-basics": {
+					isAvailable: true,
+					hasProgress: true,
+					status: "completed",
+				},
+			},
+		};
+		renderWithOnboarding(<AboutDialog opened={true} onClose={vi.fn()} />, onboarding);
+
+		fireEvent.click(screen.getByTestId("about-open-tutorials"));
+		const knowledgeCard = screen.getByTestId("tutorial-card-knowledge-base-basics");
+		fireEvent.click(within(knowledgeCard).getByRole("button", { name: "Resume" }));
+
+		expect(onboarding.resume).toHaveBeenCalledWith("knowledge-base-basics");
+		expect(onboarding.restart).not.toHaveBeenCalled();
+	});
+
+	it("disables catalog actions while another tutorial is active", () => {
+		const onboarding = { ...createOnboardingContext(), activeTutorialId: "agents-basics" as const };
+		renderWithOnboarding(<AboutDialog opened={true} onClose={vi.fn()} />, onboarding);
+
+		fireEvent.click(screen.getByTestId("about-open-tutorials"));
+
+		expect(within(screen.getByTestId("tutorial-card-quick-start")).getByRole("button").hasAttribute("disabled")).toBe(true);
+		expect(within(screen.getByTestId("tutorial-card-agents-basics")).getByRole("button").hasAttribute("disabled")).toBe(true);
+		expect(within(screen.getByTestId("tutorial-card-knowledge-base-basics")).getByRole("button").hasAttribute("disabled")).toBe(true);
 	});
 
 	it("links every bundled runtime license and notice from the Licenses tab", () => {

@@ -12,6 +12,7 @@ export interface TutorialUiState {
 export interface OnboardingContextValue {
 	isStateResolved: boolean;
 	isStateSuccessful: boolean;
+	activeTutorialId: TutorialId | null;
 	tutorials: Readonly<Record<TutorialId, TutorialUiState>>;
 	start: (tutorialId: TutorialId) => void;
 	resume: (tutorialId: TutorialId) => void;

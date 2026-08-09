@@ -64,14 +64,21 @@ export interface UseTutorialStateResult {
 	isResolved: boolean;
 	isSuccess: boolean;
 	statusByKey: Readonly<Record<string, TutorialStatus | undefined>>;
-	markDone: (persistenceKey: string, status: TutorialStatus) => void;
+	markDone: (
+		persistenceKey: string,
+		status: TutorialStatus,
+		callbacks?: { onSuccess?: () => void; onError?: () => void },
+	) => void;
 }
 
 export function useTutorialState(): UseTutorialStateResult {
 	const queryClient = useQueryClient();
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
 	const stateQuery = useQuery(withResponseValidation({ ...getTutorialStateOptions(), enabled: isAuthenticated }));
-	const saveMutation = useMutation(withResponseValidation(saveTutorialStateMutation()));
+	const saveMutation = useMutation({
+		...withResponseValidation(saveTutorialStateMutation()),
+		scope: { id: "tutorial-state" },
+	});
 
 	const statusByKey = useMemo(() => {
 		const result: Record<string, TutorialStatus | undefined> = {};
@@ -84,19 +91,18 @@ export function useTutorialState(): UseTutorialStateResult {
 	}, [stateQuery.data?.entries]);
 
 	const markDone = useCallback(
-		(persistenceKey: string, status: TutorialStatus) => {
+		(persistenceKey: string, status: TutorialStatus, callbacks?: { onSuccess?: () => void; onError?: () => void }) => {
 			// Completion is monotonic. A user may replay and close a completed tutorial without losing that achievement.
 			if (status === "skipped" && statusByKey[persistenceKey] === "completed") {
 				return;
 			}
-			saveMutation.mutate(
-				{ body: { key: persistenceKey, status } },
-				{
-					onSuccess: () => {
-						queryClient.invalidateQueries({ queryKey: getTutorialStateQueryKey() }).catch(() => undefined);
-					},
-				},
-			);
+			saveMutation
+				.mutateAsync({ body: { key: persistenceKey, status } })
+				.then(() => {
+					queryClient.invalidateQueries({ queryKey: getTutorialStateQueryKey() }).catch(() => undefined);
+					callbacks?.onSuccess?.();
+				})
+				.catch(() => callbacks?.onError?.());
 		},
 		[queryClient, saveMutation, statusByKey],
 	);

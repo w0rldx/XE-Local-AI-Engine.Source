@@ -12,7 +12,12 @@ export function TutorialInvitation({ tutorialId }: { tutorialId: Exclude<Tutoria
 		return null;
 	}
 	const tutorial = onboarding.tutorials[tutorialId];
-	if (!onboarding.isStateSuccessful || !tutorial.isAvailable || tutorial.status !== undefined) {
+	if (
+		!onboarding.isStateSuccessful ||
+		onboarding.activeTutorialId !== null ||
+		!tutorial.isAvailable ||
+		tutorial.status !== undefined
+	) {
 		return null;
 	}
 	const action = tutorial.hasProgress ? "resume" : "start";

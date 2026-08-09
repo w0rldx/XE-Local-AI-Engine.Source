@@ -23,7 +23,7 @@ export interface IAboutDialogProps {
 /**
  * About dialog for the node client. Built on the shared {@link DialogShell} so it
  * matches every other dialog in the app. Mirrors the C0re platform's About modal:
- * an Application tab plus a searchable third-party Licenses tab.
+ * Application and Tutorials tabs plus a searchable third-party Licenses tab.
  */
 export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 	const { t } = useTranslation();
@@ -35,11 +35,14 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 		if (!onboarding) {
 			return;
 		}
+		if (onboarding.activeTutorialId !== null) {
+			return;
+		}
 		const state = onboarding.tutorials[tutorialId];
-		if (state.status !== undefined) {
-			onboarding.restart(tutorialId);
-		} else if (state.hasProgress) {
+		if (state.hasProgress) {
 			onboarding.resume(tutorialId);
+		} else if (state.status !== undefined) {
+			onboarding.restart(tutorialId);
 		} else {
 			onboarding.start(tutorialId);
 		}
@@ -127,7 +130,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 						<Text c="dimmed">{t("onboarding.catalog.intro")}</Text>
 						{tutorialRegistry.map((tutorial) => {
 							const state = onboarding?.tutorials[tutorial.id];
-							const action = state?.status !== undefined ? "restart" : state?.hasProgress ? "resume" : "start";
+							const action = state?.hasProgress ? "resume" : state?.status !== undefined ? "restart" : "start";
 							return (
 								<Card key={tutorial.id} withBorder={true} radius="md" data-testid={`tutorial-card-${tutorial.id}`}>
 									<Stack gap="xs">
@@ -150,7 +153,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 											</Badge>
 											<Button
 												size="xs"
-												disabled={!onboarding || !tutorial.isAvailable}
+												disabled={!onboarding || !tutorial.isAvailable || onboarding.activeTutorialId !== null}
 												onClick={() => handleTutorialAction(tutorial.id)}
 											>
 												{t(`onboarding.actions.${action}`)}

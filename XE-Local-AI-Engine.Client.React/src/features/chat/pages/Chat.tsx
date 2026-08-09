@@ -1522,7 +1522,11 @@ export function Chat() {
 	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.
 	if (connectionReadiness !== "ready") {
 		return (
-			<Box py="lg" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+			<Box
+				py="lg"
+				data-tour="chat-overview"
+				style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
+			>
 				<Center style={{ flex: 1 }}>
 					{connectionReadiness === "connecting" ? (
 						<Stack align="center" gap="sm">
@@ -1555,7 +1559,11 @@ export function Chat() {
 	}
 
 	return (
-		<Box py="lg" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+		<Box
+			py="lg"
+			data-tour="chat-overview"
+			style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
+		>
 			{isLoadingInitialConversations ? (
 				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
 					{t("pages.chat.loadingHistory", "Loading local chat history…")}

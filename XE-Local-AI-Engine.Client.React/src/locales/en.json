@@ -3991,6 +3991,9 @@
 			"skip": "Skip"
 		},
 		"restart": "Restart tutorial",
+		"errors": {
+			"saveState": "Could not save the tutorial status. Please try again."
+		},
 		"actions": {
 			"openTutorials": "Open Tutorials",
 			"start": "Start",
@@ -4047,105 +4050,6 @@
 					"knowledgeDocuments": { "title": "Follow indexing", "content": "Document status and maintenance actions appear here after an upload." },
 					"knowledgeSearch": { "title": "Test retrieval", "content": "Search indexed content here before opting to use the Knowledge Base in Chat." }
 				}
-			}
-		},
-		"steps": {
-			"navModels": {
-				"title": "Find your models here",
-				"content": "Open the Models section. This is where you discover, install, and manage the local models that power chat."
-			},
-			"recommendationInstall": {
-				"title": "Install a recommended chat model",
-				"content": "Pick a recommended chat model and start its download — installing one moves the tour on automatically. No model yet? Just click Next to continue."
-			},
-			"setDefaultModel": {
-				"title": "Make it your default",
-				"content": "Set your installed chat model as the default so new conversations use it automatically. Setting a default moves the tour on, or click Next to continue."
-			},
-			"navChat": {
-				"title": "Open Chat",
-				"content": "Now head to the Chat section to talk to your model."
-			},
-			"chatInput": {
-				"title": "Type your first message",
-				"content": "Enter anything you'd like to ask — for example, \"Hello, can you introduce yourself?\""
-			},
-			"chatSend": {
-				"title": "Send it",
-				"content": "Send your message. The model will start generating a reply."
-			},
-			"firstResponse": {
-				"title": "Your first answer",
-				"content": "The assistant's response streams in here. That's it — you're up and running. Ask anything next."
-			},
-			"reasoningEffort": {
-				"title": "Adjustable reasoning depth",
-				"content": "When you use a reasoning-capable model, a low / medium / high control appears here. Higher effort gives more thorough answers at the cost of extra time."
-			},
-			"reasoningTrace": {
-				"title": "See the model think",
-				"content": "When a reasoning-capable model is active, its internal thinking process appears in a collapsible block before the answer — so you can follow its logic."
-			},
-			"toolCall": {
-				"title": "Tool calls in context",
-				"content": "Agent-capable models can call tools (search, code execution, and more). Each call shows the tool name, the arguments, and the result right in the conversation."
-			},
-			"agentMode": {
-				"title": "Specialized agents",
-				"content": "Switch from Default Assistant to a specialized agent persona — each one is tuned with a different system prompt and skill set for specific tasks."
-			},
-			"knowledgeBase": {
-				"title": "Knowledge Base",
-				"content": "Upload your own documents and let the model answer from them. The Knowledge Base ingests files locally and grounds chat responses in what you added."
-			},
-			"imageGeneration": {
-				"title": "Image Generation",
-				"content": "Generate images locally from a text prompt with stable-diffusion.cpp — no cloud, no account. Find it in the navigation under Image Generation."
-			},
-			"agents": {
-				"title": "Agents",
-				"content": "Build and manage reusable agent personas — each with its own instructions, model, and skills — from the Agents page, then pick them per message in chat."
-			}
-		},
-		"notes": {
-			"offline": "You appear to be offline. Model discovery needs an internet connection — you can skip the tour and try again later.",
-			"emptyRecommendations": "No installable models were returned. You can skip the tour and revisit Recommendations once models are available."
-		},
-		"showcase": {
-			"reasoningEffort": {
-				"label": "Reasoning effort",
-				"low": "Low",
-				"medium": "Medium",
-				"high": "High",
-				"description": "When you use a reasoning-capable model, this control sets how hard it thinks before replying."
-			},
-			"reasoningTrace": {
-				"label": "Thinking",
-				"sample": "Let me break this down step by step. First, I should consider the constraints…",
-				"description": "The model's internal reasoning appears here before the final answer — only on reasoning-capable models."
-			},
-			"toolCall": {
-				"label": "Tool call",
-				"sample": "search_web({ query: \"latest llama.cpp release\" })\n→ Result: \"b4567 released 2 days ago…\"",
-				"description": "When an agent-capable model uses a tool, the call and its result appear inline like this."
-			},
-			"agentMode": {
-				"label": "Agent mode",
-				"defaultAssistant": "Default Assistant",
-				"sampleAgent": "Code Reviewer",
-				"description": "Pick a specialized agent persona from the selector in the chat toolbar to change the model's focus and instructions."
-			},
-			"knowledgeBase": {
-				"label": "Knowledge Base",
-				"description": "Upload documents and the model answers from them — retrieval runs locally on your node."
-			},
-			"imageGeneration": {
-				"label": "Image Generation",
-				"description": "Create images locally from a text prompt with stable-diffusion.cpp — no cloud required."
-			},
-			"agents": {
-				"label": "Agents",
-				"description": "Create reusable agent personas with their own instructions, model, and skills — then use them in chat."
 			}
 		}
 	},

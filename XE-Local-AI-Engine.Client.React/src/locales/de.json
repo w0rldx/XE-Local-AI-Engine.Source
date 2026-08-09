@@ -3991,6 +3991,9 @@
 			"skip": "Überspringen"
 		},
 		"restart": "Tutorial neu starten",
+		"errors": {
+			"saveState": "Der Tutorial-Status konnte nicht gespeichert werden. Bitte versuche es erneut."
+		},
 		"actions": {
 			"openTutorials": "Tutorials öffnen",
 			"start": "Starten",
@@ -4047,105 +4050,6 @@
 					"knowledgeDocuments": { "title": "Indexierung verfolgen", "content": "Dokumentstatus und Wartungsaktionen erscheinen nach einem Upload hier." },
 					"knowledgeSearch": { "title": "Abruf testen", "content": "Durchsuche indexierte Inhalte hier, bevor du die Wissensdatenbank im Chat aktivierst." }
 				}
-			}
-		},
-		"steps": {
-			"navModels": {
-				"title": "Hier findest du deine Modelle",
-				"content": "Öffne den Bereich Modelle. Hier entdeckst, installierst und verwaltest du die lokalen Modelle, die den Chat antreiben."
-			},
-			"recommendationInstall": {
-				"title": "Ein empfohlenes Chat-Modell installieren",
-				"content": "Wähle ein empfohlenes Chat-Modell und starte den Download – mit der Installation geht die Tour automatisch weiter. Noch kein Modell? Klicke einfach auf Weiter."
-			},
-			"setDefaultModel": {
-				"title": "Als Standard festlegen",
-				"content": "Lege dein installiertes Chat-Modell als Standard fest, damit neue Unterhaltungen es automatisch verwenden. Mit dem Festlegen geht die Tour weiter, oder klicke auf Weiter."
-			},
-			"navChat": {
-				"title": "Chat öffnen",
-				"content": "Wechsle nun in den Bereich Chat, um mit deinem Modell zu sprechen."
-			},
-			"chatInput": {
-				"title": "Schreibe deine erste Nachricht",
-				"content": "Gib ein, was du fragen möchtest — zum Beispiel: \"Hallo, kannst du dich vorstellen?\""
-			},
-			"chatSend": {
-				"title": "Absenden",
-				"content": "Sende deine Nachricht. Das Modell beginnt, eine Antwort zu generieren."
-			},
-			"firstResponse": {
-				"title": "Deine erste Antwort",
-				"content": "Die Antwort des Assistenten erscheint hier nach und nach. Das war's — du bist startklar. Frag als Nächstes, was du möchtest."
-			},
-			"reasoningEffort": {
-				"title": "Einstellbare Denktiefe",
-				"content": "Wenn du ein reasoning-fähiges Modell verwendest, erscheint hier ein Low / Medium / High-Regler. Mehr Aufwand liefert gründlichere Antworten, braucht aber etwas länger."
-			},
-			"reasoningTrace": {
-				"title": "Dem Modell beim Denken zusehen",
-				"content": "Ist ein reasoning-fähiges Modell aktiv, erscheint sein interner Denkprozess vor der Antwort in einem ausklappbaren Block – so kannst du seiner Logik folgen."
-			},
-			"toolCall": {
-				"title": "Tool-Aufrufe im Kontext",
-				"content": "Agent-fähige Modelle können Tools aufrufen (Suche, Code-Ausführung u. v. m.). Jeder Aufruf zeigt den Tool-Namen, die Argumente und das Ergebnis direkt im Gespräch."
-			},
-			"agentMode": {
-				"title": "Spezialisierte Agenten",
-				"content": "Wechsle vom Standard-Assistenten zu einem spezialisierten Agenten – jeder ist mit einem anderen System-Prompt und eigenen Fähigkeiten für bestimmte Aufgaben ausgestattet."
-			},
-			"knowledgeBase": {
-				"title": "Wissensdatenbank",
-				"content": "Lade eigene Dokumente hoch und lass das Modell daraus antworten. Die Wissensdatenbank verarbeitet Dateien lokal und stützt Chat-Antworten auf deine Inhalte."
-			},
-			"imageGeneration": {
-				"title": "Bildgenerierung",
-				"content": "Erzeuge Bilder lokal aus einem Text-Prompt mit stable-diffusion.cpp – ohne Cloud, ohne Konto. Zu finden in der Navigation unter Bildgenerierung."
-			},
-			"agents": {
-				"title": "Agenten",
-				"content": "Erstelle und verwalte wiederverwendbare Agenten – jeder mit eigenen Anweisungen, Modell und Fähigkeiten – auf der Agenten-Seite und wähle sie dann pro Nachricht im Chat."
-			}
-		},
-		"notes": {
-			"offline": "Du scheinst offline zu sein. Die Modellsuche benötigt eine Internetverbindung — du kannst die Tour überspringen und es später erneut versuchen.",
-			"emptyRecommendations": "Es wurden keine installierbaren Modelle zurückgegeben. Du kannst die Tour überspringen und die Empfehlungen erneut aufrufen, sobald Modelle verfügbar sind."
-		},
-		"showcase": {
-			"reasoningEffort": {
-				"label": "Denktiefe",
-				"low": "Niedrig",
-				"medium": "Mittel",
-				"high": "Hoch",
-				"description": "Wenn du ein reasoning-fähiges Modell verwendest, bestimmt dieser Regler, wie intensiv es vor der Antwort nachdenkt."
-			},
-			"reasoningTrace": {
-				"label": "Denkprozess",
-				"sample": "Ich gehe das Schritt für Schritt durch. Zunächst sollte ich die Rahmenbedingungen berücksichtigen…",
-				"description": "Das interne Reasoning des Modells erscheint hier vor der endgültigen Antwort – nur bei reasoning-fähigen Modellen."
-			},
-			"toolCall": {
-				"label": "Tool-Aufruf",
-				"sample": "search_web({ query: \"neuestes llama.cpp-Release\" })\n→ Ergebnis: \"b4567 vor 2 Tagen veröffentlicht…\"",
-				"description": "Wenn ein agent-fähiges Modell ein Tool nutzt, erscheinen Aufruf und Ergebnis inline wie hier."
-			},
-			"agentMode": {
-				"label": "Agentenmodus",
-				"defaultAssistant": "Standard-Assistent",
-				"sampleAgent": "Code-Reviewer",
-				"description": "Wähle in der Chat-Toolbar einen spezialisierten Agenten aus, um Fokus und Anweisungen des Modells anzupassen."
-			},
-			"knowledgeBase": {
-				"label": "Wissensdatenbank",
-				"description": "Lade Dokumente hoch und das Modell antwortet daraus – die Suche läuft lokal auf deinem Node."
-			},
-			"imageGeneration": {
-				"label": "Bildgenerierung",
-				"description": "Erzeuge Bilder lokal aus einem Text-Prompt mit stable-diffusion.cpp – ohne Cloud."
-			},
-			"agents": {
-				"label": "Agenten",
-				"description": "Erstelle wiederverwendbare Agenten mit eigenen Anweisungen, Modell und Fähigkeiten – und nutze sie im Chat."
 			}
 		}
 	},
