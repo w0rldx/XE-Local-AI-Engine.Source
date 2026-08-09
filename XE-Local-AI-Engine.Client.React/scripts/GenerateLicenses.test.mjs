@@ -3,7 +3,21 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { dedupeAndSort, normalizeLicense } from "./GenerateLicenses.mjs";
+import { dedupeAndSort, isExcludedNativeBinary, normalizeLicense } from "./GenerateLicenses.mjs";
+
+test("isExcludedNativeBinary matches rollup platform binaries on every OS but nothing shipped", () => {
+	for (const platformName of [
+		"@rollup/rollup-linux-x64-gnu",
+		"@rollup/rollup-win32-x64-msvc",
+		"@rollup/rollup-darwin-arm64",
+	]) {
+		assert.equal(isExcludedNativeBinary(platformName), true);
+	}
+
+	// Real shipped packages must never be excluded.
+	assert.equal(isExcludedNativeBinary("react"), false);
+	assert.equal(isExcludedNativeBinary("@rollup/plugin-node-resolve"), false);
+});
 
 test("normalizeLicense rejects missing license metadata", () => {
 	assert.throws(() => normalizeLicense(""), /missing license metadata/i);
