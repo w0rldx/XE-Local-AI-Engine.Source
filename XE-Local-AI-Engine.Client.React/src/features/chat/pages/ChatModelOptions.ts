@@ -38,15 +38,17 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 // (via useCloudModelOptions), not the local list. Excluded here so they appear once, in their cloud group.
 const CLOUD_PROVIDERS = new Set(["CodexOAuth", "AzureFoundry"]);
 
+export function isLocalChatModel(model: LocalModelDto | undefined): model is LocalModelDto {
+	return model?.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? "");
+}
+
 // Strict picker filter: only chat-capable local models reach the composer's model selector.
 // Embedding and Unknown models are hidden because they have no completion head and reject the chat endpoint.
 // Cloud provider entries (CodexOAuth / AzureFoundry) are excluded here — they appear in the separate cloud
 // sections via useCloudModelOptions. Lives in its own module (not Chat.tsx) so it is unit-testable and so
 // exporting it does not break the component-only-export Fast Refresh rule on the page.
 export function toChatModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
-	return models
-		.filter((model) => model.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? ""))
-		.map((model) => toModelOption(model, nodeAvailable));
+	return models.filter(isLocalChatModel).map((model) => toModelOption(model, nodeAvailable));
 }
 
 // Models eligible as the node's speculative-decoding DRAFT model. Two kinds qualify and neither belongs in the chat
@@ -65,7 +67,7 @@ export function toDraftModelOptions(models: LocalModelDto[], nodeAvailable: bool
 // ascending). `modifiedAtUtc` is an epoch number on the DTO, so it is compared numerically (a missing value sorts
 // oldest). Returns undefined when no installed chat-capable local model exists.
 export function resolveLocalDefaultModel(models: LocalModelDto[]): LocalModelDto | undefined {
-	const chatModels = models.filter((model) => model.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? ""));
+	const chatModels = models.filter(isLocalChatModel);
 	return (
 		chatModels.find((model) => model.isSelected) ??
 		chatModels.toSorted((a, b) => {

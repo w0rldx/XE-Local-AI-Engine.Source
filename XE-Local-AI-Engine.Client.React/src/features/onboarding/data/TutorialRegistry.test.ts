@@ -50,6 +50,8 @@ describe("tutorialRegistry", () => {
 	it("allows Quick Start actions while keeping Agents and Knowledge tutorials passive", () => {
 		const quickStart = tutorialRegistry[0];
 		const quickSteps = buildTutorialSteps(t, quickStart, quickStart.stepIds);
+		expect(quickSteps[quickStart.stepIds.indexOf("navModels")]?.target).toBe('[data-tour="models-overview"]');
+		expect(quickSteps[quickStart.stepIds.indexOf("navChat")]?.target).toBe('[data-tour="chat-overview"]');
 		expect(quickSteps[quickStart.stepIds.indexOf("chatInput")]?.blockTargetInteraction).toBe(false);
 		expect(quickSteps[quickStart.stepIds.indexOf("chatSend")]?.blockTargetInteraction).toBe(false);
 		for (const tutorial of tutorialRegistry.slice(1)) {

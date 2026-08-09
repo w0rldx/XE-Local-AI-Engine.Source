@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 import type { EventData } from "react-joyride";
@@ -9,6 +10,7 @@ import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-que
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { router } from "@/core/integrations/tanstack-router/Router";
+import { toast } from "@/core/ui/notifications/Toast";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
 import { OnboardingContext, type TutorialUiState } from "@/features/onboarding/context/OnboardingContext";
 import {
@@ -20,7 +22,11 @@ import {
 	type QuickStartReadiness,
 	type TutorialId,
 } from "@/features/onboarding/data/TutorialRegistry";
-import { hasChatCapableDefault, hasInstalledChatModel } from "@/features/onboarding/data/TourAdvanceSignals";
+import {
+	countVisibleAssistantReplies,
+	hasChatCapableDefault,
+	hasInstalledChatModel,
+} from "@/features/onboarding/data/TourAdvanceSignals";
 import {
 	clearTutorialProgress,
 	readTutorialProgress,
@@ -32,7 +38,7 @@ const TOUR_Z_INDEX = 1000;
 const TARGET_WAIT_TIMEOUT_MS = 3000;
 const MAX_TARGET_RETRIES = 4;
 
-/* eslint-disable react-doctor/no-adjust-state-on-prop-change -- the optional welcome invitation opens only after the authenticated backend state resolves successfully. */
+/* eslint-disable react-doctor/no-adjust-state-on-prop-change, react-doctor/no-chain-state-updates -- the optional welcome invitation and real milestone advancement react to authenticated backend/cache state. */
 
 interface ActiveTutorial {
 	tutorialId: TutorialId;
@@ -42,6 +48,7 @@ interface ActiveTutorial {
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const { t } = useTranslation();
+	const queryClient = useQueryClient();
 	const tutorialState = useTutorialState();
 	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
 	const modelsQuery = useQuery(withResponseValidation({ ...listLocalModelsOptions(), enabled: isAuthenticated }));
@@ -51,10 +58,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const [localStatusByKey, setLocalStatusByKey] = useState<Record<string, "completed" | "skipped" | undefined>>({});
 	const welcomeHandledRef = useRef(false);
 	const targetRetryCountRef = useRef(0);
+	const autoAdvanceArmedRef = useRef(false);
+	const replyCountBaselineRef = useRef<number | null>(null);
 
 	const classifyQuickStartReadiness = useCallback((): QuickStartReadiness => {
 		const modelItems = modelsQuery.data?.items;
-		if (!modelsQuery.isSuccess || modelItems === undefined) {
+		if (!modelsQuery.isSuccess || modelsQuery.data?.isAvailable !== true || modelItems === undefined) {
 			return "unresolved";
 		}
 		if (hasChatCapableDefault(modelItems, modelsQuery.data?.selectedModelName)) {
@@ -80,6 +89,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 	const activate = useCallback(
 		(tutorialId: TutorialId, mode: "start" | "resume" | "restart") => {
+			if (active !== null) {
+				return;
+			}
 			const definition = getTutorialDefinition(tutorialId);
 			if (!definition.isAvailable) {
 				return;
@@ -100,12 +112,29 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			welcomeHandledRef.current = true;
 			setWelcomeOpen(false);
 			targetRetryCountRef.current = 0;
+			autoAdvanceArmedRef.current = false;
+			replyCountBaselineRef.current = null;
 			navigateToStep(tutorialId, stepId);
 			writeTutorialProgress(definition.persistenceKey, stepId);
 			setProgressVersion((value) => value + 1);
 			setActive({ tutorialId, stepIds: frozenStepIds, stepId });
 		},
-		[eligibleStepIds, navigateToStep],
+		[active, eligibleStepIds, navigateToStep],
+	);
+
+	const persistTerminalStatus = useCallback(
+		(persistenceKey: string, status: "completed" | "skipped") => {
+			tutorialState.markDone(persistenceKey, status, {
+				onSuccess: () => {
+					setLocalStatusByKey((current) => ({
+						...current,
+						[persistenceKey]: current[persistenceKey] === "completed" ? "completed" : status,
+					}));
+				},
+				onError: () => toast.error(t("onboarding.errors.saveState")),
+			});
+		},
+		[t, tutorialState],
 	);
 
 	const finish = useCallback(
@@ -114,38 +143,37 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				return;
 			}
 			const persistenceKey = getTutorialDefinition(active.tutorialId).persistenceKey;
+			const wasCompleted =
+				localStatusByKey[persistenceKey] === "completed" || tutorialState.statusByKey[persistenceKey] === "completed";
 			clearTutorialProgress(persistenceKey);
-			tutorialState.markDone(persistenceKey, status);
-			setLocalStatusByKey((current) => ({
-				...current,
-				[persistenceKey]:
-					current[persistenceKey] === "completed" || tutorialState.statusByKey[persistenceKey] === "completed"
-						? "completed"
-						: status,
-			}));
+			if (!wasCompleted) {
+				persistTerminalStatus(persistenceKey, status);
+			}
+			autoAdvanceArmedRef.current = false;
+			replyCountBaselineRef.current = null;
 			setActive(null);
 			setProgressVersion((value) => value + 1);
 		},
-		[active, tutorialState],
+		[active, localStatusByKey, persistTerminalStatus, tutorialState.statusByKey],
 	);
 
 	const dismiss = useCallback(
 		(tutorialId: TutorialId) => {
 			const definition = getTutorialDefinition(tutorialId);
+			const wasCompleted =
+				localStatusByKey[definition.persistenceKey] === "completed" ||
+				tutorialState.statusByKey[definition.persistenceKey] === "completed";
 			clearTutorialProgress(definition.persistenceKey);
-			tutorialState.markDone(definition.persistenceKey, "skipped");
-			setLocalStatusByKey((current) => ({
-				...current,
-				[definition.persistenceKey]:
-					tutorialState.statusByKey[definition.persistenceKey] === "completed" ? "completed" : "skipped",
-			}));
+			if (!wasCompleted) {
+				persistTerminalStatus(definition.persistenceKey, "skipped");
+			}
 			if (tutorialId === "quick-start") {
 				welcomeHandledRef.current = true;
 				setWelcomeOpen(false);
 			}
 			setProgressVersion((value) => value + 1);
 		},
-		[tutorialState],
+		[localStatusByKey, persistTerminalStatus, tutorialState.statusByKey],
 	);
 
 	const goToStep = useCallback(
@@ -153,13 +181,29 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			if (!active) {
 				return;
 			}
+			let relevantStepId = stepId;
+			const liveModelItems = modelsQuery.data?.isAvailable === true ? modelsQuery.data.items : undefined;
+			if (active.tutorialId === "quick-start" && liveModelItems !== undefined) {
+				const hasInstalledModel = hasInstalledChatModel(liveModelItems);
+				const hasDefaultModel = hasChatCapableDefault(liveModelItems, modelsQuery.data?.selectedModelName);
+				if (stepId === "recommendationInstall" && hasInstalledModel) {
+					relevantStepId = hasDefaultModel ? "navChat" : "setDefaultModel";
+				} else if (stepId === "setDefaultModel" && hasDefaultModel) {
+					relevantStepId = "navChat";
+				}
+				if (!active.stepIds.includes(relevantStepId)) {
+					relevantStepId = stepId;
+				}
+			}
 			targetRetryCountRef.current = 0;
-			navigateToStep(active.tutorialId, stepId);
-			writeTutorialProgress(getTutorialDefinition(active.tutorialId).persistenceKey, stepId);
-			setActive({ ...active, stepId });
+			autoAdvanceArmedRef.current = false;
+			replyCountBaselineRef.current = null;
+			navigateToStep(active.tutorialId, relevantStepId);
+			writeTutorialProgress(getTutorialDefinition(active.tutorialId).persistenceKey, relevantStepId);
+			setActive({ ...active, stepId: relevantStepId });
 			setProgressVersion((value) => value + 1);
 		},
-		[active, navigateToStep],
+		[active, modelsQuery.data, navigateToStep],
 	);
 
 	useEffect(() => {
@@ -175,6 +219,61 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		[active, definition, t],
 	);
 	const stepIndex = active ? active.stepIds.indexOf(active.stepId) : 0;
+	const modelItems = modelsQuery.data?.isAvailable === true ? modelsQuery.data.items : undefined;
+	const selectedModelName = modelsQuery.data?.selectedModelName;
+
+	useEffect(() => {
+		if (active?.tutorialId !== "quick-start" || active.stepId !== "recommendationInstall" || modelItems === undefined) {
+			return;
+		}
+		if (!hasInstalledChatModel(modelItems)) {
+			autoAdvanceArmedRef.current = true;
+			return;
+		}
+		if (autoAdvanceArmedRef.current) {
+			if (hasChatCapableDefault(modelItems, selectedModelName) && active.stepIds.includes("navChat")) {
+				goToStep("navChat");
+			} else if (active.stepIds.includes("setDefaultModel")) {
+				goToStep("setDefaultModel");
+			}
+		}
+	}, [active, goToStep, modelItems, selectedModelName]);
+
+	useEffect(() => {
+		if (
+			active?.tutorialId !== "quick-start" ||
+			active.stepId !== "setDefaultModel" ||
+			modelItems === undefined ||
+			!hasInstalledChatModel(modelItems)
+		) {
+			return;
+		}
+		if (!hasChatCapableDefault(modelItems, selectedModelName)) {
+			autoAdvanceArmedRef.current = true;
+			return;
+		}
+		if (autoAdvanceArmedRef.current && active.stepIds.includes("navChat")) {
+			goToStep("navChat");
+		}
+	}, [active, goToStep, modelItems, selectedModelName]);
+
+	const replyCount = useVisibleAssistantReplyCount(
+		queryClient,
+		active?.tutorialId === "quick-start" && active.stepId === "firstResponse",
+	);
+	useEffect(() => {
+		if (active?.tutorialId !== "quick-start" || active.stepId !== "firstResponse") {
+			replyCountBaselineRef.current = null;
+			return;
+		}
+		if (replyCountBaselineRef.current === null || replyCount < replyCountBaselineRef.current) {
+			replyCountBaselineRef.current = replyCount;
+			return;
+		}
+		if (replyCount > replyCountBaselineRef.current) {
+			finish("completed");
+		}
+	}, [active?.stepId, active?.tutorialId, finish, replyCount]);
 
 	const handleEvent = useCallback(
 		(data: EventData) => {
@@ -238,27 +337,35 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	);
 
 	const tutorialUiState = Object.fromEntries(
-		tutorialRegistry.map((item) => [
-			item.id,
-			{
-				status: localStatusByKey[item.persistenceKey] ?? tutorialState.statusByKey[item.persistenceKey],
-				hasProgress: readTutorialProgress(item.persistenceKey, item.stepIds) !== null,
-				isAvailable: item.isAvailable,
-			},
-		]),
+		tutorialRegistry.map((item) => {
+			const localStatus = localStatusByKey[item.persistenceKey];
+			const persistedStatus = tutorialState.statusByKey[item.persistenceKey];
+			return [
+				item.id,
+				{
+					status:
+						localStatus === "completed" || persistedStatus === "completed"
+							? "completed"
+							: (localStatus ?? persistedStatus),
+					hasProgress: readTutorialProgress(item.persistenceKey, item.stepIds) !== null,
+					isAvailable: item.isAvailable,
+				},
+			];
+		}),
 	) as Readonly<Record<TutorialId, TutorialUiState>>;
 
 	const contextValue = useMemo(
 		() => ({
 			isStateResolved: tutorialState.isResolved,
 			isStateSuccessful: tutorialState.isSuccess,
+			activeTutorialId: active?.tutorialId ?? null,
 			tutorials: tutorialUiState,
 			start: (tutorialId: TutorialId) => activate(tutorialId, "start"),
 			resume: (tutorialId: TutorialId) => activate(tutorialId, "resume"),
 			restart: (tutorialId: TutorialId) => activate(tutorialId, "restart"),
 			dismiss,
 		}),
-		[activate, dismiss, tutorialState.isResolved, tutorialState.isSuccess, tutorialUiState],
+		[active?.tutorialId, activate, dismiss, tutorialState.isResolved, tutorialState.isSuccess, tutorialUiState],
 	);
 
 	const quickStartHasProgress = tutorialUiState["quick-start"].hasProgress;
@@ -283,4 +390,22 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			{children}
 		</OnboardingContext.Provider>
 	);
+}
+
+function useVisibleAssistantReplyCount(queryClient: QueryClient, active: boolean): number {
+	const subscribe = useCallback(
+		(onStoreChange: () => void) => {
+			if (!active) {
+				return () => undefined;
+			}
+			return queryClient.getQueryCache().subscribe(onStoreChange);
+		},
+		[active, queryClient],
+	);
+	const getSnapshot = useCallback(
+		() => (active ? countVisibleAssistantReplies(queryClient) : 0),
+		[active, queryClient],
+	);
+
+	return useSyncExternalStore(subscribe, getSnapshot);
 }

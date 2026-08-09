@@ -222,7 +222,7 @@ export function ModelManagement() {
 	const downloadingRepoId = startGgufDownloadMutation.isPending ? (startGgufDownloadMutation.variables?.repoId ?? null) : null;
 
 	return (
-		<Container fluid={true} py="lg">
+		<Container fluid={true} py="lg" data-tour="models-overview">
 			<Stack gap="lg">
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={4}>

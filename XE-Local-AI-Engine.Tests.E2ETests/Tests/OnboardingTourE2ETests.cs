@@ -42,11 +42,14 @@ public sealed class OnboardingTourE2ETests : XEE2ETestBase
     [Category("Onboarding")]
     public async Task QuickStart_StartsOnlyOnClick_AndPersistsVersionedStepId()
     {
+        await Page.SetViewportSizeAsync(640, 800);
         await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(WelcomeDialog).ToBeVisibleAsync();
         await Expect(Page.Locator("[id^='react-joyride-step-']")).ToHaveCountAsync(0);
 
         await Page.GetByTestId("onboarding-welcome-start").ClickAsync();
+        await Expect(Page.Locator("[data-tour='nav-item-models']")).ToBeHiddenAsync();
+        await Expect(Page.Locator("[data-tour='models-overview']")).ToBeVisibleAsync();
         await Expect(Page.Locator("#react-joyride-step-0")).ToBeVisibleAsync();
         await Page.Locator("#react-joyride-step-0 [data-action='primary']").ClickAsync();
 

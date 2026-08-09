@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -11,10 +11,10 @@ import {
 	writeTutorialProgress,
 } from "@/features/onboarding/hooks/useTourState";
 
-const { useQueryMock, useMutationMock, mutateMock } = vi.hoisted(() => ({
+const { useQueryMock, useMutationMock, mutateAsyncMock } = vi.hoisted(() => ({
 	useQueryMock: vi.fn(),
 	useMutationMock: vi.fn(),
-	mutateMock: vi.fn(),
+	mutateAsyncMock: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -30,7 +30,22 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 function prime(entries: { key: string; status: string }[]) {
 	useQueryMock.mockReturnValue({ data: { entries }, isSuccess: true, isError: false });
-	useMutationMock.mockReturnValue({ mutate: mutateMock });
+	useMutationMock.mockReturnValue({ mutateAsync: mutateAsyncMock });
+	mutateAsyncMock.mockResolvedValue(undefined);
+}
+
+function createDeferred() {
+	let resolvePromise: (() => void) | undefined;
+	let rejectPromise: ((reason: unknown) => void) | undefined;
+	const promise = new Promise<void>((resolve, reject) => {
+		resolvePromise = resolve;
+		rejectPromise = reject;
+	});
+	return {
+		promise,
+		resolve: () => resolvePromise?.(),
+		reject: (reason: unknown) => rejectPromise?.(reason),
+	};
 }
 
 afterEach(() => {
@@ -67,6 +82,12 @@ describe("tutorial progress", () => {
 });
 
 describe("tutorial terminal state", () => {
+	it("serializes terminal-state mutations through one shared scope", () => {
+		prime([]);
+		renderHook(() => useTutorialState());
+		expect(useMutationMock).toHaveBeenCalledWith(expect.objectContaining({ scope: { id: "tutorial-state" } }));
+	});
+
 	it("maps independent backend entries by persistence key", () => {
 		prime([
 			{ key: "main-app-v1", status: "completed" },
@@ -80,16 +101,39 @@ describe("tutorial terminal state", () => {
 		prime([{ key: "agents-v1", status: "completed" }]);
 		const { result } = renderHook(() => useTutorialState());
 		result.current.markDone("agents-v1", "skipped");
-		expect(mutateMock).not.toHaveBeenCalled();
+		expect(mutateAsyncMock).not.toHaveBeenCalled();
 	});
 
-	it("promotes absent or skipped state to completed", () => {
+	it("promotes absent or skipped state to completed", async () => {
 		prime([{ key: "agents-v1", status: "skipped" }]);
 		const { result } = renderHook(() => useTutorialState());
 		result.current.markDone("agents-v1", "completed");
-		expect(mutateMock).toHaveBeenCalledWith(
-			{ body: { key: "agents-v1", status: "completed" } },
-			expect.objectContaining({ onSuccess: expect.any(Function) }),
-		);
+		expect(mutateAsyncMock).toHaveBeenCalledWith({ body: { key: "agents-v1", status: "completed" } });
+		await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledOnce());
+	});
+
+	it("delivers each consecutive mutation result to its own callbacks", async () => {
+		prime([]);
+		const first = createDeferred();
+		const second = createDeferred();
+		mutateAsyncMock.mockReset();
+		mutateAsyncMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+		const firstSuccess = vi.fn();
+		const firstError = vi.fn();
+		const secondSuccess = vi.fn();
+		const secondError = vi.fn();
+		const { result } = renderHook(() => useTutorialState());
+
+		act(() => {
+			result.current.markDone("quick-start", "completed", { onSuccess: firstSuccess, onError: firstError });
+			result.current.markDone("agents-basics", "skipped", { onSuccess: secondSuccess, onError: secondError });
+		});
+		second.resolve();
+		await waitFor(() => expect(secondSuccess).toHaveBeenCalledOnce());
+		first.reject(new Error("first write failed"));
+		await waitFor(() => expect(firstError).toHaveBeenCalledOnce());
+
+		expect(firstSuccess).not.toHaveBeenCalled();
+		expect(secondError).not.toHaveBeenCalled();
 	});
 });

@@ -14,7 +14,7 @@ public interface INodeTutorialStateService
     Task<IReadOnlyList<TutorialStateEntry>> GetEntriesAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Upserts a single tour entry by key (replacing any existing entry for that key) and stamps it now.
+    ///     Upserts a single tour entry by key and stamps it now. Completed is terminal and cannot be downgraded to skipped.
     ///     Returns false when the current user cannot be resolved.
     /// </summary>
     Task<bool> SaveEntryAsync(ClaimsPrincipal principal, string key, TutorialStatus status, CancellationToken cancellationToken);

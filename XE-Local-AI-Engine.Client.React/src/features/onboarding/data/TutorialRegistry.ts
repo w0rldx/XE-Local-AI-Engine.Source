@@ -82,10 +82,10 @@ export function getQuickStartStepIds(readiness: QuickStartReadiness): readonly s
 }
 
 const targets: Record<string, string> = {
-	navModels: '[data-tour="nav-item-models"]',
+	navModels: '[data-tour="models-overview"]',
 	recommendationInstall: '[data-tour="recommendation-install"]',
 	setDefaultModel: '[data-tour="set-default-model"]',
-	navChat: '[data-tour="nav-item-chat"]',
+	navChat: '[data-tour="chat-overview"]',
 	chatInput: '[data-testid="chat-input"]',
 	chatSend: '[data-testid="chat-send-button"]',
 	firstResponse: '[data-testid="chat-input-area"]',

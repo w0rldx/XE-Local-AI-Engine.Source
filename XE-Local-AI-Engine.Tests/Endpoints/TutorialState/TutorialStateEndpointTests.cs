@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <list type="bullet">
 ///         <item>PUT then GET round-trips an upserted entry, and a second key is preserved on merge (upsert one key
 ///         does not drop others);</item>
+///         <item>completed is monotonic, and concurrent tutorial writes preserve every distinct key;</item>
 ///         <item>PUT is Operator-gated — an unauthenticated request is rejected.</item>
 ///     </list>
 /// </summary>
@@ -61,6 +62,46 @@ public sealed class TutorialStateEndpointTests
 
         AssertEx.Equal(expected: 1, state.Entries.Count);
         AssertEx.Equal("completed", state.Entries[0].Status);
+    }
+
+    [Test]
+    public async Task Put_SkippedAfterCompleted_PreservesCompleted()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        await SeedAdminUserAsync(factory).ConfigureAwait(false);
+
+        await SaveAsync(factory, client, key: "main-app-v1", status: "completed").ConfigureAwait(false);
+        await SaveAsync(factory, client, key: "main-app-v1", status: "skipped").ConfigureAwait(false);
+
+        var state = await GetAsync(factory, client).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, state.Entries.Count);
+        AssertEx.Equal("completed", state.Entries[0].Status);
+    }
+
+    [Test]
+    public async Task Put_ConcurrentDistinctKeys_PreservesEveryEntry()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        await SeedAdminUserAsync(factory).ConfigureAwait(false);
+
+        const int entryCount = 8;
+        await Parallel.ForEachAsync(Enumerable.Range(start: 0, entryCount), async (index, _) =>
+        {
+            await SaveAsync(factory, client, key: $"tutorial-{index}", status: "completed").ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        var state = await GetAsync(factory, client).ConfigureAwait(false);
+
+        AssertEx.Equal(entryCount, state.Entries.Count);
+        for (var index = 0; index < entryCount; index++)
+        {
+            AssertEx.True(state.Entries.Any(entry => entry.Key == $"tutorial-{index}" && entry.Status == "completed"));
+        }
     }
 
     [Test]

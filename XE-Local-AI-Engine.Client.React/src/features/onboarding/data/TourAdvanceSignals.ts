@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse } from "@/core/api/generated/types.gen";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import { isLocalChatModel } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 // A model counts as chat-capable only when its kind is exactly "Chat" — a whitelist matching the chat picker
@@ -13,7 +14,7 @@ function isChatCapable(model: LocalModelResponse | undefined): boolean {
 	if (!model?.modelName) {
 		return false;
 	}
-	return model.kind === "Chat";
+	return isLocalChatModel(model);
 }
 
 // True once at least one chat-capable model is actually installed/selectable. Drives the install step's advance —
@@ -35,15 +36,24 @@ export function hasChatCapableDefault(
 	return isChatCapable(selected);
 }
 
-// True when any cached conversation carries a non-empty assistant message — the real signal that the user's first send
-// produced a streamed reply. Scanning the conversation query cache (rather than a specific conversation id) keeps the
-// provider decoupled from the router, which it lives outside of.
-export function hasVisibleAssistantReply(queryClient: QueryClient): boolean {
+// Counts cached non-empty assistant messages so the provider can baseline existing history and react only when a new
+// reply appears. Scanning the conversation query cache (rather than a specific conversation id) keeps the provider
+// decoupled from the router, which it lives outside of.
+export function countVisibleAssistantReplies(queryClient: QueryClient): number {
 	const conversations = queryClient.getQueriesData<ChatConversationModel>({
 		queryKey: nodeChatQueryKeys.conversations(),
 	});
 
-	return conversations.some(([, conversation]) =>
-		(conversation?.messages ?? []).some((message) => message.role === "assistant" && message.content.trim().length > 0),
+	return conversations.reduce(
+		(total, [, conversation]) =>
+			total +
+			(conversation?.messages ?? []).filter(
+				(message) => message.role === "assistant" && message.content.trim().length > 0,
+			).length,
+		0,
 	);
+}
+
+export function hasVisibleAssistantReply(queryClient: QueryClient): boolean {
+	return countVisibleAssistantReplies(queryClient) > 0;
 }

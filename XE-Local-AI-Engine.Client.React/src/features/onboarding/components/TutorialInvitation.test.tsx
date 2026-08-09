@@ -13,6 +13,7 @@ function context(overrides: Partial<OnboardingContextValue> = {}): OnboardingCon
 	return {
 		isStateResolved: true,
 		isStateSuccessful: true,
+		activeTutorialId: null,
 		tutorials: {
 			"quick-start": { isAvailable: true, hasProgress: false },
 			"agents-basics": { isAvailable: true, hasProgress: false },
@@ -77,6 +78,12 @@ describe("TutorialInvitation", () => {
 				</OnboardingContext.Provider>
 			</MantineProvider>,
 		);
+		expect(screen.queryByTestId("tutorial-invitation-agents-basics")).toBeNull();
+	});
+
+	it("suppresses contextual invitations while any tutorial is active", () => {
+		renderInvitation(context({ activeTutorialId: "quick-start" }));
+
 		expect(screen.queryByTestId("tutorial-invitation-agents-basics")).toBeNull();
 	});
 

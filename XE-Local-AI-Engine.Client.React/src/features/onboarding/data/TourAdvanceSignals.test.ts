@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse } from "@/core/api/generated/types.gen";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import {
+	countVisibleAssistantReplies,
 	hasChatCapableDefault,
 	hasInstalledChatModel,
 	hasVisibleAssistantReply,
@@ -39,6 +40,11 @@ const rerankerModel: LocalModelResponse = {
 	isToolCapable: false,
 	isOverridden: false,
 };
+const cloudChatModel: LocalModelResponse = {
+	...chatModel,
+	modelName: "gpt-5.3-codex",
+	provider: "CodexOAuth",
+};
 
 describe("hasInstalledChatModel (install step advances on real state, not a timer)", () => {
 	it("is false when no models are installed", () => {
@@ -53,6 +59,10 @@ describe("hasInstalledChatModel (install step advances on real state, not a time
 	it("is false when only a reranker model is installed (whitelist excludes non-chat kinds)", () => {
 		// A reranker (cross-encoder) has no completion head; the tour must not treat it as an installed chat model.
 		expect(hasInstalledChatModel([rerankerModel])).toBe(false);
+	});
+
+	it("is false when only a cloud chat model is listed", () => {
+		expect(hasInstalledChatModel([cloudChatModel])).toBe(false);
 	});
 
 	it("flips to true only once a chat-capable model is actually installed", () => {
@@ -75,6 +85,10 @@ describe("hasChatCapableDefault", () => {
 
 	it("is false when the selected default is a reranker model", () => {
 		expect(hasChatCapableDefault([rerankerModel], "bge-reranker-v2-m3")).toBe(false);
+	});
+
+	it("is false when the selected default is a cloud model", () => {
+		expect(hasChatCapableDefault([cloudChatModel], "gpt-5.3-codex")).toBe(false);
 	});
 
 	it("is true when the selected default names an installed chat-capable model", () => {
@@ -101,6 +115,15 @@ describe("hasVisibleAssistantReply", () => {
 	it("is true once an assistant message carries non-empty content", () => {
 		const client = fakeClient([[["c1"], conversation([{ role: "user", content: "hi" }, { role: "assistant", content: "Hello!" }])]]);
 		expect(hasVisibleAssistantReply(client)).toBe(true);
+	});
+
+	it("counts visible replies so a later reply can be distinguished from existing conversation history", () => {
+		const client = fakeClient([
+			[["c1"], conversation([{ role: "assistant", content: "First" }])],
+			[["c2"], conversation([{ role: "assistant", content: "Second" }, { role: "assistant", content: "   " }])],
+		]);
+
+		expect(countVisibleAssistantReplies(client)).toBe(2);
 	});
 
 	it("is false when there are no cached conversations", () => {
