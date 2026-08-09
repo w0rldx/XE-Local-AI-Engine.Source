@@ -64,6 +64,22 @@ export function normalizeLicense(value) {
 	return trimmed;
 }
 
+// Bundler native binaries are optional, OS/arch-specific packages (e.g. @rollup/rollup-linux-x64-gnu on
+// the Linux release leg, @rollup/rollup-win32-x64-msvc on Windows). They are build-time only — none of
+// them lands in the shipped SPA bundle (dist/) — and the installed one differs per platform, so leaving
+// them in makes this list platform-dependent and the fail-closed `git diff --exit-code` in licenses:check
+// passes on the leg the file was generated on and breaks the other. Exclude the whole family so the
+// disclosed corpus is deterministic across every OS; the FrontendLicenseCorpus (licenses:bundle) already
+// scopes disclosure to bytes actually bundled.
+const EXCLUDED_NATIVE_BINARY_PATTERNS = [
+	/^@rollup\/rollup-(?:linux|darwin|win32|freebsd|android|openharmony)-[a-z0-9-]+$/i,
+];
+
+/** @returns {boolean} */
+export function isExcludedNativeBinary(name) {
+	return EXCLUDED_NATIVE_BINARY_PATTERNS.some((pattern) => pattern.test(name));
+}
+
 /**
  * Collects the complete production frontend dependency tree via pnpm's own license reader.
  * @returns {ThirdPartyPackage[]}
@@ -90,6 +106,13 @@ function collectFrontendPackages() {
 
 	for (const entries of Object.values(grouped)) {
 		for (const entry of entries) {
+			// Skip OS/arch-specific build-time native binaries: they never ship in the SPA bundle and the
+			// installed one varies per platform, which would make this list non-deterministic across the
+			// Linux/Windows release legs (see EXCLUDED_NATIVE_BINARY_PATTERNS).
+			if (isExcludedNativeBinary(entry.name)) {
+				continue;
+			}
+
 			const versions = Array.isArray(entry.versions) && entry.versions.length > 0 ? entry.versions : ["unknown"];
 
 			for (const version of versions) {

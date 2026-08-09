@@ -146,14 +146,6 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rollup/rollup-linux-x64-gnu@4.59.0",
-			"name": "@rollup/rollup-linux-x64-gnu",
-			"version": "4.59.0",
-			"license": "MIT",
-			"homepageUrl": "https://rollupjs.org/",
-			"source": "frontend"
-		},
-		{
 			"id": "frontend:@rrweb/types@2.1.0",
 			"name": "@rrweb/types",
 			"version": "2.1.0",
