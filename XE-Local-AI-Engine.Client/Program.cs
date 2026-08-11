@@ -387,6 +387,26 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.McpServer)
        .RequireRateLimiting(NodeAuthRateLimits.McpPolicy);
 
+    // The inbound OpenAI-compatible model proxy. Hand-mapped here (like MapMcp) rather than as FastEndpoints, for the
+    // same load-bearing reasons: (1) the paths sit INSIDE /api/local/v1 so LocalApiSecurityMiddleware's loopback +
+    // Host + Origin gate already covers them — moving them out of the prefix would silently drop that gate and leave the
+    // bearer key as the only control; (2) the request/response is arbitrary OpenAI JSON + SSE, not a node DTO, so it
+    // must NOT appear in the OpenAPI document or the generated React SDK — only external tools talk to it. The
+    // LocalModelProxy policy accepts ONLY the model-proxy API key scheme, never the operator's JWT or the MCP key.
+    var proxyRoutePrefix = $"/{LocalApiRoutes.Prefix}/";
+    app.MapGet(proxyRoutePrefix + LocalApiRoutes.Proxy.Models,
+           static (HttpContext context, XE_Local_AI_Engine.Client.Services.Proxy.LocalModelProxyForwarder forwarder) => forwarder.WriteModelsAsync(context))
+       .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+       .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+    app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.ChatCompletions,
+           static (HttpContext context, XE_Local_AI_Engine.Client.Services.Proxy.LocalModelProxyForwarder forwarder) => forwarder.ForwardChatCompletionsAsync(context))
+       .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+       .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+    app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.Embeddings,
+           static (HttpContext context, XE_Local_AI_Engine.Client.Services.Proxy.LocalModelProxyForwarder forwarder) => forwarder.ForwardEmbeddingsAsync(context))
+       .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
+       .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+
     if (!app.Environment.IsProduction())
     {
         app.UseSwaggerGen(static options =>

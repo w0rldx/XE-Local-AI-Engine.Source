@@ -4,6 +4,9 @@
 
 export interface LocalModelViewModel {
 	modelName: string;
+	// The runtime that serves this model ("llamacpp", "Ollama", "CodexOAuth", "AzureFoundry"). Only "llamacpp" models
+	// honor a per-model launch-argument override, so the Advanced tab is gated on this.
+	provider: string;
 	sizeLabel: string;
 	modifiedDateLabel: string;
 	familyLabel: string;

@@ -165,6 +165,10 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<IInferenceInvalidationEvaluator, InferenceInvalidationEvaluator>();
         builder.Services.AddSingleton<IInferenceProfileResolver, InferenceProfileResolver>();
 
+        // Per-model developer/advanced extra-launch-arg override, read on the cold spawn path. Registered last so it wins
+        // over the provider's empty default; singleton that reads the scoped override store through a fresh scope per call.
+        builder.Services.AddSingleton<ILlamaServerExtraLaunchArgumentsResolver, LlamaServerExtraLaunchArgumentsResolver>();
+
         // The provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
         // unmapped → default) then ProviderName→ILocalModelProvider (over the registered set). Singleton; reads the
         // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "llamacpp" — Ollama

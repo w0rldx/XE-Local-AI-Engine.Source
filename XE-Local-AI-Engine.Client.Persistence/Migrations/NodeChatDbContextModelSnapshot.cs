@@ -1636,6 +1636,36 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("knowledge_document_sections", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.LocalModelProxyApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("KeyHash")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("key_hash");
+
+                    b.Property<long?>("LastUsedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_used_at_utc");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prefix");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("local_model_proxy_api_keys", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpAgentRun", b =>
                 {
                     b.Property<Guid>("RequestId")
@@ -2278,6 +2308,27 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("Operation", "UseCase", "ProviderName", "ModelName", "IsLatestSuccessful");
 
                     b.ToTable("model_fit_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelLaunchArguments", b =>
+                {
+                    b.Property<string>("ModelName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("RawArguments")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("raw_arguments");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("ModelName");
+
+                    b.ToTable("model_launch_arguments", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelProviderMap", b =>

@@ -167,6 +167,9 @@ import type {
 	DeleteModelKindData,
 	DeleteModelKindErrors,
 	DeleteModelKindResponses,
+	DeleteModelLaunchArgumentsData,
+	DeleteModelLaunchArgumentsErrors,
+	DeleteModelLaunchArgumentsResponses,
 	DeleteNodeChatConversationData,
 	DeleteNodeChatConversationErrors,
 	DeleteNodeChatConversationResponses,
@@ -245,6 +248,9 @@ import type {
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileErrors,
 	FreezeInferenceProfileResponses,
+	GenerateLocalModelProxyApiKeyData,
+	GenerateLocalModelProxyApiKeyErrors,
+	GenerateLocalModelProxyApiKeyResponses,
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyErrors,
 	GenerateMcpServerApiKeyResponses,
@@ -332,6 +338,9 @@ import type {
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsErrors,
 	GetLocalModelDetailsResponses,
+	GetLocalModelProxyApiKeyData,
+	GetLocalModelProxyApiKeyErrors,
+	GetLocalModelProxyApiKeyResponses,
 	GetMcpServerApiKeyData,
 	GetMcpServerApiKeyErrors,
 	GetMcpServerApiKeyResponses,
@@ -344,6 +353,9 @@ import type {
 	GetModelCatalogInfoData,
 	GetModelCatalogInfoErrors,
 	GetModelCatalogInfoResponses,
+	GetModelLaunchArgumentsData,
+	GetModelLaunchArgumentsErrors,
+	GetModelLaunchArgumentsResponses,
 	GetNodeChatConversationData,
 	GetNodeChatConversationErrors,
 	GetNodeChatConversationResponses,
@@ -543,6 +555,9 @@ import type {
 	PutModelKindData,
 	PutModelKindErrors,
 	PutModelKindResponses,
+	PutModelLaunchArgumentsData,
+	PutModelLaunchArgumentsErrors,
+	PutModelLaunchArgumentsResponses,
 	ReconnectDevelopmentRepositoryData,
 	ReconnectDevelopmentRepositoryErrors,
 	ReconnectDevelopmentRepositoryResponses,
@@ -591,6 +606,9 @@ import type {
 	RetrieveImageData,
 	RetrieveImageErrors,
 	RetrieveImageResponses,
+	RevokeLocalModelProxyApiKeyData,
+	RevokeLocalModelProxyApiKeyErrors,
+	RevokeLocalModelProxyApiKeyResponses,
 	RevokeMcpServerApiKeyData,
 	RevokeMcpServerApiKeyErrors,
 	RevokeMcpServerApiKeyResponses,
@@ -805,6 +823,8 @@ import {
 	zDeleteMcpServerResponse,
 	zDeleteModelKindPath,
 	zDeleteModelKindResponse,
+	zDeleteModelLaunchArgumentsPath,
+	zDeleteModelLaunchArgumentsResponse,
 	zDeleteNodeChatConversationBody,
 	zDeleteNodeChatConversationPath,
 	zDeleteNodeChatConversationResponse,
@@ -849,6 +869,7 @@ import {
 	zExploreInferenceProfileResponse,
 	zFreezeInferenceProfileBody,
 	zFreezeInferenceProfileResponse,
+	zGenerateLocalModelProxyApiKeyResponse,
 	zGenerateMcpServerApiKeyResponse,
 	zGetAgentDefinitionPath,
 	zGetAgentDefinitionResponse,
@@ -895,12 +916,15 @@ import {
 	zGetLlamaCppSourceBuildStatusResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
+	zGetLocalModelProxyApiKeyResponse,
 	zGetMcpServerApiKeyResponse,
 	zGetMcpServerPath,
 	zGetMcpServerResponse,
 	zGetMcpServerToolsPath,
 	zGetMcpServerToolsResponse,
 	zGetModelCatalogInfoResponse,
+	zGetModelLaunchArgumentsPath,
+	zGetModelLaunchArgumentsResponse,
 	zGetNodeChatConversationPath,
 	zGetNodeChatConversationResponse,
 	zGetNodeChatMessageFeedbackPath,
@@ -1009,6 +1033,9 @@ import {
 	zPutModelKindBody,
 	zPutModelKindPath,
 	zPutModelKindResponse,
+	zPutModelLaunchArgumentsBody,
+	zPutModelLaunchArgumentsPath,
+	zPutModelLaunchArgumentsResponse,
 	zReconnectDevelopmentRepositoryBody,
 	zReconnectDevelopmentRepositoryPath,
 	zReconnectDevelopmentRepositoryResponse,
@@ -1039,6 +1066,7 @@ import {
 	zResolveUserQuestionResponse,
 	zRetrieveImagePath,
 	zRetrieveImageResponse,
+	zRevokeLocalModelProxyApiKeyResponse,
 	zRevokeMcpServerApiKeyResponse,
 	zRunPlaybookActionEvalPath,
 	zRunPlaybookActionEvalResponse,
@@ -1711,6 +1739,71 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger",
+		...options,
+	});
+
+export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<RevokeLocalModelProxyApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).delete<RevokeLocalModelProxyApiKeyResponses, RevokeLocalModelProxyApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zRevokeLocalModelProxyApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/proxy/key",
+		...options,
+	});
+
+export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLocalModelProxyApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetLocalModelProxyApiKeyResponses, GetLocalModelProxyApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLocalModelProxyApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/proxy/key",
+		...options,
+	});
+
+export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<GenerateLocalModelProxyApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<GenerateLocalModelProxyApiKeyResponses, GenerateLocalModelProxyApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGenerateLocalModelProxyApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/proxy/key",
 		...options,
 	});
 
@@ -3166,6 +3259,76 @@ export const putModelKind = <ThrowOnError extends boolean = false>(options: Opti
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/models/{modelName}/kind",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteModelLaunchArgumentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteModelLaunchArgumentsResponses, DeleteModelLaunchArgumentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteModelLaunchArgumentsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDeleteModelLaunchArgumentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/launch-args",
+		...options,
+	});
+
+export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
+	options: Options<GetModelLaunchArgumentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetModelLaunchArgumentsResponses, GetModelLaunchArgumentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetModelLaunchArgumentsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLaunchArgumentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/launch-args",
+		...options,
+	});
+
+export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
+	options: Options<PutModelLaunchArgumentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<PutModelLaunchArgumentsResponses, PutModelLaunchArgumentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPutModelLaunchArgumentsBody,
+					path: zPutModelLaunchArgumentsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPutModelLaunchArgumentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/launch-args",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

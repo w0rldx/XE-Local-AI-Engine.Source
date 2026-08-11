@@ -24,6 +24,7 @@ import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
+import { LocalModelProxyKeyPanel } from "@/features/node-settings/components/LocalModelProxyKeyPanel";
 import { McpServerKeyPanel } from "@/features/node-settings/components/McpServerKeyPanel";
 import { McpWorkspaceAllowlistPanel } from "@/features/node-settings/components/McpWorkspaceAllowlistPanel";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
@@ -501,6 +502,8 @@ export function NodeSettings() {
 				/>
 
 				<McpServerKeyPanel />
+
+				<LocalModelProxyKeyPanel />
 
 				<McpWorkspaceAllowlistPanel />
 
