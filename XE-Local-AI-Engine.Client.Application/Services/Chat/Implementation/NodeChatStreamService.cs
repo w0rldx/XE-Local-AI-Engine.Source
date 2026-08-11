@@ -400,7 +400,7 @@ public sealed class NodeChatStreamService(
         }
         else if (attachmentsAllowed)
         {
-            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, resolution.SupportsVision, cancellationToken).ConfigureAwait(false);
+            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
 
             // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
             // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
@@ -419,10 +419,20 @@ public sealed class NodeChatStreamService(
             attachmentContext = null;
         }
 
+        // Image parts are attached INDEPENDENTLY of the tool/text branch above so a vision model receives them in plain
+        // chat, tool-enabled chat, AND agent mode (the offerTools branch only stages TEXT for the file tools; images have
+        // no Markdown to stage and would otherwise be silently dropped). Gated on the same cloud-egress guard as
+        // attachments and on the effective model actually being vision-capable.
+        ConversationMessageDto? imageContext = null;
+        if (attachmentsAllowed && resolution.SupportsVision)
+        {
+            imageContext = await BuildImageAttachmentMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+        }
+
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildConversationContext(conversation, userMessage, selectedPath, attachmentContext, knowledgeContext),
+            BuildConversationContext(conversation, userMessage, selectedPath, attachmentContext, imageContext, knowledgeContext),
             resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
@@ -655,6 +665,7 @@ public sealed class NodeChatStreamService(
         NodeChatPersistedMessageDto userMessage,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         ConversationMessageDto? attachmentContext,
+        ConversationMessageDto? imageContext = null,
         ConversationMessageDto? knowledgeContext = null)
     {
         // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
@@ -668,10 +679,20 @@ public sealed class NodeChatStreamService(
         // knowledge so uploaded files (explicitly attached this conversation) read ahead of the retrieved knowledge
         // supplement; the compaction synopsis comes last of the three so the condensed older history sits immediately
         // before the recent verbatim turns.
-        var leadingContext = new List<ConversationMessageDto>(capacity: 3);
+        var leadingContext = new List<ConversationMessageDto>(capacity: 4);
         if (attachmentContext is not null)
         {
             leadingContext.Add(attachmentContext with
+            {
+                SortOrder = leadingContext.Count
+            });
+        }
+
+        // Image parts ride their own synthetic User message, right after any inlined attachment text, so a vision model
+        // reads the images ahead of the recent conversation history (same placement rationale as the text attachments).
+        if (imageContext is not null)
+        {
+            leadingContext.Add(imageContext with
             {
                 SortOrder = leadingContext.Count
             });
@@ -838,7 +859,6 @@ public sealed class NodeChatStreamService(
     // (the common no-attachment path short-circuits before any store call).
     private async Task<ConversationMessageDto?> BuildAttachmentContextMessageAsync(Guid conversationId,
         IReadOnlyList<Guid>? attachmentFileIds,
-        bool modelSupportsImages,
         CancellationToken cancellationToken)
     {
         if (attachmentFileIds is null || attachmentFileIds.Count == 0)
@@ -848,46 +868,27 @@ public sealed class NodeChatStreamService(
 
         var requested = attachmentFileIds.ToHashSet();
         var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var attachments = available
+                          .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
+                          .ToList();
 
-        var textAttachments = available
-                              .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
-                              .ToList();
-
-        string? content = null;
-        if (textAttachments.Count > 0)
+        if (attachments.Count == 0)
         {
-            var parts = new List<AttachmentTextPart>(textAttachments.Count);
-            foreach (var attachment in textAttachments)
-            {
-                var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(markdown))
-                {
-                    parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
-                }
-            }
-
-            content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, fenceSeedProvider.DeriveSeed(conversationId));
+            return null;
         }
 
-        List<ConversationImagePart>? images = null;
-        if (modelSupportsImages)
+        var parts = new List<AttachmentTextPart>(attachments.Count);
+        foreach (var attachment in attachments)
         {
-            foreach (var file in available)
+            var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(markdown))
             {
-                if (!requested.Contains(file.FileId) || file.ExtractionStatus != DocumentExtractionStatus.Image)
-                {
-                    continue;
-                }
-
-                var bytes = await uploadedFileStore.ReadBytesAsync(conversationId, file.FileId, cancellationToken).ConfigureAwait(false);
-                if (bytes is { } data)
-                {
-                    (images ??= []).Add(new ConversationImagePart(file.MimeType, data));
-                }
+                parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
             }
         }
 
-        if (content is null && images is null)
+        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, fenceSeedProvider.DeriveSeed(conversationId));
+        if (content is null)
         {
             return null;
         }
@@ -896,7 +897,85 @@ public sealed class NodeChatStreamService(
         {
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
-            Content = content ?? string.Empty,
+            Content = content,
+            SortOrder = 0
+        };
+    }
+
+    // Collects the requested image attachments as image content parts for a vision turn. Runs INDEPENDENTLY of the
+    // text/tool attachment branch so images reach the model in plain chat, tool-enabled chat, AND agent mode alike — a
+    // vision model consumes image parts directly, and (unlike documents) there is no text to stage for the file tools.
+    // Bounded by MaxImageAttachments and an aggregate MaxImageAttachmentBytes budget: the client re-sends every
+    // conversation attachment each turn, so decrypting them all into memory unbounded would let a large conversation
+    // exhaust the node. Images beyond either cap are dropped (first-requested kept) with a warning. Returns an image-only
+    // User message (blank content) or null when the turn attaches no images.
+    private async Task<ConversationMessageDto?> BuildImageAttachmentMessageAsync(Guid conversationId,
+        IReadOnlyList<Guid>? attachmentFileIds,
+        CancellationToken cancellationToken)
+    {
+        if (attachmentFileIds is null || attachmentFileIds.Count == 0)
+        {
+            return null;
+        }
+
+        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+
+        // Preserve the requested order so the caps deterministically keep the first-requested images.
+        var imageFiles = attachmentFileIds
+                         .Select(id => available.FirstOrDefault(file => file.FileId == id && file.ExtractionStatus == DocumentExtractionStatus.Image))
+                         .Where(file => file is not null)
+                         .ToList();
+        if (imageFiles.Count == 0)
+        {
+            return null;
+        }
+
+        var maxCount = localChatOptions.Value.MaxImageAttachments;
+        var maxBytes = localChatOptions.Value.MaxImageAttachmentBytes;
+
+        List<ConversationImagePart>? images = null;
+        long totalBytes = 0;
+        var dropped = 0;
+        foreach (var file in imageFiles)
+        {
+            if (images is { Count: var count } && count >= maxCount)
+            {
+                dropped++;
+                continue;
+            }
+
+            var bytes = await uploadedFileStore.ReadBytesAsync(conversationId, file!.FileId, cancellationToken).ConfigureAwait(false);
+            if (bytes is not { } data)
+            {
+                continue;
+            }
+
+            if (totalBytes + data.Length > maxBytes)
+            {
+                dropped++;
+                continue;
+            }
+
+            totalBytes += data.Length;
+            (images ??= []).Add(new ConversationImagePart(file.MimeType, data));
+        }
+
+        if (dropped > 0)
+        {
+            logger.LogWarning("Dropped {Dropped} image attachment(s) for conversation {ConversationId} exceeding the per-turn image budget ({MaxCount} images / {MaxBytes} bytes).",
+                dropped, conversationId, maxCount, maxBytes);
+        }
+
+        if (images is null)
+        {
+            return null;
+        }
+
+        return new ConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = MessageRole.User,
+            Content = string.Empty,
             SortOrder = 0,
             Images = images
         };

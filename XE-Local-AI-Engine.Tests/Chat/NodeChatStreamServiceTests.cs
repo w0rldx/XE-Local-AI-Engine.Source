@@ -1057,27 +1057,65 @@ public sealed class NodeChatStreamServiceTests
             "A non-vision model must never receive image parts.");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenLocalToolsEnabledOnVisionModel_StillAttachesImageParts()
+    {
+        // The tool/agent branch stages only TEXT for the file tools; images must still reach a vision model, so image
+        // parts are composed independently of that branch (regression: they were dropped when tools were enabled).
+        var captured = await RunImageAttachmentAsync(supportsVision: true, supportsTools: true, useLocalTools: true).ConfigureAwait(false);
+
+        var imageMessage = captured.SingleOrDefault(message => message.Images is { Count: > 0 });
+        AssertEx.NotNull(imageMessage);
+        AssertEx.Equal(expected: 1, imageMessage!.Images!.Count);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenImagesExceedTheCap_AttachesOnlyUpToTheLimit()
+    {
+        // The client re-sends every conversation attachment each turn; the per-turn image count cap bounds how many are
+        // decrypted and attached so a large conversation cannot exhaust the node.
+        var options = new LocalChatAgentOptions
+        {
+            MaxImageAttachments = 3
+        };
+        var captured = await RunImageAttachmentAsync(supportsVision: true, imageCount: 10, options: options).ConfigureAwait(false);
+
+        var imageMessage = captured.SingleOrDefault(message => message.Images is { Count: > 0 });
+        AssertEx.NotNull(imageMessage);
+        AssertEx.Equal(expected: 3, imageMessage!.Images!.Count);
+    }
+
     // Runs a plain-chat send whose only attachment is an Image-status file, through a node-local (GGUF-routed) model
     // whose vision capability is toggled by supportsVision, and returns the context the runner observed. A non-Ollama
     // provider name forces the GGUF capability branch (where SupportsVision is resolved); the default Ollama resolver
     // would bypass it and never surface vision.
-    private static async Task<IReadOnlyList<ConversationMessageDto>> RunImageAttachmentAsync(bool supportsVision)
+    private static async Task<IReadOnlyList<ConversationMessageDto>> RunImageAttachmentAsync(bool supportsVision,
+        bool supportsTools = false,
+        bool useLocalTools = false,
+        int imageCount = 1,
+        LocalChatAgentOptions? options = null)
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var fileId = Guid.NewGuid();
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
-        ReadOnlyMemory<byte> imageBytes = new byte[] { 1, 2, 3, 4, 5 };
-        IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo(fileId, conversationId, "photo.png", "image/png", ".png", SizeBytes: imageBytes.Length, DocumentExtractionStatus.Image, ExtractedChars: null, CreatedAtUtc: 0)];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+        var files = new List<ConversationUploadedFileInfo>(imageCount);
+        var fileIds = new List<Guid>(imageCount);
+        for (var i = 0; i < imageCount; i++)
+        {
+            var fileId = Guid.NewGuid();
+            fileIds.Add(fileId);
+            // The first image keeps the canonical 5-byte body the single-image assertions check; the rest are distinct.
+            ReadOnlyMemory<byte> imageBytes = i == 0 ? new byte[] { 1, 2, 3, 4, 5 } : new byte[] { (byte)(10 + i) };
+            files.Add(new ConversationUploadedFileInfo(fileId, conversationId, $"photo{i}.png", "image/png", ".png", SizeBytes: imageBytes.Length, DocumentExtractionStatus.Image, ExtractedChars: null, CreatedAtUtc: 0));
+            uploadedFileStore.ReadBytesAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns<ReadOnlyMemory<byte>?>(imageBytes);
+        }
+
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
-        uploadedFileStore.ReadBytesAsync(conversationId, fileId, Arg.Any<CancellationToken>())
-                         .Returns<ReadOnlyMemory<byte>?>(imageBytes);
 
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llama.cpp");
@@ -1085,13 +1123,13 @@ public sealed class NodeChatStreamServiceTests
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
-                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: supportsVision)), Substitute.For<IActiveCloudChatClientFactory>(),
+                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision)), Substitute.For<IActiveCloudChatClientFactory>(),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions()),
+            Options.Create(options ?? new LocalChatAgentOptions()),
             StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
@@ -1114,7 +1152,8 @@ public sealed class NodeChatStreamServiceTests
                            "what is in this image?",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+                           UseLocalTools: useLocalTools,
+                           AttachmentFileIds: fileIds)).ConfigureAwait(false))
         {
             drained++;
         }
