@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse } from "@/core/api/generated";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ModelFitPanel } from "@/features/models/components/ModelFitPanel";
+import { ModelLaunchArgumentsPanel } from "@/features/models/components/ModelLaunchArgumentsPanel";
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
 import { buildKindOptions, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
 
@@ -46,6 +48,7 @@ function ModelDetailsBody({
 	onResetKind,
 }: ModelDetailsBodyProps) {
 	const { t } = useTranslation();
+	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const [tab, setTab] = useState<string | null>("overview");
 	const hasLicenseOrTemplate = Boolean(details?.template || details?.license);
 
@@ -63,6 +66,11 @@ function ModelDetailsBody({
 				<Tabs.Tab value="type">{t("pages.models.type.columnHeader", "Type")}</Tabs.Tab>
 				<Tabs.Tab value="license">License &amp; template</Tabs.Tab>
 				<Tabs.Tab value="fit">Fit</Tabs.Tab>
+				{developerMode ? (
+					<Tabs.Tab value="advanced" data-testid="model-advanced-tab">
+						{t("pages.models.launchArgs.tab", "Advanced")}
+					</Tabs.Tab>
+				) : null}
 			</Tabs.List>
 
 			<Tabs.Panel value="overview" pt="md">
@@ -158,6 +166,13 @@ function ModelDetailsBody({
 			<Tabs.Panel value="fit" pt="md">
 				{fitContent}
 			</Tabs.Panel>
+
+			{developerMode ? (
+				<Tabs.Panel value="advanced" pt="md">
+					{/* Mount the panel only while the Advanced tab is active so its override query fires on demand, mirroring Fit. */}
+					{tab === "advanced" ? <ModelLaunchArgumentsPanel modelName={model.modelName} /> : <span />}
+				</Tabs.Panel>
+			) : null}
 		</Tabs>
 	);
 }

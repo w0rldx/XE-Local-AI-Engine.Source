@@ -150,6 +150,11 @@ public static class LlamaServerServiceCollectionExtensions
         // Providers (the interface is DEFINED here, implemented in Application).
         services.TryAddSingleton<IInferenceProfileResolver, DefaultInferenceProfileResolver>();
 
+        // Self-satisfying per-model extra-launch-arg resolver: empty (no override) until the Application host registers
+        // its store-backed resolver last (last registration wins), keeping the layer arrow Application → Providers (the
+        // interface is DEFINED here, implemented in Application).
+        services.TryAddSingleton<ILlamaServerExtraLaunchArgumentsResolver, EmptyLlamaServerExtraLaunchArgumentsResolver>();
+
         // Measured GPU layer placement for the node: the supervisor writes it as models load, the runtime device audit
         // reads it for the operator UI. Both must see the SAME instance, so it is registered before the supervisor and
         // passed in explicitly rather than left to the supervisor's private default.
@@ -172,7 +177,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
             allocationResolver: sp.GetRequiredService<IProcessContextAllocationResolver>(),
             layerPlacementReport: sp.GetRequiredService<ILlamaLayerPlacementReport>(),
-            launchAdmissions: sp.GetRequiredService<IProcessLaunchAdmissionRegistry>()));
+            launchAdmissions: sp.GetRequiredService<IProcessLaunchAdmissionRegistry>(),
+            extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 

@@ -165,6 +165,10 @@ public static class LocalApiRoutes
         // Graceful in-memory unload (keep_alive=0). The literal "unload" segment follows the model name, mirroring the
         // "kind" route, so it stays distinct from ModelByName.
         public const string Unload = "models/{modelName}/unload";
+
+        // Developer/advanced per-model extra llama-server launch-argument override. The literal "launch-args" segment
+        // follows the model name, mirroring "kind"/"unload", so it stays distinct from ModelByName.
+        public const string ModelLaunchArguments = "models/{modelName}/launch-args";
     }
 
     /// <summary>
