@@ -349,6 +349,32 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest =
 	parameters?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse = {
+	configured: boolean;
+	apiKey?: XeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse | null;
+	endpointUrl: string;
+	key: string;
+};
+
+export type XeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse = {
+	prefix: string;
+	createdAt: string;
+	lastUsedAt?: string | null;
+};
+
+/**
+ * a request dto that doesn't have any properties
+ */
+export type FastEndpointsEmptyRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse = {
+	configured: boolean;
+	apiKey?: XeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse | null;
+	endpointUrl: string;
+};
+
 export type XeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = {
 	cancelledCount?: number;
 };
@@ -1133,13 +1159,6 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = {
 	prefix: string;
 	createdAt: string;
 	lastUsedAt?: string | null;
-};
-
-/**
- * a request dto that doesn't have any properties
- */
-export type FastEndpointsEmptyRequest = {
-	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = {
@@ -3715,6 +3734,89 @@ export type TriggerScheduledJobResponses = {
 };
 
 export type TriggerScheduledJobResponse = TriggerScheduledJobResponses[keyof TriggerScheduledJobResponses];
+
+export type RevokeLocalModelProxyApiKeyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/proxy/key";
+};
+
+export type RevokeLocalModelProxyApiKeyErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RevokeLocalModelProxyApiKeyResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RevokeLocalModelProxyApiKeyResponse =
+	RevokeLocalModelProxyApiKeyResponses[keyof RevokeLocalModelProxyApiKeyResponses];
+
+export type GetLocalModelProxyApiKeyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/proxy/key";
+};
+
+export type GetLocalModelProxyApiKeyErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLocalModelProxyApiKeyResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse;
+};
+
+export type GetLocalModelProxyApiKeyResponse = GetLocalModelProxyApiKeyResponses[keyof GetLocalModelProxyApiKeyResponses];
+
+export type GenerateLocalModelProxyApiKeyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/proxy/key";
+};
+
+export type GenerateLocalModelProxyApiKeyErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GenerateLocalModelProxyApiKeyResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse;
+};
+
+export type GenerateLocalModelProxyApiKeyResponse =
+	GenerateLocalModelProxyApiKeyResponses[keyof GenerateLocalModelProxyApiKeyResponses];
 
 export type CancelAllPreviewRunsData = {
 	body?: never;

@@ -110,6 +110,12 @@ vi.mock("@/features/node-settings/components/McpServerKeyPanel", () => ({
 	McpServerKeyPanel: () => <div data-testid="mcp-server-key-panel" />,
 }));
 
+// The local-model-proxy key panel owns its own data layer (the inbound-credential SDK endpoints) and has its own
+// dedicated test; stub it to null here, matching the MCP server-key panel above, so these page tests stay isolated.
+vi.mock("@/features/node-settings/components/LocalModelProxyKeyPanel", () => ({
+	LocalModelProxyKeyPanel: () => <div data-testid="local-model-proxy-key-panel" />,
+}));
+
 vi.mock("@/features/node-settings/components/McpWorkspaceAllowlistPanel", () => ({
 	McpWorkspaceAllowlistPanel: () => <div data-testid="mcp-workspace-allowlist-panel" />,
 }));

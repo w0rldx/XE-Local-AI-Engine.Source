@@ -67,6 +67,9 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // INBOUND direction: the bearer credential an external MCP client presents to this node's own MCP endpoint.
         // Scoped to match the scoped, DbContext-backed key store it reads through.
         builder.Services.AddScoped<IMcpServerApiKeyService, McpServerApiKeyService>();
+        // INBOUND model proxy: the bearer credential an external OpenAI-compatible tool presents to this node's
+        // raw-model proxy endpoint. Scoped to match its scoped, DbContext-backed key store.
+        builder.Services.AddScoped<Client.Services.Proxy.ILocalModelProxyApiKeyService, Client.Services.Proxy.Implementation.LocalModelProxyApiKeyService>();
 
         return builder;
     }

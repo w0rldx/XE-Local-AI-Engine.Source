@@ -88,6 +88,9 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // The single INBOUND-MCP bearer credential (opposite direction to the registrations above): the key an external
         // MCP client presents to this node's own MCP server endpoint. Material is encrypted at rest.
         builder.Services.AddScoped<IMcpServerApiKeyStore, McpServerApiKeyStore>();
+        // The single INBOUND model-proxy bearer credential — the key an external OpenAI-compatible tool presents to this
+        // node's raw-model proxy. Separate from the MCP key above; material is encrypted at rest on the same terms.
+        builder.Services.AddScoped<ILocalModelProxyApiKeyStore, LocalModelProxyApiKeyStore>();
         // Model-type classification store. Persists the digest-keyed detection cache and the operator override, keyed by
         // model name (NOCASE). Unencrypted — model names/digests/capabilities/kinds are not secrets. The classification
         // service reads/writes through it to resolve the effective kind that filters the chat picker. Scoped to match
