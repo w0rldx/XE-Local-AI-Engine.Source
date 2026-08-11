@@ -1242,6 +1242,15 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = {
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse = {
+	modelName: string;
+	rawArguments: string;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = {
 	modelName: string;
 	maxContextTokens?: number | null;
@@ -1297,6 +1306,10 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = {
 	kind?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1SetModelLaunchArgumentsRequest = {
+	rawArguments?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = {
@@ -5666,6 +5679,93 @@ export type PutModelKindResponses = {
 };
 
 export type PutModelKindResponse = PutModelKindResponses[keyof PutModelKindResponses];
+
+export type DeleteModelLaunchArgumentsData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/launch-args";
+};
+
+export type DeleteModelLaunchArgumentsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteModelLaunchArgumentsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+};
+
+export type DeleteModelLaunchArgumentsResponse = DeleteModelLaunchArgumentsResponses[keyof DeleteModelLaunchArgumentsResponses];
+
+export type GetModelLaunchArgumentsData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/launch-args";
+};
+
+export type GetModelLaunchArgumentsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetModelLaunchArgumentsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+};
+
+export type GetModelLaunchArgumentsResponse = GetModelLaunchArgumentsResponses[keyof GetModelLaunchArgumentsResponses];
+
+export type PutModelLaunchArgumentsData = {
+	body: XeLocalAiEngineClientEndpointsLocalModelsV1SetModelLaunchArgumentsRequest;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/launch-args";
+};
+
+export type PutModelLaunchArgumentsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type PutModelLaunchArgumentsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+};
+
+export type PutModelLaunchArgumentsResponse = PutModelLaunchArgumentsResponses[keyof PutModelLaunchArgumentsResponses];
 
 export type GetLocalModelDetailsData = {
 	body?: never;

@@ -360,6 +360,27 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal("0", spec!.Arguments[IndexOf(spec.Arguments, "--cache-ram") + 1]);
     }
 
+    [Test]
+    public async Task EnsureRunning_WithPerModelExtraArgs_AppendsThemAfterTheBuiltSpec()
+    {
+        // The per-model developer override: whatever the resolver returns (already stripped of reserved flags) is
+        // appended AFTER the built spec, so a later scalar flag overrides a bundled tuning default (llama.cpp last-wins).
+        var launcher = new FakeProcessLauncher();
+        var extraArgs = Substitute.For<ILlamaServerExtraLaunchArgumentsResolver>();
+        extraArgs.ResolveAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<string>>(["--top-k", "40", "--repeat-penalty", "1.1"]));
+        await using var supervisor = SupervisorFactory.Create(launcher, extraArgumentsResolver: extraArgs);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Contains(spec!.Arguments, "--top-k");
+        AssertEx.Equal("40", spec.Arguments[IndexOf(spec.Arguments, "--top-k") + 1]);
+        AssertEx.Equal("1.1", spec.Arguments[IndexOf(spec.Arguments, "--repeat-penalty") + 1]);
+        AssertEx.True(IndexOf(spec.Arguments, "--top-k") > IndexOf(spec.Arguments, "--jinja"),
+            "Operator extra args must be appended after the built spec so they override policy defaults.");
+    }
+
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
     {
         var hostIndex = IndexOf(spec.Arguments, "--host");

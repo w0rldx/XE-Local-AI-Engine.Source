@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -10,9 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    partial class NodeChatDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811161453_AddModelLaunchArguments")]
+    partial class AddModelLaunchArguments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -1634,36 +1637,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("DocumentId", "Ordinal");
 
                     b.ToTable("knowledge_document_sections", (string)null);
-                });
-
-            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.LocalModelProxyApiKey", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<byte[]>("KeyHash")
-                        .IsRequired()
-                        .HasColumnType("BLOB")
-                        .HasColumnName("key_hash");
-
-                    b.Property<long?>("LastUsedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("last_used_at_utc");
-
-                    b.Property<string>("Prefix")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("prefix");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("local_model_proxy_api_keys", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpAgentRun", b =>

@@ -101,6 +101,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // restarts. Unencrypted — model names and provider keys are not secrets. Scoped to match the
         // scoped, DbContext-backed store; the singleton resolver reads it through a fresh scope per lookup.
         builder.Services.AddScoped<IModelProviderMapStore, ModelProviderMapStore>();
+        builder.Services.AddScoped<IModelLaunchArgumentsStore, ModelLaunchArgumentsStore>();
         // Feedback-insights read store. Pure analytics over node-local feedback/tool-event rows; it reads only
         // plaintext columns and writes nothing.
         builder.Services.AddScoped<IFeedbackInsightsStore, FeedbackInsightsStore>();

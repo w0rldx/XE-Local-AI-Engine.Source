@@ -15,6 +15,7 @@ import {
 export function toLocalModelViewModel(dto: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse): LocalModelViewModel {
 	return {
 		modelName: dto.modelName ?? "",
+		provider: dto.provider ?? "Ollama",
 		sizeLabel: formatModelSize(dto.sizeBytes),
 		modifiedDateLabel: formatModelModifiedDate(dto.modifiedAtUtc),
 		familyLabel: dto.family?.trim() || emptyModelValue,

@@ -64,6 +64,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ModelProviderMap> ModelProviderMaps => Set<ModelProviderMap>();
 
+    internal DbSet<ModelLaunchArguments> ModelLaunchArguments => Set<ModelLaunchArguments>();
+
     internal DbSet<ScheduledJobDefinition> ScheduledJobDefinitions => Set<ScheduledJobDefinition>();
 
     internal DbSet<ScheduledJobRun> ScheduledJobRuns => Set<ScheduledJobRun>();
@@ -332,6 +334,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new McpAgentRunLedgerConfiguration());
         modelBuilder.ApplyConfiguration(new ModelClassificationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelProviderMapConfiguration());
+        modelBuilder.ApplyConfiguration(new ModelLaunchArgumentsConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobDefinitionConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobRunConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobRunEventConfiguration());

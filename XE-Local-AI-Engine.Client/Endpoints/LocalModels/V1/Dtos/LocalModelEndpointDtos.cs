@@ -138,6 +138,32 @@ public sealed class ModelKindResponse
     public required bool IsOverridden { get; init; }
 }
 
+/// <summary>Request DTO for reading a model's extra-launch-argument override. <see cref="ModelName" /> is bound from the route.</summary>
+public sealed class GetModelLaunchArgumentsRequest
+{
+    public string? ModelName { get; init; }
+}
+
+/// <summary>
+///     Request DTO for setting a model's extra <c>llama-server</c> launch-argument override (developer/advanced).
+///     <see cref="ModelName" /> is bound from the route; <see cref="RawArguments" /> is the raw operator-entered flag
+///     string (for example <c>--top-k 40 --repeat-penalty 1.1</c>).
+/// </summary>
+public sealed class SetModelLaunchArgumentsRequest
+{
+    public string? ModelName { get; init; }
+
+    public string? RawArguments { get; init; }
+}
+
+/// <summary>Response for the per-model extra-launch-argument override endpoints. Empty <see cref="RawArguments" /> means no override.</summary>
+public sealed class ModelLaunchArgumentsResponse
+{
+    public required string ModelName { get; init; }
+
+    public required string RawArguments { get; init; }
+}
+
 public sealed class LocalModelDetailsResponse
 {
     public required string ModelName { get; init; }

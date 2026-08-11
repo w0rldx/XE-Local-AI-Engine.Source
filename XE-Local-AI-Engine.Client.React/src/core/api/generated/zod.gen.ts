@@ -1538,6 +1538,13 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.o
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse = z.object({
+	modelName: z.string(),
+	rawArguments: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = z.object({
 	modelName: z.string(),
 	maxContextTokens: z
@@ -1599,6 +1606,10 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = z.object({
 	kind: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelLaunchArgumentsRequest = z.object({
+	rawArguments: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = z.object({
@@ -4224,6 +4235,35 @@ export const zPutModelKindPath = z.object({
  * Success
  */
 export const zPutModelKindResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+
+export const zDeleteModelLaunchArgumentsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zDeleteModelLaunchArgumentsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+
+export const zGetModelLaunchArgumentsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLaunchArgumentsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+
+export const zPutModelLaunchArgumentsBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelLaunchArgumentsRequest;
+
+export const zPutModelLaunchArgumentsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zPutModelLaunchArgumentsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
 
 export const zGetLocalModelDetailsPath = z.object({
 	modelName: z.string(),
