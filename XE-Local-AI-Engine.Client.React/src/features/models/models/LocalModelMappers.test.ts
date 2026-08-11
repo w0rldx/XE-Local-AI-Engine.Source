@@ -7,6 +7,7 @@ describe("local model mappers", () => {
 		expect(
 			toLocalModelViewModel({
 				modelName: "llama3:8b",
+				provider: "llamacpp",
 				sizeBytes: 1_073_741_824,
 				modifiedAtUtc: Date.UTC(2026, 4, 24),
 				family: "llama",
@@ -22,6 +23,7 @@ describe("local model mappers", () => {
 			}),
 		).toEqual({
 			modelName: "llama3:8b",
+			provider: "llamacpp",
 			sizeLabel: "1.0 GB",
 			modifiedDateLabel: "2026-05-24",
 			familyLabel: "llama",
@@ -49,6 +51,7 @@ describe("local model mappers", () => {
 			}),
 		).toEqual({
 			modelName: "",
+			provider: "Ollama",
 			sizeLabel: "—",
 			modifiedDateLabel: "—",
 			familyLabel: "—",
