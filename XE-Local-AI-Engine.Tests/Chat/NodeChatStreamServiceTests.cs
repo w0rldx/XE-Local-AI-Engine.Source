@@ -1044,7 +1044,14 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.NotNull(imageMessage);
         AssertEx.Equal(expected: 1, imageMessage!.Images!.Count);
         AssertEx.Equal("image/png", imageMessage.Images[0].MediaType);
-        AssertEx.True(imageMessage.Images[0].Data.Span.SequenceEqual(new byte[] { 1, 2, 3, 4, 5 }),
+        AssertEx.True(imageMessage.Images[0].Data.Span.SequenceEqual(new byte[]
+            {
+                1,
+                2,
+                3,
+                4,
+                5
+            }),
             "The decrypted image bytes must ride the synthetic context message.");
     }
 
@@ -1110,8 +1117,21 @@ public sealed class NodeChatStreamServiceTests
             var fileId = Guid.NewGuid();
             fileIds.Add(fileId);
             // The first image keeps the canonical 5-byte body the single-image assertions check; the rest are distinct.
-            ReadOnlyMemory<byte> imageBytes = i == 0 ? new byte[] { 1, 2, 3, 4, 5 } : new byte[] { (byte)(10 + i) };
-            files.Add(new ConversationUploadedFileInfo(fileId, conversationId, $"photo{i}.png", "image/png", ".png", SizeBytes: imageBytes.Length, DocumentExtractionStatus.Image, ExtractedChars: null, CreatedAtUtc: 0));
+            ReadOnlyMemory<byte> imageBytes = i == 0
+                ? new byte[]
+                {
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                }
+                : new byte[]
+                {
+                    (byte)(10 + i)
+                };
+            files.Add(new ConversationUploadedFileInfo(fileId, conversationId, $"photo{i}.png", "image/png", ".png", SizeBytes: imageBytes.Length, DocumentExtractionStatus.Image, ExtractedChars: null,
+                CreatedAtUtc: 0));
             uploadedFileStore.ReadBytesAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns<ReadOnlyMemory<byte>?>(imageBytes);
         }
 
@@ -1123,7 +1143,8 @@ public sealed class NodeChatStreamServiceTests
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
-                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision)), Substitute.For<IActiveCloudChatClientFactory>(),
+                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision)),
+                Substitute.For<IActiveCloudChatClientFactory>(),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),

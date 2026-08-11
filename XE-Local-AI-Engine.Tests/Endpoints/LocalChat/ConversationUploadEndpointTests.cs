@@ -42,7 +42,13 @@ public sealed class ConversationUploadEndpointTests
 
         // A genuinely unsupported type: not a text/pdf/docx the extractor handles, and not an accepted image. It is
         // rejected at the admission gate before any persistence, so no conversation seed is needed.
-        var bytes = new byte[] { 0x4D, 0x5A, 0x00, 0x00 };
+        var bytes = new byte[]
+        {
+            0x4D,
+            0x5A,
+            0x00,
+            0x00
+        };
         using var response = await UploadAsync(factory, client, Guid.NewGuid(), "installer.exe", bytes, "application/octet-stream").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -57,7 +63,17 @@ public sealed class ConversationUploadEndpointTests
         var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
 
         // Minimal PNG signature — image bytes are stored as-is (no extraction), so content need not be a full image.
-        var pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        var pngSignature = new byte[]
+        {
+            0x89,
+            0x50,
+            0x4E,
+            0x47,
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A
+        };
         using var response = await UploadAsync(factory, client, conversationId, "photo.png", pngSignature, "image/png").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);

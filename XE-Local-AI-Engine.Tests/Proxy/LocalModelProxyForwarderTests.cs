@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Proxy;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -275,7 +276,7 @@ public sealed class LocalModelProxyForwarderTests
             {
                 Content = new StringContent(body, Encoding.UTF8)
             };
-            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             return response;
         }
     }
@@ -298,7 +299,7 @@ public sealed class LocalModelProxyForwarderTests
             {
                 Content = new StreamContent(new StallingStream())
             };
-            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
             return Task.FromResult(response);
         }
     }
@@ -326,16 +327,20 @@ public sealed class LocalModelProxyForwarderTests
             return 0;
         }
 
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
 
         public override void Flush()
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 }

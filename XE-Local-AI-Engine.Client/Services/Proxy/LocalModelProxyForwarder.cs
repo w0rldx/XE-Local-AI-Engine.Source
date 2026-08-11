@@ -85,7 +85,11 @@ internal sealed class LocalModelProxyForwarder
                    })
                    .ToArray();
 
-        await context.Response.WriteAsJsonAsync(new { @object = "list", data }, ct).ConfigureAwait(false);
+        await context.Response.WriteAsJsonAsync(new
+        {
+            @object = "list",
+            data
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>Handles <c>POST proxy/v1/chat/completions</c>.</summary>
@@ -286,6 +290,14 @@ internal sealed class LocalModelProxyForwarder
     {
         context.Response.StatusCode = statusCode;
         // OpenAI error envelope, so an OpenAI-compatible client surfaces the message instead of an empty failure.
-        await context.Response.WriteAsJsonAsync(new { error = new { message, type, code = (string?)null } }, ct).ConfigureAwait(false);
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = new
+            {
+                message,
+                type,
+                code = (string?)null
+            }
+        }, ct).ConfigureAwait(false);
     }
 }

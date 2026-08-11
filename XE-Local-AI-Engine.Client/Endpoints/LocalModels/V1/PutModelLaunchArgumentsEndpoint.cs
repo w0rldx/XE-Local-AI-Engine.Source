@@ -60,11 +60,11 @@ public sealed class PutModelLaunchArgumentsEndpoint(
         {
             _ = await _store.DeleteAsync(decodedModelName!, ct).ConfigureAwait(false);
             await Send.OkAsync(new ModelLaunchArgumentsResponse
-            {
-                ModelName = decodedModelName!,
-                RawArguments = string.Empty
-            },
-            ct).ConfigureAwait(false);
+                {
+                    ModelName = decodedModelName!,
+                    RawArguments = string.Empty
+                },
+                ct).ConfigureAwait(false);
             return;
         }
 
@@ -81,10 +81,10 @@ public sealed class PutModelLaunchArgumentsEndpoint(
 
         var result = await _store.UpsertAsync(decodedModelName!, raw, ct).ConfigureAwait(false);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
-        {
-            ModelName = result.ModelName,
-            RawArguments = result.RawArguments
-        },
-        ct).ConfigureAwait(false);
+            {
+                ModelName = result.ModelName,
+                RawArguments = result.RawArguments
+            },
+            ct).ConfigureAwait(false);
     }
 }

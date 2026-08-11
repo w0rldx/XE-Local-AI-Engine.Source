@@ -38,10 +38,10 @@ public sealed class DeleteModelLaunchArgumentsEndpoint(
 
         _ = await _store.DeleteAsync(decodedModelName!, ct).ConfigureAwait(false);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
-        {
-            ModelName = decodedModelName!,
-            RawArguments = string.Empty
-        },
-        ct).ConfigureAwait(false);
+            {
+                ModelName = decodedModelName!,
+                RawArguments = string.Empty
+            },
+            ct).ConfigureAwait(false);
     }
 }

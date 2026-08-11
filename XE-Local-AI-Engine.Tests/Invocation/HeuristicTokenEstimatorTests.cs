@@ -152,7 +152,15 @@ public sealed class HeuristicTokenEstimatorTests
         var estimator = new HeuristicTokenEstimator();
         var text = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
         var textPlusImage = new ChatMessage(ChatRole.User,
-            [new TextContent(new string('x', 40)), new DataContent(new byte[] { 1, 2, 3, 4 }, "image/png")]);
+        [
+            new TextContent(new string('x', 40)), new DataContent(new byte[]
+            {
+                1,
+                2,
+                3,
+                4
+            }, "image/png")
+        ]);
 
         var textEstimate = estimator.EstimateTokens(text);
         var imageEstimate = estimator.EstimateTokens(textPlusImage);

@@ -10,6 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Client.Services.Proxy;
+using XE_Local_AI_Engine.Client.Services.Proxy.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 internal static class AddNodeModelCapabilitiesAndMcpExtensions
@@ -69,7 +71,7 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         builder.Services.AddScoped<IMcpServerApiKeyService, McpServerApiKeyService>();
         // INBOUND model proxy: the bearer credential an external OpenAI-compatible tool presents to this node's
         // raw-model proxy endpoint. Scoped to match its scoped, DbContext-backed key store.
-        builder.Services.AddScoped<Client.Services.Proxy.ILocalModelProxyApiKeyService, Client.Services.Proxy.Implementation.LocalModelProxyApiKeyService>();
+        builder.Services.AddScoped<ILocalModelProxyApiKeyService, LocalModelProxyApiKeyService>();
 
         return builder;
     }

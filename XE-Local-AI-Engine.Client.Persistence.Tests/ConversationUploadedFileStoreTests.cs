@@ -100,7 +100,21 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
 
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000)).ConfigureAwait(false);
         var fileId = Guid.NewGuid();
-        var pixels = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0xFF, 0x10, 0x42 };
+        var pixels = new byte[]
+        {
+            0x89,
+            0x50,
+            0x4E,
+            0x47,
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A,
+            0x00,
+            0xFF,
+            0x10,
+            0x42
+        };
 
         // Exactly what the upload endpoint constructs for an image: Image status, no extracted Markdown, raw bytes.
         var info = await store.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,

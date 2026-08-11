@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
+using System.Text;
+
 /// <summary>
 ///     Parses an operator-entered raw <c>llama-server</c> extra-argument string into a token list and enforces the
 ///     safety rule the per-model launch-args override carries: the operator may override the bundled sampling/decoding
@@ -61,7 +63,7 @@ public static class LlamaLaunchArgumentParser
         }
 
         var tokens = new List<string>();
-        var current = new System.Text.StringBuilder();
+        var current = new StringBuilder();
         var inToken = false;
         var quote = '\0';
 

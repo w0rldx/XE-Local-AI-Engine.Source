@@ -259,7 +259,16 @@ public sealed class RuntimePackageValidatorTests
                     Role = MessageRole.User,
                     Content = string.Empty,
                     SortOrder = 0,
-                    Images = [new ConversationImagePart("image/png", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+                    Images =
+                    [
+                        new ConversationImagePart("image/png", new byte[]
+                        {
+                            0x89,
+                            0x50,
+                            0x4E,
+                            0x47
+                        })
+                    ]
                 }
             ]
         };

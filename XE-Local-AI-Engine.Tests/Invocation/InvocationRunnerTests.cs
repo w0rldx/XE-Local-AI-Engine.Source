@@ -556,7 +556,15 @@ public sealed class InvocationRunnerTests
         InvocationAgentDefinition? capturedDefinition = null;
         var factory = CreateFactory(CreateUpdates("ok"), definition => capturedDefinition = definition);
 
-        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x01, 0x02 };
+        var imageBytes = new byte[]
+        {
+            0x89,
+            0x50,
+            0x4E,
+            0x47,
+            0x01,
+            0x02
+        };
         var package = RuntimePackageBuilder.Valid()
                                            .WithUserMessage("describe this image")
                                            .WithImageMessage("look:", "image/png", imageBytes, sortOrder: 1)

@@ -121,7 +121,8 @@ public sealed class ChatTurnResolver(
                 orchestration is not null);
         }
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision, requiresInstalledChatModel, activeModelIsCloud,
+            effectiveModelIsCloud);
     }
 
     /// <summary>
