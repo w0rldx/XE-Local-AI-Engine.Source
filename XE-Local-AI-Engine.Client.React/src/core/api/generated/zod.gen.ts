@@ -367,6 +367,30 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	parameters: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse = z.object({
+	prefix: z.string(),
+	createdAt: z.iso.datetime({ offset: true }),
+	lastUsedAt: z.iso.datetime({ offset: true }).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse = z.object({
+	configured: z.boolean(),
+	apiKey: zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse.nullish(),
+	endpointUrl: z.string(),
+	key: z.string(),
+});
+
+/**
+ * a request dto that doesn't have any properties
+ */
+export const zFastEndpointsEmptyRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse = z.object({
+	configured: z.boolean(),
+	apiKey: zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse.nullish(),
+	endpointUrl: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = z.object({
 	cancelledCount: z
 		.int()
@@ -1443,11 +1467,6 @@ export const zXeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyRespons
 	key: z.string(),
 });
 
-/**
- * a request dto that doesn't have any properties
- */
-export const zFastEndpointsEmptyRequest = z.record(z.string(), z.never());
-
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = z.object({
 	configured: z.boolean(),
 	apiKey: zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse.nullish(),
@@ -1519,6 +1538,13 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.o
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse = z.object({
+	modelName: z.string(),
+	rawArguments: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = z.object({
 	modelName: z.string(),
 	maxContextTokens: z
@@ -1581,6 +1607,10 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = z.object({
 	kind: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelLaunchArgumentsRequest = z.object({
+	rawArguments: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse = z.object({
@@ -3730,6 +3760,22 @@ export const zTriggerScheduledJobPath = z.object({
 export const zTriggerScheduledJobResponse = z.void();
 
 /**
+ * No Content
+ */
+export const zRevokeLocalModelProxyApiKeyResponse = z.void();
+
+/**
+ * Success
+ */
+export const zGetLocalModelProxyApiKeyResponse = zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse;
+
+/**
+ * Success
+ */
+export const zGenerateLocalModelProxyApiKeyResponse =
+	zXeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse;
+
+/**
  * Success
  */
 export const zCancelAllPreviewRunsResponse = zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse;
@@ -4190,6 +4236,35 @@ export const zPutModelKindPath = z.object({
  * Success
  */
 export const zPutModelKindResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse;
+
+export const zDeleteModelLaunchArgumentsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zDeleteModelLaunchArgumentsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+
+export const zGetModelLaunchArgumentsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLaunchArgumentsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
+
+export const zPutModelLaunchArgumentsBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelLaunchArgumentsRequest;
+
+export const zPutModelLaunchArgumentsPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zPutModelLaunchArgumentsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse;
 
 export const zGetLocalModelDetailsPath = z.object({
 	modelName: z.string(),

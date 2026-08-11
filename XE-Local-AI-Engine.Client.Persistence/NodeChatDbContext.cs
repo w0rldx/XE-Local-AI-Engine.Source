@@ -53,6 +53,9 @@ public sealed class NodeChatDbContext : DbContext
     /// <summary>The singleton inbound-MCP bearer credential. See <see cref="McpServerApiKey" /> for the direction split.</summary>
     internal DbSet<McpServerApiKey> McpServerApiKeys => Set<McpServerApiKey>();
 
+    /// <summary>The singleton inbound model-proxy bearer credential. See <see cref="LocalModelProxyApiKey" /> for why it is separate from the MCP key.</summary>
+    internal DbSet<LocalModelProxyApiKey> LocalModelProxyApiKeys => Set<LocalModelProxyApiKey>();
+
     internal DbSet<McpAgentRun> McpAgentRuns => Set<McpAgentRun>();
 
     internal DbSet<McpAgentRunLedger> McpAgentRunLedger => Set<McpAgentRunLedger>();
@@ -60,6 +63,8 @@ public sealed class NodeChatDbContext : DbContext
     internal DbSet<ModelClassification> ModelClassifications => Set<ModelClassification>();
 
     internal DbSet<ModelProviderMap> ModelProviderMaps => Set<ModelProviderMap>();
+
+    internal DbSet<ModelLaunchArguments> ModelLaunchArguments => Set<ModelLaunchArguments>();
 
     internal DbSet<ScheduledJobDefinition> ScheduledJobDefinitions => Set<ScheduledJobDefinition>();
 
@@ -324,10 +329,12 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new McpServerRegistrationConfiguration());
         modelBuilder.ApplyConfiguration(new SlashCommandConfiguration());
         modelBuilder.ApplyConfiguration(new McpServerApiKeyConfiguration());
+        modelBuilder.ApplyConfiguration(new LocalModelProxyApiKeyConfiguration());
         modelBuilder.ApplyConfiguration(new McpAgentRunConfiguration());
         modelBuilder.ApplyConfiguration(new McpAgentRunLedgerConfiguration());
         modelBuilder.ApplyConfiguration(new ModelClassificationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelProviderMapConfiguration());
+        modelBuilder.ApplyConfiguration(new ModelLaunchArgumentsConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobDefinitionConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobRunConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobRunEventConfiguration());

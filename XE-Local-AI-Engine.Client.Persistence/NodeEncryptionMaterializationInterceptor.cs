@@ -88,6 +88,9 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case McpServerApiKey apiKey:
                 apiKey.KeyHash = NodePayloadProtector.Decrypt(apiKey.KeyHash, context.NodeEncryptionKey.Span, Guid.Empty, apiKey.Id, "mcp_api_key_hash");
                 break;
+            case LocalModelProxyApiKey proxyApiKey:
+                proxyApiKey.KeyHash = NodePayloadProtector.Decrypt(proxyApiKey.KeyHash, context.NodeEncryptionKey.Span, Guid.Empty, proxyApiKey.Id, "local_model_proxy_api_key_hash");
+                break;
             case ScheduledJobDefinition jobDefinition:
                 jobDefinition.ParameterJson = DecryptIfPresent(jobDefinition.ParameterJson, context.NodeEncryptionKey.Span, Guid.Empty, jobDefinition.Id, "parameter_json");
                 break;

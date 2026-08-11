@@ -65,6 +65,7 @@ import {
 	deleteLocalModel,
 	deleteMcpServer,
 	deleteModelKind,
+	deleteModelLaunchArguments,
 	deleteNodeChatConversation,
 	deletePlaybookAction,
 	deletePreviewWorkflow,
@@ -91,6 +92,7 @@ import {
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
 	freezeInferenceProfile,
+	generateLocalModelProxyApiKey,
 	generateMcpServerApiKey,
 	getAgentDefinition,
 	getAgentFeedbackInsights,
@@ -120,10 +122,12 @@ import {
 	getLlamaCppSourceBuildPrerequisites,
 	getLlamaCppSourceBuildStatus,
 	getLocalModelDetails,
+	getLocalModelProxyApiKey,
 	getMcpServer,
 	getMcpServerApiKey,
 	getMcpServerTools,
 	getModelCatalogInfo,
+	getModelLaunchArguments,
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
@@ -192,6 +196,7 @@ import {
 	previewSkillImport,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
+	putModelLaunchArguments,
 	reconnectDevelopmentRepository,
 	refreshModelCatalog,
 	refreshRecommendations,
@@ -208,6 +213,7 @@ import {
 	resolveToolApproval,
 	resolveUserQuestion,
 	retrieveImage,
+	revokeLocalModelProxyApiKey,
 	revokeMcpServerApiKey,
 	runPlaybookActionEval,
 	saveCloudSettings,
@@ -359,6 +365,8 @@ import type {
 	DeleteMcpServerResponse,
 	DeleteModelKindData,
 	DeleteModelKindResponse,
+	DeleteModelLaunchArgumentsData,
+	DeleteModelLaunchArgumentsResponse,
 	DeleteNodeChatConversationData,
 	DeleteNodeChatConversationError,
 	DeleteNodeChatConversationResponse,
@@ -415,6 +423,8 @@ import type {
 	ExploreInferenceProfileResponse,
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileResponse,
+	GenerateLocalModelProxyApiKeyData,
+	GenerateLocalModelProxyApiKeyResponse,
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyResponse,
 	GetAgentDefinitionData,
@@ -475,6 +485,8 @@ import type {
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsError,
 	GetLocalModelDetailsResponse,
+	GetLocalModelProxyApiKeyData,
+	GetLocalModelProxyApiKeyResponse,
 	GetMcpServerApiKeyData,
 	GetMcpServerApiKeyResponse,
 	GetMcpServerData,
@@ -483,6 +495,8 @@ import type {
 	GetMcpServerToolsResponse,
 	GetModelCatalogInfoData,
 	GetModelCatalogInfoResponse,
+	GetModelLaunchArgumentsData,
+	GetModelLaunchArgumentsResponse,
 	GetNodeChatConversationData,
 	GetNodeChatConversationError,
 	GetNodeChatConversationResponse,
@@ -623,6 +637,8 @@ import type {
 	PromoteSuggestedPlaybookActionResponse,
 	PutModelKindData,
 	PutModelKindResponse,
+	PutModelLaunchArgumentsData,
+	PutModelLaunchArgumentsResponse,
 	ReconnectDevelopmentRepositoryData,
 	ReconnectDevelopmentRepositoryResponse,
 	RefreshModelCatalogData,
@@ -659,6 +675,8 @@ import type {
 	ResolveUserQuestionResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
+	RevokeLocalModelProxyApiKeyData,
+	RevokeLocalModelProxyApiKeyResponse,
 	RevokeMcpServerApiKeyData,
 	RevokeMcpServerApiKeyResponse,
 	RunPlaybookActionEvalData,
@@ -1282,6 +1300,76 @@ export const triggerScheduledJobMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await triggerScheduledJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const revokeLocalModelProxyApiKeyMutation = (
+	options?: Partial<Options<RevokeLocalModelProxyApiKeyData>>,
+): UseMutationOptions<
+	RevokeLocalModelProxyApiKeyResponse,
+	AxiosError<DefaultError>,
+	Options<RevokeLocalModelProxyApiKeyData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RevokeLocalModelProxyApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<RevokeLocalModelProxyApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await revokeLocalModelProxyApiKey({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLocalModelProxyApiKeyQueryKey = (options?: Options<GetLocalModelProxyApiKeyData>) =>
+	createQueryKey("getLocalModelProxyApiKey", options);
+
+export const getLocalModelProxyApiKeyOptions = (options?: Options<GetLocalModelProxyApiKeyData>) =>
+	queryOptions<
+		GetLocalModelProxyApiKeyResponse,
+		AxiosError<DefaultError>,
+		GetLocalModelProxyApiKeyResponse,
+		ReturnType<typeof getLocalModelProxyApiKeyQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLocalModelProxyApiKey({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLocalModelProxyApiKeyQueryKey(options),
+	});
+
+export const generateLocalModelProxyApiKeyMutation = (
+	options?: Partial<Options<GenerateLocalModelProxyApiKeyData>>,
+): UseMutationOptions<
+	GenerateLocalModelProxyApiKeyResponse,
+	AxiosError<DefaultError>,
+	Options<GenerateLocalModelProxyApiKeyData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		GenerateLocalModelProxyApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<GenerateLocalModelProxyApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await generateLocalModelProxyApiKey({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2588,6 +2676,68 @@ export const putModelKindMutation = (
 	const mutationOptions: UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await putModelKind({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteModelLaunchArgumentsMutation = (
+	options?: Partial<Options<DeleteModelLaunchArgumentsData>>,
+): UseMutationOptions<DeleteModelLaunchArgumentsResponse, AxiosError<DefaultError>, Options<DeleteModelLaunchArgumentsData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteModelLaunchArgumentsResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteModelLaunchArgumentsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteModelLaunchArguments({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getModelLaunchArgumentsQueryKey = (options: Options<GetModelLaunchArgumentsData>) =>
+	createQueryKey("getModelLaunchArguments", options);
+
+export const getModelLaunchArgumentsOptions = (options: Options<GetModelLaunchArgumentsData>) =>
+	queryOptions<
+		GetModelLaunchArgumentsResponse,
+		AxiosError<DefaultError>,
+		GetModelLaunchArgumentsResponse,
+		ReturnType<typeof getModelLaunchArgumentsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLaunchArguments({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLaunchArgumentsQueryKey(options),
+	});
+
+export const putModelLaunchArgumentsMutation = (
+	options?: Partial<Options<PutModelLaunchArgumentsData>>,
+): UseMutationOptions<PutModelLaunchArgumentsResponse, AxiosError<DefaultError>, Options<PutModelLaunchArgumentsData>> => {
+	const mutationOptions: UseMutationOptions<
+		PutModelLaunchArgumentsResponse,
+		AxiosError<DefaultError>,
+		Options<PutModelLaunchArgumentsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await putModelLaunchArguments({
 				...options,
 				...fnOptions,
 				throwOnError: true,
