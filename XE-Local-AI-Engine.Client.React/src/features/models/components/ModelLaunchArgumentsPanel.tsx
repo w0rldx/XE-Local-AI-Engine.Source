@@ -1,5 +1,5 @@
 import { Alert, Button, Code, Group, Loader, Stack, Text, Textarea } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowBackUp } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -51,10 +51,10 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 		...withResponseValidation(deleteModelLaunchArgumentsMutation()),
 		onSuccess: async () => {
 			setValue("");
-			toast.success(t("pages.models.launchArgs.cleared", "Launch argument override cleared."));
+			toast.success(t("pages.models.launchArgs.reset", "Launch arguments reset to defaults."));
 			await invalidate();
 		},
-		onError: (error) => toast.error(apiErrorMessage(error, "Failed to clear launch arguments")),
+		onError: (error) => toast.error(apiErrorMessage(error, "Failed to reset launch arguments")),
 	});
 
 	const isPending = saveMutation.isPending || clearMutation.isPending;
@@ -108,12 +108,13 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 				<Button
 					variant="subtle"
 					color="gray"
+					leftSection={<IconArrowBackUp size={14} />}
 					onClick={() => clearMutation.mutate({ path: { modelName } })}
 					loading={clearMutation.isPending}
 					disabled={!serverValue || isPending}
-					data-testid="model-launch-args-clear"
+					data-testid="model-launch-args-reset"
 				>
-					{t("pages.models.launchArgs.clear", "Clear override")}
+					{t("pages.models.launchArgs.reset", "Reset to default")}
 				</Button>
 			</Group>
 		</Stack>

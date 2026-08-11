@@ -1,23 +1,56 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
-///     Parses an operator-entered raw <c>llama-server</c> extra-argument string into a token list and enforces the one
-///     safety rule the per-model launch-args override carries: the operator may override the bundled launch policy's
-///     tuning flags freely (that IS the experiment), but NOT the few flags wired to the supervisor's process contract —
-///     the model path (<c>-m</c>/<c>--model</c>), the loopback bind (<c>--host</c>), and the allocated port
-///     (<c>--port</c>). Changing any of those would break the app's ability to reach the process it launched, so they are
-///     rejected on write and defensively stripped on read.
+///     Parses an operator-entered raw <c>llama-server</c> extra-argument string into a token list and enforces the
+///     safety rule the per-model launch-args override carries: the operator may override the bundled sampling/decoding
+///     tuning flags freely (that IS the experiment), but NOT the flags the app manages. Two families are managed and are
+///     rejected on write / stripped on read:
+///     <list type="bullet">
+///         <item>
+///             <b>Reachability</b> — the model path (<c>-m</c>/<c>--model</c>), the loopback bind (<c>--host</c>), and
+///             the allocated port (<c>--port</c>). Overriding any of these breaks the app's ability to reach the process
+///             it launched.
+///         </item>
+///         <item>
+///             <b>Memory-fit placement</b> — the context size, GPU-layer/tensor placement, KV-cache type,
+///             flash-attention, parallel slots, and batch sizes (<c>-c</c>, <c>-ngl</c>, <c>-ts</c>, <c>-ot</c>,
+///             <c>-ctk</c>/<c>-ctv</c>, <c>-fa</c>, <c>--parallel</c>, <c>-b</c>/<c>-ub</c> and their long aliases). The
+///             capacity/allocation resolver and the launch policy decide these BEFORE admission and record the resulting
+///             footprint in the memory ledger. The override is appended to the spec AFTER that decision, so letting it
+///             change a placement flag would silently invalidate the ledger, defeat the safe-config retry, and
+///             overcommit RAM/VRAM. Re-exploring/re-tuning is the supported way to change placement.
+///         </item>
+///     </list>
+///     Everything else llama.cpp supports (sampling, RoPE, penalties, samplers, grammar, mirostat, …) stays available.
 /// </summary>
 /// <remarks>
 ///     Tokenizing is a small quote-aware split (single or double quotes group a token; whitespace outside quotes
-///     separates), enough to pass values such as <c>-ot "\.ffn.*=CPU"</c> through as one token. It is deliberately not a
-///     full shell parser — this is a developer experimentation knob, not a command interpreter.
+///     separates), enough to pass values such as <c>--samplers "top_k;top_p"</c> through as one token. It is deliberately
+///     not a full shell parser — this is a developer experimentation knob, not a command interpreter.
 /// </remarks>
 public static class LlamaLaunchArgumentParser
 {
-    // Flags the supervisor owns because they are bound to the launched process's identity/reachability. An operator
-    // override of any of these is rejected (write) and stripped (read). Ordinal — llama.cpp flags are ASCII.
-    private static readonly string[] ReservedFlags = ["-m", "--model", "--host", "--port"];
+    // Flags the app manages, so an operator override of any of them is rejected (write) and stripped (read). Two
+    // families (see the class doc): reachability (model path / host / port) and memory-fit placement (context,
+    // GPU-layer/tensor placement, KV type, flash-attention, parallel slots, batch). Ordinal — llama.cpp flags are ASCII.
+    private static readonly string[] ReservedFlags =
+    [
+        // Reachability — the app binds these to reach the process it launched.
+        "-m", "--model", "--host", "--port",
+
+        // Memory-fit placement — owned by the capacity/allocation resolver + launch policy BEFORE admission; a post-hoc
+        // override would invalidate the memory ledger, defeat the safe-config retry, and overcommit RAM/VRAM.
+        "-c", "--ctx-size",
+        "-ngl", "--gpu-layers", "--n-gpu-layers",
+        "-ts", "--tensor-split",
+        "-ot", "--override-tensor",
+        "-ctk", "--cache-type-k",
+        "-ctv", "--cache-type-v",
+        "-fa", "--flash-attn",
+        "-np", "--parallel",
+        "-b", "--batch-size",
+        "-ub", "--ubatch-size"
+    ];
 
     /// <summary>Splits <paramref name="raw" /> into tokens, honoring single/double quotes. Null/blank yields an empty list.</summary>
     public static IReadOnlyList<string> Tokenize(string? raw)

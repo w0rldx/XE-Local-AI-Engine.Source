@@ -1105,9 +1105,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // Per-model developer/advanced override: extra llama-server flags the operator typed. Resolved here (alongside
         // the profile args, BEFORE the admission gate) so a slow store read never stalls admission for other keys, and
         // ONLY on the normal serving path — a benchmark/profiling spawn (applyLaunchPolicy false) must stay a pure
-        // measurement, so the operator's experimentation flags never perturb it. The reserved process-contract flags
-        // (-m/--model/--host/--port) are already stripped by the resolver; the rest are appended after the built spec
-        // below, so a later scalar flag overrides the bundled tuning default (llama.cpp is last-wins). Never throws.
+        // measurement, so the operator's experimentation flags never perturb it. The app-managed flags are already
+        // stripped by the resolver: reachability (-m/--model/--host/--port) AND the memory-fit placement family
+        // (-c/-ngl/-ts/-ot/-ctk/-ctv/-fa/--parallel/-b/-ub), whose values the allocation + policy above already decided
+        // and recorded in the ledger — so what remains is sampling/decoding tuning only. Those are appended after the
+        // built spec below, where a later scalar flag overrides the bundled tuning default (llama.cpp is last-wins).
+        // Never throws.
         var extraLaunchArgs = applyLaunchPolicy
             ? await _extraArgumentsResolver.ResolveAsync(key.ModelName, key.Role, ct).ConfigureAwait(false)
             : [];
