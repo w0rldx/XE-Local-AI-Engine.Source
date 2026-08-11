@@ -40,6 +40,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
+using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -359,8 +360,8 @@ public static class ConfigureServices
         // Inbound model proxy forwarder + its dedicated forwarding client. Scoped: it resolves the per-request GGUF
         // catalog and streams one response. The client has an INFINITE timeout because a long generation must not be
         // severed by a client-side timeout — the caller's disconnect (request-abort) is the cancellation signal instead.
-        builder.Services.AddScoped<Client.Services.Proxy.LocalModelProxyForwarder>();
-        builder.Services.AddHttpClient(Client.Services.Proxy.LocalModelProxyForwarder.HttpClientName)
+        builder.Services.AddScoped<LocalModelProxyForwarder>();
+        builder.Services.AddHttpClient(LocalModelProxyForwarder.HttpClientName)
                .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan);
 
         // Production limit is 10/min per client IP. Test environments drive many auth calls from a

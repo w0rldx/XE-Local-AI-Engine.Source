@@ -38,10 +38,10 @@ public sealed class GetModelLaunchArgumentsEndpoint(
 
         var raw = await _store.GetRawArgumentsAsync(decodedModelName!, ct).ConfigureAwait(false);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
-        {
-            ModelName = decodedModelName!,
-            RawArguments = raw ?? string.Empty
-        },
-        ct).ConfigureAwait(false);
+            {
+                ModelName = decodedModelName!,
+                RawArguments = raw ?? string.Empty
+            },
+            ct).ConfigureAwait(false);
     }
 }

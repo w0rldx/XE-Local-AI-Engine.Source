@@ -87,14 +87,14 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         // is a fault ONLY when the message has no images to stand in for it. Null-byte and the size cap still apply to
         // whatever text IS present.
         var invalidMessageCount = conversationContext
-                                  .Count(message =>
-                                  {
-                                      var content = message.Content;
-                                      var hasImages = message.Images is { Count: > 0 };
-                                      return (string.IsNullOrWhiteSpace(content) && !hasImages) ||
-                                             ContainsNullByte(content) ||
-                                             Encoding.UTF8.GetByteCount(content) > maxMessageSizeBytes;
-                                  });
+            .Count(message =>
+            {
+                var content = message.Content;
+                var hasImages = message.Images is { Count: > 0 };
+                return (string.IsNullOrWhiteSpace(content) && !hasImages) ||
+                       ContainsNullByte(content) ||
+                       Encoding.UTF8.GetByteCount(content) > maxMessageSizeBytes;
+            });
 
         errors.AddRange(Enumerable.Repeat("Invalid conversation message content", invalidMessageCount));
     }

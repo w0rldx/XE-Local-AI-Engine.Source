@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 
 // IMPORTANT: Velopack hook dispatch must be the first executable statement and remain outside the top-level catch.
@@ -395,15 +396,15 @@ try
     // LocalModelProxy policy accepts ONLY the model-proxy API key scheme, never the operator's JWT or the MCP key.
     var proxyRoutePrefix = $"/{LocalApiRoutes.Prefix}/";
     app.MapGet(proxyRoutePrefix + LocalApiRoutes.Proxy.Models,
-           static (HttpContext context, XE_Local_AI_Engine.Client.Services.Proxy.LocalModelProxyForwarder forwarder) => forwarder.WriteModelsAsync(context))
+           static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.WriteModelsAsync(context))
        .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
        .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
     app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.ChatCompletions,
-           static (HttpContext context, XE_Local_AI_Engine.Client.Services.Proxy.LocalModelProxyForwarder forwarder) => forwarder.ForwardChatCompletionsAsync(context))
+           static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardChatCompletionsAsync(context))
        .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
        .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
     app.MapPost(proxyRoutePrefix + LocalApiRoutes.Proxy.Embeddings,
-           static (HttpContext context, XE_Local_AI_Engine.Client.Services.Proxy.LocalModelProxyForwarder forwarder) => forwarder.ForwardEmbeddingsAsync(context))
+           static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardEmbeddingsAsync(context))
        .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
        .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
 
