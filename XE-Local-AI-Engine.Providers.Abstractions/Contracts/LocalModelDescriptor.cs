@@ -45,8 +45,16 @@ public sealed record LocalModelDescriptor
     public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
+    ///     Whether the model can accept image input (vision / multimodal). True only when a multimodal projector
+    ///     (<c>mmproj</c>) companion is present locally for this model — the same file that gates the llama-server
+    ///     <c>--mmproj</c> launch argument, so this flag never claims a vision capability the runtime cannot serve.
+    ///     Defaults to <see langword="false" />.
+    /// </summary>
+    public bool IsMultimodalCapable { get; init; }
+
+    /// <summary>
     ///     The Ollama-style capability tokens (for example <c>completion</c>, <c>tools</c>, <c>thinking</c>,
-    ///     <c>native_reasoning</c>) detected for the model. Empty when no capabilities could be determined.
+    ///     <c>native_reasoning</c>, <c>vision</c>) detected for the model. Empty when no capabilities could be determined.
     /// </summary>
     public IReadOnlyList<string> Capabilities { get; init; } = [];
 }

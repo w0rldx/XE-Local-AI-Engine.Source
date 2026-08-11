@@ -163,6 +163,52 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         return new GgufRepoDetail(detail.RepoId, detail.IsGated, detail.License, files);
     }
 
+    /// <inheritdoc />
+    public async Task<GgufProjectorFile?> FindProjectorAsync(string repoId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
+
+        var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
+        if (detail is null)
+        {
+            return null;
+        }
+
+        // A vision repo ships one or more mmproj projector companions (excluded from the selectable-file listings). Pick
+        // the highest-precision one — F32 over F16/BF16 — tie-broken by the larger file (higher precision is larger), so
+        // an image is encoded at the best fidelity the repo offers. Path safety is enforced before the store downloads it.
+        var projector = detail.Files
+                              .Where(file => IsProjectorFile(file.FileName)
+                                             && IsGgufFileName(file.FileName)
+                                             && GgufFilePath.IsSafeRelativePath(file.FileName))
+                              .OrderByDescending(file => ProjectorPrecisionRank(file.FileName))
+                              .ThenByDescending(file => file.SizeBytes)
+                              .FirstOrDefault();
+
+        return projector is null
+            ? null
+            : new GgufProjectorFile(projector.FileName, projector.SizeBytes, projector.Sha256, detail.Revision);
+    }
+
+    // Ranks a projector filename by encoder precision (higher = preferred): F32 > F16/BF16 > everything else. The markers
+    // are matched case-insensitively anywhere in the name (mmproj-F16.gguf, mmproj-model-f32.gguf, …). Ties fall through
+    // to size in FindProjectorAsync.
+    private static int ProjectorPrecisionRank(string fileName)
+    {
+        var name = Path.GetFileName(fileName);
+        if (name.Contains("f32", StringComparison.OrdinalIgnoreCase))
+        {
+            return 2;
+        }
+
+        if (name.Contains("f16", StringComparison.OrdinalIgnoreCase) || name.Contains("bf16", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return 0;
+    }
+
     // Reads every usable file's GGUF header with at most HeaderReadConcurrency in flight at once, preserving the
     // input order in the returned array (index i is usable[i]'s header) so the caller can zip them back together.
     private async Task<GgufHeaderMetadata[]> ReadHeadersAsync(string repoId,

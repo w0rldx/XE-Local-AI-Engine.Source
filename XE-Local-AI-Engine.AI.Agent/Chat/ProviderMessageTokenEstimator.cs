@@ -37,13 +37,35 @@ internal static class ProviderMessageTokenEstimator
     private const int CharsPerToken = TokenEstimatorCalibrationStore.DefaultCharsPerToken;
     private const int PerMessageOverheadTokens = 4;
 
+    // ponytail: flat per-image charge. llama.cpp vision costs a few hundred to ~1-2k tokens per image depending on
+    // resolution and the projector's patch grid; a fixed conservative heuristic keeps images from being counted as
+    // zero-cost (which would let a vision round overrun the window). Mirrored in HeuristicTokenEstimator (Application) —
+    // change both.
+    private const int EstimatedTokensPerImage = 512;
+
     public static int EstimateTokens(ChatMessage message, int charsPerToken = CharsPerToken)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         var divisor = ClampDivisor(charsPerToken);
         var profile = PerMessageCharacterProfileCache.GetValue(message, ComputeMessageCharacterProfile);
-        return (profile.WeightedLength(divisor) / divisor) + PerMessageOverheadTokens;
+        return (profile.WeightedLength(divisor) / divisor) + PerMessageOverheadTokens + EstimateImageTokens(message);
+    }
+
+    // Fixed-cost charge for any image (DataContent) parts, added post-division because the per-image cost is not a
+    // character count. Counting is cheap (a message carries few parts), so it stays outside the char-profile memo.
+    private static int EstimateImageTokens(ChatMessage message)
+    {
+        var images = 0;
+        foreach (var content in message.Contents)
+        {
+            if (content is DataContent data && data.MediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                images++;
+            }
+        }
+
+        return images * EstimatedTokensPerImage;
     }
 
     private static TokenCharacterProfile ComputeMessageCharacterProfile(ChatMessage message)
@@ -156,6 +178,10 @@ internal static class ProviderMessageTokenEstimator
                 break;
             case FunctionResultContent result:
                 profile.Add(result.Result?.ToString());
+                break;
+            case DataContent:
+                // Binary payload (e.g. an image): never char-count its bytes/data-URI — it is charged a fixed
+                // per-image token estimate separately (see EstimateImageTokens).
                 break;
             default:
                 profile.Add(content.ToString());

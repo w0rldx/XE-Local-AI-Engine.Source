@@ -23,6 +23,20 @@ public sealed class UploadConversationFileEndpoint(
 {
     private const string DefaultMimeType = "application/octet-stream";
 
+    // Image types accepted for direct vision (multimodal) input: their bytes are stored as-is with no text extraction.
+    // Whether a given turn's model can actually see them is gated later (ChatTurnResolution.SupportsVision); a non-vision
+    // model silently omits them. This map is the admission allowlist AND the CANONICAL media type: the stored MimeType is
+    // derived from the extension, never the client-supplied multipart Content-Type (which can be blank, generic, or
+    // spoofed) — that value becomes DataContent.MediaType and must start with image/ for the provider + token estimators.
+    private static readonly Dictionary<string, string> ImageMediaTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".webp"] = "image/webp",
+        [".gif"] = "image/gif"
+    };
+
     private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
     private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
     private readonly IDocumentExtractionAdmissionGate _extractionGate = extractionGate ?? throw new ArgumentNullException(nameof(extractionGate));
@@ -68,7 +82,8 @@ public sealed class UploadConversationFileEndpoint(
         }
 
         var extension = Path.GetExtension(originalName);
-        if (!_extractor.IsSupported(extension))
+        var isImage = ImageMediaTypesByExtension.TryGetValue(extension, out var canonicalImageMediaType);
+        if (!isImage && !_extractor.IsSupported(extension))
         {
             AddError($"Files of type '{extension}' are not supported.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -93,22 +108,50 @@ public sealed class UploadConversationFileEndpoint(
         using (extractionLease)
         {
             var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
-            DocumentExtractionResult extraction;
-            using (var extractionStream = new MemoryStream(bytes, writable: false))
+
+            // Images skip text extraction entirely: the raw bytes are the payload (persisted encrypted by the store),
+            // marked with the Image status and no cached Markdown. Non-image files keep the exact extract-then-persist path.
+            DocumentExtractionStatus status;
+            string? markdown;
+            int? extractedChars;
+            if (isImage)
             {
-                extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
+                status = DocumentExtractionStatus.Image;
+                markdown = null;
+                extractedChars = null;
+            }
+            else
+            {
+                using var extractionStream = new MemoryStream(bytes, writable: false);
+                var extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
+                status = extraction.Status;
+                markdown = extraction.Markdown;
+                extractedChars = extraction.ExtractedChars;
+            }
+
+            // An admitted image's media type is the canonical value for its extension — never the client-supplied
+            // Content-Type — so DataContent.MediaType is always a correct image/* type. Non-image files keep the
+            // client type (with the octet-stream fallback) since the extractor path does not depend on it.
+            string mimeType;
+            if (isImage)
+            {
+                mimeType = canonicalImageMediaType!;
+            }
+            else
+            {
+                mimeType = string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType;
             }
 
             var input = new ConversationUploadedFileInput(req.ConversationId,
                 Guid.NewGuid(),
                 originalName,
-                string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
+                mimeType,
                 extension,
                 bytes.Length,
                 bytes,
-                extraction.Status,
-                extraction.Markdown,
-                extraction.ExtractedChars);
+                status,
+                markdown,
+                extractedChars);
 
             var info = await _fileStore.AddAsync(input, ct).ConfigureAwait(false);
             await Send.OkAsync(info.ToResponse(), ct).ConfigureAwait(false);

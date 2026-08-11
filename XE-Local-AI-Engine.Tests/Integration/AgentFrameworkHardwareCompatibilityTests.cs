@@ -214,6 +214,11 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
             return Task.FromResult<string?>(Matches(modelName) ? modelPath : null);
         }
 
+        public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
         {
             IReadOnlyList<LocalModelDescriptor> result =

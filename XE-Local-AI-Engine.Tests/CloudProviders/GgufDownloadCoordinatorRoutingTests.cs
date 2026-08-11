@@ -99,6 +99,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             return Task.FromResult<string?>("/fake/m.gguf");
         }
 
+        public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
         {
             return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]);

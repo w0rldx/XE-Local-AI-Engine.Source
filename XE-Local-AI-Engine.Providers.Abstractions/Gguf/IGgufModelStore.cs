@@ -23,6 +23,14 @@ public interface IGgufModelStore
     /// </summary>
     Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct);
 
+    /// <summary>
+    ///     Resolves the absolute path to the local multimodal projector (<c>mmproj</c>) file paired with
+    ///     <paramref name="modelName" />, or <see langword="null" /> when the model has no projector companion (a
+    ///     text-only model) or the model is not installed. Consumed by the llama-server supervisor to add
+    ///     <c>--mmproj &lt;path&gt;</c> so a vision model can accept image input.
+    /// </summary>
+    Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct);
+
     /// <summary>Enumerates the installed GGUF models as normalized host-agent descriptors.</summary>
     Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct);
 

@@ -40,20 +40,34 @@ public sealed class ConversationUploadEndpointTests
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
-        var pngSignature = new byte[]
-        {
-            0x89,
-            0x50,
-            0x4E,
-            0x47,
-            0x0D,
-            0x0A,
-            0x1A,
-            0x0A
-        };
-        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "image.png", pngSignature, "image/png").ConfigureAwait(false);
+        // A genuinely unsupported type: not a text/pdf/docx the extractor handles, and not an accepted image. It is
+        // rejected at the admission gate before any persistence, so no conversation seed is needed.
+        var bytes = new byte[] { 0x4D, 0x5A, 0x00, 0x00 };
+        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "installer.exe", bytes, "application/octet-stream").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task Upload_WhenImage_AcceptsWithImageStatus()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
+
+        // Minimal PNG signature — image bytes are stored as-is (no extraction), so content need not be a full image.
+        var pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        using var response = await UploadAsync(factory, client, conversationId, "photo.png", pngSignature, "image/png").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        var uploaded = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<UploadedFileWireDto>(stream, JsonOptions).ConfigureAwait(false));
+
+        // An image is admitted for vision input and persisted with the Image status (no text extraction).
+        AssertEx.Equal("photo.png", uploaded.OriginalFileName);
+        AssertEx.Equal("Image", uploaded.ExtractionStatus);
     }
 
     [Test]

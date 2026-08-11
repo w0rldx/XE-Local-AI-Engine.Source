@@ -71,7 +71,31 @@ public sealed record GgufModelRegistryEntry
 
     /// <summary>Role hint for the chat/embedding process split.</summary>
     public GgufRole Role { get; init; } = GgufRole.Unknown;
+
+    /// <summary>
+    ///     The downloaded multimodal projector (<c>mmproj</c>) companion filename, when this repo shipped one and it was
+    ///     pulled alongside the model; otherwise <see langword="null" />. A vision GGUF needs this projector for
+    ///     llama-server to accept image input.
+    /// </summary>
+    public string? ProjectorFileName { get; init; }
+
+    /// <summary>
+    ///     Absolute path to the verified local multimodal projector (<c>mmproj</c>) file, or <see langword="null" /> when
+    ///     the model has no projector companion. Passed to llama-server as <c>--mmproj</c> to enable image input.
+    /// </summary>
+    public string? ProjectorLocalPath { get; init; }
 }
+
+/// <summary>
+///     A multimodal projector (<c>mmproj</c>) companion file inside a GGUF repo — the vision/audio encoder a vision
+///     model needs for llama-server to accept image input. Discovered separately from the selectable weight files
+///     (which exclude projectors), so a repo's projector can be paired with the chosen quant and downloaded alongside it.
+/// </summary>
+public sealed record GgufProjectorFile(
+    string FileName,
+    long SizeBytes,
+    string? Sha256,
+    string Revision);
 
 /// <summary>Sort order for GGUF repo discovery.</summary>
 public enum GgufSearchSort

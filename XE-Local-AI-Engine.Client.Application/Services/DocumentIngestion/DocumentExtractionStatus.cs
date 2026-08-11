@@ -17,5 +17,11 @@ public enum DocumentExtractionStatus
     Unsupported,
 
     /// <summary>A supported type was attempted but extraction threw or produced nothing usable.</summary>
-    Failed
+    Failed,
+
+    /// <summary>
+    ///     An image accepted for direct vision (multimodal) input. The raw bytes are stored encrypted; no text extraction
+    ///     runs and no Markdown is cached (the bytes ride the turn as an image part when the model is vision-capable).
+    /// </summary>
+    Image
 }

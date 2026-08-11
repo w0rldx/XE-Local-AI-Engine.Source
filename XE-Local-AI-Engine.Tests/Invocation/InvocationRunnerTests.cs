@@ -548,6 +548,34 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenConversationMessageCarriesImages_EmitsDataContentIntoTheAgentContext()
+    {
+        // A vision turn: a ConversationMessageDto carrying image parts must map to an MEAI DataContent alongside its
+        // text, so the model actually receives the image. Proves BuildChatMessages emits the image part.
+        var sender = new MockHubMessageSender();
+        InvocationAgentDefinition? capturedDefinition = null;
+        var factory = CreateFactory(CreateUpdates("ok"), definition => capturedDefinition = definition);
+
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x01, 0x02 };
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithUserMessage("describe this image")
+                                           .WithImageMessage("look:", "image/png", imageBytes, sortOrder: 1)
+                                           .Build();
+
+        var runner = CreateRunner(sender, factory);
+        await RunAsync(runner, package);
+
+        var definition = AssertEx.NotNull(capturedDefinition);
+        var dataContent = definition.ConversationContext
+                                    .SelectMany(message => message.Contents)
+                                    .OfType<DataContent>()
+                                    .Single();
+        AssertEx.Equal("image/png", dataContent.MediaType);
+        AssertEx.True(dataContent.Data.Span.SequenceEqual(imageBytes),
+            "The image bytes must ride the agent context as a DataContent part.");
+    }
+
+    [Test]
     public async Task RunAsync_PassesNullSessionToWorkerAgent()
     {
         var sender = new MockHubMessageSender();

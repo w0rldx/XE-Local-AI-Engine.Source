@@ -88,6 +88,53 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
     }
 
     [Test]
+    public async Task ReadBytesAsync_ForImage_RoundTripsDecryptedBytes_AndCachesNoMarkdown()
+    {
+        var databasePath = GetDatabasePath("image-bytes.sqlite");
+        var uploadRoot = Path.Combine(_rootPath, "image-data");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var provider = await BuildProviderAsync(databasePath, keyHolder).ConfigureAwait(false);
+        var store = CreateStore(provider, uploadRoot, keyHolder);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000)).ConfigureAwait(false);
+        var fileId = Guid.NewGuid();
+        var pixels = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0xFF, 0x10, 0x42 };
+
+        // Exactly what the upload endpoint constructs for an image: Image status, no extracted Markdown, raw bytes.
+        var info = await store.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
+            fileId,
+            "photo.png",
+            "image/png",
+            ".png",
+            pixels.Length,
+            pixels,
+            DocumentExtractionStatus.Image,
+            ExtractedMarkdown: null,
+            ExtractedChars: null), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(DocumentExtractionStatus.Image, info.ExtractionStatus);
+
+        // The bytes blob on disk is ciphertext but ReadBytesAsync round-trips the exact plaintext.
+        var bytesPath = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"), fileId.ToString("D") + ".png");
+        AssertEx.True(File.Exists(bytesPath), "Encrypted image bytes file should be written to disk.");
+        var diskBytes = await File.ReadAllBytesAsync(bytesPath).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(diskBytes, pixels), "On-disk image bytes should be encrypted at rest.");
+
+        var read = await store.ReadBytesAsync(conversation.ConversationId, fileId, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(read.HasValue, "ReadBytesAsync should return the stored image bytes.");
+        AssertEx.True(read!.Value.Span.SequenceEqual(pixels), "Decrypted image bytes should match the uploaded payload.");
+
+        // No cached Markdown was written for an image.
+        AssertEx.Null(await store.ReadExtractedMarkdownAsync(conversation.ConversationId, fileId, CancellationToken.None).ConfigureAwait(false));
+
+        // An unknown file id yields null rather than throwing.
+        var missing = await store.ReadBytesAsync(conversation.ConversationId, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(missing.HasValue, "ReadBytesAsync should return null for an unknown file id.");
+    }
+
+    [Test]
     public async Task DeleteConversation_WhenPurged_RemovesUploadedRowsAndDiskFiles()
     {
         var databasePath = GetDatabasePath("cascade.sqlite");

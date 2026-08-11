@@ -1593,6 +1593,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 	isReasoningCapable: z.boolean(),
 	isNativeReasoningCapable: z.boolean().optional(),
 	isToolCapable: z.boolean(),
+	isMultimodalCapable: z.boolean().optional(),
 	isOverridden: z.boolean(),
 });
 
