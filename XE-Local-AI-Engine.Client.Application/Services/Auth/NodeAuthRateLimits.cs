@@ -14,4 +14,12 @@ public static class NodeAuthRateLimits
     ///     10/min would break normal use. The cap exists to bound BRUTE FORCE, not to shape traffic.
     /// </summary>
     public const string McpPolicy = "McpRateLimit";
+
+    /// <summary>
+    ///     Guards the inbound model-proxy endpoints against offline-speed guessing of the bearer key. Like
+    ///     <see cref="McpPolicy" /> it is far more permissive than <see cref="AuthPolicy" />: an external tool issues
+    ///     many legitimate completions per minute, so the auth endpoints' 10/min would break normal use. The cap exists
+    ///     to bound BRUTE FORCE against the key, not to shape inference traffic.
+    /// </summary>
+    public const string LocalModelProxyPolicy = "LocalModelProxyRateLimit";
 }

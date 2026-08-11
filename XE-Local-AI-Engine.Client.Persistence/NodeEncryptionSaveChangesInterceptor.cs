@@ -203,6 +203,15 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "mcp_api_key_hash", trackedProperties);
         }
 
+        // The inbound model-proxy bearer credential is guarded on the same terms as the MCP key above: the stored value
+        // is a one-way SHA-256 digest, so the AAD-bound AEAD protects the digest from a database-file WRITER who would
+        // otherwise substitute the hash of a key they chose and take over the model-proxy surface. Required, so it
+        // always encrypts. A distinct AAD column name binds it to this table.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<LocalModelProxyApiKey>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "local_model_proxy_api_key_hash", trackedProperties);
+        }
+
         // Scheduled job definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation
         // id to the definition's own id plus the column name. Only the opaque job parameters are encrypted; they are
         // optional, so they encrypt only when present.

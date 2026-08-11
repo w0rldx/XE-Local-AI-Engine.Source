@@ -256,7 +256,11 @@ public static class ConfigureServices
                .AddJwtBearer()
                // Second scheme, applied ONLY by the McpServer policy on the inbound MCP endpoint. JWT bearer stays the
                // default scheme, so every existing endpoint and hub keeps its current behavior unchanged.
-               .AddScheme<AuthenticationSchemeOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
+               .AddScheme<AuthenticationSchemeOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.SchemeName, configureOptions: null)
+               // Third scheme, applied ONLY by the LocalModelProxy policy on the inbound OpenAI-compatible model proxy.
+               // Independent of both JWT bearer and the MCP key so an external tool that consumes only the raw model
+               // never gains the operator's admin reach nor the MCP client's agent-tool reach.
+               .AddScheme<AuthenticationSchemeOptions, LocalModelProxyApiKeyAuthenticationHandler>(LocalModelProxyApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
         builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
                .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
                {
@@ -342,8 +346,22 @@ public static class ConfigureServices
             options.AddPolicy(NodeAuthorizationPolicies.McpServer,
                 policy => policy.AddAuthenticationSchemes(McpApiKeyAuthenticationHandler.SchemeName)
                                 .RequireAuthenticatedUser());
+
+            // The inbound model proxy accepts ONLY the model-proxy API key scheme — never the operator's JWT and never
+            // the MCP key. One scheme, no role: the key IS the authorization, and a browser session, a stolen operator
+            // token, or the MCP client can none of them drive the raw-model surface.
+            options.AddPolicy(NodeAuthorizationPolicies.LocalModelProxy,
+                policy => policy.AddAuthenticationSchemes(LocalModelProxyApiKeyAuthenticationHandler.SchemeName)
+                                .RequireAuthenticatedUser());
         });
         builder.Services.AddAntiforgery();
+
+        // Inbound model proxy forwarder + its dedicated forwarding client. Scoped: it resolves the per-request GGUF
+        // catalog and streams one response. The client has an INFINITE timeout because a long generation must not be
+        // severed by a client-side timeout — the caller's disconnect (request-abort) is the cancellation signal instead.
+        builder.Services.AddScoped<Client.Services.Proxy.LocalModelProxyForwarder>();
+        builder.Services.AddHttpClient(Client.Services.Proxy.LocalModelProxyForwarder.HttpClientName)
+               .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan);
 
         // Production limit is 10/min per client IP. Test environments drive many auth calls from a
         // single loopback IP (one partition), so relax the cap there to keep E2E/integration runs
@@ -373,6 +391,20 @@ public static class ConfigureServices
                     {
                         AutoReplenishment = true,
                         PermitLimit = mcpPermitLimit,
+                        QueueLimit = 0,
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
+
+            // Inbound model proxy. Like the MCP cap this bounds brute force against the 256-bit key rather than shaping
+            // inference traffic, so it is sized for real usage: an external agent can drive many completions per minute.
+            // Testing gets the same relaxed treatment so integration runs from one loopback partition stay deterministic.
+            var proxyPermitLimit = builder.Environment.IsEnvironment("Testing") ? 100_000 : 120;
+            options.AddPolicy(NodeAuthRateLimits.LocalModelProxyPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = proxyPermitLimit,
                         QueueLimit = 0,
                         Window = TimeSpan.FromMinutes(1)
                     }));

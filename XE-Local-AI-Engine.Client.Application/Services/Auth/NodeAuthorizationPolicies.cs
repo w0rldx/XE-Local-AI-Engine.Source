@@ -14,6 +14,15 @@ public static class NodeAuthorizationPolicies
     /// </summary>
     public const string McpServer = "McpServer";
 
+    /// <summary>
+    ///     Gates the inbound OpenAI-compatible model proxy. Like <see cref="McpServer" /> it is SEPARATE from
+    ///     <see cref="Operator" /> and satisfied by its own authentication scheme (the model-proxy API key, not JWT):
+    ///     an external tool that only consumes the raw model is a strictly lesser principal than the node operator and
+    ///     must never inherit the operator's reach over the local admin API — nor the MCP client's reach over the agent
+    ///     tool surface.
+    /// </summary>
+    public const string LocalModelProxy = "LocalModelProxy";
+
     public const string AdminRole = "Admin";
     public const string RoleClaimType = "role";
 
