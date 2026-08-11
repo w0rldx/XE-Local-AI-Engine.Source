@@ -88,6 +88,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly LlamaServerSupervisorOptions _options;
     private readonly IInferenceProfileResolver _profileResolver;
 
+    // Per-model developer/advanced override: extra llama-server flags the operator typed, appended after the built spec
+    // on the normal serving path. Empty for every model with no override; the composition root injects the store-backed
+    // resolver over the provider's empty default.
+    private readonly ILlamaServerExtraLaunchArgumentsResolver _extraArgumentsResolver;
+
     // One running process per (model, role) key.
     private readonly ConcurrentDictionary<ProcessKey, RunningProcess> _processes = new();
     private readonly Task _reaperLoop;
@@ -128,7 +133,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaFitParamsRunner? fitParamsRunner = null,
         IProcessContextAllocationResolver? allocationResolver = null,
         ILlamaLayerPlacementReport? layerPlacementReport = null,
-        IProcessLaunchAdmissionRegistry? launchAdmissions = null)
+        IProcessLaunchAdmissionRegistry? launchAdmissions = null,
+        ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -138,6 +144,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
+        _extraArgumentsResolver = extraArgumentsResolver ?? new EmptyLlamaServerExtraLaunchArgumentsResolver();
         _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
         _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(new LlamaServerLaunchPolicyOptions());
         _launchAdmissions = launchAdmissions ?? new ProcessLaunchAdmissionRegistry();
@@ -1095,6 +1102,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // admission for other keys.
         var resolved = admission?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
 
+        // Per-model developer/advanced override: extra llama-server flags the operator typed. Resolved here (alongside
+        // the profile args, BEFORE the admission gate) so a slow store read never stalls admission for other keys, and
+        // ONLY on the normal serving path — a benchmark/profiling spawn (applyLaunchPolicy false) must stay a pure
+        // measurement, so the operator's experimentation flags never perturb it. The reserved process-contract flags
+        // (-m/--model/--host/--port) are already stripped by the resolver; the rest are appended after the built spec
+        // below, so a later scalar flag overrides the bundled tuning default (llama.cpp is last-wins). Never throws.
+        var extraLaunchArgs = applyLaunchPolicy
+            ? await _extraArgumentsResolver.ResolveAsync(key.ModelName, key.Role, ct).ConfigureAwait(false)
+            : [];
+
         // AUD4-06: serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
         // supervisor) so two --fit loads never read the same free-VRAM snapshot at once and oversubscribe the device.
         // CPU loads bypass — they do not contend for VRAM. The gate is acquired here (after variant selection + arg
@@ -1147,6 +1164,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
                     _options.ChatCacheReuse, speculative, candidate.Plan, _options.ChatCacheRamMiB);
+
+                // Append the operator's per-model extra flags LAST so they win over the bundled tuning defaults
+                // (llama.cpp is last-wins for scalar flags). Placed BEFORE the diagnostic --metrics / -lv fill-ins below
+                // so those checks see an operator-supplied --metrics/-lv and do not duplicate it.
+                if (extraLaunchArgs.Count > 0)
+                {
+                    spec = spec with
+                    {
+                        Arguments = [.. spec.Arguments, .. extraLaunchArgs]
+                    };
+                }
 
                 // Benchmark spawns need /metrics on ANY variant. Both GPU modes emit it themselves, so this now only
                 // fills in the CPU case — and guards against a future spec shape that omits it.

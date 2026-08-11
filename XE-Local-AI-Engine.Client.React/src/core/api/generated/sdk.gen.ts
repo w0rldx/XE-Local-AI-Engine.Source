@@ -167,6 +167,9 @@ import type {
 	DeleteModelKindData,
 	DeleteModelKindErrors,
 	DeleteModelKindResponses,
+	DeleteModelLaunchArgumentsData,
+	DeleteModelLaunchArgumentsErrors,
+	DeleteModelLaunchArgumentsResponses,
 	DeleteNodeChatConversationData,
 	DeleteNodeChatConversationErrors,
 	DeleteNodeChatConversationResponses,
@@ -344,6 +347,9 @@ import type {
 	GetModelCatalogInfoData,
 	GetModelCatalogInfoErrors,
 	GetModelCatalogInfoResponses,
+	GetModelLaunchArgumentsData,
+	GetModelLaunchArgumentsErrors,
+	GetModelLaunchArgumentsResponses,
 	GetNodeChatConversationData,
 	GetNodeChatConversationErrors,
 	GetNodeChatConversationResponses,
@@ -543,6 +549,9 @@ import type {
 	PutModelKindData,
 	PutModelKindErrors,
 	PutModelKindResponses,
+	PutModelLaunchArgumentsData,
+	PutModelLaunchArgumentsErrors,
+	PutModelLaunchArgumentsResponses,
 	ReconnectDevelopmentRepositoryData,
 	ReconnectDevelopmentRepositoryErrors,
 	ReconnectDevelopmentRepositoryResponses,
@@ -805,6 +814,8 @@ import {
 	zDeleteMcpServerResponse,
 	zDeleteModelKindPath,
 	zDeleteModelKindResponse,
+	zDeleteModelLaunchArgumentsPath,
+	zDeleteModelLaunchArgumentsResponse,
 	zDeleteNodeChatConversationBody,
 	zDeleteNodeChatConversationPath,
 	zDeleteNodeChatConversationResponse,
@@ -901,6 +912,8 @@ import {
 	zGetMcpServerToolsPath,
 	zGetMcpServerToolsResponse,
 	zGetModelCatalogInfoResponse,
+	zGetModelLaunchArgumentsPath,
+	zGetModelLaunchArgumentsResponse,
 	zGetNodeChatConversationPath,
 	zGetNodeChatConversationResponse,
 	zGetNodeChatMessageFeedbackPath,
@@ -1009,6 +1022,9 @@ import {
 	zPutModelKindBody,
 	zPutModelKindPath,
 	zPutModelKindResponse,
+	zPutModelLaunchArgumentsBody,
+	zPutModelLaunchArgumentsPath,
+	zPutModelLaunchArgumentsResponse,
 	zReconnectDevelopmentRepositoryBody,
 	zReconnectDevelopmentRepositoryPath,
 	zReconnectDevelopmentRepositoryResponse,
@@ -3166,6 +3182,76 @@ export const putModelKind = <ThrowOnError extends boolean = false>(options: Opti
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/models/{modelName}/kind",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteModelLaunchArgumentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteModelLaunchArgumentsResponses, DeleteModelLaunchArgumentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteModelLaunchArgumentsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDeleteModelLaunchArgumentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/launch-args",
+		...options,
+	});
+
+export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
+	options: Options<GetModelLaunchArgumentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetModelLaunchArgumentsResponses, GetModelLaunchArgumentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetModelLaunchArgumentsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLaunchArgumentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/launch-args",
+		...options,
+	});
+
+export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
+	options: Options<PutModelLaunchArgumentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<PutModelLaunchArgumentsResponses, PutModelLaunchArgumentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPutModelLaunchArgumentsBody,
+					path: zPutModelLaunchArgumentsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPutModelLaunchArgumentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/launch-args",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
