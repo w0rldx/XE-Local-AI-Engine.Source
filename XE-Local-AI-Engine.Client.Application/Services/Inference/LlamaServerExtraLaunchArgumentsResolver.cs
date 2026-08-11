@@ -9,7 +9,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Store-backed <see cref="ILlamaServerExtraLaunchArgumentsResolver" />. Replaces the provider's empty default
 ///     (registered LAST so it wins) and turns the persisted per-model override into the sanitized extra flags the
-///     supervisor appends on a cold spawn. Reserved process-contract flags (model path / host / port) are stripped via
+///     supervisor appends on a cold spawn. The app-managed flags — reachability (model path / host / port) and the
+///     memory-fit placement family (context / GPU-layer / KV / flash-attn / parallel / batch) — are stripped via
 ///     <see cref="LlamaLaunchArgumentParser.ParseSanitized" /> as a defense-in-depth backstop to the write-path rejection.
 /// </summary>
 /// <remarks>

@@ -9,10 +9,12 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
 ///     Sets (or clears, when the string is blank) the per-model extra <c>llama-server</c> launch-argument override
-///     (developer/advanced). Rejects the reserved process-contract flags — the model path (<c>-m</c>/<c>--model</c>), the
-///     loopback bind (<c>--host</c>), and the allocated port (<c>--port</c>) — which the supervisor owns; every other
-///     flag llama.cpp supports is stored verbatim and appended to the process on the next cold load so the operator can
-///     experiment with it. The override takes effect the next time the model is (re)loaded.
+///     (developer/advanced). Rejects the app-managed flags — reachability (<c>-m</c>/<c>--model</c>/<c>--host</c>/
+///     <c>--port</c>) and the memory-fit placement family (<c>-c</c>/<c>-ngl</c>/<c>-ts</c>/<c>-ot</c>/<c>-ctk</c>/
+///     <c>-ctv</c>/<c>-fa</c>/<c>--parallel</c>/<c>-b</c>/<c>-ub</c>, which the capacity/allocation resolver decides
+///     before admission); every other flag llama.cpp supports (sampling, RoPE, penalties, …) is stored verbatim and
+///     appended to the process on the next cold load so the operator can experiment with it. The override takes effect
+///     the next time the model is (re)loaded.
 /// </summary>
 public sealed class PutModelLaunchArgumentsEndpoint(
     IModelLaunchArgumentsStore store,
@@ -66,9 +68,10 @@ public sealed class PutModelLaunchArgumentsEndpoint(
             return;
         }
 
-        // Reject the reserved process-contract flags with a message naming the offender, so the operator understands why
-        // it cannot be set (the supervisor binds -m/--host/--port itself; overriding them would break app→process
-        // reachability). Everything else is intentionally permitted — that IS the experiment.
+        // Reject the app-managed flags with a message naming the offender, so the operator understands why it cannot be
+        // set: reachability flags (-m/--host/--port) the app binds itself, and the memory-fit placement flags the
+        // capacity/allocation resolver decides before admission (overriding them post-hoc would break app→process
+        // reachability or invalidate the memory ledger). Everything else is intentionally permitted — that IS the experiment.
         if (LlamaLaunchArgumentParser.FindReservedFlag(raw) is { } reserved)
         {
             AddError($"The '{reserved}' argument is managed by the app and cannot be overridden here. Remove it and try again.");

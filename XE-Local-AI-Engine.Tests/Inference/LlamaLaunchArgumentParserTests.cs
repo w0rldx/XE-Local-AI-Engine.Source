@@ -34,21 +34,33 @@ public sealed class LlamaLaunchArgumentParserTests
     }
 
     [Test]
+    // Reachability family.
     [Arguments("-m /etc/passwd", "-m")]
     [Arguments("--model foo.gguf", "--model")]
     [Arguments("--host 0.0.0.0", "--host")]
     [Arguments("--port 9999", "--port")]
     [Arguments("--top-k 40 --host=0.0.0.0", "--host")]
-    public void FindReservedFlag_DetectsReservedFlags(string raw, string expected)
+    // Memory-fit placement family — owned by the allocator/policy, so also rejected.
+    [Arguments("-c 8192", "-c")]
+    [Arguments("--ctx-size 8192", "--ctx-size")]
+    [Arguments("-ngl 20", "-ngl")]
+    [Arguments("--n-gpu-layers 20", "--n-gpu-layers")]
+    [Arguments("--flash-attn on", "--flash-attn")]
+    [Arguments("--parallel 4", "--parallel")]
+    [Arguments("-ctk q8_0", "-ctk")]
+    [Arguments("--top-k 40 -ub 2048", "-ub")]
+    public void FindReservedFlag_DetectsManagedFlags(string raw, string expected)
     {
         AssertEx.Equal(expected, LlamaLaunchArgumentParser.FindReservedFlag(raw));
     }
 
     [Test]
+    // Sampling / decoding / RoPE tuning stays available — that is the experiment.
     [Arguments("--top-k 40 --repeat-penalty 1.1")]
     [Arguments("--rope-freq-base 10000")]
-    [Arguments("--flash-attn on")]
-    public void FindReservedFlag_WhenNoneReserved_ReturnsNull(string raw)
+    [Arguments("--temp 0.7 --min-p 0.05")]
+    [Arguments("--samplers top_k")]
+    public void FindReservedFlag_WhenNoneManaged_ReturnsNull(string raw)
     {
         AssertEx.Null(LlamaLaunchArgumentParser.FindReservedFlag(raw));
     }
@@ -74,6 +86,19 @@ public sealed class LlamaLaunchArgumentParserTests
 
         AssertEx.False(result.Contains("--host"), "The reserved --host flag must be stripped.");
         AssertEx.False(result.Contains("0.0.0.0"), "The reserved flag's value must be stripped with it.");
+        AssertEx.Equal(expected: 4, result.Count);
+        AssertEx.Equal("--top-k", result[0]);
+        AssertEx.Equal("--repeat-penalty", result[2]);
+    }
+
+    [Test]
+    public void ParseSanitized_StripsMemoryFitPlacementFlag_KeepingSamplingFlags()
+    {
+        // A placement flag (owned by the allocator) is stripped with its value even mid-string; sampling flags survive.
+        var result = LlamaLaunchArgumentParser.ParseSanitized("--top-k 40 -ngl 999 --repeat-penalty 1.1");
+
+        AssertEx.False(result.Contains("-ngl"), "The memory-fit -ngl flag must be stripped.");
+        AssertEx.False(result.Contains("999"), "The stripped flag's value goes with it.");
         AssertEx.Equal(expected: 4, result.Count);
         AssertEx.Equal("--top-k", result[0]);
         AssertEx.Equal("--repeat-penalty", result[2]);

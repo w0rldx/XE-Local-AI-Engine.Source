@@ -51,6 +51,10 @@ function ModelDetailsBody({
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const [tab, setTab] = useState<string | null>("overview");
 	const hasLicenseOrTemplate = Boolean(details?.template || details?.license);
+	// The launch-argument override is only read by the llama.cpp supervisor, so the Advanced tab is shown only for
+	// llamacpp models — an Ollama/Codex/Azure entry would report success but the override would be silently ineffective
+	// (and could bleed onto a same-named GGUF). Gated behind developer mode too.
+	const showLaunchArgs = developerMode && model.provider === "llamacpp";
 
 	// Fit content is computed here (not as a chained JSX ternary) to keep the panel readable: when model-fit is off
 	// show a disabled note; otherwise mount the cache-only llmfit query only while the Fit tab is the active one.
@@ -66,7 +70,7 @@ function ModelDetailsBody({
 				<Tabs.Tab value="type">{t("pages.models.type.columnHeader", "Type")}</Tabs.Tab>
 				<Tabs.Tab value="license">License &amp; template</Tabs.Tab>
 				<Tabs.Tab value="fit">Fit</Tabs.Tab>
-				{developerMode ? (
+				{showLaunchArgs ? (
 					<Tabs.Tab value="advanced" data-testid="model-advanced-tab">
 						{t("pages.models.launchArgs.tab", "Advanced")}
 					</Tabs.Tab>
@@ -167,7 +171,7 @@ function ModelDetailsBody({
 				{fitContent}
 			</Tabs.Panel>
 
-			{developerMode ? (
+			{showLaunchArgs ? (
 				<Tabs.Panel value="advanced" pt="md">
 					{/* Mount the panel only while the Advanced tab is active so its override query fires on demand, mirroring Fit. */}
 					{tab === "advanced" ? <ModelLaunchArgumentsPanel modelName={model.modelName} /> : <span />}
