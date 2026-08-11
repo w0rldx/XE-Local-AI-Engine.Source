@@ -55,7 +55,7 @@ public sealed class ChatTurnResolver(
         using var resolveActivity = NodeActivitySource.Source.StartActivity("chat.turn.resolve");
 
         var capabilitiesStart = Stopwatch.GetTimestamp();
-        (bool SupportsThinking, bool SupportsTools, bool IsCloud) capabilities;
+        (bool SupportsThinking, bool SupportsTools, bool SupportsVision, bool IsCloud) capabilities;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_capabilities"))
         {
             capabilities = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
@@ -63,6 +63,7 @@ public sealed class ChatTurnResolver(
 
         var supportsThinking = capabilities.SupportsThinking;
         var supportsTools = capabilities.SupportsTools;
+        var supportsVision = capabilities.SupportsVision;
         var activeModelIsCloud = capabilities.IsCloud;
         var capabilitiesMs = Stopwatch.GetElapsedTime(capabilitiesStart).TotalMilliseconds;
 
@@ -120,7 +121,7 @@ public sealed class ChatTurnResolver(
                 orchestration is not null);
         }
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
     }
 
     /// <summary>
@@ -130,11 +131,11 @@ public sealed class ChatTurnResolver(
     ///     withholds the tool offer while still allowing a plain chat. The same provider-routing decision lives in
     ///     <see cref="ModelCapabilityResolver" /> for the per-participant orchestration path — change both together.
     /// </summary>
-    private async Task<(bool SupportsThinking, bool SupportsTools, bool IsCloud)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
+    private async Task<(bool SupportsThinking, bool SupportsTools, bool SupportsVision, bool IsCloud)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(activeModel))
         {
-            return (false, false, IsCloud: false);
+            return (false, false, SupportsVision: false, IsCloud: false);
         }
 
         // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
@@ -144,7 +145,7 @@ public sealed class ChatTurnResolver(
         // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
         if (CodexModelCatalog.IsCodexModel(activeModel))
         {
-            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
+            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, SupportsVision: false, IsCloud: true);
         }
 
         // Azure/cloud LOCALITY is resolved from the SAME short-TTL routing snapshot the cloud factory routes from — the
@@ -161,8 +162,8 @@ public sealed class ChatTurnResolver(
         if (routesToCloud)
         {
             return routingFaulted
-                ? (SupportsThinking: false, SupportsTools: false, IsCloud: true)
-                : (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
+                ? (SupportsThinking: false, SupportsTools: false, SupportsVision: false, IsCloud: true)
+                : (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, SupportsVision: false, IsCloud: true);
         }
 
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
@@ -180,10 +181,11 @@ public sealed class ChatTurnResolver(
             var ggufCapabilities = await ggufModelCapabilityResolver
                                          .TryResolveAsync(activeModel, cancellationToken)
                                          .ConfigureAwait(false);
-            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL.
+            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL. Vision rides the GGUF descriptor's
+            // projector-gated flag — the only path that can advertise it (cloud/Ollama stay non-vision here).
             return ggufCapabilities is { } caps
-                ? (caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
-                : (SupportsThinking: false, SupportsTools: false, IsCloud: false);
+                ? (caps.SupportsThinking, caps.SupportsTools, caps.SupportsVision, IsCloud: false)
+                : (SupportsThinking: false, SupportsTools: false, SupportsVision: false, IsCloud: false);
         }
 
         var classifications = await modelClassificationService
@@ -191,12 +193,14 @@ public sealed class ChatTurnResolver(
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(activeModel, out var classification))
         {
-            return (false, false, IsCloud: false);
+            return (false, false, SupportsVision: false, IsCloud: false);
         }
 
-        // An Ollama-routed model runs on the node — local.
+        // An Ollama-routed model runs on the node — local. Vision is not resolved on the Ollama path (llama.cpp is the
+        // default runtime and the mmproj-gated GGUF path owns vision); it stays the safe non-vision default here.
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities),
+            SupportsVision: false,
             IsCloud: false);
     }
 

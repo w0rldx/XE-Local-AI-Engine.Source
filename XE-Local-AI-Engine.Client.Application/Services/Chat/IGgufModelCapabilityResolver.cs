@@ -18,5 +18,5 @@ public interface IGgufModelCapabilityResolver
     Task<GgufModelCapabilities?> TryResolveAsync(string modelName, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The thinking / tools capabilities advertised by an installed GGUF model.</summary>
-public readonly record struct GgufModelCapabilities(bool SupportsThinking, bool SupportsTools);
+/// <summary>The thinking / tools / vision capabilities advertised by an installed GGUF model.</summary>
+public readonly record struct GgufModelCapabilities(bool SupportsThinking, bool SupportsTools, bool SupportsVision);

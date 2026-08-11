@@ -17,6 +17,9 @@ public interface IConversationUploadedFileStore
     /// <summary>Decrypts and returns the cached extracted Markdown for one file, or null when none was cached.</summary>
     Task<string?> ReadExtractedMarkdownAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken);
 
+    /// <summary>Decrypts and returns the raw stored bytes for one file (e.g. an image), or null when the blob is absent.</summary>
+    Task<ReadOnlyMemory<byte>?> ReadBytesAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken);
+
     /// <summary>Removes one file's metadata row plus its on-disk bytes and extracted Markdown. Returns whether a row existed.</summary>
     Task<bool> DeleteAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken);
 

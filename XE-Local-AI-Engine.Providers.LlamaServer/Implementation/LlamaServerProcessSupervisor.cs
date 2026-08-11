@@ -1033,6 +1033,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             throw NonRetryable("The requested model is not installed.");
         }
 
+        // A vision model's mmproj projector companion — passed to llama-server as --mmproj so it accepts image input.
+        // Chat role only (embedding/reranker never take images); null for a text-only model, which gets no --mmproj.
+        var projectorFilePath = key.Role == ModelRole.Chat
+            ? await _modelStore.ResolveProjectorFilePathAsync(key.ModelName, ct).ConfigureAwait(false)
+            : null;
+
         // AUD4-09: the cold-start readiness deadline scales with the on-disk model size — a large model loads
         // proportionally slower, so a fixed constant would kill and retry it before it can finish (the audited hang). A
         // missing/unreadable size (0) falls back to the base timeout.
@@ -1166,7 +1172,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             try
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
-                    _options.ChatCacheReuse, speculative, candidate.Plan, _options.ChatCacheRamMiB);
+                    _options.ChatCacheReuse, speculative, candidate.Plan, _options.ChatCacheRamMiB, projectorFilePath);
 
                 // Append the operator's per-model extra flags LAST so they win over the bundled tuning defaults
                 // (llama.cpp is last-wins for scalar flags). Placed BEFORE the diagnostic --metrics / -lv fill-ins below
@@ -1888,7 +1894,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         int chatCacheReuse,
         SpeculativeDecodingSettings speculative = default,
         LlamaServerLaunchPlan? plan = null,
-        int chatCacheRamMiB = 0)
+        int chatCacheRamMiB = 0,
+        string? projectorFilePath = null)
     {
         var args = new List<string>
         {
@@ -1926,6 +1933,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             // Mandatory for tool/function calling — without it llama-server ignores the GGUF tool grammar.
             args.Add("--jinja");
+
+            // Vision model: the mmproj projector is what makes llama-server accept image input (OpenAI image_url content
+            // parts) — without it an image in the request body is rejected. Present only for a model whose projector
+            // companion was resolved locally (see IGgufModelStore.ResolveProjectorFilePathAsync); a text-only model
+            // passes null and gets no flag. Chat role only — embedding/reranker servers never take images.
+            if (!string.IsNullOrWhiteSpace(projectorFilePath))
+            {
+                args.Add("--mmproj");
+                args.Add(projectorFilePath);
+            }
 
             // Prompt-cache prefix reuse. The app resends the full selected-path history every turn, so cache-reuse
             // lets llama-server reuse the unchanged prompt prefix via KV cache shifting instead of reprocessing it —

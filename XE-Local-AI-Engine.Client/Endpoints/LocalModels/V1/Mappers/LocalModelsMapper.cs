@@ -87,6 +87,7 @@ internal static class LocalModelsMapper
                        IsReasoningCapable = descriptor.IsReasoningCapable,
                        IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
                        IsToolCapable = descriptor.IsToolCapable,
+                       IsMultimodalCapable = descriptor.IsMultimodalCapable,
                        IsOverridden = false
                    };
                })

@@ -147,6 +147,66 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 });
 
+function attachmentCapabilities(overrides: Partial<ChatUiCapabilities> = {}): ChatUiCapabilities {
+	return { ...defaultChatUiCapabilities, showFileAttachmentControls: true, showImageAttachmentControls: true, ...overrides };
+}
+
+describe("ChatInputArea image attachment gate", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("omits the image accept hint when the active model is not multimodal even with the gate on", () => {
+		const { container } = renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} activeModelMultimodal={false} onUploadFiles={vi.fn()} />,
+		);
+
+		const fileInput = container.querySelector('input[type="file"]');
+		expect(fileInput).not.toBeNull();
+		expect(fileInput?.getAttribute("accept")).not.toContain("image/*");
+	});
+
+	it("omits the image accept hint when the active model is multimodal but the node-wide gate is off", () => {
+		const { container } = renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={attachmentCapabilities({ showImageAttachmentControls: false })}
+				activeModelMultimodal={true}
+				onUploadFiles={vi.fn()}
+			/>,
+		);
+
+		const fileInput = container.querySelector('input[type="file"]');
+		expect(fileInput?.getAttribute("accept")).not.toContain("image/*");
+	});
+
+	it("includes the image accept hint when the gate is on and the active model is multimodal", () => {
+		const { container } = renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} activeModelMultimodal={true} onUploadFiles={vi.fn()} />,
+		);
+
+		const fileInput = container.querySelector('input[type="file"]');
+		expect(fileInput?.getAttribute("accept")).toContain("image/*");
+	});
+
+	it("still shows the paperclip trigger for image-only attachments when file attachments are off", () => {
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={attachmentCapabilities({ showFileAttachmentControls: false })}
+				activeModelMultimodal={true}
+				onUploadFiles={vi.fn()}
+			/>,
+		);
+
+		expect(screen.queryByTestId("chat-attach-file-trigger")).not.toBeNull();
+	});
+});
+
 describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
