@@ -400,7 +400,7 @@ public sealed class NodeChatStreamService(
         }
         else if (attachmentsAllowed)
         {
-            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, resolution.SupportsVision, cancellationToken).ConfigureAwait(false);
 
             // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
             // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
@@ -738,7 +738,7 @@ public sealed class NodeChatStreamService(
         else
         {
             var available = await uploadedFileStore.ListAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
-            hasAttachments = available.Any(file => file.ExtractionStatus == DocumentExtractionStatus.Extracted);
+            hasAttachments = available.Any(file => file.ExtractionStatus is DocumentExtractionStatus.Extracted or DocumentExtractionStatus.Image);
         }
 
         if (!hasAttachments)
@@ -831,11 +831,14 @@ public sealed class NodeChatStreamService(
     }
 
     // Builds the synthetic plain-chat context message from the conversation's uploaded attachments named in the send.
-    // Only Extracted files contribute; the combined text is capped to the configured MaxInlinedAttachmentChars budget
-    // with a truncation notice. Returns null when there is nothing to inline (the common no-attachment path
-    // short-circuits before any store call).
+    // Extracted (text) files are inlined, capped to the configured MaxInlinedAttachmentChars budget with a truncation
+    // notice. Image-status files are attached as raw image parts ONLY when the effective model is vision-capable
+    // (modelSupportsImages) — a non-vision model silently omits them (defense-in-depth behind the frontend gate; a
+    // llama-server without --mmproj errors on image input). Returns null when there is nothing to inline or attach
+    // (the common no-attachment path short-circuits before any store call).
     private async Task<ConversationMessageDto?> BuildAttachmentContextMessageAsync(Guid conversationId,
         IReadOnlyList<Guid>? attachmentFileIds,
+        bool modelSupportsImages,
         CancellationToken cancellationToken)
     {
         if (attachmentFileIds is null || attachmentFileIds.Count == 0)
@@ -845,27 +848,46 @@ public sealed class NodeChatStreamService(
 
         var requested = attachmentFileIds.ToHashSet();
         var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
-        var attachments = available
-                          .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
-                          .ToList();
 
-        if (attachments.Count == 0)
+        var textAttachments = available
+                              .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
+                              .ToList();
+
+        string? content = null;
+        if (textAttachments.Count > 0)
         {
-            return null;
+            var parts = new List<AttachmentTextPart>(textAttachments.Count);
+            foreach (var attachment in textAttachments)
+            {
+                var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(markdown))
+                {
+                    parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
+                }
+            }
+
+            content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, fenceSeedProvider.DeriveSeed(conversationId));
         }
 
-        var parts = new List<AttachmentTextPart>(attachments.Count);
-        foreach (var attachment in attachments)
+        List<ConversationImagePart>? images = null;
+        if (modelSupportsImages)
         {
-            var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(markdown))
+            foreach (var file in available)
             {
-                parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
+                if (!requested.Contains(file.FileId) || file.ExtractionStatus != DocumentExtractionStatus.Image)
+                {
+                    continue;
+                }
+
+                var bytes = await uploadedFileStore.ReadBytesAsync(conversationId, file.FileId, cancellationToken).ConfigureAwait(false);
+                if (bytes is { } data)
+                {
+                    (images ??= []).Add(new ConversationImagePart(file.MimeType, data));
+                }
             }
         }
 
-        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, fenceSeedProvider.DeriveSeed(conversationId));
-        if (content is null)
+        if (content is null && images is null)
         {
             return null;
         }
@@ -874,8 +896,9 @@ public sealed class NodeChatStreamService(
         {
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
-            Content = content,
-            SortOrder = 0
+            Content = content ?? string.Empty,
+            SortOrder = 0,
+            Images = images
         };
     }
 

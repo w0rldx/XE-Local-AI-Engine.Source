@@ -456,6 +456,11 @@ public sealed class FirstRunModelProvisioningServiceTests
             return Task.FromResult<string?>(null);
         }
 
+        public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
         {
             IReadOnlyList<LocalModelDescriptor> descriptors = installed

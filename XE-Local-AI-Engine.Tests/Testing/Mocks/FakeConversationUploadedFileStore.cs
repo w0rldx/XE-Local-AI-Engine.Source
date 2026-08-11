@@ -58,6 +58,12 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         return Task.FromResult(markdown);
     }
 
+    public Task<ReadOnlyMemory<byte>?> ReadBytesAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
+    {
+        // This staging fake tracks only decrypted Markdown, not raw bytes; the vision path is exercised elsewhere.
+        return Task.FromResult<ReadOnlyMemory<byte>?>(null);
+    }
+
     public Task<bool> DeleteAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
     {
         throw new NotSupportedException();

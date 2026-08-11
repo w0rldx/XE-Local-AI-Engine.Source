@@ -101,6 +101,14 @@ public sealed class LocalModelResponse
     /// </summary>
     public required bool IsToolCapable { get; init; }
 
+    /// <summary>
+    ///     True when the model can accept image input (vision / multimodal) — its <c>mmproj</c> projector companion is
+    ///     present locally, so llama-server is launched with <c>--mmproj</c>. The composer uses this to gate image
+    ///     attachment so an image is never sent to a text-only model (which llama-server would reject). Defaults to
+    ///     <see langword="false" /> so an older client that omits the field behaves exactly as before.
+    /// </summary>
+    public bool IsMultimodalCapable { get; init; }
+
     /// <summary>True when an operator override is set, so the effective kind differs from the detected one.</summary>
     public required bool IsOverridden { get; init; }
 }

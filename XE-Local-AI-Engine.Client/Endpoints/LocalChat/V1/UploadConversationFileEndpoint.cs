@@ -23,6 +23,14 @@ public sealed class UploadConversationFileEndpoint(
 {
     private const string DefaultMimeType = "application/octet-stream";
 
+    // Image types accepted for direct vision (multimodal) input: their bytes are stored as-is with no text extraction.
+    // Whether a given turn's model can actually see them is gated later (ChatTurnResolution.SupportsVision); a non-vision
+    // model silently omits them. This allowlist only decides admission at upload time.
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".webp", ".gif"
+    };
+
     private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
     private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
     private readonly IDocumentExtractionAdmissionGate _extractionGate = extractionGate ?? throw new ArgumentNullException(nameof(extractionGate));
@@ -68,7 +76,8 @@ public sealed class UploadConversationFileEndpoint(
         }
 
         var extension = Path.GetExtension(originalName);
-        if (!_extractor.IsSupported(extension))
+        var isImage = ImageExtensions.Contains(extension);
+        if (!isImage && !_extractor.IsSupported(extension))
         {
             AddError($"Files of type '{extension}' are not supported.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -93,10 +102,25 @@ public sealed class UploadConversationFileEndpoint(
         using (extractionLease)
         {
             var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
-            DocumentExtractionResult extraction;
-            using (var extractionStream = new MemoryStream(bytes, writable: false))
+
+            // Images skip text extraction entirely: the raw bytes are the payload (persisted encrypted by the store),
+            // marked with the Image status and no cached Markdown. Non-image files keep the exact extract-then-persist path.
+            DocumentExtractionStatus status;
+            string? markdown;
+            int? extractedChars;
+            if (isImage)
             {
-                extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
+                status = DocumentExtractionStatus.Image;
+                markdown = null;
+                extractedChars = null;
+            }
+            else
+            {
+                using var extractionStream = new MemoryStream(bytes, writable: false);
+                var extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
+                status = extraction.Status;
+                markdown = extraction.Markdown;
+                extractedChars = extraction.ExtractedChars;
             }
 
             var input = new ConversationUploadedFileInput(req.ConversationId,
@@ -106,9 +130,9 @@ public sealed class UploadConversationFileEndpoint(
                 extension,
                 bytes.Length,
                 bytes,
-                extraction.Status,
-                extraction.Markdown,
-                extraction.ExtractedChars);
+                status,
+                markdown,
+                extractedChars);
 
             var info = await _fileStore.AddAsync(input, ct).ConfigureAwait(false);
             await Send.OkAsync(info.ToResponse(), ct).ConfigureAwait(false);

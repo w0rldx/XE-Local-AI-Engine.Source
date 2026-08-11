@@ -60,7 +60,7 @@ public sealed class ModelCapabilityResolverTests
         var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
         providerResolver.ResolveProviderNameForModelAsync(localModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
         ggufResolver.TryResolveAsync(localModel, Arg.Any<CancellationToken>())
-                    .Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true));
+                    .Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false));
 
         var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(localModel, CancellationToken.None).ConfigureAwait(false);
 

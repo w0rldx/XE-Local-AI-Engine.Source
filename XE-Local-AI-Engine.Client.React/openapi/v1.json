@@ -14833,6 +14833,9 @@
           "isToolCapable": {
             "type": "boolean"
           },
+          "isMultimodalCapable": {
+            "type": "boolean"
+          },
           "isOverridden": {
             "type": "boolean"
           }

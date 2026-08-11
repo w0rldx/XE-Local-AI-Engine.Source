@@ -39,7 +39,7 @@ describe("nodeCapabilities", () => {
 			encryptedConversations: false,
 			clientNodeRouting: false,
 			fileAttachments: true,
-			imageAttachments: false,
+			imageAttachments: true,
 			agentManagement: true,
 			voice: true,
 			// Plain-chat knowledge-base grounding surface ships, so the composer exposes the "Use Knowledge Base" toggle.

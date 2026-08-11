@@ -934,6 +934,7 @@
 					"noConversation": "Could not prepare a conversation for the upload.",
 					"status": {
 						"extracted": "Extracted",
+						"image": "Image",
 						"pending": "Pending",
 						"unsupported": "Unsupported",
 						"failed": "Failed",

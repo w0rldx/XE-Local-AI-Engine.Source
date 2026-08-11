@@ -25,4 +25,12 @@ public interface IHuggingFaceGgufDiscovery
     ///     each returned <see cref="GgufRepoFile" /> are <see langword="null" />.
     /// </summary>
     Task<GgufRepoDetail> ListRepoFilesAsync(string repoId, CancellationToken ct);
+
+    /// <summary>
+    ///     Finds the repo's multimodal projector (<c>mmproj</c>) companion — the vision encoder a vision GGUF needs — or
+    ///     <see langword="null" /> when the repo ships none (a text-only model). Unlike the selectable-file listings above
+    ///     (which exclude projectors), this surfaces the projector so the store can download it alongside the chosen
+    ///     quant. When a repo ships several projector precisions, the highest-precision one is returned.
+    /// </summary>
+    Task<GgufProjectorFile?> FindProjectorAsync(string repoId, CancellationToken ct);
 }
