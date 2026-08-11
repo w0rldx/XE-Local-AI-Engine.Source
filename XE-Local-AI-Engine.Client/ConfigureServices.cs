@@ -395,10 +395,13 @@ public static class ConfigureServices
                         Window = TimeSpan.FromMinutes(1)
                     }));
 
-            // Inbound model proxy. Like the MCP cap this bounds brute force against the 256-bit key rather than shaping
-            // inference traffic, so it is sized for real usage: an external agent can drive many completions per minute.
-            // Testing gets the same relaxed treatment so integration runs from one loopback partition stay deterministic.
-            var proxyPermitLimit = builder.Environment.IsEnvironment("Testing") ? 100_000 : 120;
+            // Inbound model proxy. This is NOT a key-guessing defense — a 256-bit key is uncrackable no matter the cap —
+            // so unlike a login throttle it must not shape legitimate inference traffic. A single authenticated client
+            // doing RAG/document indexing legitimately issues far more than the MCP surface's 120/min of embedding calls,
+            // so the cap is sized for that (100/s) and exists only to bound a runaway/misbehaving local client; real
+            // per-model compute is already bounded by the loaded-cap and inference leases. Testing gets the same relaxed
+            // treatment so integration runs from one loopback partition stay deterministic.
+            var proxyPermitLimit = builder.Environment.IsEnvironment("Testing") ? 100_000 : 6_000;
             options.AddPolicy(NodeAuthRateLimits.LocalModelProxyPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions

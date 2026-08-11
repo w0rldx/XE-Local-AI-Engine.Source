@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Proxy;
 
+using System.Buffers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -27,28 +28,43 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 internal sealed class LocalModelProxyForwarder
 {
-    /// <summary>Named <see cref="System.Net.Http.HttpClient" /> for forwarding. Infinite timeout: a long generation must not be cut off by a client timeout; the caller's disconnect (request-abort) is the cancellation signal instead.</summary>
+    /// <summary>Named <see cref="System.Net.Http.HttpClient" /> for forwarding. Infinite timeout: a long generation must not be cut off by a client timeout; caller disconnect and the inter-read idle watchdog below are the cancellation signals instead.</summary>
     public const string HttpClientName = "LocalModelProxyForwarder";
 
     private const string JsonContentType = "application/json";
 
+    private const int StreamCopyBufferSize = 16 * 1024;
+
+    /// <summary>
+    ///     Default maximum gap between two reads from the upstream child while streaming a response. A child that stops
+    ///     producing bytes WITHOUT closing the socket would otherwise wedge the forward forever — the forwarding client
+    ///     has an infinite timeout, and only caller disconnect would cancel it — leaving the inference lease held so a
+    ///     graceful eject can never drain the model. Mirrors the invocation path's <c>StreamIdleTimeoutSeconds</c> (60s)
+    ///     default so both streaming surfaces bound a silent runtime the same way.
+    /// </summary>
+    private static readonly TimeSpan DefaultUpstreamIdleTimeout = TimeSpan.FromSeconds(60);
+
     private readonly IGgufModelStore _ggufModelStore;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly TimeProvider _timeProvider;
     private readonly ILogger<LocalModelProxyForwarder> _logger;
+    private readonly TimeSpan _upstreamIdleTimeout;
 
+    /// <param name="upstreamIdleTimeout">
+    ///     Overrides <see cref="DefaultUpstreamIdleTimeout" />. Optional so the DI container binds the default; tests
+    ///     pass a small value to exercise the idle watchdog without waiting a real minute.
+    /// </param>
     public LocalModelProxyForwarder(IGgufModelStore ggufModelStore,
         ILlamaServerProcessSupervisor supervisor,
         IHttpClientFactory httpClientFactory,
-        TimeProvider timeProvider,
-        ILogger<LocalModelProxyForwarder> logger)
+        ILogger<LocalModelProxyForwarder> logger,
+        TimeSpan? upstreamIdleTimeout = null)
     {
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _upstreamIdleTimeout = upstreamIdleTimeout ?? DefaultUpstreamIdleTimeout;
     }
 
     /// <summary>Handles <c>GET proxy/v1/models</c> — synthesizes an OpenAI model list from the installed llama.cpp GGUF catalog.</summary>
@@ -139,22 +155,87 @@ internal sealed class LocalModelProxyForwarder
 
         var httpClient = _httpClientFactory.CreateClient(HttpClientName);
 
-        using var upstreamResponse = await httpClient
-                                           .SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct)
-                                           .ConfigureAwait(false);
-
-        context.Response.StatusCode = (int)upstreamResponse.StatusCode;
-        if (upstreamResponse.Content.Headers.ContentType is { } contentType)
+        HttpResponseMessage upstreamResponse;
+        try
         {
-            context.Response.ContentType = contentType.ToString();
+            upstreamResponse = await httpClient
+                                     .SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct)
+                                     .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            // The child exited after EnsureRunningAsync, or refused/reset the connection before any response bytes. This
+            // is the same "runtime unavailable" condition as an at-capacity spawn, so answer with the SAME retryable
+            // OpenAI-shaped 503 rather than letting it fall through to the global handler's generic 500. Nothing has been
+            // written to the response yet, so the status is still ours to set. (A caller disconnect surfaces as
+            // OperationCanceledException, not these, so it is not mistaken for a runtime failure.)
+            _logger.LogWarning(ex, "Model proxy could not reach the llama-server child for model {Model} ({Role}).", model, role);
+            await WriteBusyAsync(context, "The local model runtime is temporarily unavailable. Try again shortly.", ct).ConfigureAwait(false);
+            return;
         }
 
-        // Stream as it arrives: without disabling the write buffer an SSE (stream:true) response would be batched and
-        // the caller would not see tokens incrementally.
-        context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+        using (upstreamResponse)
+        {
+            context.Response.StatusCode = (int)upstreamResponse.StatusCode;
+            if (upstreamResponse.Content.Headers.ContentType is { } contentType)
+            {
+                context.Response.ContentType = contentType.ToString();
+            }
 
-        await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        await upstreamStream.CopyToAsync(context.Response.Body, ct).ConfigureAwait(false);
+            // Stream as it arrives: without disabling the write buffer an SSE (stream:true) response would be batched and
+            // the caller would not see tokens incrementally.
+            context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await PumpWithIdleDeadlineAsync(upstreamStream, context, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Copies the upstream stream to the caller with a per-read idle deadline. A read that returns no bytes within
+    ///     <see cref="_upstreamIdleTimeout" /> aborts the exchange so the enclosing <c>using</c> lease is released and a
+    ///     graceful eject can drain the model — the naive <see cref="Stream.CopyToAsync(Stream, CancellationToken)" />
+    ///     would instead wait forever on a silent-but-open child. Writes flow under the caller token (a slow CLIENT must
+    ///     not trip the upstream-idle timer); only the upstream read carries the idle deadline.
+    /// </summary>
+    private async Task PumpWithIdleDeadlineAsync(Stream upstream, HttpContext context, CancellationToken ct)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(StreamCopyBufferSize);
+        try
+        {
+            while (true)
+            {
+                int read;
+                using (var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    idleCts.CancelAfter(_upstreamIdleTimeout);
+                    try
+                    {
+                        read = await upstream.ReadAsync(buffer.AsMemory(0, StreamCopyBufferSize), idleCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                    {
+                        // Upstream went silent without closing the socket. The response has already started, so its
+                        // status can no longer be changed to 503 — abort the connection so the caller sees a broken
+                        // stream rather than a hang, and (crucially) so returning here releases the inference lease.
+                        context.Abort();
+                        return;
+                    }
+                }
+
+                if (read == 0)
+                {
+                    return;
+                }
+
+                await context.Response.Body.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                await context.Response.Body.FlushAsync(ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private async Task<bool> IsInstalledLlamaModelAsync(string model, CancellationToken ct)
