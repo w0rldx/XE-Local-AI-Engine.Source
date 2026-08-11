@@ -1036,6 +1036,95 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenModelIsVisionCapable_AttachesImagePartsToContext()
+    {
+        var captured = await RunImageAttachmentAsync(supportsVision: true).ConfigureAwait(false);
+
+        var imageMessage = captured.SingleOrDefault(message => message.Images is { Count: > 0 });
+        AssertEx.NotNull(imageMessage);
+        AssertEx.Equal(expected: 1, imageMessage!.Images!.Count);
+        AssertEx.Equal("image/png", imageMessage.Images[0].MediaType);
+        AssertEx.True(imageMessage.Images[0].Data.Span.SequenceEqual(new byte[] { 1, 2, 3, 4, 5 }),
+            "The decrypted image bytes must ride the synthetic context message.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenModelIsNotVisionCapable_OmitsImageParts()
+    {
+        var captured = await RunImageAttachmentAsync(supportsVision: false).ConfigureAwait(false);
+
+        AssertEx.False(captured.Any(message => message.Images is { Count: > 0 }),
+            "A non-vision model must never receive image parts.");
+    }
+
+    // Runs a plain-chat send whose only attachment is an Image-status file, through a node-local (GGUF-routed) model
+    // whose vision capability is toggled by supportsVision, and returns the context the runner observed. A non-Ollama
+    // provider name forces the GGUF capability branch (where SupportsVision is resolved); the default Ollama resolver
+    // would bypass it and never surface vision.
+    private static async Task<IReadOnlyList<ConversationMessageDto>> RunImageAttachmentAsync(bool supportsVision)
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+
+        ReadOnlyMemory<byte> imageBytes = new byte[] { 1, 2, 3, 4, 5 };
+        IReadOnlyList<ConversationUploadedFileInfo> files =
+            [new ConversationUploadedFileInfo(fileId, conversationId, "photo.png", "image/png", ".png", SizeBytes: imageBytes.Length, DocumentExtractionStatus.Image, ExtractedChars: null, CreatedAtUtc: 0)];
+        var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+        uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
+        uploadedFileStore.ReadBytesAsync(conversationId, fileId, Arg.Any<CancellationToken>())
+                         .Returns<ReadOnlyMemory<byte>?>(imageBytes);
+
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llama.cpp");
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
+                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: supportsVision)), Substitute.For<IActiveCloudChatClientFactory>(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            uploadedFileStore,
+            Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "what is in this image?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
+        return runner.CapturedContext;
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenPlainChatWithKnowledgeBase_InjectsFencedContextAndRecordsSources()
     {
         // An opt-in plain-chat send retrieves KB hits, inlines them as ONE fenced untrusted context
@@ -1360,7 +1449,7 @@ public sealed class NodeChatStreamServiceTests
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
-                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true)), Substitute.For<IActiveCloudChatClientFactory>(),
+                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false)), Substitute.For<IActiveCloudChatClientFactory>(),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -1420,7 +1509,7 @@ public sealed class NodeChatStreamServiceTests
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
-                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false)), Substitute.For<IActiveCloudChatClientFactory>(),
+                CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false)), Substitute.For<IActiveCloudChatClientFactory>(),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),

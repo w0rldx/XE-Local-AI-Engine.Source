@@ -148,6 +148,22 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         return Encoding.UTF8.GetString(plaintext);
     }
 
+    public async Task<ReadOnlyMemory<byte>?> ReadBytesAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
+    {
+        // The bytes blob is server-named "{fileId:D}{extension}"; the extension is not passed in here, so locate the blob
+        // by its unique file-id prefix (the only sibling sharing it is the ".md" companion, which is excluded). No DB
+        // round-trip on the send hot path.
+        var bytesPath = FindBytesFilePath(ConversationDirectory(conversationId), fileId);
+        if (bytesPath is null)
+        {
+            return null;
+        }
+
+        var encrypted = await File.ReadAllBytesAsync(bytesPath, cancellationToken).ConfigureAwait(false);
+        ReadOnlyMemory<byte> plaintext = _blobProtector.Decrypt(conversationId, fileId, UploadedFileBlobProtector.FileBytesColumn, encrypted);
+        return plaintext;
+    }
+
     public async Task<bool> DeleteAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -278,6 +294,21 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
     private static string MarkdownPath(string conversationDirectory, Guid fileId)
     {
         return Path.Combine(conversationDirectory, string.Concat(fileId.ToString("D"), ".md"));
+    }
+
+    // Locates the on-disk bytes blob for a file by its unique "{fileId:D}.*" name, excluding the ".md" companion. Returns
+    // null when the directory or blob is absent, or when the blob was persisted with no extension (images always carry
+    // one, so this only skips the degenerate no-extension upload — which has no image bytes to read anyway).
+    private static string? FindBytesFilePath(string conversationDirectory, Guid fileId)
+    {
+        if (!Directory.Exists(conversationDirectory))
+        {
+            return null;
+        }
+
+        var markdownPath = MarkdownPath(conversationDirectory, fileId);
+        return Directory.EnumerateFiles(conversationDirectory, string.Concat(fileId.ToString("D"), ".*"))
+                        .FirstOrDefault(path => !string.Equals(path, markdownPath, StringComparison.Ordinal));
     }
 
     private static void DeleteFileIfExists(string path)

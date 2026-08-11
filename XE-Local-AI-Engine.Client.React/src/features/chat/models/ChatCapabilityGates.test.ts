@@ -14,7 +14,9 @@ describe("chat capability gates", () => {
 			showToolApprovalControls: true,
 			showConversationFeedbackControls: true,
 			showFileAttachmentControls: true,
-			showImageAttachmentControls: false,
+			// Image attachments route to vision-capable models via the mmproj path (still gated per-model on
+			// activeModelMultimodal in ChatInputArea).
+			showImageAttachmentControls: true,
 			showLocalToolControls: true,
 		});
 	});

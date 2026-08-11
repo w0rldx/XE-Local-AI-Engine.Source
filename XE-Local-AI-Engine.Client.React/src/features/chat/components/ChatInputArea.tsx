@@ -57,6 +57,9 @@ const EMPTY_COMMAND_OPTIONS: readonly ChatCommandOption[] = [];
 // File-picker hint for the OS dialog. The server's extractor allowlist is the source of truth (it rejects
 // anything unsupported); this only nudges the picker toward the common document/text/code formats we extract.
 const ATTACHMENT_ACCEPT = ".txt,.md,.markdown,.csv,.json,.log,.pdf,.docx,text/*,application/pdf";
+// Image accept hint, appended to ATTACHMENT_ACCEPT only when the active model is multimodal (vision-capable via a
+// local mmproj projector) — mirrors ATTACHMENT_ACCEPT's role as an OS-dialog nudge, not the authoritative allowlist.
+const IMAGE_ATTACHMENT_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,image/*";
 
 interface ChatInputAreaProps {
 	availableReasoningEfforts: ReasoningEffort[];
@@ -78,6 +81,10 @@ interface ChatInputAreaProps {
 	// capability to gate the local-tool controls so a non-tool model never offers them.
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
+	// Whether the active model has a local mmproj vision projector. Combined with the node-wide capability
+	// (showImageAttachmentControls) to gate whether the composer accepts image attachments — mirrors
+	// activeModelToolCapable's role for the local-tool controls.
+	activeModelMultimodal?: boolean;
 	// Opt-in knowledge-base grounding for plain chat. The toggle renders only when the node ships the
 	// knowledge-base surface (capabilities.showKnowledgeBaseControls) and is hidden in agent mode (the agent uses the
 	// search_knowledge_base tool instead).
@@ -126,6 +133,7 @@ export function ChatInputArea({
 	reasoningEffort,
 	activeModelToolCapable = false,
 	toolsEnabled = false,
+	activeModelMultimodal = false,
 	knowledgeBaseEnabled = false,
 	knowledgeBaseHasDocuments = true,
 	agentControlsAvailable = false,
@@ -177,6 +185,13 @@ export function ChatInputArea({
 	// File attachments are offered only behind the capability gate, with a wired upload handler, and while the
 	// composer is interactive (not disabled / mid-send).
 	const fileAttachmentsEnabled = capabilities.showFileAttachmentControls && Boolean(onUploadFiles);
+	// Image attachments require BOTH the node-wide capability AND the active model advertising a local mmproj
+	// vision projector — mirrors showLocalToolControls's per-model gating above.
+	const imageAttachmentsEnabled = capabilities.showImageAttachmentControls && activeModelMultimodal && Boolean(onUploadFiles);
+	// Either capability lights up the paperclip / chip row / drag-drop surface; the accept string and upload
+	// handler still differ per attachment kind via imageAttachmentsEnabled below.
+	const attachmentControlsAvailable = fileAttachmentsEnabled || imageAttachmentsEnabled;
+	const attachmentAccept = imageAttachmentsEnabled ? `${ATTACHMENT_ACCEPT},${IMAGE_ATTACHMENT_ACCEPT}` : ATTACHMENT_ACCEPT;
 	const attachmentControlsDisabled = disabled || isSending;
 	// Voice controls are dev-gated AND require the operator-owned node gate (capabilities.showVoiceControls,
 	// derived from manifest.Enabled). The leaf components additionally self-gate on the runtime context.
@@ -248,7 +263,7 @@ export function ChatInputArea({
 	};
 
 	const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
-		if (!fileAttachmentsEnabled || attachmentControlsDisabled) {
+		if (!attachmentControlsAvailable || attachmentControlsDisabled) {
 			return;
 		}
 		// Stop the event reaching the chat-pane-level drop zone (ChatDisplayShell) so a drop on the composer is handled
@@ -265,7 +280,7 @@ export function ChatInputArea({
 	};
 
 	const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
-		if (!fileAttachmentsEnabled || attachmentControlsDisabled) {
+		if (!attachmentControlsAvailable || attachmentControlsDisabled) {
 			return;
 		}
 		event.stopPropagation();
@@ -396,8 +411,8 @@ export function ChatInputArea({
 						onSelectAgent={onSelectAgent ?? (() => undefined)}
 					/>
 				) : null}
-				{fileAttachmentsEnabled ? (
-					<FileButton onChange={handlePickFiles} multiple={true} accept={ATTACHMENT_ACCEPT}>
+				{attachmentControlsAvailable ? (
+					<FileButton onChange={handlePickFiles} multiple={true} accept={attachmentAccept}>
 						{(fileButtonProps) => (
 							<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>
 								<ActionIcon
@@ -470,9 +485,9 @@ export function ChatInputArea({
 	return (
 		<Box
 			data-testid="chat-input-area"
-			onDragOver={fileAttachmentsEnabled ? handleDragOver : undefined}
-			onDragLeave={fileAttachmentsEnabled ? handleDragLeave : undefined}
-			onDrop={fileAttachmentsEnabled ? handleDrop : undefined}
+			onDragOver={attachmentControlsAvailable ? handleDragOver : undefined}
+			onDragLeave={attachmentControlsAvailable ? handleDragLeave : undefined}
+			onDrop={attachmentControlsAvailable ? handleDrop : undefined}
 			style={
 				isDragActive
 					? { outline: "2px dashed var(--mantine-color-primary-5)", outlineOffset: 4, borderRadius: "var(--mantine-radius-md)" }
@@ -486,7 +501,7 @@ export function ChatInputArea({
 					maxContextTokens={contextUsage?.maxTokens}
 				/>
 			) : null}
-			{fileAttachmentsEnabled ? (
+			{attachmentControlsAvailable ? (
 				<ChatAttachmentChips
 					attachments={[...attachments]}
 					pendingUploads={[...pendingUploads]}

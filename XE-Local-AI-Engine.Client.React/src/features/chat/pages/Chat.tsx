@@ -78,6 +78,7 @@ const localDefaultModelOptionBase: ModelOption = {
 	isReasoningModel: false,
 	isNativeReasoningModel: false,
 	isToolCapable: false,
+	isMultimodal: false,
 	isAvailable: true,
 	statusLabel: "Runtime-selected model",
 };
@@ -321,6 +322,7 @@ export function Chat() {
 	// gate on the model's `tools` capability (combined with the node-wide gate inside ChatInputArea).
 	const activeModelReasoningCapable = selectedModelOption?.isReasoningModel ?? false;
 	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
+	const activeModelMultimodal = selectedModelOption?.isMultimodal ?? false;
 	// Pick the right reasoning-effort set based on the active model's provider:
 	// - Cloud (Codex) models get the full OpenAI Responses vocabulary: none/minimal/low/medium/high/xhigh.
 	//   "minimal" and "xhigh" are Codex-only and must NEVER be offered for Ollama models.
@@ -1583,6 +1585,7 @@ export function Chat() {
 				reasoningEffort={reasoningEffort}
 				availableReasoningEfforts={availableReasoningEfforts}
 				activeModelToolCapable={activeModelToolCapable}
+				activeModelMultimodal={activeModelMultimodal}
 				toolsEnabled={toolsEnabled}
 				knowledgeBaseEnabled={knowledgeBaseEnabled}
 				knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}

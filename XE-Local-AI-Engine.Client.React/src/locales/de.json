@@ -934,6 +934,7 @@
 					"noConversation": "Für den Upload konnte keine Unterhaltung vorbereitet werden.",
 					"status": {
 						"extracted": "Extrahiert",
+						"image": "Bild",
 						"pending": "Ausstehend",
 						"unsupported": "Nicht unterstützt",
 						"failed": "Fehlgeschlagen",

@@ -245,6 +245,54 @@ public sealed class RuntimePackageValidatorTests
     }
 
     [Test]
+    public void Validate_WhenMessageHasBlankContentButImageParts_IsValid()
+    {
+        // A vision (image-only) turn carries blank text — the image parts are its payload — and must NOT be rejected as
+        // blank-content. Regression guard: the validator previously flagged every whitespace-only message.
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = string.Empty,
+                    SortOrder = 0,
+                    Images = [new ConversationImagePart("image/png", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+                }
+            ]
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertEx.True(result.IsValid);
+    }
+
+    [Test]
+    public void Validate_WhenMessageHasBlankContentAndNoImages_IsInvalid()
+    {
+        // The image carve-out must not loosen the blank-content fault for an ordinary text message with no image parts.
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = "   ",
+                    SortOrder = 0
+                }
+            ]
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "conversation message content");
+    }
+
+    [Test]
     [Arguments("on")]
     [Arguments("On")]
     [Arguments("ON")]

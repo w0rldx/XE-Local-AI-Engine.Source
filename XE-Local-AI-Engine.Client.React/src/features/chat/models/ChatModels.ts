@@ -260,6 +260,11 @@ export interface ModelOption {
 	// local-tool controls (gated together with the node-wide capability). Undefined on the local-default
 	// option (the runtime picks a concrete model later), so callers treat undefined as "not tool-capable".
 	isToolCapable?: boolean;
+	// Whether the model has a local mmproj vision projector (backend `isMultimodalCapable`). Drives whether the
+	// composer offers image attachments for this model (gated together with the node-wide capability). Undefined on
+	// the local-default option (the runtime picks a concrete model later), so callers treat undefined as "not
+	// multimodal".
+	isMultimodal?: boolean;
 	isAvailable: boolean;
 	statusLabel?: string;
 	// True for cloud-provider models (e.g. Codex/OpenAI). Drives the "Cloud (Codex)" section in the picker
@@ -363,6 +368,9 @@ export interface ChatDisplayShellProps {
 	// capability to decide whether the composer offers the local-tool controls. Defaults to false (safe).
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
+	// Whether the active model has a local mmproj vision projector. Gated together with the node-wide capability
+	// to decide whether the composer offers image attachments. Defaults to false (safe).
+	activeModelMultimodal?: boolean;
 	// Opt-in knowledge-base grounding for plain chat; forwarded to the composer's "Use Knowledge Base" toggle.
 	knowledgeBaseEnabled?: boolean;
 	// Whether the node has at least one indexed knowledge document; gates whether the composer's KB toggle is enabled

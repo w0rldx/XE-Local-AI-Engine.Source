@@ -27,6 +27,8 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		isReasoningModel: model.isReasoningCapable ?? false,
 		isNativeReasoningModel: model.isNativeReasoningCapable ?? false,
 		isToolCapable: model.isToolCapable ?? false,
+		// Vision projector (mmproj) capability — drives whether the composer offers image attachments for this model.
+		isMultimodal: model.isMultimodalCapable ?? false,
 		isAvailable: nodeAvailable,
 		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
 		// Carry the serving runtime so the page can gate the model-details poll per provider.
@@ -100,12 +102,14 @@ export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 	isReasoningModel: boolean;
 	isNativeReasoningModel: boolean;
 	isToolCapable: boolean;
+	isMultimodal: boolean;
 } {
 	const resolved = resolveLocalDefaultModel(models);
 	return {
 		isReasoningModel: resolved?.isReasoningCapable ?? false,
 		isNativeReasoningModel: resolved?.isNativeReasoningCapable ?? false,
 		isToolCapable: resolved?.isToolCapable ?? false,
+		isMultimodal: resolved?.isMultimodalCapable ?? false,
 	};
 }
 

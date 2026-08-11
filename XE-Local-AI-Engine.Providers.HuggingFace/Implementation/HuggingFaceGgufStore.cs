@@ -17,6 +17,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // The Hugging Face provider must not depend on the LlamaServer project; the descriptor provider name is the agreed
     // constant for the host-process llama-server runtime (LlamaServerProviderConstants.ProviderName).
     private const string ProviderName = "llamacpp";
+
+    // Ollama-style capability token surfaced for a model with a local mmproj projector — mirrors the tokens the GGUF
+    // capability detector emits (completion/tools/thinking) so a vision model classifies consistently across the system.
+    private const string VisionCapability = "vision";
     private readonly IHuggingFaceGgufDiscovery _discovery;
 
     private readonly HfDownloadClient _downloadClient;
@@ -77,6 +81,20 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         }
 
         return entry.LocalPath;
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        var entry = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
+        if (entry?.ProjectorLocalPath is null || !File.Exists(entry.ProjectorLocalPath))
+        {
+            return null;
+        }
+
+        return entry.ProjectorLocalPath;
     }
 
     /// <inheritdoc />
@@ -182,6 +200,14 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 progress,
                 ct).ConfigureAwait(false);
 
+            // A vision repo ships an mmproj projector companion the model needs for image input; pull it alongside the
+            // weights (auto-pair). A text-only repo has none — FindProjectorAsync returns null and nothing extra is
+            // fetched. A projector failure never fails the model: it loads text-only. Skipped for a draft file — a
+            // speculative drafter is never the chat model that would consume a projector.
+            var (projectorFileName, projectorLocalPath) = GgufDraftModel.IsDraftQuant(quant)
+                ? (null, null)
+                : await TryEnsureProjectorAsync(request.RepoId, fileName, ct).ConfigureAwait(false);
+
             var entry = new GgufModelRegistryEntry
             {
                 ModelName = modelName,
@@ -199,7 +225,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole
                 // repo through one download action, so a drafter arrives on the same Chat/Unknown-role request as the
                 // base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
-                Role = GgufDraftModel.IsDraftQuant(quant) ? GgufRole.Draft : request.Role
+                Role = GgufDraftModel.IsDraftQuant(quant) ? GgufRole.Draft : request.Role,
+                ProjectorFileName = projectorFileName,
+                ProjectorLocalPath = projectorLocalPath
             };
 
             await _registry.UpsertAsync(entry, ct).ConfigureAwait(false);
@@ -221,6 +249,12 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         {
             TryDeleteFile(entry.LocalPath);
             TryDeleteFile(entry.LocalPath + ".part");
+            // Remove the paired mmproj projector too — it is keyed by this model's file stem, so no other model shares it.
+            if (entry.ProjectorLocalPath is not null)
+            {
+                TryDeleteFile(entry.ProjectorLocalPath);
+                TryDeleteFile(entry.ProjectorLocalPath + ".part");
+            }
             // A legacy first-download alias may share this file under a second name — remove EVERY entry pointing at it,
             // so deleting through either identity leaves no manifest entry dangling on the now-removed file.
             await _registry.RemoveByLocalPathAsync(entry.LocalPath, ct).ConfigureAwait(false);
@@ -286,9 +320,64 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         return (byQuant.FileName, byQuant.Quant, byQuant.SizeBytes, byQuant.Sha256, request.Revision ?? byQuant.Revision);
     }
 
+    // Downloads the repo's mmproj projector companion (when it ships one) next to the model and returns its filename +
+    // local path. Stored under a NON-scanned "projectors/" subdirectory keyed by the model's file stem: the projector
+    // name embeds the model's quant token, so a top-level placement would be mis-registered as a phantom model by the
+    // registry rescan (which parses a quant from every top-level *.gguf). A projector download must never fail the model
+    // — any failure degrades to text-only (null path). Cancellation propagates.
+    private const string ProjectorSubdirectory = "projectors";
+
+    private async Task<(string? FileName, string? LocalPath)> TryEnsureProjectorAsync(string repoId, string modelFileName, CancellationToken ct)
+    {
+        try
+        {
+            var projector = await _discovery.FindProjectorAsync(repoId, ct).ConfigureAwait(false);
+            if (projector is null || !GgufFilePath.IsSafeRelativePath(projector.FileName))
+            {
+                return (null, null);
+            }
+
+            var localRelativePath = $"{ProjectorSubdirectory}/{Path.GetFileNameWithoutExtension(modelFileName)}.mmproj.gguf";
+            var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, localRelativePath);
+
+            // No progress reporter: the pull UI keys progress by model name and the main weights already reported
+            // completion; a second stream under the same name would flip the bar back to "downloading".
+            var result = await _downloadClient.DownloadAsync(repoId,
+                projector.FileName,
+                projector.Revision,
+                $"{repoId} (vision projector)",
+                destinationPath,
+                projector.SizeBytes,
+                projector.Sha256,
+                progress: null,
+                ct).ConfigureAwait(false);
+
+            _logger.LogInformation("Downloaded the multimodal projector {ProjectorFile} for {RepoId}; image input is available.",
+                projector.FileName, repoId);
+            return (projector.FileName, result.LocalPath);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to download the multimodal projector for {RepoId}; the model will load as text-only.", repoId);
+            return (null, null);
+        }
+    }
+
     private async Task<LocalModelDescriptor> ToDescriptorAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
         var facts = await ResolveHeaderFactsAsync(entry, ct).ConfigureAwait(false);
+
+        // A model is multimodal (accepts image input) exactly when its mmproj projector companion is present locally —
+        // the same file that gates the llama-server --mmproj argument, so the flag never over-claims. Surface the vision
+        // capability token too, alongside the chat-template-derived tokens.
+        var isMultimodalCapable = entry.ProjectorLocalPath is not null && File.Exists(entry.ProjectorLocalPath);
+        var capabilities = isMultimodalCapable
+            ? facts.Capabilities.Append(VisionCapability).ToArray()
+            : facts.Capabilities;
 
         return new LocalModelDescriptor
         {
@@ -301,7 +390,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             IsToolCapable = facts.IsToolCapable,
             IsReasoningCapable = facts.IsReasoningCapable,
             IsNativeReasoningCapable = facts.IsNativeReasoningCapable,
-            Capabilities = facts.Capabilities
+            IsMultimodalCapable = isMultimodalCapable,
+            Capabilities = capabilities
         };
     }
 

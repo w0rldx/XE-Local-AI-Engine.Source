@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, Group, Loader, Paper, Text, Tooltip } from "@mantine/core";
-import { IconFileText, IconX } from "@tabler/icons-react";
+import { IconFileText, IconPhoto, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { formatAttachmentSize } from "@/features/chat/models/ChatAttachmentModels";
@@ -14,6 +14,7 @@ interface ChatAttachmentChipsProps {
 
 const statusColors: Record<ChatAttachmentStatus, string> = {
 	extracted: "teal",
+	image: "teal",
 	pending: "gray",
 	unsupported: "yellow",
 	failed: "red",
@@ -24,6 +25,8 @@ function statusLabel(status: ChatAttachmentStatus, t: (key: string, fallback: st
 	switch (status) {
 		case "extracted":
 			return t("pages.chat.composer.attachments.status.extracted", "Extracted");
+		case "image":
+			return t("pages.chat.composer.attachments.status.image", "Image");
 		case "pending":
 			return t("pages.chat.composer.attachments.status.pending", "Pending");
 		case "unsupported":
@@ -63,7 +66,9 @@ export function ChatAttachmentChips({ attachments, pendingUploads, onRemove, dis
 			{attachments.map((attachment) => (
 				<Paper key={attachment.fileId} withBorder={true} radius="sm" px="xs" py={4} data-testid="chat-attachment-chip">
 					<Group gap={6} wrap="nowrap">
-						<IconFileText size={14} />
+						{/* follow-up: render a real thumbnail from the pre-upload File (pendingUploads carries no File
+						    reference today, and the server DTO has no blob URL) — icon-only until that's wired. */}
+						{attachment.mimeType.startsWith("image/") ? <IconPhoto size={14} /> : <IconFileText size={14} />}
 						<Tooltip label={attachment.originalFileName} withArrow={true}>
 							<Text size="xs" lineClamp={1} style={{ maxWidth: 160 }}>
 								{attachment.originalFileName}

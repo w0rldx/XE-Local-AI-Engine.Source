@@ -143,6 +143,39 @@ public sealed class HeuristicTokenEstimatorTests
     }
 
     [Test]
+    public void EstimateTokens_ForImageContent_ChargesFixedPerImageEstimate_AndDoesNotDropIt()
+    {
+        // A vision turn must not be counted as zero-cost: an image (DataContent) is charged a fixed per-image estimate
+        // (512 tokens) on top of the surrounding text, so the budgeter never trims it away as if it were free. This also
+        // proves the estimator PRESERVES image content (it neither throws nor ignores it under the char-profile switch).
+        const int EstimatedTokensPerImage = 512;
+        var estimator = new HeuristicTokenEstimator();
+        var text = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
+        var textPlusImage = new ChatMessage(ChatRole.User,
+            [new TextContent(new string('x', 40)), new DataContent(new byte[] { 1, 2, 3, 4 }, "image/png")]);
+
+        var textEstimate = estimator.EstimateTokens(text);
+        var imageEstimate = estimator.EstimateTokens(textPlusImage);
+
+        AssertEx.Equal(expected: (40 / 4) + OverheadTokens, textEstimate);
+        AssertEx.Equal(expected: (40 / 4) + OverheadTokens + EstimatedTokensPerImage, imageEstimate);
+    }
+
+    [Test]
+    public void EstimateTokens_ForImageBytes_DoesNotCharCountThePayload()
+    {
+        // The raw image bytes must never be char-counted (a large image would otherwise explode the estimate via its
+        // data length / ToString). Two different-sized images each cost exactly the fixed per-image estimate.
+        const int EstimatedTokensPerImage = 512;
+        var estimator = new HeuristicTokenEstimator();
+        var small = new ChatMessage(ChatRole.User, [new DataContent(new byte[4], "image/png")]);
+        var large = new ChatMessage(ChatRole.User, [new DataContent(new byte[100_000], "image/png")]);
+
+        AssertEx.Equal(expected: OverheadTokens + EstimatedTokensPerImage, estimator.EstimateTokens(small));
+        AssertEx.Equal(expected: OverheadTokens + EstimatedTokensPerImage, estimator.EstimateTokens(large));
+    }
+
+    [Test]
     public void EstimateTokens_ForList_SumsPerMessageEstimates()
     {
         var estimator = new HeuristicTokenEstimator();

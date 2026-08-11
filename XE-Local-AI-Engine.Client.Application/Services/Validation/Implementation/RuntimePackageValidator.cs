@@ -83,12 +83,18 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         // checked on every path. The size cap is not — see the interface's doc for why it is inbound-only.
         var maxMessageSizeBytes = enforceMessageSizeCap ? _securityOptions.MaxMessageSizeKb * 1024 : int.MaxValue;
 
+        // A vision (image-only) turn legitimately carries blank text — its payload is the image parts — so blank content
+        // is a fault ONLY when the message has no images to stand in for it. Null-byte and the size cap still apply to
+        // whatever text IS present.
         var invalidMessageCount = conversationContext
-                                  .Select(message => message.Content)
-                                  .Count(content =>
-                                      string.IsNullOrWhiteSpace(content) ||
-                                      ContainsNullByte(content) ||
-                                      Encoding.UTF8.GetByteCount(content) > maxMessageSizeBytes);
+                                  .Count(message =>
+                                  {
+                                      var content = message.Content;
+                                      var hasImages = message.Images is { Count: > 0 };
+                                      return (string.IsNullOrWhiteSpace(content) && !hasImages) ||
+                                             ContainsNullByte(content) ||
+                                             Encoding.UTF8.GetByteCount(content) > maxMessageSizeBytes;
+                                  });
 
         errors.AddRange(Enumerable.Repeat("Invalid conversation message content", invalidMessageCount));
     }

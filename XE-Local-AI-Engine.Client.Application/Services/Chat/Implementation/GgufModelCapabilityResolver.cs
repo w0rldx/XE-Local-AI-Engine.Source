@@ -30,6 +30,9 @@ internal sealed class GgufModelCapabilityResolver(IGgufModelStore ggufModelStore
             return null;
         }
 
-        return new GgufModelCapabilities(descriptor.IsReasoningCapable, descriptor.IsToolCapable);
+        // Vision is sourced from the descriptor's IsMultimodalCapable, which is true only when a local mmproj projector
+        // companion is present — the same file that gates the llama-server --mmproj launch — so it never claims a vision
+        // capability the runtime cannot serve.
+        return new GgufModelCapabilities(descriptor.IsReasoningCapable, descriptor.IsToolCapable, descriptor.IsMultimodalCapable);
     }
 }

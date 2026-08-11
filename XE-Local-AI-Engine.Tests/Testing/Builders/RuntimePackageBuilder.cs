@@ -92,6 +92,23 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    public RuntimePackageBuilder WithImageMessage(string content, string mediaType, byte[] data, int sortOrder = 0)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(data);
+
+        _conversationContext.Add(new ConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = MessageRole.User,
+            Content = content,
+            SortOrder = sortOrder,
+            Images = [new ConversationImagePart(mediaType, data)]
+        });
+
+        return this;
+    }
+
     public RuntimePackageBuilder WithConversationMessage(MessageRole role,
         string content,
         int sortOrder,

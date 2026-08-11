@@ -29,6 +29,7 @@ export function ChatDisplayShell({
 	reasoningEffort,
 	availableReasoningEfforts,
 	activeModelToolCapable = false,
+	activeModelMultimodal = false,
 	toolsEnabled = false,
 	knowledgeBaseEnabled = false,
 	knowledgeBaseHasDocuments = true,
@@ -272,6 +273,7 @@ export function ChatDisplayShell({
 					selectedModel={selectedModel}
 					reasoningEffort={reasoningEffort}
 					activeModelToolCapable={activeModelToolCapable}
+					activeModelMultimodal={activeModelMultimodal}
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}

@@ -3,7 +3,9 @@ import type { XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileR
 // Extraction lifecycle of an uploaded attachment. The upload endpoint runs extraction synchronously, so a
 // freshly returned file is already resolved (extracted/unsupported/failed) — "pending" exists for completeness
 // and any transient client-optimistic row. "unknown" guards an unrecognized server string (never trusted blindly).
-export type ChatAttachmentStatus = "pending" | "extracted" | "unsupported" | "failed" | "unknown";
+// "image" is the backend's terminal status for an image attachment (no text extraction — the file rides straight
+// to the vision-capable model), treated as a successful attach like "extracted".
+export type ChatAttachmentStatus = "pending" | "extracted" | "unsupported" | "failed" | "unknown" | "image";
 
 // A conversation attachment as the composer renders it. Mapped from the generated upload DTO so the UI never
 // depends on the wire shape's optional/nullable fields directly.
@@ -23,6 +25,8 @@ function toAttachmentStatus(raw: string | undefined): ChatAttachmentStatus {
 			return "pending";
 		case "extracted":
 			return "extracted";
+		case "image":
+			return "image";
 		case "unsupported":
 			return "unsupported";
 		case "failed":

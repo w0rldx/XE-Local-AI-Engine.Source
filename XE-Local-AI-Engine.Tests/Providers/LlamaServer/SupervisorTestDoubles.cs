@@ -343,6 +343,14 @@ internal sealed class FakeModelStore(
         return Task.FromResult(fixedPath);
     }
 
+    public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
+    {
+        return Task.FromResult(ProjectorPath);
+    }
+
+    // Overridable so a vision-launch test can assert --mmproj is emitted; null (default) means text-only, no projector.
+    public string? ProjectorPath { get; init; }
+
     public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
     {
         IReadOnlyList<LocalModelDescriptor> descriptors = (installedModelNames ?? [])

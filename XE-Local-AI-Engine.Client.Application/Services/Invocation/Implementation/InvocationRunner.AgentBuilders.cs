@@ -443,6 +443,17 @@ public sealed partial class InvocationRunner
                           }
 
                           contents.Add(new TextContent(message.Content));
+
+                          // Vision (multimodal) parts: the turn assembler attaches these only for a vision-capable
+                          // effective model, so an image never reaches a model that cannot see it.
+                          if (message.Images is { Count: > 0 } images)
+                          {
+                              foreach (var image in images)
+                              {
+                                  contents.Add(new DataContent(image.Data, image.MediaType));
+                              }
+                          }
+
                           return new ChatMessage(MapRole(message.Role), contents);
                       })
                       .ToList();
