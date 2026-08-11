@@ -91,6 +91,7 @@ import {
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
 	freezeInferenceProfile,
+	generateLocalModelProxyApiKey,
 	generateMcpServerApiKey,
 	getAgentDefinition,
 	getAgentFeedbackInsights,
@@ -120,6 +121,7 @@ import {
 	getLlamaCppSourceBuildPrerequisites,
 	getLlamaCppSourceBuildStatus,
 	getLocalModelDetails,
+	getLocalModelProxyApiKey,
 	getMcpServer,
 	getMcpServerApiKey,
 	getMcpServerTools,
@@ -208,6 +210,7 @@ import {
 	resolveToolApproval,
 	resolveUserQuestion,
 	retrieveImage,
+	revokeLocalModelProxyApiKey,
 	revokeMcpServerApiKey,
 	runPlaybookActionEval,
 	saveCloudSettings,
@@ -415,6 +418,8 @@ import type {
 	ExploreInferenceProfileResponse,
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileResponse,
+	GenerateLocalModelProxyApiKeyData,
+	GenerateLocalModelProxyApiKeyResponse,
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyResponse,
 	GetAgentDefinitionData,
@@ -475,6 +480,8 @@ import type {
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsError,
 	GetLocalModelDetailsResponse,
+	GetLocalModelProxyApiKeyData,
+	GetLocalModelProxyApiKeyResponse,
 	GetMcpServerApiKeyData,
 	GetMcpServerApiKeyResponse,
 	GetMcpServerData,
@@ -659,6 +666,8 @@ import type {
 	ResolveUserQuestionResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
+	RevokeLocalModelProxyApiKeyData,
+	RevokeLocalModelProxyApiKeyResponse,
 	RevokeMcpServerApiKeyData,
 	RevokeMcpServerApiKeyResponse,
 	RunPlaybookActionEvalData,
@@ -1282,6 +1291,76 @@ export const triggerScheduledJobMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await triggerScheduledJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const revokeLocalModelProxyApiKeyMutation = (
+	options?: Partial<Options<RevokeLocalModelProxyApiKeyData>>,
+): UseMutationOptions<
+	RevokeLocalModelProxyApiKeyResponse,
+	AxiosError<DefaultError>,
+	Options<RevokeLocalModelProxyApiKeyData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RevokeLocalModelProxyApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<RevokeLocalModelProxyApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await revokeLocalModelProxyApiKey({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLocalModelProxyApiKeyQueryKey = (options?: Options<GetLocalModelProxyApiKeyData>) =>
+	createQueryKey("getLocalModelProxyApiKey", options);
+
+export const getLocalModelProxyApiKeyOptions = (options?: Options<GetLocalModelProxyApiKeyData>) =>
+	queryOptions<
+		GetLocalModelProxyApiKeyResponse,
+		AxiosError<DefaultError>,
+		GetLocalModelProxyApiKeyResponse,
+		ReturnType<typeof getLocalModelProxyApiKeyQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLocalModelProxyApiKey({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLocalModelProxyApiKeyQueryKey(options),
+	});
+
+export const generateLocalModelProxyApiKeyMutation = (
+	options?: Partial<Options<GenerateLocalModelProxyApiKeyData>>,
+): UseMutationOptions<
+	GenerateLocalModelProxyApiKeyResponse,
+	AxiosError<DefaultError>,
+	Options<GenerateLocalModelProxyApiKeyData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		GenerateLocalModelProxyApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<GenerateLocalModelProxyApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await generateLocalModelProxyApiKey({
 				...options,
 				...fnOptions,
 				throwOnError: true,

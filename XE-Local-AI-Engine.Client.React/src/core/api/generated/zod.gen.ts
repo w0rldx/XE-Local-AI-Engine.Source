@@ -367,6 +367,30 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	parameters: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse = z.object({
+	prefix: z.string(),
+	createdAt: z.iso.datetime({ offset: true }),
+	lastUsedAt: z.iso.datetime({ offset: true }).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse = z.object({
+	configured: z.boolean(),
+	apiKey: zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse.nullish(),
+	endpointUrl: z.string(),
+	key: z.string(),
+});
+
+/**
+ * a request dto that doesn't have any properties
+ */
+export const zFastEndpointsEmptyRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse = z.object({
+	configured: z.boolean(),
+	apiKey: zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse.nullish(),
+	endpointUrl: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse = z.object({
 	cancelledCount: z
 		.int()
@@ -1442,11 +1466,6 @@ export const zXeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyRespons
 	endpointUrl: z.string(),
 	key: z.string(),
 });
-
-/**
- * a request dto that doesn't have any properties
- */
-export const zFastEndpointsEmptyRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = z.object({
 	configured: z.boolean(),
@@ -3727,6 +3746,22 @@ export const zTriggerScheduledJobPath = z.object({
  * No Content
  */
 export const zTriggerScheduledJobResponse = z.void();
+
+/**
+ * No Content
+ */
+export const zRevokeLocalModelProxyApiKeyResponse = z.void();
+
+/**
+ * Success
+ */
+export const zGetLocalModelProxyApiKeyResponse = zXeLocalAiEngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse;
+
+/**
+ * Success
+ */
+export const zGenerateLocalModelProxyApiKeyResponse =
+	zXeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse;
 
 /**
  * Success

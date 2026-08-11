@@ -245,6 +245,9 @@ import type {
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileErrors,
 	FreezeInferenceProfileResponses,
+	GenerateLocalModelProxyApiKeyData,
+	GenerateLocalModelProxyApiKeyErrors,
+	GenerateLocalModelProxyApiKeyResponses,
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyErrors,
 	GenerateMcpServerApiKeyResponses,
@@ -332,6 +335,9 @@ import type {
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsErrors,
 	GetLocalModelDetailsResponses,
+	GetLocalModelProxyApiKeyData,
+	GetLocalModelProxyApiKeyErrors,
+	GetLocalModelProxyApiKeyResponses,
 	GetMcpServerApiKeyData,
 	GetMcpServerApiKeyErrors,
 	GetMcpServerApiKeyResponses,
@@ -591,6 +597,9 @@ import type {
 	RetrieveImageData,
 	RetrieveImageErrors,
 	RetrieveImageResponses,
+	RevokeLocalModelProxyApiKeyData,
+	RevokeLocalModelProxyApiKeyErrors,
+	RevokeLocalModelProxyApiKeyResponses,
 	RevokeMcpServerApiKeyData,
 	RevokeMcpServerApiKeyErrors,
 	RevokeMcpServerApiKeyResponses,
@@ -849,6 +858,7 @@ import {
 	zExploreInferenceProfileResponse,
 	zFreezeInferenceProfileBody,
 	zFreezeInferenceProfileResponse,
+	zGenerateLocalModelProxyApiKeyResponse,
 	zGenerateMcpServerApiKeyResponse,
 	zGetAgentDefinitionPath,
 	zGetAgentDefinitionResponse,
@@ -895,6 +905,7 @@ import {
 	zGetLlamaCppSourceBuildStatusResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
+	zGetLocalModelProxyApiKeyResponse,
 	zGetMcpServerApiKeyResponse,
 	zGetMcpServerPath,
 	zGetMcpServerResponse,
@@ -1039,6 +1050,7 @@ import {
 	zResolveUserQuestionResponse,
 	zRetrieveImagePath,
 	zRetrieveImageResponse,
+	zRevokeLocalModelProxyApiKeyResponse,
 	zRevokeMcpServerApiKeyResponse,
 	zRunPlaybookActionEvalPath,
 	zRunPlaybookActionEvalResponse,
@@ -1711,6 +1723,71 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger",
+		...options,
+	});
+
+export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<RevokeLocalModelProxyApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).delete<RevokeLocalModelProxyApiKeyResponses, RevokeLocalModelProxyApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zRevokeLocalModelProxyApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/proxy/key",
+		...options,
+	});
+
+export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLocalModelProxyApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetLocalModelProxyApiKeyResponses, GetLocalModelProxyApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLocalModelProxyApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/proxy/key",
+		...options,
+	});
+
+export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
+	options?: Options<GenerateLocalModelProxyApiKeyData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<GenerateLocalModelProxyApiKeyResponses, GenerateLocalModelProxyApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGenerateLocalModelProxyApiKeyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/proxy/key",
 		...options,
 	});
 
