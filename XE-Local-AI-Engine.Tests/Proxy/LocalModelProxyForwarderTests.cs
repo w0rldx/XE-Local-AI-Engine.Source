@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Proxy;
@@ -155,6 +156,37 @@ public sealed class LocalModelProxyForwarderTests
         AssertEx.Equal("http://127.0.0.1:18100/v1/embeddings", upstream.LastRequest!.RequestUri!.AbsoluteUri);
     }
 
+    [Test]
+    public async Task ForwardChatCompletions_WhenTheChildConnectionFails_Returns503WithRetryAfter()
+    {
+        // The child exited/refused after provisioning — an HttpRequestException before any response bytes. This must map
+        // to the same retryable 503 as an at-capacity spawn, not fall through to a generic 500.
+        using var upstream = new ThrowingHandler();
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
+
+        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+
+        AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+        AssertEx.Equal("5", context.Response.Headers.RetryAfter.ToString());
+    }
+
+    [Test]
+    public async Task ForwardChatCompletions_WhenTheUpstreamStreamStalls_AbortsWithinTheIdleDeadlineInsteadOfHanging()
+    {
+        // A child that sends response headers then goes silent WITHOUT closing the socket. Without the inter-read idle
+        // deadline the forward would hang forever (infinite client timeout) and never release the inference lease.
+        using var upstream = new StallingHandler();
+        var forwarder = CreateForwarder(out _, out _, upstream, idleTimeout: TimeSpan.FromMilliseconds(150));
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
+
+        // WaitAsync turns a regression (the hang returning) into a fast, legible failure instead of a stuck test run.
+        await forwarder.ForwardChatCompletionsAsync(context).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        AssertEx.True(context.RequestAborted.IsCancellationRequested,
+            "The idle watchdog must abort the request when the upstream goes silent, so the inference lease is released.");
+    }
+
     private static CapturingHandler Idle()
     {
         return new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
@@ -162,7 +194,8 @@ public sealed class LocalModelProxyForwarderTests
 
     private static LocalModelProxyForwarder CreateForwarder(out IGgufModelStore ggufStore,
         out ILlamaServerProcessSupervisor supervisor,
-        CapturingHandler upstream)
+        HttpMessageHandler upstream,
+        TimeSpan? idleTimeout = null)
     {
         ggufStore = Substitute.For<IGgufModelStore>();
         ggufStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
@@ -177,7 +210,7 @@ public sealed class LocalModelProxyForwarderTests
         httpClientFactory.CreateClient(LocalModelProxyForwarder.HttpClientName)
                          .Returns(_ => new HttpClient(upstream, disposeHandler: false));
 
-        return new LocalModelProxyForwarder(ggufStore, supervisor, httpClientFactory, TimeProvider.System, NullLogger<LocalModelProxyForwarder>.Instance);
+        return new LocalModelProxyForwarder(ggufStore, supervisor, httpClientFactory, NullLogger<LocalModelProxyForwarder>.Instance, idleTimeout);
     }
 
     private static LocalModelDescriptor InstalledDescriptor()
@@ -196,11 +229,32 @@ public sealed class LocalModelProxyForwarderTests
     private static DefaultHttpContext BuildContext(string body, out MemoryStream responseBody)
     {
         var context = new DefaultHttpContext();
+        // A lifetime feature so context.Abort() (used by the idle watchdog) is a well-defined no-op under test rather
+        // than an NRE, and so RequestAborted is a real, uncancelled token.
+        context.Features.Set<IHttpRequestLifetimeFeature>(new StubRequestLifetime());
         context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
         context.Request.ContentType = "application/json";
         responseBody = new MemoryStream();
         context.Response.Body = responseBody;
         return context;
+    }
+
+    private sealed class StubRequestLifetime : IHttpRequestLifetimeFeature
+    {
+        private bool _aborted;
+
+        // A fresh read after Abort() reports cancellation; the forwarder captured RequestAborted (uncancelled) at entry,
+        // so its in-flight token is unaffected — exactly the real feature's contract, without owning a disposable CTS.
+        public CancellationToken RequestAborted
+        {
+            get => _aborted ? new CancellationToken(canceled: true) : CancellationToken.None;
+            set => _ = value;
+        }
+
+        public void Abort()
+        {
+            _aborted = true;
+        }
     }
 
     /// <summary>Stands in for the llama-server child: captures the forwarded request and returns a canned response.</summary>
@@ -224,5 +278,64 @@ public sealed class LocalModelProxyForwarderTests
             response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
             return response;
         }
+    }
+
+    /// <summary>Stands in for a child that exited or refused the connection: the send itself fails.</summary>
+    private sealed class ThrowingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection refused"));
+        }
+    }
+
+    /// <summary>Stands in for a child that sends response headers then goes silent without closing the socket.</summary>
+    private sealed class StallingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new StallingStream())
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+            return Task.FromResult(response);
+        }
+    }
+
+    /// <summary>A readable stream whose reads never complete until the read's own token is cancelled (the idle deadline).</summary>
+    private sealed class StallingStream : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

@@ -16,10 +16,12 @@ public static class NodeAuthRateLimits
     public const string McpPolicy = "McpRateLimit";
 
     /// <summary>
-    ///     Guards the inbound model-proxy endpoints against offline-speed guessing of the bearer key. Like
-    ///     <see cref="McpPolicy" /> it is far more permissive than <see cref="AuthPolicy" />: an external tool issues
-    ///     many legitimate completions per minute, so the auth endpoints' 10/min would break normal use. The cap exists
-    ///     to bound BRUTE FORCE against the key, not to shape inference traffic.
+    ///     Bounds a runaway or misbehaving client on the inbound model-proxy endpoints. It is deliberately far more
+    ///     permissive than every other policy here and is NOT a key-guessing defense: the 256-bit key is uncrackable
+    ///     regardless of the cap, and a single authenticated client doing RAG/document indexing legitimately issues
+    ///     thousands of embedding calls per minute — so shaping that traffic would break normal use. Real per-model
+    ///     compute is already bounded by the loaded-model cap and inference leases; this only stops one local process
+    ///     from hammering the node unbounded.
     /// </summary>
     public const string LocalModelProxyPolicy = "LocalModelProxyRateLimit";
 }
