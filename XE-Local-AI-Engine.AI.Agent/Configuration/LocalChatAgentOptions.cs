@@ -34,6 +34,22 @@ public sealed class LocalChatAgentOptions
     public int MaxInlinedAttachmentChars { get; set; } = 48_000;
 
     /// <summary>
+    ///     Maximum number of image attachments attached to a single vision (multimodal) turn. The client re-sends every
+    ///     conversation attachment on each turn, so this — with <see cref="MaxImageAttachmentBytes" /> — bounds how many
+    ///     decrypted images one send materializes; images beyond the cap are dropped (first-requested kept).
+    /// </summary>
+    [Range(minimum: 1, maximum: 64)]
+    public int MaxImageAttachments { get; set; } = 8;
+
+    /// <summary>
+    ///     Aggregate decrypted-image byte budget for a single vision turn. Images are decrypted into memory and serialized
+    ///     to the model, so this caps the total allocation a turn can trigger regardless of per-file upload limits; once
+    ///     the running total would exceed it, no further images are attached. Defaults to 32 MiB.
+    /// </summary>
+    [Range(minimum: 1L * 1024 * 1024, maximum: 512L * 1024 * 1024)]
+    public long MaxImageAttachmentBytes { get; set; } = 32L * 1024 * 1024;
+
+    /// <summary>
     ///     Maximum number of retrieved knowledge-base characters inlined into a plain-chat turn when the user has opted
     ///     into knowledge-base grounding. The fused hybrid-search hits are fenced and concatenated up to this
     ///     budget; hits beyond it are dropped (lowest-scored first). Smaller than the attachment budget because KB

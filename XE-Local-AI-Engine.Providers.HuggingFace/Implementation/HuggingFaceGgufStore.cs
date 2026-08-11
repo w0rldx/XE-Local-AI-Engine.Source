@@ -178,6 +178,25 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var existing = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
             if (existing is not null && File.Exists(existing.LocalPath))
             {
+                // Backfill a missing projector: a vision GGUF installed before this feature, or one whose projector
+                // download failed transiently, has weights but no usable mmproj — without this it would stay text-only
+                // forever, since the reuse path never re-downloads. Paired to the installed weights' revision. A projector
+                // failure still degrades to text-only. Skipped for a draft file (never a projector consumer).
+                if (!GgufDraftModel.IsDraftQuant(existing.Quant)
+                    && (existing.ProjectorLocalPath is null || !File.Exists(existing.ProjectorLocalPath)))
+                {
+                    var (backfillFileName, backfillPath) = await TryEnsureProjectorAsync(existing.RepoId, existing.FileName, existing.SourceRevision, ct).ConfigureAwait(false);
+                    if (backfillPath is not null)
+                    {
+                        existing = existing with
+                        {
+                            ProjectorFileName = backfillFileName,
+                            ProjectorLocalPath = backfillPath
+                        };
+                        await _registry.UpsertAsync(existing, ct).ConfigureAwait(false);
+                    }
+                }
+
                 progress?.Report(new PullProgress
                 {
                     ModelName = modelName,
@@ -206,7 +225,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             // speculative drafter is never the chat model that would consume a projector.
             var (projectorFileName, projectorLocalPath) = GgufDraftModel.IsDraftQuant(quant)
                 ? (null, null)
-                : await TryEnsureProjectorAsync(request.RepoId, fileName, ct).ConfigureAwait(false);
+                : await TryEnsureProjectorAsync(request.RepoId, fileName, revision, ct).ConfigureAwait(false);
 
             var entry = new GgufModelRegistryEntry
             {
@@ -327,7 +346,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // — any failure degrades to text-only (null path). Cancellation propagates.
     private const string ProjectorSubdirectory = "projectors";
 
-    private async Task<(string? FileName, string? LocalPath)> TryEnsureProjectorAsync(string repoId, string modelFileName, CancellationToken ct)
+    private async Task<(string? FileName, string? LocalPath)> TryEnsureProjectorAsync(string repoId,
+        string modelFileName,
+        string weightsRevision,
+        CancellationToken ct)
     {
         try
         {
@@ -340,15 +362,22 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var localRelativePath = $"{ProjectorSubdirectory}/{Path.GetFileNameWithoutExtension(modelFileName)}.mmproj.gguf";
             var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, localRelativePath);
 
+            // Pin the projector to the SAME commit as the weights: a pinned older model must not pair with a newer,
+            // possibly incompatible projector from the repo head. Fall back to the projector's own (head) revision only
+            // when the weights revision is unknown (e.g. a rescanned entry). The discovery sha is for the head file, so
+            // it is dropped when the pinned revision differs — the download then verifies against that revision's own OID.
+            var pinnedRevision = string.IsNullOrWhiteSpace(weightsRevision) ? projector.Revision : weightsRevision;
+            var expectedSha = string.Equals(pinnedRevision, projector.Revision, StringComparison.Ordinal) ? projector.Sha256 : null;
+
             // No progress reporter: the pull UI keys progress by model name and the main weights already reported
             // completion; a second stream under the same name would flip the bar back to "downloading".
             var result = await _downloadClient.DownloadAsync(repoId,
                 projector.FileName,
-                projector.Revision,
+                pinnedRevision,
                 $"{repoId} (vision projector)",
                 destinationPath,
                 projector.SizeBytes,
-                projector.Sha256,
+                expectedSha,
                 progress: null,
                 ct).ConfigureAwait(false);
 

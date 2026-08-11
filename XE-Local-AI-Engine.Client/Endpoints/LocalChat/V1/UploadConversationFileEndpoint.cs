@@ -25,10 +25,16 @@ public sealed class UploadConversationFileEndpoint(
 
     // Image types accepted for direct vision (multimodal) input: their bytes are stored as-is with no text extraction.
     // Whether a given turn's model can actually see them is gated later (ChatTurnResolution.SupportsVision); a non-vision
-    // model silently omits them. This allowlist only decides admission at upload time.
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    // model silently omits them. This map is the admission allowlist AND the CANONICAL media type: the stored MimeType is
+    // derived from the extension, never the client-supplied multipart Content-Type (which can be blank, generic, or
+    // spoofed) — that value becomes DataContent.MediaType and must start with image/ for the provider + token estimators.
+    private static readonly Dictionary<string, string> ImageMediaTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".png", ".jpg", ".jpeg", ".webp", ".gif"
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".webp"] = "image/webp",
+        [".gif"] = "image/gif"
     };
 
     private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
@@ -76,7 +82,7 @@ public sealed class UploadConversationFileEndpoint(
         }
 
         var extension = Path.GetExtension(originalName);
-        var isImage = ImageExtensions.Contains(extension);
+        var isImage = ImageMediaTypesByExtension.TryGetValue(extension, out var canonicalImageMediaType);
         if (!isImage && !_extractor.IsSupported(extension))
         {
             AddError($"Files of type '{extension}' are not supported.");
@@ -123,10 +129,23 @@ public sealed class UploadConversationFileEndpoint(
                 extractedChars = extraction.ExtractedChars;
             }
 
+            // An admitted image's media type is the canonical value for its extension — never the client-supplied
+            // Content-Type — so DataContent.MediaType is always a correct image/* type. Non-image files keep the
+            // client type (with the octet-stream fallback) since the extractor path does not depend on it.
+            string mimeType;
+            if (isImage)
+            {
+                mimeType = canonicalImageMediaType!;
+            }
+            else
+            {
+                mimeType = string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType;
+            }
+
             var input = new ConversationUploadedFileInput(req.ConversationId,
                 Guid.NewGuid(),
                 originalName,
-                string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
+                mimeType,
                 extension,
                 bytes.Length,
                 bytes,
