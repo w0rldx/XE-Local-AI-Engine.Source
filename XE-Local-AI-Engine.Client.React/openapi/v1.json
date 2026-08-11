@@ -1163,6 +1163,97 @@
         ]
       }
     },
+    "/api/local/v1/proxy/key": {
+      "post": {
+        "tags": [
+          "Proxy"
+        ],
+        "operationId": "generateLocalModelProxyApiKey",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Proxy"
+        ],
+        "operationId": "getLocalModelProxyApiKey",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Proxy"
+        ],
+        "operationId": "revokeLocalModelProxyApiKey",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/preview/runs/cancel-all": {
       "post": {
         "tags": [
@@ -11692,6 +11783,85 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured",
+          "endpointUrl",
+          "key"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse"
+              }
+            ]
+          },
+          "endpointUrl": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prefix",
+          "createdAt"
+        ],
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "FastEndpointsEmptyRequest": {
+        "type": "object",
+        "description": "a request dto that doesn't have any properties",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsProxyV1LocalModelProxyApiKeyStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured",
+          "endpointUrl"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsProxyV1LocalModelProxyApiKeyResponse"
+              }
+            ]
+          },
+          "endpointUrl": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsPreviewV1CancelAllPreviewRunsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -14399,11 +14569,6 @@
             "nullable": true
           }
         }
-      },
-      "FastEndpointsEmptyRequest": {
-        "type": "object",
-        "description": "a request dto that doesn't have any properties",
-        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsMcpV1McpServerApiKeyStatusResponse": {
         "type": "object",
