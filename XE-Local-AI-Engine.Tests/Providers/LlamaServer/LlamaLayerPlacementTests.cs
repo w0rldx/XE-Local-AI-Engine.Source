@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -218,13 +219,15 @@ public sealed class LlamaLayerPlacementTests
     public async Task EnsureRunning_FirstGpuSpawn_RaisesLogVerbosity_AndRecordsMeasuredPlacement()
     {
         var report = new LlamaLayerPlacementReport();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
         var launcher = new FakeProcessLauncher
         {
             StartupLines = [PartialOffloadLine]
         };
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
-            layerPlacementReport: report);
+            layerPlacementReport: report,
+            loadTelemetry: telemetry);
 
         await supervisor.EnsureRunningAsync("qwen3-14b", ModelRole.Chat, CancellationToken.None);
 
@@ -236,6 +239,15 @@ public sealed class LlamaLayerPlacementTests
         AssertEx.Equal(expected: 38, placement.OffloadedLayers);
         AssertEx.Equal(expected: 49, placement.TotalLayers);
         AssertEx.True(placement.IsPartial);
+
+        AssertEx.True(telemetry.Observations.TryDequeue(out var observation));
+        AssertEx.Equal(ModelRole.Chat, observation!.Role);
+        AssertEx.Equal(GpuVariant.Cuda, observation.Variant);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Ready, observation.Outcome);
+        AssertEx.Equal(LlamaServerPlacementOutcome.Partial, observation.Placement);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observation.AttemptKind);
+        AssertEx.Equal(SpeculativeModeClass.Disabled, observation.SpeculativeModeClass);
+        AssertEx.True(observation.ReadinessDurationMs >= 0d);
     }
 
     [Test]
@@ -309,16 +321,21 @@ public sealed class LlamaLayerPlacementTests
     {
         // There is no placement question on a CPU runtime, so there is nothing to buy with extra log volume.
         var report = new LlamaLayerPlacementReport();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
-            layerPlacementReport: report);
+            layerPlacementReport: report,
+            loadTelemetry: telemetry);
 
         await supervisor.EnsureRunningAsync("qwen3-14b", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
         AssertEx.False(spec!.Arguments.Contains("-lv"), "A CPU spawn has no layer placement to observe.");
         AssertEx.Null(report.Current);
+        AssertEx.True(telemetry.Observations.TryDequeue(out var observation));
+        AssertEx.Equal(LlamaServerPlacementOutcome.Cpu, observation!.Placement);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observation.AttemptKind);
     }
 
     [Test]

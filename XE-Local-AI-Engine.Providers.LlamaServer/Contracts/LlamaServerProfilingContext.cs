@@ -38,6 +38,13 @@ public sealed record LlamaServerProfilingContext(
     /// </summary>
     public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
 
+    /// <summary>
+    ///     Sanitized, content-free observation of the exact candidate that reached readiness. Carries runtime identity,
+    ///     spawn-through-readiness duration, measured placement class, primary/safe-retry kind, and speculation class for benchmark
+    ///     correlation. It is report-only and never participates in admission.
+    /// </summary>
+    public LlamaServerLoadObservation? LoadObservation { get; init; }
+
     /// <summary>Creates a profiling context without machine-readable fit output (replay/benchmark callers).</summary>
     public LlamaServerProfilingContext(LlamaServerEndpoint endpoint, IReadOnlyList<string> startupOutput)
         : this(endpoint, startupOutput, FitParamsOutput: [], ProcessId: null)

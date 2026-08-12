@@ -17,12 +17,14 @@ public sealed class SupervisorLaunchFallbackTests
     {
         var launcher = new FakeProcessLauncher();
         var fallbackStore = new FakeLaunchFallbackStore();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
         // Readiness fails on the FIRST (optimized) spawn, succeeds on the SECOND (safe) spawn.
         var healthProbe = new FirstReadinessFailsHealthProbe();
         await using var supervisor = SupervisorFactory.Create(launcher,
             healthProbe: healthProbe,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
-            launchFallbackStore: fallbackStore);
+            launchFallbackStore: fallbackStore,
+            loadTelemetry: telemetry);
 
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
@@ -37,6 +39,13 @@ public sealed class SupervisorLaunchFallbackTests
         // The fallback was persisted for this backend so future spawns skip the known-bad optimized config.
         AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None),
             "a successful safe retry must record the optimized-config fallback for the backend.");
+
+        var observations = telemetry.Observations.ToArray();
+        AssertEx.Equal(expected: 2, observations.Length);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Failed, observations[0].Outcome);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observations[0].AttemptKind);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Ready, observations[1].Outcome);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.SafeRetry, observations[1].AttemptKind);
     }
 
     [Test]
@@ -45,9 +54,11 @@ public sealed class SupervisorLaunchFallbackTests
         var launcher = new FakeProcessLauncher();
         var fallbackStore = new FakeLaunchFallbackStore();
         fallbackStore.Disable(GpuVariant.Cuda);
+        var telemetry = new FakeLlamaServerLoadTelemetry();
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
-            launchFallbackStore: fallbackStore);
+            launchFallbackStore: fallbackStore,
+            loadTelemetry: telemetry);
 
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
@@ -55,6 +66,51 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.Equal(expected: 1, launcher.LaunchCount);
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
         AssertEx.False(spec!.Arguments.Contains("-ctk"), "a backend with a recorded fallback never emits the KV-cache quant.");
+        AssertEx.True(telemetry.Observations.TryDequeue(out var observation));
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observation!.AttemptKind);
+    }
+
+    [Test]
+    public async Task EnsureRunning_WhenTelemetrySinkThrows_PreservesSafeFallbackAndServingProcess()
+    {
+        var launcher = new FakeProcessLauncher();
+        var fallbackStore = new FakeLaunchFallbackStore();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore,
+            loadTelemetry: new ThrowingLlamaServerLoadTelemetry());
+
+        var endpoint = await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.NotNull(endpoint);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task EnsureRunning_LoadDurationIncludesSpawnAndIgnoresWallClockSteps()
+    {
+        var time = new AdvanceableTimeProvider();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var launcher = new FakeProcessLauncher(_ =>
+        {
+            time.AdvanceWallClockOnly(TimeSpan.FromHours(-2));
+            time.AdvanceTimestamp(TimeSpan.FromMilliseconds(875));
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            return new FakeProcessHandle(pid: 4242);
+#pragma warning restore CA2000
+        });
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            timeProvider: time,
+            loadTelemetry: telemetry);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(telemetry.Observations.TryDequeue(out var observation));
+        AssertEx.Equal(expected: 875d, observation!.ReadinessDurationMs);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observation.AttemptKind);
     }
 
     [Test]

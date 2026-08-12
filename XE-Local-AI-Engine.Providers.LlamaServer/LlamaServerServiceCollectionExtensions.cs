@@ -165,6 +165,10 @@ public static class LlamaServerServiceCollectionExtensions
         // passed in explicitly rather than left to the supervisor's private default.
         services.TryAddSingleton<ILlamaLayerPlacementReport, LlamaLayerPlacementReport>();
 
+        // Provider-only hosts remain self-satisfying. The application host overrides this report-only seam with its
+        // shared NodeMetrics bridge; it never participates in admission or memory accounting.
+        services.TryAddSingleton<ILlamaServerLoadTelemetry, NullLlamaServerLoadTelemetry>();
+
         // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
         services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(sp.GetRequiredService<ILlamaCppBinaryManager>(),
@@ -184,7 +188,8 @@ public static class LlamaServerServiceCollectionExtensions
             allocationResolver: sp.GetRequiredService<IProcessContextAllocationResolver>(),
             layerPlacementReport: sp.GetRequiredService<ILlamaLayerPlacementReport>(),
             launchAdmissions: sp.GetRequiredService<IProcessLaunchAdmissionRegistry>(),
-            extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>()));
+            extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>(),
+            loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 

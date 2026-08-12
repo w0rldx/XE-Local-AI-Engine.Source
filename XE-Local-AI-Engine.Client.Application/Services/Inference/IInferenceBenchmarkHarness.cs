@@ -199,6 +199,14 @@ public sealed record InferenceBenchmarkSpec(
 /// <param name="VramAfterBytes">Effective free VRAM observed after the loop (global-free when available, otherwise process budget).</param>
 /// <param name="Runs">Number of measured passes.</param>
 /// <param name="RawJson">Raw <c>/metrics</c> scrape for operator diagnostics.</param>
+/// <param name="RequestsProcessingAtLastScrape">Requests actively processing at the last scrape.</param>
+/// <param name="RequestsDeferredAtLastScrape">Requests deferred at the last scrape.</param>
+/// <param name="ContextTokensHighWatermark">Largest server-reported context-token watermark.</param>
+/// <param name="AverageBusySlotsPerDecode">Server-reported average busy slots per decode.</param>
+/// <param name="SpeculativeDraftTokens">Draft tokens proposed during the measured pass.</param>
+/// <param name="SpeculativeAcceptedTokens">Draft tokens accepted during the measured pass.</param>
+/// <param name="SpeculativeVerificationSteps">Speculative verification steps during the measured pass.</param>
+/// <param name="SpeculativeAcceptanceRate">Accepted/drafted token ratio, or null when no tokens were drafted.</param>
 public sealed record InferenceBenchmarkMetrics(
     bool Success,
     string? FailureReason,
@@ -229,7 +237,15 @@ public sealed record InferenceBenchmarkMetrics(
     long? MinimumProcessBudgetVramBytes = null,
     long? PeakProcessRamBytes = null,
     bool ExternalPressureDetected = false,
-    string? DiagnosticsJson = null)
+    string? DiagnosticsJson = null,
+    double? RequestsProcessingAtLastScrape = null,
+    double? RequestsDeferredAtLastScrape = null,
+    double? ContextTokensHighWatermark = null,
+    double? AverageBusySlotsPerDecode = null,
+    double? SpeculativeDraftTokens = null,
+    double? SpeculativeAcceptedTokens = null,
+    double? SpeculativeVerificationSteps = null,
+    double? SpeculativeAcceptanceRate = null)
 {
     /// <summary>A failed run carrying only the sanitized <paramref name="reason" />.</summary>
     public static InferenceBenchmarkMetrics Failed(string reason)

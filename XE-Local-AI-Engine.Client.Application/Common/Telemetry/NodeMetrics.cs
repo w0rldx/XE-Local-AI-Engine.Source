@@ -178,6 +178,25 @@ public static class NodeMetrics
             description: "Number of detected silent CPU fallbacks (GPU expected but the selected runtime runs on the CPU), by reason.");
 
     /// <summary>
+    ///     Spawn-through-readiness duration for an actual llama-server child attempt. Labels are bounded to role,
+    ///     variant, and outcome (ready | failed | cancelled). This is distinct from
+    ///     <see cref="ModelReadinessDurationMs" />, which measures the invocation's entire warm/reuse phase.
+    /// </summary>
+    public static readonly Histogram<double> LlamaServerLoadReadinessDurationMs =
+        Meter.CreateHistogram<double>("llama_server_load_readiness_duration_ms",
+            unit: "ms",
+            description: "Duration of one llama-server spawn-through-readiness attempt, by role, variant, and outcome.");
+
+    /// <summary>
+    ///     One terminal observation per llama-server load attempt. Labels are bounded enums: role, variant, outcome,
+    ///     placement (cpu | full | partial | unknown), attempt (primary | safe_retry), and speculation class. It carries no
+    ///     model name, path, arguments, prompt, or runtime hash and is report-only.
+    /// </summary>
+    public static readonly Counter<long> LlamaServerLoadTotal =
+        Meter.CreateCounter<long>("llama_server_load_total",
+            description: "Number of llama-server load attempts by bounded readiness, placement, candidate-attempt, and speculation dimensions.");
+
+    /// <summary>
     ///     Wall-clock duration (milliseconds) a GPU-backed model load waited to acquire the process-wide GPU-load
     ///     admission gate (AUD4-06) before its spawn began. Near-zero under no contention; a large value means a load
     ///     queued behind another load's spawn-through-readiness window. Content-free (a duration only).

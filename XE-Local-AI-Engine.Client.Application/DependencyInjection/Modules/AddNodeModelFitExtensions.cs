@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
@@ -122,6 +123,10 @@ internal static class AddNodeModelFitExtensions
         // AUD4-18: same bridge for the HF download read-idle-timeout seam (Providers.HuggingFace cannot reference the
         // application meter). A plain registration wins over the null default the HF store module registers.
         builder.Services.AddSingleton<IHfDownloadMetrics, NodeMetricsHfDownloadMetrics>();
+
+        // Report-only llama-server spawn/readiness/placement observations. Registered before the provider module; its
+        // TryAdd null default therefore leaves this shared NodeMetrics bridge in place.
+        builder.Services.AddSingleton<ILlamaServerLoadTelemetry, NodeMetricsLlamaServerLoadTelemetry>();
 
         // AUD4-03 runtime device audit: composes the hardware profiler + the GPU-variant selector + the device-inventory
         // probe to detect a silent CPU fallback (a GPU box whose selected runtime runs on the CPU), and exposes the

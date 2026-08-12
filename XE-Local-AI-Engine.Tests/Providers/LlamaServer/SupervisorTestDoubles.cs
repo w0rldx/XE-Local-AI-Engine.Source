@@ -192,6 +192,24 @@ internal sealed class FakeLlamaServerCapabilityManifestProbe(LlamaServerCapabili
     }
 }
 
+internal sealed class FakeLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
+{
+    public ConcurrentQueue<LlamaServerLoadObservation> Observations { get; } = new();
+
+    public void RecordLoad(LlamaServerLoadObservation observation)
+    {
+        Observations.Enqueue(observation);
+    }
+}
+
+internal sealed class ThrowingLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
+{
+    public void RecordLoad(LlamaServerLoadObservation observation)
+    {
+        throw new InvalidOperationException("Synthetic telemetry sink failure.");
+    }
+}
+
 /// <summary>Variant selector returning a fixed variant; never probes hardware.</summary>
 internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) : IGpuVariantSelector
 {
@@ -410,7 +428,15 @@ internal sealed class FakeModelStore(
 /// </summary>
 internal sealed class AdvanceableTimeProvider : TimeProvider
 {
+    private long _timestamp;
     private long _utcTicks = DateTimeOffset.UtcNow.UtcTicks;
+
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    public override long GetTimestamp()
+    {
+        return Interlocked.Read(ref _timestamp);
+    }
 
     public override DateTimeOffset GetUtcNow()
     {
@@ -420,6 +446,17 @@ internal sealed class AdvanceableTimeProvider : TimeProvider
     public void Advance(TimeSpan delta)
     {
         Interlocked.Add(ref _utcTicks, delta.Ticks);
+        Interlocked.Add(ref _timestamp, delta.Ticks);
+    }
+
+    public void AdvanceWallClockOnly(TimeSpan delta)
+    {
+        Interlocked.Add(ref _utcTicks, delta.Ticks);
+    }
+
+    public void AdvanceTimestamp(TimeSpan delta)
+    {
+        Interlocked.Add(ref _timestamp, delta.Ticks);
     }
 
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)

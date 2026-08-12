@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -23,6 +24,13 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private const string PredictedTokensMetric = "llamacpp:tokens_predicted_total";
     private const string PromptSecondsMetric = "llamacpp:prompt_seconds_total";
     private const string PredictedSecondsMetric = "llamacpp:tokens_predicted_seconds_total";
+    private const string RequestsProcessingMetric = "llamacpp:requests_processing";
+    private const string RequestsDeferredMetric = "llamacpp:requests_deferred";
+    private const string ContextTokensHighWatermarkMetric = "llamacpp:n_tokens_max";
+    private const string BusySlotsPerDecodeMetric = "llamacpp:n_busy_slots_per_decode";
+    private const string SpeculativeDraftTokensMetric = "llamacpp:spec_decode_num_draft_tokens_total";
+    private const string SpeculativeAcceptedTokensMetric = "llamacpp:spec_decode_num_accepted_tokens_total";
+    private const string SpeculativeDraftsMetric = "llamacpp:spec_decode_num_drafts_total";
 
     private const string IncrementalPressureFailureReason =
         "Benchmark invalid: VRAM divergence grew materially during measurement. Close other GPU workloads and retry.";
@@ -87,7 +95,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                     preSpawn?.ProcessBudgetExcessBytes,
                     preSpawn?.PressureAboveBaselineBytes,
                     preSpawn?.PressureAboveBaselineRatio);
-                return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(BuildPreSpawnPressureFailureReason(preSpawn)), role, resources);
+                return ApplyResourceEvidence(InferenceBenchmarkMetrics.Failed(BuildPreSpawnPressureFailureReason(preSpawn)), context, resources);
             }
 
             async Task CapturePassResourcesAsync(CancellationToken innerCt)
@@ -104,7 +112,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             };
 
             resources.Add(await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false));
-            return ApplyResourceEvidence(metrics, role, resources);
+            return ApplyResourceEvidence(metrics, context, resources);
         }
         catch (OperationCanceledException)
         {
@@ -207,7 +215,15 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             RawJson: passes[^1].RawMetrics,
             Role: ModelRole.Chat.ToString(),
             P50LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
-            P95LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.95d));
+            P95LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.95d),
+            RequestsProcessingAtLastScrape: passes[^1].RequestsProcessingAtLastScrape,
+            RequestsDeferredAtLastScrape: passes[^1].RequestsDeferredAtLastScrape,
+            ContextTokensHighWatermark: MaxNullableDouble(passes.Select(static pass => pass.ContextTokensHighWatermark)),
+            AverageBusySlotsPerDecode: MedianNullable(passes.Select(static pass => pass.AverageBusySlotsPerDecode)),
+            SpeculativeDraftTokens: MedianNullable(passes.Select(static pass => pass.SpeculativeDraftTokens)),
+            SpeculativeAcceptedTokens: MedianNullable(passes.Select(static pass => pass.SpeculativeAcceptedTokens)),
+            SpeculativeVerificationSteps: MedianNullable(passes.Select(static pass => pass.SpeculativeVerificationSteps)),
+            SpeculativeAcceptanceRate: MedianNullable(passes.Select(static pass => pass.SpeculativeAcceptanceRate)));
     }
 
     private async Task<ChatPassMetrics> RunChatPassAsync(LlamaServerEndpoint endpoint,
@@ -271,13 +287,27 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var afterAll = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
         totalStopwatch.Stop();
 
+        var speculativeDraftTokens = Delta(baseline, afterAll, SpeculativeDraftTokensMetric);
+        var speculativeAcceptedTokens = Delta(baseline, afterAll, SpeculativeAcceptedTokensMetric);
+        double? speculativeAcceptanceRate = speculativeDraftTokens is > 0 && speculativeAcceptedTokens is not null
+            ? Math.Clamp(speculativeAcceptedTokens.Value / speculativeDraftTokens.Value, min: 0d, max: 1d)
+            : null;
+
         return new ChatPassMetrics(DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
             DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric),
             ttftMs,
             totalStopwatch.Elapsed.TotalMilliseconds,
             DeriveCacheHitRate(baseline, afterCold, afterWarm),
             toolLoopMs,
-            afterAll);
+            afterAll,
+            TryParsePromMetric(afterAll, RequestsProcessingMetric),
+            TryParsePromMetric(afterAll, RequestsDeferredMetric),
+            TryParsePromMetric(afterAll, ContextTokensHighWatermarkMetric),
+            TryParsePromMetric(afterAll, BusySlotsPerDecodeMetric),
+            speculativeDraftTokens,
+            speculativeAcceptedTokens,
+            Delta(baseline, afterAll, SpeculativeDraftsMetric),
+            speculativeAcceptanceRate);
     }
 
     private async Task<InferenceBenchmarkMetrics> RunEmbeddingAsync(LlamaServerEndpoint endpoint,
@@ -484,9 +514,10 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     }
 
     private static InferenceBenchmarkMetrics ApplyResourceEvidence(InferenceBenchmarkMetrics metrics,
-        ModelRole role,
+        LlamaServerProfilingContext context,
         ResourceEvidenceCollector resources)
     {
+        var role = context.Endpoint.Role;
         var load = resources.First.Vram;
         var after = resources.Last.Vram;
         var externalPressure = resources.ExternalPressureDetected;
@@ -513,6 +544,17 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                     metrics.ValuesFinite,
                     metrics.DeterministicOutput
                 },
+                server = new
+                {
+                    metrics.RequestsProcessingAtLastScrape,
+                    metrics.RequestsDeferredAtLastScrape,
+                    metrics.ContextTokensHighWatermark,
+                    metrics.AverageBusySlotsPerDecode,
+                    metrics.SpeculativeDraftTokens,
+                    metrics.SpeculativeAcceptedTokens,
+                    metrics.SpeculativeVerificationSteps,
+                    metrics.SpeculativeAcceptanceRate
+                },
                 vram = new
                 {
                     preSpawn = resources.PreSpawnVram,
@@ -526,6 +568,17 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 {
                     peakWorkingSetBytes = resources.PeakWorkingSetBytes,
                     samples = resources.Samples.Count
+                },
+                runtime = new
+                {
+                    version = context.LoadObservation?.RuntimeVersion,
+                    sha256 = context.LoadObservation?.RuntimeSha256,
+                    launchArgumentsSha256 = HashSemanticLaunchArguments(context.SuccessfulLaunchArguments),
+                    readinessDurationMs = context.LoadObservation?.ReadinessDurationMs,
+                    outcome = context.LoadObservation?.Outcome.ToString(),
+                    placement = context.LoadObservation?.Placement.ToString(),
+                    attemptKind = context.LoadObservation?.AttemptKind.ToString(),
+                    speculationClass = context.LoadObservation?.SpeculativeModeClass.ToString()
                 }
             },
             SerializerOptions);
@@ -547,6 +600,31 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             ExternalPressureDetected = externalPressure,
             DiagnosticsJson = diagnostics
         };
+    }
+
+    internal static string? HashSemanticLaunchArguments(IReadOnlyList<string> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            return null;
+        }
+
+        var semanticArguments = new List<string>(arguments.Count);
+        var index = 0;
+        while (index < arguments.Count)
+        {
+            if (arguments[index] is "-m" or "--model" or "--host" or "--port")
+            {
+                index += 2;
+                continue;
+            }
+
+            semanticArguments.Add(arguments[index]);
+            index++;
+        }
+
+        var serialized = JsonSerializer.Serialize(semanticArguments, SerializerOptions);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(serialized)));
     }
 
     private static long? TryGetWorkingSetBytes(int? processId)
@@ -694,6 +772,12 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     {
         var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
         return Percentile(present, 0.50d);
+    }
+
+    private static double? MaxNullableDouble(IEnumerable<double?> values)
+    {
+        var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
+        return present.Length == 0 ? null : present.Max();
     }
 
     private static ChatOptions BuildOptions(string modelId, InferenceBenchmarkSpec spec, IList<AITool>? tools)
@@ -968,5 +1052,13 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         double TotalLatencyMs,
         double? CacheHitRate,
         double? ToolLoopMs,
-        string? RawMetrics);
+        string? RawMetrics,
+        double? RequestsProcessingAtLastScrape,
+        double? RequestsDeferredAtLastScrape,
+        double? ContextTokensHighWatermark,
+        double? AverageBusySlotsPerDecode,
+        double? SpeculativeDraftTokens,
+        double? SpeculativeAcceptedTokens,
+        double? SpeculativeVerificationSteps,
+        double? SpeculativeAcceptanceRate);
 }

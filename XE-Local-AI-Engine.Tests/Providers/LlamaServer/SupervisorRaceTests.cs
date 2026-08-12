@@ -230,6 +230,7 @@ public sealed class SupervisorRaceTests
     {
         var health = new GatedHealthProbe();
         var launcher = new FakeProcessLauncher();
+        var telemetry = new FakeLlamaServerLoadTelemetry();
         var registry = new ProcessLaunchAdmissionRegistry();
         var allocation = new ProcessContextAllocation(8192,
             ModelTrainContextTokens: 131072,
@@ -246,7 +247,8 @@ public sealed class SupervisorRaceTests
         var supervisor = SupervisorFactory.Create(launcher,
             healthProbe: health,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
-            launchAdmissions: registry);
+            launchAdmissions: registry,
+            loadTelemetry: telemetry);
         var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         await WaitUntilAsync(() => health.Waiting == 1);
         consumer!.Dispose();
@@ -258,6 +260,10 @@ public sealed class SupervisorRaceTests
         var handle = launcher.Handles.Single();
         AssertEx.True(handle.WasTreeKilled);
         AssertEx.True(handle.WasDisposed);
+        var observations = telemetry.Observations.ToArray();
+        AssertEx.Equal(expected: 1, observations.Length);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Cancelled, observations[0].Outcome);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observations[0].AttemptKind);
         AssertEx.False(registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
         AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission("model-b",
             ModelRole.Chat,
