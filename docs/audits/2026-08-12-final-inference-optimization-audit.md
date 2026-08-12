@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-12  
 **Repository revision:** `597c62f46a5e653cd88f12b92d8e79f576f75aa6`  
-**Scope:** research and proposal only; no production optimization was implemented.  
+**Scope:** research and proposal at the audited revision; the post-approval implementation status is recorded below.
 **Upstream research anchor:** llama.cpp `9558fa44c92746a58dd07ad1bf0c889715b938a6`; latest release at retrieval was `b10375`. XE is pinned to `b10201` / `8f4646a63`.
 
 ## Executive summary
@@ -610,4 +610,24 @@ At every checkpoint record the exact model file/revision/quant, runtime commit/h
 
 XE's inference path is already substantially mature. The most valuable remaining work is to keep **independent host-pressure and runtime-process facts explicit**, make **binary capabilities explicit**, and make **measured outcomes feed policy**. After that, native MTP, KV/FA selection, hybrid threads, and agent-prefix behavior are credible optimization candidates—but only as profiled, reversible choices. Static flag accumulation and datacenter-oriented architecture changes would add more complexity than consumer benefit.
 
-No recommendation in this report has been implemented. Implementation should begin only after explicit approval of the selected items.
+At publication, no recommendation in this report had been implemented. The user subsequently approved the Tier 1 tranche; its implementation status follows.
+
+## Post-approval implementation status
+
+### Implemented
+
+- **Binary capability manifest and launch gate** (`5b1aaee2`). Each resolved llama-server binary is probed through a bounded command runner, and the cached manifest is keyed by requested/runtime version plus path, length, modification time, and verified SHA-256. Mandatory option spellings and option-scoped values fail closed. Optional optimizations are omitted only on ordinary serving candidates; exact profiling/replay vectors are rejected rather than silently changed. KV/FA incompatibility selects the existing explicit safe candidate, preserving the paid-for one-shot readiness fallback.
+- **Report-only load and benchmark correlation** (`d9f29c9c`). The supervisor records monotonic spawn-through-readiness duration, outcome, measured CPU/full/partial/unknown placement, explicit primary/safe-retry candidate kind, runtime identity, and bounded speculation class. Application metrics exclude model/path/argv/hash labels. Encrypted benchmark diagnostics correlate runtime identity and a semantic launch-vector hash with terminal request gauges, context/busy-slot observations, and speculative draft/acceptance counters. Global-free and process-budget VRAM remain separate fields and no second memory ledger or admission authority was introduced.
+
+### Intentionally not enabled
+
+- The llama.cpp pin was not advanced merely because b10375 was newer. A pin change still requires complete official asset digests plus platform/runtime, GPU, tool-grammar, and benchmark checkpoints.
+- Tier 2 and Tier 3 candidates remain benchmark-gated: cross-vendor global-pressure sources, bounded KV/FA/thread/batch calibration, MTP, SWA/cache experiments, synthetic post-ready warming, residency changes, and optional build profiles.
+- No static tuning values, extra parallel slots, second inference engine, or experimental upstream patch were added.
+
+### Validation result
+
+- Release restore and full solution build succeeded with zero warnings and errors.
+- The guarded Release solution run passed 5,995 tests; 13 platform/live-integration tests were skipped, and the assembly guard found no contamination.
+- On fresh worktree-local state, `aspire wait app` reached healthy; backend and React resources were healthy, the ready endpoint succeeded, and the application had no Error-level structured logs.
+- The live GPU smoke correctly refused to pass: installed b10201 Vulkan enumerated no usable device under this WSL2 host (`backend=cpu`, `cpuFallback=true`), and the fresh node database had no registered chat model. No CUDA build, model registration, or large download was performed to manufacture a benchmark result.
