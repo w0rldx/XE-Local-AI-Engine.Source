@@ -26,13 +26,15 @@ internal static class SupervisorFactory
         ILlamaLayerPlacementReport? layerPlacementReport = null,
         IProcessContextAllocationResolver? allocationResolver = null,
         IProcessLaunchAdmissionRegistry? launchAdmissions = null,
-        ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null)
+        ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
+        ILlamaServerCapabilityManifestProbe? capabilityManifestProbe = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
             modelStore ?? new FakeModelStore(),
             launcher ?? new FakeProcessLauncher(),
             healthProbe ?? new FakeHealthProbe(),
+            capabilityManifestProbe ?? new FakeLlamaServerCapabilityManifestProbe(),
             options ?? new LlamaServerSupervisorOptions
             {
                 // A long TTL keeps the background reaper out of the way; tests drive eviction explicitly.

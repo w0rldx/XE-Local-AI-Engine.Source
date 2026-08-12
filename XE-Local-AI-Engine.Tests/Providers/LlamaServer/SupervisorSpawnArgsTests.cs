@@ -17,6 +17,38 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorSpawnArgsTests
 {
     [Test]
+    public async Task EnsureRunning_RuntimeMissingMandatoryCapability_FailsBeforeLauncher()
+    {
+        const string helpWithoutNoWarmup = """
+                                                   -m, --model FNAME
+                                                   --host HOST
+                                                   --port PORT
+                                                   --parallel N
+                                                   -c, --ctx-size N
+                                                   -t, --threads N
+                                                   -tb, --threads-batch N
+                                                   --jinja
+                                                   --cache-ram N
+                                                   """;
+        var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cpu, IsPinnedFallback: true);
+        var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
+            executableLengthBytes: 1,
+            DateTimeOffset.UnixEpoch,
+            executableSha256: new string('a', 64),
+            version: "b10201",
+            helpWithoutNoWarmup);
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            capabilityManifestProbe: new FakeLlamaServerCapabilityManifestProbe(manifest));
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "--no-warmup");
+        AssertEx.Equal(0, launcher.LaunchCount);
+    }
+
+    [Test]
     public async Task EnsureRunning_ChatRole_LaunchArgsContainJinja_AndBindLocalhost()
     {
         var launcher = new FakeProcessLauncher();

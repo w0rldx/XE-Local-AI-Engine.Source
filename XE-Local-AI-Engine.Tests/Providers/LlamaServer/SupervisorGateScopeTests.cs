@@ -168,6 +168,7 @@ public sealed class SupervisorGateScopeTests
             new FakeModelStore(),
             launcher,
             new FakeHealthProbe(),
+            new FakeLlamaServerCapabilityManifestProbe(),
             options,
             new FakeInferenceProfileResolver(),
             new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(), new FakeLaunchFallbackStore()),

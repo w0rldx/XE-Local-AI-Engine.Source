@@ -416,6 +416,54 @@ public sealed class SupervisorProfilingTests
     }
 
     [Test]
+    public async Task Profiling_ReplayWithUnsupportedExactKvFlashVector_RejectsWithoutLaunchingOrMutating()
+    {
+        const string helpWithoutLongFlashAlias = """
+                                                     -m
+                                                     --host
+                                                     --port
+                                                     --parallel
+                                                     --no-warmup
+                                                     -c
+                                                     --metrics
+                                                     --n-gpu-layers
+                                                     --jinja
+                                                     --cache-ram
+                                                     -fa [on|off|auto]
+                                                     -ctk, --cache-type-k TYPE
+                                                         allowed values: f16, q8_0
+                                                     -ctv, --cache-type-v TYPE
+                                                         allowed values: f16, q8_0
+                                                     """;
+        var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
+        var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
+            executableLengthBytes: 1,
+            DateTimeOffset.UnixEpoch,
+            executableSha256: new string('A', 64),
+            version: "b10201",
+            helpWithoutLongFlashAlias);
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            capabilityManifestProbe: new FakeLlamaServerCapabilityManifestProbe(manifest));
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.RunExclusiveProfilingAsync("llama3",
+                ModelRole.Chat,
+                ResolvedLaunchArguments.Replay(ctxSize: 4096,
+                    nGpuLayers: 20,
+                    kvTypeK: "q8_0",
+                    kvTypeV: "q8_0",
+                    flashAttn: true),
+                enableMetrics: true,
+                (_, _) => Task.FromResult(result: true),
+                CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "Recalibrate", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(0, launcher.LaunchCount);
+    }
+
+    [Test]
     public async Task Profiling_ReleasesGateAndEvicts_OnBodyThrow()
     {
         var launcher = new FakeProcessLauncher();

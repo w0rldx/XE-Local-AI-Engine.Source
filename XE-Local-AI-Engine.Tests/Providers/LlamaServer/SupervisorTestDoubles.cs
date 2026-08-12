@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>
 ///     Shared fakes for the <see cref="LlamaServerProcessSupervisor" /> tests: a process launcher that records the
@@ -179,6 +180,15 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     public Task RemoveCudaSourceBuildAsync(CancellationToken ct)
     {
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Capability probe for process-supervisor tests that never execute their fake llama-server path.</summary>
+internal sealed class FakeLlamaServerCapabilityManifestProbe(LlamaServerCapabilityManifest? manifest = null) : ILlamaServerCapabilityManifestProbe
+{
+    public Task<LlamaServerCapabilityManifest> GetManifestAsync(LlamaBinary binary, CancellationToken ct)
+    {
+        return Task.FromResult(manifest ?? LlamaServerCapabilityManifest.AllSupportedForTesting(binary));
     }
 }
 
