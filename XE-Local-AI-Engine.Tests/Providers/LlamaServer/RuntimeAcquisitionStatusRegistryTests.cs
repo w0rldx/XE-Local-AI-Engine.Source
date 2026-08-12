@@ -202,6 +202,7 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         // The default publisher is the no-op one, so a provider-only host broadcasts nothing.
         AssertEx.True(provider.GetRequiredService<IRuntimeAcquisitionEventPublisher>() is NullRuntimeAcquisitionEventPublisher);
         AssertEx.NotNull(provider.GetRequiredService<ILlamaCppBinaryManager>());
+        AssertEx.NotNull(provider.GetRequiredService<ILlamaServerCapabilityManifestProbe>());
     }
 
     private static RuntimeAcquisitionStatusRegistry Build(RecordingPublisher publisher, out StubTimeProvider time)

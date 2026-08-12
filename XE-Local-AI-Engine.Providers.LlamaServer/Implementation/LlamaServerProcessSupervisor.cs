@@ -29,6 +29,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor, IAsyncDisposable
 {
     private const string NonRetryableMarker = "LlamaServer.NonRetryable";
+    private const string CapabilityIncompatibleMarker = "LlamaServer.CapabilityIncompatible";
+    private const string CapabilitySafeFallbackMarker = "LlamaServer.CapabilitySafeFallback";
 
     // Flags a readiness TIMEOUT (process alive but slow) so the restart loop retries it at most
     // MaxReadinessTimeoutRetries times instead of the full MaxRestartAttempts — a deterministically slow/large model
@@ -64,6 +66,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly Lock _runtimeOperationSync = new();
     private readonly HashSet<int> _allocatedPorts = [];
     private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe;
 
     // Single-flight ensure-running gate, one semaphore per (model, role) key. Held only for the short reuse/decision
     // section, NOT for the whole spawn — the spawn itself runs detached (see _inflightSpawns).
@@ -122,6 +125,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         IGgufModelStore modelStore,
         ILlamaServerProcessLauncher launcher,
         ILlamaServerHealthProbe healthProbe,
+        ILlamaServerCapabilityManifestProbe capabilityManifestProbe,
         LlamaServerSupervisorOptions options,
         IInferenceProfileResolver profileResolver,
         ILlamaServerLaunchPolicy launchPolicy,
@@ -141,6 +145,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _healthProbe = healthProbe ?? throw new ArgumentNullException(nameof(healthProbe));
+        _capabilityManifestProbe = capabilityManifestProbe ?? throw new ArgumentNullException(nameof(capabilityManifestProbe));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
@@ -1102,6 +1107,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+        var capabilityManifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
+        if (!capabilityManifest.ProbeSucceeded)
+        {
+            throw NonRetryable("The selected llama.cpp runtime could not report its supported server options. Reinstall or rebuild the runtime and try again.");
+        }
 
         // Resolve the launch args (frozen-profile replay or explore-mode auto-fit, or operator-supplied profiling args)
         // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
@@ -1243,22 +1253,38 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     };
                 }
 
-                IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
-                if (fitParamsCapture is not null && candidate.Resolved.ExploreMode && variant != GpuVariant.Cpu)
+                if (fitParamsCapture is not null
+                    && candidate.Resolved.ExploreMode
+                    && variant != GpuVariant.Cpu
+                    && !spec.Arguments.Contains("-v", StringComparer.Ordinal)
+                    && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
                 {
                     // The fit helper (observed on b9692) leaves -ngl at its automatic sentinel when the initial
                     // placement already fits. Verbose
                     // load_tensors output is the authoritative proof that automatic placement meant every layer was
                     // offloaded; the fit parser uses that proof to normalize replay to explicit all-layers (-2).
-                    if (!spec.Arguments.Contains("-v", StringComparer.Ordinal)
-                        && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
+                    spec = spec with
                     {
-                        spec = spec with
-                        {
-                            Arguments = [.. spec.Arguments, "-v"]
-                        };
-                    }
+                        Arguments = [.. spec.Arguments, "-v"]
+                    };
+                }
 
+                var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, capabilityManifest, ensureMetrics);
+                if (!capabilityDecision.IsCompatible)
+                {
+                    throw CapabilityIncompatible(capabilityDecision.SanitizedError!, capabilityDecision.CanTrySafeFallback);
+                }
+
+                spec = capabilityDecision.Spec;
+                if (capabilityDecision.OmittedOptions.Count > 0)
+                {
+                    _logger.LogWarning("The selected llama-server runtime lacks optional capabilities {Options}; those launch optimizations were omitted.",
+                        string.Join(", ", capabilityDecision.OmittedOptions));
+                }
+
+                IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
+                if (fitParamsCapture is not null && candidate.Resolved.ExploreMode && variant != GpuVariant.Cpu)
+                {
                     var fitResult = await _fitParamsRunner.RunAsync(spec, ct).ConfigureAwait(false);
                     if (fitResult.Status == LlamaFitParamsRunStatus.Succeeded)
                     {
@@ -1340,6 +1366,26 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 handle?.TreeKill();
                 handle?.Dispose();
                 await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+
+                // A capability rejection is known before process launch, so retrying an optimized/safe candidate cannot
+                // change the outcome. Other non-retryable errors can still be caused by the optimized child exiting
+                // during load; preserve the paid-for one-shot safe KV/FA fallback for that case.
+                if (ex.Data.Contains(CapabilityIncompatibleMarker))
+                {
+                    if (ex.Data.Contains(CapabilitySafeFallbackMarker)
+                        && !isSafeRetry
+                        && attempt + 1 < planCandidates.Count)
+                    {
+                        optimizedFailure = ex;
+                        _logger.LogWarning(
+                            "The selected llama-server runtime does not support the optimized KV-cache/Flash Attention vector for model {ModelName} role {Role}; using the explicit safe candidate.",
+                            key.ModelName,
+                            key.Role);
+                        continue;
+                    }
+
+                    throw;
+                }
 
                 // The OPTIMIZED attempt failed and a safe candidate remains: remember the error and retry ONCE with the
                 // safe (KV/FA off) config. Any other failure (the safe attempt, or a spawn with no fallback candidate)
@@ -2564,6 +2610,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var ex = new LlamaRuntimeException(sanitizedMessage);
         ex.Data[NonRetryableMarker] = true;
         return ex;
+    }
+
+    private static LlamaRuntimeException CapabilityIncompatible(string sanitizedMessage, bool canTrySafeFallback)
+    {
+        var exception = NonRetryable(sanitizedMessage);
+        exception.Data[CapabilityIncompatibleMarker] = true;
+        if (canTrySafeFallback)
+        {
+            exception.Data[CapabilitySafeFallbackMarker] = true;
+        }
+
+        return exception;
     }
 
     /// <summary>

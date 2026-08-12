@@ -109,6 +109,11 @@ public static class LlamaServerServiceCollectionExtensions
         // device audit consumes it to detect a GPU-variant binary that enumerates zero devices (a silent CPU fallback).
         services.TryAddSingleton<ILlamaDeviceInventoryProbe, LlamaDeviceInventoryProbe>();
 
+        // Probe the resolved executable rather than inferring flags from a tag. The successful --version/--help result
+        // is cached per requested-version/path/length/mtime/SHA-256 identity and gates every final launch vector,
+        // including BYO/source builds.
+        services.TryAddSingleton<ILlamaServerCapabilityManifestProbe, LlamaServerCapabilityManifestProbe>();
+
         // AUD4-06 GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
         // application layer has not registered the real, metric-emitting serializer. The composition root overrides this
         // with a plain AddSingleton (last-wins) so both the LLM and image supervisors share ONE process-wide gate.
@@ -167,6 +172,7 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<IGgufModelStore>(),
             sp.GetRequiredService<ILlamaServerProcessLauncher>(),
             sp.GetRequiredService<ILlamaServerHealthProbe>(),
+            sp.GetRequiredService<ILlamaServerCapabilityManifestProbe>(),
             sp.GetRequiredService<LlamaServerSupervisorOptions>(),
             sp.GetRequiredService<IInferenceProfileResolver>(),
             sp.GetRequiredService<ILlamaServerLaunchPolicy>(),
