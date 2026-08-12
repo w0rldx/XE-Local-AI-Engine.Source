@@ -111,6 +111,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // Node-wide record of measured GPU layer placement. Written here as models load, read by the operator-facing
     // runtime device audit; the composition root injects the singleton both sides share.
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
+    private readonly ILlamaServerLoadTelemetry _loadTelemetry;
     private int _disposed;
     private int _runtimeOperationCount;
     private int _runtimeMutationActivityCount;
@@ -138,7 +139,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         IProcessContextAllocationResolver? allocationResolver = null,
         ILlamaLayerPlacementReport? layerPlacementReport = null,
         IProcessLaunchAdmissionRegistry? launchAdmissions = null,
-        ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null)
+        ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
+        ILlamaServerLoadTelemetry? loadTelemetry = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -166,6 +168,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // A private instance keeps a provider-only host (or a test) self-satisfying; the composition root injects the
         // shared singleton so what this supervisor observes is what the runtime audit reports.
         _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
+        _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -1164,16 +1167,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         for (var attempt = 0; attempt < planCandidates.Count; attempt++)
         {
             var candidate = planCandidates[attempt];
-            var isSafeRetry = attempt > 0;
+            var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
             var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
             ILlamaServerProcessHandle? handle = null;
+            long? readinessStartedTimestamp = null;
+            var readinessRecorded = false;
             var automaticCapture = applyLaunchPolicy ? new BoundedStartupCapture() : null;
 
             // Latches llama.cpp's layer-placement banner out of the streamed startup output. It is deliberately NOT
             // read off automaticCapture: that buffer is bounded, and at the verbosity the banner requires it is
             // printed around line 155 — outside any small window.
-            var placementSniffer = applyLaunchPolicy ? new LayerPlacementSniffer() : null;
+            var placementSniffer = variant == GpuVariant.Cpu ? null : new LayerPlacementSniffer();
 
             // Flipped once this child is serving, to demote its (raised-verbosity) request chatter to Debug. It stays
             // false for the whole load, and forever on a spawn that never reaches readiness, so the placement banner
@@ -1302,16 +1307,27 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     }
                 }
 
+                readinessStartedTimestamp = _timeProvider.GetTimestamp();
                 handle = _launcher.Launch(spec);
                 _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
                     key.ModelName, key.Role, handle.ProcessId, port, DescribeLaunchPlan(candidate.Plan));
 
-                var readyStartedUtc = _timeProvider.GetUtcNow();
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
+                var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
-                    key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
+                    key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, readinessTimeout.TotalSeconds);
 
-                RecordObservedLayerPlacement(key, variant, placementSniffer);
+                var placement = RecordObservedLayerPlacement(key, variant, placementSniffer);
+                var loadObservation = RecordLoadTelemetry(key,
+                    variant,
+                    capabilityManifest.Version ?? binary.Version,
+                    capabilityManifest.ExecutableSha256,
+                    readinessDuration,
+                    LlamaServerReadinessOutcome.Ready,
+                    placement,
+                    candidate.AttemptKind,
+                    speculative);
+                readinessRecorded = true;
 
                 // The load window is over and the banner has been read. From here the child's raised-verbosity output is
                 // per-request chatter nobody asked to persist: drop it to Debug AND detach the automatic startup
@@ -1338,7 +1354,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
                     EffectiveContextTokens = effectiveContext,
-                    SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments]
+                    SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
+                    LoadObservation = loadObservation
                 };
                 _processes[key] = running;
 
@@ -1354,6 +1371,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
+                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
                 handle?.TreeKill();
                 handle?.Dispose();
                 await ReleaseReservedPortAsync(port).ConfigureAwait(false);
@@ -1361,6 +1379,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
             catch (Exception ex)
             {
+                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Failed);
                 // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
                 // admission gate, since the reserved-port set backs the cap count) before deciding whether to fall back.
                 handle?.TreeKill();
@@ -1422,6 +1441,25 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
                 throw;
             }
+
+            void RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome outcome)
+            {
+                if (readinessRecorded || readinessStartedTimestamp is not { } started)
+                {
+                    return;
+                }
+
+                _ = RecordLoadTelemetry(key,
+                    variant,
+                    capabilityManifest.Version ?? binary.Version,
+                    capabilityManifest.ExecutableSha256,
+                    _timeProvider.GetElapsedTime(started),
+                    outcome,
+                    variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
+                    candidate.AttemptKind,
+                    speculative);
+                readinessRecorded = true;
+            }
         }
 
         // Unreachable: the loop returns on success or throws on the final candidate; the fallback keeps the analyzer happy.
@@ -1443,7 +1481,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (!applyLaunchPolicy)
         {
-            return new LaunchPlanSet(null, [new(resolved, null)]);
+            return new LaunchPlanSet(null, [new(resolved, null, LlamaServerLoadAttemptKind.Primary)]);
         }
 
         ProcessContextAllocation allocation;
@@ -1475,19 +1513,29 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // byte-identical second launch — no candidate there.
         if (plan.UseKvCacheQuantization)
         {
-            return new LaunchPlanSet(allocation, [new(resolved, plan), new(resolved, plan.WithoutKvCacheQuantization())]);
+            return new LaunchPlanSet(allocation,
+            [
+                new(resolved, plan, LlamaServerLoadAttemptKind.Primary),
+                new(resolved, plan.WithoutKvCacheQuantization(), LlamaServerLoadAttemptKind.SafeRetry)
+            ]);
         }
 
         if (variant != GpuVariant.Cpu && !resolved.ExploreMode && !string.IsNullOrWhiteSpace(resolved.KvTypeK))
         {
-            return new LaunchPlanSet(allocation, [new(resolved, plan), new(resolved.WithoutKvCacheQuantization(), plan)]);
+            return new LaunchPlanSet(allocation,
+            [
+                new(resolved, plan, LlamaServerLoadAttemptKind.Primary),
+                new(resolved.WithoutKvCacheQuantization(), plan, LlamaServerLoadAttemptKind.SafeRetry)
+            ]);
         }
 
-        return new LaunchPlanSet(allocation, [new(resolved, plan)]);
+        return new LaunchPlanSet(allocation, [new(resolved, plan, LlamaServerLoadAttemptKind.Primary)]);
     }
 
     /// <summary>One ordered launch attempt: the explore/replay args to emit and the policy plan to emit them under.</summary>
-    private sealed record LaunchCandidate(ResolvedLaunchArguments Resolved, LlamaServerLaunchPlan? Plan);
+    private sealed record LaunchCandidate(ResolvedLaunchArguments Resolved,
+        LlamaServerLaunchPlan? Plan,
+        LlamaServerLoadAttemptKind AttemptKind);
 
     private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LaunchCandidate> Candidates);
 
@@ -1496,11 +1544,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     readiness keeps a candidate that printed a banner and then failed to start out of the operator-facing report.
     ///     A partial offload is logged as a warning: the model serves, but a share of its layers run from system RAM.
     /// </summary>
-    private void RecordObservedLayerPlacement(ProcessKey key, GpuVariant variant, LayerPlacementSniffer? sniffer)
+    private LlamaServerPlacementOutcome RecordObservedLayerPlacement(ProcessKey key,
+        GpuVariant variant,
+        LayerPlacementSniffer? sniffer)
     {
         if (sniffer is null || !sniffer.TryGetObservation(out var offloaded, out var total))
         {
-            return;
+            return variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown;
         }
 
         _layerPlacementReport.Record(key.Role, variant, key.ModelName, offloaded, total);
@@ -1509,11 +1559,47 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             _logger.LogWarning("llama-server placed {Offloaded}/{Total} of model {ModelName} role {Role} layers on the GPU; the remainder runs from system RAM, which is substantially slower.",
                 offloaded, total, key.ModelName, key.Role);
-            return;
+            return LlamaServerPlacementOutcome.Partial;
         }
 
         _logger.LogInformation("llama-server placed all {Total} layers of model {ModelName} role {Role} on the GPU.",
             total, key.ModelName, key.Role);
+        return LlamaServerPlacementOutcome.Full;
+    }
+
+    private LlamaServerLoadObservation RecordLoadTelemetry(ProcessKey key,
+        GpuVariant variant,
+        string runtimeVersion,
+        string? runtimeSha256,
+        TimeSpan readinessDuration,
+        LlamaServerReadinessOutcome outcome,
+        LlamaServerPlacementOutcome placement,
+        LlamaServerLoadAttemptKind attemptKind,
+        SpeculativeDecodingSettings speculative)
+    {
+        var speculativeModeClass = key.Role == ModelRole.Chat
+            ? speculative.ModeClass ?? SpeculativeModeClass.Disabled
+            : SpeculativeModeClass.Disabled;
+        var observation = new LlamaServerLoadObservation(key.Role,
+            variant,
+            runtimeVersion,
+            runtimeSha256,
+            Math.Max(0d, readinessDuration.TotalMilliseconds),
+            outcome,
+            placement,
+            attemptKind,
+            speculativeModeClass);
+        try
+        {
+            _loadTelemetry.RecordLoad(observation);
+        }
+        catch (Exception exception)
+        {
+            // Telemetry is report-only. A broken exporter must never change launch/fallback/admission behavior.
+            _logger.LogDebug(exception, "llama-server load telemetry observer failed.");
+        }
+
+        return observation;
     }
 
     /// <summary>Whether the argument vector already sets a log verbosity, in which case the caller must not add one.</summary>
@@ -1850,7 +1936,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                                 running.Handle.ProcessId)
                             {
                                 PreSpawnVram = preSpawnVram,
-                                SuccessfulLaunchArguments = running.SuccessfulLaunchArguments
+                                SuccessfulLaunchArguments = running.SuccessfulLaunchArguments,
+                                LoadObservation = running.LoadObservation
                             };
                             return await body(context, ct).ConfigureAwait(false);
                         }
@@ -2711,6 +2798,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         /// <summary>Immutable snapshot of the exact argv for the candidate that reached readiness.</summary>
         public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
+
+        /// <summary>Content-free load/readiness observation for operator profiling correlation.</summary>
+        public LlamaServerLoadObservation? LoadObservation { get; init; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 

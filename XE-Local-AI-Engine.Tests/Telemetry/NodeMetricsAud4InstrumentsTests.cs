@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Telemetry;
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 // Asserts the AUD4-19 observability instruments are published on the shared "XE.Node" meter and carry their documented,
@@ -49,6 +51,36 @@ public sealed class NodeMetricsAud4InstrumentsTests
         AssertEx.Equal(expected: 2L, capture.CountLong("invocation_cancelled_total"));
         AssertEx.Contains(capture.LongTagValues("invocation_cancelled_total", "category"), (object?)"user");
         AssertEx.Contains(capture.LongTagValues("invocation_cancelled_total", "category"), (object?)"operator_eject");
+    }
+
+    [Test]
+    public void LlamaServerLoadTelemetry_RecordsBoundedPhaseAndPlacementDimensions()
+    {
+        using var capture = new NodeMeterCapture();
+        var telemetry = new NodeMetricsLlamaServerLoadTelemetry();
+
+        telemetry.RecordLoad(new LlamaServerLoadObservation(ModelRole.Chat,
+            GpuVariant.Cuda,
+            RuntimeVersion: "b10375",
+            RuntimeSha256: new string('A', 64),
+            ReadinessDurationMs: 1250.5,
+            LlamaServerReadinessOutcome.Ready,
+            LlamaServerPlacementOutcome.Partial,
+            LlamaServerLoadAttemptKind.SafeRetry,
+            SpeculativeModeClass.MainModelHeads));
+
+        var durations = capture.Doubles("llama_server_load_readiness_duration_ms");
+        AssertEx.Equal(expected: 1, durations.Count);
+        var duration = durations[0];
+        AssertEx.Equal(expected: 1250.5, duration.Value);
+        AssertEx.Equal("chat", (string?)duration.Tag("role"));
+        AssertEx.Equal("cuda", (string?)duration.Tag("variant"));
+        AssertEx.Equal("ready", (string?)duration.Tag("outcome"));
+
+        AssertEx.Equal(expected: 1L, capture.CountLong("llama_server_load_total"));
+        AssertEx.Contains(capture.LongTagValues("llama_server_load_total", "placement"), (object?)"partial");
+        AssertEx.Contains(capture.LongTagValues("llama_server_load_total", "attempt"), (object?)"safe_retry");
+        AssertEx.Contains(capture.LongTagValues("llama_server_load_total", "speculation"), (object?)"main_model_heads");
     }
 
     // A single captured measurement plus a helper to read one of its tag values by key.

@@ -126,15 +126,21 @@ public sealed class SupervisorProfilingTests
     [Test]
     public async Task Profiling_Explore_AcquiresMachineReadableFitParamsWithProductionLaunchPolicy()
     {
-        var launcher = new FakeProcessLauncher();
+        var launcher = new FakeProcessLauncher
+        {
+            StartupLines = ["0.00.539.550 I load_tensors: offloaded 38/49 layers to GPU"]
+        };
+        var placementReport = new LlamaLayerPlacementReport();
         var fitRunner = new FakeLlamaFitParamsRunner(LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
-            fitParamsRunner: fitRunner);
+            fitParamsRunner: fitRunner,
+            layerPlacementReport: placementReport);
 
         IReadOnlyList<string> captured = [];
         IReadOnlyList<string> successfulLaunchArguments = [];
         int? capturedProcessId = null;
+        LlamaServerLoadObservation? loadObservation = null;
         await supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
             ResolvedLaunchArguments.Explore(),
@@ -144,6 +150,8 @@ public sealed class SupervisorProfilingTests
                 captured = context.FitParamsOutput;
                 successfulLaunchArguments = context.SuccessfulLaunchArguments;
                 capturedProcessId = context.ProcessId;
+                loadObservation = context.LoadObservation;
+                AssertEx.NotNull(placementReport.Current);
                 return Task.FromResult(result: true);
             },
             CancellationToken.None);
@@ -163,6 +171,12 @@ public sealed class SupervisorProfilingTests
             "The helper and profiling server must receive the same production-equivalent launch vector.");
         AssertEx.True(successfulLaunchArguments.SequenceEqual(launchedSpec.Arguments),
             "The profiling body must receive the exact successful server vector so replay preserves its policy.");
+        var observedLoad = AssertEx.NotNull(loadObservation);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Ready, observedLoad.Outcome);
+        AssertEx.Equal(LlamaServerPlacementOutcome.Partial, observedLoad.Placement);
+        AssertEx.Equal("test", observedLoad.RuntimeVersion);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observedLoad.AttemptKind);
+        AssertEx.Null(placementReport.Current);
     }
 
     [Test]
@@ -239,6 +253,7 @@ public sealed class SupervisorProfilingTests
     public async Task Profiling_Replay_DoesNotInvokeFitParamsCapability()
     {
         var fitRunner = new FakeLlamaFitParamsRunner(LlamaFitParamsRunResult.Success(["-c 8192 -ngl 32"]));
+        LlamaServerLoadObservation? loadObservation = null;
         await using var supervisor = SupervisorFactory.Create(variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
             fitParamsRunner: fitRunner);
 
@@ -246,10 +261,15 @@ public sealed class SupervisorProfilingTests
             ModelRole.Chat,
             ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 32),
             enableMetrics: false,
-            (_, _) => Task.FromResult(result: true),
+            (context, _) =>
+            {
+                loadObservation = context.LoadObservation;
+                return Task.FromResult(result: true);
+            },
             CancellationToken.None);
 
         AssertEx.Equal(expected: 0, fitRunner.Calls.Count);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, AssertEx.NotNull(loadObservation).AttemptKind);
     }
 
     [Test]

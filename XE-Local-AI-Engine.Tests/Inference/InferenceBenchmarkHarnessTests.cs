@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -11,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class InferenceBenchmarkHarnessTests
@@ -32,6 +34,24 @@ public sealed class InferenceBenchmarkHarnessTests
     {
         AssertEx.Equal<double?>(1234d, InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:prompt_tokens_total"));
         AssertEx.Equal<double?>(567.5d, InferenceBenchmarkHarness.TryParsePromMetric(MetricsScrape, "llamacpp:tokens_predicted_total"));
+    }
+
+    [Test]
+    public void SemanticLaunchHash_IgnoresEphemeralReachabilityButChangesWithInferencePolicy()
+    {
+        var first = InferenceBenchmarkHarness.HashSemanticLaunchArguments([
+            "-m", "/private/a.gguf", "--host", "127.0.0.1", "--port", "18001", "-c", "4096", "-ctk", "q8_0"
+        ]);
+        var samePolicy = InferenceBenchmarkHarness.HashSemanticLaunchArguments([
+            "--model", "C:\\private\\b.gguf", "--host", "localhost", "--port", "29111", "-c", "4096", "-ctk", "q8_0"
+        ]);
+        var changedPolicy = InferenceBenchmarkHarness.HashSemanticLaunchArguments([
+            "-m", "/private/a.gguf", "--host", "127.0.0.1", "--port", "18001", "-c", "8192", "-ctk", "q8_0"
+        ]);
+
+        var firstHash = AssertEx.NotNull(first);
+        AssertEx.Equal(firstHash, samePolicy);
+        AssertEx.NotEqual(firstHash, changedPolicy);
     }
 
     [Test]
@@ -269,6 +289,51 @@ public sealed class InferenceBenchmarkHarnessTests
         AssertEx.Equal<long?>(8 * Gb, metrics.MinimumProcessBudgetVramBytes);
     }
 
+    [Test]
+    public async Task RunAsync_PersistsSanitizedRuntimeLoadCorrelationInDiagnostics()
+    {
+        using var handler = new SpeculationMetricsHandler();
+        var harness = BuildHarness(modelCallsTool: true, handler: handler);
+        var context = ProfilingContext(ModelRole.Chat) with
+        {
+            SuccessfulLaunchArguments = ["-m", "/private/models/model.gguf", "-c", "4096"],
+            LoadObservation = new LlamaServerLoadObservation(ModelRole.Chat,
+                GpuVariant.Cuda,
+                RuntimeVersion: "b10375",
+                RuntimeSha256: new string('A', 64),
+                ReadinessDurationMs: 812.5,
+                LlamaServerReadinessOutcome.Ready,
+                LlamaServerPlacementOutcome.Partial,
+                LlamaServerLoadAttemptKind.Primary,
+                SpeculativeModeClass.MainModelHeads)
+        };
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(context, spec, CancellationToken.None);
+
+        using var diagnostics = JsonDocument.Parse(AssertEx.NotNull(metrics.DiagnosticsJson));
+        var runtime = diagnostics.RootElement.GetProperty("runtime");
+        AssertEx.Equal("b10375", runtime.GetProperty("version").GetString());
+        AssertEx.Equal(new string('A', 64), runtime.GetProperty("sha256").GetString());
+        AssertEx.Equal("Partial", runtime.GetProperty("placement").GetString());
+        AssertEx.Equal("Primary", runtime.GetProperty("attemptKind").GetString());
+        AssertEx.Equal("MainModelHeads", runtime.GetProperty("speculationClass").GetString());
+        AssertEx.False(runtime.GetRawText().Contains("/private/models", StringComparison.Ordinal));
+        AssertEx.Equal(expected: 64, runtime.GetProperty("launchArgumentsSha256").GetString()!.Length);
+        AssertEx.Equal<double?>(30d, metrics.SpeculativeDraftTokens);
+        AssertEx.Equal<double?>(15d, metrics.SpeculativeAcceptedTokens);
+        AssertEx.Equal<double?>(0.5d, metrics.SpeculativeAcceptanceRate);
+        AssertEx.Equal<double?>(6d, metrics.SpeculativeVerificationSteps);
+        AssertEx.Equal<double?>(104d, metrics.ContextTokensHighWatermark);
+        AssertEx.Equal<double?>(1d, metrics.AverageBusySlotsPerDecode);
+        AssertEx.Equal<double?>(0d, metrics.RequestsProcessingAtLastScrape);
+        AssertEx.Equal<double?>(0d, metrics.RequestsDeferredAtLastScrape);
+    }
+
     private static LlamaServerProfilingContext ProfilingContext(ModelRole role,
         int? processId = null,
         LlamaServerProfilingVramSnapshot? preSpawnVram = null)
@@ -387,6 +452,30 @@ public sealed class InferenceBenchmarkHarnessTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return Task.FromResult(JsonOrText(HttpStatusCode.OK, string.Empty, "text/plain"));
+        }
+    }
+
+    private sealed class SpeculationMetricsHandler : HttpMessageHandler
+    {
+        private int _scrapes;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var scrape = Interlocked.Increment(ref _scrapes);
+            var metrics = $"""
+                           llamacpp:prompt_tokens_total {scrape * 100}
+                           llamacpp:prompt_seconds_total {scrape.ToString(CultureInfo.InvariantCulture)}
+                           llamacpp:tokens_predicted_total {scrape * 50}
+                           llamacpp:tokens_predicted_seconds_total {scrape.ToString(CultureInfo.InvariantCulture)}
+                           llamacpp:requests_processing 0
+                           llamacpp:requests_deferred 0
+                           llamacpp:n_tokens_max {100 + scrape}
+                           llamacpp:n_busy_slots_per_decode 1
+                           llamacpp:spec_decode_num_draft_tokens_total {scrape * 10}
+                           llamacpp:spec_decode_num_accepted_tokens_total {scrape * 5}
+                           llamacpp:spec_decode_num_drafts_total {scrape * 2}
+                           """;
+            return Task.FromResult(JsonOrText(HttpStatusCode.OK, metrics, "text/plain"));
         }
     }
 
