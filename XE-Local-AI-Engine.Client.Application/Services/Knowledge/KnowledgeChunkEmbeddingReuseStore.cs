@@ -12,8 +12,7 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
 {
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
-    public async Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(
-        IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
+    public async Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
         DateTimeOffset notBeforeUtc,
         CancellationToken cancellationToken)
     {

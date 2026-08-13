@@ -180,10 +180,10 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         if (!queueFull)
         {
             var existingDocuments = await _catalog.ListAsync(normalizedCollection,
-                    SourceKind,
-                    repositorySourceId,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                                      SourceKind,
+                                                      repositorySourceId,
+                                                      cancellationToken)
+                                                  .ConfigureAwait(false);
             foreach (var existing in existingDocuments)
             {
                 if (!string.Equals(existing.SourceKind, SourceKind, StringComparison.Ordinal)
@@ -350,7 +350,8 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     }
 
     [SuppressMessage("Sonar Code Smell", "S3869:SafeHandle instances should not use DangerousGetHandle",
-        Justification = "Linux exposes an opened file's canonical target through /proc/self/fd/{fd}; the owning SafeFileHandle remains live for this synchronous lookup and is never released or transferred here.")]
+        Justification =
+            "Linux exposes an opened file's canonical target through /proc/self/fd/{fd}; the owning SafeFileHandle remains live for this synchronous lookup and is never released or transferred here.")]
     private static void EnsureOpenedFileWithinRoot(SafeFileHandle handle, string resolvedRoot)
     {
         string? openedPath;
@@ -405,7 +406,8 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern uint GetFinalPathNameByHandle(SafeFileHandle file,
-        [Out] char[] filePath,
+        [Out]
+        char[] filePath,
         uint filePathSize,
         uint flags);
 }

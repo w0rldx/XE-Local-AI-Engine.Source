@@ -1533,7 +1533,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>One ordered launch attempt: the explore/replay args to emit and the policy plan to emit them under.</summary>
-    private sealed record LaunchCandidate(ResolvedLaunchArguments Resolved,
+    private sealed record LaunchCandidate(
+        ResolvedLaunchArguments Resolved,
         LlamaServerLaunchPlan? Plan,
         LlamaServerLoadAttemptKind AttemptKind);
 

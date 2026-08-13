@@ -123,14 +123,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             var vectorStart = Stopwatch.GetTimestamp();
             var vectorSearch = _vectorSearchFactory.Create();
             var vectorHits = await vectorSearch.SearchAsync(queryVector,
-                    resolvedModel,
-                    vectorIdentity,
-                    queryVector.Length,
-                    candidatePool,
-                    request.DocumentId,
-                    collectionId,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                                   resolvedModel,
+                                                   vectorIdentity,
+                                                   queryVector.Length,
+                                                   candidatePool,
+                                                   request.DocumentId,
+                                                   collectionId,
+                                                   cancellationToken)
+                                               .ConfigureAwait(false);
             RecordStage("vector", vectorStart);
             vectorRanked = vectorHits.Select(hit => new RankFusionInput(hit.ChunkId, hit.Score)).ToList();
         }
@@ -380,8 +380,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // timeout is only a safety ceiling; this per-search remaining budget wins first. WaitAsync independently
             // bounds the caller even if a provider violates the cancellation contract.
             return await RerankAsync(query, pool, limit, budgetCts.Token)
-                .WaitAsync(remaining, cancellationToken)
-                .ConfigureAwait(false);
+                         .WaitAsync(remaining, cancellationToken)
+                         .ConfigureAwait(false);
         }
         catch (TimeoutException)
         {

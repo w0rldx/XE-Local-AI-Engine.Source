@@ -237,7 +237,10 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
             new AcceptingDispatcher(),
             catalog,
             Substitute.For<IKnowledgeDocumentPurgeService>(),
-            new KnowledgeBaseOptions { MaxRepositoryImportFileBytes = 32 });
+            new KnowledgeBaseOptions
+            {
+                MaxRepositoryImportFileBytes = 32
+            });
 
         var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
             service.ImportAsync(selectedFolderId, "repo", CancellationToken.None)).ConfigureAwait(false);

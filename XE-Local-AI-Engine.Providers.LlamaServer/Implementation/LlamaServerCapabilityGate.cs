@@ -1,7 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>Compatibility result for a final llama-server launch vector.</summary>
-internal sealed record LlamaServerCapabilityDecision(LlamaServerLaunchSpec Spec,
+internal sealed record LlamaServerCapabilityDecision(
+    LlamaServerLaunchSpec Spec,
     bool IsCompatible,
     bool CanTrySafeFallback,
     string? SanitizedError,

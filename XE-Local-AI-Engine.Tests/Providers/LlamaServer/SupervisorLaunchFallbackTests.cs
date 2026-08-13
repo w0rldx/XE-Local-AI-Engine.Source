@@ -149,25 +149,25 @@ public sealed class SupervisorLaunchFallbackTests
     public async Task EnsureRunning_WhenRuntimeLacksOptimizedSpelling_SelectsSafeCandidateWithoutLaunchingTheBadVector()
     {
         const string help = """
-                                -m
-                                --host
-                                --port
-                                --parallel
-                                --no-warmup
-                                -c
-                                --metrics
-                                --fit
-                                --n-gpu-layers
-                                -lv
-                                --jinja
-                                --cache-reuse
-                                --cache-ram
-                                -fa, --flash-attn [on|off|auto]
-                                -ctk, --cache-type-k TYPE
-                                    allowed values: f16, q8_0
-                                --cache-type-v TYPE
-                                    allowed values: f16, q8_0
-                                """;
+                            -m
+                            --host
+                            --port
+                            --parallel
+                            --no-warmup
+                            -c
+                            --metrics
+                            --fit
+                            --n-gpu-layers
+                            -lv
+                            --jinja
+                            --cache-reuse
+                            --cache-ram
+                            -fa, --flash-attn [on|off|auto]
+                            -ctk, --cache-type-k TYPE
+                                allowed values: f16, q8_0
+                            --cache-type-v TYPE
+                                allowed values: f16, q8_0
+                            """;
         var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,

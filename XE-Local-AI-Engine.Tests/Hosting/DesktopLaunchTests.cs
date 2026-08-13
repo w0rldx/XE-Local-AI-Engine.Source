@@ -110,8 +110,7 @@ public sealed class DesktopLaunchTests
     [Test]
     public void KnowledgeDowngradeCommand_WhenBothFlagsArePresent_RejectsAmbiguousAction()
     {
-        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunch.GetKnowledgeDowngradeCommand(
-            ["--knowledge-downgrade-preflight", "--knowledge-downgrade-export"]));
+        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunch.GetKnowledgeDowngradeCommand(["--knowledge-downgrade-preflight", "--knowledge-downgrade-export"]));
     }
 
     [Test]

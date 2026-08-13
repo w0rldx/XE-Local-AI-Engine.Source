@@ -364,8 +364,8 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         await using (var context = CreateContext(databasePath))
         {
             _ = await AssertEx.ThrowsAsync<SqliteException>(() =>
-                    context.Database.GetService<IMigrator>().MigrateAsync(previousMigration))
-                .ConfigureAwait(false);
+                                  context.Database.GetService<IMigrator>().MigrateAsync(previousMigration))
+                              .ConfigureAwait(false);
         }
 
         AssertEx.Equal(expected: 2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));

@@ -88,7 +88,10 @@ internal sealed record RetrievalCapacityReport(
     RetrievalCapacityQueryMetrics Query,
     string MeasurementMode = "warm-cache-process-only")
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true
+    };
 
     public string Summarize() =>
         string.Create(CultureInfo.InvariantCulture,
@@ -227,8 +230,7 @@ internal static class RetrievalCapacityBenchmark
         }
     }
 
-    private static async Task<(IReadOnlyList<CapacityQuery> Queries, double ElapsedMilliseconds)> InsertCorpusAsync(
-        NodeChatDbContext context,
+    private static async Task<(IReadOnlyList<CapacityQuery> Queries, double ElapsedMilliseconds)> InsertCorpusAsync(NodeChatDbContext context,
         DbConnection connection,
         RetrievalCapacityProfile profile,
         MemorySampler memory,
@@ -456,14 +458,14 @@ internal static class RetrievalCapacityBenchmark
         if (query.VectorDimension is int vectorDimension)
         {
             vectorHits = await vectorSearch.SearchAsync(UnitVector(vectorDimension),
-                    EmbeddingModel,
-                    VectorIdentity,
-                    VectorDimensions,
-                    K * 4,
-                    null,
-                    query.CollectionId,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                               EmbeddingModel,
+                                               VectorIdentity,
+                                               VectorDimensions,
+                                               K * 4,
+                                               null,
+                                               query.CollectionId,
+                                               cancellationToken)
+                                           .ConfigureAwait(false);
         }
 
         var vectorMilliseconds = Stopwatch.GetElapsedTime(vectorStarted).TotalMilliseconds;
@@ -512,7 +514,8 @@ internal static class RetrievalCapacityBenchmark
         collectionParameter.Value = collectionId;
         _ = command.Parameters.Add(collectionParameter);
 #pragma warning disable CA2100 // Placeholder names are generated locally; every value remains a DbParameter.
-        command.CommandText = $"SELECT c.chunk_id FROM knowledge_document_chunks c JOIN knowledge_documents d ON d.document_id = c.document_id WHERE c.chunk_id IN ({string.Join(',', placeholders)}) AND d.collection_id = $collection_id;";
+        command.CommandText =
+            $"SELECT c.chunk_id FROM knowledge_document_chunks c JOIN knowledge_documents d ON d.document_id = c.document_id WHERE c.chunk_id IN ({string.Join(',', placeholders)}) AND d.collection_id = $collection_id;";
 #pragma warning restore CA2100
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var present = new HashSet<Guid>();
@@ -572,10 +575,14 @@ internal static class RetrievalCapacityBenchmark
     {
         return localIndex switch
         {
-            0 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "English policy: quartz retention seven31 days authoritative schedule.", 7, "Policy > Retention", "text", "policies/retention-en.md", "en", null),
-            1 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "Deutsche Richtlinie: aufbewahrung kupfer sieben31 Tage verbindlich.", 7, "Richtlinie > Aufbewahrung", "text", "richtlinien/aufbewahrung-de.md", "de", null),
-            2 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "internal string ResolveTenantToken() validates tenant scope before issuing a token.", 10, "TenantResolver", "code", "src/auth/TenantResolver.cs", "csharp", "ResolveTenantToken"),
-            3 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "Operational signal cobalt orchid beacon identifies the canonical recovery record.", 9, "Operations > Recovery", "text", "runbooks/recovery.md", "en", null),
+            0 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "English policy: quartz retention seven31 days authoritative schedule.", 7, "Policy > Retention", "text",
+                "policies/retention-en.md", "en", null),
+            1 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "Deutsche Richtlinie: aufbewahrung kupfer sieben31 Tage verbindlich.", 7, "Richtlinie > Aufbewahrung", "text",
+                "richtlinien/aufbewahrung-de.md", "de", null),
+            2 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "internal string ResolveTenantToken() validates tenant scope before issuing a token.", 10, "TenantResolver", "code",
+                "src/auth/TenantResolver.cs", "csharp", "ResolveTenantToken"),
+            3 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "Operational signal cobalt orchid beacon identifies the canonical recovery record.", 9, "Operations > Recovery", "text",
+                "runbooks/recovery.md", "en", null),
             _ => DistractorRow(namespaceIndex, localIndex, globalIndex)
         };
     }
@@ -630,7 +637,8 @@ internal static class RetrievalCapacityBenchmark
     private static int ChunkCountForNamespace(RetrievalCapacityProfile profile, int namespaceIndex) =>
         (profile.ChunkCount / profile.NamespaceCount) + (namespaceIndex < profile.ChunkCount % profile.NamespaceCount ? 1 : 0);
 
-    private static string GetCollectionId(int namespaceIndex) => $"CAPACITY-{namespaceIndex:D2}";
+    private static string GetCollectionId(int namespaceIndex) =>
+        $"CAPACITY-{namespaceIndex:D2}";
 
     private static async Task DisableFtsMaintenanceAsync(DbConnection connection, CancellationToken cancellationToken) =>
         await ExecuteAsync(connection,
@@ -680,7 +688,12 @@ internal static class RetrievalCapacityBenchmark
 
     private static long DatabaseFootprint(string databasePath)
     {
-        return new[] { databasePath, databasePath + "-wal", databasePath + "-shm" }
+        return new[]
+               {
+                   databasePath,
+                   databasePath + "-wal",
+                   databasePath + "-shm"
+               }
                .Where(File.Exists)
                .Sum(path => new FileInfo(path).Length);
     }
@@ -721,14 +734,16 @@ internal static class RetrievalCapacityBenchmark
         }
     }
 
-    private sealed record CapacityQuery(string Id,
+    private sealed record CapacityQuery(
+        string Id,
         string Text,
         string CollectionId,
         Guid RelevantChunkId,
         int? VectorDimension,
         bool ExpectsNoAnswer);
 
-    private sealed record CapacityCorpusRow(Guid ChunkId,
+    private sealed record CapacityCorpusRow(
+        Guid ChunkId,
         string Content,
         int TokenCount,
         string HeadingPath,
@@ -737,14 +752,16 @@ internal static class RetrievalCapacityBenchmark
         string Language,
         string? Symbol);
 
-    private sealed record CapacityQueryResult(IReadOnlyList<Guid> ChunkIds,
+    private sealed record CapacityQueryResult(
+        IReadOnlyList<Guid> ChunkIds,
         int SelectedCount,
         double FtsMilliseconds,
         double VectorMilliseconds,
         double FusionMilliseconds,
         double EndToEndMilliseconds);
 
-    private sealed record CapacityEvaluation(bool ExpectsNoAnswer,
+    private sealed record CapacityEvaluation(
+        bool ExpectsNoAnswer,
         bool RelevantRetrieved,
         double ReciprocalRank,
         double NdcgAtK,

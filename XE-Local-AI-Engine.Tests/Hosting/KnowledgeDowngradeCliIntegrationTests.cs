@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -73,17 +74,17 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            CREATE TABLE sentinel(value TEXT NOT NULL);
-            INSERT INTO sentinel(value) VALUES ('conflicting');
-            CREATE TABLE knowledge_documents(
-                document_id TEXT NOT NULL,
-                content_hash TEXT NOT NULL,
-                collection_id TEXT NOT NULL);
-            INSERT INTO knowledge_documents(document_id, content_hash, collection_id)
-            VALUES
-                ('11111111-1111-1111-1111-111111111111', 'duplicate', 'COLLECTION-A'),
-                ('22222222-2222-2222-2222-222222222222', 'duplicate', 'COLLECTION-B');
-            """;
+                              CREATE TABLE sentinel(value TEXT NOT NULL);
+                              INSERT INTO sentinel(value) VALUES ('conflicting');
+                              CREATE TABLE knowledge_documents(
+                                  document_id TEXT NOT NULL,
+                                  content_hash TEXT NOT NULL,
+                                  collection_id TEXT NOT NULL);
+                              INSERT INTO knowledge_documents(document_id, content_hash, collection_id)
+                              VALUES
+                                  ('11111111-1111-1111-1111-111111111111', 'duplicate', 'COLLECTION-A'),
+                                  ('22222222-2222-2222-2222-222222222222', 'duplicate', 'COLLECTION-B');
+                              """;
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
@@ -93,9 +94,9 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT value FROM sentinel;";
-        AssertEx.Equal(expectedSentinel, Convert.ToString(await command.ExecuteScalarAsync().ConfigureAwait(false), System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.Equal(expectedSentinel, Convert.ToString(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture));
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('__EFMigrationsHistory', '__EFMigrationsHistory_Identity');";
-        AssertEx.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), System.Globalization.CultureInfo.InvariantCulture),
+        AssertEx.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture),
             "Downgrade commands must exit before either startup migration context changes the database.");
     }
 

@@ -115,11 +115,11 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         var target = ParseP95Target();
         return await RetrievalCapacityBenchmark.RunAsync(Path.Combine(_rootPath, $"capacity-{profile.Name}.sqlite"),
-                _keyHolder,
-                profile,
-                target,
-                CancellationToken.None)
-            .ConfigureAwait(false);
+                                                   _keyHolder,
+                                                   profile,
+                                                   target,
+                                                   CancellationToken.None)
+                                               .ConfigureAwait(false);
     }
 
     private static double ParseP95Target()

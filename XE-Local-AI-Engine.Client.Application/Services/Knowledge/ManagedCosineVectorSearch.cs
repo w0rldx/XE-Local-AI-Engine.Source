@@ -189,6 +189,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         {
             AddParameter(command, "$collection_id", collectionId);
         }
+
         AddParameter(command, "$document_id", documentId);
 
         var topK = new BoundedTopKSelector(limit);

@@ -17,8 +17,7 @@ public sealed class InvocationEfficiencyTelemetryTests
         using var capture = new NodeMeterCapture();
         using var activity = new Activity("invocation-test");
         activity.Start();
-        var efficiency = new ProviderCallEfficiencySnapshot(
-            ProviderCalls: 3,
+        var efficiency = new ProviderCallEfficiencySnapshot(ProviderCalls: 3,
             ProviderRoundsRejected: 1,
             EstimatedInputTokens: 2400,
             MaximumEstimatedInputTokens: 900,

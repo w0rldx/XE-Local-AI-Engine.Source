@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -15,27 +15,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class LlamaServerCapabilityManifestTests
 {
     private const string FullHelp = """
-                                           -m, --model FNAME
-                                           --host HOST
-                                           --port PORT
-                                           -c, --ctx-size N
-                                           -ngl, --n-gpu-layers N
-                                           --parallel N
-                                           --no-warmup
-                                           --fit [on|off]
-                                           --metrics
-                                           --jinja
-                                           --cache-reuse N
-                                           --cache-ram N
-                                           -fa, --flash-attn [on|off|auto]
-                                           -ctk, --cache-type-k TYPE
-                                               allowed values: f32, f16, q8_0, q4_0
-                                           -ctv, --cache-type-v TYPE
-                                               allowed values: f32, f16, q8_0, q4_0
-                                           -lv, --verbosity N
-                                           --spec-type none,draft-simple,draft-mtp,ngram-cache
-                                           --spec-draft-n-max N
-                                           """;
+                                    -m, --model FNAME
+                                    --host HOST
+                                    --port PORT
+                                    -c, --ctx-size N
+                                    -ngl, --n-gpu-layers N
+                                    --parallel N
+                                    --no-warmup
+                                    --fit [on|off]
+                                    --metrics
+                                    --jinja
+                                    --cache-reuse N
+                                    --cache-ram N
+                                    -fa, --flash-attn [on|off|auto]
+                                    -ctk, --cache-type-k TYPE
+                                        allowed values: f32, f16, q8_0, q4_0
+                                    -ctv, --cache-type-v TYPE
+                                        allowed values: f32, f16, q8_0, q4_0
+                                    -lv, --verbosity N
+                                    --spec-type none,draft-simple,draft-mtp,ngram-cache
+                                    --spec-draft-n-max N
+                                    """;
 
     [Test]
     public void ParseHelp_IndexesAliasesAndCapabilityValues()
@@ -271,7 +271,7 @@ public sealed class LlamaServerCapabilityManifestTests
     public void Apply_MandatoryOptionMentionedOnlyInProse_DoesNotCountAsSupported()
     {
         var help = FullHelp.Replace("--no-warmup", "", StringComparison.Ordinal)
-                           + "\n--warmup       use warmup; the removed --no-warmup spelling is mentioned only here";
+                   + "\n--warmup       use warmup; the removed --no-warmup spelling is mentioned only here";
         var manifest = ManifestFromHelp(help);
         var spec = ChatSpec([
             "-m", "/models/model.gguf", "--host", "127.0.0.1", "--port", "12345", "--parallel", "1",
@@ -478,7 +478,7 @@ public sealed class LlamaServerCapabilityManifestTests
 
         private static string ComputeSha256(string path)
         {
-            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+            return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
         }
     }
 }

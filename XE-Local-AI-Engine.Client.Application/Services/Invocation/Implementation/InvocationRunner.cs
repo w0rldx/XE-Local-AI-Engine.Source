@@ -523,8 +523,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         finally
         {
-            var efficiencyRecord = new InvocationEfficiencyRecord(
-                package.InvocationId,
+            var efficiencyRecord = new InvocationEfficiencyRecord(package.InvocationId,
                 invocationOutcome ?? "failed",
                 stream?.ProviderTag ?? "unknown",
                 package.OrchestrationSpec is not null,

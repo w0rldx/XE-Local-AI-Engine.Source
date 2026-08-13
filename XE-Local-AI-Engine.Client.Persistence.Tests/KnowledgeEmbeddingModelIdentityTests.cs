@@ -28,6 +28,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 {
     private const string ConfiguredName = "nomic-embed-text";
     private const string ResolvedGgufName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+
     private const string ResolvedRevisionFingerprint =
         "inventory-v1:b50b9fd9ef78aa8769635ac7b6324c438a2d9c3cb827854dd1383a282fbdf6a1";
 

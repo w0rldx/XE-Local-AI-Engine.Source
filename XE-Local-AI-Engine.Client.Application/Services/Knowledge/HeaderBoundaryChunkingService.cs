@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
-using System.Text;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Options;
 

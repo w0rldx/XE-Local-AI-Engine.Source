@@ -119,16 +119,16 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT document.content_hash, document.document_id
-            FROM knowledge_documents AS document
-            INNER JOIN (
-                SELECT content_hash
-                FROM knowledge_documents
-                GROUP BY content_hash
-                HAVING COUNT(*) > 1
-            ) AS duplicate ON duplicate.content_hash = document.content_hash
-            ORDER BY document.content_hash COLLATE BINARY, document.document_id COLLATE BINARY;
-            """;
+                              SELECT document.content_hash, document.document_id
+                              FROM knowledge_documents AS document
+                              INNER JOIN (
+                                  SELECT content_hash
+                                  FROM knowledge_documents
+                                  GROUP BY content_hash
+                                  HAVING COUNT(*) > 1
+                              ) AS duplicate ON duplicate.content_hash = document.content_hash
+                              ORDER BY document.content_hash COLLATE BINARY, document.document_id COLLATE BINARY;
+                              """;
 
         var groups = new List<KnowledgeDowngradeConflict>();
         var documentIdentifiers = new List<string>();
@@ -153,8 +153,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         }
 
         var conflictingDocumentCount = groups.Sum(static group => group.DocumentIdentifiers.Count);
-        return new KnowledgeDowngradePreflightResult(
-            true,
+        return new KnowledgeDowngradePreflightResult(true,
             groups.Count == 0,
             groups.Count,
             conflictingDocumentCount,

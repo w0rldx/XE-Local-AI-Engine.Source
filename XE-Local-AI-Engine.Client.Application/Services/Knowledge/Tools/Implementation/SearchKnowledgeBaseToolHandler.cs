@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -150,7 +151,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                     new("source", hit.Source),
                     new("collection", hit.CollectionId),
                     new("path", hit.SourcePath),
-                    new("page", hit.PageNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    new("page", hit.PageNumber?.ToString(CultureInfo.InvariantCulture)),
                     new("symbol", hit.Symbol)
                 ]),
                 score = hit.Score,

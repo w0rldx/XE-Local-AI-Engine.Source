@@ -55,16 +55,16 @@ internal static class ReadDocumentToolDefinition
 
     /// <summary>documentId and collectionId are required to preserve the collection namespace boundary.</summary>
     public static readonly string ParameterSchema = $$"""
-                                          {
-                                            "type": "object",
-                                            "additionalProperties": false,
-                                            "required": ["documentId", "collectionId"],
-                                            "properties": {
-                                              "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
-                                              "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} }
-                                            }
-                                          }
-                                          """;
+                                                      {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "required": ["documentId", "collectionId"],
+                                                        "properties": {
+                                                          "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
+                                                          "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} }
+                                                        }
+                                                      }
+                                                      """;
 }
 
 /// <summary>Name / description / schema constants for the <c>read_surrounding_chunks</c> tool.</summary>
@@ -80,19 +80,19 @@ internal static class ReadSurroundingChunksToolDefinition
 
     /// <summary>documentId + collectionId + chunkIndex identify the anchor; before/after default to 1 and are clamped to at most 5 each.</summary>
     public static readonly string ParameterSchema = $$"""
-                                          {
-                                            "type": "object",
-                                            "additionalProperties": false,
-                                            "required": ["documentId", "collectionId", "chunkIndex"],
-                                            "properties": {
-                                              "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
-                                              "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
-                                              "chunkIndex": { "type": "integer", "minimum": 0 },
-                                              "before": { "type": "integer", "minimum": 0, "maximum": 5 },
-                                              "after": { "type": "integer", "minimum": 0, "maximum": 5 }
-                                            }
-                                          }
-                                          """;
+                                                      {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "required": ["documentId", "collectionId", "chunkIndex"],
+                                                        "properties": {
+                                                          "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
+                                                          "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
+                                                          "chunkIndex": { "type": "integer", "minimum": 0 },
+                                                          "before": { "type": "integer", "minimum": 0, "maximum": 5 },
+                                                          "after": { "type": "integer", "minimum": 0, "maximum": 5 }
+                                                        }
+                                                      }
+                                                      """;
 }
 
 /// <summary>

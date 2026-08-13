@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Tests.DocumentIngestion;
 
 using System.Text;
 using Microsoft.Extensions.DataIngestion;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
-using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class PlaintextDocumentReaderTests
@@ -77,6 +77,6 @@ public sealed class PlaintextDocumentReaderTests
 
     private static DocumentTextExtractor CreateExtractor()
     {
-        return new DocumentTextExtractor(Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentTextExtractor>.Instance);
+        return new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance);
     }
 }

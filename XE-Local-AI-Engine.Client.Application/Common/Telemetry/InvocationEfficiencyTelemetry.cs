@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 
 using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 
 /// <summary>
@@ -19,9 +17,15 @@ internal static class InvocationEfficiencyTelemetry
 
         var tags = new TagList
         {
-            { "provider", record.Provider },
-            { "outcome", record.Outcome },
-            { "orchestration", record.Orchestration }
+            {
+                "provider", record.Provider
+            },
+            {
+                "outcome", record.Outcome
+            },
+            {
+                "orchestration", record.Orchestration
+            }
         };
 
         var efficiency = record.ProviderEfficiency;

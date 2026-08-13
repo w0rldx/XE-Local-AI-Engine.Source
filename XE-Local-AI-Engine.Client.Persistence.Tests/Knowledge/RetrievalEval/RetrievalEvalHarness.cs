@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval;
 
-using System.Globalization;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
@@ -225,7 +225,10 @@ public static class RetrievalEvalHarness
             var startedAt = Stopwatch.GetTimestamp();
             var result = await search.SearchAsync(new KnowledgeSearchRequest(query.Text, Limit: k), cancellationToken).ConfigureAwait(false);
             var elapsed = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-            perQuery.Add(EvaluateQuery(query, relevantDocumentIds, result.Results, k) with { ElapsedMilliseconds = elapsed });
+            perQuery.Add(EvaluateQuery(query, relevantDocumentIds, result.Results, k) with
+            {
+                ElapsedMilliseconds = elapsed
+            });
         }
 
         var answerable = perQuery.Where(evaluation => !evaluation.ExpectsNoAnswer).ToList();

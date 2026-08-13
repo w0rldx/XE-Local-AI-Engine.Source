@@ -15,8 +15,19 @@ internal static class KnowledgeCodeSymbolExtractor
 
     private static readonly HashSet<string> ControlWords = new(StringComparer.Ordinal)
     {
-        "if", "for", "foreach", "while", "switch", "catch", "return", "new", "using", "lock", "sizeof",
-        "typeof", "nameof"
+        "if",
+        "for",
+        "foreach",
+        "while",
+        "switch",
+        "catch",
+        "return",
+        "new",
+        "using",
+        "lock",
+        "sizeof",
+        "typeof",
+        "nameof"
     };
 
     public static string? ExtractPrimary(string content)
