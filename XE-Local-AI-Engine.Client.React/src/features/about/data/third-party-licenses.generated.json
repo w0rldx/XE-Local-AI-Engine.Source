@@ -594,9 +594,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:BouncyCastle.Cryptography@2.6.2",
+			"id": "backend:BouncyCastle.Cryptography@2.7.0",
 			"name": "BouncyCastle.Cryptography",
-			"version": "2.6.2",
+			"version": "2.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://www.bouncycastle.org/stable/nuget/csharp/website",
 			"source": "backend"
@@ -1874,9 +1874,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Authentication.JwtBearer@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Authentication.JwtBearer@10.0.11",
 			"name": "Microsoft.AspNetCore.Authentication.JwtBearer",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2146,9 +2146,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AmbientMetadata.Application@10.7.0",
+			"id": "backend:Microsoft.Extensions.AmbientMetadata.Application@10.9.0",
 			"name": "Microsoft.Extensions.AmbientMetadata.Application",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2186,33 +2186,41 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Compliance.Abstractions@10.7.0",
+			"id": "backend:Microsoft.Extensions.Compliance.Abstractions@10.9.0",
 			"name": "Microsoft.Extensions.Compliance.Abstractions",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration@10.0.9",
+			"id": "backend:Microsoft.Extensions.Configuration@10.0.11",
 			"name": "Microsoft.Extensions.Configuration",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration.Abstractions@10.0.10",
+			"id": "backend:Microsoft.Extensions.Configuration.Abstractions@10.0.11",
 			"name": "Microsoft.Extensions.Configuration.Abstractions",
-			"version": "10.0.10",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration.Binder@10.0.9",
+			"id": "backend:Microsoft.Extensions.Configuration.Binder@10.0.11",
 			"name": "Microsoft.Extensions.Configuration.Binder",
-			"version": "10.0.9",
+			"version": "10.0.11",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Microsoft.Extensions.Configuration.EnvironmentVariables@10.0.0",
+			"name": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+			"version": "10.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2226,25 +2234,25 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection@10.0.9",
+			"id": "backend:Microsoft.Extensions.DependencyInjection@10.0.11",
 			"name": "Microsoft.Extensions.DependencyInjection",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.10",
+			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.11",
 			"name": "Microsoft.Extensions.DependencyInjection.Abstractions",
-			"version": "10.0.10",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection.AutoActivation@10.7.0",
+			"id": "backend:Microsoft.Extensions.DependencyInjection.AutoActivation@10.9.0",
 			"name": "Microsoft.Extensions.DependencyInjection.AutoActivation",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2274,6 +2282,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "backend:Microsoft.Extensions.Diagnostics@10.0.11",
+			"name": "Microsoft.Extensions.Diagnostics",
+			"version": "10.0.11",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
 			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.3",
 			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
 			"version": "10.0.3",
@@ -2290,17 +2306,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.10",
+			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.11",
 			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
-			"version": "10.0.10",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.ExceptionSummarization@10.7.0",
+			"id": "backend:Microsoft.Extensions.Diagnostics.ExceptionSummarization@10.9.0",
 			"name": "Microsoft.Extensions.Diagnostics.ExceptionSummarization",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2322,9 +2338,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Features@10.0.9",
+			"id": "backend:Microsoft.Extensions.Features@10.0.11",
 			"name": "Microsoft.Extensions.Features",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2338,17 +2354,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.9",
+			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.11",
 			"name": "Microsoft.Extensions.FileProviders.Abstractions",
-			"version": "10.0.9",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.10",
-			"name": "Microsoft.Extensions.FileProviders.Abstractions",
-			"version": "10.0.10",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2370,41 +2378,33 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Hosting.Abstractions@10.0.9",
+			"id": "backend:Microsoft.Extensions.Hosting.Abstractions@10.0.11",
 			"name": "Microsoft.Extensions.Hosting.Abstractions",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Hosting.Abstractions@10.0.10",
-			"name": "Microsoft.Extensions.Hosting.Abstractions",
-			"version": "10.0.10",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Http@10.0.9",
+			"id": "backend:Microsoft.Extensions.Http@10.0.11",
 			"name": "Microsoft.Extensions.Http",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Http.Diagnostics@10.7.0",
+			"id": "backend:Microsoft.Extensions.Http.Diagnostics@10.9.0",
 			"name": "Microsoft.Extensions.Http.Diagnostics",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Http.Resilience@10.7.0",
+			"id": "backend:Microsoft.Extensions.Http.Resilience@10.9.0",
 			"name": "Microsoft.Extensions.Http.Resilience",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2434,17 +2434,25 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Logging.Abstractions@10.0.10",
-			"name": "Microsoft.Extensions.Logging.Abstractions",
-			"version": "10.0.10",
+			"id": "backend:Microsoft.Extensions.Logging@10.0.11",
+			"name": "Microsoft.Extensions.Logging",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Logging.Configuration@10.0.9",
+			"id": "backend:Microsoft.Extensions.Logging.Abstractions@10.0.11",
+			"name": "Microsoft.Extensions.Logging.Abstractions",
+			"version": "10.0.11",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Microsoft.Extensions.Logging.Configuration@10.0.11",
 			"name": "Microsoft.Extensions.Logging.Configuration",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2458,9 +2466,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.ObjectPool@10.0.9",
+			"id": "backend:Microsoft.Extensions.ObjectPool@10.0.11",
 			"name": "Microsoft.Extensions.ObjectPool",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2474,33 +2482,25 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Options@10.0.9",
+			"id": "backend:Microsoft.Extensions.Options@10.0.11",
 			"name": "Microsoft.Extensions.Options",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Options@10.0.10",
-			"name": "Microsoft.Extensions.Options",
-			"version": "10.0.10",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Options.ConfigurationExtensions@10.0.9",
+			"id": "backend:Microsoft.Extensions.Options.ConfigurationExtensions@10.0.11",
 			"name": "Microsoft.Extensions.Options.ConfigurationExtensions",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Options.DataAnnotations@10.0.9",
+			"id": "backend:Microsoft.Extensions.Options.DataAnnotations@10.0.11",
 			"name": "Microsoft.Extensions.Options.DataAnnotations",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2514,41 +2514,49 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Resilience@10.7.0",
+			"id": "backend:Microsoft.Extensions.Primitives@10.0.11",
+			"name": "Microsoft.Extensions.Primitives",
+			"version": "10.0.11",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Microsoft.Extensions.Resilience@10.9.0",
 			"name": "Microsoft.Extensions.Resilience",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.ServiceDiscovery@10.7.0",
+			"id": "backend:Microsoft.Extensions.ServiceDiscovery@10.9.0",
 			"name": "Microsoft.Extensions.ServiceDiscovery",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.ServiceDiscovery.Abstractions@10.7.0",
+			"id": "backend:Microsoft.Extensions.ServiceDiscovery.Abstractions@10.9.0",
 			"name": "Microsoft.Extensions.ServiceDiscovery.Abstractions",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Telemetry@10.7.0",
+			"id": "backend:Microsoft.Extensions.Telemetry@10.9.0",
 			"name": "Microsoft.Extensions.Telemetry",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Telemetry.Abstractions@10.7.0",
+			"id": "backend:Microsoft.Extensions.Telemetry.Abstractions@10.9.0",
 			"name": "Microsoft.Extensions.Telemetry.Abstractions",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2578,49 +2586,49 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Abstractions@8.19.1",
+			"id": "backend:Microsoft.IdentityModel.Abstractions@8.19.2",
 			"name": "Microsoft.IdentityModel.Abstractions",
-			"version": "8.19.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.JsonWebTokens@8.19.1",
+			"id": "backend:Microsoft.IdentityModel.JsonWebTokens@8.19.2",
 			"name": "Microsoft.IdentityModel.JsonWebTokens",
-			"version": "8.19.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Logging@8.19.1",
+			"id": "backend:Microsoft.IdentityModel.Logging@8.19.2",
 			"name": "Microsoft.IdentityModel.Logging",
-			"version": "8.19.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Protocols@8.0.1",
+			"id": "backend:Microsoft.IdentityModel.Protocols@8.19.2",
 			"name": "Microsoft.IdentityModel.Protocols",
-			"version": "8.0.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Protocols.OpenIdConnect@8.0.1",
+			"id": "backend:Microsoft.IdentityModel.Protocols.OpenIdConnect@8.19.2",
 			"name": "Microsoft.IdentityModel.Protocols.OpenIdConnect",
-			"version": "8.0.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Tokens@8.19.1",
+			"id": "backend:Microsoft.IdentityModel.Tokens@8.19.2",
 			"name": "Microsoft.IdentityModel.Tokens",
-			"version": "8.19.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
@@ -2866,9 +2874,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry@1.16.0",
+			"id": "backend:OpenTelemetry@1.17.0",
 			"name": "OpenTelemetry",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -2882,57 +2890,57 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api@1.16.0",
+			"id": "backend:OpenTelemetry.Api@1.17.0",
 			"name": "OpenTelemetry.Api",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.16.0",
+			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.17.0",
 			"name": "OpenTelemetry.Api.ProviderBuilderExtensions",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.16.0",
+			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.17.0",
 			"name": "OpenTelemetry.Exporter.OpenTelemetryProtocol",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Extensions.Hosting@1.16.0",
+			"id": "backend:OpenTelemetry.Extensions.Hosting@1.17.0",
 			"name": "OpenTelemetry.Extensions.Hosting",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.16.0",
+			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.17.0",
 			"name": "OpenTelemetry.Instrumentation.AspNetCore",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Http@1.16.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Http@1.17.0",
 			"name": "OpenTelemetry.Instrumentation.Http",
-			"version": "1.16.0",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.15.1",
+			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.17.0",
 			"name": "OpenTelemetry.Instrumentation.Runtime",
-			"version": "1.15.1",
+			"version": "1.17.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -3658,9 +3666,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:System.IdentityModel.Tokens.Jwt@8.0.1",
+			"id": "backend:System.IdentityModel.Tokens.Jwt@8.19.2",
 			"name": "System.IdentityModel.Tokens.Jwt",
-			"version": "8.0.1",
+			"version": "8.19.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
