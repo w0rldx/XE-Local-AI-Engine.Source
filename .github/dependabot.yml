@@ -1,7 +1,4 @@
 version: 2
-# PAUSED for the v1.0.0-rc.1 release: open-pull-requests-limit is 0 on every ecosystem so no new
-# version-update PRs are opened while develop is frozen at the verified release commit. Restore the
-# prior limits (nuget 3, npm 3, github-actions 2) after the RC is published.
 updates:
   - package-ecosystem: nuget
     directory: /
@@ -11,7 +8,7 @@ updates:
       time: "06:00"
       timezone: Europe/Berlin
     target-branch: develop
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 3
     groups:
       aspire-coupled:
         patterns:
@@ -38,7 +35,7 @@ updates:
       time: "06:30"
       timezone: Europe/Berlin
     target-branch: develop
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 3
     groups:
       npm-weekly:
         patterns:
@@ -52,7 +49,7 @@ updates:
       time: "07:00"
       timezone: Europe/Berlin
     target-branch: develop
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 2
     groups:
       actions-weekly:
         patterns:
