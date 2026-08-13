@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "components": {
-    "pkg:npm/%40microsoft/signalr@10.0.0": {
+    "pkg:npm/%40microsoft/signalr@10.0.11": {
       "license": "MIT",
-      "basis": "The exact v10.0.0 source tag and npm package metadata both declare MIT; the npm tarball omits the license file.",
+      "basis": "The exact v10.0.11 source tag and npm package metadata both declare MIT; the npm tarball omits the license file.",
       "files": [
         {
-          "path": "third-party/npm/microsoft-signalr-10.0.0-LICENSE.txt",
+          "path": "third-party/npm/microsoft-signalr-10.0.11-LICENSE.txt",
           "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
-          "source": "https://raw.githubusercontent.com/dotnet/aspnetcore/v10.0.0/LICENSE.txt"
+          "source": "https://raw.githubusercontent.com/dotnet/aspnetcore/v10.0.11/LICENSE.txt"
         }
       ]
     },
@@ -34,14 +34,14 @@
         }
       ]
     },
-    "pkg:npm/rrweb@2.0.1": {
+    "pkg:npm/rrweb@2.1.1": {
       "license": "MIT",
       "basis": "The signed npm provenance identifies the pinned upstream gitHead; the exact source license and npm metadata both declare MIT while the npm tarball omits the file.",
       "files": [
         {
-          "path": "third-party/npm/rrweb-2.0.1-LICENSE.txt",
+          "path": "third-party/npm/rrweb-2.1.1-LICENSE.txt",
           "sha256": "e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c",
-          "source": "https://raw.githubusercontent.com/rrweb-io/rrweb/a9198e65069f0c741789842106a419210775074d/LICENSE"
+          "source": "https://raw.githubusercontent.com/rrweb-io/rrweb/3deb6e7da4528ddb33b5b7ff6a3e805d4ed14930/LICENSE"
         }
       ]
     },
