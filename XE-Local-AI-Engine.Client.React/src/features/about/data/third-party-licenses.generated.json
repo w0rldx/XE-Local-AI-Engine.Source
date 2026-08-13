@@ -2122,9 +2122,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.8.3",
+			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.9.0",
 			"name": "Microsoft.Extensions.AI.Abstractions",
-			"version": "10.8.3",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2138,9 +2138,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.8.3",
+			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.9.0",
 			"name": "Microsoft.Extensions.AI.OpenAI",
-			"version": "10.8.3",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
