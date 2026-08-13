@@ -135,6 +135,26 @@ public sealed class ContextExpansionServiceTests : IDisposable
         AssertEx.Empty(batched);
     }
 
+    [Test]
+    public async Task ExpandAsync_CollectionScope_DeniesDocumentFromAnotherNamespace()
+    {
+        var databasePath = GetDatabasePath("expand-collection-scope.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId, "PROJECT-A").ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), 0, "project-a-secret").ConfigureAwait(false);
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = new ContextExpansionService(context);
+
+        var denied = await service.ExpandAsync(documentId, 0, Window, "PROJECT-B", CancellationToken.None).ConfigureAwait(false);
+        var allowed = await service.ExpandAsync(documentId, 0, Window, "PROJECT-A", CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Empty(denied);
+        AssertEx.Equal(1, allowed.Count);
+        AssertEx.Equal("project-a-secret", allowed[0].Content);
+    }
+
     private static void AssertNeighborsEqual(IReadOnlyList<KnowledgeNeighborChunk> expected, IReadOnlyList<KnowledgeNeighborChunk> actual)
     {
         AssertEx.Equal(expected.Count, actual.Count);
@@ -153,7 +173,12 @@ public sealed class ContextExpansionServiceTests : IDisposable
         await context.Database.MigrateAsync().ConfigureAwait(false);
     }
 
-    private async Task SeedDocumentAsync(string databasePath, Guid documentId)
+    private Task SeedDocumentAsync(string databasePath, Guid documentId)
+    {
+        return SeedDocumentAsync(databasePath, documentId, KnowledgeCollectionScope.DefaultId);
+    }
+
+    private async Task SeedDocumentAsync(string databasePath, Guid documentId, string collectionId)
     {
         byte[] encryptedName;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
@@ -166,13 +191,14 @@ public sealed class ContextExpansionServiceTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Indexed', 5, 'nomic-embed-text', 1, 1);
+            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, created_at_utc, updated_at_utc, collection_id)
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Indexed', 5, 'nomic-embed-text', 1, 1, $collection);
             """;
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$name", encryptedName);
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
+        command.Parameters.AddWithValue("$collection", collectionId);
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 

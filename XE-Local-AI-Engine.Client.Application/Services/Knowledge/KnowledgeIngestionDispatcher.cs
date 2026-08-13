@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
-using System.Collections.Concurrent;
 using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
@@ -12,9 +11,9 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 ///     burst of uploads from accreting unbounded pending ids. Admission is non-blocking: a write that arrives while the
 ///     queue is full is rejected (<see cref="KnowledgeIngestionEnqueueResult.QueueFull" />) rather than dropped or awaited,
 ///     so the upload/reindex caller can return a retryable busy response instead of holding the request or growing the
-///     backlog. Admission is also IDEMPOTENT: a document already queued or in flight is not enqueued again (a retry or a
-///     drain-sweep of the same id is a no-op), so the same document is never processed twice concurrently. The worker calls
-///     <see cref="MarkCompleted" /> once a document reaches a terminal state so a later reindex can re-admit it. Accept /
+///     backlog. Admission never queues the same document concurrently. If the same id is admitted while already queued or
+///     in flight, one deferred follow-up run is remembered; this is required when a repository update reuses the id while
+///     the old revision is embedding. The worker calls <see cref="MarkCompleted" /> to schedule that deferred run. Accept /
 ///     reject counts and the live queue depth are published on the <c>XE.Node</c> meter.
 /// </summary>
 public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
@@ -35,9 +34,10 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
         FullMode = BoundedChannelFullMode.Wait
     });
 
-    // Document ids admitted but not yet completed (queued OR being processed). Makes admission idempotent: a retry or a
-    // drain-sweep of a document already in this set is a no-op rather than a duplicate ingestion. Cleared by MarkCompleted.
-    private readonly ConcurrentDictionary<Guid, byte> _admitted = new();
+    // A short lock keeps the admitted state and non-blocking channel write one atomic admission decision. Each document has
+    // at most one queued/in-flight run plus one coalesced follow-up request, so updates never execute concurrently.
+    private readonly Lock _admissionGate = new();
+    private readonly Dictionary<Guid, AdmissionState> _admitted = [];
 
     public KnowledgeIngestionDispatcher()
     {
@@ -61,25 +61,31 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Idempotent: a document already queued or in flight is treated as accepted without a second enqueue, so a retry
-        // (or a drain-sweep) of the same id can never queue it twice and cause a concurrent double ingestion.
-        if (!_admitted.TryAdd(documentId, 0))
+        lock (_admissionGate)
         {
-            return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
-        }
+            // Duplicate admission records one follow-up instead of queuing the same id concurrently. Repository replacement
+            // reuses the id, so permanently collapsing that admission would leave the newly Pending revision unindexed.
+            if (_admitted.TryGetValue(documentId, out var existing))
+            {
+                existing.RequeueRequested = true;
+                return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
+            }
 
-        // Non-blocking admission: TryWrite succeeds while there is capacity and returns false the instant the queue is
-        // full, so a burst is rejected rather than queued without bound or blocking the caller.
-        if (_queue.Writer.TryWrite(documentId))
-        {
-            NodeMetrics.KnowledgeIngestionAcceptedTotal.Add(1);
-            return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
-        }
+            _admitted.Add(documentId, new AdmissionState());
 
-        // Full: undo the reservation so a later attempt (after capacity frees, e.g. the worker's drain-sweep) can admit it.
-        _admitted.TryRemove(documentId, out _);
-        NodeMetrics.KnowledgeIngestionRejectedTotal.Add(1);
-        return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.QueueFull);
+            // Non-blocking admission: TryWrite succeeds while there is capacity and returns false the instant the queue is
+            // full, so a burst is rejected rather than queued without bound or blocking the caller.
+            if (_queue.Writer.TryWrite(documentId))
+            {
+                NodeMetrics.KnowledgeIngestionAcceptedTotal.Add(1);
+                return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
+            }
+
+            // Full: undo the reservation so a later attempt (after capacity frees, e.g. the worker's drain-sweep) can admit it.
+            _admitted.Remove(documentId);
+            NodeMetrics.KnowledgeIngestionRejectedTotal.Add(1);
+            return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.QueueFull);
+        }
     }
 
     /// <summary>
@@ -88,6 +94,28 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
     /// </summary>
     public void MarkCompleted(Guid documentId)
     {
-        _admitted.TryRemove(documentId, out _);
+        lock (_admissionGate)
+        {
+            if (!_admitted.TryGetValue(documentId, out var state))
+            {
+                return;
+            }
+
+            if (state.RequeueRequested && _queue.Writer.TryWrite(documentId))
+            {
+                state.RequeueRequested = false;
+                NodeMetrics.KnowledgeIngestionAcceptedTotal.Add(1);
+                return;
+            }
+
+            // If the bounded queue filled before the deferred write, release admission. The current row remains Pending;
+            // the worker's drain sweep re-admits it as capacity frees, and startup recovery is the crash-safe fallback.
+            _admitted.Remove(documentId);
+        }
+    }
+
+    private sealed class AdmissionState
+    {
+        public bool RequeueRequested { get; set; }
     }
 }

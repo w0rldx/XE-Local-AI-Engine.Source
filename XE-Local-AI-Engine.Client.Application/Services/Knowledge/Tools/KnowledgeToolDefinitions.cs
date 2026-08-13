@@ -20,8 +20,8 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "the question is about the operator's documents or local knowledge. Answering policy: rely solely on the "
         + "retrieved passages for document-grounded claims; do not invent facts or fill gaps from prior knowledge; if the "
         + "results do not contain enough information to answer, say so plainly instead of guessing. Typical flow: search "
-        + "first, then read_surrounding_chunks around a promising hit for more context, or read_document to read a whole "
-        + "document. Returns compact JSON hits with documentId, chunkId, title, section, content, source, score, and "
+        + "first, then pass the returned collectionId to read_surrounding_chunks around a promising hit, or to "
+        + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, and "
         + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
 
     /// <summary>Query is required; limit defaults to 5 and is clamped to 1-20; optional single-document scope + neighbor expansion.</summary>
@@ -34,6 +34,7 @@ internal static class SearchKnowledgeBaseToolDefinition
                                                           "query": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeQueryLimits.MaxQueryLength}} },
                                                           "limit": { "type": "integer", "minimum": 1, "maximum": 20 },
                                                           "documentId": { "type": "string", "maxLength": 64 },
+                                                          "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
                                                           "expandNeighbors": { "type": "boolean" }
                                                         }
                                                       }
@@ -46,20 +47,21 @@ internal static class ReadDocumentToolDefinition
     public const string ToolName = "read_document";
 
     public const string Description =
-        "Read a single knowledge-base document end to end by its documentId (usually obtained from a "
+        "Read a single knowledge-base document end to end by its documentId and collectionId (usually obtained from a "
         + "search_knowledge_base hit). Returns the document's non-sensitive metadata plus its ordered chunks. The content "
         + "is bounded: a very large document is truncated and the result flags that truncation, so read the specific "
         + "sections you need rather than assuming the whole document is present. Use the returned passages only to ground "
         + "document-specific claims; do not invent content that is not present.";
 
-    /// <summary>documentId is the only required argument.</summary>
-    public const string ParameterSchema = """
+    /// <summary>documentId and collectionId are required to preserve the collection namespace boundary.</summary>
+    public static readonly string ParameterSchema = $$"""
                                           {
                                             "type": "object",
                                             "additionalProperties": false,
-                                            "required": ["documentId"],
+                                            "required": ["documentId", "collectionId"],
                                             "properties": {
-                                              "documentId": { "type": "string", "minLength": 1, "maxLength": 64 }
+                                              "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
+                                              "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} }
                                             }
                                           }
                                           """;
@@ -72,18 +74,19 @@ internal static class ReadSurroundingChunksToolDefinition
 
     public const string Description =
         "Read the chunks surrounding a specific chunk within a document, to recover context that straddles a chunk "
-        + "boundary. Identify the target by its documentId and the chunkIndex of a search_knowledge_base hit, and request "
+        + "boundary. Identify the target by its documentId, collectionId, and the chunkIndex of a search_knowledge_base hit, and request "
         + "how many chunks to include before and after it. Returns the neighbor window in document order. Use the returned "
         + "passages only to ground document-specific claims.";
 
-    /// <summary>documentId + chunkIndex identify the anchor; before/after default to 1 and are clamped to at most 5 each.</summary>
-    public const string ParameterSchema = """
+    /// <summary>documentId + collectionId + chunkIndex identify the anchor; before/after default to 1 and are clamped to at most 5 each.</summary>
+    public static readonly string ParameterSchema = $$"""
                                           {
                                             "type": "object",
                                             "additionalProperties": false,
-                                            "required": ["documentId", "chunkIndex"],
+                                            "required": ["documentId", "collectionId", "chunkIndex"],
                                             "properties": {
                                               "documentId": { "type": "string", "minLength": 1, "maxLength": 64 },
+                                              "collectionId": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeCollectionScope.MaxLength}} },
                                               "chunkIndex": { "type": "integer", "minimum": 0 },
                                               "before": { "type": "integer", "minimum": 0, "maximum": 5 },
                                               "after": { "type": "integer", "minimum": 0, "maximum": 5 }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval;
 
 using System.Globalization;
+using System.Diagnostics;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
@@ -85,7 +86,22 @@ public sealed record LabeledQuery(
     string Text,
     string RelevantDocumentKey,
     string CitationSnippet,
-    bool IsVectorOnly = false);
+    bool IsVectorOnly = false)
+{
+    /// <summary>
+    ///     All documents that are relevant to this query. The default preserves the original single-label contract.
+    /// </summary>
+    public IReadOnlyList<string> RelevantDocumentKeys { get; init; } = [RelevantDocumentKey];
+
+    /// <summary>True when a correct retriever should return no hits.</summary>
+    public bool ExpectsNoAnswer { get; init; }
+
+    /// <summary>Expected lexical anchors in hit title, section, or source metadata.</summary>
+    public IReadOnlyList<string> SourceAnchors { get; init; } = [];
+
+    /// <summary>Stable scenario family used to group representative eval cases.</summary>
+    public string ScenarioGroup { get; init; } = "baseline";
+}
 
 /// <summary>Per-query evaluation outcome, retained so a caller can inspect exactly which query regressed.</summary>
 /// <param name="QueryId">The <see cref="LabeledQuery.Id" />.</param>
@@ -98,7 +114,35 @@ public sealed record QueryEvaluation(
     bool RelevantRetrieved,
     int FirstRelevantRank,
     double ReciprocalRank,
-    double CitationCoverage);
+    double CitationCoverage)
+{
+    /// <summary>Number of distinct relevant documents retrieved within the cut-off.</summary>
+    public int RetrievedRelevantCount { get; init; }
+
+    /// <summary>Number of distinct documents labeled relevant for this query.</summary>
+    public int RelevantDocumentCount { get; init; }
+
+    /// <summary>Relevant documents divided by the fixed cut-off k.</summary>
+    public double PrecisionAtK { get; init; }
+
+    /// <summary>Binary-gain normalized discounted cumulative gain at the fixed cut-off k.</summary>
+    public double NdcgAtK { get; init; }
+
+    /// <summary>Fraction of expected anchors found in hit title, section, or source metadata.</summary>
+    public double SourceAnchorCoverage { get; init; }
+
+    /// <summary>True when the expected citation phrase occurs contiguously in at least one retrieved chunk.</summary>
+    public bool CitationAnchorPresent { get; init; }
+
+    /// <summary>True for an explicit no-answer label.</summary>
+    public bool ExpectsNoAnswer { get; init; }
+
+    /// <summary>True when a no-answer query produced zero hits; false for answerable queries.</summary>
+    public bool NoAnswerCorrect { get; init; }
+
+    /// <summary>Observed end-to-end search latency for this query, including query embedding and optional reranking.</summary>
+    public double ElapsedMilliseconds { get; init; }
+}
 
 /// <summary>
 ///     Structured retrieval-quality metrics over a labeled query set at a fixed cut-off <c>k</c>. Macro-averaged across
@@ -119,10 +163,40 @@ public sealed record RetrievalMetrics(
     double CitationCoverage,
     IReadOnlyList<QueryEvaluation> PerQuery)
 {
+    /// <summary>Macro-averaged precision@k over answerable queries.</summary>
+    public double PrecisionAtK { get; init; }
+
+    /// <summary>Macro-averaged nDCG@k over answerable queries.</summary>
+    public double NdcgAtK { get; init; }
+
+    /// <summary>Mean source-anchor coverage over answerable queries.</summary>
+    public double SourceAnchorCoverage { get; init; }
+
+    /// <summary>Fraction of answerable queries with a contiguous supporting citation phrase.</summary>
+    public double CitationAnchorRate { get; init; }
+
+    /// <summary>Fraction of explicit no-answer queries for which the retriever returned zero hits.</summary>
+    public double NoAnswerAccuracy { get; init; }
+
+    /// <summary>Number of answerable queries included in retrieval-quality averages.</summary>
+    public int AnswerableQueryCount { get; init; }
+
+    /// <summary>Number of explicit no-answer queries.</summary>
+    public int NoAnswerQueryCount { get; init; }
+
+    /// <summary>Nearest-rank median end-to-end query latency.</summary>
+    public double QueryLatencyP50Milliseconds { get; init; }
+
+    /// <summary>Nearest-rank p95 end-to-end query latency.</summary>
+    public double QueryLatencyP95Milliseconds { get; init; }
+
+    /// <summary>Slowest observed end-to-end query latency.</summary>
+    public double QueryLatencyMaxMilliseconds { get; init; }
+
     /// <summary>A one-line, culture-stable summary for test output / regression logs.</summary>
     public string Summarize() =>
         string.Create(CultureInfo.InvariantCulture,
-            $"k={K} queries={QueryCount} recall@{K}={RecallAtK:F3} MRR={MeanReciprocalRank:F3} citationCoverage={CitationCoverage:F3}");
+            $"k={K} queries={QueryCount} recall@{K}={RecallAtK:F3} precision@{K}={PrecisionAtK:F3} nDCG@{K}={NdcgAtK:F3} MRR={MeanReciprocalRank:F3} citationCoverage={CitationCoverage:F3} sourceAnchors={SourceAnchorCoverage:F3} noAnswer={NoAnswerAccuracy:F3} latencyP50Ms={QueryLatencyP50Milliseconds:F1} latencyP95Ms={QueryLatencyP95Milliseconds:F1}");
 }
 
 /// <summary>
@@ -147,23 +221,61 @@ public static class RetrievalEvalHarness
         var perQuery = new List<QueryEvaluation>(queries.Count);
         foreach (var query in queries)
         {
-            var relevantDocumentId = documentIdsByKey[query.RelevantDocumentKey];
+            var relevantDocumentIds = ResolveRelevantDocumentIds(query, documentIdsByKey);
+            var startedAt = Stopwatch.GetTimestamp();
             var result = await search.SearchAsync(new KnowledgeSearchRequest(query.Text, Limit: k), cancellationToken).ConfigureAwait(false);
-            perQuery.Add(EvaluateQuery(query, relevantDocumentId, result.Results));
+            var elapsed = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            perQuery.Add(EvaluateQuery(query, relevantDocumentIds, result.Results, k) with { ElapsedMilliseconds = elapsed });
         }
 
-        var recall = perQuery.Count == 0 ? 0d : perQuery.Average(evaluation => evaluation.RelevantRetrieved ? 1d : 0d);
-        var mrr = perQuery.Count == 0 ? 0d : perQuery.Average(evaluation => evaluation.ReciprocalRank);
-        var citation = perQuery.Count == 0 ? 0d : perQuery.Average(evaluation => evaluation.CitationCoverage);
-        return new RetrievalMetrics(k, perQuery.Count, recall, mrr, citation, perQuery);
+        var answerable = perQuery.Where(evaluation => !evaluation.ExpectsNoAnswer).ToList();
+        var noAnswer = perQuery.Where(evaluation => evaluation.ExpectsNoAnswer).ToList();
+        var recall = AverageOrZero(answerable, evaluation => evaluation.RelevantDocumentCount == 0
+            ? 0d
+            : (double)evaluation.RetrievedRelevantCount / evaluation.RelevantDocumentCount);
+        var mrr = AverageOrZero(answerable, evaluation => evaluation.ReciprocalRank);
+        var citation = AverageOrZero(answerable, evaluation => evaluation.CitationCoverage);
+        return new RetrievalMetrics(k, perQuery.Count, recall, mrr, citation, perQuery)
+        {
+            PrecisionAtK = AverageOrZero(answerable, evaluation => evaluation.PrecisionAtK),
+            NdcgAtK = AverageOrZero(answerable, evaluation => evaluation.NdcgAtK),
+            SourceAnchorCoverage = AverageOrZero(answerable, evaluation => evaluation.SourceAnchorCoverage),
+            CitationAnchorRate = AverageOrZero(answerable, evaluation => evaluation.CitationAnchorPresent ? 1d : 0d),
+            NoAnswerAccuracy = AverageOrZero(noAnswer, evaluation => evaluation.NoAnswerCorrect ? 1d : 0d),
+            AnswerableQueryCount = answerable.Count,
+            NoAnswerQueryCount = noAnswer.Count,
+            QueryLatencyP50Milliseconds = Percentile(perQuery, 0.50d),
+            QueryLatencyP95Milliseconds = Percentile(perQuery, 0.95d),
+            QueryLatencyMaxMilliseconds = perQuery.Count == 0 ? 0d : perQuery.Max(static evaluation => evaluation.ElapsedMilliseconds)
+        };
     }
 
-    private static QueryEvaluation EvaluateQuery(LabeledQuery query, Guid relevantDocumentId, IReadOnlyList<KnowledgeSearchHit> hits)
+    private static IReadOnlySet<Guid> ResolveRelevantDocumentIds(LabeledQuery query,
+        IReadOnlyDictionary<string, Guid> documentIdsByKey)
     {
-        var firstRelevantRank = 0;
-        for (var index = 0; index < hits.Count; index++)
+        if (query.ExpectsNoAnswer)
         {
-            if (hits[index].DocumentId == relevantDocumentId)
+            return new HashSet<Guid>();
+        }
+
+        if (query.RelevantDocumentKeys.Count == 0)
+        {
+            throw new ArgumentException($"Answerable query '{query.Id}' must label at least one relevant document.", nameof(query));
+        }
+
+        return query.RelevantDocumentKeys.Select(key => documentIdsByKey[key]).ToHashSet();
+    }
+
+    private static QueryEvaluation EvaluateQuery(LabeledQuery query,
+        IReadOnlySet<Guid> relevantDocumentIds,
+        IReadOnlyList<KnowledgeSearchHit> hits,
+        int k)
+    {
+        var evaluatedHits = hits.Take(k).ToList();
+        var firstRelevantRank = 0;
+        for (var index = 0; index < evaluatedHits.Count; index++)
+        {
+            if (relevantDocumentIds.Contains(evaluatedHits[index].DocumentId))
             {
                 firstRelevantRank = index + 1;
                 break;
@@ -172,9 +284,87 @@ public static class RetrievalEvalHarness
 
         var relevantRetrieved = firstRelevantRank > 0;
         var reciprocalRank = relevantRetrieved ? 1d / firstRelevantRank : 0d;
-        var coverage = ComputeCitationCoverage(query.CitationSnippet, hits);
-        return new QueryEvaluation(query.Id, relevantRetrieved, firstRelevantRank, reciprocalRank, coverage);
+        var coverage = ComputeCitationCoverage(query.CitationSnippet, evaluatedHits);
+        var retrievedRelevantCount = evaluatedHits.Select(hit => hit.DocumentId).Distinct().Count(relevantDocumentIds.Contains);
+        return new QueryEvaluation(query.Id, relevantRetrieved, firstRelevantRank, reciprocalRank, coverage)
+        {
+            RetrievedRelevantCount = retrievedRelevantCount,
+            RelevantDocumentCount = relevantDocumentIds.Count,
+            PrecisionAtK = (double)retrievedRelevantCount / k,
+            NdcgAtK = ComputeNdcgAtK(relevantDocumentIds, evaluatedHits, k),
+            SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits),
+            CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits),
+            ExpectsNoAnswer = query.ExpectsNoAnswer,
+            NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0
+        };
     }
+
+    private static double AverageOrZero(IReadOnlyCollection<QueryEvaluation> evaluations,
+        Func<QueryEvaluation, double> selector) =>
+        evaluations.Count == 0 ? 0d : evaluations.Average(selector);
+
+    private static double Percentile(IReadOnlyCollection<QueryEvaluation> evaluations, double percentile)
+    {
+        if (evaluations.Count == 0)
+        {
+            return 0d;
+        }
+
+        var ordered = evaluations.Select(static evaluation => evaluation.ElapsedMilliseconds).Order().ToArray();
+        var index = Math.Max(0, (int)Math.Ceiling(percentile * ordered.Length) - 1);
+        return ordered[index];
+    }
+
+    private static double ComputeNdcgAtK(IReadOnlySet<Guid> relevantDocumentIds,
+        IReadOnlyList<KnowledgeSearchHit> hits,
+        int k)
+    {
+        if (relevantDocumentIds.Count == 0)
+        {
+            return 0d;
+        }
+
+        var seen = new HashSet<Guid>();
+        var dcg = 0d;
+        for (var index = 0; index < Math.Min(k, hits.Count); index++)
+        {
+            if (relevantDocumentIds.Contains(hits[index].DocumentId) && seen.Add(hits[index].DocumentId))
+            {
+                dcg += 1d / Math.Log2(index + 2d);
+            }
+        }
+
+        var idealRelevantCount = Math.Min(k, relevantDocumentIds.Count);
+        var idealDcg = Enumerable.Range(0, idealRelevantCount).Sum(index => 1d / Math.Log2(index + 2d));
+        return dcg / idealDcg;
+    }
+
+    private static double ComputeSourceAnchorCoverage(IReadOnlyList<string> anchors, IReadOnlyList<KnowledgeSearchHit> hits)
+    {
+        if (anchors.Count == 0)
+        {
+            return 1d;
+        }
+
+        var metadata = string.Join(' ', hits.Select(hit => string.Join(' ', hit.Title, hit.Section, hit.Source)));
+        var normalizedMetadata = NormalizeAnchor(metadata);
+        var covered = anchors.Count(anchor => normalizedMetadata.Contains(NormalizeAnchor(anchor), StringComparison.Ordinal));
+        return (double)covered / anchors.Count;
+    }
+
+    private static bool ContainsCitationAnchor(string snippet, IReadOnlyList<KnowledgeSearchHit> hits)
+    {
+        if (string.IsNullOrWhiteSpace(snippet))
+        {
+            return true;
+        }
+
+        var normalizedSnippet = NormalizeAnchor(snippet);
+        return hits.Any(hit => NormalizeAnchor(hit.Content).Contains(normalizedSnippet, StringComparison.Ordinal));
+    }
+
+    private static string NormalizeAnchor(string? value) =>
+        string.Join(' ', RetrievalTokens.Split(value ?? string.Empty));
 
     // Lexical faithfulness signal: the fraction of the expected supporting snippet's distinct tokens that appear
     // anywhere in the retrieved chunk text. A high value means the retrieved chunks actually contain the words a citation

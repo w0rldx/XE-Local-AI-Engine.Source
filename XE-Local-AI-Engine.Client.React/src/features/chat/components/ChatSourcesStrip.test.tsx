@@ -50,7 +50,18 @@ function detail(overrides: Partial<KnowledgeDocumentDetail> = {}): KnowledgeDocu
 		sizeBytes: 2048,
 		createdAtUtc: 1_700_000_000_000,
 		updatedAtUtc: 1_700_000_000_000,
-		chunks: [{ chunkIndex: 0, headingPath: "Overview", content: "Intro body" }],
+		collectionId: "default",
+		sourceKind: "upload",
+		chunks: [
+			{
+				chunkIndex: 0,
+				headingPath: "Overview",
+				content: "Intro body",
+				startOffset: 0,
+				endOffset: 10,
+				contentKind: "prose",
+			},
+		],
 		...overrides,
 	};
 }

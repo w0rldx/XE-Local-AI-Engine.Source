@@ -97,6 +97,23 @@ export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanel
 								<Text size="sm" c="dimmed" lineClamp={3}>
 									{hit.content}
 								</Text>
+								<Group gap="xs">
+									{hit.sourcePath ? (
+										<Text size="xs" c="dimmed">
+											{hit.sourcePath}
+										</Text>
+									) : null}
+									{hit.symbol ? (
+										<Badge variant="outline" color="violet" size="xs">
+											{hit.symbol}
+										</Badge>
+									) : null}
+									{hit.pageNumber ? (
+										<Text size="xs" c="dimmed">
+											{t("pages.knowledgeBase.detail.page", "Page {{page}}", { page: hit.pageNumber })}
+										</Text>
+									) : null}
+								</Group>
 							</Stack>
 						</Card>
 					))}

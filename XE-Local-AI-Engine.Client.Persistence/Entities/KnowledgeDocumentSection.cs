@@ -20,4 +20,7 @@ internal sealed record class KnowledgeDocumentSection
 
     /// <summary>Header level 1-6; null when the section is not a heading.</summary>
     public int? Level { get; set; }
+
+    /// <summary>One-based source page when supplied by the parser.</summary>
+    public int? PageNumber { get; set; }
 }

@@ -63,9 +63,14 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
             return "read_document requires a valid 'documentId'.";
         }
 
+        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        {
+            return "read_document requires a valid 'collectionId'.";
+        }
+
         await using var scope = _scopeFactory.CreateAsyncScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
-        var detail = await catalog.GetAsync(documentId, cancellationToken).ConfigureAwait(false);
+        var detail = await catalog.GetAsync(documentId, collectionId, cancellationToken).ConfigureAwait(false);
         if (detail is null)
         {
             return JsonSerializer.Serialize(new
@@ -106,6 +111,7 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
         var payload = new
         {
             documentId = detail.DocumentId,
+            collectionId = detail.CollectionId,
             status = detail.Status.ToString(),
             chunkCount = detail.ChunkCount,
             returnedChunks = chunks.Count,

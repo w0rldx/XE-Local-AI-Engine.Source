@@ -44,6 +44,51 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         Guid? documentId,
         CancellationToken cancellationToken)
     {
+        return await SearchCoreAsync(queryVector,
+                embeddingModel,
+                vectorIdentity,
+                vectorDimension,
+                limit,
+                documentId,
+                collectionId: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
+        string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
+        int limit,
+        Guid? documentId,
+        string collectionId,
+        CancellationToken cancellationToken)
+    {
+        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
+        {
+            return [];
+        }
+
+        return await SearchCoreAsync(queryVector,
+                embeddingModel,
+                vectorIdentity,
+                vectorDimension,
+                limit,
+                documentId,
+                normalizedCollectionId,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<VectorSearchHit>> SearchCoreAsync(ReadOnlyMemory<float> queryVector,
+        string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
+        int limit,
+        Guid? documentId,
+        string? collectionId,
+        CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(embeddingModel);
         ArgumentException.ThrowIfNullOrWhiteSpace(vectorIdentity);
         if (queryVector.IsEmpty || limit <= 0)
@@ -78,7 +123,16 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
 
         try
         {
-            return await ScanAsync(scoringQuery, useDot, embeddingModel, vectorIdentity, vectorDimension, limit, documentId, cancellationToken).ConfigureAwait(false);
+            return await ScanAsync(scoringQuery,
+                    useDot,
+                    embeddingModel,
+                    vectorIdentity,
+                    vectorDimension,
+                    limit,
+                    documentId,
+                    collectionId,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -96,23 +150,14 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         int vectorDimension,
         int limit,
         Guid? documentId,
+        string? collectionId,
         CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
-        if (documentId is null)
-        {
-            command.CommandText = """
-                                  SELECT chunk_id, document_id, embedding
-                                  FROM knowledge_chunk_vectors
-                                  WHERE embedding_model = $embedding_model
-                                    AND vector_identity = $vector_identity
-                                    AND dim = $vector_dimension;
-                                  """;
-        }
-        else
+        if (collectionId is null)
         {
             command.CommandText = """
                                   SELECT chunk_id, document_id, embedding
@@ -120,17 +165,31 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                                   WHERE embedding_model = $embedding_model
                                     AND vector_identity = $vector_identity
                                     AND dim = $vector_dimension
-                                    AND document_id = $document_id;
+                                    AND ($document_id IS NULL OR document_id = $document_id);
+                                  """;
+        }
+        else
+        {
+            command.CommandText = """
+                                  SELECT v.chunk_id, v.document_id, v.embedding
+                                  FROM knowledge_chunk_vectors AS v
+                                  JOIN knowledge_documents AS d ON d.document_id = v.document_id
+                                  WHERE v.embedding_model = $embedding_model
+                                    AND v.vector_identity = $vector_identity
+                                    AND v.dim = $vector_dimension
+                                    AND d.collection_id = $collection_id
+                                    AND ($document_id IS NULL OR v.document_id = $document_id);
                                   """;
         }
 
         AddParameter(command, "$embedding_model", embeddingModel);
         AddParameter(command, "$vector_identity", vectorIdentity);
         AddParameter(command, "$vector_dimension", vectorDimension);
-        if (documentId is not null)
+        if (collectionId is not null)
         {
-            AddParameter(command, "$document_id", documentId.Value);
+            AddParameter(command, "$collection_id", collectionId);
         }
+        AddParameter(command, "$document_id", documentId);
 
         var topK = new BoundedTopKSelector(limit);
         var candidatesScanned = 0L;

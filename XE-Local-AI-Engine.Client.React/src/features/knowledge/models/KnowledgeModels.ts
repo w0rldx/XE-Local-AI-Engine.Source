@@ -1,4 +1,5 @@
 import type {
+	XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse,
 	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse,
 	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse,
 	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse,
@@ -11,6 +12,15 @@ export type KnowledgeDocumentStatus = XeLocalAiEngineClientServicesKnowledgeKnow
 export type KnowledgeDocument = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse;
 export type KnowledgeDocumentDetail = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
 export type KnowledgeSearchHit = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse;
+export type KnowledgeRepositoryImportResult = XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse;
+
+export const KNOWLEDGE_DEFAULT_COLLECTION_ID = "DEFAULT";
+
+/** Mirrors the server's bounded, path-safe collection-id contract for immediate UI feedback. */
+export function normalizeKnowledgeCollectionId(value: string): string | undefined {
+	const normalized = value.trim().toUpperCase();
+	return normalized.length > 0 && normalized.length <= 128 && /^[A-Z0-9._-]+$/.test(normalized) ? normalized : undefined;
+}
 
 // Advisory upload guards. The endpoint re-enforces both (extension allow-list + size cap + extraction) — these
 // only avoid a guaranteed-reject round trip and give the operator instant feedback. Mirrors the chat-attachment
@@ -18,20 +28,84 @@ export type KnowledgeSearchHit = XeLocalAiEngineClientEndpointsKnowledgeV1Knowle
 export const KNOWLEDGE_MAX_UPLOAD_SIZE_MB = 25;
 export const KNOWLEDGE_MAX_UPLOAD_SIZE_BYTES = KNOWLEDGE_MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
-// Extensions the ingestion pipeline can extract text from (documents + plain text + common code). Advisory only.
-export const KNOWLEDGE_ACCEPTED_EXTENSIONS: readonly string[] = [
+// Deterministic plaintext/code formats handled by the backend PlaintextDocumentReader. Keep this explicit list in
+// parity with that reader: the browser guard is advisory, but hiding a server-supported extension makes a valid local
+// document impossible to select through the normal file picker.
+export const KNOWLEDGE_DETERMINISTIC_TEXT_EXTENSIONS: readonly string[] = [
 	".txt",
+	".text",
 	".md",
 	".markdown",
 	".csv",
+	".tsv",
 	".json",
-	".pdf",
-	".docx",
+	".jsonc",
+	".log",
+	".cs",
+	".ts",
+	".tsx",
+	".js",
+	".jsx",
+	".mjs",
+	".cjs",
+	".py",
+	".java",
+	".go",
+	".rs",
+	".cpp",
+	".cc",
+	".cxx",
+	".c",
+	".h",
+	".hpp",
+	".hh",
 	".html",
 	".htm",
 	".xml",
+	".xaml",
 	".yaml",
 	".yml",
+	".toml",
+	".ini",
+	".cfg",
+	".conf",
+	".properties",
+	".env",
+	".sh",
+	".bash",
+	".zsh",
+	".ps1",
+	".bat",
+	".sql",
+	".css",
+	".scss",
+	".sass",
+	".less",
+	".rb",
+	".php",
+	".kt",
+	".kts",
+	".swift",
+	".scala",
+	".pl",
+	".lua",
+	".r",
+	".vb",
+	".fs",
+	".fsx",
+	".gradle",
+	".dockerfile",
+	".gitignore",
+	".editorconfig",
+];
+
+// Structured document readers registered by DocumentTextExtractor in addition to deterministic plaintext/code.
+export const KNOWLEDGE_STRUCTURED_DOCUMENT_EXTENSIONS: readonly string[] = [".pdf", ".docx"];
+
+// Complete backend-supported upload set. Advisory only; the endpoint remains authoritative.
+export const KNOWLEDGE_ACCEPTED_EXTENSIONS: readonly string[] = [
+	...KNOWLEDGE_DETERMINISTIC_TEXT_EXTENSIONS,
+	...KNOWLEDGE_STRUCTURED_DOCUMENT_EXTENSIONS,
 ];
 
 // The `accept` attribute value for the hidden file input (comma-separated extension list).

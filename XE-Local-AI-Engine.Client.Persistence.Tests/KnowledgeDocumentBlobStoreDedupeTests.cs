@@ -5,6 +5,8 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -13,9 +15,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Content-hash dedupe on the real store: a second upload of byte-identical content must not create a second row. The
-///     store inserts with <c>ON CONFLICT(content_hash) DO NOTHING</c> and re-selects the existing id, so the caller learns
-///     the content already exists (<c>WasInserted = false</c>) and is pointed at the first document's id. This exercises
-///     the unique <c>content_hash</c> index the migration creates.
+///     store inserts with <c>ON CONFLICT DO NOTHING</c> and re-selects the existing id, so the caller learns the content
+///     already exists (<c>WasInserted = false</c>) and is pointed at the first document's id. Repository sources exercise
+///     the separate stable path identity: identical bytes at different paths remain distinct, while changed bytes at one
+///     path update that document and reset it for reindex.
 /// </summary>
 public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
 {
@@ -185,6 +188,192 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         AssertEx.Equal(beforeWriteUtc, File.GetLastWriteTimeUtc(blobPath), "An intact blob must not be rewritten by the dedupe path.");
     }
 
+    [Test]
+    public async Task AddAsync_RepositoryFilesWithIdenticalBytesAtDifferentPaths_RetainDistinctDocumentIds()
+    {
+        var databasePath = GetDatabasePath("repository-distinct-paths.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        var content = Encoding.UTF8.GetBytes("shared license text");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+        var first = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(), "src/LICENSE.txt", content, contentHash), CancellationToken.None)
+                               .ConfigureAwait(false);
+        var second = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(), "third_party/LICENSE.txt", content, contentHash), CancellationToken.None)
+                                .ConfigureAwait(false);
+
+        AssertEx.True(first.WasInserted);
+        AssertEx.True(second.WasInserted);
+        AssertEx.False(first.DocumentId == second.DocumentId);
+        AssertEx.Equal(expected: 2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task AddAsync_SameCollectionAndPathFromDifferentRepositories_RetainsIndependentDocuments()
+    {
+        var databasePath = GetDatabasePath("repository-distinct-sources.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        var repositoryA = Encoding.UTF8.GetBytes("repository A readme");
+        var repositoryB = Encoding.UTF8.GetBytes("repository B readme");
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        var first = await store.AddAsync(NewRepositoryInput(firstId,
+                "README.md",
+                repositoryA,
+                Convert.ToHexString(SHA256.HashData(repositoryA)),
+                "repository-a"),
+            CancellationToken.None).ConfigureAwait(false);
+        var second = await store.AddAsync(NewRepositoryInput(secondId,
+                "README.md",
+                repositoryB,
+                Convert.ToHexString(SHA256.HashData(repositoryB)),
+                "repository-b"),
+            CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(first.WasInserted);
+        AssertEx.True(second.WasInserted);
+        AssertEx.Equal(firstId, first.DocumentId);
+        AssertEx.Equal(secondId, second.DocumentId);
+        AssertEx.Equal(expected: 2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+        var storedA = AssertEx.NotNull(await store.ReadBytesAsync(firstId, CancellationToken.None).ConfigureAwait(false));
+        var storedB = AssertEx.NotNull(await store.ReadBytesAsync(secondId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(repositoryA.AsSpan().SequenceEqual(storedA));
+        AssertEx.True(repositoryB.AsSpan().SequenceEqual(storedB));
+    }
+
+    [Test]
+    public async Task AddAsync_UpdatingOneRepositorySource_DoesNotOverwriteSamePathInAnotherRepository()
+    {
+        var databasePath = GetDatabasePath("repository-source-update-isolation.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        var originalA = Encoding.UTF8.GetBytes("repository A original");
+        var changedA = Encoding.UTF8.GetBytes("repository A changed");
+        var repositoryB = Encoding.UTF8.GetBytes("repository B unchanged");
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        _ = await store.AddAsync(NewRepositoryInput(firstId,
+                "src/Widget.cs",
+                originalA,
+                Convert.ToHexString(SHA256.HashData(originalA)),
+                "repository-a"),
+            CancellationToken.None).ConfigureAwait(false);
+        _ = await store.AddAsync(NewRepositoryInput(secondId,
+                "src/Widget.cs",
+                repositoryB,
+                Convert.ToHexString(SHA256.HashData(repositoryB)),
+                "repository-b"),
+            CancellationToken.None).ConfigureAwait(false);
+
+        var updated = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(),
+                "src/Widget.cs",
+                changedA,
+                Convert.ToHexString(SHA256.HashData(changedA)),
+                "repository-a"),
+            CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(updated.WasInserted);
+        AssertEx.True(updated.WasUpdated);
+        AssertEx.Equal(firstId, updated.DocumentId);
+        AssertEx.Equal(expected: 2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+        var storedA = AssertEx.NotNull(await store.ReadBytesAsync(firstId, CancellationToken.None).ConfigureAwait(false));
+        var storedB = AssertEx.NotNull(await store.ReadBytesAsync(secondId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(changedA.AsSpan().SequenceEqual(storedA));
+        AssertEx.True(repositoryB.AsSpan().SequenceEqual(storedB));
+    }
+
+    [Test]
+    public async Task AddAsync_WhenRepositoryPathBytesChange_UpdatesStableDocumentAndResetsItForReindex()
+    {
+        var databasePath = GetDatabasePath("repository-update.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        var original = Encoding.UTF8.GetBytes("original source");
+        var changed = Encoding.UTF8.GetBytes("changed source");
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+        var documentId = Guid.NewGuid();
+        _ = await store.AddAsync(NewRepositoryInput(documentId,
+                "src/Widget.cs",
+                original,
+                Convert.ToHexString(SHA256.HashData(original))),
+            CancellationToken.None).ConfigureAwait(false);
+        await SetStatusAsync(databasePath, "Indexed").ConfigureAwait(false);
+
+        var result = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(),
+                "src/Widget.cs",
+                changed,
+                Convert.ToHexString(SHA256.HashData(changed))),
+            CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(result.WasInserted);
+        AssertEx.True(result.WasUpdated);
+        AssertEx.Equal(documentId, result.DocumentId);
+        AssertEx.Equal(expected: 1L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+        AssertEx.Equal("Pending", await GetStatusAsync(databasePath).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await store.ReadBytesAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(changed.AsSpan().SequenceEqual(stored));
+    }
+
+    [Test]
+    public async Task AddAsync_RepositoryIdentity_NormalizesDirectorySeparators()
+    {
+        var databasePath = GetDatabasePath("repository-normalized-path.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        var content = Encoding.UTF8.GetBytes("stable source");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+        var first = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(), @"src\Widget.cs", content, contentHash), CancellationToken.None)
+                               .ConfigureAwait(false);
+        var second = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(), "src/Widget.cs", content, contentHash), CancellationToken.None)
+                                .ConfigureAwait(false);
+
+        AssertEx.True(first.WasInserted);
+        AssertEx.False(second.WasInserted);
+        AssertEx.False(second.WasUpdated);
+        AssertEx.Equal(first.DocumentId, second.DocumentId);
+        AssertEx.Equal(expected: 1L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task MigrationDown_WhenCurrentRowsShareContentHash_FailsBeforeChangingSchemaOrData()
+    {
+        const string previousMigration = "20260811161453_AddModelLaunchArguments";
+        var databasePath = GetDatabasePath("repository-down-guard.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        var content = Encoding.UTF8.GetBytes("same bytes with two provenances");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using (var provider = BuildProvider(databasePath))
+        {
+            var store = CreateStore(provider);
+            _ = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(), "a.txt", content, contentHash), CancellationToken.None)
+                           .ConfigureAwait(false);
+            _ = await store.AddAsync(NewRepositoryInput(Guid.NewGuid(), "b.txt", content, contentHash), CancellationToken.None)
+                           .ConfigureAwait(false);
+        }
+
+        await using (var context = CreateContext(databasePath))
+        {
+            _ = await AssertEx.ThrowsAsync<SqliteException>(() =>
+                    context.Database.GetService<IMigrator>().MigrateAsync(previousMigration))
+                .ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(expected: 2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+        await using var verificationContext = CreateContext(databasePath);
+        var applied = await verificationContext.Database.GetAppliedMigrationsAsync().ConfigureAwait(false);
+        AssertEx.True(applied.Contains("20260813121930_AddKnowledgeCollectionsAndProvenance", StringComparer.Ordinal));
+    }
+
     // Each test database carries exactly one knowledge_documents row, so these read/write the status column without an
     // id filter — avoiding any dependency on the store's on-wire document_id string encoding.
     private static async Task SetStatusAsync(string databasePath, string status)
@@ -206,6 +395,15 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         return (string)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
     }
 
+    private static async Task<long> CountDocumentsAsync(string databasePath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM knowledge_documents;";
+        return (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+    }
+
     private static KnowledgeDocumentInput NewInput(Guid documentId, byte[] content, string contentHash)
     {
         return new KnowledgeDocumentInput(documentId,
@@ -216,6 +414,26 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
             contentHash,
             content,
             "nomic-embed-text");
+    }
+
+    private static KnowledgeDocumentInput NewRepositoryInput(Guid documentId,
+        string sourcePath,
+        byte[] content,
+        string contentHash,
+        string sourceId = "repository-a")
+    {
+        return new KnowledgeDocumentInput(documentId,
+            sourcePath,
+            "text/plain",
+            Path.GetExtension(sourcePath),
+            content.Length,
+            contentHash,
+            content,
+            "nomic-embed-text",
+            "REPOSITORY",
+            sourcePath,
+            "repository",
+            sourceId);
     }
 
     private KnowledgeDocumentBlobStore CreateStore(ServiceProvider provider)

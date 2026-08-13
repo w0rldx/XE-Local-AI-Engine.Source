@@ -21,7 +21,8 @@ public sealed record KnowledgeChunkingResult(
 public sealed record KnowledgeChunkingSection(
     int Ordinal,
     string? Heading,
-    int? Level);
+    int? Level,
+    int? PageNumber = null);
 
 /// <summary>
 ///     One retrieval chunk. <see cref="Content" /> is the searched/stored plaintext; <see cref="ContextualContent" /> is
@@ -39,4 +40,13 @@ public sealed record KnowledgeChunk(
     string Content,
     string ContextualContent,
     string? HeadingPath,
-    int TokenCount);
+    int TokenCount,
+    int? PageNumber = null,
+    int StartOffset = 0,
+    int EndOffset = 0,
+    string ContentKind = "text",
+    string? SourcePath = null,
+    string? Language = null,
+    string? Symbol = null,
+    string ContentHash = "",
+    string EmbeddingInputHash = "");

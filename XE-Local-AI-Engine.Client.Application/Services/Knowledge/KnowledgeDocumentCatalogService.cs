@@ -46,6 +46,39 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken)
     {
+        return await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId, CancellationToken cancellationToken)
+    {
+        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
+        {
+            return [];
+        }
+
+        return await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
+        string sourceKind,
+        string sourceId,
+        CancellationToken cancellationToken)
+    {
+        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId)
+            || string.IsNullOrWhiteSpace(sourceKind)
+            || string.IsNullOrWhiteSpace(sourceId))
+        {
+            return [];
+        }
+
+        return await ListCoreAsync(normalizedCollectionId, sourceKind, sourceId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListCoreAsync(string? collectionId,
+        string? sourceKind,
+        string? sourceId,
+        CancellationToken cancellationToken)
+    {
         var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
 
         var connection = _dbContext.Database.GetDbConnection();
@@ -54,10 +87,17 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model,
-                                     vector_identity, vector_dim, size_bytes, created_at_utc
+                                     vector_identity, vector_dim, size_bytes, created_at_utc, collection_id, source_path,
+                                     source_kind, parser_version, chunker_version
                               FROM knowledge_documents
+                              WHERE ($collection_id IS NULL OR collection_id = $collection_id)
+                                AND ($source_kind IS NULL OR source_kind = $source_kind)
+                                AND ($source_id IS NULL OR source_id = $source_id)
                               ORDER BY created_at_utc DESC;
                               """;
+        AddParameter(command, "$collection_id", collectionId);
+        AddParameter(command, "$source_kind", sourceKind);
+        AddParameter(command, "$source_id", sourceId);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var documents = new List<KnowledgeDocumentSummary>();
@@ -73,15 +113,39 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
-                IsStaleModel(status, embeddingModel, reader.GetString(6), reader.GetInt32(7), resolution),
+                IsStaleIndex(status,
+                    embeddingModel,
+                    reader.GetString(6),
+                    reader.GetInt32(7),
+                    reader.GetString(13),
+                    reader.GetString(14),
+                    resolution),
                 reader.GetInt64(8),
-                reader.GetInt64(9)));
+                reader.GetInt64(9),
+                reader.GetString(10),
+                await reader.IsDBNullAsync(11, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(11),
+                reader.GetString(12)));
         }
 
         return documents;
     }
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        return await GetCoreAsync(documentId, collectionId: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, string collectionId, CancellationToken cancellationToken)
+    {
+        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
+        {
+            return null;
+        }
+
+        return await GetCoreAsync(documentId, normalizedCollectionId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<KnowledgeDocumentDetail?> GetCoreAsync(Guid documentId, string? collectionId, CancellationToken cancellationToken)
     {
         var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
 
@@ -93,11 +157,14 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         {
             command.CommandText = """
                                   SELECT document_id, original_file_name, status, failure_reason, chunk_count, embedding_model,
-                                         vector_identity, vector_dim, size_bytes, created_at_utc, updated_at_utc
+                                         vector_identity, vector_dim, size_bytes, created_at_utc, updated_at_utc,
+                                         collection_id, source_path, source_kind, parser_version, chunker_version
                                   FROM knowledge_documents
-                                  WHERE document_id = $document_id;
+                                  WHERE document_id = $document_id
+                                    AND ($collection_id IS NULL OR collection_id = $collection_id);
                                   """;
             AddParameter(command, "$document_id", documentId);
+            AddParameter(command, "$collection_id", collectionId);
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -114,11 +181,20 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
-                IsStaleModel(status, embeddingModel, reader.GetString(6), reader.GetInt32(7), resolution),
+                IsStaleIndex(status,
+                    embeddingModel,
+                    reader.GetString(6),
+                    reader.GetInt32(7),
+                    reader.GetString(14),
+                    reader.GetString(15),
+                    resolution),
                 reader.GetInt64(8),
                 reader.GetInt64(9),
                 reader.GetInt64(10),
-                Chunks: []);
+                [],
+                reader.GetString(11),
+                await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(12),
+                reader.GetString(13));
         }
 
         var chunks = await ReadChunksAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
@@ -160,15 +236,9 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken)
     {
-        // Resolve the current embedding model once; every INDEXED row whose stored embedding_model differs from it is
-        // stale. When resolution is not confident (transient provider outage, or nothing installed matched), never
-        // touch the table: comparing against a mere fallback name would reset the entire indexed corpus during an
-        // outage instead of leaving it untouched, and a re-ingest attempted mid-outage would just fail again.
+        // Resolve the current embedding model once. Model/vector comparisons require a confident resolution, but
+        // parser/chunker version changes are local deterministic facts and must still reindex during a provider outage.
         var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
-        if (!resolution.IsConfident)
-        {
-            return [];
-        }
 
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -185,7 +255,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         {
             selectCommand.Transaction = transaction;
             selectCommand.CommandText = """
-                                        SELECT document_id, embedding_model, vector_identity, vector_dim
+                                        SELECT document_id, embedding_model, vector_identity, vector_dim,
+                                               parser_version, chunker_version
                                         FROM knowledge_documents
                                         WHERE status = $indexed;
                                         """;
@@ -194,7 +265,13 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (IsStaleModel(KnowledgeDocumentStatus.Indexed, reader.GetString(1), reader.GetString(2), reader.GetInt32(3), resolution))
+                if (IsStaleIndex(KnowledgeDocumentStatus.Indexed,
+                        reader.GetString(1),
+                        reader.GetString(2),
+                        reader.GetInt32(3),
+                        reader.GetString(4),
+                        reader.GetString(5),
+                        resolution))
                 {
                     staleIds.Add(Guid.Parse(reader.GetString(0)));
                 }
@@ -294,7 +371,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT chunk_index, heading_path, content
+                              SELECT chunk_index, heading_path, content, page_number, start_offset, end_offset,
+                                     content_kind, source_path, language, symbol
                               FROM knowledge_document_chunks
                               WHERE document_id = $document_id
                               ORDER BY chunk_index ASC;
@@ -307,7 +385,14 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         {
             chunks.Add(new KnowledgeDocumentChunkView(reader.GetInt32(0),
                 await reader.IsDBNullAsync(ordinal: 1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
-                reader.GetString(2)));
+                reader.GetString(2),
+                await reader.IsDBNullAsync(3, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt32(3),
+                reader.GetInt32(4),
+                reader.GetInt32(5),
+                reader.GetString(6),
+                await reader.IsDBNullAsync(7, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(7),
+                await reader.IsDBNullAsync(8, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(8),
+                await reader.IsDBNullAsync(9, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(9)));
         }
 
         return chunks;
@@ -344,19 +429,23 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
     // making the resolver fall back to the plain configured name — on a llama.cpp node the stored name is a resolved
     // GGUF name that never equals that fallback, so comparing against it would flag (and reset) the entire indexed
     // corpus during the outage instead of leaving it untouched.
-    private bool IsStaleModel(KnowledgeDocumentStatus status,
+    private bool IsStaleIndex(KnowledgeDocumentStatus status,
         string embeddingModel,
         string vectorIdentity,
         int vectorDimension,
+        string parserVersion,
+        string chunkerVersion,
         EmbeddingModelResolution resolution)
     {
         return status == KnowledgeDocumentStatus.Indexed
-               && resolution.IsConfident
-               && (!string.Equals(embeddingModel, resolution.Name, StringComparison.Ordinal)
-                   || !KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(vectorIdentity,
-                       vectorDimension,
-                       resolution,
-                       _options.EmbeddingVectorMode));
+               && (!string.Equals(parserVersion, KnowledgeIndexVersions.Parser, StringComparison.Ordinal)
+                   || !string.Equals(chunkerVersion, KnowledgeIndexVersions.Chunker, StringComparison.Ordinal)
+                   || (resolution.IsConfident
+                       && (!string.Equals(embeddingModel, resolution.Name, StringComparison.Ordinal)
+                           || !KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(vectorIdentity,
+                               vectorDimension,
+                               resolution,
+                               _options.EmbeddingVectorMode))));
     }
 
     private static KnowledgeDocumentStatus ParseStatus(string status)

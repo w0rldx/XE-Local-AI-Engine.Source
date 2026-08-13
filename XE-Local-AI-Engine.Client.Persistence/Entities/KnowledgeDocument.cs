@@ -10,6 +10,9 @@ internal sealed record class KnowledgeDocument
 {
     public Guid DocumentId { get; set; }
 
+    /// <summary>Lightweight collection/project namespace. Existing documents are backfilled to <c>DEFAULT</c>.</summary>
+    public string CollectionId { get; set; } = "DEFAULT";
+
     /// <summary>
     ///     UTF-8 display-name bytes. Encrypted at rest via the raw-SQL store path using
     ///     <c>NodeChatDbContext.EncryptKnowledgeFileName</c>/<c>DecryptKnowledgeFileName</c> (AAD column name
@@ -26,11 +29,23 @@ internal sealed record class KnowledgeDocument
 
     public long SizeBytes { get; set; }
 
-    /// <summary>SHA-256 hex of the raw bytes. Unique across the corpus so a duplicate upload is deduped, not re-ingested.</summary>
+    /// <summary>
+    ///     SHA-256 hex of the raw bytes. Uploads dedupe by collection + hash; repository documents retain distinct path
+    ///     provenance even when their bytes are identical.
+    /// </summary>
     public string ContentHash { get; set; } = string.Empty;
 
     /// <summary>Server-generated relative path to the encrypted blob; display-only, never used to open a file.</summary>
     public string StoragePath { get; set; } = string.Empty;
+
+    /// <summary>Optional non-secret path relative to a repository/project root. Null for ordinary file uploads.</summary>
+    public string? SourcePath { get; set; }
+
+    /// <summary>Deterministic source class such as <c>upload</c> or <c>repository</c>.</summary>
+    public string SourceKind { get; set; } = "upload";
+
+    /// <summary>Stable opaque identity of the owning source within its source class. Null for ordinary uploads.</summary>
+    public string? SourceId { get; set; }
 
     /// <summary>The <c>KnowledgeDocumentStatus</c> enum name (<c>Pending|Extracting|Chunking|Embedding|Indexed|Failed</c>).</summary>
     public string Status { get; set; } = string.Empty;
@@ -49,6 +64,10 @@ internal sealed record class KnowledgeDocument
 
     /// <summary>Committed vector width; duplicated from the canonical identity for defensive filtering and catalog checks.</summary>
     public int VectorDim { get; set; }
+
+    public string ParserVersion { get; set; } = "legacy";
+
+    public string ChunkerVersion { get; set; } = "legacy";
 
     public long CreatedAtUtc { get; set; }
 

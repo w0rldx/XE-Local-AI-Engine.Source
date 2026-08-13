@@ -34,12 +34,13 @@ export function KnowledgeDocumentsTable({
 
 	return (
 		<Stack gap="sm">
-			<Table.ScrollContainer minWidth={860}>
+			<Table.ScrollContainer minWidth={980}>
 				<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="knowledge-documents-table">
 					<Table.Thead>
 						<Table.Tr>
 							<Table.Th>{t("pages.knowledgeBase.table.name", "Name")}</Table.Th>
 							<Table.Th>{t("pages.knowledgeBase.table.status", "Status")}</Table.Th>
+							<Table.Th>{t("pages.knowledgeBase.table.source", "Source")}</Table.Th>
 							<Table.Th>{t("pages.knowledgeBase.table.chunks", "Chunks")}</Table.Th>
 							<Table.Th>{t("pages.knowledgeBase.table.embeddingModel", "Embedding model")}</Table.Th>
 							<Table.Th>{t("pages.knowledgeBase.table.size", "Size")}</Table.Th>
@@ -70,6 +71,16 @@ export function KnowledgeDocumentsTable({
 										<KnowledgeStatusBadge status={document.status} />
 										{document.status !== "Indexed" && document.chunkCount > 0 ? <KnowledgeLastKnownGoodBadge /> : null}
 									</Group>
+								</Table.Td>
+								<Table.Td>
+									<Stack gap={1} style={{ minWidth: 0 }}>
+										<Text size="sm" truncate="end">
+											{document.sourcePath ?? document.sourceKind}
+										</Text>
+										<Text size="xs" c="dimmed">
+											{document.sourceKind}
+										</Text>
+									</Stack>
 								</Table.Td>
 								<Table.Td>{document.chunkCount}</Table.Td>
 								<Table.Td>

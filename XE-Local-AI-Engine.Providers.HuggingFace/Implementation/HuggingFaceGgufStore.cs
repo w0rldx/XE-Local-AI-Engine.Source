@@ -416,6 +416,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             IsAvailable = File.Exists(entry.LocalPath),
             SizeBytes = entry.SizeBytes,
             ModifiedAt = entry.DownloadedAtUtc,
+            RevisionFingerprint = entry.Sha256 ?? entry.SourceRevision,
             MaxContextTokens = facts.MaxContextTokens,
             IsToolCapable = facts.IsToolCapable,
             IsReasoningCapable = facts.IsReasoningCapable,

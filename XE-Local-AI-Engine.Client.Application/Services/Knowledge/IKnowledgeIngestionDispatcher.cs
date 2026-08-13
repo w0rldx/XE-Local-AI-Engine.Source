@@ -12,8 +12,9 @@ public interface IKnowledgeIngestionDispatcher
 {
     /// <summary>
     ///     Attempts to queue one document for background ingestion. Returns <see cref="KnowledgeIngestionEnqueueResult.Accepted" />
-    ///     when the id was admitted, or <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> when the bounded queue is
-    ///     at capacity (the caller then reports a retryable busy condition). Never blocks waiting for space.
+    ///     when the id was admitted. If that id is already queued or in flight, coalesces the request into one deferred
+    ///     follow-up run. Returns <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> when the bounded queue is at
+    ///     capacity (the caller then reports a retryable busy condition). Never blocks waiting for space.
     /// </summary>
     ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken);
 }
@@ -21,7 +22,7 @@ public interface IKnowledgeIngestionDispatcher
 /// <summary>Outcome of an <see cref="IKnowledgeIngestionDispatcher.EnqueueAsync" /> admission attempt.</summary>
 public enum KnowledgeIngestionEnqueueResult
 {
-    /// <summary>The document id was admitted onto the queue and will be ingested by the background worker.</summary>
+    /// <summary>The document id was admitted now or coalesced into a deferred follow-up and will be ingested by the background worker.</summary>
     Accepted,
 
     /// <summary>The bounded queue was full; the document was not admitted and the caller should signal a retryable busy state.</summary>

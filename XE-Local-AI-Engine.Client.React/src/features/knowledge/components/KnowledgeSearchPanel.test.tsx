@@ -23,6 +23,8 @@ function knowledgeDocument(overrides: Partial<KnowledgeDocument> = {}): Knowledg
 		staleModel: false,
 		sizeBytes: 1024,
 		createdAtUtc: 1_700_000_000_000,
+		collectionId: "DEFAULT",
+		sourceKind: "upload",
 		...overrides,
 	};
 }
@@ -38,6 +40,10 @@ function hit(overrides: Partial<KnowledgeSearchHit> = {}): KnowledgeSearchHit {
 		chunkIndex: 0,
 		documentStatus: "Indexed",
 		servingLastKnownGood: false,
+		collectionId: "DEFAULT",
+		contentKind: "prose",
+		startOffset: 0,
+		endOffset: 12,
 		...overrides,
 	};
 }

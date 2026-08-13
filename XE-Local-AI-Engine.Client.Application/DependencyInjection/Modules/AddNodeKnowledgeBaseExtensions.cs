@@ -46,6 +46,11 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Client host supersedes this with a hub-backed notifier that pushes status changes over SignalR.
         builder.Services.AddSingleton<IKnowledgeIndexingNotifier, NullKnowledgeIndexingNotifier>();
 
+        // Process-wide reuse: hot entries and in-flight coalescing survive ingestion scopes. The durable store creates a
+        // short-lived scope per lookup, so neither singleton captures a NodeChatDbContext.
+        builder.Services.AddSingleton<IKnowledgeChunkEmbeddingReuseStore, KnowledgeChunkEmbeddingReuseStore>();
+        builder.Services.AddSingleton<IKnowledgeChunkEmbeddingCache, KnowledgeChunkEmbeddingCache>();
+
         // Scoped: these use the scoped NodeChatDbContext and are resolved inside the per-ingestion-job scope.
         builder.Services.AddScoped<IKnowledgeIndexWriter, KnowledgeIndexWriter>();
         builder.Services.AddScoped<IKnowledgeIngestionService, KnowledgeIngestionService>();
@@ -54,6 +59,7 @@ internal static class AddNodeKnowledgeBaseExtensions
         // FK cascade is OFF) and the read + reindex-reset catalog. Both drive the request-scoped NodeChatDbContext.
         builder.Services.AddScoped<IKnowledgeDocumentPurgeService, KnowledgeDocumentPurgeService>();
         builder.Services.AddScoped<IKnowledgeDocumentCatalogService, KnowledgeDocumentCatalogService>();
+        builder.Services.AddScoped<IKnowledgeRepositoryImportService, KnowledgeRepositoryImportService>();
 
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();
@@ -84,6 +90,7 @@ internal static class AddNodeKnowledgeBaseExtensions
 
         // Background worker: drains the queue with SemaphoreSlim-bounded concurrency, a fresh scope per document.
         builder.Services.AddHostedService<KnowledgeIngestionWorker>();
+        builder.Services.AddHostedService<KnowledgeScheduledModelReindexWorker>();
 
         // Read-only knowledge-base agent tools (search_knowledge_base / read_document / read_surrounding_chunks). All
         // Singleton: ClientLocalToolRegistry captures the IClientLocalToolHandler IEnumerable at construction, so a

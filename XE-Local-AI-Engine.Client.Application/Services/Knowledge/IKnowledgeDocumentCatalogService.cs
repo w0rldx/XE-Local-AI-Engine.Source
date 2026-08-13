@@ -12,8 +12,26 @@ public interface IKnowledgeDocumentCatalogService
     /// <summary>Lists every document (newest first) as a management summary. Never returns chunk content.</summary>
     Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken);
 
+    /// <summary>Lists documents in one collection namespace.</summary>
+    Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId, CancellationToken cancellationToken)
+    {
+        return ListAsync(cancellationToken);
+    }
+
+    /// <summary>Lists documents belonging to one durable source inside a collection.</summary>
+    Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
+        string sourceKind,
+        string sourceId,
+        CancellationToken cancellationToken);
+
     /// <summary>Reads one document's detail plus its ordered chunks, or <see langword="null" /> when the id is unknown.</summary>
     Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Reads one document only when it belongs to <paramref name="collectionId" />. This is the authorization seam
+    ///     used by agent follow-up reads so possession of a document id never bypasses its collection namespace.
+    /// </summary>
+    Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, string collectionId, CancellationToken cancellationToken);
 
     /// <summary>Reads one document's current pipeline status, or <see langword="null" /> when the id is unknown.</summary>
     Task<KnowledgeDocumentStatus?> GetStatusAsync(Guid documentId, CancellationToken cancellationToken);
@@ -25,9 +43,9 @@ public interface IKnowledgeDocumentCatalogService
     Task<bool> ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Resets every INDEXED document whose stored <c>embedding_model</c> differs from the currently RESOLVED embedding
-    ///     model (from <see cref="IEmbeddingModelResolver" />) to <see cref="KnowledgeDocumentStatus.Pending" /> and returns
-    ///     their ids, so the caller can enqueue a corpus-wide reindex that rebuilds only the stale-model documents.
+    ///     Resets every INDEXED document whose stored embedding/vector identity or parser/chunker version differs from
+    ///     the current pipeline to <see cref="KnowledgeDocumentStatus.Pending" /> and returns its id, so the caller can
+    ///     enqueue a corpus-wide reindex that rebuilds only stale documents.
     ///     Non-indexed rows carry only the upload-time placeholder model name and are never treated as stale.
     /// </summary>
     Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken);
@@ -66,7 +84,10 @@ public sealed record KnowledgeDocumentSummary(
     string EmbeddingModel,
     bool StaleModel,
     long SizeBytes,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    string CollectionId = KnowledgeCollectionScope.DefaultId,
+    string? SourcePath = null,
+    string SourceKind = "upload");
 
 /// <summary>One document's full detail plus its ordered chunks, for the detail drawer.</summary>
 public sealed record KnowledgeDocumentDetail(
@@ -80,7 +101,20 @@ public sealed record KnowledgeDocumentDetail(
     long SizeBytes,
     long CreatedAtUtc,
     long UpdatedAtUtc,
-    IReadOnlyList<KnowledgeDocumentChunkView> Chunks);
+    IReadOnlyList<KnowledgeDocumentChunkView> Chunks,
+    string CollectionId = KnowledgeCollectionScope.DefaultId,
+    string? SourcePath = null,
+    string SourceKind = "upload");
 
 /// <summary>A single chunk view for the detail drawer: its global order, heading trail, and plaintext content.</summary>
-public sealed record KnowledgeDocumentChunkView(int ChunkIndex, string? HeadingPath, string Content);
+public sealed record KnowledgeDocumentChunkView(
+    int ChunkIndex,
+    string? HeadingPath,
+    string Content,
+    int? PageNumber = null,
+    int StartOffset = 0,
+    int EndOffset = 0,
+    string ContentKind = "text",
+    string? SourcePath = null,
+    string? Language = null,
+    string? Symbol = null);

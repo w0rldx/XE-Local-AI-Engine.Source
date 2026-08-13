@@ -97,6 +97,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
                 // Explicit ctor (MA0132) with the SAME semantics as the implicit DateTime->DateTimeOffset
                 // conversion, so the value is byte-identical regardless of model.ModifiedAt.Kind.
                 ModifiedAt = new DateTimeOffset(model.ModifiedAt),
+                RevisionFingerprint = model.Digest,
                 MaxContextTokens = await TryReadContextLengthAsync(modelName, ct).ConfigureAwait(false)
             });
         }

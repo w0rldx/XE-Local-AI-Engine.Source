@@ -43,7 +43,14 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
         }
 
         var limit = req.Limit <= 0 ? DefaultLimit : Math.Clamp(req.Limit, MinLimit, MaxLimit);
-        var request = new KnowledgeSearchRequest(normalizedQuery, limit, req.DocumentId, req.ExpandNeighbors);
+        if (!KnowledgeCollectionScope.TryNormalize(req.CollectionId, out var collectionId))
+        {
+            AddError("The collection id is invalid.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var request = new KnowledgeSearchRequest(normalizedQuery, limit, req.DocumentId, req.ExpandNeighbors, collectionId);
         var result = await _searchService.SearchAsync(request, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new SearchKnowledgeResponse
@@ -66,7 +73,15 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
             Score = hit.Score,
             ChunkIndex = hit.ChunkIndex,
             DocumentStatus = hit.DocumentStatus,
-            ServingLastKnownGood = hit.ServingLastKnownGood
+            ServingLastKnownGood = hit.ServingLastKnownGood,
+            CollectionId = hit.CollectionId,
+            SourcePath = hit.SourcePath,
+            ContentKind = hit.ContentKind,
+            Language = hit.Language,
+            Symbol = hit.Symbol,
+            PageNumber = hit.PageNumber,
+            StartOffset = hit.StartOffset,
+            EndOffset = hit.EndOffset
         };
     }
 }

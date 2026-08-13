@@ -74,6 +74,10 @@ internal static class KnowledgeChatContextComposer
                 new("title", hit.Title),
                 new("section", hit.Section),
                 new("source", hit.Source),
+                new("collection", hit.CollectionId),
+                new("path", hit.SourcePath),
+                new("page", hit.PageNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("symbol", hit.Symbol),
                 new("status", hit.ServingLastKnownGood ? "last-known-good (re-index pending)" : null)
             };
             var fenceOverhead = UntrustedContentFraming.WrapDocument(string.Empty, metadata).Length;

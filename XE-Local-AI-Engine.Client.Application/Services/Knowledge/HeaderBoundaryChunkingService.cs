@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Text;
+using System.Security.Cryptography;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Options;
 
@@ -67,7 +68,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         for (var ordinal = 0; ordinal < builds.Count; ordinal++)
         {
             var build = builds[ordinal];
-            sections.Add(new KnowledgeChunkingSection(ordinal, build.Heading, build.Level));
+            sections.Add(new KnowledgeChunkingSection(ordinal, build.Heading, build.Level, build.PageNumber));
 
             var body = build.Body.ToString().Trim();
             if (body.Length == 0)
@@ -85,15 +86,20 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
             foreach (var window in SplitIntoWindows(body, maxChars, overlap, windowTokenBudget))
             {
                 var contextual = build.HeadingPath is null
-                    ? window
-                    : string.Concat(build.HeadingPath, "\n\n", window);
+                    ? window.Content
+                    : string.Concat(build.HeadingPath, "\n\n", window.Content);
 
                 chunks.Add(new KnowledgeChunk(chunkIndex,
                     ordinal,
-                    window,
+                    window.Content,
                     contextual,
                     build.HeadingPath,
-                    ChunkTokenApproximation.EstimateTokens(window)));
+                    ChunkTokenApproximation.EstimateTokens(window.Content),
+                    build.PageNumber,
+                    window.StartOffset,
+                    window.EndOffset,
+                    ContentHash: Hash(window.Content),
+                    EmbeddingInputHash: Hash(contextual)));
                 chunkIndex++;
             }
         }
@@ -142,7 +148,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                 headingStack.Add(new HeadingFrame(level, heading));
                 var headingPath = string.Join(" > ", headingStack.Select(frame => frame.Text));
 
-                current = new SectionBuild(heading, level, headingPath);
+                current = new SectionBuild(heading, level, headingPath, header.PageNumber);
                 headerSections.Add(current);
                 continue;
             }
@@ -155,7 +161,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
 
             if (current is null)
             {
-                implicitSection ??= new SectionBuild(Heading: null, Level: null, HeadingPath: null);
+                implicitSection ??= new SectionBuild(Heading: null, Level: null, HeadingPath: null, PageNumber: element.PageNumber);
                 current = implicitSection;
             }
 
@@ -175,7 +181,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
     // Splits a section body into windows bounded by BOTH a character ceiling (maxChars) and an estimated token budget
     // (windowTokenBudget), whichever is reached first, breaking at the last whitespace before the limit so a word is not
     // cut, and carrying `overlap` trailing characters into the next window. Deterministic; start strictly advances.
-    private static IEnumerable<string> SplitIntoWindows(string text, int maxChars, int overlap, int windowTokenBudget)
+    private static IEnumerable<ChunkWindow> SplitIntoWindows(string text, int maxChars, int overlap, int windowTokenBudget)
     {
         var start = 0;
         while (start < text.Length)
@@ -193,7 +199,9 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
             var window = text[start..end].Trim();
             if (window.Length > 0)
             {
-                yield return window;
+                var leadingWhitespace = FindLeadingContent(text.AsSpan(start, end - start));
+                var actualStart = leadingWhitespace < 0 ? start : start + leadingWhitespace;
+                yield return new ChunkWindow(window, actualStart, actualStart + window.Length);
             }
 
             if (end >= text.Length)
@@ -209,6 +217,19 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
 
             start = nextStart;
         }
+    }
+
+    private static int FindLeadingContent(ReadOnlySpan<char> value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (!char.IsWhiteSpace(value[index]))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     // The hard end index for a window starting at `start`: the smaller of the character ceiling and the position at which
@@ -257,7 +278,14 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
 
     private readonly record struct HeadingFrame(int Level, string Text);
 
-    private sealed record SectionBuild(string? Heading, int? Level, string? HeadingPath)
+    private readonly record struct ChunkWindow(string Content, int StartOffset, int EndOffset);
+
+    private static string Hash(string content)
+    {
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
+    }
+
+    private sealed record SectionBuild(string? Heading, int? Level, string? HeadingPath, int? PageNumber)
     {
         public StringBuilder Body { get; } = new();
     }

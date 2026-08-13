@@ -1950,6 +1950,23 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkRes
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	headingPath: z.string().nullish(),
 	content: z.string(),
+	pageNumber: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	startOffset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	endOffset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	contentKind: z.string(),
+	sourcePath: z.string().nullish(),
+	language: z.string().nullish(),
+	symbol: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse = z.object({
@@ -1966,7 +1983,48 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailRe
 	sizeBytes: z.int(),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
+	collectionId: z.string(),
+	sourcePath: z.string().nullish(),
+	sourceKind: z.string(),
 	chunks: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse = z.object({
+	collectionId: z.string(),
+	discoveredFiles: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	addedDocuments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	updatedDocuments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	removedDocuments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	deduplicatedDocuments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	enqueuedDocuments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	skippedFiles: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	queueCapacityReached: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRequest = z.object({
+	selectedFolderId: z.guid(),
+	collectionId: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse = z.object({
@@ -1982,11 +2040,16 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse
 	staleModel: z.boolean(),
 	sizeBytes: z.int(),
 	createdAtUtc: z.int(),
+	collectionId: z.string(),
+	sourcePath: z.string().nullish(),
+	sourceKind: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse),
 });
+
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = z.object({
 	enqueuedCount: z
@@ -2009,6 +2072,24 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitRespons
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	documentStatus: zXeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
 	servingLastKnownGood: z.boolean(),
+	collectionId: z.string(),
+	sourcePath: z.string().nullish(),
+	contentKind: z.string(),
+	language: z.string().nullish(),
+	symbol: z.string().nullish(),
+	pageNumber: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	startOffset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	endOffset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({
@@ -2024,6 +2105,7 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = 
 		.optional(),
 	documentId: z.guid().nullish(),
 	expandNeighbors: z.boolean().optional(),
+	collectionId: z.string().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse = z.object({
@@ -2034,6 +2116,7 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRe
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = z.object({
 	file: z.string().nullish(),
+	collectionId: z.string().optional(),
 });
 
 export const zXeLocalAiEngineAiContractsEnumsInvocationStatus = z.enum([
@@ -4543,6 +4626,17 @@ export const zDownloadRecommendedEmbeddingResponse =
  * Success
  */
 export const zDownloadRecommendedRerankerResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
+
+export const zImportKnowledgeRepositoryBody = zXeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRequest;
+
+/**
+ * Success
+ */
+export const zImportKnowledgeRepositoryResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse;
+
+export const zListKnowledgeDocumentsQuery = z.object({
+	collectionId: z.string().nullish(),
+});
 
 /**
  * Success

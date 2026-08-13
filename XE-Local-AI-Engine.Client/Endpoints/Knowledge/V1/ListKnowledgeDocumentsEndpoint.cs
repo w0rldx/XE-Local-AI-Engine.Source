@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     model, and a computed stale-model flag — but never chunk content.
 /// </summary>
 public sealed class ListKnowledgeDocumentsEndpoint(IKnowledgeDocumentCatalogService catalogService)
-    : EndpointWithoutRequest<ListKnowledgeDocumentsResponse>
+    : Endpoint<ListKnowledgeDocumentsRequest, ListKnowledgeDocumentsResponse>
 {
     private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
 
@@ -21,9 +21,11 @@ public sealed class ListKnowledgeDocumentsEndpoint(IKnowledgeDocumentCatalogServ
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
-    public override async Task HandleAsync(CancellationToken ct)
+    public override async Task HandleAsync(ListKnowledgeDocumentsRequest req, CancellationToken ct)
     {
-        var documents = await _catalogService.ListAsync(ct).ConfigureAwait(false);
+        var documents = string.IsNullOrWhiteSpace(req.CollectionId)
+            ? await _catalogService.ListAsync(ct).ConfigureAwait(false)
+            : await _catalogService.ListAsync(req.CollectionId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListKnowledgeDocumentsResponse
             {
                 Items = [.. documents.Select(ToResponse)]
@@ -43,7 +45,10 @@ public sealed class ListKnowledgeDocumentsEndpoint(IKnowledgeDocumentCatalogServ
             EmbeddingModel = summary.EmbeddingModel,
             StaleModel = summary.StaleModel,
             SizeBytes = summary.SizeBytes,
-            CreatedAtUtc = summary.CreatedAtUtc
+            CreatedAtUtc = summary.CreatedAtUtc,
+            CollectionId = summary.CollectionId,
+            SourcePath = summary.SourcePath,
+            SourceKind = summary.SourceKind
         };
     }
 }

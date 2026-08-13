@@ -23,6 +23,24 @@ public interface IVectorSearch
         int vectorDimension,
         int limit,
         Guid? documentId,
+        CancellationToken cancellationToken) =>
+        SearchAsync(queryVector,
+            embeddingModel,
+            vectorIdentity,
+            vectorDimension,
+            limit,
+            documentId,
+            KnowledgeCollectionScope.DefaultId,
+            cancellationToken);
+
+    /// <summary>Collection-scoped variant used by production retrieval. Implementations must enforce this boundary.</summary>
+    Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
+        string embeddingModel,
+        string vectorIdentity,
+        int vectorDimension,
+        int limit,
+        Guid? documentId,
+        string collectionId,
         CancellationToken cancellationToken);
 }
 

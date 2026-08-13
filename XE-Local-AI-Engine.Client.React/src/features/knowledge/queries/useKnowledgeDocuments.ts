@@ -40,9 +40,9 @@ export function knowledgeInvalidationKey(operationId: string): readonly [{ _id: 
  * which only needs the list to decide whether the "Use Knowledge Base" toggle has indexed docs to search); it defaults
  * to true so the knowledge-base page keeps fetching unconditionally.
  */
-export function useKnowledgeDocuments(enabled = true) {
+export function useKnowledgeDocuments(enabled = true, collectionId?: string) {
 	return useQuery({
-		...withResponseValidation(listKnowledgeDocumentsOptions()),
+		...withResponseValidation(listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined })),
 		select: (data): readonly KnowledgeDocument[] => data.items ?? [],
 		enabled,
 	});

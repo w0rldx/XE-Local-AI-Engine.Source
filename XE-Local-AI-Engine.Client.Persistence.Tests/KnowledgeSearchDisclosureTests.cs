@@ -94,7 +94,7 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         });
 
         var ftsSearch = Substitute.For<IFtsSearch>();
-        ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+        ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(ftsHits));
 
         // The vector arm never runs: with no provider the query embedding degrades, so fused order is the FTS order.

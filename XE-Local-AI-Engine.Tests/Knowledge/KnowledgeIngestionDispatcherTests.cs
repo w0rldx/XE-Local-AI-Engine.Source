@@ -50,6 +50,29 @@ public sealed class KnowledgeIngestionDispatcherTests
     }
 
     [Test]
+    public async Task EnqueueAsync_WhileDocumentIsInFlight_DefersExactlyOneFollowUpRun()
+    {
+        var dispatcher = new KnowledgeIngestionDispatcher();
+        var documentId = Guid.NewGuid();
+
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(dispatcher.Reader.TryRead(out var firstRun));
+        AssertEx.Equal(documentId, firstRun);
+
+        // A repository replacement keeps the same document id. It must not run concurrently with the old revision, but
+        // its admission must survive until completion so the replacement blob is eventually indexed.
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(dispatcher.Reader.TryRead(out _), "The follow-up must remain deferred while the first run is active.");
+
+        dispatcher.MarkCompleted(documentId);
+
+        AssertEx.True(dispatcher.Reader.TryRead(out var followUp));
+        AssertEx.Equal(documentId, followUp);
+        AssertEx.False(dispatcher.Reader.TryRead(out _), "Multiple update admissions should coalesce into one follow-up run.");
+    }
+
+    [Test]
     public async Task EnqueueAsync_AfterMarkCompleted_ReAdmitsSameDocument()
     {
         var dispatcher = new KnowledgeIngestionDispatcher();

@@ -34,6 +34,29 @@ public sealed class ContextExpansionService : IContextExpansionService
         return await ReadRangeAsync(connection, documentId, chunkIndex - safeWindow, chunkIndex + safeWindow, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<KnowledgeNeighborChunk>> ExpandAsync(Guid documentId,
+        int chunkIndex,
+        int window,
+        string collectionId,
+        CancellationToken cancellationToken)
+    {
+        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
+        {
+            return [];
+        }
+
+        var safeWindow = Math.Max(0, window);
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        return await ReadRangeAsync(connection,
+                documentId,
+                chunkIndex - safeWindow,
+                chunkIndex + safeWindow,
+                normalizedCollectionId,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     // Defensive cap on how many disjoint ranges are packed into one parameterized OR-disjunction, so the bound-parameter
     // count stays well under SQLite's per-statement limit even for a pathological anchor set (each range is 2 parameters
     // plus the shared document-id parameter). A document with more disjoint ranges than this splits into that few extra
@@ -182,14 +205,28 @@ public sealed class ContextExpansionService : IContextExpansionService
         int upperBound,
         CancellationToken cancellationToken)
     {
+        return await ReadRangeAsync(connection, documentId, lowerBound, upperBound, collectionId: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<KnowledgeNeighborChunk>> ReadRangeAsync(DbConnection connection,
+        Guid documentId,
+        int lowerBound,
+        int upperBound,
+        string? collectionId,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT chunk_id, chunk_index, content, heading_path
-                              FROM knowledge_document_chunks
-                              WHERE document_id = $document_id AND chunk_index BETWEEN $lower AND $upper
-                              ORDER BY chunk_index ASC;
+                              SELECT c.chunk_id, c.chunk_index, c.content, c.heading_path
+                              FROM knowledge_document_chunks AS c
+                              INNER JOIN knowledge_documents AS d ON d.document_id = c.document_id
+                              WHERE c.document_id = $document_id
+                                AND ($collection_id IS NULL OR d.collection_id = $collection_id)
+                                AND c.chunk_index BETWEEN $lower AND $upper
+                              ORDER BY c.chunk_index ASC;
                               """;
         AddParameter(command, "$document_id", documentId);
+        AddParameter(command, "$collection_id", collectionId);
         AddParameter(command, "$lower", lowerBound);
         AddParameter(command, "$upper", upperBound);
 

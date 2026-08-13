@@ -31,17 +31,34 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
 
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        // Delete-vs-ingestion race guard: if the document row was removed while this job was embedding, write nothing.
-        if (!await DocumentExistsAsync(connection, transaction, input.DocumentId, cancellationToken).ConfigureAwait(false))
+        // Repository updates preserve document_id, so existence alone cannot prove that the embedded chunks came from the
+        // current blob. Commit only against the exact content-hash revision captured before extraction.
+        var currentContentHash = await ReadCurrentContentHashAsync(connection,
+                transaction,
+                input.DocumentId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (currentContentHash is null)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        if (!string.Equals(currentContentHash, input.SourceContentHash, StringComparison.Ordinal))
+        {
+            await PreserveCurrentRevisionPendingAsync(connection, transaction, input.DocumentId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return false;
         }
 
         await PurgeDocumentRowsAsync(connection, transaction, input.DocumentId, cancellationToken).ConfigureAwait(false);
         var sectionIdsByOrdinal = await InsertSectionsAsync(connection, transaction, input, cancellationToken).ConfigureAwait(false);
         await InsertChunksAndVectorsAsync(connection, transaction, input, sectionIdsByOrdinal, cancellationToken).ConfigureAwait(false);
-        await MarkIndexedAsync(connection, transaction, input, cancellationToken).ConfigureAwait(false);
+        if (!await MarkIndexedAsync(connection, transaction, input, cancellationToken).ConfigureAwait(false))
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return true;
@@ -90,14 +107,15 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                                  INSERT INTO knowledge_document_sections (section_id, document_id, ordinal, heading, level)
-                                  VALUES ($section_id, $document_id, $ordinal, $heading, $level);
+                                  INSERT INTO knowledge_document_sections (section_id, document_id, ordinal, heading, level, page_number)
+                                  VALUES ($section_id, $document_id, $ordinal, $heading, $level, $page_number);
                                   """;
             AddParameter(command, "$section_id", sectionId);
             AddParameter(command, "$document_id", input.DocumentId);
             AddParameter(command, "$ordinal", section.Ordinal);
             AddParameter(command, "$heading", section.Heading);
             AddParameter(command, "$level", section.Level);
+            AddParameter(command, "$page_number", section.PageNumber);
             _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -123,8 +141,14 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             {
                 chunkCommand.Transaction = transaction;
                 chunkCommand.CommandText = """
-                                           INSERT INTO knowledge_document_chunks (chunk_id, document_id, section_id, chunk_index, content, token_count, heading_path)
-                                           VALUES ($chunk_id, $document_id, $section_id, $chunk_index, $content, $token_count, $heading_path);
+                                           INSERT INTO knowledge_document_chunks
+                                               (chunk_id, document_id, section_id, chunk_index, content, token_count, heading_path,
+                                                page_number, start_offset, end_offset, content_kind, source_path, language, symbol,
+                                                content_hash, embedding_input_hash)
+                                           VALUES
+                                               ($chunk_id, $document_id, $section_id, $chunk_index, $content, $token_count, $heading_path,
+                                                $page_number, $start_offset, $end_offset, $content_kind, $source_path, $language, $symbol,
+                                                $content_hash, $embedding_input_hash);
                                            """;
                 AddParameter(chunkCommand, "$chunk_id", chunkId);
                 AddParameter(chunkCommand, "$document_id", input.DocumentId);
@@ -133,6 +157,15 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                 AddParameter(chunkCommand, "$content", chunk.Content);
                 AddParameter(chunkCommand, "$token_count", chunk.TokenCount);
                 AddParameter(chunkCommand, "$heading_path", chunk.HeadingPath);
+                AddParameter(chunkCommand, "$page_number", chunk.PageNumber);
+                AddParameter(chunkCommand, "$start_offset", chunk.StartOffset);
+                AddParameter(chunkCommand, "$end_offset", chunk.EndOffset);
+                AddParameter(chunkCommand, "$content_kind", chunk.ContentKind);
+                AddParameter(chunkCommand, "$source_path", chunk.SourcePath);
+                AddParameter(chunkCommand, "$language", chunk.Language);
+                AddParameter(chunkCommand, "$symbol", chunk.Symbol);
+                AddParameter(chunkCommand, "$content_hash", chunk.ContentHash);
+                AddParameter(chunkCommand, "$embedding_input_hash", chunk.EmbeddingInputHash);
                 _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -161,7 +194,10 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         }
     }
 
-    private async Task MarkIndexedAsync(DbConnection connection, DbTransaction transaction, KnowledgeIndexInput input, CancellationToken cancellationToken)
+    private async Task<bool> MarkIndexedAsync(DbConnection connection,
+        DbTransaction transaction,
+        KnowledgeIndexInput input,
+        CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         await using var command = connection.CreateCommand();
@@ -174,26 +210,56 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                                   embedding_model = $embedding_model,
                                   vector_identity = $vector_identity,
                                   vector_dim = $vector_dim,
+                                  parser_version = $parser_version,
+                                  chunker_version = $chunker_version,
                                   updated_at_utc = $updated_at_utc
-                              WHERE document_id = $document_id;
+                              WHERE document_id = $document_id
+                                AND content_hash = $content_hash;
                               """;
         AddParameter(command, "$status", KnowledgeDocumentStatus.Indexed.ToString());
         AddParameter(command, "$chunk_count", input.Chunks.Count);
         AddParameter(command, "$embedding_model", input.EmbeddingModel);
         AddParameter(command, "$vector_identity", input.VectorIdentity);
         AddParameter(command, "$vector_dim", input.VectorDimension);
+        AddParameter(command, "$parser_version", input.ParserVersion);
+        AddParameter(command, "$chunker_version", input.ChunkerVersion);
         AddParameter(command, "$updated_at_utc", now);
         AddParameter(command, "$document_id", input.DocumentId);
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        AddParameter(command, "$content_hash", input.SourceContentHash);
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) == 1;
     }
 
-    private static async Task<bool> DocumentExistsAsync(DbConnection connection, DbTransaction transaction, Guid documentId, CancellationToken cancellationToken)
+    private static async Task<string?> ReadCurrentContentHashAsync(DbConnection connection,
+        DbTransaction transaction,
+        Guid documentId,
+        CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT 1 FROM knowledge_documents WHERE document_id = $document_id;";
+        command.CommandText = "SELECT content_hash FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return result is not null and not DBNull;
+        return result is null or DBNull ? null : (string)result;
+    }
+
+    private async Task PreserveCurrentRevisionPendingAsync(DbConnection connection,
+        DbTransaction transaction,
+        Guid documentId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+                              UPDATE knowledge_documents
+                              SET status = $status,
+                                  failure_reason = NULL,
+                                  chunk_count = 0,
+                                  updated_at_utc = $updated_at_utc
+                              WHERE document_id = $document_id;
+                              """;
+        AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
+        AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        AddParameter(command, "$document_id", documentId);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 }

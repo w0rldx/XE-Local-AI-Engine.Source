@@ -42,6 +42,36 @@ internal sealed class KnowledgeDocumentChunkConfiguration : IEntityTypeConfigura
         builder.Property(entity => entity.HeadingPath)
                .HasColumnName("heading_path");
 
+        builder.Property(entity => entity.PageNumber)
+               .HasColumnName("page_number");
+
+        builder.Property(entity => entity.StartOffset)
+               .HasColumnName("start_offset");
+
+        builder.Property(entity => entity.EndOffset)
+               .HasColumnName("end_offset");
+
+        builder.Property(entity => entity.ContentKind)
+               .HasColumnName("content_kind")
+               .HasDefaultValue("text");
+
+        builder.Property(entity => entity.SourcePath)
+               .HasColumnName("source_path");
+
+        builder.Property(entity => entity.Language)
+               .HasColumnName("language");
+
+        builder.Property(entity => entity.Symbol)
+               .HasColumnName("symbol");
+
+        builder.Property(entity => entity.ContentHash)
+               .HasColumnName("content_hash")
+               .HasDefaultValue(string.Empty);
+
+        builder.Property(entity => entity.EmbeddingInputHash)
+               .HasColumnName("embedding_input_hash")
+               .HasDefaultValue(string.Empty);
+
         // UNIQUE(chunk_id) as an alternate key so the vector index can foreign-key to the stable GUID rather than the rowid.
         builder.HasAlternateKey(entity => entity.ChunkId);
 
@@ -63,5 +93,7 @@ internal sealed class KnowledgeDocumentChunkConfiguration : IEntityTypeConfigura
             entity.ChunkIndex
         });
         builder.HasIndex(entity => entity.SectionId);
+        builder.HasIndex(entity => entity.ContentHash);
+        builder.HasIndex(entity => entity.EmbeddingInputHash);
     }
 }

@@ -1625,6 +1625,9 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResp
 	sizeBytes: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	collectionId: string;
+	sourcePath?: string | null;
+	sourceKind: string;
 	chunks: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse>;
 };
 
@@ -1640,6 +1643,30 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkRespo
 	chunkIndex: number;
 	headingPath?: string | null;
 	content: string;
+	pageNumber?: number | null;
+	startOffset: number;
+	endOffset: number;
+	contentKind: string;
+	sourcePath?: string | null;
+	language?: string | null;
+	symbol?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse = {
+	collectionId: string;
+	discoveredFiles: number;
+	addedDocuments: number;
+	updatedDocuments: number;
+	removedDocuments: number;
+	deduplicatedDocuments: number;
+	enqueuedDocuments: number;
+	skippedFiles: number;
+	queueCapacityReached: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRequest = {
+	selectedFolderId: string;
+	collectionId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = {
@@ -1656,6 +1683,13 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse =
 	staleModel: boolean;
 	sizeBytes: number;
 	createdAtUtc: number;
+	collectionId: string;
+	sourcePath?: string | null;
+	sourceKind: string;
+};
+
+export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = {
@@ -1677,6 +1711,14 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse 
 	chunkIndex: number;
 	documentStatus: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
 	servingLastKnownGood: boolean;
+	collectionId: string;
+	sourcePath?: string | null;
+	contentKind: string;
+	language?: string | null;
+	symbol?: string | null;
+	pageNumber?: number | null;
+	startOffset: number;
+	endOffset: number;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
@@ -1684,6 +1726,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
 	limit?: number;
 	documentId?: string | null;
 	expandNeighbors?: boolean;
+	collectionId?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse = {
@@ -1694,6 +1737,7 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResp
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest = {
 	file?: Blob | File | null;
+	collectionId?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = {
@@ -6700,10 +6744,39 @@ export type DownloadRecommendedRerankerResponses = {
 export type DownloadRecommendedRerankerResponse =
 	DownloadRecommendedRerankerResponses[keyof DownloadRecommendedRerankerResponses];
 
+export type ImportKnowledgeRepositoryData = {
+	body: XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/repositories/import";
+};
+
+export type ImportKnowledgeRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ImportKnowledgeRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse;
+};
+
+export type ImportKnowledgeRepositoryResponse = ImportKnowledgeRepositoryResponses[keyof ImportKnowledgeRepositoryResponses];
+
 export type ListKnowledgeDocumentsData = {
 	body?: never;
 	path?: never;
-	query?: never;
+	query?: {
+		collectionId?: string | null;
+	};
 	url: "/api/local/v1/knowledge-base/documents";
 };
 
