@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -324,6 +325,56 @@ public sealed class InvocationRunnerTests
         // a model id — never any prompt/completion text.
         AssertEx.Equal("remote", input[0].Provider);
         AssertEx.True(!string.IsNullOrEmpty(input[0].Model), "The usage counter must carry a model tag.");
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task RunAsync_WhenTurnCompletes_EmitsOneTerminalHarnessEfficiencyRecord()
+    {
+        using var capture = new HarnessMetricCapture();
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        var (value, provider, outcome, orchestration) = capture.Terminals.Single();
+        AssertEx.Equal(expected: 1L, value);
+        AssertEx.Equal("remote", provider);
+        AssertEx.Equal("completed", outcome);
+        AssertEx.Equal(expected: false, orchestration);
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task RunAsync_WhenTurnFails_EmitsOneFailedHarnessEfficiencyRecord()
+    {
+        using var capture = new HarnessMetricCapture();
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: ThrowingUpdates());
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        var terminal = capture.Terminals.Single();
+        AssertEx.Equal(expected: 1L, terminal.Value);
+        AssertEx.Equal("failed", terminal.Outcome);
+        AssertEx.Equal(expected: false, terminal.Orchestration);
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task RunAsync_WhenOrchestrationChangesParticipant_RecordsOneHandoffAndOneTerminal()
+    {
+        using var capture = new HarnessMetricCapture();
+        var sender = new MockHubMessageSender();
+        var orchestrationFactory = CreateOrchestrationFactory(OrchestrationParticipantTransitionUpdates(), out _);
+        var runner = CreateRunner(sender, orchestrationAgentFactory: orchestrationFactory);
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build());
+
+        var terminal = capture.Terminals.Single();
+        AssertEx.Equal("completed", terminal.Outcome);
+        AssertEx.Equal(expected: true, terminal.Orchestration);
+        AssertEx.Equal(expected: 1L, capture.Handoffs.Single());
     }
 
     [Test]
@@ -3294,6 +3345,14 @@ public sealed class InvocationRunnerTests
         yield return OrchestrationUpdate.Terminal();
     }
 
+    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationParticipantTransitionUpdates()
+    {
+        yield return OrchestrationUpdate.TextFragment("triage", "a", "Triage");
+        await Task.Yield();
+        yield return OrchestrationUpdate.TextFragment("specialist", "b", "Specialist");
+        yield return OrchestrationUpdate.Terminal();
+    }
+
     // The gated approval stream: yields the approval request, then BLOCKS on the session's ApprovalGate before the
     // post-approval text/terminal. The gate is only completed by RespondToApprovalAsync, so if the runner drops or
     // mis-keys the resume the enumeration hangs and the test times out — proving the resume actually fired.
@@ -3357,6 +3416,66 @@ public sealed class InvocationRunnerTests
     private sealed class Ref<T>
     {
         public T? Value { get; set; }
+    }
+
+    private readonly record struct HarnessTerminalMeasurement(long Value, string? Provider, string? Outcome, bool? Orchestration);
+
+    private sealed class HarnessMetricCapture : IDisposable
+    {
+        private readonly ConcurrentBag<long> _handoffs = [];
+        private readonly MeterListener _listener = new();
+        private readonly ConcurrentBag<HarnessTerminalMeasurement> _terminals = [];
+
+        public HarnessMetricCapture()
+        {
+            _listener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (string.Equals(instrument.Meter.Name, NodeMetrics.MeterName, StringComparison.Ordinal)
+                    && instrument.Name is "agent_harness_invocation_total" or "agent_harness_handoffs")
+                {
+                    listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+            {
+                if (string.Equals(instrument.Name, "agent_harness_handoffs", StringComparison.Ordinal))
+                {
+                    _handoffs.Add(measurement);
+                    return;
+                }
+
+                string? provider = null;
+                string? outcome = null;
+                bool? orchestration = null;
+                foreach (var tag in tags)
+                {
+                    if (string.Equals(tag.Key, "provider", StringComparison.Ordinal))
+                    {
+                        provider = tag.Value as string;
+                    }
+                    else if (string.Equals(tag.Key, "outcome", StringComparison.Ordinal))
+                    {
+                        outcome = tag.Value as string;
+                    }
+                    else if (string.Equals(tag.Key, "orchestration", StringComparison.Ordinal))
+                    {
+                        orchestration = tag.Value as bool?;
+                    }
+                }
+
+                _terminals.Add(new HarnessTerminalMeasurement(measurement, provider, outcome, orchestration));
+            });
+            _listener.Start();
+        }
+
+        public IReadOnlyList<long> Handoffs => [.. _handoffs];
+
+        public IReadOnlyList<HarnessTerminalMeasurement> Terminals => [.. _terminals];
+
+        public void Dispose()
+        {
+            _listener.Dispose();
+        }
     }
 
     private sealed class FakeOrchestrationRunSession : IOrchestrationRunSession

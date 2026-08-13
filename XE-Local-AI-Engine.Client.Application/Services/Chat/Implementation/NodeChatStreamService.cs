@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -80,6 +81,8 @@ public sealed class NodeChatStreamService(
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
+        var harnessStartedTimestamp = Stopwatch.GetTimestamp();
+
         // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
         // authoritative; throwing here propagates to the hub caller.
         await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
@@ -444,6 +447,7 @@ public sealed class NodeChatStreamService(
             SamplingOptions: request.SamplingOptions,
             Skills: resolved?.Skills,
             CustomTools: resolved?.CustomTools));
+        var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
 
         // Post-run adaptive-memory hook: fired once when the pump persists a Completed/Failed terminal, but ONLY when the
         // resolved agent has the playbook enabled AND opts into extraction. Retrieval/injection rides PlaybookEnabled
@@ -487,6 +491,8 @@ public sealed class NodeChatStreamService(
             requestId,
             sequence,
             resolution.RequiresInstalledChatModel,
+            harnessStartedTimestamp,
+            preRunDurationMs,
             runCancellation.Token);
 
         // Ownership is now established: the pump + runner are running and the finally below drives every row to the
@@ -573,6 +579,8 @@ public sealed class NodeChatStreamService(
         Guid requestId,
         NodeChatStreamSequence sequence,
         bool requiresInstalledChatModel,
+        long harnessStartedTimestamp,
+        double preRunDurationMs,
         CancellationToken cancellationToken)
     {
         // Queue behind any in-flight invocation (local or platform) before assigning, rather than failing the
@@ -582,7 +590,9 @@ public sealed class NodeChatStreamService(
 
         try
         {
+            var queueStartedTimestamp = Stopwatch.GetTimestamp();
             lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken).ConfigureAwait(false);
+            var queueDurationMs = Stopwatch.GetElapsedTime(queueStartedTimestamp).TotalMilliseconds;
 
             // The lease is held => the invocation is actually starting. Transition Queued -> Streaming and emit
             // the streaming event so the client leaves the queued state.
@@ -604,7 +614,11 @@ public sealed class NodeChatStreamService(
                 throw new NoChatModelInstalledException();
             }
 
-            using var context = InvocationExecutionContext.CreatePlain(package, messageId);
+            using var context = InvocationExecutionContext.CreatePlain(package,
+                messageId,
+                harnessStartedTimestamp,
+                preRunDurationMs,
+                queueDurationMs);
             await invocationRunner.RunAsync(context, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)

@@ -239,6 +239,63 @@ public sealed class ProviderCallBudgetChatClientTests
         AssertEx.True(withToolsCount < withoutToolsCount, "counting the tool schemas must shrink the message budget and drop history the tool-less round kept");
     }
 
+    [Test]
+    public async Task GetResponseAsync_WithAmbientBudget_RecordsProviderAndToolSchemaCost()
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 16_384,
+                   ReservedOutputTokenFloor = 0
+               }))
+        {
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "measure this round")], new ChatOptions
+            {
+                Tools = ManyTools(2)
+            });
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 1, snapshot.ProviderCalls);
+        AssertEx.True(snapshot.EstimatedInputTokens > 0);
+        AssertEx.True(snapshot.ToolSchemaTokens > 0);
+        AssertEx.True(snapshot.MaximumToolSchemaTokens > 0);
+        AssertEx.True(snapshot.ProviderRoundElapsedMs >= 0);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_RecordsWholeProviderRoundLifetimeIncludingBackpressure()
+    {
+        using var inner = new TwoUpdateChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            var updateCount = 0;
+            await foreach (var update in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "stream")]))
+            {
+                GC.KeepAlive(update);
+                updateCount++;
+                if (updateCount == 1)
+                {
+                    // The provider response remains open until the next pull. The round-elapsed metric intentionally
+                    // includes this backpressure rather than reporting only active MoveNextAsync wait time.
+                    await Task.Delay(TimeSpan.FromMilliseconds(40));
+                }
+            }
+
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 1, snapshot.ProviderCalls);
+        AssertEx.True(snapshot.ProviderRoundElapsedMs >= 25,
+            $"Expected provider-round elapsed time to include consumer backpressure; measured {snapshot.ProviderRoundElapsedMs:0.###} ms.");
+    }
+
     private static IList<AITool> ManyTools(int count)
     {
         var tools = new List<AITool>(count);
@@ -323,6 +380,36 @@ public sealed class ProviderCallBudgetChatClientTests
             ReceivedMessageSets.Add([.. messages]);
             await Task.Yield();
             yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+    }
+
+    private sealed class TwoUpdateChatClient : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ChatResponse());
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new ChatResponseUpdate(ChatRole.Assistant, "first");
+            yield return new ChatResponseUpdate(ChatRole.Assistant, "second");
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)

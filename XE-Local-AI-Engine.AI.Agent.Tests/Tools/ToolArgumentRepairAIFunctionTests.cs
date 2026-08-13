@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Tools;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -138,6 +140,21 @@ public sealed class ToolArgumentRepairAIFunctionTests
             static measurement => measurement.Value == 1
                                   && measurement.Source == "validation"
                                   && measurement.TagCount == 1);
+    }
+
+    [Test]
+    public async Task InvokeAsync_InvalidArguments_RecordsRepairOnCurrentInvocation()
+    {
+        var function = Build(_ => { });
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            _ = await function.InvokeAsync(Args(("count", 1L)));
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 1, snapshot.ToolArgumentRepairs);
     }
 
     [Test]

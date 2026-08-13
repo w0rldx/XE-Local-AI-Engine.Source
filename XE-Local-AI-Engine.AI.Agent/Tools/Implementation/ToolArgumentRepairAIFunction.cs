@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 /// <summary>
@@ -81,6 +82,7 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
     {
         // Deliberately content-free: no tool name, argument key/value, schema, model, request, or user dimension.
         RepairCounter.Add(1, new KeyValuePair<string, object?>("source", source));
+        ProviderCallBudget.Current?.RecordToolArgumentRepair();
     }
 
     private object RecordInvalidAndBuildResult(ToolArgumentRepairScope? scope, string reason)

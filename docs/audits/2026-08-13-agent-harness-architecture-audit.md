@@ -670,4 +670,24 @@ These are product decisions rather than facts the repository can decide:
 
 ## Final Approval Gate
 
-This audit implements **no product or harness change**. It proposes an incremental optimization plan and stops here. Each recommendation requires explicit user approval, rejection, modification, or additional research before implementation begins.
+At publication time, this audit implemented **no product or harness change**. It proposed an incremental optimization plan and stopped for approval. Each recommendation required explicit user approval, rejection, modification, or additional research before implementation began.
+
+## Post-Audit Approved Implementation
+
+On 2026-08-13, the user approved the first recommended step: establish a production-shaped harness-efficiency record and a repeatable capture workflow before changing agent behavior.
+
+The approved follow-up adds:
+
+- one content-free terminal efficiency record per admitted invocation, correlated through the existing invocation activity; local-chat totals begin before admission/context/persistence and separately expose aggregate pre-run and queue time;
+- bounded `agent_harness_*` metrics for end-to-end/queue/readiness/first-output/provider-round/tool-request latency, provider/tool calls, estimated and reported token counts, repeated tool-schema cost, retries, repairs, handoffs, and deterministic context reductions;
+- instrumentation at the existing provider-budget, tool-observability, retry, repair, streaming, and orchestration seams rather than a new parallel execution path;
+- `docs/performance/agent-harness-capture-workflow.md`, defining five production-shaped scenarios and A/B comparison gates.
+
+The implementation deliberately adds no API, database table, dependency, prompt/model/tool content logging, or harness behavior change. A tool latency is explicitly request-to-result rather than delegate execution time, and streamed provider elapsed time includes backpressure while the request remains open. Provider APIs do not currently expose per-request cached-prefix tokens, raw usage for every intermediate streaming round, physical reload attribution, or attributable RAM/VRAM peaks, so those remain separate provider/device evidence rather than inferred values.
+
+Validation after approval:
+
+- Release restore and build passed with zero warnings and errors.
+- The full Release solution test run passed: 6,006 succeeded, 13 skipped, 0 failed; the assembly guard reported no contamination.
+- Aspire boot validation passed with the backend, React client, SQLite resource, and dashboard healthy; `/health/live` and `/health/ready` succeeded; the application resource emitted no error-level OpenTelemetry logs.
+- No representative local model runtime was installed/running, so no task-level latency baseline is claimed. The new capture workflow is the required next evidence step on the selected hardware/model matrix.

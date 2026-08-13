@@ -301,6 +301,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // coarse span for the whole turn, so the audited "silent pre-spawn gap" (a first send stalled several seconds
         // before the model spawn with zero log lines) surfaces as timed child spans rather than an apparent hang.
         var turnStartedTimestamp = Stopwatch.GetTimestamp();
+        var harnessStartedTimestamp = context.HarnessStartedTimestamp ?? turnStartedTimestamp;
         using var turnActivity = NodeActivitySource.Source.StartActivity("chat.invocation.run");
 
         using (NodeActivitySource.Source.StartActivity("chat.invocation.validate_package"))
@@ -343,6 +344,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         _toolResultTimeoutsByInvocation[package.InvocationId] = turnPolicy.ToolResultTimeout;
 
+        using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions, harnessStartedTimestamp);
+        var providerBudget = ProviderCallBudget.Current!;
+        StreamState? stream = null;
+        string? invocationOutcome = null;
+
         try
         {
             var invocationToken = GetInvocationCancellationToken();
@@ -358,7 +364,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // accumulators, the byte caps, the monotonic sequence counters, and the terminal usage snapshot. Both
             // branches feed this through the same Emit* helpers so the transport, size cap, dispatcher reporting, and
             // ordering stay byte-for-byte identical.
-            var stream = new StreamState();
+            stream = new StreamState
+            {
+                HarnessStartedTimestamp = harnessStartedTimestamp
+            };
 
             if (shouldSendHubMessages)
             {
@@ -385,12 +394,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // this conversation's uploaded attachments into the sandbox. Like the spawn context it flows as an
             // AsyncLocal through the function-invocation pipeline; disposal restores the prior ambient value.
             using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
-
-            // Seed the per-invocation provider-budget scope into the same root tool-loop flow. The innermost
-            // pipeline hop reads it as an AsyncLocal to re-budget every inner tool-loop round and MAF participant round
-            // and to enforce the cumulative provider-call ceilings; disposal restores the prior ambient value. A turn
-            // that never loops pays only one pass-through budget check.
-            using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions);
 
             // AUD4-01: warm the local model to readiness BEFORE the watched streaming pull begins, so a cold big-model
             // load happens in its OWN size-aware window (owned by the supervisor) and is never killed by the shorter
@@ -482,9 +485,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 stream.UsageSnapshot?.TotalTokens,
                 stream.UsageSnapshot?.ReasoningTokens,
                 generationDurationMs).ConfigureAwait(false);
+            invocationOutcome = "completed";
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
+            invocationOutcome = "cancelled";
             CancelPendingToolCalls(package.InvocationId);
             var cancellationOrigin = ResolveCancellationOrigin();
             var failureCategory = ClassifyCancellation(cancellationOrigin);
@@ -500,6 +505,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         catch (Exception exception)
         {
+            invocationOutcome = exception is LlamaServerModelEjectedException ? "cancelled" : "failed";
             _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
             var (failureCategory, message) = MapFailure(exception);
             // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
@@ -517,6 +523,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         finally
         {
+            var efficiencyRecord = new InvocationEfficiencyRecord(
+                package.InvocationId,
+                invocationOutcome ?? "failed",
+                stream?.ProviderTag ?? "unknown",
+                package.OrchestrationSpec is not null,
+                Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds,
+                context.PreRunDurationMs,
+                context.QueueDurationMs,
+                stream?.ModelReadinessDurationMs,
+                stream?.FirstOutputLatencyMs,
+                stream?.UsageSnapshot?.InputTokens,
+                stream?.UsageSnapshot?.OutputTokens,
+                stream?.UsageSnapshot?.ReasoningTokens,
+                providerBudget.CaptureEfficiencySnapshot());
+            TryRecordInvocationEfficiency(efficiencyRecord, turnActivity);
+
             CleanupStaleToolCalls(_maxPendingToolCallAge);
             _toolResultTimeoutsByInvocation.TryRemove(package.InvocationId, out _);
             ClearActiveInvocation(package.InvocationId);
@@ -734,7 +756,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
             // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
-            RecordReadiness(startedUtc, "cancelled");
+            stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "cancelled");
             readinessActivity?.SetTag("outcome", "cancelled");
             throw;
         }
@@ -742,13 +764,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             // Readiness failed (e.g. model incompatible / OOM). Record it and let the streaming send surface the real,
             // classified failure — it hits the same supervisor path and produces the proper error.
-            RecordReadiness(startedUtc, "failed");
+            stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "failed");
             readinessActivity?.SetTag("outcome", "failed");
             _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
             return null;
         }
 
         var durationMs = RecordReadiness(startedUtc, "ready");
+        stream.ModelReadinessDurationMs = durationMs;
         readinessActivity?.SetTag("outcome", "ready");
 
         // The model is ready: measure TTFT from HERE (the first emitted chunk records against this baseline).
@@ -855,6 +878,20 @@ public sealed partial class InvocationRunner : IInvocationRunner
             new KeyValuePair<string, object?>("provider", provider),
             new KeyValuePair<string, object?>("model", model),
             new KeyValuePair<string, object?>("direction", direction));
+    }
+
+    private void TryRecordInvocationEfficiency(InvocationEfficiencyRecord record, Activity? activity)
+    {
+        try
+        {
+            InvocationEfficiencyTelemetry.Record(record, activity, _logger);
+        }
+        catch (Exception exception)
+        {
+            // Observability must never replace the invocation's real outcome or skip the cleanup that follows this call.
+            // Keep the fallback content-free: no record values or user/model/tool data are echoed here.
+            _logger.LogTrace(exception, "Agent harness efficiency telemetry could not be emitted.");
+        }
     }
 
     /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
@@ -1217,8 +1254,20 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // session drives the workflow as the stream is pulled and ends the stream right after the terminal output, so
         // a full drain is the documented terminator (an early break would risk truncating a later-superstep delta in
         // autonomous/multi-turn shapes). The terminal output carries no further deltas, so this adds no idle latency.
+        string? activeParticipantKey = null;
         await foreach (var update in session.WatchAsync(invocationToken).ConfigureAwait(false))
         {
+            if (!string.IsNullOrEmpty(update.ParticipantKey)
+                && !string.Equals(activeParticipantKey, update.ParticipantKey, StringComparison.Ordinal))
+            {
+                if (activeParticipantKey is not null)
+                {
+                    ProviderCallBudget.Current?.RecordAgentHandoff();
+                }
+
+                activeParticipantKey = update.ParticipantKey;
+            }
+
             switch (update.Kind)
             {
                 case OrchestrationUpdateKind.ReasoningDelta when !string.IsNullOrEmpty(update.Text):

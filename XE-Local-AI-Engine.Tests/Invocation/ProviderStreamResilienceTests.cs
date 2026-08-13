@@ -5,6 +5,8 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -29,6 +31,27 @@ public sealed class ProviderStreamResilienceTests
         AssertEx.Equal(expected: 1, result[0]);
         AssertEx.Equal(expected: 3, result[2]);
         AssertEx.Equal(expected: 3, callCount.Value);
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenTransientThenSuccess_RecordsOnlyActualRetries()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            MaxRetries = 2,
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        });
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            _ = await CollectAsync(sut.ExecuteStreamingAsync("endpoint", FactoryFailing(failures: 2, callCount, () => Yield(1)), CancellationToken.None));
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 2, snapshot.ProviderRetries);
     }
 
     [Test]

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
@@ -53,10 +54,21 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         _calibrationStore = calibrationStore ?? new TokenEstimatorCalibrationStore();
     }
 
-    public override Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+    public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+        ChatOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         var budgeted = ApplyBudget(messages, options);
-        return base.GetResponseAsync(budgeted, options, cancellationToken);
+        var budget = ProviderCallBudget.Current;
+        var startedTimestamp = Stopwatch.GetTimestamp();
+        try
+        {
+            return await base.GetResponseAsync(budgeted, options, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            budget?.RecordProviderRoundElapsed(Stopwatch.GetElapsedTime(startedTimestamp));
+        }
     }
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -67,9 +79,20 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         // Budget (and enforce the cumulative ceiling) BEFORE the first chunk is pulled, so a ceiling breach fails the
         // round up front rather than after streaming begins.
         var budgeted = ApplyBudget(messages, options);
-        await foreach (var update in base.GetStreamingResponseAsync(budgeted, options, cancellationToken).ConfigureAwait(false))
+        var budget = ProviderCallBudget.Current;
+        var startedTimestamp = Stopwatch.GetTimestamp();
+        try
         {
-            yield return update;
+            await foreach (var update in base.GetStreamingResponseAsync(budgeted, options, cancellationToken).ConfigureAwait(false))
+            {
+                yield return update;
+            }
+        }
+        finally
+        {
+            // A streamed call is pull-based: include the complete enumerator lifetime, including any consumer
+            // backpressure while the provider request remains open. This is provider-round elapsed time, not CPU time.
+            budget?.RecordProviderRoundElapsed(Stopwatch.GetElapsedTime(startedTimestamp));
         }
     }
 
@@ -96,8 +119,9 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         // Instructions AND the tool definitions (name + description + JSON schema) are fixed per-round input the model
         // never sees as a droppable message but which still counts against the window — folding both into the overhead
         // stops a tool-heavy agent from under-estimating and rounding an over-window request through.
+        var toolSchemaTokens = ProviderMessageTokenEstimator.EstimateTools(options?.Tools, charsPerToken);
         var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions, charsPerToken)
-                                 + ProviderMessageTokenEstimator.EstimateTools(options?.Tools, charsPerToken);
+                                 + toolSchemaTokens;
 
         var result = ProviderCallBudgeter.Budget(materialized, instructionsTokens, effectiveWindow, budgetOptions, charsPerToken);
 
@@ -136,7 +160,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
         try
         {
-            budget.RegisterProviderRound(result.EstimatedTokensAfter);
+            budget.RegisterProviderRound(result.EstimatedTokensAfter,
+                toolSchemaTokens,
+                result.MessagesDropped,
+                result.ToolResultsTruncated,
+                result.CharsTruncated);
         }
         catch (ProviderCallBudgetExceededException)
         {

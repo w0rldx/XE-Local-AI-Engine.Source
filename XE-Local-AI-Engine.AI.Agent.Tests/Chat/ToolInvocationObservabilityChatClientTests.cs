@@ -9,6 +9,8 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ToolInvocationObservabilityChatClientTests
@@ -290,6 +292,33 @@ public sealed class ToolInvocationObservabilityChatClientTests
         // The raw result telemetry must never leak the exception message.
         AssertEx.True(logger.Messages.TrueForAll(message => !message.Contains("boom", StringComparison.Ordinal)),
             "The tool result span/log must never carry the raw exception content.");
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenResultFollowsCall_RecordsLogicalToolCostOnce()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            await foreach (var update in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+            {
+                GC.KeepAlive(update);
+            }
+
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 1, snapshot.ToolCallsRequested);
+        AssertEx.Equal(expected: 1, snapshot.ToolCallsCompleted);
+        AssertEx.Equal(expected: 0, snapshot.ToolCallsFailed);
+        AssertEx.True(snapshot.ToolResultBytes > 0);
+        AssertEx.True(snapshot.ToolRequestToResultMs >= 0);
+        AssertEx.True(snapshot.TimeToFirstToolRequestMs is >= 0);
     }
 
     private sealed class CallThenResultChatClient : IChatClient
