@@ -193,8 +193,9 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260806201500_AddSelectedFolderRevocation` | Adds selected-folder revocation and makes alias uniqueness apply only to live registrations |
 | `20260807130219_AddSlashCommands` | Adds operator-authored slash commands with encrypted description/configuration |
 | `20260807193324_AddCustomTools` | Adds the Custom Tools library with encrypted description/configuration and case-insensitive unique names |
+| `20260813121930_AddKnowledgeCollectionsAndProvenance` | Adds knowledge collection namespaces plus source/page/offset/content-kind/language/symbol provenance; rebuilds `chunk_fts` with weighted source-path, heading, symbol, and content fields |
 
-(Counted on disk: **53 migration implementation files** — 51 timestamped plus 2
+(Counted on disk: **54 migration implementation files** — 52 timestamped plus 2
 untimestamped chat-schema migrations — and **2 model snapshots**. Per-migration `.Designer.cs` files
 are not included in that implementation count.)
 

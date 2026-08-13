@@ -81,8 +81,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     public async Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken)
     {
+        var searchStart = Stopwatch.GetTimestamp();
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Query))
+        {
+            return new KnowledgeSearchResult([]);
+        }
+
+        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
         {
             return new KnowledgeSearchResult([]);
         }
@@ -98,7 +104,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         // is the win here; truly concurrent execution of BOTH DB arms would need a second connection/scope and is
         // deliberately not taken. The vector arm is filtered by the SAME resolved model name the query was embedded with,
         // so query vectors are only ever compared against chunk vectors built by that identical model.
-        var ftsArm = RunFtsArmAsync(request.Query, candidatePool, request.DocumentId, cancellationToken);
+        var ftsArm = RunFtsArmAsync(request.Query, candidatePool, request.DocumentId, collectionId, cancellationToken);
         var embedArm = RunEmbedArmAsync(request.Query, cancellationToken);
         await Task.WhenAll(ftsArm, embedArm).ConfigureAwait(false);
 
@@ -115,15 +121,16 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         if (!queryVector.IsEmpty)
         {
             var vectorStart = Stopwatch.GetTimestamp();
-            var vectorHits = await _vectorSearchFactory.Create()
-                                                       .SearchAsync(queryVector,
-                                                           resolvedModel,
-                                                           vectorIdentity,
-                                                           queryVector.Length,
-                                                           candidatePool,
-                                                           request.DocumentId,
-                                                           cancellationToken)
-                                                       .ConfigureAwait(false);
+            var vectorSearch = _vectorSearchFactory.Create();
+            var vectorHits = await vectorSearch.SearchAsync(queryVector,
+                    resolvedModel,
+                    vectorIdentity,
+                    queryVector.Length,
+                    candidatePool,
+                    request.DocumentId,
+                    collectionId,
+                    cancellationToken)
+                .ConfigureAwait(false);
             RecordStage("vector", vectorStart);
             vectorRanked = vectorHits.Select(hit => new RankFusionInput(hit.ChunkId, hit.Score)).ToList();
         }
@@ -141,16 +148,23 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         // content duplicates BEFORE any top-`limit` cut so near-identical chunks stored under different ids do not crowd
         // out distinct results. The higher-RRF-ranked occurrence of a duplicate is kept (the pool is in fused order), so
         // the dedup is deterministic.
-        var pool = await HydratePoolAsync(connection, fused, candidatePool, cancellationToken).ConfigureAwait(false);
+        var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, cancellationToken).ConfigureAwait(false);
         var deduped = DeduplicateByContent(pool);
 
         // Optional rerank stage: when a reranker model is configured, the deduped pool is rescored by a local cross-encoder
         // and reordered BEFORE the top-`limit` cut, so a strong-but-lexically-weak chunk can be pulled into the results.
         // When reranking is off — or on ANY rerank failure — the behavior is the exact original: RRF order, Take(limit).
         // Reranking scores the BASE chunk content (pre-expansion); neighbor expansion is applied only to the final top-k.
-        var selections = string.IsNullOrWhiteSpace(_options.RerankerModelName)
-            ? deduped.Take(limit).ToList()
-            : await RerankAsync(request.Query, deduped, limit, cancellationToken).ConfigureAwait(false);
+        var rerankDecision = AdaptiveRetrievalPolicy.DecideRerank(_options.AdaptiveRerankingEnabled,
+            !string.IsNullOrWhiteSpace(_options.RerankerModelName),
+            ftsRanked,
+            vectorRanked,
+            deduped.Count,
+            Stopwatch.GetElapsedTime(searchStart),
+            TimeSpan.FromMilliseconds(Math.Max(1, _options.RetrievalLatencyBudgetMilliseconds)));
+        var selections = rerankDecision.ShouldRerank
+            ? await RerankWithinBudgetAsync(request.Query, deduped, limit, searchStart, cancellationToken).ConfigureAwait(false)
+            : deduped.Take(limit).ToList();
 
         // Neighbor expansion (when requested) is resolved for the whole final top-k in one batched call rather than one
         // round trip per hit; the content ordering and fallback are identical to expanding each hit individually.
@@ -178,7 +192,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 selection.Score,
                 selection.Row.ChunkIndex,
                 selection.Row.DocumentStatus,
-                servingLastKnownGood));
+                servingLastKnownGood,
+                selection.Row.CollectionId,
+                selection.Row.SourcePath,
+                selection.Row.ContentKind,
+                selection.Row.Language,
+                selection.Row.Symbol,
+                selection.Row.PageNumber,
+                selection.Row.StartOffset,
+                selection.Row.EndOffset));
         }
 
         return new KnowledgeSearchResult(hits);
@@ -186,12 +208,16 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     // Lexical arm wrapper: times the FTS round trip. Reads the request-scoped DB connection (so it never overlaps another
     // DB command — the embedding arm it runs beside touches only the provider process).
-    private async Task<IReadOnlyList<FtsSearchHit>> RunFtsArmAsync(string query, int candidatePool, Guid? documentId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<FtsSearchHit>> RunFtsArmAsync(string query,
+        int candidatePool,
+        Guid? documentId,
+        string collectionId,
+        CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
         try
         {
-            return await _ftsSearch.SearchAsync(query, candidatePool, documentId, cancellationToken).ConfigureAwait(false);
+            return await _ftsSearch.SearchAsync(query, candidatePool, documentId, collectionId, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -256,10 +282,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     private static async Task<List<ChunkSelection>> HydratePoolAsync(DbConnection connection,
         IReadOnlyList<RankFusionEntry> fused,
         int candidatePool,
+        string collectionId,
         CancellationToken cancellationToken)
     {
         var pooled = fused.Take(candidatePool).ToList();
-        var hydrated = await HydrateChunksAsync(connection, pooled.Select(static entry => entry.ChunkId).ToList(), cancellationToken).ConfigureAwait(false);
+        var hydrated = await HydrateChunksAsync(connection,
+                pooled.Select(static entry => entry.ChunkId).ToList(),
+                collectionId,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         var pool = new List<ChunkSelection>(pooled.Count);
         foreach (var entry in pooled)
@@ -326,6 +357,41 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                .OrderByDescending(static candidate => candidate.Score)
                .Take(limit)
                .ToList();
+    }
+
+    private async Task<IReadOnlyList<ChunkSelection>> RerankWithinBudgetAsync(string query,
+        IReadOnlyList<ChunkSelection> pool,
+        int limit,
+        long searchStart,
+        CancellationToken cancellationToken)
+    {
+        var totalBudget = TimeSpan.FromMilliseconds(Math.Max(1, _options.RetrievalLatencyBudgetMilliseconds));
+        var remaining = totalBudget - Stopwatch.GetElapsedTime(searchStart);
+        if (remaining <= TimeSpan.Zero)
+        {
+            return pool.Take(limit).ToList();
+        }
+
+        using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budgetCts.CancelAfter(remaining);
+        try
+        {
+            // The linked deadline flows through reranker model acquisition and scoring. The provider's larger internal
+            // timeout is only a safety ceiling; this per-search remaining budget wins first. WaitAsync independently
+            // bounds the caller even if a provider violates the cancellation contract.
+            return await RerankAsync(query, pool, limit, budgetCts.Token)
+                .WaitAsync(remaining, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            await budgetCts.CancelAsync().ConfigureAwait(false);
+            return pool.Take(limit).ToList();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && budgetCts.IsCancellationRequested)
+        {
+            return pool.Take(limit).ToList();
+        }
     }
 
     // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
@@ -397,6 +463,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         Justification = "Only internally-generated $idN placeholder names are interpolated; every chunk id is a bound parameter, so no user input reaches the command text.")]
     private static async Task<IReadOnlyDictionary<Guid, HydratedChunk>> HydrateChunksAsync(DbConnection connection,
         IReadOnlyList<Guid> chunkIds,
+        string collectionId,
         CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
@@ -423,11 +490,16 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             }
 
             command.CommandText = $"""
-                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status, d.vector_identity
+                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path,
+                                          d.storage_path, d.status, d.vector_identity, d.collection_id,
+                                          c.source_path, c.content_kind, c.language, c.symbol, c.page_number,
+                                          c.start_offset, c.end_offset
                                    FROM knowledge_document_chunks c
                                    JOIN knowledge_documents d ON d.document_id = c.document_id
-                                   WHERE c.chunk_id IN ({string.Join(", ", placeholders)});
+                                   WHERE d.collection_id = $collection_id
+                                     AND c.chunk_id IN ({string.Join(", ", placeholders)});
                                    """;
+            AddParameter(command, "$collection_id", collectionId);
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -442,7 +514,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                     headingPath,
                     reader.GetString(5),
                     ParseDocumentStatus(reader.GetString(6)),
-                    reader.GetString(7));
+                    reader.GetString(7),
+                    reader.GetString(8),
+                    await reader.IsDBNullAsync(9, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(9),
+                    reader.GetString(10),
+                    await reader.IsDBNullAsync(11, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(11),
+                    await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(12),
+                    await reader.IsDBNullAsync(13, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt32(13),
+                    reader.GetInt32(14),
+                    reader.GetInt32(15));
             }
         }
 
@@ -480,7 +560,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         string? HeadingPath,
         string StoragePath,
         KnowledgeDocumentStatus DocumentStatus,
-        string VectorIdentity);
+        string VectorIdentity,
+        string CollectionId,
+        string? SourcePath,
+        string ContentKind,
+        string? Language,
+        string? Symbol,
+        int? PageNumber,
+        int StartOffset,
+        int EndOffset);
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
     // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).

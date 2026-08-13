@@ -80,6 +80,8 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 				{detail ? (
 					<>
 						<Stack gap="xs">
+							<MetadataRow label={t("pages.knowledgeBase.collection.label", "Collection")}>{detail.collectionId}</MetadataRow>
+							<MetadataRow label={t("pages.knowledgeBase.table.source", "Source")}>{detail.sourcePath ?? detail.sourceKind}</MetadataRow>
 							<MetadataRow label={t("pages.knowledgeBase.table.status", "Status")}>
 								<KnowledgeStatusBadge status={detail.status} />
 							</MetadataRow>
@@ -135,7 +137,7 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 													: undefined
 											}
 										>
-											<Stack gap={6}>
+										<Stack gap={6}>
 												<Group gap="xs" justify="space-between" wrap="nowrap">
 													<Badge
 														variant={isHighlighted ? "filled" : "outline"}
@@ -149,8 +151,28 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 															{chunk.headingPath}
 														</Text>
 													) : null}
-												</Group>
-												<Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+											</Group>
+											<Group gap="xs">
+												<Badge variant="light" color="gray" size="xs">
+													{chunk.contentKind}
+												</Badge>
+												{chunk.language ? (
+													<Badge variant="light" color="blue" size="xs">
+														{chunk.language}
+													</Badge>
+												) : null}
+												{chunk.symbol ? (
+													<Badge variant="outline" color="violet" size="xs">
+														{chunk.symbol}
+													</Badge>
+												) : null}
+												{chunk.pageNumber ? (
+													<Text size="xs" c="dimmed">
+														{t("pages.knowledgeBase.detail.page", "Page {{page}}", { page: chunk.pageNumber })}
+													</Text>
+												) : null}
+											</Group>
+											<Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
 													{chunk.content}
 												</Text>
 											</Stack>

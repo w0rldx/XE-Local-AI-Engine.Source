@@ -16,6 +16,10 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.DocumentId)
                .HasColumnName("document_id");
 
+        builder.Property(entity => entity.CollectionId)
+               .HasColumnName("collection_id")
+               .HasDefaultValue("DEFAULT");
+
         builder.Property(entity => entity.OriginalFileName)
                .HasColumnName("original_file_name");
 
@@ -33,6 +37,16 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
 
         builder.Property(entity => entity.StoragePath)
                .HasColumnName("storage_path");
+
+        builder.Property(entity => entity.SourcePath)
+               .HasColumnName("source_path");
+
+        builder.Property(entity => entity.SourceKind)
+               .HasColumnName("source_kind")
+               .HasDefaultValue("upload");
+
+        builder.Property(entity => entity.SourceId)
+               .HasColumnName("source_id");
 
         builder.Property(entity => entity.Status)
                .HasColumnName("status");
@@ -54,17 +68,46 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
                .HasColumnName("vector_dim")
                .HasDefaultValue(0);
 
+        builder.Property(entity => entity.ParserVersion)
+               .HasColumnName("parser_version")
+               .HasDefaultValue("legacy");
+
+        builder.Property(entity => entity.ChunkerVersion)
+               .HasColumnName("chunker_version")
+               .HasDefaultValue("legacy");
+
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
 
         builder.Property(entity => entity.UpdatedAtUtc)
                .HasColumnName("updated_at_utc");
 
-        // UNIQUE content hash so a duplicate upload is deduped (store uses INSERT ... ON CONFLICT DO NOTHING, not
-        // check-then-insert), plus a status index for the management/list queries.
-        builder.HasIndex(entity => entity.ContentHash)
-               .IsUnique();
+        // Ordinary uploads dedupe by collection + content hash. Repository documents deliberately do not: identical
+        // bytes at two paths are two sources, while collection + source kind + source id + path gives a changed file
+        // stable identity without allowing two repositories in one collection to overwrite each other.
+        builder.HasIndex(entity => new
+               {
+                   entity.CollectionId,
+                   entity.ContentHash
+               })
+               .IsUnique()
+               .HasFilter("source_kind <> 'repository'");
+
+        builder.HasIndex(entity => new
+               {
+                   entity.CollectionId,
+                   entity.SourceKind,
+                   entity.SourceId,
+                   entity.SourcePath
+               })
+               .IsUnique()
+               .HasFilter("source_kind = 'repository' AND source_id IS NOT NULL AND source_path IS NOT NULL");
 
         builder.HasIndex(entity => entity.Status);
+        builder.HasIndex(entity => new
+        {
+            entity.CollectionId,
+            entity.Status
+        });
     }
 }

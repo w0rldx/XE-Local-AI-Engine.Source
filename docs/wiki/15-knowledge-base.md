@@ -1,6 +1,6 @@
 # Knowledge Base / RAG
 
-> Last reviewed: 2026-07-24 · Code-grounded.
+> Last reviewed: 2026-08-13 · Code-grounded.
 
 The Knowledge Base is a **fully offline** document store with hybrid retrieval. An operator uploads documents; the node extracts their text, chunks them on header boundaries, embeds each chunk with a local embedding model, and indexes everything into local SQLite with **selective encryption** — source document blobs and display names are encrypted at rest, while the extracted chunk text and its FTS search index are stored unencrypted locally. Retrieval fuses a **lexical** arm (SQLite FTS5 / BM25) and a **semantic** arm (vector cosine similarity) with Reciprocal Rank Fusion, optionally rescoring with a **local cross-encoder reranker**, and exposes the result to agents as a tool.
 
@@ -20,16 +20,21 @@ The gate keys on the **EFFECTIVE model** — the one that actually runs the turn
 | Background ingestion worker + dispatcher | `…/Services/Knowledge/KnowledgeIngestionWorker.cs`, `KnowledgeIngestionDispatcher.cs` |
 | Header-boundary chunker | `…/Services/Knowledge/HeaderBoundaryChunkingService.cs` (`IChunkingService`) |
 | Chunk embedder | `…/Services/Knowledge/KnowledgeChunkEmbedder.cs` (`IKnowledgeChunkEmbedder`) |
+| Exact chunk-embedding reuse | `…/Services/Knowledge/KnowledgeChunkEmbeddingCache.cs`, `KnowledgeChunkEmbeddingReuseStore.cs` |
 | Embedding model resolver + prefixer | `…/Services/Knowledge/EmbeddingModelResolver.cs`, `KnowledgeEmbeddingPrefixer.cs` |
 | Hybrid search orchestrator | `…/Services/Knowledge/KnowledgeSearchService.cs` (`IKnowledgeSearchService`) |
+| Optional-stage policy | `…/Services/Knowledge/AdaptiveRetrievalPolicy.cs` |
 | Lexical arm (FTS5) | `…/Services/Knowledge/FtsSearch.cs` (`IFtsSearch`) |
 | Semantic arm (cosine) + factory | `…/Services/Knowledge/ManagedCosineVectorSearch.cs`, `VectorSearchFactory.cs` (`IVectorSearch`) |
 | Encrypted document blob store | `…/Services/Knowledge/KnowledgeDocumentBlobStore.cs` (`IKnowledgeDocumentBlobStore`) |
 | Document text extraction | `…/Services/DocumentIngestion/DocumentTextExtractor.cs` + `Extraction/` |
+| Registered-repository import | `…/Services/Knowledge/KnowledgeRepositoryImportService.cs` |
+| Scheduled stale-model reindex | `…/Services/Knowledge/KnowledgeScheduledModelReindexWorker.cs` |
 | Agent-facing tools | `…/Services/Knowledge/Tools/Implementation/SearchKnowledgeBaseToolHandler.cs`, `ReadSurroundingChunksToolHandler.cs` |
 | SignalR notifier + hub | `XE-Local-AI-Engine.Client/Hubs/KnowledgeIndexingNotifier.cs`, `KnowledgeBaseHub.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/Knowledge/V1/` |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/knowledge/` |
+| Retrieval evaluation corpus/harness | `XE-Local-AI-Engine.Client.Persistence.Tests/Knowledge/RetrievalEval/` |
 
 ## Ingestion pipeline
 
@@ -43,28 +48,39 @@ Upload ──▶ Uploaded ──▶ Extracting ──▶ Chunking ──▶ Embe
                           plaintext)     chunker
 ```
 
-- **Extraction** — `DocumentTextExtractor` dispatches by extension: `.pdf` and `.docx` have dedicated readers (`.docx` via the pure-managed Open XML SDK); a broad set of plaintext types (`.txt`, `.md`, `.markdown`, `.csv`, `.tsv`, `.json`, `.jsonc`, `.log`, …) go through `PlaintextDocumentReader`. Extraction is bounded by `DocumentExtractionLimits` (a container format such as a `.docx` zip or `.pdf` can expand well beyond its on-disk size, so a decompression-bomb guard caps the extracted size).
-- **Chunking** — `HeaderBoundaryChunkingService` is an **offline, deterministic** chunker with no tokenizer or external package. It walks the document's ordered element stream: each header opens a new section (maintaining an `H1 > H2` heading trail via a level stack); paragraphs and tables accumulate into their section body, which is split into character-bounded, overlapping chunks (`MaxChunkChars` / `ChunkOverlapChars`). The same document always yields the same sections and chunks.
-- **Embedding** — `KnowledgeChunkEmbedder` reuses the node-local embedding resolution path: it resolves the configured embedding provider/model (`KnowledgeBaseOptions.EmbeddingProviderName` / `EmbeddingModelName`) and generates in batches (`MaxEmbeddingBatchSize`). After provider generation, ingestion and query share `KnowledgeEmbeddingVectorPolicy`. A confidently resolved `nomic-embed-text-v1.5` defaults to the versioned Matryoshka recipe (full-vector population layer norm with epsilon `1e-5` → first 512 components → L2 normalization); other models stay native. The exact resolved model + transform/version + width is persisted as the canonical vector identity and is filtered exactly during search, with the dimension checked separately as defense in depth.
+- **Extraction** — `DocumentTextExtractor` dispatches by extension: `.pdf` and `.docx` have dedicated readers (`.docx` via the pure-managed Open XML SDK); `.html`/`.htm` use the deterministic `HtmlDocumentReader`; Markdown, plaintext, structured text, logs, and supported source-code extensions use `PlaintextDocumentReader`. Markdown headings and fenced code blocks, HTML headings/paragraphs/lists/tables/code blocks, and code whitespace/symbol text are retained as ordered structural elements instead of being flattened prematurely. Extraction is bounded by `DocumentExtractionLimits` (a container format such as a `.docx` zip or `.pdf` can expand well beyond its on-disk size, so a decompression-bomb guard caps the extracted size).
+- **Chunking** — `HeaderBoundaryChunkingService` is an **offline, deterministic** chunker with no tokenizer or external package. It walks the document's ordered element stream: each header opens a new section (maintaining an `H1 > H2` heading trail via a level stack); paragraphs, tables, and code blocks accumulate into their section body, which is split into token- and character-bounded, overlapping chunks (`MaxChunkTokens`, `MaxChunkChars`, `ChunkOverlapChars`). Heading trails are prepended to the embedding input as deterministic document context. Each chunk preserves offsets plus content kind, language, symbol, page, and source-path provenance where the parser can supply them. The same document and versioned parser/chunker settings yield the same sections, chunks, hashes, and identifiers.
+- **Embedding** — `KnowledgeChunkEmbedder` reuses the node-local embedding resolution path: it resolves the configured embedding provider/model (`KnowledgeBaseOptions.EmbeddingProviderName` / `EmbeddingModelName`) and generates in batches (`MaxEmbeddingBatchSize`). After provider generation, ingestion and query share `KnowledgeEmbeddingVectorPolicy`. A confidently resolved `nomic-embed-text-v1.5` defaults to the versioned Matryoshka recipe (full-vector population layer norm with epsilon `1e-5` → first 512 components → L2 normalization); other models stay native. The provider's immutable installed-weight digest/revision is hashed into the resolved inventory fingerprint, so replacing weights under the same Ollama tag or GGUF name changes the canonical identity. The exact resolved model revision + transform/version + width is persisted and filtered during search, with dimension checked separately. When that identity and width are known before inference, ingestion reuses an exact vector keyed by contextual-content hash, parser version, chunker version, canonical vector identity, and dimension. A process-wide TTL/entry/byte-bounded RAM cache and in-flight coalescer first consult a short-lived scoped durable lookup of committed indexed rows; unknown-width providers retain the normal embed path rather than risk a false hit.
 - **Indexing** — the final `Indexed` transition is performed **atomically** by `IKnowledgeIndexWriter` so a document is never half-visible. All failure logging is **exception-type-only** — no chunk or document text reaches a log.
 - **Admission control (backpressure)** — the async queue is bounded (`KnowledgeIngestionDispatcher`: a single-reader channel, capacity 256; the worker further caps concurrency with a `SemaphoreSlim`). Admission is **non-blocking**: when the queue is full, the upload/reindex endpoint returns **503 with `Retry-After: 5`** instead of holding the request or growing the backlog, and admission is **idempotent** (a document already queued or in flight is not re-enqueued, so it is never processed twice concurrently). A 503 is a *retryable busy* signal, not data loss — the blob is already persisted, so a document whose ingestion a full queue previously rejected (persisted-but-unindexed) is re-enqueued on a later re-upload of the same file. Accept/reject counts and live queue depth are published on the `XE.Node` meter. The synchronous **chat**-attachment path has its own equivalent gate (`DocumentExtractionAdmissionGate`), also 503 + `Retry-After` when at capacity — see the busy-admission note in [API & Hubs](09-api-and-hubs.md).
+- **Scheduled index migration** — `KnowledgeScheduledModelReindexWorker` periodically discovers documents whose stored canonical vector identity, immutable model revision, parser version, or chunker version no longer matches the active pipeline and admits them to the same bounded background queue. Deterministic parser/chunker migrations still mark rows stale during a transient model-provider outage; model identity comparisons require a confident provider resolution. It does not bypass normal queue pressure or atomic indexing. `ScheduledModelReindexEnabled` and `ScheduledModelReindexIntervalMinutes` control the scheduler.
 
 **Matryoshka rollback procedure.** Set `KnowledgeBase:EmbeddingVectorMode` to `Native`, invoke the normal corpus reindex endpoint, and wait until the catalog reports no stale documents. Only then deploy a binary that predates canonical vector identities. Switching the binary first is unsafe because old model-name-only search code cannot distinguish the 512-wide transformed rows from native vectors. Switching either direction changes the canonical identity immediately, so old projections stay excluded/stale until the normal per-document or full-corpus reindex rebuilds them.
 
+## Collections and repository ingestion
+
+Every document, section, chunk, FTS row, vector candidate, and hydrated hit belongs to a canonical `CollectionId`. Missing collection input maps to `DEFAULT` for backward compatibility; explicit ids are trimmed, upper-cased, limited to 128 ASCII letters/digits plus `-`, `_`, and `.`, and applied independently to both lexical and dense retrieval. A `DocumentId` from another collection returns no results rather than weakening the collection boundary. This is a local namespace/isolation boundary, not a multi-tenant authorization system.
+
+Development Mode can import a previously registered local Git repository through `ImportKnowledgeRepositoryEndpoint`. The request carries only the registered selected-folder id and collection id—never an arbitrary path. `KnowledgeRepositoryImportService` revalidates the registered folder as a local Git top-level, refuses reparse/symlink escapes, skips sensitive/generated directories and files, enforces per-file plus aggregate byte limits, revalidates the opened file before accepting its bytes, preserves only relative source paths, and sends eligible source files through the normal encrypted-blob/background-ingestion pipeline. Repository identity is collection + normalized source path: re-import updates a changed path in place, identical bytes at two paths keep distinct provenance, unchanged paths are not requeued, and a successfully completed scan purges repository documents whose paths were deleted or renamed. Uploads retain collection-scoped content-hash deduplication.
+
 ## Hybrid retrieval
 
-`KnowledgeSearchService.SearchAsync` is the retrieval heart. A `KnowledgeSearchRequest` carries the untrusted `Query`, a `Limit`, an optional `DocumentId` scope, and an `ExpandNeighbors` flag. The flow:
+`KnowledgeSearchService.SearchAsync` is the retrieval heart. A `KnowledgeSearchRequest` carries the untrusted `Query`, a `Limit`, a normalized collection scope (defaulting to `DEFAULT`), an optional `DocumentId` scope, and an `ExpandNeighbors` flag. The flow:
 
 1. **Embed the query** with the current model, using the query-intent prefix (`KnowledgeEmbeddingPrefixer`).
 2. **Two arms retrieve candidates in parallel:**
-   - **Lexical** — `FtsSearch` runs a BM25-ranked `MATCH` over the `chunk_fts` FTS5 external-content index (the raw-SQL path; the query is escaped before it reaches FTS). A document-scoped search filters in the same `MATCH` via the UNINDEXED `document_id` column.
-   - **Semantic** — the model-scoped `IVectorSearch` (`ManagedCosineVectorSearch`) scores chunk embeddings by cosine similarity within the active model/dimension.
+   - **Lexical** — `FtsSearch` runs a BM25-ranked `MATCH` over weighted FTS5 fields for source path, heading path, symbol, and body content (the raw-SQL path; the query is escaped before it reaches FTS). Exact identifiers, file paths, and symbols therefore receive more weight than repeated body terms. Collection and optional document scopes are enforced in the same query through UNINDEXED identity columns.
+   - **Semantic** — the collection- and model-scoped `IVectorSearch` (`ManagedCosineVectorSearch`) scores chunk embeddings by cosine similarity within the active canonical model identity/dimension.
    Each arm fetches a **candidate pool** (`CandidatePoolMultiplier` × limit, floored at `MinimumCandidatePool`) so fusion has enough overlap material.
 3. **Fuse** the two ranked lists with **Reciprocal Rank Fusion** (`IRankingFusionService`).
-4. **Optionally rerank** the fused candidate pool with a local **cross-encoder reranker** (`IRerankerClient`, model `KnowledgeBaseOptions.RerankerModelName`) before the top-`limit` cut; when enabled and successful the hit's `Score` becomes the cross-encoder relevance score.
+4. **Conditionally rerank** the fused candidate pool with a local **cross-encoder reranker** (`IRerankerClient`, model `KnowledgeBaseOptions.RerankerModelName`) before the top-`limit` cut. With `AdaptiveRerankingEnabled` (default), the deterministic policy skips the optional model when both retrieval arms agree on the top chunk, the candidate set is too small, or at least 80% of `RetrievalLatencyBudgetMilliseconds` (default 500 ms) has elapsed; ambiguous candidates still rerank. The exact remaining retrieval deadline flows through reranker model acquisition and scoring; deadline expiry degrades to fusion order while caller cancellation still propagates. Disabling the adaptive gate restores always-attempt-rerank behavior for controlled benchmarks, but not an unbounded wait. When reranking succeeds the hit's `Score` becomes the cross-encoder relevance score.
 5. **Hydrate** the selected chunks over the raw-SQL path and, when `ExpandNeighbors` is set, expand each hit with its surrounding neighbor chunks (`NeighborWindow = 1` each side).
 
-**Graceful degradation is a contract:** if the embedding model or the reranker is unavailable, search degrades (lexical-only / fusion-order) rather than failing. A hit's `Title`/`Section` are derived from the **non-sensitive** `heading_path`/`storage_path`, so a result never exposes the encrypted original file name.
+**Graceful degradation is a contract:** if the embedding model or the reranker is unavailable, search degrades (lexical-only / fusion-order) rather than failing. Each hit carries collection, document, chunk, relative source path, heading/section, page, offsets, content kind, language, and symbol provenance where available. A hit's `Title`/`Section` are derived from the **non-sensitive** `heading_path`/`storage_path`, so a result never exposes the encrypted original file name.
+
+## Retrieval evaluation
+
+`Client.Persistence.Tests/Knowledge/RetrievalEval/` runs the real ingestion, SQLite FTS/vector, fusion, hydration, and optional reranker path against deterministic embeddings. Its representative corpus covers English and German semantic questions, exact code identifiers/paths, lexical distractors, long-document boundary facts, multi-source answers, and explicit no-answer queries. The harness reports Recall@K, document Precision@K, MRR, binary nDCG@K, no-answer accuracy, citation/source-anchor coverage, and measured p50/p95/max query latency. Latency is diagnostic in the deterministic suite; hardware-specific 500 ms acceptance remains a benchmark gate rather than a timing-sensitive unit assertion.
 
 That invariant is a statement about the **search response**, not about what the user sees. Because `storage_path` is a GUID filename, a chunk with no heading trail would otherwise be labelled with a raw GUID — unreadable, and indistinguishable between two documents. The **UI resolves the display name client-side**: each hit carries its `document_id`, and `KnowledgeSearchPanel` joins that against the already-loaded documents list (which decrypts names for the same operator-authenticated viewer) to render `12-security-and-privacy.md › Encryption at rest`, falling back to the API's title when the document is not in the loaded list. So do not "fix" a GUID-titled result by decrypting `original_file_name` in `KnowledgeSearchService` — the readable label already exists one layer up, and moving it into the response would also hand file names to a cloud model through the gated `search_knowledge_base` tool.
 
@@ -72,8 +88,9 @@ That invariant is a statement about the **search response**, not about what the 
 
 The knowledge base is exposed to the agent loop as tools:
 
-- **`SearchKnowledgeBaseToolHandler`** — the agent issues a query and receives fused, hydrated hits (the same `IKnowledgeSearchService` path).
-- **`ReadSurroundingChunksToolHandler`** — the agent expands a specific hit with its neighboring chunks for more context.
+- **`SearchKnowledgeBaseToolHandler`** — the agent issues a collection-scoped query and receives fused, hydrated hits (the same `IKnowledgeSearchService` path), including the `collectionId` needed for follow-up reads.
+- **`ReadDocumentToolHandler`** — the agent reads one bounded document only when both its document id and collection id match.
+- **`ReadSurroundingChunksToolHandler`** — the agent expands a specific hit with its neighboring chunks only inside the hit's collection.
 
 These make the KB a **retrieval-augmented generation (RAG)** source the agent can consult mid-conversation. See [Agent Mode](04-agent-mode.md) for the tool registry.
 
@@ -92,6 +109,7 @@ Routes under `knowledge/*`, one endpoint class per file in `Endpoints/Knowledge/
 | `GetKnowledgeDocumentEndpoint` | One document's detail. |
 | `DeleteKnowledgeDocumentEndpoint` | Delete a document and its chunks/index rows. |
 | `SearchKnowledgeEndpoint` | Hybrid search over the corpus (or a single document). |
+| `ImportKnowledgeRepositoryEndpoint` | Import supported files from a registered local Git repository into one collection. |
 | `ReindexKnowledgeDocumentEndpoint` | Re-run ingestion for one document. |
 | `ReindexCorpusEndpoint` | Re-run ingestion for the whole corpus (e.g. after an embedding-model change). |
 | `DownloadRecommendedRerankerEndpoint` | POST: one-click download of the recommended cross-encoder reranker via the same GGUF download coordinator operator HF downloads use; idempotent no-op if already installed or in flight. |
@@ -100,15 +118,17 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 
 ## React feature
 
-`src/features/knowledge/` (`pages/`, `components/`, `hooks/`, `queries/`, `models/`) renders the upload surface, the document list with live ingestion status, and the search UI. It follows the standard client conventions (TanStack Query for server state, a SignalR hub that invalidates queries on push). See [React Client](10-react-client.md).
+`src/features/knowledge/` (`pages/`, `components/`, `hooks/`, `queries/`, `models/`) renders the active-collection selector, collection-bound upload/document/search surfaces, source/provenance details, and the Development Mode registered-repository importer. It follows the standard client conventions (TanStack Query for server state, a SignalR hub that invalidates queries on push). See [React Client](10-react-client.md).
 
 ## Invariants a maintainer must respect
 
 1. **No document/chunk/query text is ever logged** — failure logging is exception-type-only; `failure_reason` is a fixed content-free string.
-2. **Vectors compare only within one model/dimension.** A dimension mismatch is a `Failed` document, not a silent wrong answer. Changing the embedding model requires a re-index (`ReindexCorpusEndpoint`).
+2. **Vectors compare only within one immutable model revision and dimension.** A dimension mismatch is a `Failed` document, not a silent wrong answer. Changing or replacing the embedding model requires a re-index (`ReindexCorpusEndpoint`).
 3. **Search degrades, never 500s,** when the embedding model or reranker is unavailable.
 4. **Results never expose the encrypted original file name** — `Title`/`Section` come from the non-sensitive heading/storage path only.
 5. **The `Indexed` transition is atomic** — a document is never half-visible to retrieval.
+6. **Every retrieval arm and hydration query applies the same collection scope** — document filters never override namespace isolation.
+7. **Embedding reuse is exact or disabled** — content, parser/chunker versions, canonical vector identity, and dimension must all match.
 
 ## Related pages
 

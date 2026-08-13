@@ -1487,6 +1487,20 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("chunk_count");
 
+                    b.Property<string>("ChunkerVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("legacy")
+                        .HasColumnName("chunker_version");
+
+                    b.Property<string>("CollectionId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("DEFAULT")
+                        .HasColumnName("collection_id");
+
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -1520,9 +1534,31 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("original_file_name");
 
+                    b.Property<string>("ParserVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("legacy")
+                        .HasColumnName("parser_version");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER")
                         .HasColumnName("size_bytes");
+
+                    b.Property<string>("SourceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("upload")
+                        .HasColumnName("source_kind");
+
+                    b.Property<string>("SourcePath")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_path");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1553,10 +1589,17 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasKey("DocumentId");
 
-                    b.HasIndex("ContentHash")
-                        .IsUnique();
-
                     b.HasIndex("Status");
+
+                    b.HasIndex("CollectionId", "ContentHash")
+                        .IsUnique()
+                        .HasFilter("source_kind <> 'repository'");
+
+                    b.HasIndex("CollectionId", "SourceKind", "SourceId", "SourcePath")
+                        .IsUnique()
+                        .HasFilter("source_kind = 'repository' AND source_id IS NOT NULL AND source_path IS NOT NULL");
+
+                    b.HasIndex("CollectionId", "Status");
 
                     b.ToTable("knowledge_documents", (string)null);
                 });
@@ -1581,23 +1624,72 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("content");
 
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("content_hash");
+
+                    b.Property<string>("ContentKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("text")
+                        .HasColumnName("content_kind");
+
                     b.Property<Guid>("DocumentId")
                         .HasColumnType("TEXT")
                         .HasColumnName("document_id");
+
+                    b.Property<string>("EmbeddingInputHash")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .HasColumnName("embedding_input_hash");
+
+                    b.Property<int>("EndOffset")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("end_offset");
 
                     b.Property<string>("HeadingPath")
                         .HasColumnType("TEXT")
                         .HasColumnName("heading_path");
 
+                    b.Property<string>("Language")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("language");
+
+                    b.Property<int?>("PageNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("page_number");
+
                     b.Property<Guid?>("SectionId")
                         .HasColumnType("TEXT")
                         .HasColumnName("section_id");
+
+                    b.Property<string>("SourcePath")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_path");
+
+                    b.Property<int>("StartOffset")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("start_offset");
+
+                    b.Property<string>("Symbol")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("symbol");
 
                     b.Property<int>("TokenCount")
                         .HasColumnType("INTEGER")
                         .HasColumnName("token_count");
 
                     b.HasKey("Rowid");
+
+                    b.HasIndex("ContentHash");
+
+                    b.HasIndex("EmbeddingInputHash");
 
                     b.HasIndex("SectionId");
 
@@ -1628,6 +1720,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int>("Ordinal")
                         .HasColumnType("INTEGER")
                         .HasColumnName("ordinal");
+
+                    b.Property<int?>("PageNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("page_number");
 
                     b.HasKey("SectionId");
 

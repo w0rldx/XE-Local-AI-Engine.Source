@@ -11,7 +11,8 @@ public interface IKnowledgeDocumentBlobStore
 {
     /// <summary>
     ///     Persists one document: writes the <c>knowledge_documents</c> row (status <c>Pending</c>) with an encrypted
-    ///     display name, deduping on content hash, and encrypts the raw bytes to disk when the row is newly inserted.
+    ///     display name and encrypts its raw bytes. Uploads dedupe by collection + content hash. Repository sources use
+    ///     collection + source kind + source path identity, updating and invalidating projections when bytes change.
     /// </summary>
     Task<KnowledgeDocumentAddResult> AddAsync(KnowledgeDocumentInput input, CancellationToken cancellationToken);
 

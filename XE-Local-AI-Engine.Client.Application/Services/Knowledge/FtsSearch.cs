@@ -19,6 +19,15 @@ public sealed class FtsSearch : IFtsSearch
 
     public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken)
     {
+        return await SearchAsync(query, limit, documentId, KnowledgeCollectionScope.DefaultId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query,
+        int limit,
+        Guid? documentId,
+        string collectionId,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(query);
         if (string.IsNullOrWhiteSpace(query) || limit <= 0)
         {
@@ -28,39 +37,31 @@ public sealed class FtsSearch : IFtsSearch
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        await using var command = connection.CreateCommand();
-        // Order by the BM25 score ascending: FTS5 returns more-negative scores for stronger matches, so ascending yields
-        // the strongest matches first. The chunk and document identifiers are stored as GUID text. chunk_fts.document_id
-        // is an available UNINDEXED column, so a document-scoped search can filter in the same MATCH query rather than
-        // post-filtering in memory. Two separate string-literal CommandText assignments (never concatenation, which trips
-        // CA2100) mirror the pattern in ManagedCosineVectorSearch.
-        if (documentId is null)
+        if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
         {
-            command.CommandText = """
-                                  SELECT chunk_id, document_id, bm25(chunk_fts) AS score
-                                  FROM chunk_fts
-                                  WHERE chunk_fts MATCH $match
-                                  ORDER BY score ASC
-                                  LIMIT $limit;
-                                  """;
-        }
-        else
-        {
-            command.CommandText = """
-                                  SELECT chunk_id, document_id, bm25(chunk_fts) AS score
-                                  FROM chunk_fts
-                                  WHERE chunk_fts MATCH $match AND document_id = $document_id
-                                  ORDER BY score ASC
-                                  LIMIT $limit;
-                                  """;
+            return [];
         }
 
+        await using var command = connection.CreateCommand();
+        // Identifiers are UNINDEXED; title-bearing metadata receives a larger BM25 weight than body text. The document
+        // join applies the same collection boundary as the dense arm before ranking, so no cross-project candidate can
+        // enter fusion or consume the bounded pool.
+        command.CommandText = """
+                              SELECT chunk_fts.chunk_id, chunk_fts.document_id,
+                                     bm25(chunk_fts, 0.0, 0.0, 6.0, 3.0, 8.0, 1.0) AS score
+                              FROM chunk_fts
+                              JOIN knowledge_documents AS d ON d.document_id = chunk_fts.document_id
+                              WHERE chunk_fts MATCH $match
+                                AND d.collection_id = $collection_id
+                                AND ($document_id IS NULL OR chunk_fts.document_id = $document_id)
+                              ORDER BY score ASC
+                              LIMIT $limit;
+                              """;
+
         AddParameter(command, "$match", EscapeMatchQuery(query));
+        AddParameter(command, "$collection_id", normalizedCollectionId);
+        AddParameter(command, "$document_id", documentId);
         AddParameter(command, "$limit", limit);
-        if (documentId is not null)
-        {
-            AddParameter(command, "$document_id", documentId.Value);
-        }
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var hits = new List<FtsSearchHit>();

@@ -27,6 +27,9 @@ internal sealed class KnowledgeDocumentSectionConfiguration : IEntityTypeConfigu
         builder.Property(entity => entity.Level)
                .HasColumnName("level");
 
+        builder.Property(entity => entity.PageNumber)
+               .HasColumnName("page_number");
+
         // Cascade from the owning document. Configured without a navigation on the principal so KnowledgeDocument stays a
         // bare metadata row. The node-sqlite runtime connection does NOT enable PRAGMA foreign_keys, so this cascade
         // documents intent and serves EF-managed deletes (tests); the raw-SQL purge path removes rows explicitly.

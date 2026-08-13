@@ -28,9 +28,17 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 {
     private const string ConfiguredName = "nomic-embed-text";
     private const string ResolvedGgufName = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+    private const string ResolvedRevisionFingerprint =
+        "inventory-v1:b50b9fd9ef78aa8769635ac7b6324c438a2d9c3cb827854dd1383a282fbdf6a1";
 
     private const string ResolvedVectorIdentity =
-        "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M::layernorm-population-eps1e-5-truncate-l2:v1:512";
+        "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:b50b9fd9ef78aa8769635ac7b6324c438a2d9c3cb827854dd1383a282fbdf6a1::layernorm-population-eps1e-5-truncate-l2:v1:512";
+
+    private const string ResolvedNativeIdentity =
+        "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M@inventory-v1:b50b9fd9ef78aa8769635ac7b6324c438a2d9c3cb827854dd1383a282fbdf6a1::native:v1:768";
+
+    private const string BgeNativeIdentity =
+        "bge-m3@inventory-v1:26e50285285b6c8f2a6d22cc6a650c14303f9c7b74bfcbd19aa0a111a48d7faa::native:v1:768";
 
     private const int Dimensions = 768;
 
@@ -136,6 +144,34 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     [Test]
+    public async Task ResetStaleDocumentsToPendingAsync_ResetsLegacyParserAndChunkerDuringProviderOutage()
+    {
+        var databasePath = GetDatabasePath("catalog-structure-version-reset.sqlite");
+        var legacyId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, legacyId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+        await SetIndexVersionsAsync(databasePath, legacyId, "legacy", "legacy").ConfigureAwait(false);
+
+        IReadOnlyList<Guid> reset;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            var options = Options.Create(new KnowledgeBaseOptions());
+            var catalog = new KnowledgeDocumentCatalogService(context,
+                CreateOutageProviderResolver(),
+                new EmbeddingModelResolver(options),
+                options,
+                TimeProvider.System);
+            reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(1, reset.Count);
+        AssertEx.Equal(legacyId, reset[0]);
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, legacyId).ConfigureAwait(false));
+    }
+
+    [Test]
     public async Task ListAsync_WhenPolicySwitchesToNative_FlagsTheMatryoshkaIndexStale()
     {
         var databasePath = GetDatabasePath("catalog-policy-rollback.sqlite");
@@ -168,7 +204,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(), Arg.Do<string>(model => capturedModel = model),
                         Arg.Do<string>(identity => capturedIdentity = identity),
                         Arg.Do<int>(dimension => capturedDimension = dimension),
-                        Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+                        Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>([]));
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
@@ -265,10 +301,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await vectorSearch.Received(2)
                           .SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
                               ResolvedGgufName,
-                              $"{ResolvedGgufName}::native:v1:{Dimensions}",
+                              ResolvedNativeIdentity,
                               Dimensions,
                               Arg.Any<int>(),
                               Arg.Any<Guid?>(),
+                              Arg.Any<string>(),
                               Arg.Any<CancellationToken>())
                           .ConfigureAwait(false);
     }
@@ -298,10 +335,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await vectorSearch.Received(2)
                           .SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
                               nonNomicModel,
-                              $"{nonNomicModel}::native:v1:{Dimensions}",
+                              BgeNativeIdentity,
                               Dimensions,
                               Arg.Any<int>(),
                               Arg.Any<Guid?>(),
+                              Arg.Any<string>(),
                               Arg.Any<CancellationToken>())
                           .ConfigureAwait(false);
     }
@@ -315,13 +353,13 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
         });
-        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
+        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true, ResolvedRevisionFingerprint);
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
         var cache = new KnowledgeQueryEmbeddingCache(options);
         cache.Store(cacheFamily,
             query,
             new KnowledgeQueryEmbeddingCacheEntry(new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
-                $"{ResolvedGgufName}::native:v1:{Dimensions}"));
+                ResolvedNativeIdentity));
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
         var vectorSearch = EmptyVectorSearch();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
@@ -332,7 +370,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The invalid record must be replaced by the generated vector.");
-        AssertEx.Equal($"{ResolvedGgufName}::native:v1:{Dimensions}", repaired.VectorIdentity);
+        AssertEx.Equal(ResolvedNativeIdentity, repaired.VectorIdentity);
         AssertEx.Equal(Dimensions, repaired.Vector.Length);
     }
 
@@ -345,7 +383,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
         });
-        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true);
+        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true, ResolvedRevisionFingerprint);
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
         var cache = new KnowledgeQueryEmbeddingCache(options);
         cache.Store(cacheFamily,
@@ -362,7 +400,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The wrong-identity record must be replaced.");
-        AssertEx.Equal($"{ResolvedGgufName}::native:v1:{Dimensions}", repaired.VectorIdentity);
+        AssertEx.Equal(ResolvedNativeIdentity, repaired.VectorIdentity);
         AssertEx.Equal(Dimensions, repaired.Vector.Length);
     }
 
@@ -454,7 +492,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         options ??= Options.Create(new KnowledgeBaseOptions());
 
         var ftsSearch = Substitute.For<IFtsSearch>();
-        ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+        ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(ftsHits ?? (IReadOnlyList<FtsSearchHit>)[]));
 
         var vectorSearchFactory = Substitute.For<IVectorSearchFactory>();
@@ -483,6 +521,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                         Arg.Any<int>(),
                         Arg.Any<int>(),
                         Arg.Any<Guid?>(),
+                        Arg.Any<string>(),
                         Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>([]));
         return vectorSearch;
@@ -547,8 +586,10 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.CommandText =
             """
             INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path,
-                                             status, chunk_count, embedding_model, vector_identity, vector_dim, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, $model, $identity, $dim, 1, 1);
+                                             status, chunk_count, embedding_model, vector_identity, vector_dim, created_at_utc, updated_at_utc,
+                                             parser_version, chunker_version)
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, $model, $identity, $dim, 1, 1,
+                    $parser, $chunker);
             """;
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$name", encryptedName);
@@ -562,6 +603,21 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                 : KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
         command.Parameters.AddWithValue("$dim",
             status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal) ? 512 : 0);
+        command.Parameters.AddWithValue("$parser", KnowledgeIndexVersions.Parser);
+        command.Parameters.AddWithValue("$chunker", KnowledgeIndexVersions.Chunker);
+        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task SetIndexVersionsAsync(string databasePath, Guid documentId, string parserVersion, string chunkerVersion)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "UPDATE knowledge_documents SET parser_version = $parser, chunker_version = $chunker WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$parser", parserVersion);
+        command.Parameters.AddWithValue("$chunker", chunkerVersion);
+        command.Parameters.AddWithValue("$id", documentId);
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
@@ -676,6 +732,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             IsAvailable = true,
             SizeBytes = 1024,
             ModifiedAt = DateTimeOffset.UnixEpoch,
+            RevisionFingerprint = "test-revision",
             MaxContextTokens = null,
             Capabilities = []
         };

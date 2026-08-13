@@ -5769,12 +5769,69 @@
         ]
       }
     },
+    "/api/local/v1/knowledge-base/repositories/import": {
+      "post": {
+        "tags": [
+          "Knowledge-Base"
+        ],
+        "operationId": "importKnowledgeRepository",
+        "requestBody": {
+          "x-name": "ImportKnowledgeRepositoryRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/knowledge-base/documents": {
       "get": {
         "tags": [
           "Knowledge-Base"
         ],
         "operationId": "listKnowledgeDocuments",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -16201,6 +16258,8 @@
           "sizeBytes",
           "createdAtUtc",
           "updatedAtUtc",
+          "collectionId",
+          "sourceKind",
           "chunks"
         ],
         "properties": {
@@ -16237,6 +16296,16 @@
           "updatedAtUtc": {
             "type": "integer"
           },
+          "collectionId": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceKind": {
+            "type": "string"
+          },
           "chunks": {
             "type": "array",
             "items": {
@@ -16270,7 +16339,10 @@
         "additionalProperties": false,
         "required": [
           "chunkIndex",
-          "content"
+          "content",
+          "startOffset",
+          "endOffset",
+          "contentKind"
         ],
         "properties": {
           "chunkIndex": {
@@ -16283,6 +16355,102 @@
           },
           "content": {
             "type": "string"
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "startOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contentKind": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "language": {
+            "type": "string",
+            "nullable": true
+          },
+          "symbol": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "collectionId",
+          "discoveredFiles",
+          "addedDocuments",
+          "updatedDocuments",
+          "removedDocuments",
+          "deduplicatedDocuments",
+          "enqueuedDocuments",
+          "skippedFiles",
+          "queueCapacityReached"
+        ],
+        "properties": {
+          "collectionId": {
+            "type": "string"
+          },
+          "discoveredFiles": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "addedDocuments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updatedDocuments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "removedDocuments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deduplicatedDocuments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "enqueuedDocuments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skippedFiles": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queueCapacityReached": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1ImportKnowledgeRepositoryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selectedFolderId"
+        ],
+        "properties": {
+          "selectedFolderId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "collectionId": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -16312,7 +16480,9 @@
           "embeddingModel",
           "staleModel",
           "sizeBytes",
-          "createdAtUtc"
+          "createdAtUtc",
+          "collectionId",
+          "sourceKind"
         ],
         "properties": {
           "documentId": {
@@ -16344,8 +16514,22 @@
           },
           "createdAtUtc": {
             "type": "integer"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceKind": {
+            "type": "string"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsKnowledgeV1ReindexCorpusResponse": {
         "type": "object",
@@ -16387,7 +16571,11 @@
           "score",
           "chunkIndex",
           "documentStatus",
-          "servingLastKnownGood"
+          "servingLastKnownGood",
+          "collectionId",
+          "contentKind",
+          "startOffset",
+          "endOffset"
         ],
         "properties": {
           "documentId": {
@@ -16424,6 +16612,37 @@
           },
           "servingLastKnownGood": {
             "type": "boolean"
+          },
+          "collectionId": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "contentKind": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string",
+            "nullable": true
+          },
+          "symbol": {
+            "type": "string",
+            "nullable": true
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "startOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endOffset": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -16448,6 +16667,9 @@
           },
           "expandNeighbors": {
             "type": "boolean"
+          },
+          "collectionId": {
+            "type": "string"
           }
         }
       },
@@ -16480,6 +16702,9 @@
             "type": "string",
             "format": "binary",
             "nullable": true
+          },
+          "collectionId": {
+            "type": "string"
           }
         }
       },

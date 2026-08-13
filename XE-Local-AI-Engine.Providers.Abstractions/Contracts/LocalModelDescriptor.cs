@@ -19,6 +19,12 @@ public sealed record LocalModelDescriptor
     [JsonRequired]
     public required DateTimeOffset? ModifiedAt { get; init; }
 
+    /// <summary>
+    ///     Immutable installed-weight revision when the provider exposes one: a content digest for Ollama/GGUF, or a
+    ///     source revision when content hashing was unavailable. Consumers may use this to invalidate same-name caches.
+    /// </summary>
+    public string? RevisionFingerprint { get; init; }
+
     [JsonRequired]
     public required int? MaxContextTokens { get; init; }
 

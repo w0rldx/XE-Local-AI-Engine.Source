@@ -15,7 +15,15 @@ public interface IFtsSearch
     ///     is non-null, the scope is pushed into the SQL <c>WHERE</c> clause so a scoped search over a large corpus cannot
     ///     miss the target document's chunks.
     /// </summary>
-    Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken) =>
+        SearchAsync(query, limit, documentId, KnowledgeCollectionScope.DefaultId, cancellationToken);
+
+    /// <summary>Collection-scoped variant used by production retrieval. Implementations must enforce this boundary.</summary>
+    Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query,
+        int limit,
+        Guid? documentId,
+        string collectionId,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>One lexical match: the chunk, its owning document, and its BM25 score (lower is a better match in FTS5).</summary>

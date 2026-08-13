@@ -37,4 +37,24 @@ internal sealed record class KnowledgeDocumentChunk
 
     /// <summary>Denormalized "H1 &gt; H2" heading trail for the retrieval result's section field; null when unknown.</summary>
     public string? HeadingPath { get; set; }
+
+    public int? PageNumber { get; set; }
+
+    public int StartOffset { get; set; }
+
+    public int EndOffset { get; set; }
+
+    public string ContentKind { get; set; } = "text";
+
+    public string? SourcePath { get; set; }
+
+    public string? Language { get; set; }
+
+    public string? Symbol { get; set; }
+
+    /// <summary>SHA-256 of the normalized stored body. Used for deterministic identity and incremental indexing.</summary>
+    public string ContentHash { get; set; } = string.Empty;
+
+    /// <summary>SHA-256 of the exact contextual text embedded for this chunk.</summary>
+    public string EmbeddingInputHash { get; set; } = string.Empty;
 }

@@ -62,6 +62,11 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
             return "read_surrounding_chunks requires a valid 'documentId'.";
         }
 
+        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        {
+            return "read_surrounding_chunks requires a valid 'collectionId'.";
+        }
+
         if (request.ChunkIndex is not { } chunkIndex || chunkIndex < 0)
         {
             return "read_surrounding_chunks requires a non-negative 'chunkIndex'.";
@@ -75,13 +80,14 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var expansion = scope.ServiceProvider.GetRequiredService<IContextExpansionService>();
-        var neighbors = await expansion.ExpandAsync(documentId, chunkIndex, window, cancellationToken).ConfigureAwait(false);
+        var neighbors = await expansion.ExpandAsync(documentId, chunkIndex, window, collectionId, cancellationToken).ConfigureAwait(false);
 
         var lowerBound = chunkIndex - before;
         var upperBound = chunkIndex + after;
         var payload = new
         {
             documentId,
+            collectionId,
             chunkIndex,
             chunks = neighbors
                      .Where(neighbor => neighbor.ChunkIndex >= lowerBound && neighbor.ChunkIndex <= upperBound)

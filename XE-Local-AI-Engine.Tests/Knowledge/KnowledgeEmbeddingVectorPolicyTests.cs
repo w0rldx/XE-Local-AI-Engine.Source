@@ -53,6 +53,30 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     }
 
     [Test]
+    public void Transform_SameModelNameWithDifferentInstalledRevision_UsesDifferentCanonicalIdentity()
+    {
+        var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
+        var original = KnowledgeEmbeddingVectorPolicy.Transform(
+            new EmbeddingModelResolution(NomicV15, IsConfident: true, RevisionFingerprint: "inventory-v1:original"),
+            native,
+            KnowledgeEmbeddingVectorMode.Matryoshka512);
+        var replacementResolution = new EmbeddingModelResolution(NomicV15,
+            IsConfident: true,
+            RevisionFingerprint: "inventory-v1:replacement");
+        var replacement = KnowledgeEmbeddingVectorPolicy.Transform(replacementResolution,
+            native,
+            KnowledgeEmbeddingVectorMode.Matryoshka512);
+
+        AssertEx.NotEqual(original.Identity, replacement.Identity,
+            "Replacing installed weights under the same name must invalidate stored vectors and cache entries.");
+        AssertEx.False(KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(original.Identity,
+                original.Dimension,
+                replacementResolution,
+                KnowledgeEmbeddingVectorMode.Matryoshka512),
+            "The catalog staleness check must reject vectors built by the previous installed revision.");
+    }
+
+    [Test]
     public void Transform_NonNomicOrExplicitNative_PreservesNativeWidthAndUsesDistinctRollbackIdentity()
     {
         var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
@@ -95,8 +119,8 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
         var native = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Native);
         var matryoshka = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Matryoshka512);
 
-        AssertEx.Equal($"{NomicV15}::native:v1", native);
-        AssertEx.Equal($"{NomicV15}::layernorm-population-eps1e-5-truncate-l2:v1:512", matryoshka);
+        AssertEx.Equal($"{NomicV15}@unresolved::native:v1", native);
+        AssertEx.Equal($"{NomicV15}@unresolved::layernorm-population-eps1e-5-truncate-l2:v1:512", matryoshka);
         AssertEx.NotEqual(native, matryoshka);
     }
 

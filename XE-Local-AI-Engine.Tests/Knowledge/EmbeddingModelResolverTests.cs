@@ -31,6 +31,7 @@ public sealed class EmbeddingModelResolverTests
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.True(resolution.IsConfident, "An exact configured-name match is a confident resolution.");
+        AssertEx.True(resolution.RevisionFingerprint.StartsWith("inventory-v1:", StringComparison.Ordinal));
     }
 
     [Test]
@@ -58,6 +59,41 @@ public sealed class EmbeddingModelResolverTests
         // Deterministic ordinal-ignore-case order: "bge-small:Q4" sorts before "mxbai-embed-large:Q8_0".
         AssertEx.Equal("bge-small:Q4", resolution.Name);
         AssertEx.True(resolution.IsConfident);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenSameNameInstallationIsReplaced_ChangesRevisionFingerprint()
+    {
+        var original = ProviderWithModels(Descriptor("nomic-embed-text", revisionFingerprint: "sha256:original"));
+        var replacement = ProviderWithModels(Descriptor("nomic-embed-text", revisionFingerprint: "sha256:replacement"));
+        var resolver = CreateResolver();
+
+        var first = await resolver.ResolveAsync(original, CancellationToken.None).ConfigureAwait(false);
+        var second = await resolver.ResolveAsync(replacement, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(first.Name, second.Name, "The installed model name intentionally remains stable.");
+        AssertEx.NotEqual(first.RevisionFingerprint, second.RevisionFingerprint,
+            "A same-name replacement must invalidate vector, staleness, and cache identities.");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenImmutableRevisionMatches_IgnoresMutableInventoryMetadata()
+    {
+        var firstInventory = ProviderWithModels(Descriptor("nomic-embed-text",
+            sizeBytes: 1024,
+            modifiedAt: DateTimeOffset.UnixEpoch,
+            revisionFingerprint: "sha256:same-content"));
+        var refreshedInventory = ProviderWithModels(Descriptor("nomic-embed-text",
+            sizeBytes: 2048,
+            modifiedAt: DateTimeOffset.UnixEpoch.AddDays(1),
+            revisionFingerprint: "sha256:same-content"));
+        var resolver = CreateResolver();
+
+        var first = await resolver.ResolveAsync(firstInventory, CancellationToken.None).ConfigureAwait(false);
+        var refreshed = await resolver.ResolveAsync(refreshedInventory, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(first.RevisionFingerprint, refreshed.RevisionFingerprint,
+            "An immutable provider digest is authoritative; mutable inventory metadata must not churn the vector identity.");
     }
 
     [Test]
@@ -148,15 +184,19 @@ public sealed class EmbeddingModelResolverTests
         return provider;
     }
 
-    private static LocalModelDescriptor Descriptor(string modelName)
+    private static LocalModelDescriptor Descriptor(string modelName,
+        long sizeBytes = 1024,
+        DateTimeOffset? modifiedAt = null,
+        string? revisionFingerprint = "sha256:test-fixture")
     {
         return new LocalModelDescriptor
         {
             ModelName = modelName,
             ProviderName = "llamacpp",
             IsAvailable = true,
-            SizeBytes = 1024,
-            ModifiedAt = DateTimeOffset.UnixEpoch,
+            SizeBytes = sizeBytes,
+            ModifiedAt = modifiedAt ?? DateTimeOffset.UnixEpoch,
+            RevisionFingerprint = revisionFingerprint,
             MaxContextTokens = null,
             Capabilities = []
         };

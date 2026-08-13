@@ -87,6 +87,12 @@ public sealed class UploadKnowledgeDocumentEndpoint(
 
         var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
         var contentHash = Convert.ToHexString(SHA256.HashData(bytes));
+        if (!KnowledgeCollectionScope.TryNormalize(req.CollectionId, out var collectionId))
+        {
+            AddError("The collection id may contain only letters, digits, '.', '_' or '-' and must be 128 characters or fewer.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
 
         var input = new KnowledgeDocumentInput(Guid.NewGuid(),
             originalName,
@@ -95,7 +101,8 @@ public sealed class UploadKnowledgeDocumentEndpoint(
             bytes.Length,
             contentHash,
             bytes,
-            _embeddingModel);
+            _embeddingModel,
+            collectionId);
 
         var result = await _blobStore.AddAsync(input, ct).ConfigureAwait(false);
 

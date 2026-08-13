@@ -115,6 +115,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
                         Arg.Any<int>(),
                         Arg.Any<int>(),
                         Arg.Any<Guid?>(),
+                        Arg.Any<string>(),
                         Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(vectorRanked.Select((id, index) => new VectorSearchHit(id, documentA, 1.0f - (index * 0.1f))).ToList()));
 
@@ -186,7 +187,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         });
 
         var ftsSearch = Substitute.For<IFtsSearch>();
-        ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+        ftsSearch.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(ftsHits));
 
         var vectorSearchFactory = Substitute.For<IVectorSearchFactory>();

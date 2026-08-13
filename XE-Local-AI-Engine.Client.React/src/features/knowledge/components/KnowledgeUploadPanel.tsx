@@ -96,7 +96,7 @@ export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUplo
 					<IconCloudUpload size={40} stroke={1.4} color="var(--mantine-color-primary-filled)" />
 					<Text fw={600}>{t("pages.knowledgeBase.upload.prompt", "Drop documents here or click to browse")}</Text>
 					<Text size="sm" c="dimmed" ta="center">
-						{t("pages.knowledgeBase.upload.hint", "PDF, DOCX, Markdown, text, CSV, JSON — up to {{limit}} MB each.", {
+							{t("pages.knowledgeBase.upload.hint", "PDF, DOCX, Markdown, text, structured data, and source code — up to {{limit}} MB each.", {
 							limit: KNOWLEDGE_MAX_UPLOAD_SIZE_MB,
 						})}
 					</Text>

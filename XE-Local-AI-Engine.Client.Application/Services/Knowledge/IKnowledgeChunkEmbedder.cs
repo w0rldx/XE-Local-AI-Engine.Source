@@ -23,7 +23,18 @@ public interface IKnowledgeChunkEmbedder
     ///     must proceed regardless); a genuine caller cancellation still propagates.
     /// </summary>
     Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Resolves an exact pre-generation identity only when the active vector policy fixes its width. Native-width
+    ///     models return null because their exact cache identity is unknown until the provider produces a vector.
+    /// </summary>
+    Task<KnowledgeEmbeddingDescriptor?> ResolveExpectedVectorAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<KnowledgeEmbeddingDescriptor?>(null);
+    }
 }
+
+public sealed record KnowledgeEmbeddingDescriptor(string ResolvedModel, string VectorIdentity, int Dimension);
 
 /// <summary>
 ///     The embedding blobs for a set of chunks plus the RESOLVED embedding model name that produced them and the vector

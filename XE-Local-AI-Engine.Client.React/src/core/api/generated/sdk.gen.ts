@@ -413,6 +413,9 @@ import type {
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesErrors,
 	ImportAgentTemplatesResponses,
+	ImportKnowledgeRepositoryData,
+	ImportKnowledgeRepositoryErrors,
+	ImportKnowledgeRepositoryResponses,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryErrors,
 	InspectGgufRepositoryResponses,
@@ -956,6 +959,8 @@ import {
 	zHarvestGoldenConversationsResponse,
 	zImportAgentTemplatesBody,
 	zImportAgentTemplatesResponse,
+	zImportKnowledgeRepositoryBody,
+	zImportKnowledgeRepositoryResponse,
 	zInspectGgufRepositoryQuery,
 	zInspectGgufRepositoryResponse,
 	zInspectImageRepositoryQuery,
@@ -986,6 +991,7 @@ import {
 	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
 	zListInferenceProfilesResponse,
+	zListKnowledgeDocumentsQuery,
 	zListKnowledgeDocumentsResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
@@ -4053,6 +4059,32 @@ export const downloadRecommendedReranker = <ThrowOnError extends boolean = false
 		...options,
 	});
 
+export const importKnowledgeRepository = <ThrowOnError extends boolean = false>(
+	options: Options<ImportKnowledgeRepositoryData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ImportKnowledgeRepositoryResponses, ImportKnowledgeRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zImportKnowledgeRepositoryBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zImportKnowledgeRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/knowledge-base/repositories/import",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
 	options?: Options<ListKnowledgeDocumentsData, ThrowOnError>,
 ) =>
@@ -4062,7 +4094,7 @@ export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
 				.object({
 					body: z.never().optional(),
 					path: z.never().optional(),
-					query: z.never().optional(),
+					query: zListKnowledgeDocumentsQuery.optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",

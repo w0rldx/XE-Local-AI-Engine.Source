@@ -7,7 +7,13 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// <param name="Limit">Maximum number of fused results to return.</param>
 /// <param name="DocumentId">Optional scope: restrict the search to a single document.</param>
 /// <param name="ExpandNeighbors">When true, each hit's content is expanded with its surrounding neighbor chunks.</param>
-public sealed record KnowledgeSearchRequest(string Query, int Limit, Guid? DocumentId = null, bool ExpandNeighbors = false);
+/// <param name="CollectionId">Collection/project namespace. Defaults to the backwards-compatible node corpus.</param>
+public sealed record KnowledgeSearchRequest(
+    string Query,
+    int Limit,
+    Guid? DocumentId = null,
+    bool ExpandNeighbors = false,
+    string CollectionId = KnowledgeCollectionScope.DefaultId);
 
 /// <summary>The structured result of a hybrid knowledge-base search.</summary>
 /// <param name="Results">The fused, hydrated hits ordered by descending fused score.</param>
@@ -46,4 +52,12 @@ public sealed record KnowledgeSearchHit(
     double Score,
     int ChunkIndex,
     KnowledgeDocumentStatus DocumentStatus,
-    bool ServingLastKnownGood);
+    bool ServingLastKnownGood,
+    string CollectionId = KnowledgeCollectionScope.DefaultId,
+    string? SourcePath = null,
+    string ContentKind = "text",
+    string? Language = null,
+    string? Symbol = null,
+    int? PageNumber = null,
+    int StartOffset = 0,
+    int EndOffset = 0);

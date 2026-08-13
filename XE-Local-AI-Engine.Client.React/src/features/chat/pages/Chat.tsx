@@ -234,7 +234,9 @@ export function Chat() {
 	// empty corpus is a no-op, so the toggle stays visible but disabled until at least one document is INDEXED. The
 	// list is fetched only when the KB surface is on (Chat is authed-mounted, so this gate matches the feature gate);
 	// an indexed doc is one that is Ready to search — status Indexed, or any row still serving last-known-good chunks.
-	const { data: knowledgeDocuments } = useKnowledgeDocuments(chatUiCapabilities.showKnowledgeBaseControls);
+	// Plain-chat grounding currently targets the backwards-compatible DEFAULT collection. Scope availability to that
+	// same namespace so documents in project collections never enable a toggle whose backend search would return none.
+	const { data: knowledgeDocuments } = useKnowledgeDocuments(chatUiCapabilities.showKnowledgeBaseControls, "DEFAULT");
 	const knowledgeBaseHasDocuments = useMemo(
 		() => (knowledgeDocuments ?? []).some((document) => document.status === "Indexed" || document.chunkCount > 0),
 		[knowledgeDocuments],

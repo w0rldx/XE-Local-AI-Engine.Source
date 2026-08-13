@@ -19,6 +19,14 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 public sealed class UploadKnowledgeDocumentRequest
 {
     public IFormFile? File { get; init; }
+
+    public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;
+}
+
+/// <summary>Optional collection filter for the management document list.</summary>
+public sealed class ListKnowledgeDocumentsRequest
+{
+    public string? CollectionId { get; init; }
 }
 
 /// <summary>Route-only request for <c>GET/DELETE knowledge-base/documents/{documentId}</c> and the reindex action.</summary>
@@ -40,6 +48,38 @@ public sealed class SearchKnowledgeRequest
 
     /// <summary>When true, each hit's content is expanded with its surrounding neighbor chunks.</summary>
     public bool ExpandNeighbors { get; init; }
+
+    /// <summary>Collection/project namespace searched by both lexical and dense retrieval.</summary>
+    public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;
+}
+
+/// <summary>Imports one previously registered local Git repository into a knowledge collection.</summary>
+public sealed class ImportKnowledgeRepositoryRequest
+{
+    public required Guid SelectedFolderId { get; init; }
+
+    public string? CollectionId { get; init; }
+}
+
+public sealed class ImportKnowledgeRepositoryResponse
+{
+    public required string CollectionId { get; init; }
+
+    public required int DiscoveredFiles { get; init; }
+
+    public required int AddedDocuments { get; init; }
+
+    public required int UpdatedDocuments { get; init; }
+
+    public required int RemovedDocuments { get; init; }
+
+    public required int DeduplicatedDocuments { get; init; }
+
+    public required int EnqueuedDocuments { get; init; }
+
+    public required int SkippedFiles { get; init; }
+
+    public required bool QueueCapacityReached { get; init; }
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +125,12 @@ public sealed class KnowledgeDocumentResponse
     public required long SizeBytes { get; init; }
 
     public required long CreatedAtUtc { get; init; }
+
+    public required string CollectionId { get; init; }
+
+    public string? SourcePath { get; init; }
+
+    public required string SourceKind { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET knowledge-base/documents</c>.</summary>
@@ -101,6 +147,20 @@ public sealed class KnowledgeDocumentChunkResponse
     public string? HeadingPath { get; init; }
 
     public required string Content { get; init; }
+
+    public int? PageNumber { get; init; }
+
+    public required int StartOffset { get; init; }
+
+    public required int EndOffset { get; init; }
+
+    public required string ContentKind { get; init; }
+
+    public string? SourcePath { get; init; }
+
+    public string? Language { get; init; }
+
+    public string? Symbol { get; init; }
 }
 
 /// <summary>Full detail of one document plus its ordered chunks. Response for <c>GET knowledge-base/documents/{documentId}</c>.</summary>
@@ -125,6 +185,12 @@ public sealed class KnowledgeDocumentDetailResponse
     public required long CreatedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
+
+    public required string CollectionId { get; init; }
+
+    public string? SourcePath { get; init; }
+
+    public required string SourceKind { get; init; }
 
     public required IReadOnlyList<KnowledgeDocumentChunkResponse> Chunks { get; init; }
 }
@@ -156,6 +222,22 @@ public sealed class KnowledgeSearchHitResponse
     ///     re-ingest failed (i.e. <see cref="DocumentStatus" /> is not <c>Indexed</c>). The UI badges these hits.
     /// </summary>
     public required bool ServingLastKnownGood { get; init; }
+
+    public required string CollectionId { get; init; }
+
+    public string? SourcePath { get; init; }
+
+    public required string ContentKind { get; init; }
+
+    public string? Language { get; init; }
+
+    public string? Symbol { get; init; }
+
+    public int? PageNumber { get; init; }
+
+    public required int StartOffset { get; init; }
+
+    public required int EndOffset { get; init; }
 }
 
 /// <summary>Response envelope for <c>POST knowledge-base/search</c>.</summary>

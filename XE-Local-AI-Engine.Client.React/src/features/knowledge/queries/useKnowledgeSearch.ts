@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { searchKnowledgeMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import type { KnowledgeSearchHit } from "@/features/knowledge/models/KnowledgeModels";
+import { KNOWLEDGE_DEFAULT_COLLECTION_ID, type KnowledgeSearchHit } from "@/features/knowledge/models/KnowledgeModels";
 
 // Number of hits requested per search. Kept modest — the panel is a "does the KB know about X" probe, not a
 // full retrieval UI. The backend re-clamps its own maximum.
@@ -25,16 +25,35 @@ export interface UseKnowledgeSearchResult {
 // TanStack mutation rather than a cached query — each submit is an explicit, non-cached action. Results + the
 // "has searched" flag live in local state so the panel can distinguish "nothing typed yet" from "searched, no
 // hits". Response-shape failures surface as ApiError via withResponseValidation.
-export function useKnowledgeSearch(): UseKnowledgeSearchResult {
+export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_ID): UseKnowledgeSearchResult {
 	const [results, setResults] = useState<readonly KnowledgeSearchHit[]>([]);
 	const [hasSearched, setHasSearched] = useState(false);
 	const [lastQuery, setLastQuery] = useState("");
+	const activeCollectionRef = useRef(collectionId);
+	const previousCollectionRef = useRef(collectionId);
+	const requestGenerationRef = useRef(0);
+	// Assignment during render closes the narrow gap before effects run: a response resolving immediately after a
+	// collection-switch render already sees the new namespace and cannot commit its old collection's results.
+	activeCollectionRef.current = collectionId;
 
 	const mutation = useMutation({
 		...withResponseValidation(searchKnowledgeMutation()),
 	});
 
-	const { mutate } = mutation;
+	const { mutate, reset: resetMutation } = mutation;
+
+	useEffect(() => {
+		if (previousCollectionRef.current === collectionId) {
+			return;
+		}
+
+		previousCollectionRef.current = collectionId;
+		requestGenerationRef.current += 1;
+		resetMutation();
+		setResults([]);
+		setHasSearched(false);
+		setLastQuery("");
+	}, [collectionId, resetMutation]);
 
 	const search = useCallback(
 		(query: string): void => {
@@ -42,10 +61,16 @@ export function useKnowledgeSearch(): UseKnowledgeSearchResult {
 			if (trimmed.length === 0) {
 				return;
 			}
+			const requestedCollection = collectionId;
+			const requestGeneration = requestGenerationRef.current + 1;
+			requestGenerationRef.current = requestGeneration;
 			mutate(
-				{ body: { query: trimmed, limit: SEARCH_RESULT_LIMIT } },
+				{ body: { query: trimmed, limit: SEARCH_RESULT_LIMIT, collectionId: requestedCollection } },
 				{
 					onSuccess: (response) => {
+						if (requestGenerationRef.current !== requestGeneration || activeCollectionRef.current !== requestedCollection) {
+							return;
+						}
 						setResults(response.results ?? []);
 						setLastQuery(trimmed);
 						setHasSearched(true);
@@ -53,15 +78,16 @@ export function useKnowledgeSearch(): UseKnowledgeSearchResult {
 				},
 			);
 		},
-		[mutate],
+		[collectionId, mutate],
 	);
 
 	const reset = useCallback((): void => {
-		mutation.reset();
+		requestGenerationRef.current += 1;
+		resetMutation();
 		setResults([]);
 		setHasSearched(false);
 		setLastQuery("");
-	}, [mutation]);
+	}, [resetMutation]);
 
 	return {
 		results,

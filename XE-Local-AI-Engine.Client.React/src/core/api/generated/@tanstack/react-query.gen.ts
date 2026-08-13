@@ -147,6 +147,7 @@ import {
 	getTutorialState,
 	harvestGoldenConversations,
 	importAgentTemplates,
+	importKnowledgeRepository,
 	inspectGgufRepository,
 	inspectImageRepository,
 	invalidateInferenceProfile,
@@ -537,6 +538,8 @@ import type {
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesResponse,
+	ImportKnowledgeRepositoryData,
+	ImportKnowledgeRepositoryResponse,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
 	InspectImageRepositoryData,
@@ -3395,6 +3398,26 @@ export const downloadRecommendedRerankerMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await downloadRecommendedReranker({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const importKnowledgeRepositoryMutation = (
+	options?: Partial<Options<ImportKnowledgeRepositoryData>>,
+): UseMutationOptions<ImportKnowledgeRepositoryResponse, AxiosError<DefaultError>, Options<ImportKnowledgeRepositoryData>> => {
+	const mutationOptions: UseMutationOptions<
+		ImportKnowledgeRepositoryResponse,
+		AxiosError<DefaultError>,
+		Options<ImportKnowledgeRepositoryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await importKnowledgeRepository({
 				...options,
 				...fnOptions,
 				throwOnError: true,

@@ -20,6 +20,16 @@ public interface IContextExpansionService
         CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Collection-scoped expansion used by agent follow-up reads. Returns no chunks when the document belongs to a
+    ///     different collection, even if its identifier is otherwise valid.
+    /// </summary>
+    Task<IReadOnlyList<KnowledgeNeighborChunk>> ExpandAsync(Guid documentId,
+        int chunkIndex,
+        int window,
+        string collectionId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     ///     Batched form of <see cref="ExpandAsync" /> for a whole set of matched chunks at once: returns, index-for-index
     ///     with <paramref name="anchors" />, each anchor's neighbor window (same rows, same ascending order as calling
     ///     <see cref="ExpandAsync" /> per anchor). Collapses the per-hit round trips to one query per distinct document, so

@@ -185,6 +185,27 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         }
     }
 
+    public async Task<KnowledgeEmbeddingDescriptor?> ResolveExpectedVectorAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            var identity = KnowledgeEmbeddingVectorPolicy.TryCreateExpectedIdentity(resolution, _options.EmbeddingVectorMode);
+            return identity is null
+                ? null
+                : new KnowledgeEmbeddingDescriptor(resolution.Name, identity, KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        {
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
     private ILocalModelProvider ResolveProvider()
     {
         try

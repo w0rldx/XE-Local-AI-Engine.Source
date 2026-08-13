@@ -47,6 +47,23 @@ public sealed class KnowledgeBaseOptions
     public string RerankerModelName { get; set; } = string.Empty;
 
     /// <summary>
+    ///     When true, a configured reranker runs only for ambiguous candidate sets. Agreement between the lexical and
+    ///     dense top hit is treated as high confidence, and optional reranking is skipped once 80% of the retrieval
+    ///     latency budget has already elapsed. Disable to force reranking for controlled benchmarks while time remains;
+    ///     the hard remaining per-search deadline still applies.
+    /// </summary>
+    public bool AdaptiveRerankingEnabled { get; set; } = true;
+
+    /// <summary>Soft end-to-end retrieval target used to skip optional stages; defaults to 500 ms.</summary>
+    public int RetrievalLatencyBudgetMilliseconds { get; set; } = 500;
+
+    /// <summary>Periodically enqueue stale-vector documents after a scheduled embedding-model change.</summary>
+    public bool ScheduledModelReindexEnabled { get; set; } = true;
+
+    /// <summary>Polling interval for stale-vector discovery. Clamped to at least one minute.</summary>
+    public int ScheduledModelReindexIntervalMinutes { get; set; } = 60;
+
+    /// <summary>
     ///     Whether the read-only knowledge-base agent tools (<c>search_knowledge_base</c>, <c>read_document</c>,
     ///     <c>read_surrounding_chunks</c>) are offered to agents and executed. Default <see langword="true" /> (the
     ///     feature is built); set to <see langword="false" /> to turn the tools off node-wide, in which case each handler
@@ -104,6 +121,26 @@ public sealed class KnowledgeBaseOptions
     public int QueryEmbeddingCacheTtlSeconds { get; set; } = 300;
 
     /// <summary>
+    ///     Maximum number of content-addressed document-chunk embeddings retained in the process-local reuse layer.
+    ///     The durable layer reads already-committed vectors from the knowledge index, so this bound applies only to the
+    ///     hot RAM working set. Default 4096; values below one clamp to one.
+    /// </summary>
+    public int ChunkEmbeddingCacheMaxEntries { get; set; } = 4096;
+
+    /// <summary>
+    ///     Approximate RAM ceiling, in MiB, for the process-local chunk-embedding reuse layer. Applied alongside
+    ///     <see cref="ChunkEmbeddingCacheMaxEntries" /> so a wider embedding model cannot silently multiply memory use.
+    ///     Default 64 MiB; values below one clamp to one.
+    /// </summary>
+    public int ChunkEmbeddingCacheMaxMegabytes { get; set; } = 64;
+
+    /// <summary>
+    ///     Time-to-live, in seconds, for both the RAM working set and eligibility of already-committed vectors used as a
+    ///     durable cache. Zero disables chunk-embedding reuse. Default seven days.
+    /// </summary>
+    public int ChunkEmbeddingCacheTtlSeconds { get; set; } = 7 * 24 * 60 * 60;
+
+    /// <summary>
     ///     Which fusion combines the lexical (BM25) and semantic (cosine) arms on the DEFAULT no-reranker retrieval path.
     ///     <see cref="RankFusionStrategy.Rrf" /> is classic score-agnostic Reciprocal Rank Fusion (rank position only).
     ///     <see cref="RankFusionStrategy.ScoreAware" /> (default) additionally tilts each fused contribution by the arm's
@@ -153,6 +190,15 @@ public sealed class KnowledgeBaseOptions
     ///     across a chunk boundary stays retrievable. Must be smaller than <see cref="MaxChunkChars" />.
     /// </summary>
     public int ChunkOverlapChars { get; set; } = 200;
+
+    /// <summary>Maximum supported files admitted by one repository import.</summary>
+    public int MaxRepositoryImportFiles { get; set; } = 50_000;
+
+    /// <summary>Maximum aggregate source bytes admitted by one repository import.</summary>
+    public long MaxRepositoryImportBytes { get; set; } = 512L * 1024L * 1024L;
+
+    /// <summary>Hard maximum raw size of one repository file before any managed allocation is made.</summary>
+    public long MaxRepositoryImportFileBytes { get; set; } = 16L * 1024L * 1024L;
 }
 
 /// <summary>Versioned post-provider vector policy used by both knowledge ingestion and query embedding.</summary>

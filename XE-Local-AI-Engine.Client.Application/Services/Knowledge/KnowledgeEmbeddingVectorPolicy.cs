@@ -33,7 +33,8 @@ public static class KnowledgeEmbeddingVectorPolicy
         if (!ShouldApplyMatryoshka(resolution, mode))
         {
             var native = nativeVector.ToArray();
-            return new KnowledgeEmbeddingVector(native, CreateIdentity(resolution.Name, NativeAlgorithm, native.Length));
+            return new KnowledgeEmbeddingVector(native,
+                CreateIdentity(resolution.Name, resolution.RevisionFingerprint, NativeAlgorithm, native.Length));
         }
 
         if (source.Length < MatryoshkaWidth)
@@ -77,7 +78,8 @@ public static class KnowledgeEmbeddingVectorPolicy
             }
         }
 
-        return new KnowledgeEmbeddingVector(transformed, CreateIdentity(resolution.Name, MatryoshkaAlgorithm, MatryoshkaWidth));
+        return new KnowledgeEmbeddingVector(transformed,
+            CreateIdentity(resolution.Name, resolution.RevisionFingerprint, MatryoshkaAlgorithm, MatryoshkaWidth));
     }
 
     /// <summary>Serializes a transformed vector deterministically in the platform's established native float32 byte order.</summary>
@@ -95,7 +97,7 @@ public static class KnowledgeEmbeddingVectorPolicy
     {
         ArgumentNullException.ThrowIfNull(resolution);
         return ShouldApplyMatryoshka(resolution, mode)
-            ? CreateIdentity(resolution.Name, MatryoshkaAlgorithm, MatryoshkaWidth)
+            ? CreateIdentity(resolution.Name, resolution.RevisionFingerprint, MatryoshkaAlgorithm, MatryoshkaWidth)
             : null;
     }
 
@@ -107,8 +109,9 @@ public static class KnowledgeEmbeddingVectorPolicy
     {
         ArgumentNullException.ThrowIfNull(resolution);
         return ShouldApplyMatryoshka(resolution, mode)
-            ? CreateIdentity(resolution.Name, MatryoshkaAlgorithm, MatryoshkaWidth)
-            : string.Create(CultureInfo.InvariantCulture, $"{resolution.Name}::{NativeAlgorithm}");
+            ? CreateIdentity(resolution.Name, resolution.RevisionFingerprint, MatryoshkaAlgorithm, MatryoshkaWidth)
+            : string.Create(CultureInfo.InvariantCulture,
+                $"{resolution.Name}@{resolution.RevisionFingerprint}::{NativeAlgorithm}");
     }
 
     /// <summary>Checks whether a persisted identity belongs to the currently resolved model and configured policy.</summary>
@@ -129,7 +132,9 @@ public static class KnowledgeEmbeddingVectorPolicy
             return storedWidth == MatryoshkaWidth && string.Equals(storedIdentity, expected, StringComparison.Ordinal);
         }
 
-        return string.Equals(storedIdentity, CreateIdentity(resolution.Name, NativeAlgorithm, storedWidth), StringComparison.Ordinal);
+        return string.Equals(storedIdentity,
+            CreateIdentity(resolution.Name, resolution.RevisionFingerprint, NativeAlgorithm, storedWidth),
+            StringComparison.Ordinal);
     }
 
     private static bool ShouldApplyMatryoshka(EmbeddingModelResolution resolution, KnowledgeEmbeddingVectorMode mode)
@@ -144,10 +149,11 @@ public static class KnowledgeEmbeddingVectorPolicy
         return resolvedModel.Contains("nomic-embed-text-v1.5", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string CreateIdentity(string resolvedModel, string algorithm, int width)
+    private static string CreateIdentity(string resolvedModel, string revisionFingerprint, string algorithm, int width)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resolvedModel);
-        return string.Create(CultureInfo.InvariantCulture, $"{resolvedModel}::{algorithm}:{width}");
+        ArgumentException.ThrowIfNullOrWhiteSpace(revisionFingerprint);
+        return string.Create(CultureInfo.InvariantCulture, $"{resolvedModel}@{revisionFingerprint}::{algorithm}:{width}");
     }
 
     private static void ValidateFinite(ReadOnlySpan<float> vector)

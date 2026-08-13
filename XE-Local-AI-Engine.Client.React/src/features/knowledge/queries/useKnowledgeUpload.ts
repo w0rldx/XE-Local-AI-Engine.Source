@@ -7,6 +7,7 @@ import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
+	KNOWLEDGE_DEFAULT_COLLECTION_ID,
 	isAcceptedKnowledgeFile,
 	KNOWLEDGE_MAX_UPLOAD_SIZE_BYTES,
 	KNOWLEDGE_MAX_UPLOAD_SIZE_MB,
@@ -34,7 +35,7 @@ export interface UseKnowledgeUploadResult {
 // `{}` as JSON). Setting the multipart content type per-request lets axios append the boundary; auth + XSRF still
 // ride the instance interceptors, and the ProblemDetails interceptor turns a non-2xx into an ApiError. The server
 // is the authoritative validator (size cap, extension allow-list, extraction, dedup).
-export function useKnowledgeUpload(): UseKnowledgeUploadResult {
+export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_ID): UseKnowledgeUploadResult {
 	const queryClient = useQueryClient();
 	const [pendingUploads, setPendingUploads] = useState<readonly KnowledgePendingUpload[]>([]);
 
@@ -54,6 +55,7 @@ export function useKnowledgeUpload(): UseKnowledgeUploadResult {
 			try {
 				const formData = new FormData();
 				formData.append("file", file);
+				formData.append("collectionId", collectionId);
 				const { data } = await axiosInstance.post<UploadKnowledgeDocumentResponse>(
 					buildLocalApiUrl("knowledge-base/documents"),
 					formData,
@@ -86,7 +88,7 @@ export function useKnowledgeUpload(): UseKnowledgeUploadResult {
 				removePending(tempId);
 			}
 		},
-		[queryClient, removePending, updatePendingPercent],
+		[collectionId, queryClient, removePending, updatePendingPercent],
 	);
 
 	const uploadFiles = useCallback(

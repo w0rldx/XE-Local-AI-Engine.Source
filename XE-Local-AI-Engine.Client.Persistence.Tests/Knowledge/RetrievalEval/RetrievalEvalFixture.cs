@@ -179,14 +179,16 @@ internal sealed class RetrievalEvalFixture : IDisposable
         CreateSearchService(new UnavailableProviderResolver(), _options, Substitute.For<IRerankerClient>());
 
     /// <summary>The hybrid search plus a caller-supplied reranker (options carry a non-empty reranker model name).</summary>
-    public IKnowledgeSearchService CreateRerankedSearchService(IRerankerClient reranker)
+    public IKnowledgeSearchService CreateRerankedSearchService(IRerankerClient reranker, int retrievalLatencyBudgetMilliseconds = 500)
     {
         ArgumentNullException.ThrowIfNull(reranker);
         var rerankedOptions = new KnowledgeBaseOptions
         {
             MaxChunkChars = _options.MaxChunkChars,
             ChunkOverlapChars = _options.ChunkOverlapChars,
-            RerankerModelName = "bge-reranker-v2-m3"
+            RerankerModelName = "bge-reranker-v2-m3",
+            AdaptiveRerankingEnabled = false,
+            RetrievalLatencyBudgetMilliseconds = retrievalLatencyBudgetMilliseconds
         };
         return CreateSearchService(HybridProviderResolver(), rerankedOptions, reranker);
     }

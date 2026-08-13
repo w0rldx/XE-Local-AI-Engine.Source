@@ -13,18 +13,24 @@ internal sealed record SearchKnowledgeBaseToolRequest
     public string? DocumentId { get; init; }
 
     public bool? ExpandNeighbors { get; init; }
+
+    public string? CollectionId { get; init; }
 }
 
 /// <summary>Typed projection of the <c>read_document</c> JSON arguments.</summary>
 internal sealed record ReadDocumentToolRequest
 {
     public string? DocumentId { get; init; }
+
+    public string? CollectionId { get; init; }
 }
 
 /// <summary>Typed projection of the <c>read_surrounding_chunks</c> JSON arguments.</summary>
 internal sealed record ReadSurroundingChunksToolRequest
 {
     public string? DocumentId { get; init; }
+
+    public string? CollectionId { get; init; }
 
     public int? ChunkIndex { get; init; }
 

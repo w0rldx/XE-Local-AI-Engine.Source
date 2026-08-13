@@ -63,6 +63,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         _maxPdfPageCount = maxPdfPageCount;
 
         var plaintext = new PlaintextDocumentReader();
+        var html = new HtmlDocumentReader();
         var pdf = new PdfDocumentReader();
         var docx = new DocxDocumentReader();
 
@@ -72,6 +73,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             readers[extension] = plaintext;
         }
 
+        readers[".html"] = html;
+        readers[".htm"] = html;
         readers[".pdf"] = pdf;
         readers[".docx"] = docx;
 

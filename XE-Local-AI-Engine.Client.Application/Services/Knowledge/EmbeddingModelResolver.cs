@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -41,7 +44,8 @@ public interface IEmbeddingModelResolver
 /// </summary>
 /// <param name="Name">The model name to hand to the embedding generator.</param>
 /// <param name="IsConfident">Whether an installed model was actually matched (as opposed to a bare fallback).</param>
-public sealed record EmbeddingModelResolution(string Name, bool IsConfident);
+/// <param name="RevisionFingerprint">Content-free fingerprint of the matched immutable installed-inventory record.</param>
+public sealed record EmbeddingModelResolution(string Name, bool IsConfident, string RevisionFingerprint = "unresolved");
 
 /// <inheritdoc />
 public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
@@ -87,7 +91,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             string.Equals(descriptor.ModelName, configuredName, StringComparison.OrdinalIgnoreCase));
         if (exactMatch is not null)
         {
-            return new EmbeddingModelResolution(configuredName, IsConfident: true);
+            return CreateConfidentResolution(configuredName, exactMatch);
         }
 
         // (2) First installed embedding-named model in a deterministic order (for example a nomic-embed GGUF).
@@ -98,10 +102,27 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
                              .FirstOrDefault();
         if (embeddingModel is not null)
         {
-            return new EmbeddingModelResolution(embeddingModel.ModelName, IsConfident: true);
+            return CreateConfidentResolution(embeddingModel.ModelName, embeddingModel);
         }
 
         // (3) Nothing installed matches → keep the configured name, NOT confident (graceful failure downstream).
         return new EmbeddingModelResolution(configuredName, IsConfident: false);
+    }
+
+    private static EmbeddingModelResolution CreateConfidentResolution(string resolvedName, LocalModelDescriptor descriptor)
+    {
+        // Prefer the provider's immutable content/source revision. Older providers may not expose one, so retain a
+        // deterministic inventory-record fallback; hashing prevents the revision or timestamp becoming identifier text.
+        var modifiedTicks = descriptor.ModifiedAt?.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        var sizeBytes = descriptor.SizeBytes?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        var immutableRevision = string.IsNullOrWhiteSpace(descriptor.RevisionFingerprint)
+            ? $"inventory-record:{sizeBytes}:{modifiedTicks}"
+            : $"provider-revision:{descriptor.RevisionFingerprint}";
+        var material = string.Create(CultureInfo.InvariantCulture,
+            $"inventory-v1\n{descriptor.ProviderName}\n{resolvedName}\n{immutableRevision}");
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(material));
+        return new EmbeddingModelResolution(resolvedName,
+            IsConfident: true,
+            $"inventory-v1:{Convert.ToHexStringLower(digest)}");
     }
 }

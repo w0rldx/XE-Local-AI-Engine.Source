@@ -583,6 +583,9 @@ public static class LocalApiRoutes
         // Hybrid retrieval over the indexed corpus (POST body: query + options).
         public const string Search = "knowledge-base/search";
 
+        // Imports supported tracked/unignored files from an already-registered local Development repository.
+        public const string RepositoryImport = "knowledge-base/repositories/import";
+
         // One-click download of the recommended cross-encoder reranker so an operator can enable KB reranking without
         // hunting for a repo/quant. Body-less POST; a distinct "reranker" literal keeps it off the document-id surface.
         public const string RerankerDownloadRecommended = "knowledge-base/reranker/download-recommended";

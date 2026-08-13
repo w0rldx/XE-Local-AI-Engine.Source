@@ -4,6 +4,7 @@ using System.Globalization;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -110,11 +111,68 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
         AssertEx.True(metrics.RecallAtK >= 1.0, $"reranked recall@{K} regressed below the baseline. {metrics.Summarize()}");
     }
 
+    [Test]
+    public async Task Reranker_WhenRemainingRetrievalBudgetExpires_DegradesToFusionOrder()
+    {
+        using var fixture = await BuildFixtureAsync("reranker-budget.sqlite").ConfigureAwait(false);
+        var reranker = new BudgetObservingReranker();
+        var search = fixture.CreateRerankedSearchService(reranker, retrievalLatencyBudgetMilliseconds: 500);
+
+        var result = await search.SearchAsync(new KnowledgeSearchRequest("retention period", Limit: 3), CancellationToken.None).ConfigureAwait(false);
+
+        if (reranker.InvocationObserved)
+        {
+            AssertEx.True(await reranker.WaitForCancellationAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                "When optional reranking starts, the remaining per-search deadline must cancel model acquisition/scoring rather than permitting the provider's multi-second timeout.");
+        }
+
+        AssertEx.True(result.Results.Count > 0, "A reranker budget expiry must preserve the fused retrieval results.");
+    }
+
     // Number of distinct query tokens present in the candidate document text — a deterministic reranker relevance score.
     private static double TokenOverlap(string query, string document)
     {
         var documentTokens = RetrievalTokens.Split(document).ToHashSet(StringComparer.Ordinal);
         return RetrievalTokens.Split(query).Distinct(StringComparer.Ordinal).Count(documentTokens.Contains);
+    }
+
+    private sealed class BudgetObservingReranker : IRerankerClient
+    {
+        private readonly TaskCompletionSource _cancellationObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _invocationObserved;
+
+        public bool InvocationObserved => Volatile.Read(ref _invocationObserved) != 0;
+
+        public async Task<bool> WaitForCancellationAsync(TimeSpan timeout)
+        {
+            try
+            {
+                await _cancellationObserved.Task.WaitAsync(timeout).ConfigureAwait(false);
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
+
+        public async Task<IReadOnlyList<double>?> RerankAsync(string modelName,
+            string query,
+            IReadOnlyList<string> documents,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Exchange(ref _invocationObserved, 1);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+            catch (OperationCanceledException)
+            {
+                _cancellationObserved.TrySetResult();
+                throw;
+            }
+        }
     }
 
     private Task<RetrievalEvalFixture> BuildFixtureAsync(string fileName)

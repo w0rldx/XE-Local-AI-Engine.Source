@@ -94,7 +94,16 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
         }
 
         var limit = request.Limit is { } requested ? Math.Clamp(requested, MinLimit, MaxLimit) : DefaultLimit;
-        var searchRequest = new KnowledgeSearchRequest(normalizedQuery, limit, documentId, request.ExpandNeighbors ?? false);
+        if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
+        {
+            return "search_knowledge_base 'collectionId' is invalid.";
+        }
+
+        var searchRequest = new KnowledgeSearchRequest(normalizedQuery,
+            limit,
+            documentId,
+            request.ExpandNeighbors ?? false,
+            collectionId);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
@@ -126,6 +135,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             usedChars += hit.Content.Length;
             hits.Add(new
             {
+                collectionId = hit.CollectionId,
                 documentId = hit.DocumentId,
                 chunkId = hit.ChunkId,
                 // The attacker-controlled document metadata (title, section, source) AND the chunk body are DATA, not
@@ -137,7 +147,11 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 [
                     new("title", hit.Title),
                     new("section", hit.Section),
-                    new("source", hit.Source)
+                    new("source", hit.Source),
+                    new("collection", hit.CollectionId),
+                    new("path", hit.SourcePath),
+                    new("page", hit.PageNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    new("symbol", hit.Symbol)
                 ]),
                 score = hit.Score,
                 chunkIndex = hit.ChunkIndex,
