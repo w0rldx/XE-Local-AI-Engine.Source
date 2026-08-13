@@ -75,8 +75,46 @@ Keep backups of data you care about. A binary update does not replace a backup p
 
 ## Going back to an older version
 
-Back up the complete data directory first. Database migrations are forward-only, and an older binary may not
+Back up the complete data directory first. Database migrations are normally forward-only, and an older binary may not
 understand a database already migrated by a newer one.
+
+### Knowledge collection downgrade preflight
+
+Builds that include knowledge collections permit the same document content in different collections or repository
+provenances. The older schema required every document content hash to be globally unique, so not every upgraded data set
+can be represented by that schema. The migration itself remains fail-fast: it refuses the downgrade transaction before
+dropping any columns when duplicate hashes exist. It never chooses a document to delete or merge.
+
+With the app stopped, use the newer binary to inspect the on-disk database **before** attempting a downgrade:
+
+```text
+XE-Local-AI-Engine --knowledge-downgrade-preflight
+```
+
+The command runs before startup migrations and does not start the web server. It reports:
+
+- whether the collection migration is present;
+- compatibility with the legacy global uniqueness rule;
+- conflict-group, conflicting-document, and minimum-removal counts; and
+- deterministic opaque document identifiers grouped as `conflict-000001`, etc.
+
+It never prints document content, filenames, paths, source identifiers, collection identifiers, or content hashes. Exit
+code `0` means compatible, `3` means conflicts block the downgrade, and `1` means the check itself failed.
+
+Create an explicit consistent SQLite backup before any downgrade attempt:
+
+```text
+XE-Local-AI-Engine --knowledge-downgrade-export
+```
+
+This command includes the same preflight and writes a `VACUUM INTO` snapshot under
+`<data-directory>/backups/knowledge-downgrade/`. The artifact path, byte count, and SHA-256 are printed. The filename is
+generated internally, an existing file is never overwritten, and symlink/reparse-point backup directories are rejected.
+The export is still created when conflicts exist so the operator has a recovery artifact; the command then exits `3` to
+make clear that the downgrade remains blocked.
+
+Conflict resolution is deliberately manual and must happen in the newer version. Exporting does not remove, merge, or
+rewrite any knowledge document. Re-run the preflight after operator-directed cleanup and proceed only after it exits `0`.
 
 Then download and verify the older platform artifact and run it from a separate location. If it cannot open the
 migrated data, stop it and restore the complete pre-update backup or return to the newer version. Do not delete

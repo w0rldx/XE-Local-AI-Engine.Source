@@ -175,6 +175,16 @@ try
         app.Lifetime.ApplicationStopped.Register(instanceLease.Dispose);
     }
 
+    // The downgrade commands must inspect/export the schema exactly as it is on disk. Run them before the ordinary
+    // startup migration path so invoking a newer binary never changes the database before reporting compatibility.
+    var knowledgeDowngradeCommand = DesktopLaunch.GetKnowledgeDowngradeCommand(args);
+    if (knowledgeDowngradeCommand != KnowledgeDowngradeCommand.None)
+    {
+        var downgradeExitCode = await RunKnowledgeDowngradeCommandAsync(app.Services, knowledgeDowngradeCommand).ConfigureAwait(false);
+        instanceLease?.Dispose();
+        return downgradeExitCode;
+    }
+
     // Loopback-only bind guard (defense-in-depth behind LocalApiSecurityMiddleware): shut down if the server bound a
     // routable address without the Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch (desktop
     // binds 127.0.0.1; Aspire binds localhost and exposes externally via the DCP proxy).
@@ -532,6 +542,61 @@ static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string
     Log.Information("Admin password reset succeeded. Refresh tokens revoked and existing access tokens invalidated; "
                     + "sign in with the new password.");
     return 0;
+}
+
+static async Task<int> RunKnowledgeDowngradeCommandAsync(IServiceProvider services, KnowledgeDowngradeCommand command)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    try
+    {
+        var safetyService = services.GetRequiredService<IKnowledgeDowngradeSafetyService>();
+        KnowledgeDowngradePreflightResult preflight;
+
+        if (command == KnowledgeDowngradeCommand.Export)
+        {
+            var export = await safetyService.ExportAsync(CancellationToken.None).ConfigureAwait(false);
+            preflight = export.Preflight;
+            Log.Information(
+                "Knowledge downgrade backup exported to {ArtifactPath} ({ArtifactBytes} bytes, SHA-256 {ArtifactSha256}).",
+                export.ArtifactPath,
+                export.ArtifactBytes,
+                export.ArtifactSha256);
+        }
+        else
+        {
+            preflight = await safetyService.PreflightAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
+        Log.Information(
+            "Knowledge downgrade preflight: migrationApplied={MigrationApplied}, compatible={Compatible}, "
+            + "conflictGroups={ConflictGroups}, conflictingDocuments={ConflictingDocuments}, minimumRemovals={MinimumRemovals}.",
+            preflight.CollectionMigrationApplied,
+            preflight.IsCompatible,
+            preflight.ConflictGroupCount,
+            preflight.ConflictingDocumentCount,
+            preflight.MinimumDocumentsToRemove);
+
+        foreach (var conflict in preflight.Conflicts)
+        {
+            Log.Warning("Knowledge downgrade {ConflictId}: opaque document identifiers {DocumentIdentifiers}.",
+                conflict.ConflictId,
+                conflict.DocumentIdentifiers);
+        }
+
+        if (!preflight.IsCompatible)
+        {
+            Log.Error("Knowledge downgrade is blocked. No data was modified; resolve conflicts explicitly or restore the exported backup.");
+            return 3;
+        }
+
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Log.Error(exception, "Knowledge downgrade preflight/export failed. No downgrade was attempted.");
+        return 1;
+    }
 }
 
 static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider services)
