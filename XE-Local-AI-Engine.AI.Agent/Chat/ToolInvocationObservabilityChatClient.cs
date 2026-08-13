@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Sessions;
 
 internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClient
@@ -26,7 +27,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         // A completed response carries the whole function-calling turn in order — the assistant's FunctionCallContent
         // then the tool's FunctionResultContent — so pairing them here yields an outcome span per call. (Non-streaming
         // durations are near-zero: the tool already executed below this hop before the response returned; the
-        // outcome/name/result-hash are still accurate. Real durations come from the streaming path.)
+        // outcome/name/result-hash are still accurate. Request-to-result latency comes from the streaming path.)
         var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
         foreach (var message in response.Messages)
         {
@@ -42,9 +43,10 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         CancellationToken cancellationToken = default)
     {
         // Streaming is the real chat path. A logical tool call streams across many updates (its argument fragments share
-        // one CallId), the tool executes below this hop, then its FunctionResultContent update flows back — so the gap
-        // between the first observed request and the result is a real tool duration. One pending entry per CallId keeps
-        // each call to exactly one requested span/log and one completion span.
+        // one CallId), the tool executes below this hop, then its FunctionResultContent update flows back. One pending
+        // entry per CallId keeps
+        // each call to exactly one requested span/log and one completion span. The interval is deliberately named
+        // request-to-result latency: it can include remaining argument generation and middleware work before execution.
         var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
 
         await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
@@ -84,10 +86,12 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             return;
         }
 
+        ProviderCallBudget.Current?.RecordToolCallRequested();
+
         // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
         // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
         // duration measures call DISCOVERY, not run time. Named accordingly for honesty. The paired
-        // ObserveCompleted span carries the execution outcome + real duration.
+        // ObserveCompleted span carries the execution outcome + request-to-result latency.
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallRequested");
         activity?.SetTag("tool.call_id", functionCall.CallId);
         activity?.SetTag("tool.name", functionCall.Name);
@@ -109,12 +113,14 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             return;
         }
 
-        var durationMs = Stopwatch.GetElapsedTime(requested.StartTimestamp).TotalMilliseconds;
+        var duration = Stopwatch.GetElapsedTime(requested.StartTimestamp);
+        var durationMs = duration.TotalMilliseconds;
         var outcome = functionResult.Exception is not null ? "error" : "success";
         var (resultLength, resultHash) = SummarizePayload(functionResult.Result);
+        ProviderCallBudget.Current?.RecordToolCallCompleted(duration, resultLength, functionResult.Exception is not null);
 
         // The completion span sits at the same hop but fires when the FunctionResultContent flows back, so it records
-        // the actual execution outcome + duration. Only the result length + hash are captured — never the raw result
+        // the actual execution outcome + request-to-result latency. Only the result length + hash are captured — never the raw result
         // value (docs/agent-knowledge.md §4: tool telemetry must never log raw arguments or results).
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallCompleted");
         activity?.SetTag("tool.call_id", functionResult.CallId);

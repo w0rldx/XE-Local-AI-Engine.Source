@@ -23,11 +23,17 @@ public sealed partial class InvocationRunner
         // block to stamp the persisted tokens-per-second duration.
         public Stopwatch GenerationStopwatch { get; } = Stopwatch.StartNew();
 
-        // Time-to-first-token (AUD4-19) inputs, seeded by the readiness phase before the watched stream begins:
-        // ModelReadyTimestamp is the Stopwatch.GetTimestamp() baseline the first output is measured from (the local
-        // warm phase's completion, or turn start for a runtime with no cold load); ProviderTag is the metric dimension
-        // (local | remote). FirstOutputRecorded gates the one-shot histogram record on the very first emitted chunk.
+        // Time-to-first-token (AUD4-19) inputs. HarnessStartedTimestamp provides the production-harness TTFT used by the
+        // terminal efficiency record. ModelReadyTimestamp preserves the existing inference-only measure (the local
+        // warm phase's completion, or turn start for a runtime with no cold load). ProviderTag is the bounded metric
+        // dimension (local | remote). FirstOutputRecorded gates both one-shot values on the first emitted chunk.
+        public long HarnessStartedTimestamp { get; init; }
+
         public long? ModelReadyTimestamp { get; set; }
+
+        public double? ModelReadinessDurationMs { get; set; }
+
+        public double? FirstOutputLatencyMs { get; set; }
 
         public string ProviderTag { get; set; } = "remote";
 
@@ -98,19 +104,23 @@ public sealed partial class InvocationRunner
             });
         }
 
-        // Records time-to-first-token exactly once per turn, on the first emitted reasoning OR text chunk, measured from
-        // the model-ready baseline the readiness phase seeded (AUD4-19). Tagged by provider (local | remote), no model
-        // identity. A no-op after the first chunk and when no baseline was seeded.
+        // Records time-to-first-token exactly once per turn, on the first emitted reasoning OR text chunk. The terminal
+        // record uses the true turn-start baseline; the existing histogram retains its model-ready baseline so cold-load
+        // and generation latency remain separable. Tagged by provider (local | remote), with no model identity.
         private static void RecordFirstOutputLatency(StreamState stream)
         {
-            if (stream.FirstOutputRecorded || stream.ModelReadyTimestamp is not { } readyTimestamp)
+            if (stream.FirstOutputRecorded)
             {
                 return;
             }
 
             stream.FirstOutputRecorded = true;
-            NodeMetrics.ModelReadyToFirstOutputMs.Record(Stopwatch.GetElapsedTime(readyTimestamp).TotalMilliseconds,
-                new KeyValuePair<string, object?>("provider", stream.ProviderTag));
+            stream.FirstOutputLatencyMs = Stopwatch.GetElapsedTime(stream.HarnessStartedTimestamp).TotalMilliseconds;
+            if (stream.ModelReadyTimestamp is { } readyTimestamp)
+            {
+                NodeMetrics.ModelReadyToFirstOutputMs.Record(Stopwatch.GetElapsedTime(readyTimestamp).TotalMilliseconds,
+                    new KeyValuePair<string, object?>("provider", stream.ProviderTag));
+            }
         }
 
         public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)

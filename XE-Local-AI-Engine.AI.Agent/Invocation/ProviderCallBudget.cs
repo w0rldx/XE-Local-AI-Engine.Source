@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 
+using System.Diagnostics;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 
 /// <summary>
@@ -27,14 +28,34 @@ public sealed class ProviderCallBudget
 
     private readonly int _maxProviderCalls;
     private readonly int _maxCumulativeInputTokens;
+    private readonly long _startedTimestamp;
+    private long _charsTruncated;
     private int _providerCalls;
+    private int _providerRoundsRejected;
+    private long _providerRoundElapsedMicroseconds;
     private long _cumulativeInputTokens;
+    private long _rejectedInputTokens;
+    private long _toolSchemaTokens;
+    private int _maximumEstimatedInputTokens;
+    private int _maximumToolSchemaTokens;
+    private long _messagesDropped;
+    private long _toolResultsTruncated;
+    private int _toolCallsRequested;
+    private int _toolCallsCompleted;
+    private int _toolCallsFailed;
+    private long _toolRequestToResultMicroseconds;
+    private long _toolResultBytes;
+    private long _firstToolRequestMicroseconds = -1;
+    private int _providerRetries;
+    private int _toolArgumentRepairs;
+    private int _agentHandoffs;
 
-    private ProviderCallBudget(ProviderCallBudgetOptions options)
+    private ProviderCallBudget(ProviderCallBudgetOptions options, long startedTimestamp)
     {
         Options = options;
         _maxProviderCalls = options.MaxProviderCallsPerInvocation;
         _maxCumulativeInputTokens = options.MaxCumulativeInputTokens;
+        _startedTimestamp = startedTimestamp;
     }
 
     /// <summary>The per-round budgeting knobs (context window / reserve / keep-count / excerpt size), shared with the middleware.</summary>
@@ -56,10 +77,20 @@ public sealed class ProviderCallBudget
     /// </summary>
     public static IDisposable BeginScope(ProviderCallBudgetOptions options)
     {
+        return BeginScope(options, Stopwatch.GetTimestamp());
+    }
+
+    /// <summary>
+    ///     Seeds a scope whose latency baselines start at a caller-owned timestamp. The production invocation runner
+    ///     passes its turn-start timestamp so time-to-first-tool includes admission/context work before the budget scope
+    ///     itself is created; direct/test callers use <see cref="BeginScope(ProviderCallBudgetOptions)" />.
+    /// </summary>
+    internal static IDisposable BeginScope(ProviderCallBudgetOptions options, long startedTimestamp)
+    {
         ArgumentNullException.ThrowIfNull(options);
 
         var previous = AmbientBudget.Value;
-        AmbientBudget.Value = new ProviderCallBudget(options);
+        AmbientBudget.Value = new ProviderCallBudget(options, startedTimestamp);
         return new Scope(previous);
     }
 
@@ -69,14 +100,120 @@ public sealed class ProviderCallBudget
     ///     fail the round BEFORE calling the provider rather than after. Atomic increments make it safe across the
     ///     concurrent participant runs an orchestration may drive.
     /// </summary>
-    public void RegisterProviderRound(int estimatedInputTokens)
+    public void RegisterProviderRound(int estimatedInputTokens,
+        int toolSchemaTokens = 0,
+        int messagesDropped = 0,
+        int toolResultsTruncated = 0,
+        int charsTruncated = 0)
     {
+        var normalizedInputTokens = Math.Max(0, estimatedInputTokens);
         var calls = Interlocked.Increment(ref _providerCalls);
-        var tokens = Interlocked.Add(ref _cumulativeInputTokens, Math.Max(0, estimatedInputTokens));
+        var tokens = Interlocked.Add(ref _cumulativeInputTokens, normalizedInputTokens);
 
         if (calls > _maxProviderCalls || tokens > _maxCumulativeInputTokens)
         {
+            Interlocked.Increment(ref _providerRoundsRejected);
+            Interlocked.Add(ref _rejectedInputTokens, normalizedInputTokens);
             throw new ProviderCallBudgetExceededException(CeilingExceededMessage);
+        }
+
+        Interlocked.Add(ref _toolSchemaTokens, Math.Max(0, toolSchemaTokens));
+        Interlocked.Add(ref _messagesDropped, Math.Max(0, messagesDropped));
+        Interlocked.Add(ref _toolResultsTruncated, Math.Max(0, toolResultsTruncated));
+        Interlocked.Add(ref _charsTruncated, Math.Max(0, charsTruncated));
+        UpdateMaximum(ref _maximumEstimatedInputTokens, normalizedInputTokens);
+        UpdateMaximum(ref _maximumToolSchemaTokens, Math.Max(0, toolSchemaTokens));
+    }
+
+    internal void RecordProviderRoundElapsed(TimeSpan duration)
+    {
+        Interlocked.Add(ref _providerRoundElapsedMicroseconds, ToMicroseconds(duration));
+    }
+
+    internal void RecordToolCallRequested()
+    {
+        Interlocked.Increment(ref _toolCallsRequested);
+        var elapsedMicroseconds = ToMicroseconds(Stopwatch.GetElapsedTime(_startedTimestamp));
+        Interlocked.CompareExchange(ref _firstToolRequestMicroseconds, elapsedMicroseconds, comparand: -1);
+    }
+
+    internal void RecordToolCallCompleted(TimeSpan requestToResultLatency, int resultBytes, bool failed)
+    {
+        Interlocked.Increment(ref _toolCallsCompleted);
+        if (failed)
+        {
+            Interlocked.Increment(ref _toolCallsFailed);
+        }
+
+        Interlocked.Add(ref _toolRequestToResultMicroseconds, ToMicroseconds(requestToResultLatency));
+        Interlocked.Add(ref _toolResultBytes, Math.Max(0, resultBytes));
+    }
+
+    internal void RecordProviderRetry()
+    {
+        Interlocked.Increment(ref _providerRetries);
+    }
+
+    internal void RecordToolArgumentRepair()
+    {
+        Interlocked.Increment(ref _toolArgumentRepairs);
+    }
+
+    internal void RecordAgentHandoff()
+    {
+        Interlocked.Increment(ref _agentHandoffs);
+    }
+
+    internal ProviderCallEfficiencySnapshot CaptureEfficiencySnapshot()
+    {
+        var attempts = Volatile.Read(ref _providerCalls);
+        var rejected = Volatile.Read(ref _providerRoundsRejected);
+        var firstToolRequestMicroseconds = Interlocked.Read(ref _firstToolRequestMicroseconds);
+
+        return new ProviderCallEfficiencySnapshot(
+            ProviderCalls: Math.Max(0, attempts - rejected),
+            ProviderRoundsRejected: rejected,
+            EstimatedInputTokens: Math.Max(0, Interlocked.Read(ref _cumulativeInputTokens) - Interlocked.Read(ref _rejectedInputTokens)),
+            MaximumEstimatedInputTokens: Volatile.Read(ref _maximumEstimatedInputTokens),
+            ToolSchemaTokens: Interlocked.Read(ref _toolSchemaTokens),
+            MaximumToolSchemaTokens: Volatile.Read(ref _maximumToolSchemaTokens),
+            ProviderRoundElapsedMs: FromMicroseconds(Interlocked.Read(ref _providerRoundElapsedMicroseconds)),
+            MessagesDropped: Interlocked.Read(ref _messagesDropped),
+            ToolResultsTruncated: Interlocked.Read(ref _toolResultsTruncated),
+            CharsTruncated: Interlocked.Read(ref _charsTruncated),
+            ToolCallsRequested: Volatile.Read(ref _toolCallsRequested),
+            ToolCallsCompleted: Volatile.Read(ref _toolCallsCompleted),
+            ToolCallsFailed: Volatile.Read(ref _toolCallsFailed),
+            ToolRequestToResultMs: FromMicroseconds(Interlocked.Read(ref _toolRequestToResultMicroseconds)),
+            ToolResultBytes: Interlocked.Read(ref _toolResultBytes),
+            TimeToFirstToolRequestMs: firstToolRequestMicroseconds < 0 ? null : FromMicroseconds(firstToolRequestMicroseconds),
+            ProviderRetries: Volatile.Read(ref _providerRetries),
+            ToolArgumentRepairs: Volatile.Read(ref _toolArgumentRepairs),
+            AgentHandoffs: Volatile.Read(ref _agentHandoffs));
+    }
+
+    private static long ToMicroseconds(TimeSpan duration)
+    {
+        return duration <= TimeSpan.Zero ? 0 : (long)Math.Min(long.MaxValue, duration.TotalMicroseconds);
+    }
+
+    private static double FromMicroseconds(long microseconds)
+    {
+        return Math.Max(0, microseconds) / 1000d;
+    }
+
+    private static void UpdateMaximum(ref int location, int candidate)
+    {
+        var observed = Volatile.Read(ref location);
+        while (candidate > observed)
+        {
+            var previous = Interlocked.CompareExchange(ref location, candidate, observed);
+            if (previous == observed)
+            {
+                return;
+            }
+
+            observed = previous;
         }
     }
 
@@ -95,3 +232,29 @@ public sealed class ProviderCallBudget
         }
     }
 }
+
+/// <summary>
+///     Immutable, content-free aggregate of the expensive work performed during one root agent invocation. It contains
+///     counts, durations, and estimated sizes only — never prompts, model output, tool identities, arguments, results,
+///     paths, or schemas — so the invocation runner can export it safely through bounded telemetry.
+/// </summary>
+internal sealed record ProviderCallEfficiencySnapshot(
+    int ProviderCalls,
+    int ProviderRoundsRejected,
+    long EstimatedInputTokens,
+    int MaximumEstimatedInputTokens,
+    long ToolSchemaTokens,
+    int MaximumToolSchemaTokens,
+    double ProviderRoundElapsedMs,
+    long MessagesDropped,
+    long ToolResultsTruncated,
+    long CharsTruncated,
+    int ToolCallsRequested,
+    int ToolCallsCompleted,
+    int ToolCallsFailed,
+    double ToolRequestToResultMs,
+    long ToolResultBytes,
+    double? TimeToFirstToolRequestMs,
+    int ProviderRetries,
+    int ToolArgumentRepairs,
+    int AgentHandoffs);

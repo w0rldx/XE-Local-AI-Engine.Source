@@ -87,6 +87,115 @@ public static class NodeMetrics
             description: "Number of failed invocations by failure source.");
 
     /// <summary>
+    ///     One terminal, content-free observation per admitted production agent invocation. Labels are deliberately
+    ///     bounded to provider (local | remote | unknown), outcome (completed | cancelled | failed), and orchestration
+    ///     (true | false), so benchmark and production-mode comparisons cannot create per-user/model/tool series.
+    /// </summary>
+    public static readonly Counter<long> AgentHarnessInvocationTotal =
+        Meter.CreateCounter<long>("agent_harness_invocation_total",
+            description: "Number of terminal agent-harness invocations by bounded provider, outcome, and orchestration dimensions.");
+
+    public static readonly Histogram<double> AgentHarnessTotalDurationMs =
+        Meter.CreateHistogram<double>("agent_harness_total_duration_ms",
+            unit: "ms",
+            description: "Duration from the available harness entry timestamp through the invocation runner terminal.");
+
+    public static readonly Histogram<double> AgentHarnessPreRunDurationMs =
+        Meter.CreateHistogram<double>("agent_harness_pre_run_duration_ms",
+            unit: "ms",
+            description: "Local-chat admission, context construction, and pre-run persistence duration before queueing.");
+
+    public static readonly Histogram<double> AgentHarnessQueueDurationMs =
+        Meter.CreateHistogram<double>("agent_harness_queue_duration_ms",
+            unit: "ms",
+            description: "Time a local-chat invocation waited for the collision/inference slot before starting.");
+
+    public static readonly Histogram<double> AgentHarnessModelReadinessMs =
+        Meter.CreateHistogram<double>("agent_harness_model_readiness_ms",
+            unit: "ms",
+            description: "Local model readiness duration within one production agent invocation, when applicable.");
+
+    public static readonly Histogram<double> AgentHarnessFirstOutputMs =
+        Meter.CreateHistogram<double>("agent_harness_first_output_ms",
+            unit: "ms",
+            description: "Time from the available harness entry timestamp to the first emitted reasoning or response chunk.");
+
+    public static readonly Histogram<long> AgentHarnessProviderCalls =
+        Meter.CreateHistogram<long>("agent_harness_provider_calls",
+            unit: "calls",
+            description: "Raw provider calls made by one production agent invocation.");
+
+    public static readonly Histogram<long> AgentHarnessEstimatedInputTokens =
+        Meter.CreateHistogram<long>("agent_harness_estimated_input_tokens",
+            unit: "tokens",
+            description: "Cumulative estimated provider-input tokens sent by one production agent invocation.");
+
+    public static readonly Histogram<long> AgentHarnessReportedInputTokens =
+        Meter.CreateHistogram<long>("agent_harness_reported_input_tokens",
+            unit: "tokens",
+            description: "Terminal provider-reported input tokens for one production agent invocation, when available.");
+
+    public static readonly Histogram<long> AgentHarnessReportedOutputTokens =
+        Meter.CreateHistogram<long>("agent_harness_reported_output_tokens",
+            unit: "tokens",
+            description: "Terminal provider-reported output tokens for one production agent invocation, when available.");
+
+    public static readonly Histogram<long> AgentHarnessToolSchemaTokens =
+        Meter.CreateHistogram<long>("agent_harness_tool_schema_tokens",
+            unit: "tokens",
+            description: "Cumulative estimated tool-schema tokens repeated across provider calls in one invocation.");
+
+    public static readonly Histogram<double> AgentHarnessProviderRoundElapsedMs =
+        Meter.CreateHistogram<double>("agent_harness_provider_round_elapsed_ms",
+            unit: "ms",
+            description: "Cumulative provider-round elapsed time, including stream backpressure, for one invocation.");
+
+    public static readonly Histogram<long> AgentHarnessToolCalls =
+        Meter.CreateHistogram<long>("agent_harness_tool_calls",
+            unit: "calls",
+            description: "Logical tool calls requested by one production agent invocation.");
+
+    public static readonly Histogram<double> AgentHarnessToolRequestToResultMs =
+        Meter.CreateHistogram<double>("agent_harness_tool_request_to_result_ms",
+            unit: "ms",
+            description: "Cumulative latency from first observed tool request fragment to its result in one invocation.");
+
+    public static readonly Histogram<long> AgentHarnessToolResultBytes =
+        Meter.CreateHistogram<long>("agent_harness_tool_result_bytes",
+            unit: "By",
+            description: "Cumulative serialized tool-result bytes returned during one invocation.");
+
+    public static readonly Histogram<long> AgentHarnessProviderRetries =
+        Meter.CreateHistogram<long>("agent_harness_provider_retries",
+            unit: "retries",
+            description: "Pre-first-output provider retries performed during one invocation.");
+
+    public static readonly Histogram<long> AgentHarnessToolArgumentRepairs =
+        Meter.CreateHistogram<long>("agent_harness_tool_argument_repairs",
+            unit: "repairs",
+            description: "Deterministic tool-argument repairs performed during one invocation.");
+
+    public static readonly Histogram<long> AgentHarnessHandoffs =
+        Meter.CreateHistogram<long>("agent_harness_handoffs",
+            unit: "handoffs",
+            description: "Agent-participant handoffs observed during one orchestration invocation.");
+
+    public static readonly Histogram<long> AgentHarnessMessagesDropped =
+        Meter.CreateHistogram<long>("agent_harness_messages_dropped",
+            unit: "messages",
+            description: "Conversation messages deterministically dropped at provider boundaries during one invocation.");
+
+    public static readonly Histogram<long> AgentHarnessToolResultsTruncated =
+        Meter.CreateHistogram<long>("agent_harness_tool_results_truncated",
+            unit: "results",
+            description: "Oversized tool results deterministically truncated at provider boundaries during one invocation.");
+
+    public static readonly Histogram<double> AgentHarnessFirstToolRequestMs =
+        Meter.CreateHistogram<double>("agent_harness_first_tool_request_ms",
+            unit: "ms",
+            description: "Time from the root harness scope starting to the first logical tool request.");
+
+    /// <summary>
     ///     Incremented each time a model-invoked MCP tool call exceeds its per-call
     ///     <c>Mcp:ToolCallTimeoutSeconds</c> deadline and is cancelled, returning a typed tool-failure result to the model
     ///     (the run continues; the call is never retried). A non-zero rate flags a slow or wedged MCP server. Content-free

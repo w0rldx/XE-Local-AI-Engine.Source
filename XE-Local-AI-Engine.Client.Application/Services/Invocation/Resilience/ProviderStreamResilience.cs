@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 
 /// <inheritdoc cref="IProviderStreamResilience" />
 /// <remarks>
@@ -123,6 +124,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                     throw;
                 }
 
+                ProviderCallBudget.Current?.RecordProviderRetry();
                 _logger.LogWarning(exception,
                     "Transient provider send failure for endpoint {Endpoint} (attempt {Attempt} of {MaxAttempts}); retrying after backoff.",
                     endpointKey,
