@@ -74,6 +74,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
         builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
+        builder.Services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
 
         // AUD4-08: node SQLite concurrency posture. Resolve the connection-time pragma settings once and (a) publish them
         // to the static raw-open helpers (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path cannot take injected

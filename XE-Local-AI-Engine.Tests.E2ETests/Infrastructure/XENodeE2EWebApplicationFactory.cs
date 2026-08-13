@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
@@ -334,6 +335,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
+                ["KnowledgeBase:EmbeddingProviderName"] = "ollama",
+                ["KnowledgeBase:EmbeddingModelName"] = "qwen3-embedding:0.6b",
                 ["NodeData:Directory"] = Path.Combine(_fixtureDataRoot, "node-data"),
                 ["Development:Enabled"] = "true"
             });
@@ -342,6 +345,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         _ = builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
+
+            // Most production workers are intentionally absent from browser E2E, but knowledge imports are defined as
+            // queue-backed operations. Keep the real ingestion worker so the focused RAG scenario exercises the same
+            // endpoint -> bounded dispatcher -> scoped ingestion pipeline as production instead of calling ingestion
+            // directly from test code. The scheduled corpus reindex worker remains disabled.
+            services.AddHostedService<KnowledgeIngestionWorker>();
 
             services.Configure<CentralPlatformOptions>(options =>
             {

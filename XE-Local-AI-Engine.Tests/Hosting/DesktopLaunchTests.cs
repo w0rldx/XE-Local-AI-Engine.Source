@@ -98,6 +98,23 @@ public sealed class DesktopLaunchTests
     }
 
     [Test]
+    public void KnowledgeDowngradeCommand_RecognizesPreflightAndExport()
+    {
+        AssertEx.Equal(KnowledgeDowngradeCommand.None, DesktopLaunch.GetKnowledgeDowngradeCommand(["--desktop"]));
+        AssertEx.Equal(KnowledgeDowngradeCommand.Preflight,
+            DesktopLaunch.GetKnowledgeDowngradeCommand(["--knowledge-downgrade-preflight"]));
+        AssertEx.Equal(KnowledgeDowngradeCommand.Export,
+            DesktopLaunch.GetKnowledgeDowngradeCommand(["--knowledge-downgrade-export"]));
+    }
+
+    [Test]
+    public void KnowledgeDowngradeCommand_WhenBothFlagsArePresent_RejectsAmbiguousAction()
+    {
+        _ = AssertEx.Throws<ArgumentException>(() => DesktopLaunch.GetKnowledgeDowngradeCommand(
+            ["--knowledge-downgrade-preflight", "--knowledge-downgrade-export"]));
+    }
+
+    [Test]
     public void BrowserLaunchCommand_PerOs_UsesExplorerOrXdgOpen()
     {
         const string url = "http://127.0.0.1:5001/";

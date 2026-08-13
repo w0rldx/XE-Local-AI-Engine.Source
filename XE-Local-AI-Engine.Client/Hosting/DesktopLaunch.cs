@@ -27,6 +27,12 @@ internal static class DesktopLaunch
     /// </summary>
     internal const string ResetAdminPasswordArgument = "--reset-admin-password";
 
+    /// <summary>Runs the read-only knowledge downgrade compatibility report, then exits.</summary>
+    internal const string KnowledgeDowngradePreflightArgument = "--knowledge-downgrade-preflight";
+
+    /// <summary>Runs the compatibility report, exports a database snapshot, then exits.</summary>
+    internal const string KnowledgeDowngradeExportArgument = "--knowledge-downgrade-export";
+
     /// <summary>
     ///     The loopback URL desktop mode binds (port 0 lets the OS pick a free port). Composed from parts rather than a
     ///     literal so it reads as a bind specification, not a fixed endpoint.
@@ -124,4 +130,39 @@ internal static class DesktopLaunch
 
         return false;
     }
+
+    /// <summary>
+    ///     Resolves the operator-only knowledge downgrade command. The export command includes the preflight, so passing
+    ///     both flags is rejected instead of silently selecting one action.
+    /// </summary>
+    internal static KnowledgeDowngradeCommand GetKnowledgeDowngradeCommand(string[] args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+
+        var preflight = args.Any(static argument =>
+            string.Equals(argument, KnowledgeDowngradePreflightArgument, StringComparison.OrdinalIgnoreCase));
+        var export = args.Any(static argument =>
+            string.Equals(argument, KnowledgeDowngradeExportArgument, StringComparison.OrdinalIgnoreCase));
+
+        if (preflight && export)
+        {
+            throw new ArgumentException(
+                $"Use either {KnowledgeDowngradePreflightArgument} or {KnowledgeDowngradeExportArgument}, not both.",
+                nameof(args));
+        }
+
+        if (export)
+        {
+            return KnowledgeDowngradeCommand.Export;
+        }
+
+        return preflight ? KnowledgeDowngradeCommand.Preflight : KnowledgeDowngradeCommand.None;
+    }
+}
+
+internal enum KnowledgeDowngradeCommand
+{
+    None,
+    Preflight,
+    Export
 }
