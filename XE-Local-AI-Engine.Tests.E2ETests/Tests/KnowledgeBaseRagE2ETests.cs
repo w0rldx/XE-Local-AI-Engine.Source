@@ -100,10 +100,10 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         }).ConfigureAwait(false);
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
-            {
-                Name = "Knowledge base"
-            }))
-            .ToBeVisibleAsync().ConfigureAwait(false);
+              {
+                  Name = "Knowledge base"
+              }))
+              .ToBeVisibleAsync().ConfigureAwait(false);
         await Expect(Page.GetByTestId("knowledge-active-collection")).ToContainTextAsync(DefaultCollection).ConfigureAwait(false);
     }
 
@@ -113,7 +113,7 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         await using var scope = Factory.Services.CreateAsyncScope();
         var repositories = scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>();
         var reference = await repositories.RegisterAsync(alias, repositoryRoot)
-            .ConfigureAwait(false);
+                                          .ConfigureAwait(false);
         _repositorySourceId = reference.Id;
         _selectedFolderId = Guid.Parse(reference.Id);
 
@@ -127,11 +127,11 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         {
             await select.ClickAsync().ConfigureAwait(false);
             await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions
-                {
-                    Name = repositoryAlias,
-                    Exact = true
-                })
-                .ClickAsync().ConfigureAwait(false);
+                      {
+                          Name = repositoryAlias,
+                          Exact = true
+                      })
+                      .ClickAsync().ConfigureAwait(false);
         }
 
         await Expect(Page.GetByTestId("knowledge-repository-import")).ToBeEnabledAsync().ConfigureAwait(false);
@@ -145,8 +145,7 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         await Assert.That(response.Ok).IsTrue();
 
         var payload = JsonDocument.Parse(await response.TextAsync().ConfigureAwait(false));
-        await Assert.That(payload.RootElement.GetProperty("collectionId").GetString()).IsEqualTo(
-            await Page.GetByTestId("knowledge-active-collection").TextContentAsync().ConfigureAwait(false));
+        await Assert.That(payload.RootElement.GetProperty("collectionId").GetString()).IsEqualTo(await Page.GetByTestId("knowledge-active-collection").TextContentAsync().ConfigureAwait(false));
         return payload;
     }
 
@@ -163,10 +162,10 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
     {
         await Page.GetByTestId("knowledge-collection-input").FillAsync(collectionId).ConfigureAwait(false);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-            {
-                Name = "Open collection"
-            })
-            .ClickAsync().ConfigureAwait(false);
+                  {
+                      Name = "Open collection"
+                  })
+                  .ClickAsync().ConfigureAwait(false);
 
         await Expect(Page.GetByTestId("knowledge-active-collection")).ToContainTextAsync(collectionId).ConfigureAwait(false);
     }
@@ -188,7 +187,7 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
             await using var scope = Factory.Services.CreateAsyncScope();
             var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
             var summary = (await catalog.ListAsync(collectionId, timeout.Token).ConfigureAwait(false))
-                          .SingleOrDefault(document => string.Equals(document.DisplayName, displayName, StringComparison.Ordinal));
+                .SingleOrDefault(document => string.Equals(document.DisplayName, displayName, StringComparison.Ordinal));
             if (summary?.Status == KnowledgeDocumentStatus.Indexed)
             {
                 var detail = await catalog.GetAsync(summary.DocumentId, timeout.Token).ConfigureAwait(false);
@@ -205,11 +204,11 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
             response.Request.Method == "GET"
             && response.Url.Contains("/api/local/v1/knowledge-base/documents", StringComparison.Ordinal));
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-            {
-                Name = "Refresh",
-                Exact = true
-            })
-            .ClickAsync().ConfigureAwait(false);
+                  {
+                      Name = "Refresh",
+                      Exact = true
+                  })
+                  .ClickAsync().ConfigureAwait(false);
         await refreshResponse.ConfigureAwait(false);
 
         var row = DocumentRow(displayName);
@@ -297,8 +296,11 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         {
             Timeout = 20_000
         }).ConfigureAwait(false);
-        await Expect(Page.GetByText(GroundedReplyMarker, new PageGetByTextOptions { Exact = true }).Last)
-            .ToBeVisibleAsync().ConfigureAwait(false);
+        await Expect(Page.GetByText(GroundedReplyMarker, new PageGetByTextOptions
+              {
+                  Exact = true
+              }).Last)
+              .ToBeVisibleAsync().ConfigureAwait(false);
 
         await Expect(Page.GetByTestId("chat-sources-strip")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
         {
@@ -328,7 +330,7 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         await Expect(option).ToBeVisibleAsync().ConfigureAwait(false);
         await option.ClickAsync().ConfigureAwait(false);
         await Expect(Page.GetByTestId("chat-model-selector-selected"))
-            .ToContainTextAsync(FakeOllamaChatModel).ConfigureAwait(false);
+              .ToContainTextAsync(FakeOllamaChatModel).ConfigureAwait(false);
     }
 
     private async Task PurgeScenarioDocumentsAsync()
@@ -341,7 +343,11 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
         await using var scope = Factory.Services.CreateAsyncScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
         var purge = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentPurgeService>();
-        foreach (var collection in new[] { DefaultCollection, SecondaryCollection })
+        foreach (var collection in new[]
+                 {
+                     DefaultCollection,
+                     SecondaryCollection
+                 })
         {
             var documents = await catalog.ListAsync(collection, "repository", _repositorySourceId, CancellationToken.None)
                                          .ConfigureAwait(false);
@@ -378,15 +384,15 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
     private static async Task WriteRepositorySnapshotAsync(string repositoryRoot, string token, bool includeObsolete)
     {
         await File.WriteAllTextAsync(Path.Combine(repositoryRoot, SharedDocument),
-                $"# Shared knowledge\n\nThe deterministic repository fact is {token}.\n")
-            .ConfigureAwait(false);
+                      $"# Shared knowledge\n\nThe deterministic repository fact is {token}.\n")
+                  .ConfigureAwait(false);
 
         var obsoletePath = Path.Combine(repositoryRoot, ObsoleteDocument);
         if (includeObsolete)
         {
             await File.WriteAllTextAsync(obsoletePath,
-                    $"# Retiring knowledge\n\nThis tracked fact is {ObsoleteToken}.\n")
-                .ConfigureAwait(false);
+                          $"# Retiring knowledge\n\nThis tracked fact is {ObsoleteToken}.\n")
+                      .ConfigureAwait(false);
         }
         else if (File.Exists(obsoletePath))
         {

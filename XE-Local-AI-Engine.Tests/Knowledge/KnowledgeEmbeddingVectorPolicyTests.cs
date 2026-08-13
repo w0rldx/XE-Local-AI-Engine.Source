@@ -56,8 +56,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     public void Transform_SameModelNameWithDifferentInstalledRevision_UsesDifferentCanonicalIdentity()
     {
         var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
-        var original = KnowledgeEmbeddingVectorPolicy.Transform(
-            new EmbeddingModelResolution(NomicV15, IsConfident: true, RevisionFingerprint: "inventory-v1:original"),
+        var original = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true, RevisionFingerprint: "inventory-v1:original"),
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
         var replacementResolution = new EmbeddingModelResolution(NomicV15,

@@ -439,22 +439,22 @@ public sealed class SupervisorProfilingTests
     public async Task Profiling_ReplayWithUnsupportedExactKvFlashVector_RejectsWithoutLaunchingOrMutating()
     {
         const string helpWithoutLongFlashAlias = """
-                                                     -m
-                                                     --host
-                                                     --port
-                                                     --parallel
-                                                     --no-warmup
-                                                     -c
-                                                     --metrics
-                                                     --n-gpu-layers
-                                                     --jinja
-                                                     --cache-ram
-                                                     -fa [on|off|auto]
-                                                     -ctk, --cache-type-k TYPE
-                                                         allowed values: f16, q8_0
-                                                     -ctv, --cache-type-v TYPE
-                                                         allowed values: f16, q8_0
-                                                     """;
+                                                 -m
+                                                 --host
+                                                 --port
+                                                 --parallel
+                                                 --no-warmup
+                                                 -c
+                                                 --metrics
+                                                 --n-gpu-layers
+                                                 --jinja
+                                                 --cache-ram
+                                                 -fa [on|off|auto]
+                                                 -ctk, --cache-type-k TYPE
+                                                     allowed values: f16, q8_0
+                                                 -ctv, --cache-type-v TYPE
+                                                     allowed values: f16, q8_0
+                                                 """;
         var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,

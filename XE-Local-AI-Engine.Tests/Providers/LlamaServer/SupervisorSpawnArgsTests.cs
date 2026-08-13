@@ -20,16 +20,16 @@ public sealed class SupervisorSpawnArgsTests
     public async Task EnsureRunning_RuntimeMissingMandatoryCapability_FailsBeforeLauncher()
     {
         const string helpWithoutNoWarmup = """
-                                                   -m, --model FNAME
-                                                   --host HOST
-                                                   --port PORT
-                                                   --parallel N
-                                                   -c, --ctx-size N
-                                                   -t, --threads N
-                                                   -tb, --threads-batch N
-                                                   --jinja
-                                                   --cache-ram N
-                                                   """;
+                                           -m, --model FNAME
+                                           --host HOST
+                                           --port PORT
+                                           --parallel N
+                                           -c, --ctx-size N
+                                           -t, --threads N
+                                           -tb, --threads-batch N
+                                           --jinja
+                                           --cache-ram N
+                                           """;
         var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cpu, IsPinnedFallback: true);
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,

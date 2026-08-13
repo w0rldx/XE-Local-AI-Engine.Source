@@ -19,8 +19,7 @@ public interface IKnowledgeChunkEmbeddingCache
 public interface IKnowledgeChunkEmbeddingReuseStore
 {
     /// <summary>Returns exact-key matches which were committed no earlier than <paramref name="notBeforeUtc" />.</summary>
-    Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(
-        IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
+    Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
         DateTimeOffset notBeforeUtc,
         CancellationToken cancellationToken);
 }

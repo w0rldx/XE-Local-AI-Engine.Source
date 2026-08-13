@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Knowledge;
 
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -13,7 +14,10 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
     {
         var key = Key('a');
         var durableVector = Vector(1f, 2f);
-        var store = new StubReuseStore(new Dictionary<KnowledgeChunkEmbeddingCacheKey, byte[]> { [key] = durableVector });
+        var store = new StubReuseStore(new Dictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>
+        {
+            [key] = durableVector
+        });
         var cache = CreateCache(store);
         var factoryCalls = 0;
 
@@ -42,7 +46,10 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
             new KnowledgeChunkEmbeddingCacheKey(storedKey.EmbeddingInputHash, storedKey.ParserVersion, storedKey.ChunkerVersion, "other::native:v1:2", storedKey.Dimension),
             new KnowledgeChunkEmbeddingCacheKey(storedKey.EmbeddingInputHash, storedKey.ParserVersion, storedKey.ChunkerVersion, "other::native:v1:3", 3)
         };
-        var store = new StubReuseStore(new Dictionary<KnowledgeChunkEmbeddingCacheKey, byte[]> { [storedKey] = Vector(1f, 2f) });
+        var store = new StubReuseStore(new Dictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>
+        {
+            [storedKey] = Vector(1f, 2f)
+        });
         var cache = CreateCache(store);
         IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>? factoryKeys = null;
 
@@ -90,6 +97,7 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
         var store = new StubReuseStore();
         var cache = CreateCache(store, maxEntries: 8, ttlSeconds: 10, clock);
         var factoryCalls = 0;
+
         Task<IReadOnlyList<byte[]>> Factory(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> _, CancellationToken __)
         {
             factoryCalls++;
@@ -113,6 +121,7 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
         var first = Key('e');
         var second = Key('f');
         var calls = 0;
+
         Task<IReadOnlyList<byte[]>> Factory(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys, CancellationToken _)
         {
             calls += keys.Count;
@@ -155,8 +164,12 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
 
     private static byte[] Vector(float first, float second)
     {
-        var values = new[] { first, second };
-        return System.Runtime.InteropServices.MemoryMarshal.AsBytes(values.AsSpan()).ToArray();
+        var values = new[]
+        {
+            first,
+            second
+        };
+        return MemoryMarshal.AsBytes(values.AsSpan()).ToArray();
     }
 
     private sealed class StubReuseStore(IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>? entries = null)
@@ -167,14 +180,13 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
 
         public int CallCount { get; private set; }
 
-        public Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(
-            IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
+        public Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
             DateTimeOffset notBeforeUtc,
             CancellationToken cancellationToken)
         {
             CallCount++;
             IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]> found = keys.Where(_entries.ContainsKey)
-                .ToDictionary(key => key, key => _entries[key]);
+                                                                                     .ToDictionary(key => key, key => _entries[key]);
             return Task.FromResult(found);
         }
     }
@@ -183,8 +195,10 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
     {
         private DateTimeOffset _now = now;
 
-        public override DateTimeOffset GetUtcNow() => _now;
+        public override DateTimeOffset GetUtcNow() =>
+            _now;
 
-        public void Advance(TimeSpan value) => _now += value;
+        public void Advance(TimeSpan value) =>
+            _now += value;
     }
 }

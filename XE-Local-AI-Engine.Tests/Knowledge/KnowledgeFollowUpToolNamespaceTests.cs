@@ -63,7 +63,8 @@ public sealed class KnowledgeFollowUpToolNamespaceTests
     {
         foreach (var schema in new[]
                  {
-                     ReadDocumentToolDefinition.ParameterSchema, ReadSurroundingChunksToolDefinition.ParameterSchema
+                     ReadDocumentToolDefinition.ParameterSchema,
+                     ReadSurroundingChunksToolDefinition.ParameterSchema
                  })
         {
             using var document = JsonDocument.Parse(schema);
@@ -92,8 +93,9 @@ public sealed class KnowledgeFollowUpToolNamespaceTests
         return new ReadSurroundingChunksToolHandler(scopeFactory, EnabledOptions());
     }
 
-    private static IOptions<KnowledgeBaseOptions> EnabledOptions() => Options.Create(new KnowledgeBaseOptions
-    {
-        AgentToolsEnabled = true
-    });
+    private static IOptions<KnowledgeBaseOptions> EnabledOptions() =>
+        Options.Create(new KnowledgeBaseOptions
+        {
+            AgentToolsEnabled = true
+        });
 }

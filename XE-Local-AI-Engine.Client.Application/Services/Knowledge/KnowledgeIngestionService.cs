@@ -145,9 +145,9 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
         using var stream = new MemoryStream(bytes, writable: false);
         var extraction = await _extractor.ExtractStructuredAsync(stream,
-                revision.SourcePath ?? documentId.ToString("D"),
-                revision.Extension,
-                cancellationToken)
+                                             revision.SourcePath ?? documentId.ToString("D"),
+                                             revision.Extension,
+                                             cancellationToken)
                                          .ConfigureAwait(false);
         switch (extraction.Status)
         {
@@ -280,21 +280,21 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
 
         var vectors = await _embeddingCache.GetOrCreateManyAsync(keys,
-                async (missing, token) =>
-                {
-                    var texts = missing.Select(key => textByKey[key]).ToList();
-                    var generated = await _embedder.EmbedAsync(texts, token).ConfigureAwait(false);
-                    if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
-                        || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
-                        || generated.Dimension != descriptor.Dimension)
-                    {
-                        throw new KnowledgeIngestionException("The embedding model changed while the document was being indexed. Retry the document.");
-                    }
+                                               async (missing, token) =>
+                                               {
+                                                   var texts = missing.Select(key => textByKey[key]).ToList();
+                                                   var generated = await _embedder.EmbedAsync(texts, token).ConfigureAwait(false);
+                                                   if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
+                                                       || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
+                                                       || generated.Dimension != descriptor.Dimension)
+                                                   {
+                                                       throw new KnowledgeIngestionException("The embedding model changed while the document was being indexed. Retry the document.");
+                                                   }
 
-                    return generated.Vectors;
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
+                                                   return generated.Vectors;
+                                               },
+                                               cancellationToken)
+                                           .ConfigureAwait(false);
         return new KnowledgeEmbeddingResult(vectors, descriptor.ResolvedModel, descriptor.VectorIdentity, descriptor.Dimension);
     }
 

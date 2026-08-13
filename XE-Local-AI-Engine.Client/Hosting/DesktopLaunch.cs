@@ -146,8 +146,7 @@ internal static class DesktopLaunch
 
         if (preflight && export)
         {
-            throw new ArgumentException(
-                $"Use either {KnowledgeDowngradePreflightArgument} or {KnowledgeDowngradeExportArgument}, not both.",
+            throw new ArgumentException($"Use either {KnowledgeDowngradePreflightArgument} or {KnowledgeDowngradeExportArgument}, not both.",
                 nameof(args));
         }
 

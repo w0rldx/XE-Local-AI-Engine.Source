@@ -557,8 +557,7 @@ static async Task<int> RunKnowledgeDowngradeCommandAsync(IServiceProvider servic
         {
             var export = await safetyService.ExportAsync(CancellationToken.None).ConfigureAwait(false);
             preflight = export.Preflight;
-            Log.Information(
-                "Knowledge downgrade backup exported to {ArtifactPath} ({ArtifactBytes} bytes, SHA-256 {ArtifactSha256}).",
+            Log.Information("Knowledge downgrade backup exported to {ArtifactPath} ({ArtifactBytes} bytes, SHA-256 {ArtifactSha256}).",
                 export.ArtifactPath,
                 export.ArtifactBytes,
                 export.ArtifactSha256);
@@ -568,9 +567,8 @@ static async Task<int> RunKnowledgeDowngradeCommandAsync(IServiceProvider servic
             preflight = await safetyService.PreflightAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
-        Log.Information(
-            "Knowledge downgrade preflight: migrationApplied={MigrationApplied}, compatible={Compatible}, "
-            + "conflictGroups={ConflictGroups}, conflictingDocuments={ConflictingDocuments}, minimumRemovals={MinimumRemovals}.",
+        Log.Information("Knowledge downgrade preflight: migrationApplied={MigrationApplied}, compatible={Compatible}, "
+                        + "conflictGroups={ConflictGroups}, conflictingDocuments={ConflictingDocuments}, minimumRemovals={MinimumRemovals}.",
             preflight.CollectionMigrationApplied,
             preflight.IsCompatible,
             preflight.ConflictGroupCount,

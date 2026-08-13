@@ -209,7 +209,8 @@ internal sealed partial record LlamaServerCapabilityManifest
 }
 
 /// <summary>Immutable parser output used by focused capability tests.</summary>
-internal sealed record ParsedLlamaServerHelp(IReadOnlySet<string> Options,
+internal sealed record ParsedLlamaServerHelp(
+    IReadOnlySet<string> Options,
     IReadOnlySet<string> SpeculativeModes,
     IReadOnlySet<string> CacheTypesK,
     IReadOnlySet<string> CacheTypesV,
@@ -388,7 +389,8 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
 
     private sealed record ExecutableIdentitySnapshot(long LengthBytes, DateTimeOffset LastWriteUtc);
 
-    private sealed record CapabilityCacheKey(GpuVariant Variant,
+    private sealed record CapabilityCacheKey(
+        GpuVariant Variant,
         string RequestedVersion,
         string ExecutablePath,
         long LengthBytes,

@@ -127,8 +127,8 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         try
         {
             _ = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
-                    serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync())
-                .ConfigureAwait(false);
+                                  serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync())
+                              .ConfigureAwait(false);
             AssertEx.Empty(Directory.EnumerateFileSystemEntries(outside),
                 "A symlinked backup directory must not redirect an export outside the node data root.");
         }
@@ -148,8 +148,8 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await cancellation.CancelAsync().ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
-                serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync(cancellation.Token))
-            .ConfigureAwait(false);
+                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync(cancellation.Token))
+                          .ConfigureAwait(false);
 
         AssertEx.False(Directory.Exists(Path.Combine(_rootPath, "backups")),
             "Cancellation before work begins must not leave an export directory or partial artifact.");
@@ -163,8 +163,8 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_rootPath, "backups"), "collision").ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<IOException>(() =>
-                serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync())
-            .ConfigureAwait(false);
+                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync())
+                          .ConfigureAwait(false);
     }
 
     private async Task<ServiceProvider> BuildMigratedServiceProviderAsync(string databasePath, TimeProvider? timeProvider = null)
@@ -209,12 +209,12 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO knowledge_documents
-                (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status,
-                 chunk_count, embedding_model, vector_identity, collection_id, created_at_utc, updated_at_utc)
-            VALUES
-                ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Indexed', 0, 'embed', 'vector', $collection, 1, 1);
-            """;
+                              INSERT INTO knowledge_documents
+                                  (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status,
+                                   chunk_count, embedding_model, vector_identity, collection_id, created_at_utc, updated_at_utc)
+                              VALUES
+                                  ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Indexed', 0, 'embed', 'vector', $collection, 1, 1);
+                              """;
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$name", RandomNumberGenerator.GetBytes(48));
         command.Parameters.AddWithValue("$hash", contentHash);
@@ -239,6 +239,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public override DateTimeOffset GetUtcNow() =>
+            now;
     }
 }

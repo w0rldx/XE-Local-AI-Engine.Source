@@ -376,16 +376,19 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         AddParameter(command, "$collection_id", collectionId);
         if (repositorySource)
         {
-            command.CommandText = "SELECT document_id, extension, content_hash FROM knowledge_documents WHERE collection_id = $collection_id AND source_kind = $source_kind AND source_id = $source_id AND source_path = $source_path;";
+            command.CommandText =
+                "SELECT document_id, extension, content_hash FROM knowledge_documents WHERE collection_id = $collection_id AND source_kind = $source_kind AND source_id = $source_id AND source_path = $source_path;";
             AddParameter(command, "$source_kind", sourceKind);
             AddParameter(command, "$source_id", sourceId);
             AddParameter(command, "$source_path", sourcePath);
         }
         else
         {
-            command.CommandText = "SELECT document_id, extension, content_hash FROM knowledge_documents WHERE collection_id = $collection_id AND source_kind <> 'repository' AND content_hash = $content_hash;";
+            command.CommandText =
+                "SELECT document_id, extension, content_hash FROM knowledge_documents WHERE collection_id = $collection_id AND source_kind <> 'repository' AND content_hash = $content_hash;";
             AddParameter(command, "$content_hash", contentHash);
         }
+
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {

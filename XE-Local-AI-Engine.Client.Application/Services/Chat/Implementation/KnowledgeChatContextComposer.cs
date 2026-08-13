@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -76,7 +77,7 @@ internal static class KnowledgeChatContextComposer
                 new("source", hit.Source),
                 new("collection", hit.CollectionId),
                 new("path", hit.SourcePath),
-                new("page", hit.PageNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("page", hit.PageNumber?.ToString(CultureInfo.InvariantCulture)),
                 new("symbol", hit.Symbol),
                 new("status", hit.ServingLastKnownGood ? "last-known-good (re-index pending)" : null)
             };

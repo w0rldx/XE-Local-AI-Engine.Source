@@ -170,8 +170,7 @@ public sealed class ProviderCallBudget
         var rejected = Volatile.Read(ref _providerRoundsRejected);
         var firstToolRequestMicroseconds = Interlocked.Read(ref _firstToolRequestMicroseconds);
 
-        return new ProviderCallEfficiencySnapshot(
-            ProviderCalls: Math.Max(0, attempts - rejected),
+        return new ProviderCallEfficiencySnapshot(ProviderCalls: Math.Max(0, attempts - rejected),
             ProviderRoundsRejected: rejected,
             EstimatedInputTokens: Math.Max(0, Interlocked.Read(ref _cumulativeInputTokens) - Interlocked.Read(ref _rejectedInputTokens)),
             MaximumEstimatedInputTokens: Volatile.Read(ref _maximumEstimatedInputTokens),
