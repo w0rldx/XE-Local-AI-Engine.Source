@@ -493,6 +493,7 @@ public sealed class ImageJobCoordinatorTests
     private sealed class FakeImageJobStore : IImageJobStore
     {
         private readonly ConcurrentDictionary<Guid, ImageJobView> _jobs = new();
+        private readonly Lock _updateLock = new();
 
         public ImageJobStatus? StatusOf(Guid jobId)
         {
@@ -610,11 +611,17 @@ public sealed class ImageJobCoordinatorTests
             return Task.FromResult<IReadOnlyList<Guid>>(interrupted);
         }
 
+        // Serialized read-modify-write: the run task's terminal mark and CancelAsync's cancellation-requested mark race
+        // on the same row, and an unlocked check-then-set lets the later writer clobber the earlier one's status (the
+        // real EF store is immune because SaveChanges only writes each call's changed columns).
         private void Update(Guid jobId, Func<ImageJobView, ImageJobView> mutate)
         {
-            if (_jobs.TryGetValue(jobId, out var view))
+            lock (_updateLock)
             {
-                _jobs[jobId] = mutate(view);
+                if (_jobs.TryGetValue(jobId, out var view))
+                {
+                    _jobs[jobId] = mutate(view);
+                }
             }
         }
     }
