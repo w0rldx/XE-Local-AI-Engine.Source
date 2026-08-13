@@ -18,41 +18,41 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@floating-ui/core@1.7.5",
+			"id": "frontend:@floating-ui/core@1.8.0",
 			"name": "@floating-ui/core",
-			"version": "1.7.5",
+			"version": "1.8.0",
 			"license": "MIT",
 			"homepageUrl": "https://floating-ui.com",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@floating-ui/dom@1.7.6",
+			"id": "frontend:@floating-ui/dom@1.8.0",
 			"name": "@floating-ui/dom",
-			"version": "1.7.6",
+			"version": "1.8.0",
 			"license": "MIT",
 			"homepageUrl": "https://floating-ui.com",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@floating-ui/react@0.27.19",
+			"id": "frontend:@floating-ui/react@0.27.20",
 			"name": "@floating-ui/react",
-			"version": "0.27.19",
+			"version": "0.27.20",
 			"license": "MIT",
 			"homepageUrl": "https://floating-ui.com/docs/react",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@floating-ui/react-dom@2.1.8",
+			"id": "frontend:@floating-ui/react-dom@2.1.9",
 			"name": "@floating-ui/react-dom",
-			"version": "2.1.8",
+			"version": "2.1.9",
 			"license": "MIT",
 			"homepageUrl": "https://floating-ui.com/docs/react-dom",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@floating-ui/utils@0.2.11",
+			"id": "frontend:@floating-ui/utils@0.2.12",
 			"name": "@floating-ui/utils",
-			"version": "0.2.11",
+			"version": "0.2.12",
 			"license": "MIT",
 			"homepageUrl": "https://floating-ui.com",
 			"source": "frontend"
@@ -82,57 +82,57 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/charts@9.4.1",
+			"id": "frontend:@mantine/charts@9.5.1",
 			"name": "@mantine/charts",
-			"version": "9.4.1",
+			"version": "9.5.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/colors-generator@9.4.1",
+			"id": "frontend:@mantine/colors-generator@9.5.1",
 			"name": "@mantine/colors-generator",
-			"version": "9.4.1",
+			"version": "9.5.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/core@9.4.1",
+			"id": "frontend:@mantine/core@9.5.1",
 			"name": "@mantine/core",
-			"version": "9.4.1",
+			"version": "9.5.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/hooks@9.4.1",
+			"id": "frontend:@mantine/hooks@9.5.1",
 			"name": "@mantine/hooks",
-			"version": "9.4.1",
+			"version": "9.5.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/notifications@9.4.1",
+			"id": "frontend:@mantine/notifications@9.5.1",
 			"name": "@mantine/notifications",
-			"version": "9.4.1",
+			"version": "9.5.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/store@9.4.1",
+			"id": "frontend:@mantine/store@9.5.1",
 			"name": "@mantine/store",
-			"version": "9.4.1",
+			"version": "9.5.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@microsoft/signalr@10.0.0",
+			"id": "frontend:@microsoft/signalr@10.0.11",
 			"name": "@microsoft/signalr",
-			"version": "10.0.0",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/dotnet/aspnetcore/tree/main/src/SignalR#readme",
 			"source": "frontend"
@@ -146,17 +146,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/types@2.1.0",
+			"id": "frontend:@rrweb/types@2.1.1",
 			"name": "@rrweb/types",
-			"version": "2.1.0",
+			"version": "2.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/types#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/utils@2.1.0",
+			"id": "frontend:@rrweb/utils@2.1.1",
 			"name": "@rrweb/utils",
-			"version": "2.1.0",
+			"version": "2.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/utils#readme",
 			"source": "frontend"
@@ -186,49 +186,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons@3.44.0",
+			"id": "frontend:@tabler/icons@3.46.0",
 			"name": "@tabler/icons",
-			"version": "3.44.0",
+			"version": "3.46.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons-react@3.44.0",
+			"id": "frontend:@tabler/icons-react@3.46.0",
 			"name": "@tabler/icons-react",
-			"version": "3.44.0",
+			"version": "3.46.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/history@1.162.0",
+			"id": "frontend:@tanstack/history@1.162.1",
 			"name": "@tanstack/history",
-			"version": "1.162.0",
+			"version": "1.162.1",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.101.2",
+			"id": "frontend:@tanstack/query-core@5.101.4",
 			"name": "@tanstack/query-core",
-			"version": "5.101.2",
+			"version": "5.101.4",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.101.2",
+			"id": "frontend:@tanstack/react-query@5.101.4",
 			"name": "@tanstack/react-query",
-			"version": "5.101.2",
+			"version": "5.101.4",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-router@1.170.16",
+			"id": "frontend:@tanstack/react-router@1.170.21",
 			"name": "@tanstack/react-router",
-			"version": "1.170.16",
+			"version": "1.170.21",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -242,17 +242,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-virtual@3.14.5",
+			"id": "frontend:@tanstack/react-virtual@3.14.9",
 			"name": "@tanstack/react-virtual",
-			"version": "3.14.5",
+			"version": "3.14.9",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/router-core@1.171.13",
+			"id": "frontend:@tanstack/router-core@1.171.18",
 			"name": "@tanstack/router-core",
-			"version": "1.171.13",
+			"version": "1.171.18",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -266,9 +266,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/virtual-core@3.17.3",
+			"id": "frontend:@tanstack/virtual-core@3.17.7",
 			"name": "@tanstack/virtual-core",
-			"version": "3.17.3",
+			"version": "3.17.7",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
@@ -410,9 +410,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@types/hast@3.0.4",
+			"id": "frontend:@types/hast@3.0.5",
 			"name": "@types/hast",
-			"version": "3.0.4",
+			"version": "3.0.5",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/hast",
 			"source": "frontend"
@@ -442,17 +442,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@types/react@19.2.17",
+			"id": "frontend:@types/react@19.2.18",
 			"name": "@types/react",
-			"version": "19.2.17",
+			"version": "19.2.18",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@types/react-dom@19.2.3",
+			"id": "frontend:@types/react-dom@19.2.4",
 			"name": "@types/react-dom",
-			"version": "19.2.3",
+			"version": "19.2.4",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom",
 			"source": "frontend"
@@ -482,9 +482,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@ungap/structured-clone@1.3.2",
+			"id": "frontend:@ungap/structured-clone@1.3.3",
 			"name": "@ungap/structured-clone",
-			"version": "1.3.2",
+			"version": "1.3.3",
 			"license": "ISC",
 			"homepageUrl": "https://github.com/ungap/structured-clone#readme",
 			"source": "frontend"
@@ -538,9 +538,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:axios@1.18.1",
+			"id": "frontend:axios@1.19.0",
 			"name": "axios",
-			"version": "1.18.1",
+			"version": "1.19.0",
 			"license": "MIT",
 			"homepageUrl": "https://axios-http.com",
 			"source": "frontend"
@@ -1018,9 +1018,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:es-toolkit@1.49.0",
+			"id": "frontend:es-toolkit@1.50.0",
 			"name": "es-toolkit",
-			"version": "1.49.0",
+			"version": "1.50.0",
 			"license": "MIT",
 			"homepageUrl": "https://es-toolkit.dev",
 			"source": "frontend"
@@ -1186,9 +1186,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@12.42.0",
+			"id": "frontend:framer-motion@12.43.0",
 			"name": "framer-motion",
-			"version": "12.42.0",
+			"version": "12.43.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -1314,11 +1314,11 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:html-parse-stringify@3.0.1",
+			"id": "frontend:html-parse-stringify@4.0.1",
 			"name": "html-parse-stringify",
-			"version": "3.0.1",
+			"version": "4.0.1",
 			"license": "MIT",
-			"homepageUrl": "https://github.com/henrikjoreteg/html-parse-stringify",
+			"homepageUrl": "https://github.com/i18next/html-parse-stringify",
 			"source": "frontend"
 		},
 		{
@@ -1346,9 +1346,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:i18next@26.3.3",
+			"id": "frontend:i18next@26.3.6",
 			"name": "i18next",
-			"version": "26.3.3",
+			"version": "26.3.6",
 			"license": "MIT",
 			"homepageUrl": "https://www.i18next.com",
 			"source": "frontend"
@@ -1370,9 +1370,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:immer@11.1.11",
+			"id": "frontend:immer@11.1.16",
 			"name": "immer",
-			"version": "11.1.11",
+			"version": "11.1.16",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/immerjs/immer#readme",
 			"source": "frontend"
@@ -1442,9 +1442,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:isbot@5.1.44",
+			"id": "frontend:isbot@5.2.1",
 			"name": "isbot",
-			"version": "5.1.44",
+			"version": "5.2.1",
 			"license": "Unlicense",
 			"homepageUrl": "https://isbot.js.org",
 			"source": "frontend"
@@ -2698,9 +2698,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@12.42.0",
+			"id": "frontend:motion-dom@12.43.0",
 			"name": "motion-dom",
-			"version": "12.42.0",
+			"version": "12.43.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -2986,9 +2986,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:postcss@8.5.23",
+			"id": "frontend:postcss@8.5.26",
 			"name": "postcss",
-			"version": "8.5.23",
+			"version": "8.5.26",
 			"license": "MIT",
 			"homepageUrl": "https://postcss.org/",
 			"source": "frontend"
@@ -3106,17 +3106,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react@19.2.7",
+			"id": "frontend:react@19.2.8",
 			"name": "react",
-			"version": "19.2.7",
+			"version": "19.2.8",
 			"license": "MIT",
 			"homepageUrl": "https://react.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-dom@19.2.7",
+			"id": "frontend:react-dom@19.2.8",
 			"name": "react-dom",
-			"version": "19.2.7",
+			"version": "19.2.8",
 			"license": "MIT",
 			"homepageUrl": "https://react.dev/",
 			"source": "frontend"
@@ -3130,9 +3130,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-i18next@17.0.8",
+			"id": "frontend:react-i18next@17.0.11",
 			"name": "react-i18next",
-			"version": "17.0.8",
+			"version": "17.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/react-i18next",
 			"source": "frontend"
@@ -3234,9 +3234,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:recharts@3.9.2",
+			"id": "frontend:recharts@3.10.1",
 			"name": "recharts",
-			"version": "3.9.2",
+			"version": "3.10.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/recharts/recharts",
 			"source": "frontend"
@@ -3322,25 +3322,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrdom@2.1.0",
+			"id": "frontend:rrdom@2.1.1",
 			"name": "rrdom",
-			"version": "2.1.0",
+			"version": "2.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrdom#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb@2.0.1",
+			"id": "frontend:rrweb@2.1.1",
 			"name": "rrweb",
-			"version": "2.0.1",
+			"version": "2.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb-snapshot@2.1.0",
+			"id": "frontend:rrweb-snapshot@2.1.1",
 			"name": "rrweb-snapshot",
-			"version": "2.1.0",
+			"version": "2.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/master/packages/rrweb-snapshot#readme",
 			"source": "frontend"
@@ -3490,17 +3490,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:seroval@1.5.4",
+			"id": "frontend:seroval@1.6.2",
 			"name": "seroval",
-			"version": "1.5.4",
+			"version": "1.6.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/seroval",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:seroval-plugins@1.5.4",
+			"id": "frontend:seroval-plugins@1.6.2",
 			"name": "seroval-plugins",
-			"version": "1.5.4",
+			"version": "1.6.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/plugins",
 			"source": "frontend"
@@ -3786,9 +3786,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:type-fest@5.7.0",
+			"id": "frontend:type-fest@5.8.0",
 			"name": "type-fest",
-			"version": "5.7.0",
+			"version": "5.8.0",
 			"license": "(MIT OR CC0-1.0)",
 			"homepageUrl": "https://github.com/sindresorhus/type-fest#readme",
 			"source": "frontend"
@@ -3930,14 +3930,6 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:void-elements@3.1.0",
-			"name": "void-elements",
-			"version": "3.1.0",
-			"license": "MIT",
-			"homepageUrl": "https://github.com/jadejs/void-elements",
-			"source": "frontend"
-		},
-		{
 			"id": "frontend:webidl-conversions@3.0.1",
 			"name": "webidl-conversions",
 			"version": "3.0.1",
@@ -3954,9 +3946,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:ws@7.5.11",
+			"id": "frontend:ws@7.5.13",
 			"name": "ws",
-			"version": "7.5.11",
+			"version": "7.5.13",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/websockets/ws",
 			"source": "frontend"

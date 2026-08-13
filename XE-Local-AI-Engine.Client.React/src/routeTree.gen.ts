@@ -9,36 +9,35 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SetupRouteImport } from './routes/setup'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
-import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
-import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
-import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
-import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
-import { Route as LayoutPreviewRouteImport } from './routes/_layout/preview'
-import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
-import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
-import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
-import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
-import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
-import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
-import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
-import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
-import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
-import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
-import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
-import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
-import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-tools'
-import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
-import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
-import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
+import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
+import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
+import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
+import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-tools'
+import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
+import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
+import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
+import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
+import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
+import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
+import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
+import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
+import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
+import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
+import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
+import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
+import { Route as LayoutPreviewRouteImport } from './routes/_layout/preview'
+import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
+import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
+import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
+import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 
-const SetupRoute = SetupRouteImport.update({
-  id: '/setup',
-  path: '/setup',
+const LayoutRoute = LayoutRouteImport.update({
+  id: '/_layout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -46,8 +45,9 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LayoutRoute = LayoutRouteImport.update({
-  id: '/_layout',
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
@@ -55,44 +55,69 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutUsageRoute = LayoutUsageRouteImport.update({
-  id: '/usage',
-  path: '/usage',
+const LayoutAgentsRoute = LayoutAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutToolsRoute = LayoutToolsRouteImport.update({
-  id: '/tools',
-  path: '/tools',
+const LayoutChatRoute = LayoutChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutSkillsRoute = LayoutSkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
+const LayoutCloudSettingsRoute = LayoutCloudSettingsRouteImport.update({
+  id: '/cloud-settings',
+  path: '/cloud-settings',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutSchedulerRoute = LayoutSchedulerRouteImport.update({
-  id: '/scheduler',
-  path: '/scheduler',
+const LayoutCommandsRoute = LayoutCommandsRouteImport.update({
+  id: '/commands',
+  path: '/commands',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutPreviewRoute = LayoutPreviewRouteImport.update({
-  id: '/preview',
-  path: '/preview',
+const LayoutCustomToolsRoute = LayoutCustomToolsRouteImport.update({
+  id: '/custom-tools',
+  path: '/custom-tools',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutNodeSettingsRoute = LayoutNodeSettingsRouteImport.update({
-  id: '/node-settings',
-  path: '/node-settings',
+const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutNodeBindingRoute = LayoutNodeBindingRouteImport.update({
-  id: '/node-binding',
-  path: '/node-binding',
+const LayoutDevelopmentRoute = LayoutDevelopmentRouteImport.update({
+  id: '/development',
+  path: '/development',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutModelsRoute = LayoutModelsRouteImport.update({
-  id: '/models',
-  path: '/models',
+const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
+  id: '/diagnostics',
+  path: '/diagnostics',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutImagesRoute = LayoutImagesRouteImport.update({
+  id: '/images',
+  path: '/images',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutInvocationsRoute = LayoutInvocationsRouteImport.update({
+  id: '/invocations',
+  path: '/invocations',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutKnowledgeBaseRoute = LayoutKnowledgeBaseRouteImport.update({
+  id: '/knowledge-base',
+  path: '/knowledge-base',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutLoadedModelsRoute = LayoutLoadedModelsRouteImport.update({
+  id: '/loaded-models',
+  path: '/loaded-models',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutMcpRoute = LayoutMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutModelRecommendationsRoute =
@@ -101,69 +126,44 @@ const LayoutModelRecommendationsRoute =
     path: '/model-recommendations',
     getParentRoute: () => LayoutRoute,
   } as any)
-const LayoutMcpRoute = LayoutMcpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
+const LayoutModelsRoute = LayoutModelsRouteImport.update({
+  id: '/models',
+  path: '/models',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutLoadedModelsRoute = LayoutLoadedModelsRouteImport.update({
-  id: '/loaded-models',
-  path: '/loaded-models',
+const LayoutNodeBindingRoute = LayoutNodeBindingRouteImport.update({
+  id: '/node-binding',
+  path: '/node-binding',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutKnowledgeBaseRoute = LayoutKnowledgeBaseRouteImport.update({
-  id: '/knowledge-base',
-  path: '/knowledge-base',
+const LayoutNodeSettingsRoute = LayoutNodeSettingsRouteImport.update({
+  id: '/node-settings',
+  path: '/node-settings',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutInvocationsRoute = LayoutInvocationsRouteImport.update({
-  id: '/invocations',
-  path: '/invocations',
+const LayoutPreviewRoute = LayoutPreviewRouteImport.update({
+  id: '/preview',
+  path: '/preview',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutImagesRoute = LayoutImagesRouteImport.update({
-  id: '/images',
-  path: '/images',
+const LayoutSchedulerRoute = LayoutSchedulerRouteImport.update({
+  id: '/scheduler',
+  path: '/scheduler',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
-  id: '/diagnostics',
-  path: '/diagnostics',
+const LayoutSkillsRoute = LayoutSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutDevelopmentRoute = LayoutDevelopmentRouteImport.update({
-  id: '/development',
-  path: '/development',
+const LayoutToolsRoute = LayoutToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutCustomToolsRoute = LayoutCustomToolsRouteImport.update({
-  id: '/custom-tools',
-  path: '/custom-tools',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutCommandsRoute = LayoutCommandsRouteImport.update({
-  id: '/commands',
-  path: '/commands',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutCloudSettingsRoute = LayoutCloudSettingsRouteImport.update({
-  id: '/cloud-settings',
-  path: '/cloud-settings',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutChatRoute = LayoutChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutAgentsRoute = LayoutAgentsRouteImport.update({
-  id: '/agents',
-  path: '/agents',
+const LayoutUsageRoute = LayoutUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
   getParentRoute: () => LayoutRoute,
 } as any)
 
@@ -343,11 +343,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupRouteImport
+    '/_layout': {
+      id: '/_layout'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -357,11 +357,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_layout': {
-      id: '/_layout'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof LayoutRouteImport
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout/': {
@@ -371,144 +371,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/usage': {
-      id: '/_layout/usage'
-      path: '/usage'
-      fullPath: '/usage'
-      preLoaderRoute: typeof LayoutUsageRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/tools': {
-      id: '/_layout/tools'
-      path: '/tools'
-      fullPath: '/tools'
-      preLoaderRoute: typeof LayoutToolsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/skills': {
-      id: '/_layout/skills'
-      path: '/skills'
-      fullPath: '/skills'
-      preLoaderRoute: typeof LayoutSkillsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/scheduler': {
-      id: '/_layout/scheduler'
-      path: '/scheduler'
-      fullPath: '/scheduler'
-      preLoaderRoute: typeof LayoutSchedulerRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/preview': {
-      id: '/_layout/preview'
-      path: '/preview'
-      fullPath: '/preview'
-      preLoaderRoute: typeof LayoutPreviewRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/node-settings': {
-      id: '/_layout/node-settings'
-      path: '/node-settings'
-      fullPath: '/node-settings'
-      preLoaderRoute: typeof LayoutNodeSettingsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/node-binding': {
-      id: '/_layout/node-binding'
-      path: '/node-binding'
-      fullPath: '/node-binding'
-      preLoaderRoute: typeof LayoutNodeBindingRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/models': {
-      id: '/_layout/models'
-      path: '/models'
-      fullPath: '/models'
-      preLoaderRoute: typeof LayoutModelsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/model-recommendations': {
-      id: '/_layout/model-recommendations'
-      path: '/model-recommendations'
-      fullPath: '/model-recommendations'
-      preLoaderRoute: typeof LayoutModelRecommendationsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/mcp': {
-      id: '/_layout/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof LayoutMcpRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/loaded-models': {
-      id: '/_layout/loaded-models'
-      path: '/loaded-models'
-      fullPath: '/loaded-models'
-      preLoaderRoute: typeof LayoutLoadedModelsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/knowledge-base': {
-      id: '/_layout/knowledge-base'
-      path: '/knowledge-base'
-      fullPath: '/knowledge-base'
-      preLoaderRoute: typeof LayoutKnowledgeBaseRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/invocations': {
-      id: '/_layout/invocations'
-      path: '/invocations'
-      fullPath: '/invocations'
-      preLoaderRoute: typeof LayoutInvocationsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/images': {
-      id: '/_layout/images'
-      path: '/images'
-      fullPath: '/images'
-      preLoaderRoute: typeof LayoutImagesRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/diagnostics': {
-      id: '/_layout/diagnostics'
-      path: '/diagnostics'
-      fullPath: '/diagnostics'
-      preLoaderRoute: typeof LayoutDiagnosticsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/development': {
-      id: '/_layout/development'
-      path: '/development'
-      fullPath: '/development'
-      preLoaderRoute: typeof LayoutDevelopmentRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/dashboard': {
-      id: '/_layout/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof LayoutDashboardRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/custom-tools': {
-      id: '/_layout/custom-tools'
-      path: '/custom-tools'
-      fullPath: '/custom-tools'
-      preLoaderRoute: typeof LayoutCustomToolsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/commands': {
-      id: '/_layout/commands'
-      path: '/commands'
-      fullPath: '/commands'
-      preLoaderRoute: typeof LayoutCommandsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/cloud-settings': {
-      id: '/_layout/cloud-settings'
-      path: '/cloud-settings'
-      fullPath: '/cloud-settings'
-      preLoaderRoute: typeof LayoutCloudSettingsRouteImport
+    '/_layout/agents': {
+      id: '/_layout/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof LayoutAgentsRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/chat': {
@@ -518,11 +385,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutChatRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/agents': {
-      id: '/_layout/agents'
-      path: '/agents'
-      fullPath: '/agents'
-      preLoaderRoute: typeof LayoutAgentsRouteImport
+    '/_layout/cloud-settings': {
+      id: '/_layout/cloud-settings'
+      path: '/cloud-settings'
+      fullPath: '/cloud-settings'
+      preLoaderRoute: typeof LayoutCloudSettingsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/commands': {
+      id: '/_layout/commands'
+      path: '/commands'
+      fullPath: '/commands'
+      preLoaderRoute: typeof LayoutCommandsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/custom-tools': {
+      id: '/_layout/custom-tools'
+      path: '/custom-tools'
+      fullPath: '/custom-tools'
+      preLoaderRoute: typeof LayoutCustomToolsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/dashboard': {
+      id: '/_layout/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof LayoutDashboardRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/development': {
+      id: '/_layout/development'
+      path: '/development'
+      fullPath: '/development'
+      preLoaderRoute: typeof LayoutDevelopmentRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/diagnostics': {
+      id: '/_layout/diagnostics'
+      path: '/diagnostics'
+      fullPath: '/diagnostics'
+      preLoaderRoute: typeof LayoutDiagnosticsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/images': {
+      id: '/_layout/images'
+      path: '/images'
+      fullPath: '/images'
+      preLoaderRoute: typeof LayoutImagesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/invocations': {
+      id: '/_layout/invocations'
+      path: '/invocations'
+      fullPath: '/invocations'
+      preLoaderRoute: typeof LayoutInvocationsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/knowledge-base': {
+      id: '/_layout/knowledge-base'
+      path: '/knowledge-base'
+      fullPath: '/knowledge-base'
+      preLoaderRoute: typeof LayoutKnowledgeBaseRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/loaded-models': {
+      id: '/_layout/loaded-models'
+      path: '/loaded-models'
+      fullPath: '/loaded-models'
+      preLoaderRoute: typeof LayoutLoadedModelsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/mcp': {
+      id: '/_layout/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof LayoutMcpRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/model-recommendations': {
+      id: '/_layout/model-recommendations'
+      path: '/model-recommendations'
+      fullPath: '/model-recommendations'
+      preLoaderRoute: typeof LayoutModelRecommendationsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/models': {
+      id: '/_layout/models'
+      path: '/models'
+      fullPath: '/models'
+      preLoaderRoute: typeof LayoutModelsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/node-binding': {
+      id: '/_layout/node-binding'
+      path: '/node-binding'
+      fullPath: '/node-binding'
+      preLoaderRoute: typeof LayoutNodeBindingRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/node-settings': {
+      id: '/_layout/node-settings'
+      path: '/node-settings'
+      fullPath: '/node-settings'
+      preLoaderRoute: typeof LayoutNodeSettingsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/preview': {
+      id: '/_layout/preview'
+      path: '/preview'
+      fullPath: '/preview'
+      preLoaderRoute: typeof LayoutPreviewRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/scheduler': {
+      id: '/_layout/scheduler'
+      path: '/scheduler'
+      fullPath: '/scheduler'
+      preLoaderRoute: typeof LayoutSchedulerRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/skills': {
+      id: '/_layout/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof LayoutSkillsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/tools': {
+      id: '/_layout/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof LayoutToolsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/usage': {
+      id: '/_layout/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof LayoutUsageRouteImport
       parentRoute: typeof LayoutRoute
     }
   }

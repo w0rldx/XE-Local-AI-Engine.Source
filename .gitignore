@@ -457,4 +457,3 @@ XE-Local-AI-Engine.Client/models/
 # universal harness at .agent-harness. Kept locally, not shipped/open-sourced.
 /.opencode/
 /opencode.jsonc
-/Plans/
