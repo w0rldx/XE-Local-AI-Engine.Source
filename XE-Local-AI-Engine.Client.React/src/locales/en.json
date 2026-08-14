@@ -2080,6 +2080,7 @@
 					},
 					"errors": {
 						"InvalidPath": "Enter a valid absolute file path.",
+						"InvalidRequest": "Enter a source file, model base name, and quantization before importing.",
 						"SourceNotFound": "The selected GGUF file was not found.",
 						"UnsupportedFileType": "Select a supported GGUF file.",
 						"UnsupportedGgufVersion": "This GGUF version is not supported.",
@@ -2090,7 +2091,10 @@
 						"DestinationConflict": "The managed destination is already in use.",
 						"AcquisitionAlreadyActive": "Another acquisition is already using this model or file.",
 						"InsufficientStorage": "There is not enough free storage for this import.",
+						"InvalidPreviewToken": "The preview has expired or does not match this file. Preview it again.",
+						"StalePreview": "The file changed after it was previewed. Preview it again before importing.",
 						"OperationNotFound": "This import operation is no longer available.",
+						"ImportCompensationFailed": "Import cleanup failed and needs manual recovery. Contact support before retrying.",
 						"ImportFailed": "The model could not be imported."
 					}
 				}

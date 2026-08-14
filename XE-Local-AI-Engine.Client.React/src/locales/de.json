@@ -2080,6 +2080,7 @@
 					},
 					"errors": {
 						"InvalidPath": "Gib einen gültigen absoluten Dateipfad ein.",
+						"InvalidRequest": "Gib vor dem Import eine Quelldatei, einen Modellbasisnamen und eine Quantisierung an.",
 						"SourceNotFound": "Die ausgewählte GGUF-Datei wurde nicht gefunden.",
 						"UnsupportedFileType": "Wähle eine unterstützte GGUF-Datei aus.",
 						"UnsupportedGgufVersion": "Diese GGUF-Version wird nicht unterstützt.",
@@ -2090,7 +2091,10 @@
 						"DestinationConflict": "Das verwaltete Ziel wird bereits verwendet.",
 						"AcquisitionAlreadyActive": "Ein anderer Vorgang verwendet dieses Modell oder diese Datei bereits.",
 						"InsufficientStorage": "Für diesen Import ist nicht genügend freier Speicher vorhanden.",
+						"InvalidPreviewToken": "Die Vorschau ist abgelaufen oder passt nicht mehr zu dieser Datei. Prüfe den Import erneut.",
+						"StalePreview": "Die Datei hat sich seit der Vorschau geändert. Prüfe den Import erneut, bevor du fortfährst.",
 						"OperationNotFound": "Dieser Importvorgang ist nicht mehr verfügbar.",
+						"ImportCompensationFailed": "Die Bereinigung des Imports ist fehlgeschlagen und erfordert manuelle Nacharbeit. Wende dich an den Support, bevor du es erneut versuchst.",
 						"ImportFailed": "Das Modell konnte nicht importiert werden."
 					}
 				}

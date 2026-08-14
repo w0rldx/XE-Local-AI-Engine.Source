@@ -39,7 +39,14 @@ public sealed class DeleteLocalModelEndpoint(
         CommittedModelDeletion? committed = null;
         if (string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
         {
-            committed = await _deletionCoordinator.CommitDeleteAsync(modelName, ct).ConfigureAwait(false);
+            try
+            {
+                committed = await _deletionCoordinator.CommitDeleteAsync(modelName, ct).ConfigureAwait(false);
+            }
+            catch (KeyNotFoundException)
+            {
+                // Delete is idempotent: an already-ejected/uninstalled model still reports success rather than 500ing.
+            }
         }
         else
         {
