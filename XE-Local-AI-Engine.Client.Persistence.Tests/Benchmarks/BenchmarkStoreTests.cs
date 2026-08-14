@@ -132,6 +132,26 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task StartRun_FreezeCommitGuardRejectsInsideTransactionWithoutInsertingRows()
+    {
+        var databasePath = GetDatabasePath("freeze-guard.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var guard = new RejectingFreezeCommitGuard();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() =>
+            store.StartRunAsync(CreateRun(project) with { FreezeCommitGuard = guard }));
+
+        AssertEx.Equal("FreezeDependencyChanged", exception.Code);
+        AssertEx.True(guard.WasCalled, "The dependency guard must execute before persistence mutation.");
+        AssertEx.Equal(expected: 0, (await store.ListRunsAsync(project.Id)).Count);
+        AssertEx.Null(await store.ClaimNextAsync(), "A rejected freeze must not leave primary work behind.");
+    }
+
+    [Test]
     public async Task EncryptedFields_RawSqlContainsCiphertextAndFreshContextRoundTrips()
     {
         var databasePath = GetDatabasePath("encrypted.sqlite");
@@ -255,5 +275,16 @@ public sealed class BenchmarkStoreTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
+    }
+
+    private sealed class RejectingFreezeCommitGuard : IBenchmarkFreezeCommitGuard
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<bool> IsCurrentAsync(CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            return Task.FromResult(false);
+        }
     }
 }
