@@ -193,11 +193,74 @@ internal sealed class GgufModelImporter(
     public async Task RollbackCommittedAsync(GgufImportCommitReceipt commitReceipt, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(commitReceipt);
-        if (await registry.RemoveExactAsync(commitReceipt.RegistryEntry, cancellationToken).ConfigureAwait(false))
+        var entries = await registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
+        var exactOwner = entries.Any(entry => entry == commitReceipt.RegistryEntry
+                                              && string.Equals(entry.RegistryRevision,
+                                                  commitReceipt.RegistryEntry.RegistryRevision,
+                                                  StringComparison.Ordinal));
+        if (exactOwner)
         {
+            if (!await registry.RemoveExactAsync(commitReceipt.RegistryEntry, cancellationToken).ConfigureAwait(false))
+            {
+                throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
+                    "The committed import registry identity changed during rollback.");
+            }
+
+            TryDelete(commitReceipt.FinalGgufPath);
             TryDelete(commitReceipt.FinalSidecarPath);
+            return;
+        }
+
+        var conflictingOwner = entries.Any(entry => string.Equals(entry.ModelName, commitReceipt.RegistryEntry.ModelName,
+                                                       StringComparison.OrdinalIgnoreCase)
+                                                   || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath));
+        if (conflictingOwner)
+        {
+            throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
+                "The committed import is now owned by a different registry entry.");
+        }
+
+        // A previous rollback may have removed the exact registry row and then crashed between artifact deletes.
+        // Delete only orphaned artifacts that still prove they belong to this receipt; a same-path replacement is
+        // preserved and reported as a conflict.
+        if (File.Exists(commitReceipt.FinalGgufPath))
+        {
+            var info = new FileInfo(commitReceipt.FinalGgufPath);
+            var hash = await GgufAcquisitionSidecar.ComputeSha256Async(commitReceipt.FinalGgufPath, cancellationToken).ConfigureAwait(false);
+            if (info.Length != commitReceipt.RegistryEntry.SizeBytes
+                || !string.Equals(hash, commitReceipt.RegistryEntry.Sha256, StringComparison.Ordinal)
+                || !string.Equals(GgufMemberFingerprint.Compute(hash, info.Length), commitReceipt.WeightMemberFingerprint,
+                    StringComparison.Ordinal))
+            {
+                throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
+                    "The committed import artifact identity no longer matches the rollback receipt.");
+            }
+
             TryDelete(commitReceipt.FinalGgufPath);
         }
+
+        if (File.Exists(commitReceipt.FinalSidecarPath))
+        {
+            var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(commitReceipt.FinalSidecarPath,
+                commitReceipt.FinalGgufPath,
+                options.ModelsDirectory,
+                cancellationToken).ConfigureAwait(false);
+            if (metadata is null
+                || !string.Equals(metadata.RegistryRevision, commitReceipt.RegistryEntry.RegistryRevision, StringComparison.Ordinal)
+                || !string.Equals(metadata.ModelContentFingerprint, commitReceipt.ModelContentFingerprint, StringComparison.Ordinal))
+            {
+                throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
+                    "The committed import recovery metadata no longer matches the rollback receipt.");
+            }
+
+            TryDelete(commitReceipt.FinalSidecarPath);
+        }
+    }
+
+    private static bool PathsEqual(string left, string right)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
     }
 
     public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)

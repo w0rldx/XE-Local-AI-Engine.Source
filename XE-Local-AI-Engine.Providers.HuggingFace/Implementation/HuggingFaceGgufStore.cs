@@ -214,9 +214,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
             var weightHash = await GgufAcquisitionSidecar.ComputeSha256Async(result.LocalPath, ct).ConfigureAwait(false);
             var weightFingerprint = GgufMemberFingerprint.Compute(weightHash, result.SizeBytes);
+            var weightRelativePath = GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, result.LocalPath);
             var contentMembers = new List<GgufModelContentMember>
             {
-                new(Path.GetFileName(result.LocalPath), InstalledModelPhysicalMemberRole.Weight, result.SizeBytes, weightHash, [modelName])
+                new(weightRelativePath, InstalledModelPhysicalMemberRole.Weight, result.SizeBytes, weightHash, [modelName])
             };
             if (projector.LocalPath is not null)
             {

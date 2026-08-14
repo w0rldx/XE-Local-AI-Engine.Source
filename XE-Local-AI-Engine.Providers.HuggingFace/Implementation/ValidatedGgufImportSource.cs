@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -15,6 +16,10 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 {
     private const int LinuxReadOnlyNoFollowNonBlockingCloseOnExec = 0x0 | 0x800 | 0x20000 | 0x80000;
+    internal const uint WindowsOpenReparsePoint = 0x00200000;
+    internal const uint WindowsOverlapped = 0x40000000;
+    internal const uint WindowsSequentialScan = 0x08000000;
+    internal const uint WindowsOpenFlags = WindowsOpenReparsePoint | WindowsOverlapped | WindowsSequentialScan;
     private readonly string _canonicalPath;
     private readonly SourceIdentity _identity;
     private readonly DateTime _lastWriteUtc;
@@ -33,6 +38,8 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
     public string DisplayName => Path.GetFileName(_canonicalPath);
 
     public Stream Stream => _stream;
+
+    public string SourceIdentityToken => _identity.ToOpaqueToken(_lastWriteUtc);
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The successful FileStream constructor takes ownership of the SafeFileHandle; every constructor failure disposes it below.")]
@@ -60,13 +67,11 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 throw new GgufImportException(GgufImportRejectionCode.InvalidSource, "The selected source must be outside the managed models directory.");
             }
 
-            var handle = OpenNoFollow(canonicalPath);
+            var openedHandle = OpenNoFollow(canonicalPath);
+            var handle = openedHandle.Handle;
             try
             {
-                // libc open(2) does not create a .NET async-capable handle. FileStream still provides its async APIs
-                // over this synchronous handle while retaining ownership and, critically, reading the exact validated
-                // descriptor used for identity capture.
-                var stream = new FileStream(handle, FileAccess.Read, bufferSize: 81920, isAsync: false);
+                var stream = new FileStream(handle, FileAccess.Read, bufferSize: 81920, openedHandle.IsAsync);
                 try
                 {
                     var identity = CaptureIdentity(handle, canonicalPath, stream.Length);
@@ -109,7 +114,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         try
         {
             EnsureNoReparseComponents(_canonicalPath);
-            using var currentHandle = OpenNoFollow(_canonicalPath);
+            using var currentHandle = OpenNoFollow(_canonicalPath).Handle;
             var currentLength = RandomAccess.GetLength(currentHandle);
             var current = CaptureIdentity(currentHandle, _canonicalPath, currentLength);
             if (current != _identity || currentLength != Length || File.GetLastWriteTimeUtc(_canonicalPath) != _lastWriteUtc)
@@ -152,15 +157,37 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         }
     }
 
-    private static SafeFileHandle OpenNoFollow(string path)
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The returned OpenedHandle transfers ownership to the FileStream constructor or caller using declaration.")]
+    private static OpenedHandle OpenNoFollow(string path)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            var handle = CreateFile(path,
+                0x80000000,
+                FileShare.Read,
+                IntPtr.Zero,
+                FileMode.Open,
+                WindowsOpenFlags,
+                IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                handle.Dispose();
+                throw new UnauthorizedAccessException(string.Create(CultureInfo.InvariantCulture,
+                    $"The selected source could not be opened without following reparse points (error {Marshal.GetLastPInvokeError()})."));
+            }
+
+            return new OpenedHandle(handle, IsAsync: true);
+        }
+
         if (!OperatingSystem.IsLinux())
         {
-            return File.OpenHandle(path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            return new OpenedHandle(File.OpenHandle(path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan),
+                IsAsync: true);
         }
 
         var pathBytes = new byte[Encoding.UTF8.GetByteCount(path) + 1];
@@ -172,7 +199,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 $"The selected source could not be opened without following links (errno {Marshal.GetLastPInvokeError()})."));
         }
 
-        return new SafeFileHandle(descriptor, ownsHandle: true);
+        return new OpenedHandle(new SafeFileHandle(descriptor, ownsHandle: true), IsAsync: false);
     }
 
     [SuppressMessage("Sonar Code Smell", "S3869:SafeHandle instances should not use DangerousGetHandle",
@@ -204,6 +231,17 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 throw new UnauthorizedAccessException("The selected source handle identity could not be read.");
             }
 
+            if ((information.FileAttributes & ((uint)FileAttributes.Directory | (uint)FileAttributes.ReparsePoint)) != 0)
+            {
+                throw new UnauthorizedAccessException("The selected source handle is not a regular file.");
+            }
+
+            var openedPath = GetFinalPath(handle);
+            if (!string.Equals(openedPath, canonicalPath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException("The selected source handle did not resolve to the validated path.");
+            }
+
             return new SourceIdentity("windows",
                 information.VolumeSerialNumber.ToString(CultureInfo.InvariantCulture),
                 string.Create(CultureInfo.InvariantCulture, $"{information.FileIndexHigh:x8}{information.FileIndexLow:x8}"),
@@ -218,9 +256,57 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         return lines.FirstOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal))?[prefix.Length..].Trim();
     }
 
+    private static string GetFinalPath(SafeFileHandle handle)
+    {
+        var required = GetFinalPathNameByHandle(handle, null, 0, 0);
+        if (required == 0)
+        {
+            throw new UnauthorizedAccessException("The selected source handle path could not be read.");
+        }
+
+        var buffer = new char[checked((int)required + 1)];
+        var written = GetFinalPathNameByHandle(handle, buffer, buffer.Length, 0);
+        if (written == 0 || written >= buffer.Length)
+        {
+            throw new UnauthorizedAccessException("The selected source handle path could not be read.");
+        }
+
+        return NormalizeWindowsFinalPath(new string(buffer, startIndex: 0, checked((int)written)));
+    }
+
+    internal static string NormalizeWindowsFinalPath(string path)
+    {
+        const string devicePrefix = @"\\?\";
+        const string uncPrefix = @"\\?\UNC\";
+        if (path.StartsWith(uncPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            path = @"\\" + path[uncPrefix.Length..];
+        }
+        else if (path.StartsWith(devicePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            path = path[devicePrefix.Length..];
+        }
+
+        return Path.GetFullPath(path);
+    }
+
     [DllImport("libc", EntryPoint = "open", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int open(byte[] pathname, int flags);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern SafeFileHandle CreateFile(string fileName,
+        uint desiredAccess,
+        FileShare shareMode,
+        IntPtr securityAttributes,
+        FileMode creationDisposition,
+        uint flagsAndAttributes,
+        IntPtr templateFile);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern uint GetFinalPathNameByHandle(SafeFileHandle file, [Out] char[]? filePath, int filePathLength, uint flags);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -242,5 +328,15 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         public uint FileIndexLow;
     }
 
-    private sealed record SourceIdentity(string Platform, string Volume, string FileId, long Length);
+    private readonly record struct OpenedHandle(SafeFileHandle Handle, bool IsAsync);
+
+    private sealed record SourceIdentity(string Platform, string Volume, string FileId, long Length)
+    {
+        public string ToOpaqueToken(DateTime lastWriteUtc)
+        {
+            var material = string.Create(CultureInfo.InvariantCulture,
+                $"gguf-import-source-v1\0{Platform}\0{Volume}\0{FileId}\0{Length}\0{lastWriteUtc.Ticks}");
+            return "v1:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)));
+        }
+    }
 }

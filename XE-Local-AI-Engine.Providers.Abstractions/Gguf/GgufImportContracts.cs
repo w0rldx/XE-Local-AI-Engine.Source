@@ -46,6 +46,12 @@ public sealed record GgufImportInspection(
     IReadOnlyList<GgufImportRejectionCode> Rejections,
     IReadOnlyList<string> Warnings)
 {
+    /// <summary>
+    ///     Opaque identity of the exact validated source file. Callers may compare it across preview/start without
+    ///     learning the source path or platform file identifier.
+    /// </summary>
+    public string SourceIdentityToken { get; init; } = string.Empty;
+
     /// <summary>True when no locked rejection was found.</summary>
     public bool IsAccepted => Rejections.Count == 0;
 }

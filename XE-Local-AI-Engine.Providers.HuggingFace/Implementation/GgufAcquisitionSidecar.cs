@@ -35,11 +35,8 @@ internal static class GgufAcquisitionSidecar
     {
         try
         {
-            await using var stream = new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-            var metadata = await JsonSerializer.DeserializeAsync<GgufAcquisitionMetadata>(stream, SerializerOptions, cancellationToken)
-                                               .ConfigureAwait(false);
-            if (metadata is null || !ValidateShape(metadata, weightPath, modelsDirectory))
+            var metadata = await ReadShapeValidAsync(sidecarPath, weightPath, modelsDirectory, cancellationToken).ConfigureAwait(false);
+            if (metadata is null)
             {
                 return null;
             }
@@ -55,7 +52,11 @@ internal static class GgufAcquisitionSidecar
 
             var members = new List<GgufModelContentMember>
             {
-                new(metadata.LocalFileName, InstalledModelPhysicalMemberRole.Weight, metadata.WeightSizeBytes, weightHash, [metadata.ModelName])
+                new(GgufFilePath.GetRelativeContainedPath(modelsDirectory, weightPath),
+                    InstalledModelPhysicalMemberRole.Weight,
+                    metadata.WeightSizeBytes,
+                    weightHash,
+                    [metadata.ModelName])
             };
 
             if (metadata.ProjectorRelativePath is not null)
@@ -87,6 +88,25 @@ internal static class GgufAcquisitionSidecar
             return string.Equals(GgufModelContentFingerprint.ComputeV1(members), metadata.ModelContentFingerprint, StringComparison.Ordinal)
                 ? metadata
                 : null;
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    internal static async Task<GgufAcquisitionMetadata?> ReadShapeValidAsync(string sidecarPath,
+        string weightPath,
+        string modelsDirectory,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var metadata = await JsonSerializer.DeserializeAsync<GgufAcquisitionMetadata>(stream, SerializerOptions, cancellationToken)
+                                               .ConfigureAwait(false);
+            return metadata is not null && ValidateShape(metadata, weightPath, modelsDirectory) ? metadata : null;
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

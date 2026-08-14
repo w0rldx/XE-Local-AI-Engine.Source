@@ -424,7 +424,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             var sidecarPath = path + GgufAcquisitionSidecar.Suffix;
             if (File.Exists(sidecarPath))
             {
-                var metadata = await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
+                var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
                 if (metadata is null)
                 {
                     changed |= RemoveEntriesForPath(entries, path) > 0;
@@ -440,15 +440,36 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                     continue;
                 }
 
-                var matches = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path))
-                                                     || string.Equals(entry.ModelName, recovered.ModelName, StringComparison.OrdinalIgnoreCase))
-                                     .ToArray();
-                if (matches.Length == 1 && matches[0] == recovered)
+                var samePath = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)))
+                                      .ToArray();
+                if (samePath.Length == 1
+                    && string.Equals(samePath[0].ModelName, recovered.ModelName, StringComparison.Ordinal)
+                    && string.Equals(samePath[0].RegistryRevision, recovered.RegistryRevision, StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                entries.RemoveAll(entry => matches.Contains(entry));
+                var nameCollision = entries.Any(entry => !samePath.Contains(entry)
+                                                         && string.Equals(entry.ModelName, recovered.ModelName,
+                                                             StringComparison.OrdinalIgnoreCase));
+                if (nameCollision)
+                {
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: its model name conflicts with another registry path.",
+                        Path.GetFileName(path));
+                    continue;
+                }
+
+                // Recovery is the only normal registry path that needs to establish file-byte integrity. Existing exact
+                // manifest rows are deliberately served from stable registry/sidecar facts; explicit snapshots perform
+                // the full content verification required for mutation and benchmark boundaries.
+                if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false) is null)
+                {
+                    changed |= RemoveEntriesForPath(entries, path) > 0;
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: acquisition content verification failed.", Path.GetFileName(path));
+                    continue;
+                }
+
+                entries.RemoveAll(entry => samePath.Contains(entry));
                 entries.Add(recovered);
                 changed = true;
                 continue;
@@ -456,7 +477,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
             if (IsDeterministicAcquisitionFileName(Path.GetFileName(path)))
             {
-                changed |= RemoveEntriesForPath(entries, path) > 0;
+                changed |= RemoveAcquiredEntriesForPath(entries, path) > 0;
                 _logger.LogWarning("Skipping acquired GGUF {FileName}: recovery sidecar is missing.", Path.GetFileName(path));
             }
         }
@@ -476,6 +497,12 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     private static int RemoveEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
     {
         return entries.RemoveAll(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
+    }
+
+    private static int RemoveAcquiredEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
+    {
+        return entries.RemoveAll(entry => entry.Origin is not null
+                                          && PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
     }
 
     private static bool IsDeterministicAcquisitionFileName(string fileName)
