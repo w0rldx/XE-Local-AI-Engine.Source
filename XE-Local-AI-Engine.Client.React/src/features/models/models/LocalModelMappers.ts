@@ -7,15 +7,13 @@ import {
 	type LocalModelViewModel,
 } from "@/features/models/models/LocalModelModel";
 
-type LocalModelWire = Omit<XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse, "origin"> & {
-	origin?: LocalModelOrigin | "HuggingFace" | "Imported" | null;
-};
+type LocalModelWire = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
 function localModelOrigin(value: LocalModelWire["origin"]): LocalModelOrigin | null {
-	if (value === "huggingface" || value === "HuggingFace") {
+	if (value === "huggingface") {
 		return "huggingface";
 	}
-	if (value === "imported" || value === "Imported") {
+	if (value === "imported") {
 		return "imported";
 	}
 	return null;

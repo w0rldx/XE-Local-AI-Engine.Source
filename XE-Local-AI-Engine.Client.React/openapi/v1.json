@@ -3572,8 +3572,8 @@
           "x-position": 1
         },
         "responses": {
-          "200": {
-            "description": "Success",
+          "202": {
+            "description": "Accepted",
             "content": {
               "application/json": {
                 "schema": {
@@ -9065,6 +9065,663 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudCodexV1CodexStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/eligible-agents": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listEligibleBenchmarkAgents",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListEligibleBenchmarkAgentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/eligible-models": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listEligibleBenchmarkModels",
+        "parameters": [
+          {
+            "name": "contextTokens",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListEligibleBenchmarkModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/projects": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listBenchmarkProjects",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "createBenchmarkProject",
+        "requestBody": {
+          "x-name": "BenchmarkProjectMutationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/projects/{projectId}": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "getBenchmarkProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "updateBenchmarkProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateBenchmarkProjectRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "deleteBenchmarkProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteBenchmarkProjectRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1DeleteBenchmarkProjectRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1DeleteBenchmarkProjectRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/projects/{projectId}/runs": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listBenchmarkRuns",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "startBenchmarkRun",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "StartBenchmarkRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "getBenchmarkRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "deleteBenchmarkRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteBenchmarkRunRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1DeleteBenchmarkRunRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1DeleteBenchmarkRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "cancelBenchmarkRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "CancelBenchmarkRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}/score": {
+      "put": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "scoreBenchmarkRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ScoreBenchmarkRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
                 }
               }
             }
@@ -15646,8 +16303,8 @@
           "Imported"
         ],
         "enum": [
-          "HuggingFace",
-          "Imported"
+          "huggingface",
+          "imported"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest": {
@@ -19975,6 +20632,546 @@
           },
           "loginPending": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListEligibleBenchmarkAgentsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListEligibleBenchmarkModelsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "modelContentFingerprint"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "maxContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "effectiveContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "origin": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineProvidersAbstractionsContractsLocalModelOrigin"
+              }
+            ]
+          },
+          "modelContentFingerprint": {
+            "type": "string"
+          },
+          "supportsTools": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1EligibleBenchmarkModelsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "judgeEnabled": {
+            "type": "boolean"
+          },
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isFrozen": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "coreTask"
+            ],
+            "properties": {
+              "coreTask": {
+                "type": "string"
+              },
+              "judgeModelName": {
+                "type": "string",
+                "nullable": true
+              },
+              "judgeContextTokens": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "judgePromptVersion": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "judgeOutputSchemaVersion": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          }
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "coreTask": {
+            "type": "string"
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "judgeEnabled": {
+            "type": "boolean"
+          },
+          "judgeModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "judgePromptVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "judgeOutputSchemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "expectedVersion": {
+                "type": "integer"
+              }
+            }
+          }
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1DeleteBenchmarkProjectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "primaryModelName",
+          "modelContentFingerprint",
+          "agentName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "primaryModelName": {
+            "type": "string"
+          },
+          "primaryModelOrigin": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineProvidersAbstractionsContractsLocalModelOrigin"
+              }
+            ]
+          },
+          "modelContentFingerprint": {
+            "type": "string"
+          },
+          "agentName": {
+            "type": "string"
+          },
+          "agentVersion": {
+            "type": "integer"
+          },
+          "requestedContextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "primaryStatus": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkPrimaryStatus"
+          },
+          "judgeStatus": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkJudgeStatus"
+          },
+          "effectiveContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "totalTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "tokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "userScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "lastStreamSequence": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkPrimaryStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "CancelRequested",
+          "Cancelled"
+        ],
+        "enum": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "CancelRequested",
+          "Cancelled"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkJudgeStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Disabled",
+          "Pending",
+          "Skipped",
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Disabled",
+          "Pending",
+          "Skipped",
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkRunsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "outputParts": {
+                "nullable": true
+              },
+              "judgeResult": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesBenchmarksBenchmarkJudgeResultV1"
+                  }
+                ]
+              },
+              "primaryErrorMessage": {
+                "type": "string",
+                "nullable": true
+              },
+              "judgeErrorMessage": {
+                "type": "string",
+                "nullable": true
+              },
+              "startedAtUtc": {
+                "type": "integer",
+                "nullable": true
+              },
+              "primaryCompletedAtUtc": {
+                "type": "integer",
+                "nullable": true
+              },
+              "judgeStartedAtUtc": {
+                "type": "integer",
+                "nullable": true
+              },
+              "judgeCompletedAtUtc": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesBenchmarksBenchmarkJudgeResultV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "judgeModelContentFingerprint": {
+            "type": "string"
+          },
+          "promptVersion": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "expectedProjectVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1DeleteBenchmarkRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesBenchmarksBenchmarkCancellationTarget"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesBenchmarksBenchmarkCancellationTarget": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Primary",
+          "Judge"
+        ],
+        "enum": [
+          "Primary",
+          "Judge"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "score": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expectedVersion": {
+            "type": "integer"
           }
         }
       },

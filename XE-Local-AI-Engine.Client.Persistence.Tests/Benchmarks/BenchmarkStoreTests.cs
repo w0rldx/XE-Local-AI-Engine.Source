@@ -366,8 +366,12 @@ public sealed class BenchmarkStoreTests : IDisposable
         var store = new BenchmarkStore(context, TimeProvider.System);
         var project = await store.CreateProjectAsync(CreateProject());
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await AssertEx.ThrowsAsync<DbUpdateException>(() =>
             store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = (LocalModelOrigin)999 }));
+
+        AssertEx.True(exception.GetBaseException() is InvalidOperationException invalidOperation
+                      && invalidOperation.Message == "Unknown benchmark model origin enum value.",
+            "EF may wrap conversion failures, but the exact strict origin converter must remain the root cause.");
     }
 
     [Test]
