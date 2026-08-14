@@ -40,22 +40,46 @@ describe("source build models", () => {
 		});
 	});
 
-	it("never submits a stale commit for the official source", () => {
+	it("submits an optional explicit commit for the official source", () => {
 		expect(
 			sourceBuildRequest({
 				backend: "cpu",
 				source: "official",
 				repository: "",
-				commit: "a".repeat(40),
+				commit: "A".repeat(40),
 				acknowledgeCustomSourceRisk: false,
 			}),
 		).toEqual({
 			backend: "cpu",
 			source: "official",
 			repository: null,
-			commit: null,
+			commit: "a".repeat(40),
 			acknowledgeCustomSourceRisk: false,
 		});
+	});
+
+	it("submits no commit for an official build without one", () => {
+		expect(
+			sourceBuildRequest({
+				backend: "cpu",
+				source: "official",
+				repository: "",
+				commit: "  ",
+				acknowledgeCustomSourceRisk: false,
+			}).commit,
+		).toBeNull();
+	});
+
+	it("flags a malformed commit for the official source", () => {
+		expect(
+			sourceBuildValidationError({
+				backend: "cpu",
+				source: "official",
+				repository: "",
+				commit: "abc123",
+				acknowledgeCustomSourceRisk: false,
+			}),
+		).toContain("40-character");
 	});
 
 	it("reconciles a 400-line server ring with a 2000-line live buffer by sequence", () => {
