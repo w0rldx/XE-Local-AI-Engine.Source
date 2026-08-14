@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -131,10 +130,10 @@ public sealed class DeleteBenchmarkRunEndpoint(IBenchmarkStore store)
     }
 }
 
-public sealed class CancelBenchmarkRunEndpoint(IBenchmarkStore store)
+public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation)
     : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IBenchmarkCancellationService _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
 
     public override void Configure()
     {
@@ -146,32 +145,12 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkStore store)
     {
         try
         {
-            var current = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false)
-                          ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-            ValidateTarget(current, req.Target);
-            var run = await _store.CancelAsync(req.RunId, req.ExpectedVersion, ct).ConfigureAwait(false);
+            var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct).ConfigureAwait(false);
             await Send.OkAsync(run.ToDetail(), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
-    }
-
-    private static void ValidateTarget(BenchmarkRunRecord run, BenchmarkCancelTarget target)
-    {
-        if (target == BenchmarkCancelTarget.Primary
-            && run.PrimaryStatus is not (BenchmarkPrimaryStatus.Queued or BenchmarkPrimaryStatus.Running
-                or BenchmarkPrimaryStatus.CancelRequested or BenchmarkPrimaryStatus.Cancelled))
-        {
-            throw new BenchmarkConflictException("InvalidCancellationTransition");
-        }
-
-        if (target == BenchmarkCancelTarget.Judge
-            && (run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded
-                || run.JudgeStatus is not (BenchmarkJudgeStatus.Queued or BenchmarkJudgeStatus.Running or BenchmarkJudgeStatus.Cancelled)))
-        {
-            throw new BenchmarkConflictException("InvalidCancellationTransition");
         }
     }
 }

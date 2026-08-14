@@ -158,6 +158,10 @@ public static class ConfigureServices
         // so run/node lifecycle events broadcast to the connected operator (PreviewWorkflowHub mapped in Program).
         builder.Services.AddSingleton<IPreviewWorkflowEventPublisher, PreviewWorkflowEventPublisher>();
 
+        // Ordered per-run benchmark output relay. The application buffer remains the bounded replay authority; this
+        // host service only bridges its published events to the Operator-scoped benchmark hub.
+        builder.Services.AddHostedService<BenchmarkRunHubEventRelay>();
+
         // Hub-backed GGUF download event publisher — supersedes the no-op default registered in AddNodeModelFit so
         // download status changes push live to operator clients (GgufDownloadHub mapped in Program), replacing the
         // per-second downloads poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.

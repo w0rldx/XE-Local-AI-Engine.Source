@@ -163,18 +163,24 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
-    public async Task CancelPrimary_AfterPrimarySucceeded_ReturnsConflictAndDoesNotCancelJudge()
+    public async Task CancelPrimary_AfterPrimarySucceeded_MapsCancellationServiceConflict()
     {
         await using var context = CreateContext();
-            context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkJudgeStatus.Queued));
+            context.Cancellation.CancelAsync(RunId,
+                    3,
+                    BenchmarkCancellationTarget.Primary,
+                    Arg.Any<CancellationToken>())
+                   .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("PrimaryAlreadySucceeded"));
             using var client = context.Factory.CreateClient();
             using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/runs/{RunId}/cancel",
                 new { target = "Primary", expectedVersion = 3 });
             using var response = await client.SendAsync(request).ConfigureAwait(false);
 
             AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            AssertEx.False(context.Store.ReceivedCalls().Any(static call =>
-                string.Equals(call.GetMethodInfo().Name, nameof(IBenchmarkStore.CancelAsync), StringComparison.Ordinal)));
+            await context.Cancellation.Received(1).CancelAsync(RunId,
+                3,
+                BenchmarkCancellationTarget.Primary,
+                Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -266,6 +272,7 @@ public sealed class BenchmarkEndpointTests
         public IBenchmarkProjectService Projects { get; } = Substitute.For<IBenchmarkProjectService>();
         public IBenchmarkRunFreezeService RunFreeze { get; } = Substitute.For<IBenchmarkRunFreezeService>();
         public IBenchmarkCatalogService Catalog { get; } = Substitute.For<IBenchmarkCatalogService>();
+        public IBenchmarkCancellationService Cancellation { get; } = Substitute.For<IBenchmarkCancellationService>();
 
         public TestingWebAppFactory Factory { get; }
 
@@ -279,10 +286,12 @@ public sealed class BenchmarkEndpointTests
                     services.RemoveAll<IBenchmarkProjectService>();
                     services.RemoveAll<IBenchmarkRunFreezeService>();
                     services.RemoveAll<IBenchmarkCatalogService>();
+                    services.RemoveAll<IBenchmarkCancellationService>();
                     services.AddSingleton(Store);
                     services.AddSingleton(Projects);
                     services.AddSingleton(RunFreeze);
                     services.AddSingleton(Catalog);
+                    services.AddSingleton(Cancellation);
                 }
             };
         }
