@@ -28,11 +28,16 @@ public sealed class GetGgufDownloadsEndpoint(IGgufDownloadCoordinator downloadCo
         var items = statuses
                     .Select(s => new GgufDownloadStatusResponse
                     {
+                        OperationId = s.OperationId,
+                        OperationKind = s.OperationKind,
                         ModelName = s.ModelName,
                         Phase = s.Phase.ToString(),
                         CompletedBytes = s.CompletedBytes,
                         TotalBytes = s.TotalBytes,
-                        SanitizedError = s.SanitizedError
+                        SanitizedError = s.SanitizedError,
+                        ErrorCode = s.ErrorCode,
+                        StartedAtUtc = s.StartedAtUtc,
+                        UpdatedAtUtc = s.UpdatedAtUtc
                     })
                     .ToList();
 

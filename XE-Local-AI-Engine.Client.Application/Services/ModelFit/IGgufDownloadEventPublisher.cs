@@ -37,4 +37,7 @@ public sealed record GgufDownloadStatusHubEvent(
     string Phase,
     long? CompletedBytes,
     long? TotalBytes,
-    string? SanitizedError);
+    string? SanitizedError,
+    Guid OperationId = default,
+    string OperationKind = "Download",
+    string? ErrorCode = null);

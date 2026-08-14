@@ -44,7 +44,9 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
         await Send.OkAsync(new StartGgufDownloadResponse
             {
                 ModelName = ticket.ModelName,
-                AlreadyInFlight = ticket.AlreadyInFlight
+                AlreadyInFlight = ticket.AlreadyInFlight,
+                OperationId = ticket.OperationId,
+                OperationKind = ticket.OperationKind
             },
             ct).ConfigureAwait(false);
     }

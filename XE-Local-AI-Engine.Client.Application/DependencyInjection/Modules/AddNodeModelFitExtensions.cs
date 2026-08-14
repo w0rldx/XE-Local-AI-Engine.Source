@@ -92,7 +92,9 @@ internal static class AddNodeModelFitExtensions
         // Singleton because the download runs detached after the request scope that started it has returned (it composes
         // the singleton Hugging Face GGUF store IGgufModelStore). The advisor management endpoints (download/cancel)
         // consume it.
+        builder.Services.AddSingleton<IGgufAcquisitionOperationRegistry, GgufAcquisitionOperationRegistry>();
         builder.Services.AddSingleton<IGgufDownloadCoordinator, GgufDownloadCoordinator>();
+        builder.Services.AddSingleton<IGgufImportTransactionCoordinator, GgufImportTransactionCoordinator>();
         // No-op download event publisher default — the coordinator (singleton) resolves a publisher even in
         // Application-only / test hosts that wire no SignalR hub. The Client host supersedes this with a hub-backed
         // publisher so download status changes push live to operator clients (replacing the per-second downloads poll).
