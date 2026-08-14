@@ -112,6 +112,12 @@ public static class HuggingFaceServiceCollectionExtensions
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<HuggingFaceGgufStore>>()));
 
+        // Startup-only cleanup of stale acquisition artifacts (.part staging files, orphaned final sidecars) left
+        // behind by a crashed import/download. See GgufAcquisitionArtifactStartupReaper for the exact rules.
+        services.AddHostedService(static sp => new GgufAcquisitionArtifactStartupReaper(sp.GetRequiredService<HuggingFaceOptions>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetRequiredService<ILogger<GgufAcquisitionArtifactStartupReaper>>()));
+
         return services;
     }
 }

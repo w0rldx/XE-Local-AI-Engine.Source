@@ -533,19 +533,23 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             var sidecarPath = path + GgufAcquisitionSidecar.Suffix;
             if (File.Exists(sidecarPath))
             {
+                // An unreadable/corrupt sidecar (metadata null) or one whose own claimed revision does not recompute
+                // (RegistryRevisionMismatch) only disables sidecar-DERIVED recovery for this path. Any existing manifest
+                // entry here already passed its own RegistryRevision self-check in LoadEntriesAsync — the manifest stays
+                // readable, so we keep the entry rather than deleting it; only the reaper cleans up genuine orphans.
                 var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
                 if (metadata is null)
                 {
-                    changed |= RemoveEntriesForPath(entries, path) > 0;
-                    _logger.LogWarning("Skipping acquired GGUF {FileName}: invalid acquisition sidecar.", Path.GetFileName(path));
+                    _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is unreadable or corrupt; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                        Path.GetFileName(path));
                     continue;
                 }
 
                 var recovered = GgufAcquisitionSidecar.ToRegistryEntry(metadata, path, _modelsDirectory);
                 if (!string.Equals(recovered.RegistryRevision, metadata.RegistryRevision, StringComparison.Ordinal))
                 {
-                    changed |= RemoveEntriesForPath(entries, path) > 0;
-                    _logger.LogWarning("Skipping acquired GGUF {FileName}: RegistryRevisionMismatch.", Path.GetFileName(path));
+                    _logger.LogWarning("Acquisition sidecar for GGUF {FileName} failed its RegistryRevision self-check; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                        Path.GetFileName(path));
                     continue;
                 }
 
@@ -573,8 +577,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 // the full content verification required for mutation and benchmark boundaries.
                 if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false) is null)
                 {
-                    changed |= RemoveEntriesForPath(entries, path) > 0;
-                    _logger.LogWarning("Skipping acquired GGUF {FileName}: acquisition content verification failed.", Path.GetFileName(path));
+                    _logger.LogWarning("Acquisition content verification failed for GGUF {FileName}; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                        Path.GetFileName(path));
                     continue;
                 }
 
@@ -586,32 +590,22 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
             if (IsDeterministicAcquisitionFileName(Path.GetFileName(path)))
             {
-                changed |= RemoveAcquiredEntriesForPath(entries, path) > 0;
-                _logger.LogWarning("Skipping acquired GGUF {FileName}: recovery sidecar is missing.", Path.GetFileName(path));
+                _logger.LogWarning("Recovery sidecar for GGUF {FileName} is missing; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                    Path.GetFileName(path));
             }
         }
 
-        var invalidAcquisitions = entries.Where(entry => entry.Origin is not null
-                                                         && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
-                                         .ToArray();
-        if (invalidAcquisitions.Length > 0)
+        // A missing acquisition sidecar, of any filename shape, only disables sidecar-derived recovery for these
+        // entries because their manifest row already passed its own RegistryRevision self-check. This just logs for
+        // operator visibility — the startup reaper is what actually cleans up genuinely orphaned acquisition artifacts.
+        foreach (var entry in entries.Where(entry => entry.Origin is not null
+                                                     && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix)))
         {
-            entries.RemoveAll(entry => invalidAcquisitions.Contains(entry));
-            changed = true;
+            _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is missing; keeping the existing valid manifest entry without sidecar-derived recovery.",
+                Path.GetFileName(entry.LocalPath));
         }
 
         return (entries, changed);
-    }
-
-    private static int RemoveEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
-    {
-        return entries.RemoveAll(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
-    }
-
-    private static int RemoveAcquiredEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
-    {
-        return entries.RemoveAll(entry => entry.Origin is not null
-                                          && PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
     }
 
     private static bool IsDeterministicAcquisitionFileName(string fileName)

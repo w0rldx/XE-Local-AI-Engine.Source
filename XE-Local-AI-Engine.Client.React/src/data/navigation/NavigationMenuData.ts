@@ -31,7 +31,8 @@ type NavigationCapabilityKey =
 	| "development"
 	| "cloudSettings"
 	| "dashboard"
-	| "binding";
+	| "binding"
+	| "benchmarks";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -148,6 +149,7 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconFlask,
 		translationKey: "navigation.benchmarks",
 		to: nodeRoutePaths.benchmarks,
+		capability: "benchmarks",
 	},
 	{
 		id: "invocations",

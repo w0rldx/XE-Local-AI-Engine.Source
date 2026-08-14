@@ -244,7 +244,7 @@ public sealed class BenchmarkJudgeExecutor(
             new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
         try
         {
-            var persisted = await store.MarkJudgeCancelledAsync(runId, run.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+            var persisted = await store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
             events.PublishReserved(terminal with
             {
                 Payload = terminal.Payload with

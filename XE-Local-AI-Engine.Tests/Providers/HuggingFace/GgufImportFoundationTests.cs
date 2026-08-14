@@ -215,6 +215,45 @@ public sealed class GgufImportFoundationTests
     }
 
     [Test]
+    public async Task Registry_KeepsValidManifestEntry_WhenAcquisitionSidecarIsMissingOrCorrupt()
+    {
+        // The manifest row's RegistryRevision is a self-consistency token over its own fields (see
+        // GgufRegistryRevision.ComputeV1); it already passed that check when written by CommitAsync. A missing or
+        // corrupt acquisition sidecar afterward only disables sidecar-DERIVED provenance recovery — it must not cause
+        // the registry to delete an otherwise-valid entry (Plan §5.2).
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(), "source.gguf");
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+        var prepared = await importer.PrepareAsync(new GgufImportSource(source), Destination(), progress: null, CancellationToken.None);
+        var receipt = await importer.CommitAsync(prepared, CancellationToken.None);
+
+        // Sidecar missing entirely: a fresh registry load must keep the manifest entry it already trusts rather than
+        // deleting it just because sidecar-derived provenance recovery is unavailable.
+        File.Delete(receipt.FinalSidecarPath);
+        using (var missingSidecarRegistry = Infra.Registry(options))
+        {
+            var listed = await missingSidecarRegistry.ListAsync(CancellationToken.None);
+            AssertEx.ContainsSingle(listed, entry => entry.ModelName == receipt.RegistryEntry.ModelName);
+            var kept = listed.Single(entry => entry.ModelName == receipt.RegistryEntry.ModelName);
+            AssertEx.Equal(receipt.RegistryEntry.RegistryRevision!, kept.RegistryRevision);
+            AssertEx.Equal(receipt.RegistryEntry.ModelContentFingerprint!, kept.ModelContentFingerprint);
+            AssertEx.Equal(receipt.RegistryEntry.Sha256!, kept.Sha256);
+            AssertEx.True(File.Exists(kept.LocalPath), "the backing GGUF must not be touched when its sidecar is missing");
+        }
+
+        // Sidecar present but corrupt (unreadable JSON): same outcome — no invented provenance, no deletion.
+        await File.WriteAllTextAsync(receipt.FinalSidecarPath, "{ this is not valid json");
+        using var corruptSidecarRegistry = Infra.Registry(options);
+        var listedAfterCorruption = await corruptSidecarRegistry.ListAsync(CancellationToken.None);
+        AssertEx.ContainsSingle(listedAfterCorruption, entry => entry.ModelName == receipt.RegistryEntry.ModelName);
+        var keptAfterCorruption = listedAfterCorruption.Single(entry => entry.ModelName == receipt.RegistryEntry.ModelName);
+        AssertEx.Equal(receipt.RegistryEntry.RegistryRevision!, keptAfterCorruption.RegistryRevision);
+        AssertEx.Equal(receipt.RegistryEntry.ModelContentFingerprint!, keptAfterCorruption.ModelContentFingerprint);
+    }
+
+    [Test]
     public async Task Importer_CommitNeverOverwritesAnExistingDestination_AndDiscardsTemps()
     {
         using var paths = new ImportPaths();
@@ -223,13 +262,16 @@ public sealed class GgufImportFoundationTests
         using var registry = Infra.Registry(options);
         var importer = NewImporter(options, registry);
         var prepared = await importer.PrepareAsync(new GgufImportSource(source), Destination(), progress: null, CancellationToken.None);
-        var finalPath = Path.Combine(paths.ModelsDirectory, prepared.Destination.RelativeGgufPath);
-        await File.WriteAllTextAsync(finalPath, "do-not-overwrite");
+        // Sidecar moves first (see CommitAsync), so a collision on the sidecar destination is the one still checked
+        // before anything is moved — a collision on the GGUF destination is covered separately as a partial-commit
+        // case in Importer_PostRenameRegistryFailure_ReturnsOwnedReceiptForApplicationRollback.
+        var finalSidecarPath = Path.Combine(paths.ModelsDirectory, prepared.Destination.RelativeSidecarPath);
+        await File.WriteAllTextAsync(finalSidecarPath, "do-not-overwrite");
 
         var exception = await AssertEx.ThrowsAsync<GgufImportException>(() => importer.CommitAsync(prepared, CancellationToken.None));
 
         AssertEx.Equal(GgufImportRejectionCode.DestinationConflict, exception.Reason);
-        AssertEx.Equal("do-not-overwrite", await File.ReadAllTextAsync(finalPath));
+        AssertEx.Equal("do-not-overwrite", await File.ReadAllTextAsync(finalSidecarPath));
         await importer.DiscardPreparedAsync(prepared, CancellationToken.None);
         AssertEx.False(File.Exists(prepared.TemporaryGgufPath));
         AssertEx.False(File.Exists(prepared.TemporarySidecarPath));
@@ -488,7 +530,9 @@ public sealed class GgufImportFoundationTests
         using var registry = Infra.Registry(options);
         var importer = NewImporter(options, registry);
         var prepared = await importer.PrepareAsync(new GgufImportSource(source), Destination(), progress: null, CancellationToken.None);
-        var caseCollision = Path.Combine(paths.ModelsDirectory, prepared.Destination.RelativeGgufPath.ToUpperInvariant());
+        // Sidecar moves first (see CommitAsync), so a case-only collision on the sidecar destination is the one still
+        // rejected cleanly before anything is moved.
+        var caseCollision = Path.Combine(paths.ModelsDirectory, prepared.Destination.RelativeSidecarPath.ToUpperInvariant());
         await File.WriteAllTextAsync(caseCollision, "existing");
 
         var exception = await AssertEx.ThrowsAsync<GgufImportException>(() => importer.CommitAsync(prepared, CancellationToken.None));

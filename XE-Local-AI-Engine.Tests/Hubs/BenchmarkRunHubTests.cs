@@ -58,6 +58,59 @@ public sealed class BenchmarkRunHubTests
     }
 
     [Test]
+    public async Task Subscribe_ReplaysReasoningAndToolPartEventKinds()
+    {
+        var store = Substitute.For<IBenchmarkStore>();
+        var events = Buffer();
+        var runId = Guid.NewGuid();
+        var reasoning = events.Append(runId, BenchmarkRunStreamEventKind.ReasoningDelta, new BenchmarkRunStreamPayload(Content: "thinking..."));
+        var toolCall = events.Append(runId,
+            BenchmarkRunStreamEventKind.ToolCall,
+            new BenchmarkRunStreamPayload(ToolCallId: "call-1", ToolName: "search", Arguments: "{}"));
+        var toolResult = events.Append(runId,
+            BenchmarkRunStreamEventKind.ToolResult,
+            new BenchmarkRunStreamPayload(ToolCallId: "call-1", Result: "ok", IsError: false));
+        store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, lastStreamSequence: 0));
+        using var fixture = CreateHub(store, events);
+
+        await fixture.Hub.Subscribe(runId, afterSeq: 0);
+
+        await fixture.Caller.Received(1).SendCoreAsync(BenchmarkRunHubEvents.Event,
+            Arg.Is<object?[]>(arguments => MatchesEvent(arguments, reasoning)),
+            Arg.Any<CancellationToken>());
+        await fixture.Caller.Received(1).SendCoreAsync(BenchmarkRunHubEvents.Event,
+            Arg.Is<object?[]>(arguments => MatchesEvent(arguments, toolCall)),
+            Arg.Any<CancellationToken>());
+        await fixture.Caller.Received(1).SendCoreAsync(BenchmarkRunHubEvents.Event,
+            Arg.Is<object?[]>(arguments => MatchesEvent(arguments, toolResult)),
+            Arg.Any<CancellationToken>());
+        await fixture.Caller.DidNotReceive().SendCoreAsync(BenchmarkRunHubEvents.ReplayReset,
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Subscribe_AfterTerminalPlaintextEviction_SendsReplayResetAndNoPlaintextEvents()
+    {
+        var store = Substitute.For<IBenchmarkStore>();
+        var events = Buffer();
+        var runId = Guid.NewGuid();
+        var retained = events.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "sensitive output"));
+        events.EvictPlaintext(runId);
+        store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, lastStreamSequence: retained.Sequence));
+        using var fixture = CreateHub(store, events);
+
+        await fixture.Hub.Subscribe(runId, afterSeq: 0);
+
+        await fixture.Caller.Received(1).SendCoreAsync(BenchmarkRunHubEvents.ReplayReset,
+            Arg.Is<object?[]>(arguments => MatchesReset(arguments, runId, latestSequence: retained.Sequence, runVersion: 4)),
+            Arg.Any<CancellationToken>());
+        await fixture.Caller.DidNotReceive().SendCoreAsync(BenchmarkRunHubEvents.Event,
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void Hub_RequiresOperatorAuthorization()
     {
         var authorize = typeof(BenchmarkRunHub).GetCustomAttribute<AuthorizeAttribute>();

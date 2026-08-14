@@ -123,6 +123,46 @@ public sealed class GgufImportTransactionCoordinatorTests
     }
 
     [Test]
+    public async Task Start_WhenSameModelAlreadyActive_ReturnsAcquisitionAlreadyActiveWithoutBlockingOnPreflight()
+    {
+        // Regression: a second import of the same model used to fall through to preflight, which blocks on the
+        // composite mutation lease held by the first (still-running) import for the entire copy. The active-operation
+        // check must reject the second Start before preflight is even reached, so SecondCallHangsPreflight makes any
+        // second ResolveAndReserveAsync call hang forever — proving the fix short-circuits ahead of it.
+        var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
+        var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
+            "example",
+            "Q4_K_M"));
+        var importer = new BlockingCommitImporter(identity);
+        var services = new ServiceCollection();
+        services.AddSingleton<IGgufAcquisitionPreflight>(new SecondCallHangsPreflight(identity));
+        var coordinator = BuildCoordinator(sourcePath,
+            importer: importer,
+            resolver: resolver,
+            services: services.BuildServiceProvider());
+        var firstPreview = await coordinator.PreviewAsync(sourcePath);
+
+        var ticket = await coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+            firstPreview.PreviewToken,
+            firstPreview.ModelBaseName,
+            "Q4_K_M"));
+        await importer.CommitEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var secondPreview = await coordinator.PreviewAsync(sourcePath);
+        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+                                                                                              secondPreview.PreviewToken,
+                                                                                              secondPreview.ModelBaseName,
+                                                                                              "Q4_K_M"))
+            .WaitAsync(TimeSpan.FromSeconds(2)));
+
+        AssertEx.Equal("AcquisitionAlreadyActive", exception!.ErrorCode);
+
+        importer.ReleaseCommit.SetResult();
+        await WaitForPhaseAsync(coordinator, ticket.OperationId, GgufAcquisitionPhase.Failed);
+    }
+
+    [Test]
     public async Task Cancel_DuringCommit_RollsBackAndNeverPublishesCompleted()
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
@@ -365,6 +405,47 @@ public sealed class GgufImportTransactionCoordinatorTests
         public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
             CancellationToken cancellationToken = default)
         {
+            var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
+                InstalledModelMutationKind.Acquire,
+                [
+                    new IntendedInstalledModelMember(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
+                    new IntendedInstalledModelMember(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
+                ]);
+            var keys = new[]
+            {
+                ModelCoordinationKeys.Model(identity.CanonicalModelName),
+                ModelCoordinationKeys.Path(identity.RelativeGgufPath),
+                ModelCoordinationKeys.Path(identity.RelativeSidecarPath),
+                ModelCoordinationKeys.ProviderMap(identity.CanonicalModelName)
+            };
+            var inner = await _domain.AcquireMutationAsync(keys, cancellationToken);
+            var lease = new InstalledModelMutationLease(request, snapshot: null, providerMapping: null, inner);
+            return new PreparedGgufAcquisition(identity,
+                GgufAcquisitionDisposition.Available,
+                ProviderMapDisposition.Absent,
+                lease,
+                activeOperationId: null);
+        }
+    }
+
+    // Hangs forever on the SECOND call to ResolveAndReserveAsync (the preflight call that acquires the composite
+    // mutation lease). Used to prove the pre-preflight active-operation check rejects a second Start for the same
+    // model before preflight is ever reached — if it were reached, this class would make the test time out.
+    private sealed class SecondCallHangsPreflight(ResolvedGgufAcquisitionIdentity identity) : IGgufAcquisitionPreflight
+    {
+        private readonly KeyedCompositeLockDomain _domain = new();
+        private int _callCount;
+
+        [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "The returned PreparedGgufAcquisition takes exclusive ownership of the mutation lease and the production coordinator disposes or transfers it on every path.")]
+        public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _callCount) > 1)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            }
+
             var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
                 InstalledModelMutationKind.Acquire,
                 [

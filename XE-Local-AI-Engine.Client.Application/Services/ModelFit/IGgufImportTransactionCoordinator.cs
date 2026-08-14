@@ -164,6 +164,15 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                 "The selected quantization was not offered by the import preview.");
         }
 
+        // Reject an already-active acquisition for this model BEFORE preflight, which blocks on the composite mutation
+        // lease for the whole copy — otherwise a second import of the same model hangs behind the first instead of
+        // getting an immediate 409 (mirrors GgufDownloadCoordinator.StartAsync's pre-preflight rejoin check).
+        if (IsActive(_operations.GetNewest(AcquisitionKind.Download, requestedIdentity.CanonicalModelName))
+            || IsActive(_operations.GetNewest(AcquisitionKind.Import, requestedIdentity.CanonicalModelName)))
+        {
+            throw new GgufImportApplicationException("AcquisitionAlreadyActive", "An import for this model is already active.");
+        }
+
         PreparedGgufAcquisition reservation;
         try
         {
@@ -497,6 +506,14 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         && left.Workload == right.Workload
         && string.Equals(left.DetectedQuantization, right.DetectedQuantization, StringComparison.Ordinal)
         && string.Equals(left.SourceDisplayName, right.SourceDisplayName, StringComparison.Ordinal);
+
+    private static bool IsActive(GgufAcquisitionStatus? status) =>
+        status is not null
+        && status.Phase is GgufAcquisitionPhase.Validating
+            or GgufAcquisitionPhase.Downloading
+            or GgufAcquisitionPhase.Copying
+            or GgufAcquisitionPhase.Committing
+            or GgufAcquisitionPhase.Running;
 
     private static string InferModelBaseName(string sourceDisplayName, string? quantization)
     {

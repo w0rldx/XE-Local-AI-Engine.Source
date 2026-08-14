@@ -131,14 +131,15 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     [Test]
-    public async Task Execute_WhenOwnedCancellationWins_UsesCurrentRunVersionAndIsIdempotent()
+    public async Task Execute_WhenOwnedCancellationWins_UsesWorkItemVersionAndIsIdempotent()
     {
         var installed = Installed();
         var snapshot = Snapshot(installed);
         var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 7);
+        const int workVersion = 2;
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkJudgeCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
+        store.MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
                  JudgeStatus = BenchmarkJudgeStatus.Cancelled,
@@ -169,9 +170,9 @@ public sealed class BenchmarkJudgeExecutorTests
             cancellations,
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, workVersion, run), CancellationToken.None);
 
-        _ = store.Received(1).MarkJudgeCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = store.Received(1).MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>());
         AssertEx.False(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
     }
 

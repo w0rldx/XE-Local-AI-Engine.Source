@@ -1,6 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	cancelBenchmarkRun,
+	createBenchmarkProject,
+	deleteBenchmarkRun,
+	getBenchmarkProject,
+	getBenchmarkRun,
+	listBenchmarkProjects,
+	listBenchmarkRuns,
+	listEligibleBenchmarkModels,
+	scoreBenchmarkRun,
+	startBenchmarkRun,
+	updateBenchmarkProject,
+} from "@/core/api/generated";
+import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import {
 	toBenchmarkEligibleModel,
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
@@ -15,7 +29,11 @@ import type {
 	BenchmarkRunDetail,
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkApi } from "@/features/benchmarks/queries/BenchmarkApi";
+
+// Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY through the shared
+// `callWithResponseValidation` bridge (the same imperative pattern as useLoadedModels / the chat adapter) rather than
+// the generated TanStack `*Options()` wrappers, because several hooks below derive their poll cadence from the
+// already-mapped domain data (`query.state.data`), which `select`-based options would not expose pre-mapping.
 
 const benchmarkQueryKeys = {
 	projects: ["benchmarks", "projects"] as const,
@@ -25,19 +43,32 @@ const benchmarkQueryKeys = {
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
 };
 
-const record = (value: unknown): Record<string, unknown> =>
-	value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-const items = (value: unknown): Record<string, unknown>[] => {
-	const candidate = record(value)["items"];
-	return Array.isArray(candidate) ? candidate.map(record) : [];
-};
+const activeRunPollIntervalMs = 2_000;
+
+function hasActiveRun(runs: BenchmarkRunSummary[] | undefined): boolean {
+	return (
+		runs?.some(
+			(run) =>
+				["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
+				["Pending", "Queued", "Running"].includes(run.judgeStatus),
+		) ?? false
+	);
+}
+
+function isRunActive(run: BenchmarkRunDetail | undefined): boolean {
+	return Boolean(
+		run &&
+			(["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
+				["Pending", "Queued", "Running"].includes(run.judgeStatus)),
+	);
+}
 
 export function useBenchmarkProjects() {
 	return useQuery<BenchmarkProjectSummary[]>({
 		queryKey: benchmarkQueryKeys.projects,
 		queryFn: async ({ signal }) => {
-			const data = await benchmarkApi.listProjects(signal);
-			return items(data).map(toBenchmarkProjectSummary);
+			const { data } = await callWithResponseValidation(listBenchmarkProjects({ signal, throwOnError: true }));
+			return (data.items ?? []).map(toBenchmarkProjectSummary);
 		},
 	});
 }
@@ -47,8 +78,10 @@ export function useBenchmarkProject(projectId: string | null) {
 		queryKey: benchmarkQueryKeys.project(projectId ?? ""),
 		enabled: Boolean(projectId),
 		queryFn: async ({ signal }) => {
-			const data = await benchmarkApi.getProject(projectId as string, signal);
-			return toBenchmarkProjectDetail(record(data));
+			const { data } = await callWithResponseValidation(
+				getBenchmarkProject({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			return toBenchmarkProjectDetail(data);
 		},
 	});
 }
@@ -57,19 +90,17 @@ export function useBenchmarkRuns(projectId: string | null) {
 	return useQuery<BenchmarkRunSummary[]>({
 		queryKey: benchmarkQueryKeys.runs(projectId ?? ""),
 		enabled: Boolean(projectId),
-		refetchInterval: (query) => {
-			const data = query.state.data;
-			return data?.some(
-				(run) =>
-					["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
-					["Pending", "Queued", "Running"].includes(run.judgeStatus),
-			)
-				? 2_000
-				: false;
-		},
+		refetchInterval: (query) => (hasActiveRun(query.state.data) ? activeRunPollIntervalMs : false),
 		queryFn: async ({ signal }) => {
-			const data = await benchmarkApi.listRuns(projectId as string, signal);
-			return items(data).map(toBenchmarkRunSummary);
+			const { data } = await callWithResponseValidation(
+				listBenchmarkRuns({
+					path: { projectId: projectId as string },
+					query: { page: 1, pageSize: 100 },
+					signal,
+					throwOnError: true,
+				}),
+			);
+			return (data.items ?? []).map(toBenchmarkRunSummary);
 		},
 	});
 }
@@ -77,17 +108,10 @@ export function useBenchmarkRuns(projectId: string | null) {
 export function useBenchmarkRun(runId: string) {
 	return useQuery<BenchmarkRunDetail>({
 		queryKey: benchmarkQueryKeys.run(runId),
-		refetchInterval: (query) => {
-			const run = query.state.data;
-			return run &&
-				(["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
-					["Pending", "Queued", "Running"].includes(run.judgeStatus))
-				? 2_000
-				: false;
-		},
+		refetchInterval: (query) => (isRunActive(query.state.data) ? activeRunPollIntervalMs : false),
 		queryFn: async ({ signal }) => {
-			const data = await benchmarkApi.getRun(runId, signal);
-			return toBenchmarkRunDetail(record(data));
+			const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
+			return toBenchmarkRunDetail(data);
 		},
 	});
 }
@@ -96,8 +120,10 @@ export function useEligibleBenchmarkModels(contextTokens?: number) {
 	return useQuery<BenchmarkEligibleModel[]>({
 		queryKey: benchmarkQueryKeys.models(contextTokens),
 		queryFn: async ({ signal }) => {
-			const data = await benchmarkApi.listEligibleModels(contextTokens, signal);
-			return items(data).map(toBenchmarkEligibleModel);
+			const { data } = await callWithResponseValidation(
+				listEligibleBenchmarkModels({ query: contextTokens ? { contextTokens } : undefined, signal, throwOnError: true }),
+			);
+			return (data.items ?? []).map(toBenchmarkEligibleModel);
 		},
 	});
 }
@@ -122,12 +148,13 @@ export function useCreateBenchmarkProject() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (draft: BenchmarkProjectDraft) => {
-			const data = await benchmarkApi.createProject(draft);
-			return toBenchmarkProjectDetail(record(data));
+			const { data } = await callWithResponseValidation(createBenchmarkProject({ body: draft, throwOnError: true }));
+			return toBenchmarkProjectDetail(data);
 		},
 		onSuccess: (project) => invalidate(project.id),
 	});
 }
+
 export function useUpdateBenchmarkProject() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
@@ -140,12 +167,15 @@ export function useUpdateBenchmarkProject() {
 			expectedVersion: number;
 			draft: BenchmarkProjectDraft;
 		}) => {
-			const data = await benchmarkApi.updateProject(projectId, expectedVersion, draft);
-			return toBenchmarkProjectDetail(record(data));
+			const { data } = await callWithResponseValidation(
+				updateBenchmarkProject({ path: { projectId }, body: { ...draft, expectedVersion }, throwOnError: true }),
+			);
+			return toBenchmarkProjectDetail(data);
 		},
 		onSuccess: (project) => invalidate(project.id),
 	});
 }
+
 export function useStartBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
@@ -158,36 +188,49 @@ export function useStartBenchmarkRun() {
 			modelName: string;
 			expectedProjectVersion: number;
 		}) => {
-			const data = await benchmarkApi.startRun(projectId, modelName, expectedProjectVersion);
-			return toBenchmarkRunDetail(record(data));
+			const { data } = await callWithResponseValidation(
+				startBenchmarkRun({ path: { projectId }, body: { modelName, expectedProjectVersion }, throwOnError: true }),
+			);
+			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
 	});
 }
+
 export function useCancelBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ run, target }: { run: BenchmarkRunDetail; target: "Primary" | "Judge" }) => {
-			const data = await benchmarkApi.cancelRun(run, target);
-			return toBenchmarkRunDetail(record(data));
+			const { data } = await callWithResponseValidation(
+				cancelBenchmarkRun({ path: { runId: run.id }, body: { target, expectedVersion: run.version }, throwOnError: true }),
+			);
+			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
 	});
 }
+
 export function useScoreBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async ({ run, score }: { run: BenchmarkRunDetail; score: number }) => {
-			const data = await benchmarkApi.scoreRun(run, score);
-			return toBenchmarkRunDetail(record(data));
+			const { data } = await callWithResponseValidation(
+				scoreBenchmarkRun({ path: { runId: run.id }, body: { score, expectedVersion: run.version }, throwOnError: true }),
+			);
+			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
 	});
 }
+
 export function useDeleteBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
-		mutationFn: (run: BenchmarkRunDetail) => benchmarkApi.deleteRun(run),
+		mutationFn: async (run: BenchmarkRunDetail) => {
+			await callWithResponseValidation(
+				deleteBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version }, throwOnError: true }),
+			);
+		},
 		onSuccess: (_, run) => invalidate(run.projectId, run.id),
 	});
 }
