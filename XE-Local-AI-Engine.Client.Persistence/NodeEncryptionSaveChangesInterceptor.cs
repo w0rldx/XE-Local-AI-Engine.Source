@@ -295,6 +295,38 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.ResultMetadataJson), entry.Entity.ProjectId, entry.Entity.Id, "development_event_result_json", trackedProperties);
         }
 
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkProject>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.CoreTaskJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_core_task_json",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkRun>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.RuntimeSnapshotJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_runtime_snapshot_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.OutputPartsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_output_parts_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.JudgeResultJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_result_json",
+                trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;
