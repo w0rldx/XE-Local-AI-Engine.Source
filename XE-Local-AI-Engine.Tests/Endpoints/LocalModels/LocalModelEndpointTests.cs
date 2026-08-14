@@ -381,7 +381,9 @@ public sealed class LocalModelEndpointTests
                               IsAvailable = true,
                               SizeBytes = 491_000_000,
                               ModifiedAt = DateTimeOffset.UnixEpoch,
-                              MaxContextTokens = 32768
+                              MaxContextTokens = 32768,
+                              Origin = LocalModelOrigin.Imported,
+                              ModelContentFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                           }
                       ]);
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
@@ -394,6 +396,9 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", details.ModelName);
         AssertEx.Equal(expected: 32768, details.MaxContextTokens);
+        AssertEx.Equal(LocalModelOrigin.Imported, details.Origin);
+        AssertEx.Equal("v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            details.ModelContentFingerprint);
         await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 

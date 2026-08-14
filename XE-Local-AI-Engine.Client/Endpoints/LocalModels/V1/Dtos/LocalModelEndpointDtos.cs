@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
 /// <summary>Provider tags for <see cref="LocalModelResponse.Provider" /> (chat picker grouping + egress hint).</summary>
 public static class LocalModelProviders
 {
@@ -64,6 +66,12 @@ public sealed class LocalModelResponse
     public string? ParameterSize { get; init; }
 
     public string? QuantizationLevel { get; init; }
+
+    /// <summary>Typed acquisition provenance for installed GGUF models; null for legacy, Ollama, and cloud entries.</summary>
+    public LocalModelOrigin? Origin { get; init; }
+
+    /// <summary>Verified aggregate identity of installed GGUF weight/projector content.</summary>
+    public string? ModelContentFingerprint { get; init; }
 
     public required bool IsSelected { get; init; }
 
@@ -185,6 +193,12 @@ public sealed class LocalModelDetailsResponse
     ///     advertised train ceiling): the chat context-usage meter should size against this real window when present.
     /// </summary>
     public int? EffectiveContextTokens { get; init; }
+
+    /// <summary>Typed acquisition provenance for an installed GGUF; null for legacy and non-GGUF models.</summary>
+    public LocalModelOrigin? Origin { get; init; }
+
+    /// <summary>Verified aggregate identity of installed GGUF weight/projector content.</summary>
+    public string? ModelContentFingerprint { get; init; }
 
     public string? Template { get; init; }
 
