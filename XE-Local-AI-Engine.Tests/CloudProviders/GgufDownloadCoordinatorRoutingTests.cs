@@ -37,6 +37,8 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
         var canonical = GgufModelName.Format(Repo, Quant);
         AssertEx.Equal(canonical, ticket.ModelName);
+        AssertEx.NotEqual(Guid.Empty, ticket.OperationId);
+        AssertEx.Equal("Download", ticket.OperationKind);
         AssertEx.True(mapStore.Mappings.TryGetValue(canonical, out var mapping), "a map row must be written for the canonical name");
         AssertEx.Equal(LlamaServerProviderConstants.ProviderName, mapping!.ProviderName);
     }
@@ -69,7 +71,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         services.AddScoped(_ => mapStore);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new GgufDownloadCoordinator(store, scopeFactory, new NullGgufDownloadEventPublisher(), NullLogger<GgufDownloadCoordinator>.Instance);
+        return new GgufDownloadCoordinator(store,
+            scopeFactory,
+            new GgufAcquisitionOperationRegistry(TimeProvider.System),
+            new NullGgufDownloadEventPublisher(),
+            NullLogger<GgufDownloadCoordinator>.Instance);
     }
 
     private static async Task WaitForPhaseAsync(IGgufDownloadCoordinator coordinator, string modelName, GgufDownloadPhase phase)

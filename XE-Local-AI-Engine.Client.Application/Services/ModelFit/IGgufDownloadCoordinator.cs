@@ -35,6 +35,8 @@ public interface IGgufDownloadCoordinator
     /// <summary>Returns the latest sanitized status for <paramref name="modelName" />, or <c>null</c> when unknown.</summary>
     GgufDownloadStatus? GetStatus(string modelName);
 
+    GgufDownloadStatus? GetStatus(Guid operationId) => null;
+
     /// <summary>Returns a snapshot of all tracked download statuses (in-flight and recently finished).</summary>
     IReadOnlyList<GgufDownloadStatus> ListStatuses();
 }
@@ -42,7 +44,7 @@ public interface IGgufDownloadCoordinator
 /// <summary>The accepted-download identity returned by <see cref="IGgufDownloadCoordinator.Start" />.</summary>
 /// <param name="ModelName">Canonical <c>{repoId}[:{quant}]</c> model name the download is keyed by (track/cancel by this).</param>
 /// <param name="AlreadyInFlight"><c>true</c> when an existing download for the same model name was rejoined instead of started.</param>
-public sealed record GgufDownloadTicket(string ModelName, bool AlreadyInFlight);
+public sealed record GgufDownloadTicket(string ModelName, bool AlreadyInFlight, Guid OperationId = default, string OperationKind = "Download");
 
 /// <summary>Phase of a coordinated GGUF download.</summary>
 public enum GgufDownloadPhase
@@ -69,4 +71,9 @@ public sealed record GgufDownloadStatus(
     GgufDownloadPhase Phase,
     long? CompletedBytes,
     long? TotalBytes,
-    string? SanitizedError);
+    string? SanitizedError,
+    Guid OperationId = default,
+    string OperationKind = "Download",
+    DateTimeOffset? StartedAtUtc = null,
+    DateTimeOffset? UpdatedAtUtc = null,
+    string? ErrorCode = null);
