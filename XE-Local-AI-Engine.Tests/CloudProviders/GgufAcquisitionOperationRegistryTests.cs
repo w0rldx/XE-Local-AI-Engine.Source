@@ -78,4 +78,60 @@ public sealed class GgufAcquisitionOperationRegistryTests
         AssertEx.Equal(expected: 42L, afterLateProgress.CompletedBytes);
         AssertEx.False(registry.Cancel(registration.Status.OperationId));
     }
+
+    [Test]
+    public void TerminalRetention_CountCapEvictsOldestTerminalButNeverActive()
+    {
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var registry = new GgufAcquisitionOperationRegistry(time, TimeSpan.FromHours(1), maxTerminalCount: 2);
+        var active = registry.Start(GgufAcquisitionOperationKind.Download, "active:Q4_K_M");
+        var first = registry.RecordTerminal(GgufAcquisitionOperationKind.Download, "first:Q4_K_M", GgufAcquisitionPhase.Completed);
+        var second = registry.RecordTerminal(GgufAcquisitionOperationKind.Import, "second:Q4_K_M", GgufAcquisitionPhase.Failed);
+        var third = registry.RecordTerminal(GgufAcquisitionOperationKind.Download, "third:Q4_K_M", GgufAcquisitionPhase.Cancelled);
+
+        AssertEx.True(registry.GetStatus(first.OperationId) is null);
+        AssertEx.NotNull(registry.GetStatus(second.OperationId));
+        AssertEx.NotNull(registry.GetStatus(third.OperationId));
+        AssertEx.NotNull(registry.GetStatus(active.Status.OperationId));
+        AssertEx.True(registry.Cancel(active.Status.OperationId));
+    }
+
+    [Test]
+    public void TerminalRetention_MaxAgeExpiresTerminalButNeverActive()
+    {
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var registry = new GgufAcquisitionOperationRegistry(time, TimeSpan.FromMinutes(5), maxTerminalCount: 256);
+        var terminal = registry.RecordTerminal(GgufAcquisitionOperationKind.Download, "terminal:Q4_K_M", GgufAcquisitionPhase.Completed);
+        var active = registry.Start(GgufAcquisitionOperationKind.Import, "active:Q4_K_M");
+
+        time.Advance(TimeSpan.FromMinutes(6));
+
+        AssertEx.True(registry.GetStatus(terminal.OperationId) is null);
+        AssertEx.NotNull(registry.GetStatus(active.Status.OperationId));
+    }
+
+    [Test]
+    public void Updates_AreStrictlyMonotonicWhenClockDoesNotAdvanceOrMovesBackward()
+    {
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddHours(1));
+        var registry = new GgufAcquisitionOperationRegistry(time);
+        var registration = registry.Start(GgufAcquisitionOperationKind.Download, "model:Q4_K_M");
+        var downloading = registry.Update(registration.Status.OperationId, GgufAcquisitionPhase.Downloading);
+        time.Advance(TimeSpan.FromHours(-1));
+        var committing = registry.Update(registration.Status.OperationId, GgufAcquisitionPhase.Committing);
+        var completed = registry.Update(registration.Status.OperationId, GgufAcquisitionPhase.Completed);
+
+        AssertEx.True(registration.Status.UpdatedAtUtc < downloading.UpdatedAtUtc);
+        AssertEx.True(downloading.UpdatedAtUtc < committing.UpdatedAtUtc);
+        AssertEx.True(committing.UpdatedAtUtc < completed.UpdatedAtUtc);
+    }
+
+    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Advance(TimeSpan elapsed) => _utcNow += elapsed;
+    }
 }

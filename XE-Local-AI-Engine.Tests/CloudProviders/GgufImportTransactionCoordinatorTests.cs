@@ -188,6 +188,42 @@ public sealed class GgufImportTransactionCoordinatorTests
         AssertEx.Equal(expected: 0, importer.RollbackCount);
     }
 
+    [Test]
+    public async Task SuccessfulImport_PublishesCopyAndCommitPhasesWithMonotonicTimestamps()
+    {
+        var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
+        var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(
+            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+            "example",
+            "Q4_K_M"));
+        var importer = new BlockingCommitImporter(identity);
+        importer.ReleaseCommit.SetResult();
+        var publisher = new RecordingPublisher();
+        var serviceCollection = new ServiceCollection();
+        serviceCollection.AddSingleton<IGgufAcquisitionPreflight>(new AvailablePreflight(identity));
+        serviceCollection.AddSingleton<ICoordinatedModelProviderMapStore>(new InMemoryCoordinatedModelProviderMapStore());
+        var coordinator = BuildCoordinator(sourcePath,
+            importer: importer,
+            resolver: resolver,
+            services: serviceCollection.BuildServiceProvider(),
+            publisher: publisher);
+        var preview = await coordinator.PreviewAsync(sourcePath);
+
+        var ticket = await coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+            preview.PreviewToken,
+            preview.ModelBaseName,
+            "Q4_K_M"));
+        await WaitForPhaseAsync(coordinator, ticket.OperationId, GgufAcquisitionPhase.Completed);
+
+        var events = publisher.Events.ToArray();
+        AssertEx.True(events.Select(static value => value.Phase).SequenceEqual(
+            ["Validating", "Copying", "Committing", "Completed"],
+            StringComparer.Ordinal));
+        AssertEx.True(events.All(static value => value.UpdatedAtUtc is not null));
+        AssertEx.True(events.Zip(events.Skip(1), static (left, right) => left.UpdatedAtUtc < right.UpdatedAtUtc).All(static value => value));
+    }
+
     private static GgufImportTransactionCoordinator BuildCoordinator(string sourcePath,
         GgufImportInspection? inspection = null,
         long availableBytes = long.MaxValue,
@@ -195,7 +231,8 @@ public sealed class GgufImportTransactionCoordinatorTests
         IGgufModelImporter? importer = null,
         GgufAcquisitionIdentityResolver? resolver = null,
         ServiceProvider? services = null,
-        IGgufImportInspector? inspector = null)
+        IGgufImportInspector? inspector = null,
+        IGgufDownloadEventPublisher? publisher = null)
     {
         var security = Options.Create(new SecurityOptions());
         services ??= new ServiceCollection().BuildServiceProvider();
@@ -205,7 +242,7 @@ public sealed class GgufImportTransactionCoordinatorTests
             resolver ?? new GgufAcquisitionIdentityResolver(new ModelNameValidator(security)),
             new GgufAcquisitionOperationRegistry(TimeProvider.System),
             services.GetRequiredService<IServiceScopeFactory>(),
-            new NullGgufDownloadEventPublisher(),
+            publisher ?? new NullGgufDownloadEventPublisher(),
             new FixedFreeSpaceProbe(availableBytes),
             new HuggingFaceOptions
             {
@@ -435,5 +472,16 @@ public sealed class GgufImportTransactionCoordinatorTests
             string expectedProvider,
             string expectedRevision,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingPublisher : IGgufDownloadEventPublisher
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<GgufDownloadStatusHubEvent> Events { get; } = new();
+
+        public Task PublishStatusAsync(GgufDownloadStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        {
+            Events.Enqueue(statusEvent);
+            return Task.CompletedTask;
+        }
     }
 }

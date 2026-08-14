@@ -40,4 +40,5 @@ public sealed record GgufDownloadStatusHubEvent(
     string? SanitizedError,
     Guid OperationId = default,
     string OperationKind = "Download",
-    string? ErrorCode = null);
+    string? ErrorCode = null,
+    DateTimeOffset? UpdatedAtUtc = null);
