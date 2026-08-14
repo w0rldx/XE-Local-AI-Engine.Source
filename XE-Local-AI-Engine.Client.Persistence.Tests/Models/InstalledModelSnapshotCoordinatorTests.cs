@@ -69,13 +69,42 @@ public sealed class InstalledModelSnapshotCoordinatorTests
 
         var currentCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(), current.Store, map);
         await using var currentLease = await currentCoordinator.AcquireMutationAsync(CreateRequest(identity));
-        var currentState = await probe.ProbeAsync(identity, currentLease, CancellationToken.None);
+        var intent = CreateDownloadIntent();
+        var currentState = await probe.ProbeAsync(intent, identity, currentLease, CancellationToken.None);
         AssertEx.Equal(GgufAcquisitionDisposition.VerifiedInstalled, currentState.Disposition);
 
         var legacyCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(), legacy.Store, map);
         await using var legacyLease = await legacyCoordinator.AcquireMutationAsync(CreateRequest(identity));
-        var legacyState = await probe.ProbeAsync(identity, legacyLease, CancellationToken.None);
+        var legacyState = await probe.ProbeAsync(intent, identity, legacyLease, CancellationToken.None);
         AssertEx.Equal(GgufAcquisitionDisposition.VerifiedLegacyInstalled, legacyState.Disposition);
+    }
+
+    [Test]
+    public async Task StateProbe_RejectsInstalledReuseWithoutExactTrustedResolvedFacts()
+    {
+        var identity = CreateIdentity();
+        var fixture = CreateCurrentFixture();
+        var map = new ReadOnlyMapStore(new ModelProviderMapRecord(identity.CanonicalModelName,
+            LlamaServerProviderConstants.ProviderName,
+            UpdatedAtUtc: 1,
+            Revision: "map-r1"));
+        var coordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(), fixture.Store, map);
+        await using var lease = await coordinator.AcquireMutationAsync(CreateRequest(identity));
+        var probe = new GgufAcquisitionStateProbe();
+
+        var missingHash = CreateDownloadIntent() with
+        {
+            Download = CreateDownloadIntent().Download! with { DeclaredSha256 = null }
+        };
+        var wrongRevision = CreateDownloadIntent() with
+        {
+            Download = CreateDownloadIntent().Download! with { ResolvedRevision = "source-r2" }
+        };
+
+        AssertEx.Equal(GgufAcquisitionDisposition.Conflict,
+            (await probe.ProbeAsync(missingHash, identity, lease, CancellationToken.None)).Disposition);
+        AssertEx.Equal(GgufAcquisitionDisposition.Conflict,
+            (await probe.ProbeAsync(wrongRevision, identity, lease, CancellationToken.None)).Disposition);
     }
 
     private static InstalledModelMutationRequest CreateRequest(ResolvedGgufAcquisitionIdentity identity) =>
@@ -89,8 +118,19 @@ public sealed class InstalledModelSnapshotCoordinatorTests
     private static ResolvedGgufAcquisitionIdentity CreateIdentity()
     {
         var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
-        return resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Download, "foo", "Q4_K_M"));
+        return resolver.Resolve(CreateDownloadIntent());
     }
+
+    private static GgufAcquisitionIntent CreateDownloadIntent() =>
+        new(GgufAcquisitionOperationKind.Download,
+            "foo",
+            "Q4_K_M",
+            Download: new GgufDownloadAcquisitionMetadata("org/repo",
+                "source-r1",
+                "model.gguf",
+                DeclaredSizeBytes: 10,
+                new string('a', 64),
+                GgufRole.Chat));
 
     private static SnapshotFixture CreateCurrentFixture(int failuresBeforeSuccess = 0)
     {
