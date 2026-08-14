@@ -436,6 +436,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             return ToRecord(run);
         }
 
+        if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+            && run.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
+        {
+            return ToRecord(run);
+        }
+
         EnsureVersion(run.Version, expectedRunVersion);
         var now = Now();
         if (run.PrimaryStatus == BenchmarkPrimaryStatus.Queued)
