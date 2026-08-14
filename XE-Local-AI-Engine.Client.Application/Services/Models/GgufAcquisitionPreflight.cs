@@ -77,7 +77,7 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         ArgumentNullException.ThrowIfNull(intent);
         var modelBaseName = intent.ModelBaseName.Trim().Normalize(NormalizationForm.FormC);
         if (modelBaseName.Length == 0
-            || modelBaseName.Contains(":", StringComparison.Ordinal)
+            || modelBaseName.Contains(':', StringComparison.Ordinal)
             || !_modelNameValidator.IsValid(modelBaseName))
         {
             throw new ArgumentException("The model base name is invalid or already contains a quantization suffix.", nameof(intent));

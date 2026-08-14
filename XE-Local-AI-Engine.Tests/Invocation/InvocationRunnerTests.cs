@@ -560,7 +560,7 @@ public sealed class InvocationRunnerTests
         var package = RuntimePackageBuilder.Valid().Build();
         using var cancellationTokenSource = new CancellationTokenSource();
 
-        var runTask = RunAsync(runner, package, cancellationTokenSource.Token);
+        var runTask = RunAsync(runner, package, cancellationToken: cancellationTokenSource.Token);
         await started.Task;
         await cancellationTokenSource.CancelAsync();
         gate.TrySetCanceled();
@@ -2651,8 +2651,9 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
             "Requested context 8192 tokens exceeds effective context 4096 tokens.",
             FailureCategory.AgentRuntime);
-        AssertEx.Equal(expected: 8192, AssertEx.NotNull(policy.LastContext).RequestedContextTokens);
-        AssertEx.Equal(expected: 4096, policy.LastContext.EffectiveContextTokens);
+        var admissionContext = AssertEx.NotNull(policy.LastContext);
+        AssertEx.Equal(expected: 8192, admissionContext.RequestedContextTokens);
+        AssertEx.Equal(expected: 4096, admissionContext.EffectiveContextTokens);
     }
 
     [Test]
@@ -2677,8 +2678,9 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Equal(expected: 1, generationCalls);
         AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
-        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, AssertEx.NotNull(policy.LastContext).ProviderName);
-        AssertEx.Equal(expected: 16384, policy.LastContext.EffectiveContextTokens);
+        var admissionContext = AssertEx.NotNull(policy.LastContext);
+        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, admissionContext.ProviderName);
+        AssertEx.Equal(expected: 16384, admissionContext.EffectiveContextTokens);
         await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
             Arg.Any<int?>(),
             Arg.Any<int?>(),
@@ -3116,8 +3118,8 @@ public sealed class InvocationRunnerTests
 
     private static async Task RunAsync(InvocationRunner runner,
         RuntimePackage package,
-        CancellationToken cancellationToken = default,
-        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
+        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null,
+        CancellationToken cancellationToken = default)
     {
         using var context = InvocationExecutionContext.Create(package,
             Guid.NewGuid(),

@@ -237,7 +237,11 @@ public sealed class GgufImportFoundationTests
         var replaced = false;
         var progress = new InlineProgress<GgufImportProgress>(_ =>
         {
-            if (replaced) return;
+            if (replaced)
+            {
+                return;
+            }
+
             File.Move(replacement, source, overwrite: true);
             replaced = true;
         });
@@ -437,7 +441,10 @@ public sealed class GgufImportFoundationTests
         public void Dispose()
         {
             try { Directory.Delete(Root, recursive: true); }
-            catch (IOException) { }
+            catch (IOException)
+            {
+                // Best-effort fixture cleanup; a locked file must not mask the assertion result.
+            }
         }
     }
 }

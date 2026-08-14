@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using OllamaSharp.Models;
