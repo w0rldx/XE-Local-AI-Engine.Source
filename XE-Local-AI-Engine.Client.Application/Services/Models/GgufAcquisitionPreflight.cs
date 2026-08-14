@@ -23,7 +23,16 @@ public sealed record GgufAcquisitionIntent(
     GgufAcquisitionOperationKind OperationKind,
     string ModelBaseName,
     string Quantization,
-    GgufProjectorAcquisitionMetadata? Projector = null);
+    GgufProjectorAcquisitionMetadata? Projector = null,
+    GgufDownloadAcquisitionMetadata? Download = null);
+
+public sealed record GgufDownloadAcquisitionMetadata(
+    string RepoId,
+    string ResolvedRevision,
+    string SourceDisplayName,
+    long DeclaredSizeBytes,
+    string? DeclaredSha256,
+    GgufRole Role);
 
 public sealed record GgufProjectorAcquisitionMetadata(
     string SourceDisplayName,
@@ -57,7 +66,8 @@ public sealed record GgufAcquisitionState(
 
 public interface IGgufAcquisitionStateProbe
 {
-    Task<GgufAcquisitionState> ProbeAsync(ResolvedGgufAcquisitionIdentity identity,
+    Task<GgufAcquisitionState> ProbeAsync(GgufAcquisitionIntent intent,
+        ResolvedGgufAcquisitionIdentity identity,
         InstalledModelMutationLease lease,
         CancellationToken cancellationToken);
 }
@@ -92,6 +102,7 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(reservationKey));
         var identityHash = Convert.ToHexStringLower(hashBytes.AsSpan(0, 12));
         var fileName = $"{slug}-{quantization}-{identityHash}.gguf";
+        ValidateDownloadMetadata(intent);
         ValidateProjectorMetadata(intent);
         var projectorFileName = intent.Projector is not null ? $"{slug}-projector-{identityHash}.gguf" : null;
         return new ResolvedGgufAcquisitionIdentity(
@@ -103,6 +114,28 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
             $"{fileName}.xe-model.json",
             projectorFileName,
             projectorFileName);
+    }
+
+    private static void ValidateDownloadMetadata(GgufAcquisitionIntent intent)
+    {
+        if (intent.OperationKind == GgufAcquisitionOperationKind.Import && intent.Download is not null)
+        {
+            throw new ArgumentException("Local imports cannot carry resolved download metadata.", nameof(intent));
+        }
+
+        if (intent.Download is not { } download)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(download.RepoId)
+            || string.IsNullOrWhiteSpace(download.ResolvedRevision)
+            || !string.Equals(download.SourceDisplayName, Path.GetFileName(download.SourceDisplayName), StringComparison.Ordinal)
+            || download.DeclaredSizeBytes <= 0
+            || download.DeclaredSha256 is not null && !IsCanonicalSha256(download.DeclaredSha256))
+        {
+            throw new ArgumentException("The resolved download metadata is invalid.", nameof(intent));
+        }
     }
 
     private static void ValidateProjectorMetadata(GgufAcquisitionIntent intent)
@@ -119,12 +152,14 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
 
         if (!string.Equals(projector.SourceDisplayName, Path.GetFileName(projector.SourceDisplayName), StringComparison.Ordinal)
             || projector.DeclaredSizeBytes <= 0
-            || projector.DeclaredSha256.Length != 64
-            || projector.DeclaredSha256.Any(static character => character is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
+            || !IsCanonicalSha256(projector.DeclaredSha256))
         {
             throw new ArgumentException("The projector metadata is invalid.", nameof(intent));
         }
     }
+
+    private static bool IsCanonicalSha256(string value) =>
+        value.Length == 64 && value.All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string NormalizeQuantization(string quantization)
     {
@@ -204,7 +239,7 @@ public sealed class GgufAcquisitionPreflight(
             cancellationToken).ConfigureAwait(false);
         try
         {
-            var state = await _stateProbe.ProbeAsync(identity, lease, cancellationToken).ConfigureAwait(false);
+            var state = await _stateProbe.ProbeAsync(intent, identity, lease, cancellationToken).ConfigureAwait(false);
             if (state.Disposition == GgufAcquisitionDisposition.Conflict
                 || state.ProviderMapDisposition == ProviderMapDisposition.ConflictingProvider
                 || (intent.OperationKind == GgufAcquisitionOperationKind.Import && state.Disposition != GgufAcquisitionDisposition.Available))
