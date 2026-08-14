@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
+using System.Collections.ObjectModel;
+
 /// <summary>
 ///     The single source of truth for GGUF quant quality: a llama.cpp quant ladder ordered by quality (best → worst),
 ///     where each known token carries BOTH a fine-grained quality RANK and the coarse <see cref="GgufQuantTier" /> grade.
@@ -66,6 +68,9 @@ public static class QuantLadder
         ("IQ1_S", GgufQuantTier.Minimal)
     ];
 
+    private static readonly ReadOnlyCollection<string> CanonicalQuantizationValues =
+        Array.AsReadOnly(Rungs.Select(static rung => rung.Quant).ToArray());
+
     private static readonly Dictionary<string, int> RankByQuant =
         Rungs
             .Select(static (rung, index) => (rung.Quant, index))
@@ -76,6 +81,13 @@ public static class QuantLadder
 
     /// <summary>The rank of the quality floor (<see cref="DefaultFloorQuant" />); quants ranked above this are off-limits.</summary>
     public static int FloorRank => RankByQuant[DefaultFloorQuant];
+
+    /// <summary>
+    ///     Repository-owned canonical quantizations that may be selected when a GGUF header and filename cannot
+    ///     identify the source quantization. The returned collection is immutable and ordered best-to-worst by the
+    ///     same quality ladder used by model-fit selection.
+    /// </summary>
+    public static IReadOnlyList<string> CanonicalQuantizations => CanonicalQuantizationValues;
 
     /// <summary>
     ///     The quality rank of <paramref name="quant" /> — 0 is the best quality, larger is more compressed. An Unsloth

@@ -5,6 +5,8 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using AcquisitionKind = XE_Local_AI_Engine.Client.Services.ModelFit.GgufAcquisitionOperationKind;
 using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
@@ -51,6 +53,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     private readonly IGgufDownloadEventPublisher _eventPublisher;
     private readonly IGgufImportInspector _inspector;
     private readonly IGgufModelImporter _importer;
+    private readonly IFreeSpaceProbe _freeSpaceProbe;
+    private readonly HuggingFaceOptions _options;
     private readonly ILogger<GgufImportTransactionCoordinator> _logger;
     private readonly IGgufAcquisitionOperationRegistry _operations;
     private readonly ConcurrentDictionary<string, PreviewState> _previews = new(StringComparer.Ordinal);
@@ -64,6 +68,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         IGgufAcquisitionOperationRegistry operations,
         IServiceScopeFactory scopeFactory,
         IGgufDownloadEventPublisher eventPublisher,
+        IFreeSpaceProbe freeSpaceProbe,
+        HuggingFaceOptions options,
         TimeProvider timeProvider,
         ILogger<GgufImportTransactionCoordinator> logger)
     {
@@ -73,6 +79,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
+        _freeSpaceProbe = freeSpaceProbe ?? throw new ArgumentNullException(nameof(freeSpaceProbe));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -88,13 +96,17 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             identity = _resolver.Resolve(new GgufAcquisitionIntent(PreflightKind.Import, modelBaseName, inspection.DetectedQuantization));
         }
 
+        var quantizationChoices = inspection.DetectedQuantization is null
+            ? GgufAcquisitionIdentityResolver.CanonicalQuantizationChoices
+            : new[] { inspection.DetectedQuantization };
+
         RemoveExpiredPreviews();
         var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         var expiresAt = _timeProvider.GetUtcNow().Add(PreviewLifetime);
-        _previews[token] = new PreviewState(sourcePath, inspection, expiresAt);
+        _previews[token] = new PreviewState(sourcePath, inspection, quantizationChoices, expiresAt);
         return new PreviewGgufImportResult(modelBaseName,
             inspection.DetectedQuantization,
-            inspection.DetectedQuantization is null ? Array.Empty<string>() : new[] { inspection.DetectedQuantization },
+            quantizationChoices,
             identity?.CanonicalModelName,
             identity?.FinalFileName,
             inspection.SizeBytes,
@@ -102,7 +114,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             inspection.Architecture,
             inspection.GgufVersion,
             inspection.Warnings,
-            HasSufficientStorage: null,
+            CheckStorage(inspection.SizeBytes),
             token,
             expiresAt);
     }
@@ -129,6 +141,24 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         if (!InspectionMatches(preview.Inspection, inspection))
         {
             throw new GgufImportApplicationException("StalePreview", "The selected file changed after it was previewed.");
+        }
+
+        ResolvedGgufAcquisitionIdentity requestedIdentity;
+        try
+        {
+            requestedIdentity = _resolver.Resolve(
+                new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization));
+        }
+        catch (ArgumentException exception)
+        {
+            _logger.LogDebug(exception, "Rejected a GGUF import identity before acquisition preflight.");
+            throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.");
+        }
+
+        if (!preview.CanonicalQuantizationChoices.Contains(requestedIdentity.CanonicalQuantization, StringComparer.Ordinal))
+        {
+            throw new GgufImportApplicationException("UnsupportedQuantization",
+                "The selected quantization was not offered by the import preview.");
         }
 
         PreparedGgufAcquisition reservation;
@@ -211,6 +241,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                     cancellationToken).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
                 committed = await _importer.CommitAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
@@ -221,7 +252,9 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                 }
 
                 mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
+                cancellationToken.ThrowIfCancellationRequested();
                 scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
+                cancellationToken.ThrowIfCancellationRequested();
                 var status = _operations.Update(operationId,
                     GgufAcquisitionPhase.Completed,
                     committed.RegistryEntry.SizeBytes,
@@ -363,6 +396,24 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         }
     }
 
+    private bool? CheckStorage(long sizeBytes)
+    {
+        try
+        {
+            var requiredBytes = checked(sizeBytes + Math.Max(0, _options.DiskMarginBytes));
+            return _freeSpaceProbe.GetAvailableFreeBytes(_options.ModelsDirectory) >= requiredBytes;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+                                          or IOException
+                                          or InvalidOperationException
+                                          or NotSupportedException
+                                          or OverflowException
+                                          or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     private static bool InspectionMatches(GgufImportInspection left, GgufImportInspection right) =>
         left.SizeBytes == right.SizeBytes
         && left.GgufVersion == right.GgufVersion
@@ -393,5 +444,9 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         _ => "UnsupportedFileType"
     };
 
-    private sealed record PreviewState(string SourcePath, GgufImportInspection Inspection, DateTimeOffset ExpiresAtUtc);
+    private sealed record PreviewState(
+        string SourcePath,
+        GgufImportInspection Inspection,
+        IReadOnlyList<string> CanonicalQuantizationChoices,
+        DateTimeOffset ExpiresAtUtc);
 }
