@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 public enum BenchmarkErrorCode
@@ -17,12 +18,6 @@ public enum BenchmarkErrorCode
     IneligibleAgent,
     IneligibleModel,
     UnsupportedSnapshot
-}
-
-public enum BenchmarkCancelTarget
-{
-    Primary,
-    Judge
 }
 
 public sealed class BenchmarkErrorResponse
@@ -117,7 +112,7 @@ public sealed class DeleteBenchmarkRunRequest
 public sealed class CancelBenchmarkRunRequest
 {
     public Guid RunId { get; init; }
-    public BenchmarkCancelTarget Target { get; init; }
+    public BenchmarkCancellationTarget Target { get; init; }
     public long ExpectedVersion { get; init; }
 }
 
@@ -161,15 +156,6 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     public long? PrimaryCompletedAtUtc { get; init; }
     public long? JudgeStartedAtUtc { get; init; }
     public long? JudgeCompletedAtUtc { get; init; }
-}
-
-public sealed class BenchmarkJudgeResultV1
-{
-    public int SchemaVersion { get; init; } = 1;
-    public int Score { get; init; }
-    public required string Rationale { get; init; }
-    public required string JudgeModelContentFingerprint { get; init; }
-    public int PromptVersion { get; init; }
 }
 
 public sealed class ListBenchmarkRunsResponse
