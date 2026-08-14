@@ -16,20 +16,26 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
     {
         ArgumentNullException.ThrowIfNull(source);
         var displayName = Path.GetFileName(source.AbsolutePath) ?? string.Empty;
-        if (!TryValidateSource(source.AbsolutePath, options.ModelsDirectory, out var fullPath, out var size))
-        {
-            return Rejected(displayName, size, GgufImportRejectionCode.InvalidSource);
-        }
-
         try
         {
-            var header = await GgufStrictHeaderParser.ReadAsync(fullPath!, cancellationToken).ConfigureAwait(false);
-            return Classify(displayName, size, header);
+            await using var opened = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
+            return await InspectOpenedAsync(opened, cancellationToken).ConfigureAwait(false);
+        }
+        catch (GgufImportException)
+        {
+            return Rejected(displayName, size: 0, GgufImportRejectionCode.InvalidSource);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            return Rejected(displayName, size, GgufImportRejectionCode.InvalidSource);
+            return Rejected(displayName, size: 0, GgufImportRejectionCode.InvalidSource);
         }
+    }
+
+    internal async Task<GgufImportInspection> InspectOpenedAsync(ValidatedGgufImportSource source, CancellationToken cancellationToken)
+    {
+        var header = await GgufStrictHeaderParser.ReadAsync(source.Stream, cancellationToken).ConfigureAwait(false);
+        source.Rewind();
+        return Classify(source.DisplayName, source.Length, header);
     }
 
     internal static GgufImportInspection Classify(string displayName, long size, GgufStrictHeaderParser.StrictHeader header)
@@ -64,7 +70,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             rejections.Add(GgufImportRejectionCode.UnsupportedArchitecture);
         }
 
-        var quant = GgufStrictHeaderParser.ResolveQuantization(header);
+        var quant = GgufQuantDetector.Detect(displayName, header);
         if (quant is null)
         {
             rejections.Add(header.Values.ContainsKey("general.file_type")
@@ -82,42 +88,6 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             displayName,
             rejections.Distinct().ToArray(),
             []);
-    }
-
-    internal static bool TryValidateSource(string sourcePath, string managedDirectory, out string? fullPath, out long size)
-    {
-        fullPath = null;
-        size = 0;
-        try
-        {
-            if (!Path.IsPathFullyQualified(sourcePath)
-                || !string.Equals(Path.GetExtension(sourcePath), ".gguf", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            fullPath = Path.GetFullPath(sourcePath);
-            var info = new FileInfo(fullPath);
-            if (!info.Exists || info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint)
-                || info.Attributes.HasFlag(FileAttributes.Directory) || info.Attributes.HasFlag(FileAttributes.Device))
-            {
-                return false;
-            }
-
-            var managed = Path.GetFullPath(managedDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            if (fullPath.StartsWith(managed, comparison))
-            {
-                return false;
-            }
-
-            size = info.Length;
-            return size > 0;
-        }
-        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
     }
 
     private static bool IsShardName(string displayName)

@@ -22,6 +22,18 @@ internal static class GgufStrictHeaderParser
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return await ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<StrictHeader> ReadAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanRead || !stream.CanSeek)
+        {
+            return StrictHeader.Invalid;
+        }
+
+        stream.Position = 0;
         var length = Math.Min(stream.Length, MaximumHeaderBytes);
         if (length < 24)
         {

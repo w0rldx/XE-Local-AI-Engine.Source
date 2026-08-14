@@ -25,6 +25,7 @@ public enum GgufImportWorkload
 public enum GgufImportRejectionCode
 {
     InvalidSource,
+    DestinationConflict,
     InvalidGguf,
     UnsupportedVersion,
     SplitModel,
@@ -97,6 +98,12 @@ public sealed class GgufImportException : Exception
 {
     public GgufImportException(GgufImportRejectionCode reason, string sanitizedMessage)
         : base(sanitizedMessage)
+    {
+        Reason = reason;
+    }
+
+    public GgufImportException(GgufImportRejectionCode reason, string sanitizedMessage, Exception innerException)
+        : base(sanitizedMessage, innerException)
     {
         Reason = reason;
     }

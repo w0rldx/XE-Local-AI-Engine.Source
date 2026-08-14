@@ -86,6 +86,19 @@ public sealed class GgufRegistryTests
     }
 
     [Test]
+    public async Task GgufRegistry_DeterministicUdFilenameWithoutSidecar_FailsClosed()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        await File.WriteAllTextAsync(dir.FilePath("demo-UD-Q4_K_XL-0123456789abcdef01234567.gguf"), "untrusted");
+
+        using var registry = Infra.Registry(options);
+        var listed = await registry.ListAsync(CancellationToken.None);
+
+        AssertEx.Empty(listed);
+    }
+
+    [Test]
     public async Task GgufRegistry_Remove_DropsEntry_Idempotent()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

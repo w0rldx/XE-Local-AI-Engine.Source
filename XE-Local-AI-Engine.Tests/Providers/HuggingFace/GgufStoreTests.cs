@@ -112,6 +112,31 @@ public sealed class GgufStoreTests
     }
 
     [Test]
+    public async Task GgufStore_DownloadCommitRejectsCaseOnlyDestinationCollision()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var collisionPath = dir.FilePath(Infra.FileName.ToUpperInvariant());
+        await File.WriteAllTextAsync(collisionPath, "preserve-existing");
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(download,
+            Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length)),
+            registry,
+            options);
+
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, progress: null, CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.DestinationConflict, exception.Reason);
+        AssertEx.Equal("preserve-existing", await File.ReadAllTextAsync(collisionPath));
+    }
+
+    [Test]
     public async Task GgufStore_EnsureModel_HonorsQuantOverride()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
