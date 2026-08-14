@@ -23,9 +23,10 @@ public sealed class GgufImportFoundationTests
     public void Fingerprints_MatchGoldenVectors_AndRejectNoncanonicalMembers()
     {
         const string hash = "0000000000000000000000000000000000000000000000000000000000000000";
+        const string alphaHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd";
         AssertEx.Equal($"sha256:{hash}:4", GgufMemberFingerprint.Compute(hash, sizeBytes: 4));
         AssertEx.True(GgufMemberFingerprint.IsCanonical($"sha256:{hash}:4"));
-        AssertEx.False(GgufMemberFingerprint.IsCanonical($"sha256:{hash.ToUpperInvariant()}:4"));
+        AssertEx.False(GgufMemberFingerprint.IsCanonical($"sha256:{alphaHash.ToUpperInvariant()}:4"));
         AssertEx.False(GgufMemberFingerprint.IsCanonical($"sha256:{hash}:04"));
 
         var aggregate = GgufModelContentFingerprint.ComputeV1([
