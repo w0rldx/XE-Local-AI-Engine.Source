@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
+import { Route as LayoutBenchmarksRouteImport } from './routes/_layout/benchmarks'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
@@ -58,6 +59,11 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
 const LayoutAgentsRoute = LayoutAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutBenchmarksRoute = LayoutBenchmarksRouteImport.update({
+  id: '/benchmarks',
+  path: '/benchmarks',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutChatRoute = LayoutChatRouteImport.update({
@@ -172,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/agents': typeof LayoutAgentsRoute
+  '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/agents': typeof LayoutAgentsRoute
+  '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
@@ -227,6 +235,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/_layout/agents': typeof LayoutAgentsRoute
+  '/_layout/benchmarks': typeof LayoutBenchmarksRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/commands': typeof LayoutCommandsRoute
@@ -257,6 +266,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/agents'
+    | '/benchmarks'
     | '/chat'
     | '/cloud-settings'
     | '/commands'
@@ -283,6 +293,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/agents'
+    | '/benchmarks'
     | '/chat'
     | '/cloud-settings'
     | '/commands'
@@ -311,6 +322,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/_layout/agents'
+    | '/_layout/benchmarks'
     | '/_layout/chat'
     | '/_layout/cloud-settings'
     | '/_layout/commands'
@@ -376,6 +388,13 @@ declare module '@tanstack/react-router' {
       path: '/agents'
       fullPath: '/agents'
       preLoaderRoute: typeof LayoutAgentsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/benchmarks': {
+      id: '/_layout/benchmarks'
+      path: '/benchmarks'
+      fullPath: '/benchmarks'
+      preLoaderRoute: typeof LayoutBenchmarksRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/chat': {
@@ -530,6 +549,7 @@ declare module '@tanstack/react-router' {
 
 interface LayoutRouteChildren {
   LayoutAgentsRoute: typeof LayoutAgentsRoute
+  LayoutBenchmarksRoute: typeof LayoutBenchmarksRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutCommandsRoute: typeof LayoutCommandsRoute
@@ -556,6 +576,7 @@ interface LayoutRouteChildren {
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAgentsRoute: LayoutAgentsRoute,
+  LayoutBenchmarksRoute: LayoutBenchmarksRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutCommandsRoute: LayoutCommandsRoute,

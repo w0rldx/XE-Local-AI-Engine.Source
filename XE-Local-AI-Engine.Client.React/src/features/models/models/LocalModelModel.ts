@@ -7,7 +7,7 @@ export interface LocalModelViewModel {
 	// The runtime that serves this model ("llamacpp", "Ollama", "CodexOAuth", "AzureFoundry"). Only "llamacpp" models
 	// honor a per-model launch-argument override, so the Advanced tab is gated on this.
 	provider: string;
-	origin: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
+	origin: LocalModelOrigin | null;
 	sizeLabel: string;
 	modifiedDateLabel: string;
 	familyLabel: string;
@@ -19,6 +19,8 @@ export interface LocalModelViewModel {
 	capabilities: string[];
 	isOverridden: boolean;
 }
+
+export type LocalModelOrigin = "huggingface" | "imported";
 
 export const emptyModelValue = "—";
 
@@ -45,4 +47,3 @@ export function formatModelModifiedDate(modifiedAtUtc: number | null | undefined
 
 	return new Date(modifiedAtUtc).toISOString().slice(0, 10);
 }
-import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } from "@/core/api/generated";

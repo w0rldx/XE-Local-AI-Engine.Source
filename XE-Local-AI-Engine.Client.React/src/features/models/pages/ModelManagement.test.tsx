@@ -528,7 +528,9 @@ describe("ModelManagement", () => {
 		renderWithProviders(<ModelManagement />);
 		fireEvent.click(await screen.findByRole("button", { name: "Import model" }));
 		const dialog = await screen.findByRole("dialog");
-		fireEvent.change(within(dialog).getByPlaceholderText("/path/to/model.gguf"), { target: { value: "/private/models/private-model.gguf" } });
+		fireEvent.change(within(dialog).getByPlaceholderText("/path/to/model.gguf"), {
+			target: { value: "/private/models/private-model.gguf" },
+		});
 		fireEvent.click(within(dialog).getByRole("button", { name: "Preview import" }));
 
 		expect(await within(dialog).findByText("private-model.gguf")).toBeTruthy();
@@ -550,18 +552,20 @@ describe("ModelManagement", () => {
 	it("hides import when capability is unavailable and labels imported provenance from the typed origin", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
 			isAvailable: true,
-			items: [{
-				modelName: "private-model:Q4_K_M",
-				provider: "llamacpp",
-				origin: "Imported",
-				isSelected: false,
-				kind: "Chat",
-				detectedKind: "Chat",
-				capabilities: [],
-				isReasoningCapable: false,
-				isToolCapable: false,
-				isOverridden: false,
-			}],
+			items: [
+				{
+					modelName: "private-model:Q4_K_M",
+					provider: "llamacpp",
+					origin: "imported",
+					isSelected: false,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: [],
+					isReasoningCapable: false,
+					isToolCapable: false,
+					isOverridden: false,
+				},
+			],
 		});
 
 		renderWithProviders(<ModelManagement />);

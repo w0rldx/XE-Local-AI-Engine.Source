@@ -84,9 +84,10 @@ function ModelDetailsBody({
 					<Text>Family: {model.familyLabel}</Text>
 					<Text>Quantization: {model.quantizationLabel}</Text>
 					<Text>
-						{t("pages.models.local.origin.label", "Origin")}: {model.origin === "Imported"
+						{t("pages.models.local.origin.label", "Origin")}:{" "}
+						{model.origin === "imported"
 							? t("pages.models.local.origin.imported", "Imported")
-							: model.origin === "HuggingFace"
+							: model.origin === "huggingface"
 								? t("pages.models.local.origin.huggingFace", "Hugging Face")
 								: t("pages.models.local.origin.legacy", "Legacy / unknown")}
 					</Text>

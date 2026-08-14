@@ -74,6 +74,7 @@
 		"user": "Benutzer",
 		"skills": "Skills",
 		"customTools": "Eigene Tools",
+		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
 		"images": "Bildgenerierung"
 	},
@@ -3839,6 +3840,34 @@
 		"tools": {
 			"title": "Lokale Werkzeuge",
 			"subtitle": "Werkzeuge, die dem lokalen Node-Agenten zur Verfügung stehen: integrierte In-Process-Werkzeuge sowie Werkzeuge aus aktivierten MCP-Servern."
+		},
+		"benchmarks": {
+			"title": "Lokale Modell-Benchmarks",
+			"subtitle": "Lokale Modelle mit derselben eingefrorenen Agentenaufgabe und optionaler unabhängiger Bewertung vergleichen.",
+			"projects": "Projekte", "runs": "Läufe",
+			"status": { "Queued": "Wartend", "Running": "Läuft", "CancelRequested": "Abbruch angefordert", "Succeeded": "Erfolgreich", "Failed": "Fehlgeschlagen", "Cancelled": "Abgebrochen", "Disabled": "Deaktiviert", "Pending": "Ausstehend", "Skipped": "Übersprungen" },
+			"origin": { "huggingface": "Hugging Face", "imported": "Importiert", "legacy": "Altbestand / Unbekannt" },
+			"project": {
+				"create": "Neues Projekt", "edit": "Benchmark-Projekt", "name": "Name", "task": "Kernaufgabe", "context": "Angeforderte Kontext-Tokens", "agent": "Agent",
+				"judgeEnabled": "Automatische Bewertung aktivieren", "judgeModel": "Bewertungsmodell", "judgeContext": "Kontext-Tokens der Bewertung", "frozen": "Eingefroren",
+				"frozenExplanation": "Dieses Projekt ist eingefroren, solange Läufe existieren. Löschen Sie die abgeschlossenen Läufe, um es wieder zu bearbeiten.",
+				"runCount": "{{count}} Läufe", "empty": "Erstellen Sie ein Projekt, um eine Aufgabe einzufrieren und Modelle zu vergleichen.", "select": "Wählen Sie ein Benchmark-Projekt."
+			},
+			"run": { "model": "Primärmodell", "start": "Lauf starten", "cancel": "Lauf abbrechen", "delete": "Abgeschlossenen Lauf löschen", "waiting": "Warten auf Modellausgabe…", "compareSelection": "Zu vergleichende Läufe" },
+			"metrics": { "duration": "Dauer", "tokens": "Tokens", "speed": "Tok/s" },
+			"connection": { "live": "Live-Aktualisierungen verbunden", "reconnecting": "Verbindung und Zustand werden abgeglichen…", "http": "Dauerhafter HTTP-Zustand wird verwendet" },
+			"score": { "label": "Betreiberbewertung", "value": "Bewertung {{score}} von 5" },
+			"judge": {
+				"title": "Automatische Bewertung", "score": "Bewertung: {{score}}", "cancel": "Bewertung abbrechen",
+				"explanations": { "Disabled": "Für dieses Projekt wurde keine automatische Bewertung angefordert.", "Pending": "Die Bewertung wird erst nach einem erfolgreichen Primärlauf eingereiht.", "Skipped": "Die Bewertung war angefordert, wurde aber übersprungen, weil der Primärlauf nicht erfolgreich war.", "Queued": "Die Bewertung wartet in der dauerhaften Warteschlange.", "Running": "Das erfolgreiche Primärergebnis wird bewertet.", "Succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.", "Failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.", "Cancelled": "Die Bewertung wurde abgebrochen." }
+			},
+			"validation": { "name": "Ein Name ist erforderlich.", "task": "Eine Kernaufgabe ist erforderlich.", "context": "Der Kontext muss positiv sein.", "agent": "Wählen Sie einen Agenten.", "judgeModel": "Wählen Sie ein Bewertungsmodell." },
+			"errors": {
+				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.", "projectSave": "Das Projekt konnte nicht gespeichert werden.", "runLoad": "Der Lauf konnte nicht geladen werden.", "start": "Der Benchmark-Lauf konnte nicht gestartet werden.",
+				"cancel": "Diese Laufphase konnte nicht abgebrochen werden.", "delete": "Dieser abgeschlossene Lauf konnte nicht gelöscht werden.", "score": "Der Lauf wurde vor dem Speichern der Bewertung geändert und deshalb aktualisiert.",
+				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.", "fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
+				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Knotens unterbrochen.", "judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar."
+			}
 		}
 	},
 	"components": {

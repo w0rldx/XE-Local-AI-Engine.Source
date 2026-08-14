@@ -33,6 +33,7 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"preview",
+			"benchmarks",
 			"invocations",
 			"usage",
 		]);
@@ -55,6 +56,7 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"preview",
+			"benchmarks",
 			"invocations",
 			"usage",
 		]);
