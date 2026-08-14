@@ -1287,7 +1287,6 @@
 				"title": "Dashboard",
 				"description": "Remote connection state and node health controls will be added here."
 			},
-			"eyebrow": "Worker Node",
 			"title": "Dashboard",
 			"subtitle": "Monitor the local worker connection and control startup connection behavior.",
 			"loadingStatus": "Loading connection status…",
@@ -1341,7 +1340,9 @@
 			"placeholder": {
 				"title": "Node binding",
 				"description": "Pairing and binding workflows will be ported from the current node UI."
-			}
+			},
+			"title": "Bind this node to your Central Platform account",
+			"subtitle": "Start binding here, then approve the request in the Central Platform using the displayed user code."
 		},
 		"nodeSettings": {
 			"placeholder": {
@@ -1782,7 +1783,10 @@
 						"output": "Output $/1M"
 					}
 				}
-			}
+			},
+			"title": "Node settings",
+			"subtitle": "Tune non-secret local runtime settings stored on this worker.",
+			"loading": "Loading node settings…"
 		},
 		"cloudSettings": {
 			"placeholder": {
@@ -1926,7 +1930,10 @@
 					"signInSucceeded": "Signed in with Entra ID.",
 					"signInFailed": "Entra ID sign-in failed."
 				}
-			}
+			},
+			"title": "Cloud settings",
+			"subtitle": "Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.",
+			"loading": "Loading cloud settings…"
 		},
 		"models": {
 			"placeholder": {
@@ -1964,6 +1971,13 @@
 					"imported": "Imported",
 					"huggingFace": "Hugging Face",
 					"legacy": "Legacy / unknown"
+				},
+				"delete": {
+					"title": "Delete model",
+					"description": "Delete '{{name}}' from the local model store? This cannot be undone."
+				},
+				"errors": {
+					"unexpected": "Unexpected local model error"
 				}
 			},
 			"gguf": {
@@ -2199,7 +2213,6 @@
 			}
 		},
 		"agents": {
-			"eyebrow": "Worker Node",
 			"title": "Agent definitions",
 			"subtitle": "Author local agent personas: instructions, model, reasoning effort, and the tools they may use.",
 			"createButton": "New agent",
@@ -2587,7 +2600,6 @@
 			}
 		},
 		"mcp": {
-			"eyebrow": "Worker Node",
 			"title": "MCP servers",
 			"subtitle": "Register local MCP servers to extend the node tool catalog. Servers are disabled until you enable them, and every discovered tool requires approval by default.",
 			"createButton": "Register server",
@@ -2604,7 +2616,8 @@
 					"enabled": "Enabled",
 					"version": "Version",
 					"actions": "Actions"
-				}
+				},
+				"title": "Registered servers"
 			},
 			"editor": {
 				"createTitle": "Register MCP server",
@@ -2682,7 +2695,6 @@
 			}
 		},
 		"scheduler": {
-			"eyebrow": "Worker Node",
 			"title": "Scheduler",
 			"subtitle": "Schedule recurring and one-off jobs on this node. Jobs are disabled until you enable them, and parameters are stored encrypted.",
 			"createButton": "Create job",
@@ -2839,7 +2851,6 @@
 			}
 		},
 		"modelFit": {
-			"eyebrow": "Worker Node",
 			"recommendations": {
 				"title": "Local model advisor",
 				"subtitle": "Hardware-aware local model guidance for this node. Detect hardware and pick the use case to see ranked, fit-checked model recommendations.",
@@ -3059,7 +3070,6 @@
 			}
 		},
 		"loadedModels": {
-			"eyebrow": "Worker Node",
 			"title": "Loaded models",
 			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory; if a generation is running, the app waits briefly for it to finish and may interrupt it.",
 			"loading": "Loading loaded models…",
@@ -3173,7 +3183,6 @@
 			"appointmentDeleted": "Appointment deleted successfully"
 		},
 		"images": {
-			"eyebrow": "Worker Node",
 			"title": "Image Generation",
 			"subtitle": "Generate images locally with stable-diffusion.cpp. Jobs run one at a time and stream coarse status as they progress.",
 			"jobs": {
@@ -3422,7 +3431,6 @@
 			}
 		},
 		"preview": {
-			"eyebrow": "Worker Node",
 			"title": "Open Canvas",
 			"subtitle": "Drag Start, Agent, Debug, Pause, and End blocks onto the canvas, wire them into a linear chain, and run the workflow with live per-node output.",
 			"createButton": "New workflow",
@@ -3525,7 +3533,9 @@
 				"cancel": "Could not cancel the run.",
 				"cancelAll": "Could not cancel the runs.",
 				"conflict": "This workflow changed elsewhere. Reload and reapply your edits."
-			}
+			},
+			"canvasLoading": "Loading workflow…",
+			"listLoading": "Loading workflows…"
 		},
 		"notFound": {
 			"subtitleSecret": "You have found a secret place.",
@@ -3646,7 +3656,6 @@
 			}
 		},
 		"commands": {
-			"eyebrow": "Worker Node",
 			"title": "Commands",
 			"subtitle": "Create node-wide slash commands that send a configured prompt in the current chat. Commands can only be invoked by the user.",
 			"createButton": "New command",
@@ -3695,7 +3704,6 @@
 			}
 		},
 		"skills": {
-			"eyebrow": "Worker Node",
 			"title": "Skills",
 			"subtitle": "Author a node-wide library of reusable skills. Assign skills to an agent so its model can load the relevant expertise on demand while it works.",
 			"createButton": "New skill",
@@ -3851,29 +3859,103 @@
 			"subtitle": "Compare local models against one frozen agent task, with optional independent judging.",
 			"projects": "Projects",
 			"runs": "Runs",
-			"status": { "Queued": "Queued", "Running": "Running", "CancelRequested": "Cancellation requested", "Succeeded": "Succeeded", "Failed": "Failed", "Cancelled": "Cancelled", "Disabled": "Disabled", "Pending": "Pending", "Skipped": "Skipped" },
-			"origin": { "huggingface": "Hugging Face", "imported": "Imported", "legacy": "Legacy / Unknown" },
+			"status": {
+				"Queued": "Queued",
+				"Running": "Running",
+				"CancelRequested": "Cancellation requested",
+				"Succeeded": "Succeeded",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled",
+				"Disabled": "Disabled",
+				"Pending": "Pending",
+				"Skipped": "Skipped"
+			},
+			"origin": {
+				"huggingface": "Hugging Face",
+				"imported": "Imported",
+				"legacy": "Legacy / Unknown"
+			},
 			"project": {
-				"create": "New project", "edit": "Benchmark project", "name": "Name", "task": "Core task", "context": "Requested context tokens", "agent": "Agent",
-				"judgeEnabled": "Enable automated judge", "judgeModel": "Judge model", "judgeContext": "Judge context tokens", "frozen": "Frozen",
+				"create": "New project",
+				"edit": "Benchmark project",
+				"name": "Name",
+				"task": "Core task",
+				"context": "Requested context tokens",
+				"agent": "Agent",
+				"judgeEnabled": "Enable automated judge",
+				"judgeModel": "Judge model",
+				"judgeContext": "Judge context tokens",
+				"frozen": "Frozen",
 				"frozenExplanation": "This project is frozen while runs exist. Delete its terminal runs to edit it again.",
-				"runCount": "{{count}} runs", "empty": "Create a project to freeze one task and compare models.", "select": "Select a benchmark project."
+				"runCount": "{{count}} runs",
+				"empty": "Create a project to freeze one task and compare models.",
+				"select": "Select a benchmark project."
 			},
-			"run": { "model": "Primary model", "start": "Start run", "cancel": "Cancel run", "delete": "Delete terminal run", "waiting": "Waiting for model output…", "compareSelection": "Runs to compare" },
-			"metrics": { "duration": "Duration", "tokens": "Tokens", "speed": "tok/s" },
-			"connection": { "live": "Live updates connected", "reconnecting": "Reconnecting and reconciling…", "http": "Using durable HTTP state" },
-			"score": { "label": "Operator score", "value": "Score {{score}} of 5" },
+			"run": {
+				"model": "Primary model",
+				"start": "Start run",
+				"cancel": "Cancel run",
+				"delete": "Delete terminal run",
+				"waiting": "Waiting for model output…",
+				"compareSelection": "Runs to compare"
+			},
+			"metrics": {
+				"duration": "Duration",
+				"tokens": "Tokens",
+				"speed": "tok/s"
+			},
+			"connection": {
+				"live": "Live updates connected",
+				"reconnecting": "Reconnecting and reconciling…",
+				"http": "Using durable HTTP state"
+			},
+			"score": {
+				"label": "Operator score",
+				"value": "Score {{score}} of 5"
+			},
 			"judge": {
-				"title": "Automated judge", "score": "Judge score: {{score}}", "cancel": "Cancel judge",
-				"explanations": { "Disabled": "Automated judging was not requested for this project.", "Pending": "The judge will be queued only after the primary run succeeds.", "Skipped": "Judging was requested but skipped because the primary run did not succeed.", "Queued": "The judge is waiting in the durable queue.", "Running": "The judge is evaluating the successful primary result.", "Succeeded": "The judge completed independently of the primary run.", "Failed": "The judge failed; the successful primary result remains unchanged.", "Cancelled": "The judge was cancelled." }
+				"title": "Automated judge",
+				"score": "Judge score: {{score}}",
+				"cancel": "Cancel judge",
+				"explanations": {
+					"Disabled": "Automated judging was not requested for this project.",
+					"Pending": "The judge will be queued only after the primary run succeeds.",
+					"Skipped": "Judging was requested but skipped because the primary run did not succeed.",
+					"Queued": "The judge is waiting in the durable queue.",
+					"Running": "The judge is evaluating the successful primary result.",
+					"Succeeded": "The judge completed independently of the primary run.",
+					"Failed": "The judge failed; the successful primary result remains unchanged.",
+					"Cancelled": "The judge was cancelled."
+				}
 			},
-			"validation": { "name": "Name is required.", "task": "Core task is required.", "context": "Context must be positive.", "agent": "Select an agent.", "judgeModel": "Select a judge model." },
+			"validation": {
+				"name": "Name is required.",
+				"task": "Core task is required.",
+				"context": "Context must be positive.",
+				"agent": "Select an agent.",
+				"judgeModel": "Select a judge model."
+			},
 			"errors": {
-				"projectsLoad": "Could not load benchmark projects.", "projectSave": "Could not save the project.", "runLoad": "Could not load the run.", "start": "Could not start the benchmark run.",
-				"cancel": "Could not cancel this run phase.", "delete": "Could not delete this terminal run.", "score": "The run changed before the score was saved. It has been refreshed.",
-				"contextRefused": "The model could not provide the requested context.", "fingerprintChanged": "The installed model changed after this run was frozen.",
-				"restartInterrupted": "This running phase was interrupted by a node restart.", "judgeFailed": "The automated judge failed; the primary result is still available."
+				"projectsLoad": "Could not load benchmark projects.",
+				"projectSave": "Could not save the project.",
+				"runLoad": "Could not load the run.",
+				"start": "Could not start the benchmark run.",
+				"cancel": "Could not cancel this run phase.",
+				"delete": "Could not delete this terminal run.",
+				"score": "The run changed before the score was saved. It has been refreshed.",
+				"contextRefused": "The model could not provide the requested context.",
+				"fingerprintChanged": "The installed model changed after this run was frozen.",
+				"restartInterrupted": "This running phase was interrupted by a node restart.",
+				"judgeFailed": "The automated judge failed; the primary result is still available."
+			},
+			"loading": {
+				"projects": "Loading benchmark projects…",
+				"project": "Loading benchmark project…"
 			}
+		},
+		"customTools": {
+			"title": "Custom tools",
+			"subtitle": "Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default."
 		}
 	},
 	"components": {

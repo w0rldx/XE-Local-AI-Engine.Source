@@ -1,6 +1,6 @@
-import { Badge, Loader } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { type KnowledgeDocumentStatus, knowledgeStatusDescriptor } from "@/features/knowledge/models/KnowledgeModels";
 
 interface KnowledgeStatusBadgeProps {
@@ -14,13 +14,11 @@ export function KnowledgeStatusBadge({ status }: KnowledgeStatusBadgeProps) {
 	const descriptor = knowledgeStatusDescriptor(status);
 
 	return (
-		<Badge
+		<StatusBadge
 			color={descriptor.color}
-			variant="light"
-			leftSection={descriptor.inProgress ? <Loader size={10} color={descriptor.color} /> : undefined}
+			label={t(descriptor.labelKey)}
+			inProgress={descriptor.inProgress}
 			data-testid={`knowledge-status-${status}`}
-		>
-			{t(descriptor.labelKey)}
-		</Badge>
+		/>
 	);
 }

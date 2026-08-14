@@ -2,6 +2,7 @@ import { Alert, Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
 import type { McpConnectionStatus } from "@/features/mcp/models/McpServerToolsModels";
 import { toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
@@ -75,9 +76,11 @@ export function McpServerToolsPanel({ serverId }: McpServerToolsPanelProps) {
 				) : null}
 
 				{toolsQuery.data && !toolsQuery.data.error && toolsQuery.data.tools.length === 0 ? (
-					<Text size="xs" c="dimmed" data-testid="mcp-server-tools-empty">
-						{t("pages.mcp.tools.empty", "No tools discovered. Enable the server to connect and list its tools.")}
-					</Text>
+					<EmptyState
+						size="xs"
+						message={t("pages.mcp.tools.empty", "No tools discovered. Enable the server to connect and list its tools.")}
+						data-testid="mcp-server-tools-empty"
+					/>
 				) : null}
 
 				{toolsQuery.data?.tools.map((tool) => (

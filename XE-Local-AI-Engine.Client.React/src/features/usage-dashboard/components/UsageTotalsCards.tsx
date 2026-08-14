@@ -1,6 +1,7 @@
-import { Card, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import { SimpleGrid } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { StatTile } from "@/core/ui/components/StatTile/StatTile";
 import type { UsageTotalsDto } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
@@ -17,20 +18,15 @@ interface StatCardProps {
 
 // A single stat tile: compact headline value with the exact value available on hover/aria for accessibility.
 function StatCard({ label, value, testId, formatValue = formatTokensCompact, formatExact = formatCount }: StatCardProps) {
-	const exact = formatExact(value);
 	return (
-		<Card withBorder={true} radius="md" p="lg" data-testid={testId}>
-			<Stack gap={4}>
-				<Text size="sm" c="dimmed">
-					{label}
-				</Text>
-				<Tooltip label={exact} withArrow={true}>
-					<Text size="xl" fw={700} aria-label={exact} data-testid={`${testId}-value`}>
-						{formatValue(value)}
-					</Text>
-				</Tooltip>
-			</Stack>
-		</Card>
+		<StatTile
+			variant="card"
+			label={label}
+			value={formatValue(value)}
+			exactValue={formatExact(value)}
+			data-testid={testId}
+			valueTestId={`${testId}-value`}
+		/>
 	);
 }
 

@@ -11,7 +11,6 @@ import { languageData } from "@/data/language/LanguageMenuData";
 import type { IMobileNavigationLanguageMenuProperties } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu.types";
 
 export function MobileNavigationLanguageMenu({
-	theme,
 	menuItemStyle,
 	setDrawerOpen,
 	width,
@@ -40,7 +39,6 @@ export function MobileNavigationLanguageMenu({
 	const drawerContent = (
 		<MobileNavigationDrawerPanel
 			isOpen={isDrawerOpen}
-			theme={theme}
 			width={width}
 			title={t("components.mobileNavigation.languageTitle")}
 			onClose={() => setIsDrawerOpen(false)}

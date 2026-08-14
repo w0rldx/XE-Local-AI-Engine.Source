@@ -1,10 +1,13 @@
-import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconTools, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -68,7 +71,10 @@ export function CustomToolsPage() {
 
 	const submitError =
 		createMutation.error || updateMutation.error
-			? apiErrorMessage(createMutation.error ?? updateMutation.error, t("pages.customTools.errors.save", "Could not save the custom tool."))
+			? apiErrorMessage(
+					createMutation.error ?? updateMutation.error,
+					t("pages.customTools.errors.save", "Could not save the custom tool."),
+				)
 			: undefined;
 
 	const closeAndResetEditor = useCallback(() => {
@@ -93,7 +99,10 @@ export function CustomToolsPage() {
 		if (isDirty) {
 			const confirmed = await confirm({
 				title: t("components.dialogShell.unsavedTitle", "Discard unsaved changes?"),
-				description: t("components.dialogShell.unsavedDescription", "You have unsaved changes. If you leave now, they will be lost."),
+				description: t(
+					"components.dialogShell.unsavedDescription",
+					"You have unsaved changes. If you leave now, they will be lost.",
+				),
 				confirmationText: t("common.discard", "Discard"),
 				cancellationText: t("common.keepEditing", "Keep editing"),
 			});
@@ -116,7 +125,10 @@ export function CustomToolsPage() {
 			if (confirmed) {
 				deleteMutation.mutate(
 					{ path: { customToolId: tool.id } },
-					{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.customTools.errors.delete", "Could not delete the custom tool."))) },
+					{
+						onError: (error) =>
+							toast.error(apiErrorMessage(error, t("pages.customTools.errors.delete", "Could not delete the custom tool."))),
+					},
 				);
 			}
 		},
@@ -130,55 +142,44 @@ export function CustomToolsPage() {
 	const formInitialValues = isEditing && toolQuery.data ? toFormValues(toolQuery.data) : emptyFormValues;
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("pages.customTools.eyebrow", "Worker Node")}
-						</Text>
-						<Group gap="xs" align="center">
-							<IconTools size={24} />
-							<Title order={2}>{t("pages.customTools.title", "Custom tools")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.customTools.subtitle",
-								"Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default.",
-							)}
-						</Text>
-					</Stack>
+		<PageShell>
+			<PageHeader
+				title={t("pages.customTools.title", "Custom tools")}
+				icon={<IconTools size={24} />}
+				subtitle={t(
+					"pages.customTools.subtitle",
+					"Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default.",
+				)}
+				actions={
 					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="custom-tool-create-button">
 						{t("pages.customTools.createButton", "New custom tool")}
 					</Button>
-				</Group>
+				}
+			/>
 
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />} data-testid="custom-tools-danger-banner">
-					{t(
-						"pages.customTools.dangerBanner",
-						"Custom tools run commands, call networks, and launch programs on the host machine with your access. Only enable a tool whose exact behaviour you trust — every call still asks for your approval, but the code runs here.",
-					)}
-				</Alert>
+			<Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />} data-testid="custom-tools-danger-banner">
+				{t(
+					"pages.customTools.dangerBanner",
+					"Custom tools run commands, call networks, and launch programs on the host machine with your access. Only enable a tool whose exact behaviour you trust — every call still asks for your approval, but the code runs here.",
+				)}
+			</Alert>
 
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						{toolsQuery.isLoading ? (
-							<Group gap="sm">
-								<Loader size="sm" />
-								<Text c="dimmed">{t("pages.customTools.list.loading", "Loading custom tools…")}</Text>
-							</Group>
-						) : null}
-						{toolsQuery.error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="custom-tools-list-error">
-								{apiErrorMessage(toolsQuery.error, t("pages.customTools.errors.load", "Could not load custom tools."))}
-							</Alert>
-						) : null}
-						{!toolsQuery.isLoading && !toolsQuery.error ? (
-							<CustomToolList tools={tools} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
-						) : null}
-					</Stack>
-				</Card>
-			</Stack>
+			<SectionCard>
+				{toolsQuery.isLoading ? (
+					<Group gap="sm">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.customTools.list.loading", "Loading custom tools…")}</Text>
+					</Group>
+				) : null}
+				{toolsQuery.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="custom-tools-list-error">
+						{apiErrorMessage(toolsQuery.error, t("pages.customTools.errors.load", "Could not load custom tools."))}
+					</Alert>
+				) : null}
+				{!toolsQuery.isLoading && !toolsQuery.error ? (
+					<CustomToolList tools={tools} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
+				) : null}
+			</SectionCard>
 
 			<DialogShell
 				opened={isEditorOpen}
@@ -241,6 +242,6 @@ export function CustomToolsPage() {
 					)}
 				</Stack>
 			</DialogShell>
-		</Container>
+		</PageShell>
 	);
 }

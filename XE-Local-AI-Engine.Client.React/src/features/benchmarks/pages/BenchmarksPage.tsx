@@ -3,10 +3,9 @@ import {
 	Badge,
 	Button,
 	Card,
-	Container,
+	Grid,
 	Group,
 	Loader,
-	Modal,
 	Select,
 	SimpleGrid,
 	Stack,
@@ -19,6 +18,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
@@ -128,85 +131,85 @@ export function BenchmarksPage() {
 	};
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("common.workerNode", "Worker Node")}
-						</Text>
-						<Group gap="xs">
-							<IconFlask size={24} />
-							<Title order={2}>{t("pages.benchmarks.title", "Local model benchmarks")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.benchmarks.subtitle",
-								"Compare local models against one frozen agent task, with optional independent judging.",
-							)}
-						</Text>
-					</Stack>
+		<PageShell>
+			<PageHeader
+				title={t("pages.benchmarks.title", "Local model benchmarks")}
+				icon={<IconFlask size={24} />}
+				subtitle={t(
+					"pages.benchmarks.subtitle",
+					"Compare local models against one frozen agent task, with optional independent judging.",
+				)}
+				actions={
 					<Button leftSection={<IconPlus size={16} />} onClick={() => setEditorMode("create")}>
 						{t("pages.benchmarks.project.create", "New project")}
 					</Button>
-				</Group>
+				}
+			/>
 
-				<SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg">
-					<Card withBorder={true} radius="md" padding="md">
-						<Stack gap="sm">
-							<Group justify="space-between">
-								<Title order={4}>{t("pages.benchmarks.projects", "Projects")}</Title>
-								<Button
-									variant="subtle"
-									size="xs"
-									leftSection={<IconRefresh size={14} />}
-									onClick={() => projectsQuery.refetch()}
-								>
-									{t("common.refresh", "Refresh")}
-								</Button>
+			<Grid gap="lg">
+				<Grid.Col span={{ base: 12, md: 4 }}>
+					<SectionCard
+						gap="sm"
+						title={t("pages.benchmarks.projects", "Projects")}
+						actions={
+							<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={() => projectsQuery.refetch()}>
+								{t("common.refresh", "Refresh")}
+							</Button>
+						}
+					>
+						{projectsQuery.isLoading ? (
+							<Group gap="sm">
+								<Loader size="sm" />
+								<Text c="dimmed">{t("pages.benchmarks.loading.projects", "Loading benchmark projects…")}</Text>
 							</Group>
-							{projectsQuery.isLoading ? <Loader size="sm" /> : null}
-							{projectsQuery.error ? (
-								<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-									{apiErrorMessage(
-										projectsQuery.error,
-										t("pages.benchmarks.errors.projectsLoad", "Could not load benchmark projects."),
-									)}
-								</Alert>
-							) : null}
-							{projectsQuery.data?.map((project) => (
-								<UnstyledButton
-									key={project.id}
-									onClick={() => setSelectedProjectId(project.id)}
-									aria-pressed={project.id === selectedProjectId}
+						) : null}
+						{projectsQuery.error ? (
+							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+								{apiErrorMessage(
+									projectsQuery.error,
+									t("pages.benchmarks.errors.projectsLoad", "Could not load benchmark projects."),
+								)}
+							</Alert>
+						) : null}
+						{projectsQuery.data?.map((project) => (
+							<UnstyledButton
+								key={project.id}
+								onClick={() => setSelectedProjectId(project.id)}
+								aria-pressed={project.id === selectedProjectId}
+							>
+								<Card
+									withBorder={true}
+									bg={project.id === selectedProjectId ? "var(--mantine-color-blue-light)" : undefined}
+									padding="sm"
 								>
-									<Card
-										withBorder={true}
-										bg={project.id === selectedProjectId ? "var(--mantine-color-blue-light)" : undefined}
-										padding="sm"
-									>
-										<Group justify="space-between">
-											<Text fw={700}>{project.name}</Text>
-											{project.isFrozen ? (
-												<Badge leftSection={<IconLock size={11} />}>{t("pages.benchmarks.project.frozen", "Frozen")}</Badge>
-											) : null}
-										</Group>
-										<Text size="xs" c="dimmed">
-											{t("pages.benchmarks.project.runCount", "{{count}} runs", { count: project.runCount })}
-										</Text>
-									</Card>
-								</UnstyledButton>
-							))}
-							{projectsQuery.data?.length === 0 ? (
-								<Text c="dimmed">
-									{t("pages.benchmarks.project.empty", "Create a project to freeze one task and compare models.")}
-								</Text>
-							) : null}
-						</Stack>
-					</Card>
+									<Group justify="space-between">
+										<Text fw={700}>{project.name}</Text>
+										{project.isFrozen ? (
+											<Badge leftSection={<IconLock size={11} />}>{t("pages.benchmarks.project.frozen", "Frozen")}</Badge>
+										) : null}
+									</Group>
+									<Text size="xs" c="dimmed">
+										{t("pages.benchmarks.project.runCount", "{{count}} runs", { count: project.runCount })}
+									</Text>
+								</Card>
+							</UnstyledButton>
+						))}
+						{projectsQuery.data?.length === 0 ? (
+							<Text c="dimmed">
+								{t("pages.benchmarks.project.empty", "Create a project to freeze one task and compare models.")}
+							</Text>
+						) : null}
+					</SectionCard>
+				</Grid.Col>
 
-					<Card withBorder={true} radius="md" padding="lg" style={{ gridColumn: "span 2" }}>
-						{projectQuery.isLoading ? <Loader size="sm" /> : null}
+				<Grid.Col span={{ base: 12, md: 8 }}>
+					<SectionCard>
+						{projectQuery.isLoading ? (
+							<Group gap="sm">
+								<Loader size="sm" />
+								<Text c="dimmed">{t("pages.benchmarks.loading.project", "Loading benchmark project…")}</Text>
+							</Group>
+						) : null}
 						{detail ? (
 							<Stack gap="md">
 								<Group justify="space-between" align="flex-start">
@@ -262,34 +265,33 @@ export function BenchmarksPage() {
 						) : !projectQuery.isLoading ? (
 							<Text c="dimmed">{t("pages.benchmarks.project.select", "Select a benchmark project.")}</Text>
 						) : null}
-					</Card>
-				</SimpleGrid>
+					</SectionCard>
+				</Grid.Col>
+			</Grid>
 
-				{runsQuery.data && runsQuery.data.length > 0 ? (
-					<Stack gap="md">
-						<Title order={3}>{t("pages.benchmarks.runs", "Runs")}</Title>
-						<Group gap="xs" role="group" aria-label={t("pages.benchmarks.run.compareSelection", "Runs to compare")}>
-							{runsQuery.data.map((run) => (
-								<Button
-									key={run.id}
-									size="xs"
-									variant={selectedRunIds.includes(run.id) ? "filled" : "default"}
-									onClick={() => toggleRun(run.id)}
-								>
-									{run.primaryModelName}
-								</Button>
-							))}
-						</Group>
-						<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>
-							{selectedRunIds.map((runId) => (
-								<BenchmarkRunLivePane key={runId} runId={runId} />
-							))}
-						</SimpleGrid>
-					</Stack>
-				) : null}
-			</Stack>
+			{runsQuery.data && runsQuery.data.length > 0 ? (
+				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
+					<Group gap="xs" role="group" aria-label={t("pages.benchmarks.run.compareSelection", "Runs to compare")}>
+						{runsQuery.data.map((run) => (
+							<Button
+								key={run.id}
+								size="xs"
+								variant={selectedRunIds.includes(run.id) ? "filled" : "default"}
+								onClick={() => toggleRun(run.id)}
+							>
+								{run.primaryModelName}
+							</Button>
+						))}
+					</Group>
+					<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>
+						{selectedRunIds.map((runId) => (
+							<BenchmarkRunLivePane key={runId} runId={runId} />
+						))}
+					</SimpleGrid>
+				</SectionCard>
+			) : null}
 
-			<Modal
+			<DialogShell
 				opened={editorMode !== null}
 				onClose={() => setEditorMode(null)}
 				title={
@@ -317,7 +319,7 @@ export function BenchmarksPage() {
 					onSubmit={saveProject}
 					onCancel={() => setEditorMode(null)}
 				/>
-			</Modal>
-		</Container>
+			</DialogShell>
+		</PageShell>
 	);
 }

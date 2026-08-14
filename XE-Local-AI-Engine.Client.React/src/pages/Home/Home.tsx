@@ -23,7 +23,7 @@ export function Home() {
 	const hasModels = installedCount > 0;
 
 	return (
-		<Center className="h-full w-full" p="md">
+		<Center h="100%" w="100%" p="md">
 			<Card withBorder={true} radius="lg" p="xl" maw={560} w="100%" data-testid="home-card">
 				<Stack gap="md" align="center" ta="center">
 					<Title order={1}>{t("pages.home.title.welcome")}</Title>

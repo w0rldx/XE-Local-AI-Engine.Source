@@ -1,6 +1,7 @@
-import { Loader, Stack, Text } from "@mantine/core";
+import { Loader, Stack } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
@@ -37,9 +38,10 @@ export function ImageJobList({ jobs, isLoading, cancellingJobId, onCancel }: Ima
 
 	if (jobs.length === 0) {
 		return (
-			<Text c="dimmed" data-testid="image-job-list-empty">
-				{t("pages.images.jobs.empty", "No image jobs yet. Generate one to see it here.")}
-			</Text>
+			<EmptyState
+				message={t("pages.images.jobs.empty", "No image jobs yet. Generate one to see it here.")}
+				data-testid="image-job-list-empty"
+			/>
 		);
 	}
 

@@ -1287,7 +1287,6 @@
 				"title": "Dashboard",
 				"description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
 			},
-			"eyebrow": "Worker-Node",
 			"title": "Dashboard",
 			"subtitle": "Lokale Worker-Verbindung überwachen und Verbindungsverhalten beim Start steuern.",
 			"loadingStatus": "Verbindungsstatus wird geladen…",
@@ -1341,7 +1340,9 @@
 			"placeholder": {
 				"title": "Node-Bindung",
 				"description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
-			}
+			},
+			"title": "Diesen Node mit Ihrem Central-Platform-Konto verbinden",
+			"subtitle": "Starten Sie die Bindung hier und bestätigen Sie die Anfrage anschließend in der Central Platform mit dem angezeigten Benutzercode."
 		},
 		"nodeSettings": {
 			"placeholder": {
@@ -1782,7 +1783,10 @@
 						"output": "Ausgabe $/1 Mio."
 					}
 				}
-			}
+			},
+			"title": "Node-Einstellungen",
+			"subtitle": "Nicht-geheime lokale Runtime-Einstellungen dieses Workers anpassen.",
+			"loading": "Node-Einstellungen werden geladen…"
 		},
 		"cloudSettings": {
 			"placeholder": {
@@ -1926,7 +1930,10 @@
 					"signInSucceeded": "Mit Entra ID angemeldet.",
 					"signInFailed": "Entra-ID-Anmeldung fehlgeschlagen."
 				}
-			}
+			},
+			"title": "Cloud-Einstellungen",
+			"subtitle": "Azure-OpenAI-Zugangsdaten lokal für den cloudgestützten Runtime-Modus speichern. Gespeicherte API-Schlüssel werden nie an diese Seite zurückgegeben.",
+			"loading": "Cloud-Einstellungen werden geladen…"
 		},
 		"models": {
 			"placeholder": {
@@ -1964,6 +1971,13 @@
 					"imported": "Importiert",
 					"huggingFace": "Hugging Face",
 					"legacy": "Altbestand / unbekannt"
+				},
+				"delete": {
+					"title": "Modell löschen",
+					"description": "'{{name}}' aus dem lokalen Modellspeicher löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"errors": {
+					"unexpected": "Unerwarteter Fehler beim lokalen Modell"
 				}
 			},
 			"gguf": {
@@ -2199,7 +2213,6 @@
 			}
 		},
 		"agents": {
-			"eyebrow": "Worker-Node",
 			"title": "Agent-Definitionen",
 			"subtitle": "Lokale Agent-Personas erstellen: Anweisungen, Modell, Reasoning-Aufwand und die nutzbaren Tools.",
 			"createButton": "Neuer Agent",
@@ -2587,7 +2600,6 @@
 			}
 		},
 		"mcp": {
-			"eyebrow": "Worker-Node",
 			"title": "MCP-Server",
 			"subtitle": "Lokale MCP-Server registrieren, um den Node-Tool-Katalog zu erweitern. Server sind deaktiviert, bis du sie aktivierst, und jedes erkannte Tool erfordert standardmäßig eine Freigabe.",
 			"createButton": "Server registrieren",
@@ -2604,7 +2616,8 @@
 					"enabled": "Aktiviert",
 					"version": "Version",
 					"actions": "Aktionen"
-				}
+				},
+				"title": "Registrierte Server"
 			},
 			"editor": {
 				"createTitle": "MCP-Server registrieren",
@@ -2682,7 +2695,6 @@
 			}
 		},
 		"scheduler": {
-			"eyebrow": "Worker-Node",
 			"title": "Planer",
 			"subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Aufgaben sind deaktiviert, bis du sie aktivierst, und Parameter werden verschlüsselt gespeichert.",
 			"createButton": "Aufgabe erstellen",
@@ -2839,7 +2851,6 @@
 			}
 		},
 		"modelFit": {
-			"eyebrow": "Worker Node",
 			"recommendations": {
 				"title": "Lokaler Modell-Advisor",
 				"subtitle": "Hardware-bewusste lokale Modellempfehlungen für diesen Node. Hardware erkennen und Anwendungsfall auswählen, um bewertete, auf Eignung geprüfte Modellempfehlungen zu sehen.",
@@ -3059,7 +3070,6 @@
 			}
 		},
 		"loadedModels": {
-			"eyebrow": "Worker-Node",
 			"title": "Geladene Modelle",
 			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei; läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss und unterbricht sie möglicherweise.",
 			"loading": "Geladene Modelle werden geladen…",
@@ -3173,7 +3183,6 @@
 			"appointmentDeleted": "Termin erfolgreich gelöscht"
 		},
 		"images": {
-			"eyebrow": "Worker-Knoten",
 			"title": "Bildgenerierung",
 			"subtitle": "Erzeugen Sie Bilder lokal mit stable-diffusion.cpp. Aufträge laufen einzeln und übertragen ihren groben Status während der Verarbeitung.",
 			"jobs": {
@@ -3422,7 +3431,6 @@
 			}
 		},
 		"preview": {
-			"eyebrow": "Worker-Knoten",
 			"title": "Open Canvas",
 			"subtitle": "Ziehen Sie Start-, Agent-, Debug-, Pause- und End-Blöcke auf die Arbeitsfläche, verbinden Sie sie zu einer linearen Kette und führen Sie den Workflow mit Live-Ausgabe pro Knoten aus.",
 			"createButton": "Neuer Workflow",
@@ -3525,7 +3533,9 @@
 				"cancel": "Der Lauf konnte nicht abgebrochen werden.",
 				"cancelAll": "Die Läufe konnten nicht abgebrochen werden.",
 				"conflict": "Dieser Workflow wurde an anderer Stelle geändert. Laden Sie neu und wenden Sie Ihre Änderungen erneut an."
-			}
+			},
+			"canvasLoading": "Workflow wird geladen…",
+			"listLoading": "Workflows werden geladen…"
 		},
 		"notFound": {
 			"subtitleSecret": "Du hast einen geheimen Bereich gefunden.",
@@ -3646,7 +3656,6 @@
 			}
 		},
 		"commands": {
-			"eyebrow": "Worker-Node",
 			"title": "Befehle",
 			"subtitle": "Erstellen Sie knotenweite Slash-Befehle, die im aktuellen Chat einen konfigurierten Prompt senden. Befehle können nur vom Benutzer aufgerufen werden.",
 			"createButton": "Neuer Befehl",
@@ -3695,7 +3704,6 @@
 			}
 		},
 		"skills": {
-			"eyebrow": "Worker-Node",
 			"title": "Skills",
 			"subtitle": "Erstellen Sie eine knotenweite Bibliothek wiederverwendbarer Skills. Weisen Sie einem Agenten Skills zu, damit sein Modell das passende Fachwissen bei der Arbeit bei Bedarf laden kann.",
 			"createButton": "Neuer Skill",
@@ -3849,30 +3857,105 @@
 		"benchmarks": {
 			"title": "Lokale Modell-Benchmarks",
 			"subtitle": "Lokale Modelle mit derselben eingefrorenen Agentenaufgabe und optionaler unabhängiger Bewertung vergleichen.",
-			"projects": "Projekte", "runs": "Läufe",
-			"status": { "Queued": "Wartend", "Running": "Läuft", "CancelRequested": "Abbruch angefordert", "Succeeded": "Erfolgreich", "Failed": "Fehlgeschlagen", "Cancelled": "Abgebrochen", "Disabled": "Deaktiviert", "Pending": "Ausstehend", "Skipped": "Übersprungen" },
-			"origin": { "huggingface": "Hugging Face", "imported": "Importiert", "legacy": "Altbestand / Unbekannt" },
+			"projects": "Projekte",
+			"runs": "Läufe",
+			"status": {
+				"Queued": "Wartend",
+				"Running": "Läuft",
+				"CancelRequested": "Abbruch angefordert",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen",
+				"Disabled": "Deaktiviert",
+				"Pending": "Ausstehend",
+				"Skipped": "Übersprungen"
+			},
+			"origin": {
+				"huggingface": "Hugging Face",
+				"imported": "Importiert",
+				"legacy": "Altbestand / Unbekannt"
+			},
 			"project": {
-				"create": "Neues Projekt", "edit": "Benchmark-Projekt", "name": "Name", "task": "Kernaufgabe", "context": "Angeforderte Kontext-Tokens", "agent": "Agent",
-				"judgeEnabled": "Automatische Bewertung aktivieren", "judgeModel": "Bewertungsmodell", "judgeContext": "Kontext-Tokens der Bewertung", "frozen": "Eingefroren",
+				"create": "Neues Projekt",
+				"edit": "Benchmark-Projekt",
+				"name": "Name",
+				"task": "Kernaufgabe",
+				"context": "Angeforderte Kontext-Tokens",
+				"agent": "Agent",
+				"judgeEnabled": "Automatische Bewertung aktivieren",
+				"judgeModel": "Bewertungsmodell",
+				"judgeContext": "Kontext-Tokens der Bewertung",
+				"frozen": "Eingefroren",
 				"frozenExplanation": "Dieses Projekt ist eingefroren, solange Läufe existieren. Löschen Sie die abgeschlossenen Läufe, um es wieder zu bearbeiten.",
-				"runCount": "{{count}} Läufe", "empty": "Erstellen Sie ein Projekt, um eine Aufgabe einzufrieren und Modelle zu vergleichen.", "select": "Wählen Sie ein Benchmark-Projekt."
+				"runCount": "{{count}} Läufe",
+				"empty": "Erstellen Sie ein Projekt, um eine Aufgabe einzufrieren und Modelle zu vergleichen.",
+				"select": "Wählen Sie ein Benchmark-Projekt."
 			},
-			"run": { "model": "Primärmodell", "start": "Lauf starten", "cancel": "Lauf abbrechen", "delete": "Abgeschlossenen Lauf löschen", "waiting": "Warten auf Modellausgabe…", "compareSelection": "Zu vergleichende Läufe" },
-			"metrics": { "duration": "Dauer", "tokens": "Tokens", "speed": "Tok/s" },
-			"connection": { "live": "Live-Aktualisierungen verbunden", "reconnecting": "Verbindung und Zustand werden abgeglichen…", "http": "Dauerhafter HTTP-Zustand wird verwendet" },
-			"score": { "label": "Betreiberbewertung", "value": "Bewertung {{score}} von 5" },
+			"run": {
+				"model": "Primärmodell",
+				"start": "Lauf starten",
+				"cancel": "Lauf abbrechen",
+				"delete": "Abgeschlossenen Lauf löschen",
+				"waiting": "Warten auf Modellausgabe…",
+				"compareSelection": "Zu vergleichende Läufe"
+			},
+			"metrics": {
+				"duration": "Dauer",
+				"tokens": "Tokens",
+				"speed": "Tok/s"
+			},
+			"connection": {
+				"live": "Live-Aktualisierungen verbunden",
+				"reconnecting": "Verbindung und Zustand werden abgeglichen…",
+				"http": "Dauerhafter HTTP-Zustand wird verwendet"
+			},
+			"score": {
+				"label": "Betreiberbewertung",
+				"value": "Bewertung {{score}} von 5"
+			},
 			"judge": {
-				"title": "Automatische Bewertung", "score": "Bewertung: {{score}}", "cancel": "Bewertung abbrechen",
-				"explanations": { "Disabled": "Für dieses Projekt wurde keine automatische Bewertung angefordert.", "Pending": "Die Bewertung wird erst nach einem erfolgreichen Primärlauf eingereiht.", "Skipped": "Die Bewertung war angefordert, wurde aber übersprungen, weil der Primärlauf nicht erfolgreich war.", "Queued": "Die Bewertung wartet in der dauerhaften Warteschlange.", "Running": "Das erfolgreiche Primärergebnis wird bewertet.", "Succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.", "Failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.", "Cancelled": "Die Bewertung wurde abgebrochen." }
+				"title": "Automatische Bewertung",
+				"score": "Bewertung: {{score}}",
+				"cancel": "Bewertung abbrechen",
+				"explanations": {
+					"Disabled": "Für dieses Projekt wurde keine automatische Bewertung angefordert.",
+					"Pending": "Die Bewertung wird erst nach einem erfolgreichen Primärlauf eingereiht.",
+					"Skipped": "Die Bewertung war angefordert, wurde aber übersprungen, weil der Primärlauf nicht erfolgreich war.",
+					"Queued": "Die Bewertung wartet in der dauerhaften Warteschlange.",
+					"Running": "Das erfolgreiche Primärergebnis wird bewertet.",
+					"Succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.",
+					"Failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.",
+					"Cancelled": "Die Bewertung wurde abgebrochen."
+				}
 			},
-			"validation": { "name": "Ein Name ist erforderlich.", "task": "Eine Kernaufgabe ist erforderlich.", "context": "Der Kontext muss positiv sein.", "agent": "Wählen Sie einen Agenten.", "judgeModel": "Wählen Sie ein Bewertungsmodell." },
+			"validation": {
+				"name": "Ein Name ist erforderlich.",
+				"task": "Eine Kernaufgabe ist erforderlich.",
+				"context": "Der Kontext muss positiv sein.",
+				"agent": "Wählen Sie einen Agenten.",
+				"judgeModel": "Wählen Sie ein Bewertungsmodell."
+			},
 			"errors": {
-				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.", "projectSave": "Das Projekt konnte nicht gespeichert werden.", "runLoad": "Der Lauf konnte nicht geladen werden.", "start": "Der Benchmark-Lauf konnte nicht gestartet werden.",
-				"cancel": "Diese Laufphase konnte nicht abgebrochen werden.", "delete": "Dieser abgeschlossene Lauf konnte nicht gelöscht werden.", "score": "Der Lauf wurde vor dem Speichern der Bewertung geändert und deshalb aktualisiert.",
-				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.", "fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
-				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Knotens unterbrochen.", "judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar."
+				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
+				"projectSave": "Das Projekt konnte nicht gespeichert werden.",
+				"runLoad": "Der Lauf konnte nicht geladen werden.",
+				"start": "Der Benchmark-Lauf konnte nicht gestartet werden.",
+				"cancel": "Diese Laufphase konnte nicht abgebrochen werden.",
+				"delete": "Dieser abgeschlossene Lauf konnte nicht gelöscht werden.",
+				"score": "Der Lauf wurde vor dem Speichern der Bewertung geändert und deshalb aktualisiert.",
+				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.",
+				"fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
+				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Knotens unterbrochen.",
+				"judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar."
+			},
+			"loading": {
+				"projects": "Benchmark-Projekte werden geladen…",
+				"project": "Benchmark-Projekt wird geladen…"
 			}
+		},
+		"customTools": {
+			"title": "Eigene Tools",
+			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus."
 		}
 	},
 	"components": {

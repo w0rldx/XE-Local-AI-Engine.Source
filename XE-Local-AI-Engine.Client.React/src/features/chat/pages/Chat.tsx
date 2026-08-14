@@ -1,4 +1,4 @@
-import { Alert, Anchor, Box, Button, Center, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Anchor, Button, Center, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -12,6 +12,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
@@ -311,7 +312,8 @@ export function Chat() {
 	// cloud provider — a Codex/Azure session is still a usable send path, so the guidance would be misleading there.
 	// `localModelsData !== undefined` guards the pre-load default-only modelOptions shape (before the query
 	// resolves) from being mistaken for a genuinely empty node.
-	const showNoModelGuidance = localModelsData !== undefined && hasNoLocalChatModels(modelOptions) && cloudModelOptions.length === 0;
+	const showNoModelGuidance =
+		localModelsData !== undefined && hasNoLocalChatModels(modelOptions) && cloudModelOptions.length === 0;
 	const selectedModelOption = useMemo(
 		() =>
 			modelOptions.find((option) => option.value === selectedModel) ??
@@ -444,9 +446,7 @@ export function Chat() {
 	// (llamacpp) selections that are installed ARE polled — CL-4 serves their details as a 200 carrying
 	// maxContextTokens, which the context meter needs.
 	const concreteModelInstalled = useMemo(
-		() =>
-			selectedConcreteModelName.length > 0 &&
-			modelOptions.some((option) => option.value === selectedConcreteModelName),
+		() => selectedConcreteModelName.length > 0 && modelOptions.some((option) => option.value === selectedConcreteModelName),
 		[modelOptions, selectedConcreteModelName],
 	);
 	const selectedModelDetailsEnabled = shouldFetchLocalModelDetails(
@@ -508,9 +508,7 @@ export function Chat() {
 	// re-keys the query and clears this. Drives the inline error+retry state in the message list. Without it, a
 	// permanently-failing getConversation left the loading term below true forever (spinner deadlock, no error).
 	const selectedConversationLoadFailed =
-		selectedConversationId.length > 0 &&
-		selectedConversationIsError &&
-		selectedConversationData?.id !== selectedConversationId;
+		selectedConversationId.length > 0 && selectedConversationIsError && selectedConversationData?.id !== selectedConversationId;
 	// The full payload (with messages) hasn't settled for the currently selected conversation yet: either the
 	// first load, a switch where keepPreviousData is still showing the prior thread (isPlaceholderData), or a
 	// background refetch over a cached message-less entry. isFetching is the key signal — isLoading alone is
@@ -1134,8 +1132,7 @@ export function Chat() {
 						break;
 					}
 					const currentConversation =
-						latestConversation ??
-						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversationId));
+						latestConversation ?? queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversationId));
 					if (!currentConversation) {
 						break;
 					}
@@ -1186,9 +1183,7 @@ export function Chat() {
 					// Re-bound as a const so the updater below keeps the narrowing (a `let` loses it inside a closure).
 					const resumedMessageId = attachedMessageId;
 					activeStream.current = null;
-					setStreamingMessage((current) =>
-						current?.messageId === resumedMessageId ? { ...current, isActive: false } : current,
-					);
+					setStreamingMessage((current) => (current?.messageId === resumedMessageId ? { ...current, isActive: false } : current));
 					if (!deletedConversationIds.current.has(conversationId)) {
 						await refreshConversation(conversationId);
 					}
@@ -1511,9 +1506,7 @@ export function Chat() {
 				// cloud sections, and a send attempted anyway still falls through to ChatMessage's ModelNotInstalled Alert.
 				<Stack gap={2}>
 					<Text fw={700}>{t("pages.chat.noModelGuidance.title", "No chat model installed yet")}</Text>
-					<Text size="sm">
-						{t("pages.chat.noModelGuidance.body", "Install a GGUF model to start chatting locally.")}
-					</Text>
+					<Text size="sm">{t("pages.chat.noModelGuidance.body", "Install a GGUF model to start chatting locally.")}</Text>
 					<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
 						{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
 					</Anchor>
@@ -1526,11 +1519,7 @@ export function Chat() {
 	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.
 	if (connectionReadiness !== "ready") {
 		return (
-			<Box
-				py="lg"
-				data-tour="chat-overview"
-				style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
-			>
+			<FullHeightPage data-tour="chat-overview">
 				<Center style={{ flex: 1 }}>
 					{connectionReadiness === "connecting" ? (
 						<Stack align="center" gap="sm">
@@ -1558,16 +1547,12 @@ export function Chat() {
 						</Alert>
 					)}
 				</Center>
-			</Box>
+			</FullHeightPage>
 		);
 	}
 
 	return (
-		<Box
-			py="lg"
-			data-tour="chat-overview"
-			style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
-		>
+		<FullHeightPage data-tour="chat-overview">
 			{isLoadingInitialConversations ? (
 				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
 					{t("pages.chat.loadingHistory", "Loading local chat history…")}
@@ -1656,6 +1641,6 @@ export function Chat() {
 				pendingFeedbackMessageId={pendingFeedbackMessageId}
 				onSubmitFeedback={isRemoteConversation ? undefined : handleSubmitFeedback}
 			/>
-		</Box>
+		</FullHeightPage>
 	);
 }

@@ -3,6 +3,7 @@ import { IconDeviceFloppy, IconPlus, IconTrash, IconX } from "@tabler/icons-reac
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import {
 	type McpEnvEntry,
 	type McpServerFormValues,
@@ -353,9 +354,7 @@ function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemov
 				</Button>
 			</Group>
 			{rows.length === 0 ? (
-				<Text size="xs" c="dimmed">
-					{t("pages.mcp.form.env.empty", "No environment variables.")}
-				</Text>
+				<EmptyState size="xs" message={t("pages.mcp.form.env.empty", "No environment variables.")} />
 			) : null}
 			{rows.map((row, index) => (
 				<Group key={row.id} gap="xs" align="flex-start" wrap="nowrap">

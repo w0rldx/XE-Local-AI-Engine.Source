@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Group, Switch, Table, Text } from "@mantine/core";
 import { IconPencil, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 
 interface ScheduledJobListProps {
@@ -37,9 +38,10 @@ export function ScheduledJobList({ jobs, isMutating, onEdit, onDelete, onTrigger
 
 	if (jobs.length === 0) {
 		return (
-			<Text c="dimmed" data-testid="scheduler-jobs-empty">
-				{t("pages.scheduler.list.empty", "No scheduled jobs yet. Create one to get started.")}
-			</Text>
+			<EmptyState
+				message={t("pages.scheduler.list.empty", "No scheduled jobs yet. Create one to get started.")}
+				data-testid="scheduler-jobs-empty"
+			/>
 		);
 	}
 

@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
@@ -74,9 +75,11 @@ export function AgentExecutionLogPanel({ agentDefinitionId, agentName, enabled }
 				) : null}
 
 				{!logsQuery.isLoading && !logsQuery.error && logs.length === 0 ? (
-					<Text size="sm" c="dimmed" data-testid="agent-execution-log-empty">
-						{t("pages.agents.executionLog.empty", "No runs recorded yet.")}
-					</Text>
+					<EmptyState
+						size="sm"
+						message={t("pages.agents.executionLog.empty", "No runs recorded yet.")}
+						data-testid="agent-execution-log-empty"
+					/>
 				) : null}
 
 				{!logsQuery.isLoading && !logsQuery.error && logs.length > 0 ? (

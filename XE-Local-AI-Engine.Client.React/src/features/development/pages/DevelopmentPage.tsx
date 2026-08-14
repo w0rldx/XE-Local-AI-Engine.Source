@@ -4,12 +4,10 @@ import {
 	Badge,
 	Button,
 	Code,
-	Container,
 	Divider,
 	Grid,
 	Group,
 	Loader,
-	Paper,
 	ScrollArea,
 	Select,
 	Stack,
@@ -19,8 +17,9 @@ import {
 	Title,
 } from "@mantine/core";
 import {
-	IconAlertCircle,
+	IconAlertTriangle,
 	IconCheck,
+	IconCode,
 	IconGitPullRequest,
 	IconLink,
 	IconPlayerPlay,
@@ -31,6 +30,9 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
 import {
@@ -324,405 +326,396 @@ export function DevelopmentPage() {
 
 	if (capabilityQuery.isLoading) {
 		return (
-			<Container fluid={true} py="lg">
-				<Loader aria-label={t("pages.development.loading.capability", "Loading Development capability")} />
-			</Container>
+			<PageShell>
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.development.loading.capability", "Loading Development capability")}</Text>
+				</Group>
+			</PageShell>
 		);
 	}
 
 	if (capabilityQuery.error || !developmentEnabled) {
 		return (
-			<Container fluid={true} py="lg">
-				<Alert color={capabilityQuery.error ? "red" : "yellow"} icon={<IconAlertCircle size={16} />}>
+			<PageShell>
+				<Alert color={capabilityQuery.error ? "red" : "yellow"} icon={<IconAlertTriangle size={16} />}>
 					{capabilityQuery.error
 						? apiErrorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")
 						: t("pages.development.disabled", "Development Mode is disabled by this node's runtime configuration.")}
 				</Alert>
-			</Container>
+			</PageShell>
 		);
 	}
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				{/*
-				 * Above the page body rather than replacing it. ADR 0004 makes a container runtime a hard requirement for
-				 * Development Mode execution, but execution has not moved to the container provider yet, so blocking the
-				 * page on this preflight would break the workflow that ships today. The panel says so explicitly rather
-				 * than leaving the operator to reconcile a red banner with a page that plainly works.
-				 */}
-				<DevelopmentContainerRuntimePanel
-					runtime={containerRuntime}
-					sandboxProvider={sandboxProvider}
-					onConfirm={(daemonId) => confirmContainerRuntimeMutation.mutate({ body: { daemonId } })}
-					confirming={confirmContainerRuntimeMutation.isPending}
-					confirmError={
-						confirmContainerRuntimeMutation.error
-							? apiErrorMessage(confirmContainerRuntimeMutation.error, "Could not confirm the container runtime.")
-							: undefined
-					}
-				/>
+		<PageShell>
+			{/*
+			 * Above the page body rather than replacing it. ADR 0004 makes a container runtime a hard requirement for
+			 * Development Mode execution, but execution has not moved to the container provider yet, so blocking the
+			 * page on this preflight would break the workflow that ships today. The panel says so explicitly rather
+			 * than leaving the operator to reconcile a red banner with a page that plainly works.
+			 */}
+			<DevelopmentContainerRuntimePanel
+				runtime={containerRuntime}
+				sandboxProvider={sandboxProvider}
+				onConfirm={(daemonId) => confirmContainerRuntimeMutation.mutate({ body: { daemonId } })}
+				confirming={confirmContainerRuntimeMutation.isPending}
+				confirmError={
+					confirmContainerRuntimeMutation.error
+						? apiErrorMessage(confirmContainerRuntimeMutation.error, "Could not confirm the container runtime.")
+						: undefined
+				}
+			/>
 
-				<div>
-					<Title order={1}>{t("pages.development.title", "Development Mode")}</Title>
+			<PageHeader
+				icon={<IconCode size={24} />}
+				title={t("pages.development.title", "Development Mode")}
+				subtitle={t(
+					"pages.development.subtitle",
+					"Run one durable coder → validation → independent review → explicit apply workflow outside Chat.",
+				)}
+			/>
+
+			<Accordion variant="contained" defaultValue={projects.length === 0 ? "create" : null}>
+				<Accordion.Item value="create">
+					<Accordion.Control>{t("pages.development.newProject", "New Development project")}</Accordion.Control>
+					<Accordion.Panel>
+						<DevelopmentProjectForm
+							sandboxProvider={sandboxProvider}
+							repositories={repositories}
+							repositoriesLoading={repositoriesQuery.isLoading}
+							repositoriesError={
+								repositoriesQuery.error
+									? apiErrorMessage(repositoriesQuery.error, "Could not load registered Development repositories.")
+									: undefined
+							}
+							isRegistering={registerMutation.isPending}
+							isSubmitting={createMutation.isPending}
+							error={
+								createMutation.error
+									? apiErrorMessage(
+											createMutation.error,
+											t("pages.development.errors.create", "Could not create the Development project."),
+										)
+									: undefined
+							}
+							detection={profileFolderId ? (detectionQuery.data ?? null) : null}
+							detectionLoading={detectionQuery.isFetching}
+							detectionError={
+								detectionQuery.error
+									? apiErrorMessage(
+											detectionQuery.error,
+											t("pages.development.errors.profileDetection", "Could not inspect the repository for a build system."),
+										)
+									: undefined
+							}
+							templates={templates}
+							templatesLoading={templatesQuery.isLoading}
+							onRepositoryChange={setProfileFolderId}
+							onRegister={registerRepository}
+							onCreateFromTemplate={createRepositoryFromTemplate}
+							onAddTemplate={addTemplate}
+							onRemoveTemplate={removeTemplate}
+							onSubmit={createProject}
+						/>
+					</Accordion.Panel>
+				</Accordion.Item>
+			</Accordion>
+
+			{projectsQuery.isLoading ? (
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.development.loading.projects", "Loading Development projects")}</Text>
+				</Group>
+			) : null}
+			{projectsQuery.error ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{apiErrorMessage(projectsQuery.error, "Could not load Development projects.")}
+				</Alert>
+			) : null}
+			{projects.length === 0 && !projectsQuery.isLoading ? (
+				<SectionCard gap="xs" data-testid="development-empty-state">
+					<Text fw={600}>{t("pages.development.empty.title", "No Development projects yet")}</Text>
 					<Text c="dimmed">
-						{t(
-							"pages.development.subtitle",
-							"Run one durable coder → validation → independent review → explicit apply workflow outside Chat.",
-						)}
+						{t("pages.development.empty.body", "Create the initial project and task above. This workflow never enters Chat.")}
 					</Text>
-				</div>
+				</SectionCard>
+			) : null}
 
-				<Accordion variant="contained" defaultValue={projects.length === 0 ? "create" : null}>
-					<Accordion.Item value="create">
-						<Accordion.Control>{t("pages.development.newProject", "New Development project")}</Accordion.Control>
-						<Accordion.Panel>
-							<DevelopmentProjectForm
-								sandboxProvider={sandboxProvider}
-								repositories={repositories}
-								repositoriesLoading={repositoriesQuery.isLoading}
-								repositoriesError={
-									repositoriesQuery.error
-										? apiErrorMessage(repositoriesQuery.error, "Could not load registered Development repositories.")
-										: undefined
-								}
-								isRegistering={registerMutation.isPending}
-								isSubmitting={createMutation.isPending}
-								error={
-									createMutation.error
-										? apiErrorMessage(
-												createMutation.error,
-												t("pages.development.errors.create", "Could not create the Development project."),
-											)
-										: undefined
-								}
-								detection={profileFolderId ? (detectionQuery.data ?? null) : null}
-								detectionLoading={detectionQuery.isFetching}
-								detectionError={
-									detectionQuery.error
-										? apiErrorMessage(
-												detectionQuery.error,
-												t(
-													"pages.development.errors.profileDetection",
-													"Could not inspect the repository for a build system.",
-												),
-											)
-										: undefined
-								}
-								templates={templates}
-								templatesLoading={templatesQuery.isLoading}
-								onRepositoryChange={setProfileFolderId}
-								onRegister={registerRepository}
-								onCreateFromTemplate={createRepositoryFromTemplate}
-								onAddTemplate={addTemplate}
-								onRemoveTemplate={removeTemplate}
-								onSubmit={createProject}
-							/>
-						</Accordion.Panel>
-					</Accordion.Item>
-				</Accordion>
+			{projects.length > 0 ? (
+				<Grid>
+					<Grid.Col span={{ base: 12, lg: 3 }}>
+						<SectionCard title={t("pages.development.projects", "Projects")} gap="xs">
+							{projects.map((project) => (
+								<Button
+									key={project.id}
+									variant={project.id === selectedProjectId ? "light" : "subtle"}
+									justify="space-between"
+									onClick={() => {
+										setSelectedProjectId(project.id ?? null);
+										setReconnectFolderId(null);
+										setPreviewTaskId(null);
+									}}
+									data-testid={`development-project-${project.id}`}
+								>
+									{project.objective ?? t("pages.development.untitledProject", "Untitled project")}
+								</Button>
+							))}
+						</SectionCard>
+					</Grid.Col>
 
-				{projectsQuery.isLoading ? <Loader aria-label={t("pages.development.loading.projects", "Loading Development projects")} /> : null}
-				{projectsQuery.error ? (
-					<Alert color="red" icon={<IconAlertCircle size={16} />}>
-						{apiErrorMessage(projectsQuery.error, "Could not load Development projects.")}
-					</Alert>
-				) : null}
-				{projects.length === 0 && !projectsQuery.isLoading ? (
-					<Paper withBorder={true} p="xl" data-testid="development-empty-state">
-						<Text fw={600}>{t("pages.development.empty.title", "No Development projects yet")}</Text>
-						<Text c="dimmed">
-							{t(
-								"pages.development.empty.body",
-								"Create the initial project and task above. This workflow never enters Chat.",
-							)}
-						</Text>
-					</Paper>
-				) : null}
-
-				{projects.length > 0 ? (
-					<Grid>
-						<Grid.Col span={{ base: 12, lg: 3 }}>
-							<Paper withBorder={true} p="md">
-								<Stack gap="xs">
-									<Text fw={600}>{t("pages.development.projects", "Projects")}</Text>
-									{projects.map((project) => (
-										<Button
-											key={project.id}
-											variant={project.id === selectedProjectId ? "light" : "subtle"}
-											justify="space-between"
-											onClick={() => {
-												setSelectedProjectId(project.id ?? null);
-												setReconnectFolderId(null);
-												setPreviewTaskId(null);
-											}}
-											data-testid={`development-project-${project.id}`}
-										>
-											{project.objective ?? t("pages.development.untitledProject", "Untitled project")}
-										</Button>
-									))}
-								</Stack>
-							</Paper>
-						</Grid.Col>
-
-						<Grid.Col span={{ base: 12, lg: 9 }}>
-							{projectQuery.isLoading ? <Loader aria-label={t("pages.development.loading.project", "Loading Development project")} /> : null}
-							{projectQuery.error ? (
-								<Alert color="red" icon={<IconAlertCircle size={16} />}>
-									{apiErrorMessage(projectQuery.error, "Could not load the Development project.")}
-								</Alert>
-							) : null}
-							{detail?.project && task ? (
-								<Stack gap="lg" data-testid="development-project-detail">
-									<Paper withBorder={true} p="md">
-										<Group justify="space-between" align="flex-start">
-											<div>
-												<Title order={2}>{detail.project.objective}</Title>
-												<Text c="dimmed">
-													{detail.project.baseBranch} · {detail.project.egressPolicy} ·{" "}
-													{projectRepository?.alias ?? t("pages.development.repositoryNotConnected", "Repository not connected")}
-												</Text>
-											</div>
-											<Badge color={statusColor(task.status)}>{task.status}</Badge>
-										</Group>
-										<Divider my="md" />
+					<Grid.Col span={{ base: 12, lg: 9 }}>
+						{projectQuery.isLoading ? (
+							<Group gap="sm">
+								<Loader size="sm" />
+								<Text c="dimmed">{t("pages.development.loading.project", "Loading Development project")}</Text>
+							</Group>
+						) : null}
+						{projectQuery.error ? (
+							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+								{apiErrorMessage(projectQuery.error, "Could not load the Development project.")}
+							</Alert>
+						) : null}
+						{detail?.project && task ? (
+							<Stack gap="lg" data-testid="development-project-detail">
+								<SectionCard>
+									<Group justify="space-between" align="flex-start">
+										<div>
+											<Title order={2}>{detail.project.objective}</Title>
+											<Text c="dimmed">
+												{detail.project.baseBranch} · {detail.project.egressPolicy} ·{" "}
+												{projectRepository?.alias ?? t("pages.development.repositoryNotConnected", "Repository not connected")}
+											</Text>
+										</div>
+										<Badge color={statusColor(task.status)}>{task.status}</Badge>
+									</Group>
+									<Divider />
+									<Stack gap="xs">
 										<Title order={3}>{task.title}</Title>
 										<Text>{task.requirements}</Text>
-										{repositoryConnectionRequired ? (
-											<Alert color="yellow" mt="md" icon={<IconLink size={16} />} data-testid="development-reconnect-panel">
-												<Stack gap="sm">
-													<Text>
-														{t(
-															"pages.development.reconnect.description",
-															"This existing project must be reconnected to its original registered repository before actions can run.",
-														)}
-													</Text>
-													<Group align="end">
-														<Select
-															label={t("pages.development.reconnect.repository", "Original repository")}
-															data={reconnectOptions}
-															value={reconnectFolderId}
-															onChange={setReconnectFolderId}
-															loading={repositoriesQuery.isLoading}
-															data-testid="development-reconnect-select"
-														/>
-														<Button
-															leftSection={<IconLink size={16} />}
-															onClick={reconnectRepository}
-															loading={reconnectMutation.isPending}
-															disabled={!reconnectFolderId}
-															data-testid="development-reconnect-repository"
-														>
-															{t("pages.development.reconnect.submit", "Reconnect repository")}
-														</Button>
-													</Group>
-													{reconnectMutation.error ? (
-														<Text c="red" size="sm">
-															{apiErrorMessage(reconnectMutation.error, "Could not reconnect the repository.")}
-														</Text>
-													) : null}
-												</Stack>
-											</Alert>
-										) : repositoriesQuery.isLoading ? (
-											<Loader
-										mt="md"
-										size="sm"
-										aria-label={t("pages.development.loading.repositories", "Loading registered Development repositories")}
-									/>
-										) : projectRepository?.availability !== "Available" ? (
-											<Alert color="red" mt="md" icon={<IconAlertCircle size={16} />}>
-												{t(
-													"pages.development.repositoryUnavailableDescription",
-													"The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
-												)}
-											</Alert>
-										) : null}
-										<Group mt="md" align="end">
-											{nextActionStatuses.has(task.status ?? "") ? (
-												<Button
-													leftSection={<IconPlayerPlay size={16} />}
-													onClick={startNext}
-													loading={startMutation.isPending}
-													disabled={!repositoryReady || activeAttempt !== null}
-													data-testid="development-start-next"
-												>
-													{t(nextActionKey, nextActionDefault)}
-												</Button>
-											) : null}
-											{activeAttempt ? (
-												<Button
-													color="red"
-													variant="light"
-													leftSection={<IconX size={16} />}
-													onClick={cancelActive}
-													loading={cancelMutation.isPending}
-													data-testid="development-cancel-attempt"
-												>
-													{t("pages.development.cancelAttempt", "Cancel attempt")}
-												</Button>
-											) : null}
-										</Group>
-										{startMutation.error ? (
-											<Alert color="red" mt="md">
-												{apiErrorMessage(startMutation.error, "Could not start the next action.")}
-											</Alert>
-										) : null}
-										{task.blockedReason ? (
-											<Alert color="red" mt="md">
-												{task.blockedReason}
-											</Alert>
-										) : null}
-									</Paper>
-
-									<Paper withBorder={true} p="md">
-										<DevelopmentLivePanel
-											attempt={activeAttempt ?? latestAttempt}
-											live={live}
-											artifacts={artifacts}
-											events={events}
-										/>
-									</Paper>
-
-									<Paper withBorder={true} p="md">
-										<Title order={3} mb="md">
-											{t("pages.development.attempts.title", "Attempts")}
-										</Title>
-										<Table.ScrollContainer minWidth={700}>
-											<Table striped={true} highlightOnHover={true}>
-												<Table.Thead>
-													<Table.Tr>
-														<Table.Th>{t("pages.development.attempts.role", "Role")}</Table.Th>
-														<Table.Th>{t("pages.development.attempts.model", "Model")}</Table.Th>
-														<Table.Th>{t("pages.development.attempts.provider", "Provider")}</Table.Th>
-														<Table.Th>{t("pages.development.attempts.status", "Status")}</Table.Th>
-														<Table.Th>{t("pages.development.attempts.tokens", "Tokens")}</Table.Th>
-														<Table.Th>{t("pages.development.attempts.predecessor", "Predecessor")}</Table.Th>
-													</Table.Tr>
-												</Table.Thead>
-												<Table.Tbody>
-													{attempts.map((attempt) => (
-														<Fragment key={attempt.id}>
-															<Table.Tr data-testid={`development-attempt-${attempt.id}`}>
-																<Table.Td>{attempt.role}</Table.Td>
-																<Table.Td>{attempt.modelId}</Table.Td>
-																<Table.Td>{attempt.provider}</Table.Td>
-																<Table.Td>
-																	<Badge color={statusColor(attempt.status)}>{attempt.status}</Badge>
-																</Table.Td>
-																<Table.Td>{(attempt.inputTokens ?? 0) + (attempt.outputTokens ?? 0)}</Table.Td>
-																<Table.Td>{attempt.predecessorAttemptId?.slice(0, 8) ?? "—"}</Table.Td>
-															</Table.Tr>
-															{/*
-																The reason an attempt ended, on its own full-width row rather than in a
-																column: it is a sentence, and squeezing it into a cell is what keeps it
-																unread. Rendered at all because it previously was not rendered ANYWHERE —
-																the operator saw a red FAILED badge and nothing else, while the engine had
-																already diagnosed the cause and persisted it.
-															*/}
-															{attempt.terminalReason ? (
-																<Table.Tr data-testid={`development-attempt-reason-${attempt.id}`}>
-																	<Table.Td colSpan={6} py="xs">
-																		<AttemptTerminalReason
-																			reason={attempt.terminalReason}
-																			color={statusColor(attempt.status)}
-																		/>
-																	</Table.Td>
-																</Table.Tr>
-															) : null}
-														</Fragment>
-													))}
-												</Table.Tbody>
-											</Table>
-										</Table.ScrollContainer>
-									</Paper>
-
-									{task.status === "AwaitingApply" ? (
-										<Paper withBorder={true} p="md" data-testid="development-apply-panel">
-											<Group justify="space-between" mb="md">
-												<Title order={3}>{t("pages.development.apply.title", "Human-controlled patch apply")}</Title>
-												<Badge color="green">{t("pages.development.apply.awaiting", "Awaiting explicit approval")}</Badge>
-											</Group>
-											<Group>
-												<Button
-													leftSection={<IconGitPullRequest size={16} />}
-													onClick={preview}
-													loading={previewMutation.isPending}
-													disabled={!repositoryReady}
-													data-testid="development-preview-patch"
-												>
-													{t("pages.development.apply.preview", "Preview current patch")}
-												</Button>
-												<Button
-													color="green"
-													leftSection={<IconCheck size={16} />}
-													onClick={apply}
-													loading={applyMutation.isPending}
-													disabled={!repositoryReady || !previewMutation.data || previewTaskId !== task.id}
-													data-testid="development-apply-patch"
-												>
-													{t("pages.development.apply.apply", "Apply verified patch")}
-												</Button>
-											</Group>
-											{previewMutation.data && previewTaskId === task.id ? (
-												<Stack mt="md">
-													<Text size="sm">
-														{t("pages.development.apply.subject", "Subject")} <Code>{previewMutation.data.subjectHash}</Code>{" "}
-														· {t("pages.development.apply.patch", "patch")}{" "}
-														<Code>{previewMutation.data.patchHash}</Code> ·{" "}
-														{t("pages.development.apply.manifest", "manifest")}{" "}
-														<Code>{previewMutation.data.manifestHash}</Code>
-													</Text>
-													<Textarea
-														value={previewMutation.data.patch ?? ""}
-														readOnly={true}
-														autosize={true}
-														minRows={8}
-														maxRows={24}
-														aria-label={t("pages.development.apply.previewLabel", "Verified patch preview")}
+									</Stack>
+									{repositoryConnectionRequired ? (
+										<Alert color="yellow" icon={<IconLink size={16} />} data-testid="development-reconnect-panel">
+											<Stack gap="sm">
+												<Text>
+													{t(
+														"pages.development.reconnect.description",
+														"This existing project must be reconnected to its original registered repository before actions can run.",
+													)}
+												</Text>
+												<Group align="end">
+													<Select
+														label={t("pages.development.reconnect.repository", "Original repository")}
+														data={reconnectOptions}
+														value={reconnectFolderId}
+														onChange={setReconnectFolderId}
+														loading={repositoriesQuery.isLoading}
+														data-testid="development-reconnect-select"
 													/>
-												</Stack>
-											) : null}
-											{applyMutation.data ? (
-												<Alert color="green" mt="md">
-													{applyMutation.data.outcome ?? t("pages.development.apply.applied", "Patch applied.")}
-												</Alert>
-											) : null}
-										</Paper>
+													<Button
+														leftSection={<IconLink size={16} />}
+														onClick={reconnectRepository}
+														loading={reconnectMutation.isPending}
+														disabled={!reconnectFolderId}
+														data-testid="development-reconnect-repository"
+													>
+														{t("pages.development.reconnect.submit", "Reconnect repository")}
+													</Button>
+												</Group>
+												{reconnectMutation.error ? (
+													<Text c="red" size="sm">
+														{apiErrorMessage(reconnectMutation.error, "Could not reconnect the repository.")}
+													</Text>
+												) : null}
+											</Stack>
+										</Alert>
+									) : repositoriesQuery.isLoading ? (
+										<Group gap="sm">
+											<Loader size="sm" />
+											<Text c="dimmed">
+												{t("pages.development.loading.repositories", "Loading registered Development repositories")}
+											</Text>
+										</Group>
+									) : projectRepository?.availability !== "Available" ? (
+										<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+											{t(
+												"pages.development.repositoryUnavailableDescription",
+												"The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
+											)}
+										</Alert>
 									) : null}
-
-									<Paper withBorder={true} p="md">
-										<Group justify="space-between" mb="md">
-											<Title order={3}>{t("pages.development.timeline.title", "Durable event timeline")}</Title>
+									<Group align="end">
+										{nextActionStatuses.has(task.status ?? "") ? (
 											<Button
-												variant="subtle"
-												size="xs"
-												leftSection={<IconRefresh size={14} />}
-												onClick={() => projectQuery.refetch()}
+												leftSection={<IconPlayerPlay size={16} />}
+												onClick={startNext}
+												loading={startMutation.isPending}
+												disabled={!repositoryReady || activeAttempt !== null}
+												data-testid="development-start-next"
 											>
-												{t("common.refresh", "Refresh")}
+												{t(nextActionKey, nextActionDefault)}
+											</Button>
+										) : null}
+										{activeAttempt ? (
+											<Button
+												color="red"
+												variant="light"
+												leftSection={<IconX size={16} />}
+												onClick={cancelActive}
+												loading={cancelMutation.isPending}
+												data-testid="development-cancel-attempt"
+											>
+												{t("pages.development.cancelAttempt", "Cancel attempt")}
+											</Button>
+										) : null}
+									</Group>
+									{startMutation.error ? (
+										<Alert color="red">{apiErrorMessage(startMutation.error, "Could not start the next action.")}</Alert>
+									) : null}
+									{task.blockedReason ? <Alert color="red">{task.blockedReason}</Alert> : null}
+								</SectionCard>
+
+								<SectionCard>
+									<DevelopmentLivePanel
+										attempt={activeAttempt ?? latestAttempt}
+										live={live}
+										artifacts={artifacts}
+										events={events}
+									/>
+								</SectionCard>
+
+								<SectionCard title={t("pages.development.attempts.title", "Attempts")}>
+									<Table.ScrollContainer minWidth={700}>
+										<Table striped={true} highlightOnHover={true}>
+											<Table.Thead>
+												<Table.Tr>
+													<Table.Th>{t("pages.development.attempts.role", "Role")}</Table.Th>
+													<Table.Th>{t("pages.development.attempts.model", "Model")}</Table.Th>
+													<Table.Th>{t("pages.development.attempts.provider", "Provider")}</Table.Th>
+													<Table.Th>{t("pages.development.attempts.status", "Status")}</Table.Th>
+													<Table.Th>{t("pages.development.attempts.tokens", "Tokens")}</Table.Th>
+													<Table.Th>{t("pages.development.attempts.predecessor", "Predecessor")}</Table.Th>
+												</Table.Tr>
+											</Table.Thead>
+											<Table.Tbody>
+												{attempts.map((attempt) => (
+													<Fragment key={attempt.id}>
+														<Table.Tr data-testid={`development-attempt-${attempt.id}`}>
+															<Table.Td>{attempt.role}</Table.Td>
+															<Table.Td>{attempt.modelId}</Table.Td>
+															<Table.Td>{attempt.provider}</Table.Td>
+															<Table.Td>
+																<Badge color={statusColor(attempt.status)}>{attempt.status}</Badge>
+															</Table.Td>
+															<Table.Td>{(attempt.inputTokens ?? 0) + (attempt.outputTokens ?? 0)}</Table.Td>
+															<Table.Td>{attempt.predecessorAttemptId?.slice(0, 8) ?? "—"}</Table.Td>
+														</Table.Tr>
+														{/*
+															The reason an attempt ended, on its own full-width row rather than in a
+															column: it is a sentence, and squeezing it into a cell is what keeps it
+															unread. Rendered at all because it previously was not rendered ANYWHERE —
+															the operator saw a red FAILED badge and nothing else, while the engine had
+															already diagnosed the cause and persisted it.
+														*/}
+														{attempt.terminalReason ? (
+															<Table.Tr data-testid={`development-attempt-reason-${attempt.id}`}>
+																<Table.Td colSpan={6} py="xs">
+																	<AttemptTerminalReason reason={attempt.terminalReason} color={statusColor(attempt.status)} />
+																</Table.Td>
+															</Table.Tr>
+														) : null}
+													</Fragment>
+												))}
+											</Table.Tbody>
+										</Table>
+									</Table.ScrollContainer>
+								</SectionCard>
+
+								{task.status === "AwaitingApply" ? (
+									<SectionCard
+										title={t("pages.development.apply.title", "Human-controlled patch apply")}
+										actions={<Badge color="green">{t("pages.development.apply.awaiting", "Awaiting explicit approval")}</Badge>}
+										data-testid="development-apply-panel"
+									>
+										<Group>
+											<Button
+												leftSection={<IconGitPullRequest size={16} />}
+												onClick={preview}
+												loading={previewMutation.isPending}
+												disabled={!repositoryReady}
+												data-testid="development-preview-patch"
+											>
+												{t("pages.development.apply.preview", "Preview current patch")}
+											</Button>
+											<Button
+												color="green"
+												leftSection={<IconCheck size={16} />}
+												onClick={apply}
+												loading={applyMutation.isPending}
+												disabled={!repositoryReady || !previewMutation.data || previewTaskId !== task.id}
+												data-testid="development-apply-patch"
+											>
+												{t("pages.development.apply.apply", "Apply verified patch")}
 											</Button>
 										</Group>
-										<ScrollArea h={260}>
-											<Stack gap="xs">
-												{events.map((event) => (
-													<Group key={event.id} justify="space-between" wrap="nowrap">
-														<Text size="sm">
-															<Code>#{event.sequence}</Code> {event.eventType}
-														</Text>
-														<Text size="xs" c="dimmed">
-															{event.outcome ?? event.operationPhase ?? ""}
-														</Text>
-													</Group>
-												))}
+										{previewMutation.data && previewTaskId === task.id ? (
+											<Stack>
+												<Text size="sm">
+													{t("pages.development.apply.subject", "Subject")} <Code>{previewMutation.data.subjectHash}</Code> ·{" "}
+													{t("pages.development.apply.patch", "patch")} <Code>{previewMutation.data.patchHash}</Code> ·{" "}
+													{t("pages.development.apply.manifest", "manifest")} <Code>{previewMutation.data.manifestHash}</Code>
+												</Text>
+												<Textarea
+													value={previewMutation.data.patch ?? ""}
+													readOnly={true}
+													autosize={true}
+													minRows={8}
+													maxRows={24}
+													aria-label={t("pages.development.apply.previewLabel", "Verified patch preview")}
+												/>
 											</Stack>
-										</ScrollArea>
-									</Paper>
-								</Stack>
-							) : null}
-						</Grid.Col>
-					</Grid>
-				) : null}
-			</Stack>
-		</Container>
+										) : null}
+										{applyMutation.data ? (
+											<Alert color="green">
+												{applyMutation.data.outcome ?? t("pages.development.apply.applied", "Patch applied.")}
+											</Alert>
+										) : null}
+									</SectionCard>
+								) : null}
+
+								<SectionCard
+									title={t("pages.development.timeline.title", "Durable event timeline")}
+									actions={
+										<Button
+											variant="subtle"
+											size="xs"
+											leftSection={<IconRefresh size={14} />}
+											onClick={() => projectQuery.refetch()}
+										>
+											{t("common.refresh", "Refresh")}
+										</Button>
+									}
+								>
+									<ScrollArea h={260}>
+										<Stack gap="xs">
+											{events.map((event) => (
+												<Group key={event.id} justify="space-between" wrap="nowrap">
+													<Text size="sm">
+														<Code>#{event.sequence}</Code> {event.eventType}
+													</Text>
+													<Text size="xs" c="dimmed">
+														{event.outcome ?? event.operationPhase ?? ""}
+													</Text>
+												</Group>
+											))}
+										</Stack>
+									</ScrollArea>
+								</SectionCard>
+							</Stack>
+						) : null}
+					</Grid.Col>
+				</Grid>
+			) : null}
+		</PageShell>
 	);
 }

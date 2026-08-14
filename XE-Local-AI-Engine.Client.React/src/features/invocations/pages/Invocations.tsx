@@ -3,8 +3,6 @@ import {
 	Alert,
 	Badge,
 	Button,
-	Card,
-	Container,
 	CopyButton,
 	Group,
 	Loader,
@@ -24,6 +22,10 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toInvocationMonitor } from "@/features/invocations/models/InvocationMonitorMappers";
 import type { InvocationCurrentDto, InvocationHistoryDto } from "@/features/invocations/models/InvocationMonitorModel";
 import {
@@ -88,90 +90,84 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 	const { t } = useTranslation();
 	if (!current) {
 		return (
-			<Card withBorder={true} radius="md" p="lg">
-				<Stack gap="sm">
-					<Group justify="space-between">
-						<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
-						<IconPlayerPlay size={22} />
-					</Group>
-					<Text c="dimmed">
-						{t("pages.invocations.monitor.current.empty", "No invocation is currently assigned or running.")}
-					</Text>
-				</Stack>
-			</Card>
+			<SectionCard
+				title={t("pages.invocations.monitor.current.title", "Current invocation")}
+				icon={<IconPlayerPlay size={22} />}
+				gap="sm"
+			>
+				<EmptyState message={t("pages.invocations.monitor.current.empty", "No invocation is currently assigned or running.")} />
+			</SectionCard>
 		);
 	}
 
 	return (
-		<Card withBorder={true} radius="md" p="lg">
-			<Stack gap="md">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
-						<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
-							{current.invocationId}
-						</Text>
-						<TraceIdLine traceId={current.traceId} />
-					</Stack>
-					<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
-				</Group>
-				<Text fw={500} data-testid="invocation-summary">
-					{buildInvocationSummary(current, t)}
+		<SectionCard>
+			<Group justify="space-between" align="flex-start">
+				<Stack gap={4}>
+					<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
+					<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
+						{current.invocationId}
+					</Text>
+					<TraceIdLine traceId={current.traceId} />
+				</Stack>
+				<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
+			</Group>
+			<Text fw={500} data-testid="invocation-summary">
+				{buildInvocationSummary(current, t)}
+			</Text>
+			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+				<Text>
+					{t("pages.invocations.monitor.current.model", "Model: {{value}}", { value: formatInvocationText(current.modelUsed) })}
 				</Text>
-				<SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-					<Text>
-						{t("pages.invocations.monitor.current.model", "Model: {{value}}", { value: formatInvocationText(current.modelUsed) })}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.conversation", "Conversation: {{value}}", { value: current.conversationId })}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.started", "Started: {{value}}", {
-							value: formatInvocationTimestamp(current.startedAt),
-						})}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.updated", "Updated: {{value}}", {
-							value: formatInvocationTimestamp(current.lastUpdatedAt),
-						})}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.outputChunks", "Output chunks: {{value}}", {
-							value: current.streamedChunkCount,
-						})}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.thinkingChunks", "Thinking chunks: {{value}}", {
-							value: current.streamedThinkingChunkCount,
-						})}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.pendingToolCalls", "Pending tool calls: {{value}}", {
-							value: current.pendingToolCallCount,
-						})}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.pendingApproval", "Pending approval: {{value}}", {
-							value: current.hasPendingApproval
-								? t("pages.invocations.monitor.current.yes", "Yes")
-								: t("pages.invocations.monitor.current.no", "No"),
-						})}
-					</Text>
-					<Text>
-						{t("pages.invocations.monitor.current.pendingQuestion", "Pending question: {{value}}", {
-							value: current.hasPendingQuestion
-								? t("pages.invocations.monitor.current.yes", "Yes")
-								: t("pages.invocations.monitor.current.no", "No"),
-						})}
-					</Text>
-				</SimpleGrid>
-				{current.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{current.error}
-					</Alert>
-				) : null}
-			</Stack>
-		</Card>
+				<Text>
+					{t("pages.invocations.monitor.current.conversation", "Conversation: {{value}}", { value: current.conversationId })}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.started", "Started: {{value}}", {
+						value: formatInvocationTimestamp(current.startedAt),
+					})}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.updated", "Updated: {{value}}", {
+						value: formatInvocationTimestamp(current.lastUpdatedAt),
+					})}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.outputChunks", "Output chunks: {{value}}", {
+						value: current.streamedChunkCount,
+					})}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.thinkingChunks", "Thinking chunks: {{value}}", {
+						value: current.streamedThinkingChunkCount,
+					})}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.pendingToolCalls", "Pending tool calls: {{value}}", {
+						value: current.pendingToolCallCount,
+					})}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.pendingApproval", "Pending approval: {{value}}", {
+						value: current.hasPendingApproval
+							? t("pages.invocations.monitor.current.yes", "Yes")
+							: t("pages.invocations.monitor.current.no", "No"),
+					})}
+				</Text>
+				<Text>
+					{t("pages.invocations.monitor.current.pendingQuestion", "Pending question: {{value}}", {
+						value: current.hasPendingQuestion
+							? t("pages.invocations.monitor.current.yes", "Yes")
+							: t("pages.invocations.monitor.current.no", "No"),
+					})}
+				</Text>
+			</SimpleGrid>
+			{current.error ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{current.error}
+				</Alert>
+			) : null}
+		</SectionCard>
 	);
 }
 
@@ -181,7 +177,7 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 		return (
 			<Table.Tr>
 				<Table.Td colSpan={8}>
-					<Text c="dimmed">{t("pages.invocations.monitor.history.empty", "No completed invocations recorded yet.")}</Text>
+					<EmptyState message={t("pages.invocations.monitor.history.empty", "No completed invocations recorded yet.")} />
 				</Table.Td>
 			</Table.Tr>
 		);
@@ -225,22 +221,16 @@ export function Invocations() {
 	const active = isInvocationActive(monitor?.current?.status);
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("common.workerNode", "Worker Node")}
-						</Text>
-						<Title order={2}>{t("pages.invocations.monitor.title", "Invocation monitor")}</Title>
-						<Text c="dimmed">
-							{t(
-								"pages.invocations.monitor.subtitle",
-								"Inspect the active invocation and the local in-memory history retained by the worker.",
-							)}
-						</Text>
-					</Stack>
-					<Group gap="sm">
+		<PageShell>
+			<PageHeader
+				icon={<IconPlayerPlay size={24} />}
+				title={t("pages.invocations.monitor.title", "Invocation monitor")}
+				subtitle={t(
+					"pages.invocations.monitor.subtitle",
+					"Inspect the active invocation and the local in-memory history retained by the worker.",
+				)}
+				actions={
+					<>
 						<Badge color={active ? "blue" : "gray"}>
 							{active ? t("pages.invocations.monitor.active", "Active") : t("pages.invocations.monitor.idle", "Idle")}
 						</Badge>
@@ -252,59 +242,55 @@ export function Invocations() {
 						>
 							{t("common.refresh", "Refresh")}
 						</Button>
-					</Group>
+					</>
+				}
+			/>
+
+			{monitorIsLoading ? (
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.invocations.monitor.loading", "Loading invocation monitor…")}</Text>
 				</Group>
+			) : null}
 
-				{monitorIsLoading ? (
-					<Group gap="sm">
-						<Loader size="sm" />
-						<Text c="dimmed">{t("pages.invocations.monitor.loading", "Loading invocation monitor…")}</Text>
-					</Group>
-				) : null}
+			{monitorError ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{errorMessage(monitorError, t)}
+				</Alert>
+			) : null}
 
-				{monitorError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(monitorError, t)}
-					</Alert>
-				) : null}
+			<CurrentInvocation current={monitor?.current ?? null} />
 
-				<CurrentInvocation current={monitor?.current ?? null} />
-
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						<Group justify="space-between">
-							<Stack gap={2}>
-								<Title order={3}>{t("pages.invocations.monitor.history.title", "Invocation history")}</Title>
-								<Text size="sm" c="dimmed">
-									{t("pages.invocations.monitor.history.subtitle", "Showing up to {{count}} most recent terminal invocations.", {
-										count: monitor?.historyCapacity ?? 0,
-									})}
-								</Text>
-							</Stack>
-							<IconHistory size={22} />
-						</Group>
-						<Table.ScrollContainer minWidth={980}>
-							<Table striped={true} highlightOnHover={true} verticalSpacing="sm">
-								<Table.Thead>
-									<Table.Tr>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.invocation", "Invocation")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.status", "Status")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.model", "Model")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.completed", "Completed")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.duration", "Duration")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.chunks", "Chunks")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.thinking", "Thinking")}</Table.Th>
-										<Table.Th>{t("pages.invocations.monitor.history.columns.result", "Result")}</Table.Th>
-									</Table.Tr>
-								</Table.Thead>
-								<Table.Tbody>
-									<HistoryRows history={history} />
-								</Table.Tbody>
-							</Table>
-						</Table.ScrollContainer>
-					</Stack>
-				</Card>
-			</Stack>
-		</Container>
+			<SectionCard
+				title={t("pages.invocations.monitor.history.title", "Invocation history")}
+				icon={<IconHistory size={22} />}
+				gap="sm"
+			>
+				<Text size="sm" c="dimmed">
+					{t("pages.invocations.monitor.history.subtitle", "Showing up to {{count}} most recent terminal invocations.", {
+						count: monitor?.historyCapacity ?? 0,
+					})}
+				</Text>
+				<Table.ScrollContainer minWidth={980}>
+					<Table striped={true} highlightOnHover={true} verticalSpacing="sm">
+						<Table.Thead>
+							<Table.Tr>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.invocation", "Invocation")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.status", "Status")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.model", "Model")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.completed", "Completed")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.duration", "Duration")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.chunks", "Chunks")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.thinking", "Thinking")}</Table.Th>
+								<Table.Th>{t("pages.invocations.monitor.history.columns.result", "Result")}</Table.Th>
+							</Table.Tr>
+						</Table.Thead>
+						<Table.Tbody>
+							<HistoryRows history={history} />
+						</Table.Tbody>
+					</Table>
+				</Table.ScrollContainer>
+			</SectionCard>
+		</PageShell>
 	);
 }
