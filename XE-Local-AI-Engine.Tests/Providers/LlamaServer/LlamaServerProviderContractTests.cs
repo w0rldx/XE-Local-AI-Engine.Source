@@ -39,7 +39,7 @@ public sealed class LlamaServerProviderContractTests
                 ProviderName = "ollama"
             }));
 
-        AssertEx.Contains(ex!.Message, "does not match", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Contains(ex.Message, "does not match", StringComparison.OrdinalIgnoreCase);
     }
 
     [Test]

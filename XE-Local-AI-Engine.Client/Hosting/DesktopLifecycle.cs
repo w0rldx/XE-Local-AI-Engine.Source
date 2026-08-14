@@ -168,7 +168,7 @@ internal sealed class DesktopLifecycle : IDisposable
 
             using var stopped = new ManualResetEventSlim(initialState: false, spinCount: 0);
             using var registration = _lifetime.ApplicationStopped.Register(stopped.Set);
-            stopped.Wait(ConsoleCloseDrainBudget);
+            stopped.Wait(ConsoleCloseDrainBudget, CancellationToken.None);
         }
         catch (Exception exception)
         {

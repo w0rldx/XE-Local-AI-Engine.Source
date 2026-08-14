@@ -267,7 +267,7 @@ public sealed class MemoryFitEstimatorTests
         AssertEx.Equal(expectedGpuBytes, estimate.GpuBytes);
         AssertEx.Equal(expectedCpuBytes, estimate.CpuBytes);
         AssertEx.Equal(expectedGpuBytes + expectedCpuBytes, estimate.EstimatedBytes);
-        AssertEx.Equal(profile.VramBytes!.Value - expectedGpuBytes, estimate.HeadroomBytes);
+        AssertEx.Equal(profile.VramBytes.Value - expectedGpuBytes, estimate.HeadroomBytes);
         AssertEx.Equal(FitMode.Gpu, estimate.Mode);
     }
 

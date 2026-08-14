@@ -184,7 +184,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             _drainTasks[runId] = drainTask;
             _ = drainTask.ContinueWith((t, state) =>
                 {
-                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))state!;
+                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))(state ?? throw new ArgumentNullException(nameof(state)));
                     svc._drainTasks.TryRemove(id, out _);
                     if (t.IsFaulted)
                     {
@@ -270,7 +270,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             _drainTasks[runId] = drainTask;
             _ = drainTask.ContinueWith((t, state) =>
                 {
-                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))state!;
+                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))(state ?? throw new ArgumentNullException(nameof(state)));
                     svc._drainTasks.TryRemove(id, out _);
                     if (t.IsFaulted)
                     {

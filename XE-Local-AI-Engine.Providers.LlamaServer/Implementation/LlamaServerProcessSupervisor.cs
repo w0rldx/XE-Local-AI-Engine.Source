@@ -170,7 +170,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
 
-        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
+        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }
 
     /// <inheritdoc />
@@ -579,7 +579,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 inflight.Completion.SetResult(running!);
             }
-        });
+        }, _shutdownCts.Token);
     }
 
     /// <summary>

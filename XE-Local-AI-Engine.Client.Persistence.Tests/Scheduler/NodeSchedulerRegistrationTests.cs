@@ -89,7 +89,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
 
         // GetScheduler triggers the Quartz ADO store to connect and validate the QRTZ_ schema.
         // PerformSchemaValidation=true means any missing table surfaces here as an exception.
-        var scheduler = await factory!.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await (factory ?? throw new InvalidOperationException("factory must not be null.")).GetScheduler(CancellationToken.None).ConfigureAwait(false);
         AssertEx.NotNull(scheduler, "IScheduler must be obtainable from the factory.");
 
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);

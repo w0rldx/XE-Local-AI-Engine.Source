@@ -747,7 +747,7 @@ namespace XE_Local_AI_Engine.Client
             ArgumentNullException.ThrowIfNull(context);
 
             context.Response.ContentType = "application/json";
-            return context.Response.WriteAsJsonAsync(BuildPayload(report));
+            return context.Response.WriteAsJsonAsync(BuildPayload(report), CancellationToken.None);
         }
     }
 }

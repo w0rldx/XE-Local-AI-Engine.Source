@@ -139,7 +139,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             return BuildResult(request, scripted, completed: true, startedAt);
         }
 
-        using var registration = cancellationToken.Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(),
+        using var registration = cancellationToken.Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
             inFlight);
 
         bool completedNormally;

@@ -106,7 +106,7 @@ internal sealed class HfHubClient
                 continue;
             }
 
-            summaries.Add(new HubModelSummary(repoId!,
+            summaries.Add(new HubModelSummary(repoId,
                 ParseGated(element),
                 GetInt64(element, "downloads") ?? 0L,
                 (int)(GetInt64(element, "likes") ?? 0L),
@@ -172,7 +172,7 @@ internal sealed class HfHubClient
                 }
 
                 var size = lfsSize ?? GetInt64(sibling, "size") ?? 0L;
-                files.Add(new HubRepoFile(fileName!, size, sha256));
+                files.Add(new HubRepoFile(fileName, size, sha256));
             }
         }
 
@@ -280,7 +280,7 @@ internal sealed class HfHubClient
             var name = GetString(sibling, "rfilename");
             if (!string.IsNullOrWhiteSpace(name))
             {
-                names.Add(name!);
+                names.Add(name);
             }
         }
 
