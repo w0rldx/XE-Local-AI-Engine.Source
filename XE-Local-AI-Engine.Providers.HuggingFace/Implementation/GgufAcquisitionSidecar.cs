@@ -21,8 +21,12 @@ internal static class GgufAcquisitionSidecar
             FileOptions.Asynchronous | FileOptions.SequentialScan);
         await JsonSerializer.SerializeAsync(stream, metadata, SerializerOptions, cancellationToken).ConfigureAwait(false);
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-        stream.Flush(flushToDisk: true);
+        FlushToDisk(stream);
     }
+
+    // FlushAsync drains managed buffers but exposes no flush-to-disk overload. This short synchronous durability
+    // boundary runs only after the async flush and before the sidecar is eligible for an atomic commit rename.
+    private static void FlushToDisk(FileStream stream) => stream.Flush(flushToDisk: true);
 
     public static async Task<GgufAcquisitionMetadata?> ReadValidAsync(string sidecarPath,
         string weightPath,

@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 internal sealed class GgufModelImporter(
-    GgufImportInspector inspector,
     GgufModelRegistry registry,
     IFreeSpaceProbe freeSpaceProbe,
     HuggingFaceOptions options,
@@ -23,7 +22,7 @@ internal sealed class GgufModelImporter(
         ValidateDestination(destination);
 
         await using var openedSource = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
-        var inspection = await inspector.InspectOpenedAsync(openedSource, cancellationToken).ConfigureAwait(false);
+        var inspection = await GgufImportInspector.InspectOpenedAsync(openedSource, cancellationToken).ConfigureAwait(false);
         if (!IsUsableInspection(inspection, destination.CanonicalQuant))
         {
             var reason = inspection.Rejections.Count > 0
@@ -90,11 +89,12 @@ internal sealed class GgufModelImporter(
                 MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
                 ModelContentFingerprint = modelFingerprint
             };
-            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory) };
+            var registryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
+            entry = entry with { RegistryRevision = registryRevision };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                RegistryRevision = entry.RegistryRevision!,
+                RegistryRevision = registryRevision,
                 ModelName = entry.ModelName,
                 Origin = LocalModelOrigin.Imported,
                 LocalFileName = entry.FileName,
@@ -169,8 +169,16 @@ internal sealed class GgufModelImporter(
                 await registry.RemoveExactAsync(preparedImport.RegistryEntry, CancellationToken.None).ConfigureAwait(false);
             }
 
-            if (movedSidecar) TryDelete(finalSidecarPath);
-            if (movedWeight) TryDelete(finalPath);
+            if (movedSidecar)
+            {
+                TryDelete(finalSidecarPath);
+            }
+
+            if (movedWeight)
+            {
+                TryDelete(finalPath);
+            }
+
             if (exception is OperationCanceledException or GgufImportException)
             {
                 throw;
@@ -215,7 +223,11 @@ internal sealed class GgufModelImporter(
         while (true)
         {
             var read = await source.Stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (read == 0) break;
+            if (read == 0)
+            {
+                break;
+            }
+
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             hasher.AppendData(buffer, 0, read);
             total += read;
@@ -223,7 +235,7 @@ internal sealed class GgufModelImporter(
         }
 
         await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
-        destination.Flush(flushToDisk: true);
+        FlushToDisk(destination);
         if (total != expectedBytes)
         {
             throw new GgufImportException(GgufImportRejectionCode.InvalidSource, "The selected source changed while it was copied.");
@@ -241,8 +253,16 @@ internal sealed class GgufModelImporter(
             throw new ArgumentException("Local import accepts only imported, weight-only destinations.", nameof(destination));
         }
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(destination.CanonicalModelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(destination.CanonicalQuant);
+        if (string.IsNullOrWhiteSpace(destination.CanonicalModelName))
+        {
+            throw new ArgumentException("The import destination model name is required.", nameof(destination));
+        }
+
+        if (string.IsNullOrWhiteSpace(destination.CanonicalQuant))
+        {
+            throw new ArgumentException("The import destination quantization is required.", nameof(destination));
+        }
+
         if (!GgufQuantDetector.IsCanonical(destination.CanonicalQuant))
         {
             throw new ArgumentException("The import destination quantization is not canonical.", nameof(destination));
@@ -268,8 +288,15 @@ internal sealed class GgufModelImporter(
     private static void TryDelete(string path)
     {
         try { File.Delete(path); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException) { }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // Best-effort compensation must preserve the original operation failure.
+        }
     }
+
+    // FlushAsync drains managed buffers but exposes no flush-to-disk overload. This short synchronous durability
+    // boundary runs only after the async flush and before the staged file can be committed by rename.
+    private static void FlushToDisk(FileStream stream) => stream.Flush(flushToDisk: true);
 
     private static void EnsureNoCaseInsensitiveCollision(string finalPath)
     {

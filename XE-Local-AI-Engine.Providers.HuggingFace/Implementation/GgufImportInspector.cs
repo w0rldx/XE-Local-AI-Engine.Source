@@ -31,7 +31,8 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         }
     }
 
-    internal async Task<GgufImportInspection> InspectOpenedAsync(ValidatedGgufImportSource source, CancellationToken cancellationToken)
+    internal static async Task<GgufImportInspection> InspectOpenedAsync(ValidatedGgufImportSource source,
+        CancellationToken cancellationToken)
     {
         var header = await GgufStrictHeaderParser.ReadAsync(source.Stream, cancellationToken).ConfigureAwait(false);
         source.Rewind();
@@ -63,7 +64,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             rejections.Add(GgufImportRejectionCode.UnsupportedModelType);
         }
 
-        var architecture = header.GetString("general.architecture")?.Trim().ToLowerInvariant();
+        var architecture = NormalizeArchitecture(header.GetString("general.architecture"));
         if (architecture is null || !CausalArchitectures.Contains(architecture)
             || IsRejectedArchitecture(architecture, displayName))
         {
@@ -89,6 +90,10 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             rejections.Distinct().ToArray(),
             []);
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+        Justification = "GGUF architecture identifiers are externally defined lowercase tokens and the inspection contract preserves that canonical form.")]
+    private static string? NormalizeArchitecture(string? architecture) => architecture?.Trim().ToLowerInvariant();
 
     private static bool IsShardName(string displayName)
     {

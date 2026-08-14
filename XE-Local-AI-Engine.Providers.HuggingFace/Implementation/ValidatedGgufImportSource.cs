@@ -34,6 +34,8 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 
     public Stream Stream => _stream;
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The successful FileStream constructor takes ownership of the SafeFileHandle; every constructor failure disposes it below.")]
     public static ValidatedGgufImportSource Open(string sourcePath, string modelsDirectory)
     {
         try

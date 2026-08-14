@@ -230,6 +230,13 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var modelContentFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
             var acquiredAt = DateTimeOffset.UtcNow;
 
+            var role = request.Role == GgufRole.Unknown ? GgufRole.Chat : request.Role;
+            if (GgufDraftModel.IsDraftQuant(quant))
+            {
+                role = GgufRole.Draft;
+            }
+
+            var sourceDisplayName = Path.GetFileName(fileName);
             var entry = new GgufModelRegistryEntry
             {
                 ModelName = modelName,
@@ -247,24 +254,23 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole
                 // repo through one download action, so a drafter arrives on the same Chat/Unknown-role request as the
                 // base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
-                Role = GgufDraftModel.IsDraftQuant(quant)
-                    ? GgufRole.Draft
-                    : request.Role == GgufRole.Unknown ? GgufRole.Chat : request.Role,
+                Role = role,
                 ProjectorFileName = projector.SourceDisplayName,
                 ProjectorLocalPath = projector.LocalPath,
                 ProjectorSizeBytes = projector.SizeBytes,
                 ProjectorSha256 = projector.ContentSha256,
                 Origin = LocalModelOrigin.HuggingFace,
-                SourceDisplayName = Path.GetFileName(fileName),
+                SourceDisplayName = sourceDisplayName,
                 MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
                 ModelContentFingerprint = modelContentFingerprint
             };
 
-            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory) };
+            var registryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
+            entry = entry with { RegistryRevision = registryRevision };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                RegistryRevision = entry.RegistryRevision!,
+                RegistryRevision = registryRevision,
                 ModelName = modelName,
                 Origin = LocalModelOrigin.HuggingFace,
                 LocalFileName = entry.FileName,
@@ -272,7 +278,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 WeightContentSha256 = weightHash,
                 WeightSizeBytes = entry.SizeBytes,
                 WeightMemberFingerprint = weightFingerprint,
-                SourceDisplayName = entry.SourceDisplayName!,
+                SourceDisplayName = sourceDisplayName,
                 AcquiredAtUtc = acquiredAt,
                 RegistryRepoId = entry.RepoId,
                 RegistrySourceRevision = entry.SourceRevision,
@@ -430,7 +436,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 result.LocalPath,
                 result.SizeBytes,
                 contentSha,
-                projector.Sha256?.ToLowerInvariant(),
+                NormalizeSha256(projector.Sha256),
                 projector.SizeBytes,
                 GgufMemberFingerprint.Compute(contentSha, result.SizeBytes));
         }
@@ -444,6 +450,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             return ProjectorDownloadResult.None;
         }
     }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+        Justification = "Acquisition metadata requires the canonical lowercase SHA-256 representation validated by the universal sidecar.")]
+    private static string? NormalizeSha256(string? sha256) => sha256?.ToLowerInvariant();
 
     private async Task<LocalModelDescriptor> ToDescriptorAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
