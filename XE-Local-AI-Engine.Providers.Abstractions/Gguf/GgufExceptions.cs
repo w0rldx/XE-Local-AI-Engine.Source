@@ -70,3 +70,13 @@ public sealed class InsufficientDiskSpaceException : Exception
     /// <summary>Bytes currently free on the target volume.</summary>
     public long AvailableBytes { get; }
 }
+
+/// <summary>Signals that acquisition-owned temporary artifacts remained after provider cleanup was attempted.</summary>
+public sealed class GgufAcquisitionCleanupException : Exception
+{
+    /// <summary>Creates a sanitized cleanup failure while retaining internal diagnostics in the inner exception.</summary>
+    public GgufAcquisitionCleanupException(string sanitizedMessage, Exception innerException)
+        : base(sanitizedMessage, innerException)
+    {
+    }
+}

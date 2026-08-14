@@ -50,7 +50,31 @@ public sealed record GgufDownloadCommitReceipt(
     string? FinalProjectorPath,
     string WeightMemberFingerprint,
     string? ProjectorMemberFingerprint,
-    string ModelContentFingerprint);
+    string ModelContentFingerprint)
+{
+    /// <summary>Whether this operation created the final weight path.</summary>
+    public bool OwnsFinalGguf { get; init; } = true;
+
+    /// <summary>Whether this operation created the final sidecar path.</summary>
+    public bool OwnsFinalSidecar { get; init; } = true;
+
+    /// <summary>Whether this operation created the optional final projector path.</summary>
+    public bool OwnsFinalProjector { get; init; } = true;
+}
+
+/// <summary>A failed commit that created one or more final artifacts which still require compensation.</summary>
+public sealed class GgufDownloadCommitException : Exception
+{
+    /// <summary>Creates a partial-commit failure with the exact ownership receipt required for retryable rollback.</summary>
+    public GgufDownloadCommitException(GgufDownloadCommitReceipt commitReceipt, string sanitizedMessage, Exception innerException)
+        : base(sanitizedMessage, innerException)
+    {
+        CommitReceipt = commitReceipt;
+    }
+
+    /// <summary>Exact final paths created before the commit failed.</summary>
+    public GgufDownloadCommitReceipt CommitReceipt { get; }
+}
 
 /// <summary>Staged Hugging Face GGUF filesystem/registry transaction.</summary>
 public interface IGgufDownloadTransaction

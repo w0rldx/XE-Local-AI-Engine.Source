@@ -91,6 +91,63 @@ public sealed class GgufDownloadTransactionTests
     }
 
     [Test]
+    public async Task Commit_PostRenameRegistryFailure_ReturnsOwnedReceiptForApplicationRollback()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new Infra.ScriptedHandler((_, _) => Download(WeightBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
+        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var prepared = await transaction.PrepareAsync(source, Destination(withProjector: false), progress: null, CancellationToken.None);
+        var manifestPath = dir.FilePath("index.json");
+        Directory.CreateDirectory(manifestPath);
+
+        var exception = await AssertEx.ThrowsAsync<GgufDownloadCommitException>(() =>
+            transaction.CommitAsync(prepared, CancellationToken.None));
+
+        AssertEx.True(exception.CommitReceipt.OwnsFinalGguf);
+        AssertEx.True(exception.CommitReceipt.OwnsFinalSidecar);
+        AssertEx.False(exception.CommitReceipt.OwnsFinalProjector);
+        Directory.Delete(manifestPath);
+        await transaction.RollbackCommittedAsync(exception.CommitReceipt, CancellationToken.None);
+        AssertEx.False(File.Exists(exception.CommitReceipt.FinalGgufPath));
+        AssertEx.False(File.Exists(exception.CommitReceipt.FinalSidecarPath));
+    }
+
+    [Test]
+    public async Task RollbackAndDiscard_ReportOwnedArtifactsThatCouldNotBeDeleted()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new Infra.ScriptedHandler((_, _) => Download(WeightBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
+        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var destination = Destination(withProjector: false);
+        var committedPrepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
+        var receipt = await transaction.CommitAsync(committedPrepared, CancellationToken.None);
+        File.Delete(receipt.FinalSidecarPath);
+        Directory.CreateDirectory(receipt.FinalSidecarPath);
+
+        _ = await AssertEx.ThrowsAsync<IOException>(() =>
+            transaction.RollbackCommittedAsync(receipt, CancellationToken.None));
+        AssertEx.True(Directory.Exists(receipt.FinalSidecarPath));
+        Directory.Delete(receipt.FinalSidecarPath);
+        File.Delete(receipt.FinalGgufPath);
+
+        var discardPrepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
+        File.Delete(discardPrepared.TemporarySidecarPath);
+        Directory.CreateDirectory(discardPrepared.TemporarySidecarPath);
+
+        _ = await AssertEx.ThrowsAsync<IOException>(() =>
+            transaction.DiscardPreparedAsync(discardPrepared, CancellationToken.None));
+        AssertEx.True(Directory.Exists(discardPrepared.TemporarySidecarPath));
+    }
+
+    [Test]
     public async Task Resolve_ProjectorWithoutExactHash_FailsBeforeAnyArtifactIsReserved()
     {
         using var dir = new Infra.TempModelsDir();

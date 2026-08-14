@@ -214,16 +214,27 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
                 projectorFingerprint,
                 modelFingerprint);
         }
-        catch
+        catch (Exception exception)
         {
-            TryDelete(temporarySidecarPath);
+            var artifacts = new List<(string Path, bool Owned)>
+            {
+                (temporarySidecarPath, true),
+                (temporaryWeightPath, true),
+                (temporaryWeightPath + ".part", true)
+            };
             if (temporaryProjectorPath is not null)
             {
-                TryDelete(temporaryProjectorPath);
-                TryDelete(temporaryProjectorPath + ".part");
+                artifacts.Add((temporaryProjectorPath, true));
+                artifacts.Add((temporaryProjectorPath + ".part", true));
             }
-            TryDelete(temporaryWeightPath);
-            TryDelete(temporaryWeightPath + ".part");
+
+            var cleanupFailure = TryDeleteOwnedArtifacts(artifacts.ToArray());
+            if (cleanupFailure is not null)
+            {
+                throw new GgufAcquisitionCleanupException("Download cleanup requires recovery.",
+                    new AggregateException(exception, cleanupFailure));
+            }
+
             throw;
         }
     }
@@ -278,21 +289,25 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
                 preparedDownload.ProjectorMemberFingerprint,
                 preparedDownload.ModelContentFingerprint);
         }
-        catch
+        catch (Exception exception)
         {
-            if (movedWeight)
+            if (movedWeight || movedProjector || movedSidecar)
             {
-                _ = await registry.RemoveExactAsync(preparedDownload.RegistryEntry, CancellationToken.None).ConfigureAwait(false);
-                TryDelete(finalWeightPath);
+                var receipt = new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
+                    finalWeightPath,
+                    finalSidecarPath,
+                    finalProjectorPath,
+                    preparedDownload.WeightMemberFingerprint,
+                    preparedDownload.ProjectorMemberFingerprint,
+                    preparedDownload.ModelContentFingerprint)
+                {
+                    OwnsFinalGguf = movedWeight,
+                    OwnsFinalSidecar = movedSidecar,
+                    OwnsFinalProjector = movedProjector
+                };
+                throw new GgufDownloadCommitException(receipt, "The download could not be committed safely.", exception);
             }
-            if (movedProjector)
-            {
-                TryDelete(finalProjectorPath!);
-            }
-            if (movedSidecar)
-            {
-                TryDelete(finalSidecarPath);
-            }
+
             throw;
         }
     }
@@ -315,10 +330,15 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
 
         if (!exactOwner && File.Exists(commitReceipt.FinalSidecarPath))
         {
-            var metadata = await GgufAcquisitionSidecar.ReadValidAsync(commitReceipt.FinalSidecarPath,
-                commitReceipt.FinalGgufPath,
-                options.ModelsDirectory,
-                cancellationToken).ConfigureAwait(false);
+            var metadata = commitReceipt.OwnsFinalGguf
+                ? await GgufAcquisitionSidecar.ReadValidAsync(commitReceipt.FinalSidecarPath,
+                    commitReceipt.FinalGgufPath,
+                    options.ModelsDirectory,
+                    cancellationToken).ConfigureAwait(false)
+                : await GgufAcquisitionSidecar.ReadShapeValidAsync(commitReceipt.FinalSidecarPath,
+                    commitReceipt.FinalGgufPath,
+                    options.ModelsDirectory,
+                    cancellationToken).ConfigureAwait(false);
             if (metadata is null
                 || !string.Equals(metadata.RegistryRevision, commitReceipt.RegistryEntry.RegistryRevision, StringComparison.Ordinal)
                 || !string.Equals(metadata.ModelContentFingerprint, commitReceipt.ModelContentFingerprint, StringComparison.Ordinal))
@@ -327,25 +347,28 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             }
         }
 
-        TryDelete(commitReceipt.FinalGgufPath);
-        if (commitReceipt.FinalProjectorPath is not null)
-        {
-            TryDelete(commitReceipt.FinalProjectorPath);
-        }
-        TryDelete(commitReceipt.FinalSidecarPath);
+        DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
+            (commitReceipt.FinalProjectorPath ?? string.Empty,
+                commitReceipt.FinalProjectorPath is not null && commitReceipt.OwnsFinalProjector),
+            (commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
     }
 
     public Task DiscardPreparedAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedDownload);
-        TryDelete(preparedDownload.TemporarySidecarPath);
+        var artifacts = new List<(string Path, bool Owned)>
+        {
+            (preparedDownload.TemporarySidecarPath, true),
+            (preparedDownload.TemporaryGgufPath, true),
+            (preparedDownload.TemporaryGgufPath + ".part", true)
+        };
         if (preparedDownload.TemporaryProjectorPath is not null)
         {
-            TryDelete(preparedDownload.TemporaryProjectorPath);
-            TryDelete(preparedDownload.TemporaryProjectorPath + ".part");
+            artifacts.Add((preparedDownload.TemporaryProjectorPath, true));
+            artifacts.Add((preparedDownload.TemporaryProjectorPath + ".part", true));
         }
-        TryDelete(preparedDownload.TemporaryGgufPath);
-        TryDelete(preparedDownload.TemporaryGgufPath + ".part");
+
+        DeleteOwnedArtifacts(artifacts.ToArray());
         return Task.CompletedTask;
     }
 
@@ -425,12 +448,44 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
     private static HuggingFaceDownloadException IntegrityFailure(string message) =>
         new(HuggingFaceDownloadFailure.HashMismatch, message);
 
-    private static void TryDelete(string path)
+    private static Exception? TryDeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
     {
-        try { File.Delete(path); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        List<Exception>? failures = null;
+        foreach (var artifact in artifacts)
         {
-            // Best-effort compensation preserves the primary failure.
+            try
+            {
+                DeleteOwned(artifact.Path, artifact.Owned);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                (failures ??= []).Add(exception);
+            }
+        }
+
+        return failures is null ? null : new AggregateException(failures);
+    }
+
+    private static void DeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
+    {
+        var failure = TryDeleteOwnedArtifacts(artifacts);
+        if (failure is not null)
+        {
+            throw new IOException("One or more download-owned artifacts could not be removed.", failure);
+        }
+    }
+
+    private static void DeleteOwned(string path, bool owned)
+    {
+        if (!owned)
+        {
+            return;
+        }
+
+        File.Delete(path);
+        if (File.Exists(path) || Directory.Exists(path))
+        {
+            throw new IOException("A download-owned artifact could not be removed.");
         }
     }
 }

@@ -229,6 +229,61 @@ public sealed class GgufImportFoundationTests
     }
 
     [Test]
+    public async Task Importer_PostRenameRegistryFailure_ReturnsOwnedReceiptForApplicationRollback()
+    {
+        using var paths = new ImportPaths();
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+        var prepared = await importer.PrepareAsync(
+            new GgufImportSource(paths.WriteSource(BuildCausalGguf(), "source.gguf")),
+            Destination(),
+            progress: null,
+            CancellationToken.None);
+        var manifestPath = Path.Combine(paths.ModelsDirectory, "index.json");
+        Directory.CreateDirectory(manifestPath);
+
+        var exception = await AssertEx.ThrowsAsync<GgufImportCommitException>(() =>
+            importer.CommitAsync(prepared, CancellationToken.None));
+
+        AssertEx.True(exception.CommitReceipt.OwnsFinalGguf);
+        AssertEx.True(exception.CommitReceipt.OwnsFinalSidecar);
+        AssertEx.True(File.Exists(exception.CommitReceipt.FinalGgufPath));
+        AssertEx.True(File.Exists(exception.CommitReceipt.FinalSidecarPath));
+        Directory.Delete(manifestPath);
+        await importer.RollbackCommittedAsync(exception.CommitReceipt, CancellationToken.None);
+        AssertEx.False(File.Exists(exception.CommitReceipt.FinalGgufPath));
+        AssertEx.False(File.Exists(exception.CommitReceipt.FinalSidecarPath));
+    }
+
+    [Test]
+    public async Task Importer_RollbackAndDiscard_ReportOwnedArtifactsThatCouldNotBeDeleted()
+    {
+        using var paths = new ImportPaths();
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+        var source = new GgufImportSource(paths.WriteSource(BuildCausalGguf(), "source.gguf"));
+        var committedPrepared = await importer.PrepareAsync(source, Destination(), progress: null, CancellationToken.None);
+        var receipt = await importer.CommitAsync(committedPrepared, CancellationToken.None);
+        File.Delete(receipt.FinalSidecarPath);
+        Directory.CreateDirectory(receipt.FinalSidecarPath);
+
+        _ = await AssertEx.ThrowsAsync<IOException>(() =>
+            importer.RollbackCommittedAsync(receipt, CancellationToken.None));
+        AssertEx.True(Directory.Exists(receipt.FinalSidecarPath));
+        Directory.Delete(receipt.FinalSidecarPath);
+
+        var discardPrepared = await importer.PrepareAsync(source, Destination(), progress: null, CancellationToken.None);
+        File.Delete(discardPrepared.TemporarySidecarPath);
+        Directory.CreateDirectory(discardPrepared.TemporarySidecarPath);
+
+        _ = await AssertEx.ThrowsAsync<IOException>(() =>
+            importer.DiscardPreparedAsync(discardPrepared, CancellationToken.None));
+        AssertEx.True(Directory.Exists(discardPrepared.TemporarySidecarPath));
+    }
+
+    [Test]
     public async Task Importer_RollbackContinuesAfterRegistryRemovalCrash_AndRejectsNewOwner()
     {
         using var paths = new ImportPaths();

@@ -273,6 +273,25 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Cancelled);
             }
+            catch (GgufAcquisitionCleanupException exception)
+            {
+                PublishCompensationFailure(operationId);
+                _logger.LogWarning(exception, "GGUF import preparation cleanup was incomplete for {ModelName}.", identity.CanonicalModelName);
+            }
+            catch (GgufImportCommitException exception)
+            {
+                committed = exception.CommitReceipt;
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                {
+                    PublishCompensationFailure(operationId);
+                    return;
+                }
+
+                UpdateAndPublish(operationId,
+                    GgufAcquisitionPhase.Failed,
+                    errorCode: "DestinationConflict",
+                    sanitizedError: exception.Message);
+            }
             catch (GgufImportException exception)
             {
                 if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
