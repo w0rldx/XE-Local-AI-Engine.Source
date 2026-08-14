@@ -237,6 +237,22 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Operator-managed benchmark projects, durable runs, scoring, cancellation, and eligibility catalogs.
+    /// </summary>
+    public static class Benchmarks
+    {
+        public const string Projects = "benchmarks/projects";
+        public const string ProjectById = "benchmarks/projects/{projectId}";
+        public const string ProjectRuns = "benchmarks/projects/{projectId}/runs";
+        public const string RunById = "benchmarks/runs/{runId}";
+        public const string RunCancel = "benchmarks/runs/{runId}/cancel";
+        public const string RunScore = "benchmarks/runs/{runId}/score";
+        public const string EligibleAgents = "benchmarks/eligible-agents";
+        public const string EligibleModels = "benchmarks/eligible-models";
+        public const string Hub = "/api/local/v1/benchmarks/hub";
+    }
+
+    /// <summary>
     ///     Node-wide agent skill library routes. Skills are SKILL.md documents (name + description + markdown body)
     ///     that agent definitions select into via <c>AllowedSkillIds</c> and load on demand at runtime.
     /// </summary>

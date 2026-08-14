@@ -14,6 +14,7 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkProjectService, BenchmarkProjectService>();
         builder.Services.AddScoped<IBenchmarkFreezeDependencyService, BenchmarkFreezeDependencyService>();
         builder.Services.AddScoped<IBenchmarkRunFreezeService, BenchmarkRunFreezeService>();
+        builder.Services.AddScoped<IBenchmarkCatalogService, BenchmarkCatalogService>();
         builder.Services.AddSingleton<IBenchmarkEligibilityPolicy, BenchmarkEligibilityPolicy>();
         builder.Services.AddSingleton<IBenchmarkRuntimeSnapshotFactory, BenchmarkRuntimeSnapshotFactory>();
         builder.Services.AddOptions<BenchmarkEventBufferOptions>();
