@@ -430,7 +430,7 @@ public sealed class GgufStoreTests
         }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.Equal(correctSha.ToLowerInvariant(), handle.Sha256!);
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -455,7 +455,7 @@ public sealed class GgufStoreTests
         }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.Equal(correctSha.ToLowerInvariant(), handle.Sha256!);
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -485,12 +485,12 @@ public sealed class GgufStoreTests
     }
 
     [Test]
-    public async Task GgufStore_NoShaAnywhere_PersistsNullSha_NotDiscoveryValue()
+    public async Task GgufStore_NoShaAnywhere_PersistsComputedCanonicalSha()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest → nothing to verify, so the
-        // persisted sha256 MUST be null rather than an unverified echo.
+        // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest. The universal acquisition
+        // contract still persists the hash computed from the completed local bytes in canonical lowercase form.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -503,11 +503,12 @@ public sealed class GgufStoreTests
             RepoId = Infra.RepoId
         }, progress: null, CancellationToken.None);
 
-        AssertEx.Null(handle.Sha256);
+        var computedSha = Infra.Sha256Upper(ModelBytes).ToLowerInvariant();
+        AssertEx.Equal(computedSha, handle.Sha256);
         AssertEx.True(File.Exists(handle.LocalPath));
 
         var stored = await registry.ListAsync(CancellationToken.None);
-        AssertEx.Null(stored.Single().Sha256);
+        AssertEx.Equal(computedSha, stored.Single().Sha256);
     }
 
     [Test]
@@ -652,7 +653,7 @@ public sealed class GgufStoreTests
 
         // The download succeeds and records the sha from the probe's X-Linked-Etag — the CDN Xet ETag was ignored.
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.Equal(correctSha.ToLowerInvariant(), handle.Sha256!);
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 

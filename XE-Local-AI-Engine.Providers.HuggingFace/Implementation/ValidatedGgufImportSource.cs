@@ -58,7 +58,10 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
             var handle = OpenNoFollow(canonicalPath);
             try
             {
-                var stream = new FileStream(handle, FileAccess.Read, bufferSize: 81920, isAsync: true);
+                // libc open(2) does not create a .NET async-capable handle. FileStream still provides its async APIs
+                // over this synchronous handle while retaining ownership and, critically, reading the exact validated
+                // descriptor used for identity capture.
+                var stream = new FileStream(handle, FileAccess.Read, bufferSize: 81920, isAsync: false);
                 try
                 {
                     var identity = CaptureIdentity(handle, canonicalPath, stream.Length);
