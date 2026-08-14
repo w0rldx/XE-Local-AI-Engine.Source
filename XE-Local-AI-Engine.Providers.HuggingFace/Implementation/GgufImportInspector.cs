@@ -36,7 +36,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
     {
         var header = await GgufStrictHeaderParser.ReadAsync(source.Stream, cancellationToken).ConfigureAwait(false);
         source.Rewind();
-        return Classify(source.DisplayName, source.Length, header);
+        return Classify(source.DisplayName, source.Length, header) with { SourceIdentityToken = source.SourceIdentityToken };
     }
 
     internal static GgufImportInspection Classify(string displayName, long size, GgufStrictHeaderParser.StrictHeader header)

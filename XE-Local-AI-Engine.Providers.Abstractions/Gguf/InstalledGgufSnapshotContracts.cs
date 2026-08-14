@@ -151,7 +151,8 @@ public static class GgufPhysicalMemberSetHash
             GgufModelContentFingerprint.WriteField(buffer, member.Required ? "true" : "false");
             GgufModelContentFingerprint.WriteField(buffer,
                 member.MetadataSchemaVersion?.ToString(CultureInfo.InvariantCulture) ?? "null");
-            var aliases = member.OwningAliases.OrderBy(static alias => alias, StringComparer.OrdinalIgnoreCase)
+            var aliases = member.OwningAliases.Distinct(StringComparer.Ordinal)
+                                .OrderBy(static alias => alias, StringComparer.OrdinalIgnoreCase)
                                 .ThenBy(static alias => alias, StringComparer.Ordinal)
                                 .ToArray();
             GgufModelContentFingerprint.WriteField(buffer, aliases.Length.ToString(CultureInfo.InvariantCulture));

@@ -291,7 +291,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         }
 
         observations[relativePath] = new MemberObservation(relativePath, role, metadataSchemaVersion,
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { alias });
+            new HashSet<string>(StringComparer.Ordinal) { alias });
     }
 
     private static void VerifyRegistryFingerprints(IReadOnlyList<InstalledModelRegistryAliasSnapshot> aliases,
@@ -313,8 +313,11 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
             }
 
             var projector = members.Single(member => string.Equals(member.RelativePath, alias.ProjectorRelativePath, StringComparison.OrdinalIgnoreCase));
-            if (alias.RegistryValue.ProjectorSizeBytes != projector.SizeBytes
-                || !string.Equals(alias.RegistryValue.ProjectorSha256, projector.Sha256, StringComparison.Ordinal))
+            var acquired = alias.RegistryValue.Origin is not null;
+            if (acquired && (alias.RegistryValue.ProjectorSizeBytes is null || alias.RegistryValue.ProjectorSha256 is null)
+                || alias.RegistryValue.ProjectorSizeBytes is { } projectorSize && projectorSize != projector.SizeBytes
+                || alias.RegistryValue.ProjectorSha256 is { } projectorHash
+                && !string.Equals(projectorHash, projector.Sha256, StringComparison.Ordinal))
             {
                 throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
                     "The installed model projector no longer matches its registry value.");

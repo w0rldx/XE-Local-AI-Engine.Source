@@ -127,7 +127,7 @@ public static class GgufModelContentFingerprint
         var path = NormalizeRelativePath(member.RelativePath);
         var aliases = member.OwningAliases
                             .Select(static alias => alias.Normalize(NormalizationForm.FormC))
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .Distinct(StringComparer.Ordinal)
                             .OrderBy(static alias => alias, StringComparer.OrdinalIgnoreCase)
                             .ThenBy(static alias => alias, StringComparer.Ordinal)
                             .ToArray();
