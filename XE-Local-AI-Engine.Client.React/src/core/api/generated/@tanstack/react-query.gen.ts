@@ -24,6 +24,7 @@ import {
 	cancelCudaBuild,
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
+	cancelGgufImport,
 	cancelImageJob,
 	cancelImageModelDownload,
 	cancelLlamaCppSourceBuild,
@@ -108,8 +109,12 @@ import {
 	getDevelopmentCapability,
 	getDevelopmentProject,
 	getDevelopmentTask,
+	getGgufDownloadOperationStatus,
 	getGgufDownloads,
 	getGgufDownloadStatus,
+	getGgufImportCapability,
+	getGgufImports,
+	getGgufImportStatus,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
@@ -194,6 +199,7 @@ import {
 	pinNodeChatConversation,
 	pollNodeBinding,
 	previewDevelopmentPatch,
+	previewGgufImport,
 	previewSkillImport,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
@@ -230,6 +236,7 @@ import {
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
+	startGgufImport,
 	startImageModelDownload,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
@@ -279,6 +286,8 @@ import type {
 	CancelDevelopmentAttemptResponse,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
+	CancelGgufImportData,
+	CancelGgufImportResponse,
 	CancelImageJobData,
 	CancelImageJobResponse,
 	CancelImageModelDownloadData,
@@ -456,10 +465,18 @@ import type {
 	GetDevelopmentProjectResponse,
 	GetDevelopmentTaskData,
 	GetDevelopmentTaskResponse,
+	GetGgufDownloadOperationStatusData,
+	GetGgufDownloadOperationStatusResponse,
 	GetGgufDownloadsData,
 	GetGgufDownloadsResponse,
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusResponse,
+	GetGgufImportCapabilityData,
+	GetGgufImportCapabilityResponse,
+	GetGgufImportsData,
+	GetGgufImportsResponse,
+	GetGgufImportStatusData,
+	GetGgufImportStatusResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -634,6 +651,8 @@ import type {
 	PollNodeBindingResponse,
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchResponse,
+	PreviewGgufImportData,
+	PreviewGgufImportResponse,
 	PreviewSkillImportData,
 	PreviewSkillImportResponse,
 	PromoteSuggestedPlaybookActionData,
@@ -714,6 +733,8 @@ import type {
 	StartDevelopmentNextActionResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadResponse,
+	StartGgufImportData,
+	StartGgufImportResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
 	StartLlamaCppSourceBuildData,
@@ -1799,6 +1820,22 @@ export const cancelGgufDownloadMutation = (
 	return mutationOptions;
 };
 
+export const cancelGgufImportMutation = (
+	options?: Partial<Options<CancelGgufImportData>>,
+): UseMutationOptions<CancelGgufImportResponse, AxiosError<DefaultError>, Options<CancelGgufImportData>> => {
+	const mutationOptions: UseMutationOptions<CancelGgufImportResponse, AxiosError<DefaultError>, Options<CancelGgufImportData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelGgufImport({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const cancelLlamaCppSourceBuildMutation = (
 	options?: Partial<Options<CancelLlamaCppSourceBuildData>>,
 ): UseMutationOptions<CancelLlamaCppSourceBuildResponse, AxiosError<DefaultError>, Options<CancelLlamaCppSourceBuildData>> => {
@@ -1943,6 +1980,28 @@ export const getCudaBuildStatusOptions = (options?: Options<GetCudaBuildStatusDa
 		queryKey: getCudaBuildStatusQueryKey(options),
 	});
 
+export const getGgufDownloadOperationStatusQueryKey = (options: Options<GetGgufDownloadOperationStatusData>) =>
+	createQueryKey("getGgufDownloadOperationStatus", options);
+
+export const getGgufDownloadOperationStatusOptions = (options: Options<GetGgufDownloadOperationStatusData>) =>
+	queryOptions<
+		GetGgufDownloadOperationStatusResponse,
+		AxiosError<DefaultError>,
+		GetGgufDownloadOperationStatusResponse,
+		ReturnType<typeof getGgufDownloadOperationStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufDownloadOperationStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufDownloadOperationStatusQueryKey(options),
+	});
+
 export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) => createQueryKey("getGgufDownloads", options);
 
 export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>) =>
@@ -1984,6 +2043,71 @@ export const getGgufDownloadStatusOptions = (options: Options<GetGgufDownloadSta
 			return data;
 		},
 		queryKey: getGgufDownloadStatusQueryKey(options),
+	});
+
+export const getGgufImportCapabilityQueryKey = (options?: Options<GetGgufImportCapabilityData>) =>
+	createQueryKey("getGgufImportCapability", options);
+
+export const getGgufImportCapabilityOptions = (options?: Options<GetGgufImportCapabilityData>) =>
+	queryOptions<
+		GetGgufImportCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetGgufImportCapabilityResponse,
+		ReturnType<typeof getGgufImportCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufImportCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufImportCapabilityQueryKey(options),
+	});
+
+export const getGgufImportsQueryKey = (options?: Options<GetGgufImportsData>) => createQueryKey("getGgufImports", options);
+
+export const getGgufImportsOptions = (options?: Options<GetGgufImportsData>) =>
+	queryOptions<
+		GetGgufImportsResponse,
+		AxiosError<DefaultError>,
+		GetGgufImportsResponse,
+		ReturnType<typeof getGgufImportsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufImports({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufImportsQueryKey(options),
+	});
+
+export const getGgufImportStatusQueryKey = (options: Options<GetGgufImportStatusData>) =>
+	createQueryKey("getGgufImportStatus", options);
+
+export const getGgufImportStatusOptions = (options: Options<GetGgufImportStatusData>) =>
+	queryOptions<
+		GetGgufImportStatusResponse,
+		AxiosError<DefaultError>,
+		GetGgufImportStatusResponse,
+		ReturnType<typeof getGgufImportStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufImportStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufImportStatusQueryKey(options),
 	});
 
 export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
@@ -2263,6 +2387,26 @@ export const listRunningModelsOptions = (options?: Options<ListRunningModelsData
 		queryKey: listRunningModelsQueryKey(options),
 	});
 
+export const previewGgufImportMutation = (
+	options?: Partial<Options<PreviewGgufImportData>>,
+): UseMutationOptions<PreviewGgufImportResponse, AxiosError<DefaultError>, Options<PreviewGgufImportData>> => {
+	const mutationOptions: UseMutationOptions<
+		PreviewGgufImportResponse,
+		AxiosError<DefaultError>,
+		Options<PreviewGgufImportData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await previewGgufImport({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const refreshModelCatalogMutation = (
 	options?: Partial<Options<RefreshModelCatalogData>>,
 ): UseMutationOptions<RefreshModelCatalogResponse, AxiosError<DefaultError>, Options<RefreshModelCatalogData>> => {
@@ -2369,6 +2513,22 @@ export const startGgufDownloadMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startGgufDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startGgufImportMutation = (
+	options?: Partial<Options<StartGgufImportData>>,
+): UseMutationOptions<StartGgufImportResponse, AxiosError<DefaultError>, Options<StartGgufImportData>> => {
+	const mutationOptions: UseMutationOptions<StartGgufImportResponse, AxiosError<DefaultError>, Options<StartGgufImportData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startGgufImport({
 				...options,
 				...fnOptions,
 				throwOnError: true,

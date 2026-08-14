@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -42,11 +42,26 @@ const getGgufDownloadsOptionsMock = vi.fn(() => ({
 	queryKey: [{ _id: "getGgufDownloads" }],
 	queryFn: () => Promise.resolve({ items: [] }),
 }));
+interface ImportStatusFixture {
+	operationId: string;
+	operationKind: string;
+	modelName: string;
+	phase: string;
+	startedAtUtc: string;
+	updatedAtUtc: string;
+}
+
+const getGgufImportsOptionsMock = vi.fn(() => ({
+	// biome-ignore lint/style/useNamingConvention: generated query key discriminator.
+	queryKey: [{ _id: "getGgufImports" }],
+	queryFn: (): Promise<{ items: ImportStatusFixture[] }> => Promise.resolve({ items: [] }),
+}));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	browseGgufRepositoriesOptions: vi.fn(),
 	cancelGgufDownloadMutation: vi.fn(),
 	getGgufDownloadsOptions: () => getGgufDownloadsOptionsMock(),
+	getGgufImportsOptions: () => getGgufImportsOptionsMock(),
 	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	getGgufDownloadsQueryKey: () => [{ _id: "getGgufDownloads" }],
 	inspectGgufRepositoryOptions: vi.fn(),
@@ -58,6 +73,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
+import { useActiveGgufAcquisitions } from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 const STATUS_CHANGED = "ggufDownload.statusChanged";
@@ -72,6 +88,14 @@ function renderActiveDownloads(enabled = true) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
 	return { ...renderHook(() => useActiveGgufDownloads({ enabled }), { wrapper: Wrapper }), queryClient };
+}
+
+function renderActiveAcquisitions() {
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	function Wrapper({ children }: { children: ReactNode }) {
+		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+	}
+	return renderHook(() => useActiveGgufAcquisitions(), { wrapper: Wrapper });
 }
 
 describe("useActiveGgufDownloads", () => {
@@ -118,6 +142,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Running",
 				completedBytes: 50,
@@ -127,7 +153,7 @@ describe("useActiveGgufDownloads", () => {
 		});
 
 		const status = result.current.get("unsloth/x:Q4_K_M");
-		expect(status?.phase).toBe("Running");
+		expect(status?.phase).toBe("Downloading");
 		expect(status?.pct).toBe(25);
 		expect(useGgufBrowseStore.getState().inFlightDownloads).toContain("unsloth/x:Q4_K_M");
 	});
@@ -137,6 +163,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Running",
 				completedBytes: 10,
@@ -148,6 +176,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Completed",
 				completedBytes: 20,
@@ -166,6 +196,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Completed",
 				completedBytes: 20,
@@ -182,6 +214,8 @@ describe("useActiveGgufDownloads", () => {
 		// A re-pushed Completed status (hub reconnect / hydrate refetch) must not trigger another refetch.
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Completed",
 				completedBytes: 20,
@@ -202,6 +236,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Running",
 				completedBytes: 10,
@@ -221,6 +257,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Failed",
 				completedBytes: null,
@@ -233,6 +271,40 @@ describe("useActiveGgufDownloads", () => {
 		expect(status?.phase).toBe("Failed");
 		expect(status?.pct).toBeUndefined();
 		expect(status?.sanitizedError).toBe("Download failed.");
+	});
+
+	it("hydrates acquisition-neutral imports by operation id and keeps them out of the download-only wrapper", async () => {
+		getGgufImportsOptionsMock.mockReturnValueOnce({
+			// biome-ignore lint/style/useNamingConvention: generated query key discriminator.
+			queryKey: [{ _id: "getGgufImports" }],
+			queryFn: () =>
+				Promise.resolve({
+					items: [
+						{
+							operationId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+							operationKind: "Import",
+							modelName: "private:Q4_K_M",
+							phase: "Copying",
+							startedAtUtc: "2026-08-14T10:00:00Z",
+							updatedAtUtc: "2026-08-14T10:00:01Z",
+						},
+					],
+				}),
+		});
+		const acquisitions = renderActiveAcquisitions();
+		await waitFor(() => expect(acquisitions.result.current.get("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?.modelName).toBe("private:Q4_K_M"));
+		acquisitions.unmount();
+
+		const downloads = renderActiveDownloads();
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({
+				operationId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+				operationKind: "Import",
+				modelName: "private:Q4_K_M",
+				phase: "Copying",
+			});
+		});
+		expect(downloads.result.current.has("private:Q4_K_M")).toBe(false);
 	});
 
 	it("stops the connection on unmount", async () => {

@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconRefresh, IconRobot } from "@tabler/icons-react";
+import { IconAlertTriangle, IconFileImport, IconRefresh, IconRobot } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,10 +23,17 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { GgufBrowsePanel } from "@/features/models/components/GgufBrowsePanel";
 import { GgufDownloadDialog } from "@/features/models/components/GgufDownloadDialog";
+import { GgufImportDialog } from "@/features/models/components/GgufImportDialog";
+import { ImportProgressPanel } from "@/features/models/components/ImportProgressPanel";
 import { InstalledModelsTable } from "@/features/models/components/InstalledModelsTable";
 import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDialog";
 import { defaultGgufQuant, type GgufRepository, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
 import { toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
+import {
+	useActiveGgufAcquisitions,
+	useCancelGgufImport,
+	useGgufImportCapability,
+} from "@/features/models/queries/useGgufAcquisitions";
 import {
 	useActiveGgufDownloads,
 	useBrowseGgufRepositories,
@@ -48,6 +55,7 @@ export function ModelManagement() {
 	// The model whose details dialog is open (also the only model whose details endpoint is fetched).
 	const [detailsModelName, setDetailsModelName] = useState<string | undefined>();
 	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
+	const [importModalOpened, { open: openImportModal, close: closeImportModal }] = useDisclosure(false);
 
 	// GGUF browse + download flow (relocated from the model-fit advisor — it is a model-acquisition action). The
 	// committed browse term + the in-flight download set live in a shared store so they survive a remount AND so a
@@ -62,6 +70,13 @@ export function ModelManagement() {
 	// Polls GET /downloads every second while any download is Running. Reconciles the store so entries started before
 	// a page refresh rehydrate, and terminal entries (Completed/Cancelled/Failed) are removed from the store.
 	const downloadStatuses = useActiveGgufDownloads();
+	const acquisitionStatuses = useActiveGgufAcquisitions();
+	const importStatuses = useMemo(
+		() => [...acquisitionStatuses.values()].filter((status) => status.operationKind === "Import"),
+		[acquisitionStatuses],
+	);
+	const importCapability = useGgufImportCapability();
+	const cancelGgufImportMutation = useCancelGgufImport();
 	// The repo whose quant picker dialog is open (null = closed). Selecting a browse row opens the dialog so the
 	// operator picks the exact quant (incl. Unsloth Dynamic UD- quants) instead of always pulling the default Q4_K_M.
 	const [downloadRepo, setDownloadRepo] = useState<GgufRepository | null>(null);
@@ -220,6 +235,11 @@ export function ModelManagement() {
 	};
 
 	const downloadingRepoId = startGgufDownloadMutation.isPending ? (startGgufDownloadMutation.variables?.repoId ?? null) : null;
+	const handleCancelImport = (operationId: string): void => {
+		cancelGgufImportMutation.mutate(operationId, {
+			onError: () => toast.error(t("pages.models.gguf.import.cancelError", "Could not cancel the import.")),
+		});
+	};
 
 	return (
 		<Container fluid={true} py="lg" data-tour="models-overview">
@@ -233,6 +253,11 @@ export function ModelManagement() {
 						<Text c="dimmed">{t("pages.models.local.subtitle", "List, select, and delete installed local models.")}</Text>
 					</Stack>
 					<Group gap="sm">
+						{importCapability.data?.available ? (
+							<Button variant="light" leftSection={<IconFileImport size={16} />} onClick={openImportModal}>
+								{t("pages.models.gguf.import.action", "Import model")}
+							</Button>
+						) : null}
 						<Button
 							variant="subtle"
 							leftSection={<IconRefresh size={16} />}
@@ -284,6 +309,12 @@ export function ModelManagement() {
 					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
 				/>
 
+				<ImportProgressPanel
+					operations={importStatuses}
+					onCancel={handleCancelImport}
+					cancellingOperationId={cancelGgufImportMutation.isPending ? (cancelGgufImportMutation.variables ?? null) : null}
+				/>
+
 				<GgufBrowsePanel
 					repositories={browseQueryResult.data ?? []}
 					isLoading={browseQueryResult.isLoading && browseQuery.trim().length > 0}
@@ -313,6 +344,12 @@ export function ModelManagement() {
 				onConfirm={handleConfirmQuantDownload}
 				onConfirmDefault={handleConfirmDefaultDownload}
 				isDownloading={startGgufDownloadMutation.isPending}
+			/>
+
+			<GgufImportDialog
+				opened={importModalOpened}
+				onClose={closeImportModal}
+				onStarted={() => toast.success(t("pages.models.gguf.import.started", "Import started."))}
 			/>
 		</Container>
 	);

@@ -16,6 +16,7 @@ export function toLocalModelViewModel(dto: XeLocalAiEngineClientEndpointsLocalMo
 	return {
 		modelName: dto.modelName ?? "",
 		provider: dto.provider ?? "Ollama",
+		origin: dto.origin ?? null,
 		sizeLabel: formatModelSize(dto.sizeBytes),
 		modifiedDateLabel: formatModelModifiedDate(dto.modifiedAtUtc),
 		familyLabel: dto.family?.trim() || emptyModelValue,

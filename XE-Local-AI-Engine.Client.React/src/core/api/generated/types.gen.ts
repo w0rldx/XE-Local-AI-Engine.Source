@@ -757,6 +757,29 @@ export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = 
 	modelName: string;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufImportResponse = {
+	operationId: string;
+	cancellationRequested: boolean;
+	status: XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse = {
+	operationId: string;
+	operationKind: string;
+	modelName: string;
+	phase: string;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	startedAtUtc: string;
+	updatedAtUtc: string;
+	errorCode?: string | null;
+	sanitizedMessage?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufImportOperationRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse = {
 	phase: string;
 	isRunning: boolean;
@@ -860,20 +883,37 @@ export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemRes
 	detail: string;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse>;
-};
-
 export type XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = {
+	operationId: string;
+	operationKind: string;
 	modelName: string;
 	phase: string;
 	completedBytes?: number | null;
 	totalBytes?: number | null;
 	sanitizedError?: string | null;
+	errorCode?: string | null;
+	startedAtUtc?: string | null;
+	updatedAtUtc?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadOperationStatusRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufImportCapabilityResponse = {
+	available: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ListGgufImportsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
@@ -1054,6 +1094,26 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
 	detail: string;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse = {
+	modelBaseName: string;
+	detectedQuantization?: string | null;
+	canonicalQuantizationChoices: Array<string>;
+	canonicalModelName?: string | null;
+	finalFileName?: string | null;
+	sizeBytes: number;
+	sourceDisplayName: string;
+	architecture?: string | null;
+	ggufVersion?: number | null;
+	warnings: Array<string>;
+	hasSufficientStorage?: boolean | null;
+	previewToken: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportRequest = {
+	sourcePath: string;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = {
 	scheduledJobId: string;
 };
@@ -1084,6 +1144,8 @@ export type XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = {
 export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = {
 	modelName: string;
 	alreadyInFlight: boolean;
+	operationId: string;
+	operationKind: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = {
@@ -1091,6 +1153,19 @@ export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = {
 	fileName?: string | null;
 	quant?: string | null;
 	revision?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionTicketResponse = {
+	operationId: string;
+	operationKind: string;
+	modelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufImportRequest = {
+	sourcePath: string;
+	previewToken: string;
+	modelBaseName: string;
+	quantization: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = {
@@ -1255,10 +1330,14 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse
 	modelName: string;
 	maxContextTokens?: number | null;
 	effectiveContextTokens?: number | null;
+	origin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
+	modelContentFingerprint?: string | null;
 	template?: string | null;
 	system?: string | null;
 	license?: string | null;
 };
+
+export type XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin = "HuggingFace" | "Imported";
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = {
 	[key: string]: never;
@@ -1294,6 +1373,8 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	family?: string | null;
 	parameterSize?: string | null;
 	quantizationLevel?: string | null;
+	origin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
+	modelContentFingerprint?: string | null;
 	isSelected: boolean;
 	kind: string;
 	detectedKind: string;
@@ -4469,6 +4550,35 @@ export type CancelGgufDownloadResponses = {
 
 export type CancelGgufDownloadResponse = CancelGgufDownloadResponses[keyof CancelGgufDownloadResponses];
 
+export type CancelGgufImportData = {
+	body?: never;
+	path: {
+		operationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/imports/{operationId}/cancel";
+};
+
+export type CancelGgufImportErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelGgufImportResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufImportResponse;
+};
+
+export type CancelGgufImportResponse = CancelGgufImportResponses[keyof CancelGgufImportResponses];
+
 export type CancelLlamaCppSourceBuildData = {
 	body?: never;
 	path?: never;
@@ -4665,6 +4775,36 @@ export type GetCudaBuildStatusResponses = {
 
 export type GetCudaBuildStatusResponse = GetCudaBuildStatusResponses[keyof GetCudaBuildStatusResponses];
 
+export type GetGgufDownloadOperationStatusData = {
+	body?: never;
+	path: {
+		operationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/downloads/operations/{operationId}";
+};
+
+export type GetGgufDownloadOperationStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufDownloadOperationStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+};
+
+export type GetGgufDownloadOperationStatusResponse =
+	GetGgufDownloadOperationStatusResponses[keyof GetGgufDownloadOperationStatusResponses];
+
 export type GetGgufDownloadsData = {
 	body?: never;
 	path?: never;
@@ -4720,6 +4860,89 @@ export type GetGgufDownloadStatusResponses = {
 };
 
 export type GetGgufDownloadStatusResponse = GetGgufDownloadStatusResponses[keyof GetGgufDownloadStatusResponses];
+
+export type GetGgufImportCapabilityData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/import/capability";
+};
+
+export type GetGgufImportCapabilityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufImportCapabilityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GgufImportCapabilityResponse;
+};
+
+export type GetGgufImportCapabilityResponse = GetGgufImportCapabilityResponses[keyof GetGgufImportCapabilityResponses];
+
+export type GetGgufImportsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/imports";
+};
+
+export type GetGgufImportsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufImportsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListGgufImportsResponse;
+};
+
+export type GetGgufImportsResponse = GetGgufImportsResponses[keyof GetGgufImportsResponses];
+
+export type GetGgufImportStatusData = {
+	body?: never;
+	path: {
+		operationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/imports/{operationId}";
+};
+
+export type GetGgufImportStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufImportStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse;
+};
+
+export type GetGgufImportStatusResponse = GetGgufImportStatusResponses[keyof GetGgufImportStatusResponses];
 
 export type GetHardwareProfileData = {
 	body?: never;
@@ -5092,6 +5315,33 @@ export type ListRunningModelsResponses = {
 
 export type ListRunningModelsResponse = ListRunningModelsResponses[keyof ListRunningModelsResponses];
 
+export type PreviewGgufImportData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/import/preview";
+};
+
+export type PreviewGgufImportErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type PreviewGgufImportResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse;
+};
+
+export type PreviewGgufImportResponse = PreviewGgufImportResponses[keyof PreviewGgufImportResponses];
+
 export type RefreshModelCatalogData = {
 	body?: never;
 	path?: never;
@@ -5256,6 +5506,33 @@ export type StartGgufDownloadResponses = {
 };
 
 export type StartGgufDownloadResponse = StartGgufDownloadResponses[keyof StartGgufDownloadResponses];
+
+export type StartGgufImportData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1StartGgufImportRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/import";
+};
+
+export type StartGgufImportErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartGgufImportResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionTicketResponse;
+};
+
+export type StartGgufImportResponse = StartGgufImportResponses[keyof StartGgufImportResponses];
 
 export type StartLlamaCppSourceBuildData = {
 	body: XeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;

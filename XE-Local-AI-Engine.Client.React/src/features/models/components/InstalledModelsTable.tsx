@@ -49,6 +49,9 @@ export function InstalledModelsTable({
 								<Group gap="xs" align="center" wrap="nowrap">
 									<Text fw={500}>{model.modelName}</Text>
 									{model.isSelected ? <Badge color="green">Default</Badge> : null}
+									{model.origin === "Imported" ? (
+										<Badge color="violet" variant="light">{t("pages.models.local.origin.imported", "Imported")}</Badge>
+									) : null}
 								</Group>
 							</Table.Td>
 							<Table.Td>
