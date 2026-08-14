@@ -362,7 +362,7 @@ public sealed class GgufImportFoundationTests
     private static GgufModelImporter NewImporter(XE_Local_AI_Engine.Providers.HuggingFace.Options.HuggingFaceOptions options,
         GgufModelRegistry registry)
     {
-        return new GgufModelImporter(new GgufImportInspector(options), registry, Infra.AbundantSpace(), options, TimeProvider.System);
+        return new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
     }
 
     private static GgufImportDestination Destination()

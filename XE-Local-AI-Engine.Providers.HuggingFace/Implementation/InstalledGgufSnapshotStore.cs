@@ -214,21 +214,36 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
     {
         var closure = new List<GgufModelRegistryEntry> { requested };
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(requested.LocalPath) };
-        if (requested.ProjectorLocalPath is not null) paths.Add(Path.GetFullPath(requested.ProjectorLocalPath));
+        if (requested.ProjectorLocalPath is not null)
+        {
+            paths.Add(Path.GetFullPath(requested.ProjectorLocalPath));
+        }
+
         var changed = true;
         while (changed)
         {
             changed = false;
             foreach (var entry in entries)
             {
-                if (closure.Contains(entry)) continue;
+                if (closure.Contains(entry))
+                {
+                    continue;
+                }
+
                 var weight = Path.GetFullPath(entry.LocalPath);
                 var projector = entry.ProjectorLocalPath is null ? null : Path.GetFullPath(entry.ProjectorLocalPath);
-                if (!paths.Contains(weight) && (projector is null || !paths.Contains(projector))) continue;
+                if (!paths.Contains(weight) && (projector is null || !paths.Contains(projector)))
+                {
+                    continue;
+                }
+
                 closure.Add(entry);
                 changed = true;
                 _ = paths.Add(weight);
-                if (projector is not null) _ = paths.Add(projector);
+                if (projector is not null)
+                {
+                    _ = paths.Add(projector);
+                }
             }
         }
 
@@ -238,8 +253,15 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
     private static IEnumerable<string> EnumerateMemberPaths(InstalledModelRegistryAliasSnapshot alias)
     {
         yield return alias.WeightRelativePath;
-        if (alias.ProjectorRelativePath is not null) yield return alias.ProjectorRelativePath;
-        if (alias.SidecarRelativePath is not null) yield return alias.SidecarRelativePath;
+        if (alias.ProjectorRelativePath is not null)
+        {
+            yield return alias.ProjectorRelativePath;
+        }
+
+        if (alias.SidecarRelativePath is not null)
+        {
+            yield return alias.SidecarRelativePath;
+        }
     }
 
     private static bool CandidateMatches(InstalledGgufCandidate expected, InstalledGgufCandidate current)
@@ -285,7 +307,11 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
                     "The installed model weight no longer matches its registry value.");
             }
 
-            if (alias.ProjectorRelativePath is null) continue;
+            if (alias.ProjectorRelativePath is null)
+            {
+                continue;
+            }
+
             var projector = members.Single(member => string.Equals(member.RelativePath, alias.ProjectorRelativePath, StringComparison.OrdinalIgnoreCase));
             if (alias.RegistryValue.ProjectorSizeBytes != projector.SizeBytes
                 || !string.Equals(alias.RegistryValue.ProjectorSha256, projector.Sha256, StringComparison.Ordinal))

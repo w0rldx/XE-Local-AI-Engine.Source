@@ -106,7 +106,11 @@ internal static class GgufStrictHeaderParser
             case 9:
                 return TrySkipArray(ref reader);
             case 10:
-                if (!reader.TryReadUInt64(out var uint64)) return false;
+                if (!reader.TryReadUInt64(out var uint64))
+                {
+                    return false;
+                }
+
                 value = uint64 <= long.MaxValue ? (long)uint64 : long.MaxValue;
                 return true;
             case 11:
@@ -144,7 +148,9 @@ internal static class GgufStrictHeaderParser
 
     internal sealed record StrictHeader(uint? Version, IReadOnlyDictionary<string, object> Values, bool IsComplete)
     {
-        public static StrictHeader Invalid { get; } = new(null, new Dictionary<string, object>(), IsComplete: false);
+        public static StrictHeader Invalid { get; } = new(null,
+            new Dictionary<string, object>(StringComparer.Ordinal),
+            IsComplete: false);
 
         public string? GetString(string key) => Values.TryGetValue(key, out var value) ? value as string : null;
 
