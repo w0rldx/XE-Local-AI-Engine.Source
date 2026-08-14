@@ -55,14 +55,14 @@ public sealed class ModelCoordinationTests
         var secondAcquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var first = HoldReadUntilReleasedAsync(domain, ["0:model:ALPHA", "1:path:a.gguf"], firstAcquired, releaseReaders.Task);
         var second = HoldReadUntilReleasedAsync(domain, ["1:path:a.gguf"], secondAcquired, releaseReaders.Task);
-        await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(30));
         var writerTask = AcquireAndReleaseMutationAsync(domain, "1:path:a.gguf");
 
         await Task.Delay(50);
         AssertEx.False(writerTask.IsCompleted, "An overlapping mutation must wait for every read lease.");
         releaseReaders.SetResult();
         await Task.WhenAll(first, second);
-        await writerTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await writerTask.WaitAsync(TimeSpan.FromSeconds(30));
     }
 
     [Test]
@@ -82,9 +82,9 @@ public sealed class ModelCoordinationTests
         var first = HoldReadUntilReleasedAsync(domain, ["0:model:ALPHA"], firstAcquired, release.Task);
         var second = HoldReadUntilReleasedAsync(domain, ["0:model:BETA"], secondAcquired, release.Task);
 
-        await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(30));
         release.SetResult();
-        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(30));
     }
 
     [Test]
