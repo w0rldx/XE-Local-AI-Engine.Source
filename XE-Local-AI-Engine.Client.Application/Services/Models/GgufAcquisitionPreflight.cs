@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Validation;
@@ -76,7 +77,7 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         ArgumentNullException.ThrowIfNull(intent);
         var modelBaseName = intent.ModelBaseName.Trim().Normalize(NormalizationForm.FormC);
         if (modelBaseName.Length == 0
-            || modelBaseName.Contains(':')
+            || modelBaseName.Contains(":", StringComparison.Ordinal)
             || !_modelNameValidator.IsValid(modelBaseName))
         {
             throw new ArgumentException("The model base name is invalid or already contains a quantization suffix.", nameof(intent));
@@ -87,7 +88,7 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         var reservationKey = ModelCoordinationKeys.NormalizeModelName(canonicalModelName);
         var slug = CreateSlug(modelBaseName);
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(reservationKey));
-        var identityHash = Convert.ToHexString(hashBytes.AsSpan(0, 12)).ToLowerInvariant();
+        var identityHash = Convert.ToHexStringLower(hashBytes.AsSpan(0, 12));
         var fileName = $"{slug}-{quantization}-{identityHash}.gguf";
         ValidateProjectorMetadata(intent);
         var projectorFileName = intent.Projector is not null ? $"{slug}-projector-{identityHash}.gguf" : null;
@@ -117,8 +118,7 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         if (!string.Equals(projector.SourceDisplayName, Path.GetFileName(projector.SourceDisplayName), StringComparison.Ordinal)
             || projector.DeclaredSizeBytes <= 0
             || projector.DeclaredSha256.Length != 64
-            || projector.DeclaredSha256.Any(static character => !Uri.IsHexDigit(character))
-            || !string.Equals(projector.DeclaredSha256, projector.DeclaredSha256.ToLowerInvariant(), StringComparison.Ordinal))
+            || projector.DeclaredSha256.Any(static character => character is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
         {
             throw new ArgumentException("The projector metadata is invalid.", nameof(intent));
         }
@@ -137,6 +137,9 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         return parsed;
     }
 
+    [SuppressMessage("Major Code Smell",
+        "S3267:Loops should be simplified with LINQ expressions",
+        Justification = "Slug construction is a stateful single-pass normalization that cannot be expressed clearly as Select().")]
     private static string CreateSlug(string modelBaseName)
     {
         var builder = new StringBuilder(modelBaseName.Length);

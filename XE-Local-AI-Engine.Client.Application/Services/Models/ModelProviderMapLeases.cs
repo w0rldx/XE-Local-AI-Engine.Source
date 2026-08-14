@@ -107,6 +107,7 @@ public class ModelProviderMapReadLease : IModelProviderMapReadLease
 
     public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
         var inner = Interlocked.Exchange(ref _inner, null);
         if (inner is not null)
         {

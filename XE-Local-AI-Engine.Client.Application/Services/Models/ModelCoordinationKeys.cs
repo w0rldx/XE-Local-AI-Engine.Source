@@ -21,8 +21,8 @@ public static class ModelCoordinationKeys
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         var normalized = relativePath.Trim().Replace('\\', '/').Normalize(NormalizationForm.FormC);
-        if (normalized.StartsWith('/', StringComparison.Ordinal)
-            || Path.IsPathRooted(normalized)
+        if (normalized.StartsWith("/", StringComparison.Ordinal)
+            || System.IO.Path.IsPathRooted(normalized)
             || normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(static segment => segment is "." or ".."))
         {
             throw new ArgumentException("The member path must be a contained relative path.", nameof(relativePath));
