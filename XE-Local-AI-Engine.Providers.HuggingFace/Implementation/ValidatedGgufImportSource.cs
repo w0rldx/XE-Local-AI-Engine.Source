@@ -47,6 +47,11 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
             }
 
             var canonicalPath = Path.GetFullPath(sourcePath);
+            if (!File.Exists(canonicalPath))
+            {
+                throw new FileNotFoundException("The selected source does not exist.", canonicalPath);
+            }
+
             EnsureNoReparseComponents(canonicalPath);
             var managedRoot = Path.GetFullPath(modelsDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
