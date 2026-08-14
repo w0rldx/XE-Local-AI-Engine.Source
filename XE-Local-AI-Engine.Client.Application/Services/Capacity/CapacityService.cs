@@ -59,7 +59,24 @@ public sealed class CapacityService : ICapacityService
     /// <inheritdoc />
     public async Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        return await DecideAsync(new CapacityRequest(modelName, role), ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var modelName = request.ModelName;
+        var role = request.Role;
+        if (string.IsNullOrWhiteSpace(modelName))
+        {
+            throw new ArgumentException("Capacity model name must be provided.", nameof(request));
+        }
+
+        if (request.RequiredContextTokens is <= 0)
+        {
+            throw new ArgumentException("Required context tokens must be positive when supplied.", nameof(request));
+        }
 
         // Cloud short-circuit: when THIS model routes to cloud (the RuntimeChatClient re-selects per send by the same
         // per-request model id), the child's sends have no local byte/process cost — admit without any probe. Passing
@@ -124,7 +141,7 @@ public sealed class CapacityService : ICapacityService
         // Vulkan runtime enumerates no devices, admission sizes against system RAM instead of pretending 16 GB of VRAM
         // exists. The audit was warmed above, so this call only re-probes the raw hardware profile under the gate.
         var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct).ConfigureAwait(false);
-        var footprint = await _footprintProvider.ResolveFootprintAsync(modelName, role, profile, ct).ConfigureAwait(false);
+        var footprint = await _footprintProvider.ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, ct).ConfigureAwait(false);
         if (!footprint.IsKnown)
         {
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectFootprintUnknown, ollamaWarning);
