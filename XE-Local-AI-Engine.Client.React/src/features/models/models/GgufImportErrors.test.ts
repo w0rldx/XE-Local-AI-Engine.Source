@@ -19,4 +19,11 @@ describe("GGUF import safe errors", () => {
 		expect(importErrorMessage(t, "SourceNotFound")).toBe("The selected GGUF file was not found.");
 		expect(importErrorMessage(t, "UnknownServerMessage")).toBe("The model could not be imported.");
 	});
+
+	it("maps the transaction-coordinator error codes to non-generic messages", () => {
+		const t = translate as TFunction;
+		for (const code of ["InvalidRequest", "InvalidPreviewToken", "StalePreview", "ImportCompensationFailed"]) {
+			expect(importErrorMessage(t, code)).not.toBe("The model could not be imported.");
+		}
+	});
 });

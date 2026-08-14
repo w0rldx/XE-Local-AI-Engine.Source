@@ -80,6 +80,58 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task StartRun_ConcurrentWithProjectUpdate_ExactlyOneWins()
+    {
+        var databasePath = GetDatabasePath("start-run-vs-update-race.sqlite");
+        BenchmarkProjectRecord project;
+        await using (var setup = CreateContext(databasePath))
+        {
+            await setup.Database.EnsureDeletedAsync();
+            await setup.Database.EnsureCreatedAsync();
+            project = await new BenchmarkStore(setup, TimeProvider.System).CreateProjectAsync(CreateProject());
+        }
+
+        await using var startContext = CreateContext(databasePath);
+        await using var updateContext = CreateContext(databasePath);
+        var startStore = new BenchmarkStore(startContext, TimeProvider.System);
+        var updateStore = new BenchmarkStore(updateContext, TimeProvider.System);
+
+        var startTask = RaceAsync(() => startStore.StartRunAsync(CreateRun(project)));
+        var updateTask = RaceAsync(() => updateStore.UpdateProjectAsync(project.Id, project.Version, CreateProject(project.Id) with { Name = "Updated" }));
+        var results = await Task.WhenAll(startTask, updateTask).WaitAsync(TimeSpan.FromSeconds(30));
+        var (startWon, startConflict) = results[0];
+        var (updateWon, updateConflict) = results[1];
+
+        AssertEx.True(startWon ^ updateWon, "Exactly one concurrent writer must win the project version race.");
+        if (!startWon)
+        {
+            AssertEx.Equal("VersionConflict", AssertEx.NotNull(startConflict).Code);
+        }
+
+        if (!updateWon)
+        {
+            AssertEx.Equal("VersionConflict", AssertEx.NotNull(updateConflict).Code);
+        }
+
+        await using var verifyContext = CreateContext(databasePath);
+        var verifyStore = new BenchmarkStore(verifyContext, TimeProvider.System);
+        var runs = await verifyStore.ListRunsAsync(project.Id);
+        var finalProject = AssertEx.NotNull(await verifyStore.GetProjectAsync(project.Id));
+        if (startWon)
+        {
+            AssertEx.Equal(expected: 1, runs.Count);
+            AssertEx.NotNull(await verifyStore.ClaimNextAsync(), "The winning StartRun must leave claimable primary work.");
+            AssertEx.Equal("Benchmark", finalProject.Name, "A losing project update must not persist.");
+        }
+        else
+        {
+            AssertEx.Equal(expected: 0, runs.Count);
+            AssertEx.Null(await verifyStore.ClaimNextAsync(), "A losing StartRun must not insert a claimable work item.");
+            AssertEx.Equal("Updated", finalProject.Name);
+        }
+    }
+
+    [Test]
     public async Task RecoverOnStartup_FailsRunningPhasesAndKeepsQueuedWork()
     {
         var databasePath = GetDatabasePath("recovery.sqlite");
@@ -529,6 +581,19 @@ public sealed class BenchmarkStoreTests : IDisposable
 
     private static void AssertBytes(ReadOnlySpan<byte> expected, ReadOnlySpan<byte> actual) =>
         AssertEx.True(actual.SequenceEqual(expected), "Byte payload should round-trip exactly.");
+
+    private static async Task<(bool Won, BenchmarkConflictException? Conflict)> RaceAsync(Func<Task> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+            return (true, null);
+        }
+        catch (BenchmarkConflictException exception)
+        {
+            return (false, exception);
+        }
+    }
 
     private string GetDatabasePath(string fileName)
     {

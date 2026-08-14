@@ -294,6 +294,34 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
+    public async Task DeleteLocalModel_WhenModelAlreadyGone_ReturnsOkIdempotently()
+    {
+        // Regression: CommitDeleteAsync throws KeyNotFoundException when the mutation lease has no snapshot (the model
+        // was already deleted/never existed). Delete must stay idempotent (200, Deleted=true) rather than 500ing.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        var deletionCoordinator = Substitute.For<ILocalModelDeletionCoordinator>();
+        deletionCoordinator.CommitDeleteAsync("ghost:model", Arg.Any<CancellationToken>())
+                           .Returns<Task<CommittedModelDeletion>>(_ => throw new KeyNotFoundException("The installed model was not found."));
+        await using var context = CreateContext(modelService,
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            LlamaCppProviderName,
+            ggufModelStore,
+            deletionCoordinator);
+        using var client = context.Factory.CreateClient();
+
+        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/ghost:model");
+        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+        AssertEx.Equal("ghost:model", deleted.ModelName);
+        AssertEx.True(deleted.Deleted);
+        await deletionCoordinator.DidNotReceiveWithAnyArgs()
+                                 .PurgeAfterSuccessAsync(Arg.Any<CommittedModelDeletion>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task DeleteLocalModel_WhenNameHasEncodedSlashes_DecodesBeforeDeleting()
     {
         // The hey-api client escapes the route segment with encodeURIComponent, and Kestrel leaves %2F encoded by design,
