@@ -338,7 +338,7 @@ public sealed class NodeAgentMcpToolsTests
         var harness = new Harness();
         harness.RunCoordinator.GetResult = CreateRunView(status);
 
-        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult!.RequestId.ToString("D"), CancellationToken.None);
+        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult.RequestId.ToString("D"), CancellationToken.None);
 
         AssertEx.Equal(expectedStatus, response.Status);
         AssertEx.Equal(expectedStatus, response.Run!.Metadata.Status);
@@ -353,7 +353,7 @@ public sealed class NodeAgentMcpToolsTests
             Result = "12345678"
         };
 
-        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult!.RequestId.ToString("D"), CancellationToken.None);
+        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult.RequestId.ToString("D"), CancellationToken.None);
 
         AssertEx.Equal("12345678", response.Run!.Result!);
         AssertEx.False(response.Run.ResultTruncated, "A result exactly at the configured bound must not be marked truncated.");
@@ -368,7 +368,7 @@ public sealed class NodeAgentMcpToolsTests
             Result = "123456789"
         };
 
-        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult!.RequestId.ToString("D"), CancellationToken.None);
+        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult.RequestId.ToString("D"), CancellationToken.None);
 
         AssertEx.Equal("12345678", response.Run!.Result!);
         AssertEx.True(response.Run.ResultTruncated, "A clipped result must explicitly report truncation.");
@@ -385,7 +385,7 @@ public sealed class NodeAgentMcpToolsTests
             CompactedAtUtc = 99
         };
 
-        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult!.RequestId.ToString("D"), CancellationToken.None);
+        var response = await harness.Tools.GetAgentRunAsync(harness.RunCoordinator.GetResult.RequestId.ToString("D"), CancellationToken.None);
 
         AssertEx.True(response.Run!.Metadata.ResultExpired, "Expired result payloads must be reported truthfully.");
         AssertEx.True(response.Run.Metadata.Compacted, "Compacted payloads must be distinguishable from active empty results.");

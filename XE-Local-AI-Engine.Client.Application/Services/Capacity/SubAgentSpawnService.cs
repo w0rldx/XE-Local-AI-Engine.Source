@@ -466,8 +466,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         {
             var instructions = string.IsNullOrWhiteSpace(request.Instructions)
                 ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
-                : request.Instructions!;
-            return new ResolvedBinding(request.ModelId!, instructions, Tools: null);
+                : request.Instructions;
+            return new ResolvedBinding(request.ModelId, instructions, Tools: null);
         }
 
         var definition = await ResolveDefinitionAsync(request.SubAgentKey!, ct).ConfigureAwait(false);
@@ -507,7 +507,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
                                              .ResolveAsync(definition.ModelProfile, ct)
                                              .ConfigureAwait(false);
 
-        return new ResolvedBinding(definition.ModelProfile!,
+        return new ResolvedBinding(definition.ModelProfile,
             resolved.ResolvedSystemPrompt,
             tools,
             new ChildReasoning(resolved.ReasoningEffort, supportsThinking),

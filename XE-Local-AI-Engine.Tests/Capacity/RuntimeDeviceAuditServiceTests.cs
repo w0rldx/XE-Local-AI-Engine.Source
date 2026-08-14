@@ -40,9 +40,9 @@ public sealed class RuntimeDeviceAuditServiceTests
         AssertEx.True(state.CpuFallback);
         AssertEx.Equal("cpu", state.InferenceBackend);
         AssertEx.True(state.Reason!.Contains("Vulkan", StringComparison.Ordinal));
-        AssertEx.True(state.Reason!.Contains("WSL2", StringComparison.Ordinal));
+        AssertEx.True(state.Reason.Contains("WSL2", StringComparison.Ordinal));
         AssertEx.True(state.Remediation!.Contains("build", StringComparison.OrdinalIgnoreCase));
-        AssertEx.True(state.Remediation!.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal));
+        AssertEx.True(state.Remediation.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal));
     }
 
     [Test]

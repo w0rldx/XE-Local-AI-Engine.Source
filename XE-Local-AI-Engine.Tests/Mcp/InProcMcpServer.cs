@@ -65,7 +65,7 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         {
             // Bound the wait: if the SDK's read loop does not observe cancellation promptly (e.g. it is parked on a
             // stream read whose peer has already closed), teardown must still complete rather than hang the test run.
-            await _serverLoop.WaitAsync(TimeSpan.FromSeconds(5));
+            await _serverLoop.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or IOException or InvalidOperationException or ObjectDisposedException)
         {

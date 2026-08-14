@@ -481,7 +481,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                     tag,
                     descriptor.Variant,
                     descriptor.Repository,
-                    descriptor.ResolvedCommit!,
+                    descriptor.ResolvedCommit,
                     descriptor.RevisionMode,
                     descriptor.RequestedCommit,
                     descriptor.Source,

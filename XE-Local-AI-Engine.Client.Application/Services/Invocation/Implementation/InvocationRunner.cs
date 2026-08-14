@@ -624,8 +624,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
-                removedPendingToolCall.ResultCompletion.TrySetCanceled();
+                removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
+                removedPendingToolCall.ResultCompletion.TrySetCanceled(CancellationToken.None);
             }
         }
     }
@@ -1987,7 +1987,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         try
         {
-            var reportTask = _capabilityReporter.ReportToApiAsync();
+            var reportTask = _capabilityReporter.ReportToApiAsync(CancellationToken.None);
             if (reportTask is not null)
             {
                 await reportTask.ConfigureAwait(false);
@@ -2141,8 +2141,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
-                removedPendingToolCall.ResultCompletion.TrySetCanceled();
+                removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
+                removedPendingToolCall.ResultCompletion.TrySetCanceled(CancellationToken.None);
             }
         }
     }

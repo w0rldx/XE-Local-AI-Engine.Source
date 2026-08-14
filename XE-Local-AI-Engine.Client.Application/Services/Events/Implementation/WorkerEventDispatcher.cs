@@ -191,7 +191,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
                 MessageId = package.MessageId,
                 Error = "runtime-package-assemble-failed",
                 FailureCategory = nameof(FailureCategory.AgentRuntime)
-            }).ConfigureAwait(false);
+            }, CancellationToken.None).ConfigureAwait(false);
             return;
         }
         catch (Exception exception)
@@ -709,7 +709,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
         try
         {
-            session = await _remotePersistenceCoordinator.BeginAsync(runtimePackage).ConfigureAwait(false);
+            session = await _remotePersistenceCoordinator.BeginAsync(runtimePackage, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -768,9 +768,9 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
         try
         {
-            await foreach (var state in stateReader.ReadAllAsync().ConfigureAwait(false))
+            await foreach (var state in stateReader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
             {
-                terminalPersisted = await session.ApplyAsync(state).ConfigureAwait(false);
+                terminalPersisted = await session.ApplyAsync(state, CancellationToken.None).ConfigureAwait(false);
                 if (terminalPersisted)
                 {
                     break;
@@ -796,7 +796,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             messageId,
             reason,
             nodeKeyIdUsed);
-        await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed).ConfigureAwait(false);
+        await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed, CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task EmitEncryptedFailureAsync(EncryptedRuntimePackageDto package, string error, FailureCategory failureCategory = FailureCategory.AgentRuntime)
@@ -813,7 +813,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             EpochVersion = package.EpochVersion,
             FailureCategory = failureCategory.ToString(),
             Error = error
-        }).ConfigureAwait(false);
+        }, CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task RunInvocationAsync(InvocationExecutionContext context)
@@ -834,7 +834,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
         try
         {
-            await _invocationRunner.RunAsync(context).ConfigureAwait(false);
+            await _invocationRunner.RunAsync(context, CancellationToken.None).ConfigureAwait(false);
 
             UpdateInvocation(package.InvocationId,
                 static state =>

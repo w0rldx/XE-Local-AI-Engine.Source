@@ -312,7 +312,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         _ = dispatchTask.ContinueWith(static (task, state) =>
             {
-                var (continuationLogger, dispatchOperationName) = ((ILogger Logger, string OperationName))state!;
+                var (continuationLogger, dispatchOperationName) = ((ILogger Logger, string OperationName))(state ?? throw new ArgumentNullException(nameof(state)));
 
                 if (task.IsFaulted)
                 {

@@ -400,8 +400,8 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             }
         });
         AssertEx.Equal(expected: 2, added.AllowedSkillIds!.Count);
-        AssertEx.Equal(firstSkill, added.AllowedSkillIds![0]);
-        AssertEx.Equal(secondSkill, added.AllowedSkillIds![1]);
+        AssertEx.Equal(firstSkill, added.AllowedSkillIds[0]);
+        AssertEx.Equal(secondSkill, added.AllowedSkillIds[1]);
         AssertEx.Equal(expected: 1, added.Version);
 
         // Changing the assigned skill set is config-affecting (same class as the tool list) and must bump Version.
@@ -415,7 +415,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             }),
             "Update should find the definition.");
         AssertEx.Equal(expected: 1, updated.AllowedSkillIds!.Count);
-        AssertEx.Equal(firstSkill, updated.AllowedSkillIds![0]);
+        AssertEx.Equal(firstSkill, updated.AllowedSkillIds[0]);
         AssertEx.Equal(expected: 2, updated.Version);
 
         // Re-applying the same skill set is not a config change and must not bump Version again.

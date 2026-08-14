@@ -124,7 +124,7 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
 
     private async Task<IChatClient> ResolveClientAsync(ChatOptions? options, CancellationToken cancellationToken)
     {
-        var modelName = string.IsNullOrWhiteSpace(options?.ModelId) ? _defaultModelName : options!.ModelId!;
+        var modelName = string.IsNullOrWhiteSpace(options?.ModelId) ? _defaultModelName : options.ModelId;
         var providerName = await _resolver.ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
 
         var cacheKey = (Provider: providerName, Model: modelName);

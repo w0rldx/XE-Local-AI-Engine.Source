@@ -610,8 +610,8 @@ public sealed class NodeSettingsEndpointTests
         var stored = request.ToStoredSettings(new StoredNodeSettings());
         AssertEx.NotNull(stored.UsageRates);
         AssertEx.NotNull(stored.UsageRates!.Models);
-        AssertEx.Equal(expected: 1.25d, stored.UsageRates!.Models!["gpt-5"].InputPer1M);
-        AssertEx.Equal(expected: 10d, stored.UsageRates!.Models!["gpt-5"].OutputPer1M);
+        AssertEx.Equal(expected: 1.25d, stored.UsageRates.Models!["gpt-5"].InputPer1M);
+        AssertEx.Equal(expected: 10d, stored.UsageRates.Models["gpt-5"].OutputPer1M);
 
         var response = stored.ToResponse();
         AssertEx.NotNull(response.UsageRates);

@@ -297,7 +297,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private static string ResolveSpeculativeMode(StoredNodeSettings stored) =>
         StoredNodeSettings.IsValidSpeculativeMode(stored.SpeculativeMode) && !string.IsNullOrWhiteSpace(stored.SpeculativeMode)
-            ? stored.SpeculativeMode!
+            ? stored.SpeculativeMode
             : StoredNodeSettings.DefaultSpeculativeMode;
 
     private static string? ResolveSpeculativeDraftModelName(StoredNodeSettings stored) =>

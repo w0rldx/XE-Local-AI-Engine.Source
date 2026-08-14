@@ -163,7 +163,7 @@ public sealed class CustomToolServiceTests
         var view = await service.CreateAsync(definition).ConfigureAwait(false);
 
         var secret = view.Http!.Headers.Single(header => header.Name == "Authorization");
-        var plain = view.Http!.Headers.Single(header => header.Name == "Accept");
+        var plain = view.Http.Headers.Single(header => header.Name == "Accept");
 
         // The secret value never leaves the node — it comes back as the sentinel; the non-secret value is echoed verbatim.
         AssertEx.Equal(CustomToolSecrets.Sentinel, secret.Value);

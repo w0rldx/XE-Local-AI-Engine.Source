@@ -550,10 +550,10 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var (installedResultLease, _, installedBlockedMessage) =
             await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, activity, supervisor, CancellationToken.None);
-        await installedResultLease!.DisposeAsync();
+        await (installedResultLease ?? throw new InvalidOperationException("installedResultLease must not be null.")).DisposeAsync();
         var (activeResultLease, _, activeBlockedMessage) =
             await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, activity, supervisor, CancellationToken.None);
-        await activeResultLease!.DisposeAsync();
+        await (activeResultLease ?? throw new InvalidOperationException("activeResultLease must not be null.")).DisposeAsync();
 
         AssertEx.True(installedBlockedMessage?.Contains("source-built", StringComparison.Ordinal) == true);
         AssertEx.True(activeBlockedMessage?.Contains("active", StringComparison.Ordinal) == true);

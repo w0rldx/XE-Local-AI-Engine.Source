@@ -68,7 +68,7 @@ public sealed class SupervisorProfilingTests
         AssertEx.False(profiling.IsCompleted);
         AssertEx.Equal(0, launcher.LaunchCount);
 
-        await lease!.DisposeAsync();
+        await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
         await profiling;
         AssertEx.Equal(1, launcher.LaunchCount);
     }
@@ -94,7 +94,7 @@ public sealed class SupervisorProfilingTests
 
         var after = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
         AssertEx.NotNull(after);
-        await after!.DisposeAsync();
+        await (after ?? throw new InvalidOperationException("after must not be null.")).DisposeAsync();
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class SupervisorProfilingTests
 
         var disposal = supervisor.DisposeAsync().AsTask();
         await Task.Delay(50);
-        await blocker!.DisposeAsync();
+        await (blocker ?? throw new InvalidOperationException("blocker must not be null.")).DisposeAsync();
 
         await AssertEx.ThrowsAsync<ObjectDisposedException>(() => profiling);
         await disposal;
