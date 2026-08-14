@@ -14,6 +14,7 @@ public sealed class StartGgufImportEndpoint(IGgufImportTransactionCoordinator co
     {
         Post(LocalApiRoutes.ModelFit.Import);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<GgufAcquisitionTicketResponse>(StatusCodes.Status202Accepted));
     }
 
     public override async Task HandleAsync(StartGgufImportRequest req, CancellationToken ct)
