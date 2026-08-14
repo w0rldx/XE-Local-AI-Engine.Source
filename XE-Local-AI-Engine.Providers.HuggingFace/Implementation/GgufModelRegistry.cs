@@ -534,22 +534,32 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             if (File.Exists(sidecarPath))
             {
                 // An unreadable/corrupt sidecar (metadata null) or one whose own claimed revision does not recompute
-                // (RegistryRevisionMismatch) only disables sidecar-DERIVED recovery for this path. Any existing manifest
-                // entry here already passed its own RegistryRevision self-check in LoadEntriesAsync — the manifest stays
-                // readable, so we keep the entry rather than deleting it; only the reaper cleans up genuine orphans.
+                // (RegistryRevisionMismatch) is repaired in place from the token-verified manifest entry when one
+                // exists for this path — a registered model without a valid sidecar would be loadable but unable to
+                // pass the sidecar-requiring mutation/deletion snapshot checks. When repair is impossible the entry is
+                // still kept (the manifest passed its own RegistryRevision self-check in LoadEntriesAsync); only the
+                // startup reaper cleans up genuine orphans.
                 var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
                 if (metadata is null)
                 {
-                    _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is unreadable or corrupt; keeping any existing valid manifest entry without sidecar-derived recovery.",
-                        Path.GetFileName(path));
+                    if (!await TryRepairSidecarAsync(entries, path, ct).ConfigureAwait(false))
+                    {
+                        _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is unreadable or corrupt and could not be repaired; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                            Path.GetFileName(path));
+                    }
+
                     continue;
                 }
 
                 var recovered = GgufAcquisitionSidecar.ToRegistryEntry(metadata, path, _modelsDirectory);
                 if (!string.Equals(recovered.RegistryRevision, metadata.RegistryRevision, StringComparison.Ordinal))
                 {
-                    _logger.LogWarning("Acquisition sidecar for GGUF {FileName} failed its RegistryRevision self-check; keeping any existing valid manifest entry without sidecar-derived recovery.",
-                        Path.GetFileName(path));
+                    if (!await TryRepairSidecarAsync(entries, path, ct).ConfigureAwait(false))
+                    {
+                        _logger.LogWarning("Acquisition sidecar for GGUF {FileName} failed its RegistryRevision self-check and could not be repaired; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                            Path.GetFileName(path));
+                    }
+
                     continue;
                 }
 
@@ -590,22 +600,95 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
             if (IsDeterministicAcquisitionFileName(Path.GetFileName(path)))
             {
-                _logger.LogWarning("Recovery sidecar for GGUF {FileName} is missing; keeping any existing valid manifest entry without sidecar-derived recovery.",
-                    Path.GetFileName(path));
+                _logger.LogWarning("Recovery sidecar for GGUF {FileName} is missing.", Path.GetFileName(path));
             }
         }
 
-        // A missing acquisition sidecar, of any filename shape, only disables sidecar-derived recovery for these
-        // entries because their manifest row already passed its own RegistryRevision self-check. This just logs for
-        // operator visibility — the startup reaper is what actually cleans up genuinely orphaned acquisition artifacts.
-        foreach (var entry in entries.Where(entry => entry.Origin is not null
-                                                     && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix)))
+        // A missing acquisition sidecar, of any filename shape, is rewritten from its token-verified manifest entry so
+        // the model stays consistent for the sidecar-requiring mutation/deletion snapshot checks. When repair is
+        // impossible the entry is still kept (its manifest row passed the RegistryRevision self-check); the startup
+        // reaper cleans up genuinely orphaned acquisition artifacts.
+        foreach (var localPath in entries.Where(entry => entry.Origin is not null
+                                                         && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
+                                         .Select(entry => entry.LocalPath)
+                                         .ToArray())
         {
-            _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is missing; keeping the existing valid manifest entry without sidecar-derived recovery.",
-                Path.GetFileName(entry.LocalPath));
+            if (!await TryRepairSidecarAsync(entries, localPath, ct).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is missing and could not be repaired; keeping the existing valid manifest entry without sidecar-derived recovery.",
+                    Path.GetFileName(localPath));
+            }
         }
 
         return (entries, changed);
+    }
+
+    /// <summary>
+    ///     Rewrites the acquisition sidecar for <paramref name="weightPath" /> from its single token-verified manifest
+    ///     entry. The reconstruction is trusted only when round-tripping it back through
+    ///     <see cref="GgufAcquisitionSidecar.ToRegistryEntry" /> reproduces the entry's exact verified
+    ///     <c>RegistryRevision</c>, and the on-disk weight/projector sizes still match the entry — replaced bytes are
+    ///     never blessed with fresh metadata. Best-effort: returns <see langword="false" /> instead of throwing.
+    /// </summary>
+    private async Task<bool> TryRepairSidecarAsync(List<GgufModelRegistryEntry> entries, string weightPath, CancellationToken ct)
+    {
+        var samePath = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(weightPath)))
+                              .ToArray();
+        if (samePath.Length != 1)
+        {
+            return false;
+        }
+
+        var entry = samePath[0];
+        var metadata = GgufAcquisitionSidecar.FromRegistryEntry(entry, _modelsDirectory);
+        if (metadata is null)
+        {
+            return false;
+        }
+
+        var roundTrip = GgufAcquisitionSidecar.ToRegistryEntry(metadata, entry.LocalPath, _modelsDirectory);
+        if (!string.Equals(roundTrip.RegistryRevision, entry.RegistryRevision, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var sidecarPath = entry.LocalPath + GgufAcquisitionSidecar.Suffix;
+        // The ".part" temp suffix keeps a crash-orphaned repair file inside the startup reaper's cleanup contract.
+        var tempPath = sidecarPath + ".repair.part";
+        try
+        {
+            if (new FileInfo(entry.LocalPath).Length != entry.SizeBytes)
+            {
+                return false;
+            }
+
+            if (entry.ProjectorLocalPath is { } projectorPath
+                && (!File.Exists(projectorPath) || new FileInfo(projectorPath).Length != entry.ProjectorSizeBytes))
+            {
+                return false;
+            }
+
+            File.Delete(tempPath);
+            await GgufAcquisitionSidecar.WriteAsync(tempPath, metadata, ct).ConfigureAwait(false);
+            File.Move(tempPath, sidecarPath, overwrite: true);
+            _logger.LogWarning("Repaired the missing or invalid acquisition sidecar for GGUF {FileName} from its verified manifest entry.",
+                Path.GetFileName(entry.LocalPath));
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            _logger.LogWarning(exception, "Could not repair the acquisition sidecar for GGUF {FileName}.", Path.GetFileName(entry.LocalPath));
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+            {
+                // The orphaned ".part" temp is reclaimed by the startup reaper.
+            }
+
+            return false;
+        }
     }
 
     private static bool IsDeterministicAcquisitionFileName(string fileName)
