@@ -21,14 +21,16 @@ public static class ModelCoordinationKeys
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         var normalized = relativePath.Trim().Replace('\\', '/').Normalize(NormalizationForm.FormC);
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (normalized.StartsWith('/')
             || System.IO.Path.IsPathRooted(normalized)
-            || normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(static segment => segment is "." or ".."))
+            || segments.Length == 0
+            || segments.Any(static segment => segment is "." or ".."))
         {
             throw new ArgumentException("The member path must be a contained relative path.", nameof(relativePath));
         }
 
-        return normalized.ToUpper(CultureInfo.InvariantCulture);
+        return string.Join('/', segments).ToUpper(CultureInfo.InvariantCulture);
     }
 
     public static string Model(string modelName) => $"0:model:{NormalizeModelName(modelName)}";

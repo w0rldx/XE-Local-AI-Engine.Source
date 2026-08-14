@@ -72,6 +72,8 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
 {
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
 
+    public static IReadOnlyList<string> CanonicalQuantizationChoices => QuantLadder.CanonicalQuantizations;
+
     public ResolvedGgufAcquisitionIdentity Resolve(GgufAcquisitionIntent intent)
     {
         ArgumentNullException.ThrowIfNull(intent);

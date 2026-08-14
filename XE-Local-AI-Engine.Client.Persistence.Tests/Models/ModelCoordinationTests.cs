@@ -128,6 +128,15 @@ public sealed class ModelCoordinationTests
             projector)));
     }
 
+    [Test]
+    public void RelativePathKeys_CollapseEquivalentSeparatorsAndTrailingSlash()
+    {
+        var canonical = ModelCoordinationKeys.NormalizeRelativePath("nested/model.gguf");
+
+        AssertEx.Equal(canonical, ModelCoordinationKeys.NormalizeRelativePath("nested//model.gguf/"));
+        AssertEx.Equal(canonical, ModelCoordinationKeys.NormalizeRelativePath(@"nested\\model.gguf"));
+    }
+
     private static GgufAcquisitionIdentityResolver CreateIdentityResolver()
     {
         return new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
