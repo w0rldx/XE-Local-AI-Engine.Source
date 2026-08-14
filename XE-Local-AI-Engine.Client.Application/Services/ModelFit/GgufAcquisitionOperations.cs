@@ -70,7 +70,7 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _cancellations = new();
     private readonly ConcurrentDictionary<Guid, GgufAcquisitionStatus> _statuses = new();
     private readonly int _maxTerminalCount;
-    private readonly object _pruneGate = new();
+    private readonly Lock _pruneGate = new();
     private readonly TimeSpan _terminalMaxAge;
     private readonly TimeProvider _timeProvider;
     private long _lastTimestampTicks;

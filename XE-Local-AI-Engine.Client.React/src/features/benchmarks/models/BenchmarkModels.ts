@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } from "@/core/api/generated";
 import type { ChatMessagePart, ToolCallState } from "@/features/chat/models/ChatModels";
 
 const benchmarkPrimaryStatuses = ["Queued", "Running", "CancelRequested", "Succeeded", "Failed", "Cancelled"] as const;
@@ -15,7 +16,7 @@ const benchmarkJudgeStatuses = [
 	"Cancelled",
 ] as const;
 export type BenchmarkJudgeStatus = (typeof benchmarkJudgeStatuses)[number];
-export type BenchmarkOrigin = "huggingface" | "imported" | null;
+export type BenchmarkOrigin = XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
 
 export interface BenchmarkProjectSummary {
 	id: string;

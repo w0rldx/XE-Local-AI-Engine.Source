@@ -254,6 +254,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             var cancelledAt = Now();
             run.PrimaryStatus = BenchmarkPrimaryStatus.Cancelled;
             run.PrimaryErrorMessage = null;
+            run.OutputPartsJson = null;
+            run.LastStreamSequence = 0;
+            run.EffectiveContextTokens = null;
+            run.DurationMs = null;
+            run.TotalTokens = null;
+            run.TokensPerSecond = null;
             run.PrimaryCompletedAtUtc = cancelledAt;
             run.Version++;
             run.UpdatedAtUtc = cancelledAt;
@@ -763,8 +769,18 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private static BenchmarkRunRecord ToRecord(BenchmarkRun entity) =>
         new(entity.Id, entity.ProjectId, entity.RuntimeSnapshotJson.ToArray(), entity.PrimaryModelName, entity.PrimaryModelOrigin,
             entity.ModelContentFingerprint, entity.AgentName, entity.AgentVersion, entity.RequestedContextTokens, entity.PrimaryStatus,
-            entity.EffectiveContextTokens, entity.DurationMs, entity.TotalTokens, entity.TokensPerSecond, entity.OutputPartsJson?.ToArray(),
-            entity.LastStreamSequence, entity.UserScore, entity.JudgeStatus, entity.JudgeResultJson?.ToArray(), entity.PrimaryErrorMessage,
+            entity.EffectiveContextTokens, entity.DurationMs, entity.TotalTokens, entity.TokensPerSecond, CopyOptional(entity.OutputPartsJson),
+            entity.LastStreamSequence, entity.UserScore, entity.JudgeStatus, CopyOptional(entity.JudgeResultJson), entity.PrimaryErrorMessage,
             entity.JudgeErrorMessage, entity.Version, entity.CreatedAtUtc, entity.StartedAtUtc, entity.PrimaryCompletedAtUtc,
             entity.JudgeStartedAtUtc, entity.JudgeCompletedAtUtc, entity.UpdatedAtUtc);
+
+    private static ReadOnlyMemory<byte>? CopyOptional(byte[]? value)
+    {
+        if (value is null)
+        {
+            return default;
+        }
+
+        return new ReadOnlyMemory<byte>(value.ToArray());
+    }
 }

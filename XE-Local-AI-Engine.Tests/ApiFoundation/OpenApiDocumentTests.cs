@@ -152,6 +152,54 @@ public sealed class OpenApiDocumentTests
     }
 
     [Test]
+    public async Task LocalOpenApiDocument_DescribesGgufImportAndBenchmarkSurfaces()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        foreach (var path in new[]
+                 {
+                     "/api/local/v1/model-fit/gguf/import/capability",
+                     "/api/local/v1/model-fit/gguf/imports",
+                     "/api/local/v1/model-fit/gguf/imports/{operationId}",
+                     "/api/local/v1/model-fit/gguf/imports/{operationId}/cancel",
+                     "/api/local/v1/benchmarks/projects",
+                     "/api/local/v1/benchmarks/projects/{projectId}",
+                     "/api/local/v1/benchmarks/projects/{projectId}/runs",
+                     "/api/local/v1/benchmarks/runs/{runId}",
+                     "/api/local/v1/benchmarks/runs/{runId}/cancel",
+                     "/api/local/v1/benchmarks/runs/{runId}/score",
+                     "/api/local/v1/benchmarks/eligible-agents",
+                     "/api/local/v1/benchmarks/eligible-models"
+                 })
+        {
+            AssertEx.True(paths.TryGetProperty(path, out _), $"Expected local model-management path '{path}'.");
+        }
+
+        AssertResponses(paths, "/api/local/v1/benchmarks/projects/{projectId}/runs", "post", ["202"]);
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaEnum(schemas, "LocalModelOrigin", ["huggingface", "imported"]);
+        AssertSchemaProperties(schemas, "GgufAcquisitionStatusResponse",
+        [
+            "operationId", "operationKind", "modelName", "phase", "completedBytes", "totalBytes", "startedAtUtc",
+            "updatedAtUtc", "errorCode", "sanitizedMessage"
+        ]);
+        AssertSchemaProperties(schemas, "BenchmarkRunSummaryResponse",
+        [
+            "id", "projectId", "primaryModelName", "primaryModelOrigin", "modelContentFingerprint", "primaryStatus",
+            "judgeStatus", "lastStreamSequence", "version"
+        ]);
+        AssertDeclaredSchemaProperties(schemas, "BenchmarkRunDetailResponse", ["outputParts", "judgeResult"]);
+    }
+
+    [Test]
     public async Task LocalOpenApiDocument_DescribesImageRuntimeSourceBuildSurface()
     {
         await using var factory = new TestingWebAppFactory();
@@ -241,6 +289,29 @@ public sealed class OpenApiDocumentTests
         foreach (var property in expected)
         {
             AssertEx.True(properties.TryGetProperty(property, out _), $"Expected {schemaSuffix}.{property} in OpenAPI.");
+        }
+    }
+
+    private static void AssertDeclaredSchemaProperties(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> expected)
+    {
+        var schema = FindSchema(schemas, schemaSuffix);
+        var propertySets = new List<JsonElement>();
+        if (schema.TryGetProperty("properties", out var directProperties))
+        {
+            propertySets.Add(directProperties);
+        }
+
+        if (schema.TryGetProperty("allOf", out var allOf))
+        {
+            propertySets.AddRange(allOf.EnumerateArray()
+                                       .Where(static item => item.TryGetProperty("properties", out _))
+                                       .Select(static item => item.GetProperty("properties")));
+        }
+
+        foreach (var property in expected)
+        {
+            AssertEx.True(propertySets.Any(properties => properties.TryGetProperty(property, out _)),
+                $"Expected {schemaSuffix}.{property} in OpenAPI.");
         }
     }
 

@@ -1337,7 +1337,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse
 	license?: string | null;
 };
 
-export type XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin = "HuggingFace" | "Imported";
+export type XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin = "huggingface" | "imported";
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = {
 	[key: string]: never;
@@ -2619,6 +2619,184 @@ export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = {
 	accountId?: string | null;
 	expiresAtUtc?: string | null;
 	loginPending: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkAgentsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentResponse = {
+	id?: string;
+	name: string;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkAgentsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkModelsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse = {
+	modelName: string;
+	maxContextTokens?: number | null;
+	effectiveContextTokens?: number | null;
+	origin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
+	modelContentFingerprint: string;
+	supportsTools?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = {
+	id?: string;
+	name: string;
+	contextTokens?: number;
+	agentDefinitionId?: string;
+	judgeEnabled?: boolean;
+	runCount?: number;
+	isFrozen?: boolean;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
+		coreTask: string;
+		judgeModelName?: string | null;
+		judgeContextTokens?: number | null;
+		judgePromptVersion?: number;
+		judgeOutputSchemaVersion?: number;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest = {
+	name?: string;
+	coreTask?: string;
+	contextTokens?: number;
+	agentDefinitionId?: string;
+	judgeEnabled?: boolean;
+	judgeModelName?: string | null;
+	judgeContextTokens?: number | null;
+	judgePromptVersion?: number;
+	judgeOutputSchemaVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest & {
+		expectedVersion?: number;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkProjectRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse>;
+	page?: number;
+	pageSize?: number;
+	totalCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse = {
+	id?: string;
+	projectId?: string;
+	primaryModelName: string;
+	primaryModelOrigin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
+	modelContentFingerprint: string;
+	agentName: string;
+	agentVersion?: number;
+	requestedContextTokens?: number;
+	primaryStatus?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus;
+	judgeStatus?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkJudgeStatus;
+	effectiveContextTokens?: number | null;
+	durationMs?: number | null;
+	totalTokens?: number | null;
+	tokensPerSecond?: number | null;
+	userScore?: number | null;
+	lastStreamSequence?: number;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus =
+	| "Queued"
+	| "Running"
+	| "Succeeded"
+	| "Failed"
+	| "CancelRequested"
+	| "Cancelled";
+
+export type XeLocalAiEngineClientPersistenceEntitiesBenchmarkJudgeStatus =
+	| "Disabled"
+	| "Pending"
+	| "Skipped"
+	| "Queued"
+	| "Running"
+	| "Succeeded"
+	| "Failed"
+	| "Cancelled";
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
+		outputParts?: unknown;
+		judgeResult?: XeLocalAiEngineClientServicesBenchmarksBenchmarkJudgeResultV1 | null;
+		primaryErrorMessage?: string | null;
+		judgeErrorMessage?: string | null;
+		startedAtUtc?: number | null;
+		primaryCompletedAtUtc?: number | null;
+		judgeStartedAtUtc?: number | null;
+		judgeCompletedAtUtc?: number | null;
+	};
+
+export type XeLocalAiEngineClientServicesBenchmarksBenchmarkJudgeResultV1 = {
+	schemaVersion?: number;
+	score?: number;
+	rationale?: string;
+	judgeModelContentFingerprint?: string;
+	promptVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest = {
+	modelName?: string;
+	expectedProjectVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkRunRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest = {
+	target?: XeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget;
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget = "Primary" | "Judge";
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest = {
+	score?: number;
+	expectedVersion?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse = {
@@ -5527,9 +5705,9 @@ export type StartGgufImportErrors = {
 
 export type StartGgufImportResponses = {
 	/**
-	 * Success
+	 * Accepted
 	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionTicketResponse;
+	202: XeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionTicketResponse;
 };
 
 export type StartGgufImportResponse = StartGgufImportResponses[keyof StartGgufImportResponses];
@@ -8990,6 +9168,384 @@ export type CodexStatusResponses = {
 };
 
 export type CodexStatusResponse = CodexStatusResponses[keyof CodexStatusResponses];
+
+export type ListEligibleBenchmarkAgentsData = {
+	body?: never;
+	path?: never;
+	query: {
+		modelName: string;
+	};
+	url: "/api/local/v1/benchmarks/eligible-agents";
+};
+
+export type ListEligibleBenchmarkAgentsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListEligibleBenchmarkAgentsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkAgentsResponse;
+};
+
+export type ListEligibleBenchmarkAgentsResponse =
+	ListEligibleBenchmarkAgentsResponses[keyof ListEligibleBenchmarkAgentsResponses];
+
+export type ListEligibleBenchmarkModelsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		contextTokens?: number | null;
+	};
+	url: "/api/local/v1/benchmarks/eligible-models";
+};
+
+export type ListEligibleBenchmarkModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListEligibleBenchmarkModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkModelsResponse;
+};
+
+export type ListEligibleBenchmarkModelsResponse =
+	ListEligibleBenchmarkModelsResponses[keyof ListEligibleBenchmarkModelsResponses];
+
+export type ListBenchmarkProjectsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects";
+};
+
+export type ListBenchmarkProjectsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListBenchmarkProjectsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse;
+};
+
+export type ListBenchmarkProjectsResponse = ListBenchmarkProjectsResponses[keyof ListBenchmarkProjectsResponses];
+
+export type CreateBenchmarkProjectData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects";
+};
+
+export type CreateBenchmarkProjectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateBenchmarkProjectResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse;
+};
+
+export type CreateBenchmarkProjectResponse = CreateBenchmarkProjectResponses[keyof CreateBenchmarkProjectResponses];
+
+export type DeleteBenchmarkProjectData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkProjectRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}";
+};
+
+export type DeleteBenchmarkProjectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteBenchmarkProjectResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteBenchmarkProjectResponse = DeleteBenchmarkProjectResponses[keyof DeleteBenchmarkProjectResponses];
+
+export type GetBenchmarkProjectData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}";
+};
+
+export type GetBenchmarkProjectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetBenchmarkProjectResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse;
+};
+
+export type GetBenchmarkProjectResponse = GetBenchmarkProjectResponses[keyof GetBenchmarkProjectResponses];
+
+export type UpdateBenchmarkProjectData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}";
+};
+
+export type UpdateBenchmarkProjectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateBenchmarkProjectResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse;
+};
+
+export type UpdateBenchmarkProjectResponse = UpdateBenchmarkProjectResponses[keyof UpdateBenchmarkProjectResponses];
+
+export type ListBenchmarkRunsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query: {
+		page: number;
+		pageSize: number;
+	};
+	url: "/api/local/v1/benchmarks/projects/{projectId}/runs";
+};
+
+export type ListBenchmarkRunsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListBenchmarkRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse;
+};
+
+export type ListBenchmarkRunsResponse = ListBenchmarkRunsResponses[keyof ListBenchmarkRunsResponses];
+
+export type StartBenchmarkRunData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/runs";
+};
+
+export type StartBenchmarkRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartBenchmarkRunResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+};
+
+export type StartBenchmarkRunResponse = StartBenchmarkRunResponses[keyof StartBenchmarkRunResponses];
+
+export type DeleteBenchmarkRunData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkRunRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}";
+};
+
+export type DeleteBenchmarkRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteBenchmarkRunResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteBenchmarkRunResponse = DeleteBenchmarkRunResponses[keyof DeleteBenchmarkRunResponses];
+
+export type GetBenchmarkRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}";
+};
+
+export type GetBenchmarkRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetBenchmarkRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+};
+
+export type GetBenchmarkRunResponse = GetBenchmarkRunResponses[keyof GetBenchmarkRunResponses];
+
+export type CancelBenchmarkRunData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/cancel";
+};
+
+export type CancelBenchmarkRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelBenchmarkRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+};
+
+export type CancelBenchmarkRunResponse = CancelBenchmarkRunResponses[keyof CancelBenchmarkRunResponses];
+
+export type ScoreBenchmarkRunData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1ScoreBenchmarkRunRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/score";
+};
+
+export type ScoreBenchmarkRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ScoreBenchmarkRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+};
+
+export type ScoreBenchmarkRunResponse = ScoreBenchmarkRunResponses[keyof ScoreBenchmarkRunResponses];
 
 export type ListSlashCommandsData = {
 	body?: never;

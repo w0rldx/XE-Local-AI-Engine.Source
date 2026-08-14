@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -309,7 +311,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
                     Arg.Any<CancellationToken>())
                 .Returns(LlamaServerProviderConstants.ProviderName);
         }
-        services.AddScoped(_ => providerResolver!);
+        services.AddScoped(_ => providerResolver);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         return new GgufDownloadCoordinator(transaction,
@@ -493,11 +495,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public TaskCompletionSource ReleaseClaim { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
-            string requestedModelName,
+            string modelName,
             CancellationToken cancellationToken = default) => Task.FromResult<ModelProviderMapRecord?>(_receipt.Mutation);
 
         public async Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease,
-            string requestedModelName,
+            string modelName,
             CancellationToken cancellationToken = default)
         {
             ClaimEntered.TrySetResult();
@@ -510,7 +512,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         }
 
         public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease,
-            string requestedModelName,
+            string modelName,
             string providerName,
             string? expectedRevision = null,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -524,7 +526,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         }
 
         public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease,
-            string requestedModelName,
+            string modelName,
             string expectedProvider,
             string expectedRevision,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
