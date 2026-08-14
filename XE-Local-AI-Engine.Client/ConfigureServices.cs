@@ -42,6 +42,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using LoggerExtensions = XE_Local_AI_Engine.Client.Common.Extensions.LoggerExtensions;
@@ -505,6 +506,11 @@ public static class ConfigureServices
         if (!options.Converters.OfType<SlashCommandActionTypeDtoJsonConverter>().Any())
         {
             options.Converters.Insert(index: 0, new SlashCommandActionTypeDtoJsonConverter());
+        }
+
+        if (!options.Converters.OfType<LocalModelOriginJsonConverter>().Any())
+        {
+            options.Converters.Insert(index: 0, new LocalModelOriginJsonConverter());
         }
 
         if (!options.Converters.OfType<JsonStringEnumConverter>().Any())
