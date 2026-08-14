@@ -116,6 +116,75 @@ internal static class GgufAcquisitionSidecar
         }
     }
 
+    /// <summary>
+    ///     Rebuilds the recovery sidecar metadata from a token-verified manifest entry, or returns <see langword="null" />
+    ///     when the entry lacks the required acquisition fields or cannot produce a shape-valid sidecar. The registry
+    ///     entry is the complete material value its <c>RegistryRevision</c> commits to, so this is reconstruction from an
+    ///     authoritative representation — the caller must still prove faithfulness by round-tripping the result through
+    ///     <see cref="ToRegistryEntry" /> and comparing revisions. Remote-declared projector source hash/size are not part
+    ///     of the registry value and are rebuilt as <see langword="null" />, which the shape contract permits.
+    /// </summary>
+    public static GgufAcquisitionMetadata? FromRegistryEntry(GgufModelRegistryEntry entry, string modelsDirectory)
+    {
+        if (entry.Origin is not { } origin
+            || entry.RegistryRevision is not { } registryRevision
+            || entry.Sha256 is not { } weightSha256
+            || entry.SourceDisplayName is not { } sourceDisplayName
+            || entry.ModelContentFingerprint is not { } modelContentFingerprint
+            || entry.MetadataSchemaVersion != GgufAcquisitionMetadata.CurrentSchemaVersion)
+        {
+            return null;
+        }
+
+        string? projectorRelativePath = null;
+        string? projectorFingerprint = null;
+        if (entry.ProjectorLocalPath is { } projectorLocalPath)
+        {
+            if (entry.ProjectorSha256 is not { } projectorSha256 || entry.ProjectorSizeBytes is not { } projectorSizeBytes)
+            {
+                return null;
+            }
+
+            try
+            {
+                projectorRelativePath = GgufFilePath.GetRelativeContainedPath(modelsDirectory, projectorLocalPath);
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+
+            projectorFingerprint = GgufMemberFingerprint.Compute(projectorSha256, projectorSizeBytes);
+        }
+
+        var metadata = new GgufAcquisitionMetadata
+        {
+            SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            RegistryRevision = registryRevision,
+            ModelName = entry.ModelName,
+            Origin = origin,
+            LocalFileName = entry.FileName,
+            Quantization = entry.Quant,
+            WeightContentSha256 = weightSha256,
+            WeightSizeBytes = entry.SizeBytes,
+            WeightMemberFingerprint = GgufMemberFingerprint.Compute(weightSha256, entry.SizeBytes),
+            SourceDisplayName = sourceDisplayName,
+            AcquiredAtUtc = entry.DownloadedAtUtc,
+            RegistryRepoId = entry.RepoId,
+            RegistrySourceRevision = entry.SourceRevision,
+            Role = entry.Role,
+            ProjectorRelativePath = projectorRelativePath,
+            ProjectorSourceDisplayName = entry.ProjectorFileName,
+            ProjectorSourceSha256 = null,
+            ProjectorSourceSizeBytes = null,
+            ProjectorContentSha256 = entry.ProjectorSha256,
+            ProjectorContentSizeBytes = entry.ProjectorSizeBytes,
+            ProjectorMemberFingerprint = projectorFingerprint,
+            ModelContentFingerprint = modelContentFingerprint
+        };
+        return ValidateShape(metadata, entry.LocalPath, modelsDirectory) ? metadata : null;
+    }
+
     public static GgufModelRegistryEntry ToRegistryEntry(GgufAcquisitionMetadata metadata, string weightPath, string modelsDirectory)
     {
         var projectorPath = metadata.ProjectorRelativePath is null
