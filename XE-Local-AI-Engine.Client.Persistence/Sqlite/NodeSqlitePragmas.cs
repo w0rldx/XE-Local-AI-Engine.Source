@@ -139,26 +139,29 @@ public static class NodeSqlitePragmas
         return $"PRAGMA synchronous={settings.Synchronous.ToString().ToUpperInvariant()};";
     }
 
-    // WAL and synchronous are only meaningful for a writable, on-disk database. An in-memory database ignores/refuses WAL
-    // ("PRAGMA journal_mode=WAL" returns "memory"), and a read-only connection (e.g. the knowledge-downgrade safety check)
-    // rejects the write with SQLite error 8 ("attempt to write a readonly database"). Skip both cases rather than log a
-    // spurious warning every open.
+    // WAL journaling is only safely settable on a writable, private-cache, on-disk connection. Skip it (rather than log a
+    // spurious warning on every open) for the three connection shapes that cannot switch into WAL. An in-memory database
+    // reports its journal mode as memory and never wal. A read-only connection refuses the write with SQLite error 8. A
+    // shared-cache connection (the Aspire dev integration sets one) collides with the sibling connections that other
+    // services open against the node database concurrently at startup, so the switch is refused with SQLite error 6 or 8.
+    // The desktop and packaged builds use a plain private-cache data source, so they still get WAL.
     private static bool ShouldApplyWal(DbConnection connection, NodeSqlitePragmaSettings settings)
     {
-        return settings.EnableWriteAheadLog && !IsMemoryOrReadOnlyDatabase(connection);
+        return settings.EnableWriteAheadLog && !IsWalIncompatibleConnection(connection);
     }
 
-    private static bool IsMemoryOrReadOnlyDatabase(DbConnection connection)
+    private static bool IsWalIncompatibleConnection(DbConnection connection)
     {
         try
         {
             var builder = new SqliteConnectionStringBuilder(connection.ConnectionString);
             return builder.Mode is SqliteOpenMode.Memory or SqliteOpenMode.ReadOnly
+                   || builder.Cache == SqliteCacheMode.Shared
                    || string.Equals(builder.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase);
         }
         catch (ArgumentException)
         {
-            // A non-SQLite or unparseable connection string: treat as writable on-disk and let the pragma itself no-op if unsupported.
+            // A non-SQLite or unparseable connection string: treat as a writable private-cache file and let the pragma itself no-op if unsupported.
             return false;
         }
     }
