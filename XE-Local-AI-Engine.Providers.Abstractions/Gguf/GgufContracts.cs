@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
 /// <summary>
 ///     Caller request to ensure a specific GGUF file is present locally. When <see cref="FileName" /> is supplied it
 ///     selects the exact <c>.gguf</c>; otherwise <see cref="Quant" /> (defaulting to the store's configured default,
@@ -42,6 +44,11 @@ public sealed record GgufModelHandle(
 /// </summary>
 public sealed record GgufModelRegistryEntry
 {
+    /// <summary>Deterministic value-derived compare token. Legacy manifests may omit it on disk.</summary>
+    public string? RegistryRevision { get; init; }
+
+    /// <summary>Typed acquisition provenance; <see langword="null" /> only for legacy entries.</summary>
+    public LocalModelOrigin? Origin { get; init; }
     /// <summary>Registry key — repo + quant identity, e.g. <c>bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M</c>.</summary>
     public required string ModelName { get; init; }
 
@@ -84,6 +91,21 @@ public sealed record GgufModelRegistryEntry
     ///     the model has no projector companion. Passed to llama-server as <c>--mmproj</c> to enable image input.
     /// </summary>
     public string? ProjectorLocalPath { get; init; }
+
+    /// <summary>Committed projector size, present together with <see cref="ProjectorSha256" />.</summary>
+    public long? ProjectorSizeBytes { get; init; }
+
+    /// <summary>Lowercase SHA-256 of committed projector bytes.</summary>
+    public string? ProjectorSha256 { get; init; }
+
+    /// <summary>Source basename only, never an absolute path or URL.</summary>
+    public string? SourceDisplayName { get; init; }
+
+    /// <summary>Recovery sidecar schema version for new acquisitions.</summary>
+    public int? MetadataSchemaVersion { get; init; }
+
+    /// <summary>Aggregate V1 content identity across weight and optional projector.</summary>
+    public string? ModelContentFingerprint { get; init; }
 }
 
 /// <summary>

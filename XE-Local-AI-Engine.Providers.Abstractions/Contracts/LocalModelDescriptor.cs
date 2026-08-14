@@ -4,6 +4,11 @@ using System.Text.Json.Serialization;
 
 public sealed record LocalModelDescriptor
 {
+    /// <summary>Typed acquisition provenance; null for legacy/unknown provider entries.</summary>
+    public LocalModelOrigin? Origin { get; init; }
+
+    /// <summary>Aggregate content identity across weight and optional projector members.</summary>
+    public string? ModelContentFingerprint { get; init; }
     [JsonRequired]
     public required string ModelName { get; init; }
 

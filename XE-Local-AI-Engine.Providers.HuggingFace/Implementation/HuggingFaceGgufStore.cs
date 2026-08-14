@@ -185,14 +185,18 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 if (!GgufDraftModel.IsDraftQuant(existing.Quant)
                     && (existing.ProjectorLocalPath is null || !File.Exists(existing.ProjectorLocalPath)))
                 {
-                    var (backfillFileName, backfillPath) = await TryEnsureProjectorAsync(existing.RepoId, existing.FileName, existing.SourceRevision, ct).ConfigureAwait(false);
-                    if (backfillPath is not null)
+                    var backfill = await TryEnsureProjectorAsync(existing.RepoId, existing.FileName, existing.SourceRevision, ct).ConfigureAwait(false);
+                    if (backfill.LocalPath is not null)
                     {
                         existing = existing with
                         {
-                            ProjectorFileName = backfillFileName,
-                            ProjectorLocalPath = backfillPath
+                            ProjectorFileName = backfill.SourceDisplayName,
+                            ProjectorLocalPath = backfill.LocalPath,
+                            ProjectorSizeBytes = backfill.SizeBytes,
+                            ProjectorSha256 = backfill.ContentSha256,
+                            RegistryRevision = null
                         };
+                        existing = existing with { RegistryRevision = GgufRegistryRevision.ComputeV1(existing) };
                         await _registry.UpsertAsync(existing, ct).ConfigureAwait(false);
                     }
                 }
@@ -223,31 +227,85 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             // weights (auto-pair). A text-only repo has none — FindProjectorAsync returns null and nothing extra is
             // fetched. A projector failure never fails the model: it loads text-only. Skipped for a draft file — a
             // speculative drafter is never the chat model that would consume a projector.
-            var (projectorFileName, projectorLocalPath) = GgufDraftModel.IsDraftQuant(quant)
-                ? (null, null)
+            var projector = GgufDraftModel.IsDraftQuant(quant)
+                ? ProjectorDownloadResult.None
                 : await TryEnsureProjectorAsync(request.RepoId, fileName, revision, ct).ConfigureAwait(false);
+
+            var weightHash = await GgufAcquisitionSidecar.ComputeSha256Async(result.LocalPath, ct).ConfigureAwait(false);
+            var weightFingerprint = GgufMemberFingerprint.Compute(weightHash, result.SizeBytes);
+            var contentMembers = new List<GgufModelContentMember>
+            {
+                new(Path.GetFileName(result.LocalPath), InstalledModelPhysicalMemberRole.Weight, result.SizeBytes, weightHash, [modelName])
+            };
+            if (projector.LocalPath is not null)
+            {
+                contentMembers.Add(new GgufModelContentMember(projector.RelativePath!,
+                    InstalledModelPhysicalMemberRole.Projector,
+                    projector.SizeBytes!.Value,
+                    projector.ContentSha256!,
+                    [modelName]));
+            }
+
+            var modelContentFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
+            var acquiredAt = DateTimeOffset.UtcNow;
 
             var entry = new GgufModelRegistryEntry
             {
                 ModelName = modelName,
                 RepoId = request.RepoId,
-                FileName = fileName,
+                FileName = Path.GetFileName(result.LocalPath),
                 Quant = quant,
                 LocalPath = result.LocalPath,
                 SizeBytes = result.SizeBytes,
                 // The download verified the content against the resolve OID or, failing that, the discovery digest we
                 // just passed. Persist ONLY that verified hash — never echo an unverified digest, which would be
                 // indistinguishable from a real integrity guarantee.
-                Sha256 = result.Sha256,
+                Sha256 = weightHash,
                 SourceRevision = string.IsNullOrEmpty(result.ResolvedRevision) ? revision : result.ResolvedRevision,
-                DownloadedAtUtc = DateTimeOffset.UtcNow,
+                DownloadedAtUtc = acquiredAt,
                 // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole
                 // repo through one download action, so a drafter arrives on the same Chat/Unknown-role request as the
                 // base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
-                Role = GgufDraftModel.IsDraftQuant(quant) ? GgufRole.Draft : request.Role,
-                ProjectorFileName = projectorFileName,
-                ProjectorLocalPath = projectorLocalPath
+                Role = GgufDraftModel.IsDraftQuant(quant)
+                    ? GgufRole.Draft
+                    : request.Role == GgufRole.Unknown ? GgufRole.Chat : request.Role,
+                ProjectorFileName = projector.SourceDisplayName,
+                ProjectorLocalPath = projector.LocalPath,
+                ProjectorSizeBytes = projector.SizeBytes,
+                ProjectorSha256 = projector.ContentSha256,
+                Origin = LocalModelOrigin.HuggingFace,
+                SourceDisplayName = Path.GetFileName(fileName),
+                MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+                ModelContentFingerprint = modelContentFingerprint
             };
+
+            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry) };
+            var sidecar = new GgufAcquisitionMetadata
+            {
+                SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+                RegistryRevision = entry.RegistryRevision,
+                ModelName = modelName,
+                Origin = LocalModelOrigin.HuggingFace,
+                LocalFileName = entry.FileName,
+                Quantization = entry.Quant,
+                WeightContentSha256 = weightHash,
+                WeightSizeBytes = entry.SizeBytes,
+                WeightMemberFingerprint = weightFingerprint,
+                SourceDisplayName = entry.SourceDisplayName,
+                AcquiredAtUtc = acquiredAt,
+                RegistryRepoId = entry.RepoId,
+                RegistrySourceRevision = entry.SourceRevision,
+                Role = entry.Role,
+                ProjectorRelativePath = projector.RelativePath,
+                ProjectorSourceDisplayName = projector.SourceDisplayName,
+                ProjectorSourceSha256 = projector.SourceSha256,
+                ProjectorSourceSizeBytes = projector.SourceSizeBytes,
+                ProjectorContentSha256 = projector.ContentSha256,
+                ProjectorContentSizeBytes = projector.SizeBytes,
+                ProjectorMemberFingerprint = projector.MemberFingerprint,
+                ModelContentFingerprint = modelContentFingerprint
+            };
+            await GgufAcquisitionSidecar.WriteAsync(result.LocalPath + GgufAcquisitionSidecar.Suffix, sidecar, ct).ConfigureAwait(false);
 
             await _registry.UpsertAsync(entry, ct).ConfigureAwait(false);
             return ToHandle(entry);
@@ -268,6 +326,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         {
             TryDeleteFile(entry.LocalPath);
             TryDeleteFile(entry.LocalPath + ".part");
+            TryDeleteFile(entry.LocalPath + GgufAcquisitionSidecar.Suffix);
             // Remove the paired mmproj projector too — it is keyed by this model's file stem, so no other model shares it.
             if (entry.ProjectorLocalPath is not null)
             {
@@ -347,7 +406,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // — any failure degrades to text-only (null path). Cancellation propagates.
     private const string ProjectorSubdirectory = "projectors";
 
-    private async Task<(string? FileName, string? LocalPath)> TryEnsureProjectorAsync(string repoId,
+    private async Task<ProjectorDownloadResult> TryEnsureProjectorAsync(string repoId,
         string modelFileName,
         string weightsRevision,
         CancellationToken ct)
@@ -357,7 +416,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var projector = await _discovery.FindProjectorAsync(repoId, ct).ConfigureAwait(false);
             if (projector is null || !GgufFilePath.IsSafeRelativePath(projector.FileName))
             {
-                return (null, null);
+                return ProjectorDownloadResult.None;
             }
 
             var localRelativePath = $"{ProjectorSubdirectory}/{Path.GetFileNameWithoutExtension(modelFileName)}.mmproj.gguf";
@@ -384,7 +443,15 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
             _logger.LogInformation("Downloaded the multimodal projector {ProjectorFile} for {RepoId}; image input is available.",
                 projector.FileName, repoId);
-            return (projector.FileName, result.LocalPath);
+            var contentSha = await GgufAcquisitionSidecar.ComputeSha256Async(result.LocalPath, ct).ConfigureAwait(false);
+            return new ProjectorDownloadResult(projector.FileName,
+                localRelativePath,
+                result.LocalPath,
+                result.SizeBytes,
+                contentSha,
+                projector.Sha256?.ToLowerInvariant(),
+                projector.SizeBytes,
+                GgufMemberFingerprint.Compute(contentSha, result.SizeBytes));
         }
         catch (OperationCanceledException)
         {
@@ -393,7 +460,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to download the multimodal projector for {RepoId}; the model will load as text-only.", repoId);
-            return (null, null);
+            return ProjectorDownloadResult.None;
         }
     }
 
@@ -417,6 +484,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             SizeBytes = entry.SizeBytes,
             ModifiedAt = entry.DownloadedAtUtc,
             RevisionFingerprint = entry.Sha256 ?? entry.SourceRevision,
+            Origin = entry.Origin,
+            ModelContentFingerprint = entry.ModelContentFingerprint,
             MaxContextTokens = facts.MaxContextTokens,
             IsToolCapable = facts.IsToolCapable,
             IsReasoningCapable = facts.IsReasoningCapable,
@@ -549,6 +618,19 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // Identity for a downloaded GGUF file: a re-download changes the size and/or download timestamp, so a stale header
     // result (e.g. for a replaced quant at the same path) can never be served from the cache.
     private readonly record struct HeaderFactsCacheKey(string LocalPath, long SizeBytes, DateTimeOffset DownloadedAtUtc);
+
+    private sealed record ProjectorDownloadResult(
+        string? SourceDisplayName,
+        string? RelativePath,
+        string? LocalPath,
+        long? SizeBytes,
+        string? ContentSha256,
+        string? SourceSha256,
+        long? SourceSizeBytes,
+        string? MemberFingerprint)
+    {
+        public static ProjectorDownloadResult None { get; } = new(null, null, null, null, null, null, null, null);
+    }
 
     // The per-file header facts surfaced onto the descriptor, derived from one tolerant header read.
     private readonly record struct GgufHeaderFacts(
