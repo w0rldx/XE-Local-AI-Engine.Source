@@ -6,6 +6,7 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -146,6 +147,34 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         AssertEx.Equal(expected: 2L, await ScalarAsync<long>(holder, "SELECT COUNT(*) FROM t;"));
     }
 
+    [Test]
+    public async Task ReadOnlyConnection_SkipsWalWithoutLoggingAWarning()
+    {
+        var path = Path.Combine(_dir, "readonly.sqlite");
+
+        // Seed the file so a read-only open has something to attach to.
+        await using (var seed = new SqliteConnection($"Data Source={path}"))
+        {
+            await seed.OpenAsync();
+            await ExecuteAsync(seed, "CREATE TABLE t(id INTEGER PRIMARY KEY);");
+        }
+
+        SqliteConnection.ClearAllPools();
+
+        var logger = new WarningCapturingLogger();
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString());
+        await connection.OpenAsync();
+
+        // Must not attempt PRAGMA journal_mode=WAL on a read-only handle (SQLite error 8) — so no warning is logged.
+        await NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None);
+
+        AssertEx.Empty(logger.Warnings, "A read-only connection must not log a PRAGMA warning.");
+    }
+
     private static async Task<SqliteConnection> OpenConfiguredAsync(string path, NodeSqlitePragmaSettings settings)
     {
         var connection = new SqliteConnection($"Data Source={path}");
@@ -174,4 +203,22 @@ public sealed class NodeSqlitePragmasTests : IDisposable
 
     // A minimal EF context used only to force an EF-initiated connection open through the interceptor.
     private sealed class ProbeContext(DbContextOptions<ProbeContext> options) : DbContext(options);
+
+    // Captures Warning-level log entries so a test can assert the pragma path stayed quiet.
+    private sealed class WarningCapturingLogger : ILogger
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel == LogLevel.Warning;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                Warnings.Add(formatter(state, exception));
+            }
+        }
+    }
 }
