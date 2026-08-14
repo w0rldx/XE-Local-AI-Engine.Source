@@ -22,6 +22,7 @@ public sealed class BenchmarkRunExecutor(
     IInvocationRunner runner,
     ILlamaServerProcessSupervisor supervisor,
     IGpuVariantSelector variantSelector,
+    ILlamaServerEndpointBinding endpointBinding,
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
@@ -72,12 +73,13 @@ public sealed class BenchmarkRunExecutor(
                 throw new BenchmarkExecutionException("The selected llama.cpp runtime changed after the benchmark was created.");
             }
 
-            _ = await supervisor.RunExclusiveProfilingAsync(snapshot.PrimaryModel.ModelName,
+            _ = await supervisor.RunExclusiveBenchmarkAsync(snapshot.PrimaryModel.ModelName,
                     ModelRole.Chat,
                     snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
-                    enableMetrics: false,
-                    async (_, profilingToken) =>
+                    snapshot.PrimaryRuntime.LaunchPolicy,
+                    async (profiling, profilingToken) =>
                     {
+                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
                         await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
                         using var context = InvocationExecutionContext.CreatePlain(package,
                             Guid.Empty,

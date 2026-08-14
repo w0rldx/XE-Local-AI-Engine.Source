@@ -101,7 +101,8 @@ public sealed record BenchmarkLlamaRuntimeSnapshotV1(
     string? OverrideTensor,
     string? KvTypeK,
     string? KvTypeV,
-    bool FlashAttention)
+    bool FlashAttention,
+    LlamaServerBenchmarkLaunchPolicy LaunchPolicy)
 {
     public ResolvedLaunchArguments ToResolvedLaunchArguments() => ResolvedLaunchArguments.Replay(ContextTokens,
         GpuLayers,
@@ -252,6 +253,11 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         if (runtime.ContextTokens < minimumContextTokens)
         {
             throw new BenchmarkSnapshotException("The frozen llama.cpp runtime context is smaller than the benchmark requirement.");
+        }
+
+        if (!runtime.LaunchPolicy.IsSupported)
+        {
+            throw new BenchmarkSnapshotException("The frozen llama.cpp benchmark launch policy is unsupported.");
         }
     }
 

@@ -137,6 +137,20 @@ public interface ILlamaServerProcessSupervisor
         Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null);
 
     /// <summary>
+    ///     Benchmark-only exact spawn. Unlike ordinary chat and operator profiling, this consumes an explicit frozen
+    ///     launch policy and cannot inherit mutable cache or speculative-decoding settings.
+    /// </summary>
+    Task<T> RunExclusiveBenchmarkAsync<T>(string modelName,
+        ModelRole role,
+        ResolvedLaunchArguments launchArgs,
+        LlamaServerBenchmarkLaunchPolicy launchPolicy,
+        Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
+        CancellationToken ct)
+    {
+        throw new NotSupportedException("This supervisor does not support exact benchmark launches.");
+    }
+
+    /// <summary>
     ///     Aggregates every running process's health into one snapshot — operational iff the supervisor can serve
     ///     requests; per-process detail is surfaced for diagnostics. This performs a live responsiveness probe per
     ///     process, so it is for the diagnostics surface — NOT a hot path. For a cheap running-count read use

@@ -1033,7 +1033,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         bool ensureMetrics,
         bool applyLaunchPolicy,
         ProcessLaunchAdmission? admission,
-        CancellationToken ct)
+        CancellationToken ct,
+        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy = null)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(modelFilePath))
@@ -1059,7 +1060,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // The operator selects a draft model by NAME (installed chat model); resolve it to its on-disk GGUF the same way
         // the target model is resolved above so the effective launch args carry a real path. An explicit path override
         // (SpeculativeDraftModelPath), when set, wins and skips resolution.
-        var speculative = _options.Speculative;
+        var launchTuning = ResolveChatLaunchTuning(benchmarkPolicy, _options);
+        var speculative = launchTuning.Speculative;
         if (key.Role == ModelRole.Chat && speculative.RequiresExternalDraftModel)
         {
             var draftModelPath = speculative.DraftModelPath;
@@ -1187,7 +1189,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             try
             {
                 var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
-                    _options.ChatCacheReuse, speculative, candidate.Plan, _options.ChatCacheRamMiB, projectorFilePath);
+                    launchTuning.ChatCacheReuse,
+                    speculative,
+                    candidate.Plan,
+                    launchTuning.ChatCacheRamMiB,
+                    projectorFilePath);
 
                 // Append the operator's per-model extra flags LAST so they win over the bundled tuning defaults
                 // (llama.cpp is last-wins for scalar flags). Placed BEFORE the diagnostic --metrics / -lv fill-ins below
@@ -1532,6 +1538,25 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return new LaunchPlanSet(allocation, [new(resolved, plan, LlamaServerLoadAttemptKind.Primary)]);
     }
 
+    internal static LlamaServerChatLaunchTuning ResolveChatLaunchTuning(LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy,
+        LlamaServerSupervisorOptions liveOptions)
+    {
+        ArgumentNullException.ThrowIfNull(liveOptions);
+        if (benchmarkPolicy is null)
+        {
+            return new LlamaServerChatLaunchTuning(liveOptions.ChatCacheReuse, liveOptions.ChatCacheRamMiB, liveOptions.Speculative);
+        }
+
+        if (!benchmarkPolicy.IsSupported)
+        {
+            throw new ArgumentException("The frozen benchmark launch policy is unsupported.", nameof(benchmarkPolicy));
+        }
+
+        return new LlamaServerChatLaunchTuning(benchmarkPolicy.ChatCacheReuse,
+            benchmarkPolicy.ChatCacheRamMiB,
+            SpeculativeDecodingSettings.Disabled);
+    }
+
     /// <summary>One ordered launch attempt: the explore/replay args to emit and the policy plan to emit them under.</summary>
     private sealed record LaunchCandidate(
         ResolvedLaunchArguments Resolved,
@@ -1831,13 +1856,54 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
-    public async Task<T> RunExclusiveProfilingAsync<T>(string modelName,
+    public Task<T> RunExclusiveProfilingAsync<T>(string modelName,
         ModelRole role,
         ResolvedLaunchArguments launchArgs,
         bool enableMetrics,
         Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
         CancellationToken ct,
-        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null)
+        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn = null) =>
+        RunExclusiveProfilingCoreAsync(modelName,
+            role,
+            launchArgs,
+            enableMetrics,
+            body,
+            captureVramBeforeSpawn,
+            benchmarkPolicy: null,
+            ct);
+
+    /// <inheritdoc />
+    public Task<T> RunExclusiveBenchmarkAsync<T>(string modelName,
+        ModelRole role,
+        ResolvedLaunchArguments launchArgs,
+        LlamaServerBenchmarkLaunchPolicy launchPolicy,
+        Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(launchPolicy);
+        if (!launchPolicy.IsSupported)
+        {
+            throw new ArgumentException("The frozen benchmark launch policy is unsupported.", nameof(launchPolicy));
+        }
+
+        return RunExclusiveProfilingCoreAsync(modelName,
+            role,
+            launchArgs,
+            enableMetrics: false,
+            body,
+            captureVramBeforeSpawn: null,
+            launchPolicy,
+            ct);
+    }
+
+    private async Task<T> RunExclusiveProfilingCoreAsync<T>(string modelName,
+        ModelRole role,
+        ResolvedLaunchArguments launchArgs,
+        bool enableMetrics,
+        Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
+        Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>? captureVramBeforeSpawn,
+        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(launchArgs);
@@ -1918,7 +1984,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                                 ensureMetrics: enableMetrics,
                                 applyLaunchPolicy: launchArgs.ExploreMode,
                                 admission: null,
-                                ct)
+                                ct,
+                                benchmarkPolicy)
                             .ConfigureAwait(false);
 
                         // The profiling process is registered, so mutation attempts now observe it and return null. Release
@@ -2924,3 +2991,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 }
+
+internal readonly record struct LlamaServerChatLaunchTuning(
+    int ChatCacheReuse,
+    int ChatCacheRamMiB,
+    SpeculativeDecodingSettings Speculative);

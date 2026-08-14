@@ -56,6 +56,7 @@ public sealed class BenchmarkRunExecutorTests
             runner,
             PassthroughSupervisor(),
             FixedVariantSelector(),
+            EndpointBinding(),
             Buffer(),
             new BenchmarkCancellationRegistry(),
             NullLogger<BenchmarkRunExecutor>.Instance);
@@ -130,13 +131,12 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
         AssertEx.Equal("0", package.SamplingOptions!.Seed);
         AssertEx.Equal(8192, package.SamplingOptions.NumCtx);
-        _ = supervisor.Received(1).RunExclusiveProfilingAsync(Arg.Is<string>("model.gguf"),
+        _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("model.gguf"),
             ModelRole.Chat,
             Arg.Is<ResolvedLaunchArguments>(arguments => !arguments.ExploreMode && arguments.CtxSize == 8192),
-            false,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
-            Arg.Any<CancellationToken>(),
-            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>());
+            Arg.Any<CancellationToken>());
         AssertEx.False(cancellationRegistry.TryCancel(run.Id, BenchmarkWorkKind.Primary));
         _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
     }
@@ -244,6 +244,7 @@ public sealed class BenchmarkRunExecutorTests
             runner,
             supervisor ?? PassthroughSupervisor(),
             FixedVariantSelector(),
+            EndpointBinding(),
             Buffer(),
             cancellations,
             NullLogger<BenchmarkRunExecutor>.Instance);
@@ -336,7 +337,7 @@ public sealed class BenchmarkRunExecutorTests
     private static string V1(char value) => $"v1:{new string(value, 64)}";
 
     private static BenchmarkLlamaRuntimeSnapshotV1 Runtime() =>
-        new(GpuVariant.Cpu, 8192, null, null, null, null, null, false);
+        new(GpuVariant.Cpu, 8192, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
     private static IGpuVariantSelector FixedVariantSelector()
     {
@@ -348,15 +349,26 @@ public sealed class BenchmarkRunExecutorTests
     private static ILlamaServerProcessSupervisor PassthroughSupervisor()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
+        supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
                 Arg.Any<ModelRole>(),
                 Arg.Any<ResolvedLaunchArguments>(),
-                Arg.Any<bool>(),
+                Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
                 Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
-                Arg.Any<CancellationToken>(),
-                Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>())
-            .Returns(call => call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(default!, call.ArgAt<CancellationToken>(5)));
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var modelName = call.ArgAt<string>(0);
+                var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), []);
+                return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
+            });
         return supervisor;
+    }
+
+    private static ILlamaServerEndpointBinding EndpointBinding()
+    {
+        var binding = Substitute.For<ILlamaServerEndpointBinding>();
+        binding.Bind(Arg.Any<LlamaServerEndpoint>()).Returns(Substitute.For<IDisposable>());
+        return binding;
     }
 
     private static BenchmarkEventBuffer Buffer() => new(Options.Create(new BenchmarkEventBufferOptions()));

@@ -22,6 +22,7 @@ public sealed class BenchmarkJudgeExecutor(
     IInvocationRunner runner,
     ILlamaServerProcessSupervisor supervisor,
     IGpuVariantSelector variantSelector,
+    ILlamaServerEndpointBinding endpointBinding,
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
@@ -82,12 +83,13 @@ public sealed class BenchmarkJudgeExecutor(
                 throw new BenchmarkExecutionException("The selected judge llama.cpp runtime changed after the benchmark was created.");
             }
 
-            _ = await supervisor.RunExclusiveProfilingAsync(judgeModel.ModelName,
+            _ = await supervisor.RunExclusiveBenchmarkAsync(judgeModel.ModelName,
                     ModelRole.Chat,
                     runtime.ToResolvedLaunchArguments(),
-                    enableMetrics: false,
-                    async (_, profilingToken) =>
+                    runtime.LaunchPolicy,
+                    async (profiling, profilingToken) =>
                     {
+                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
                         await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
                         using var context = InvocationExecutionContext.CreatePlain(package,
                             Guid.Empty,

@@ -55,6 +55,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
+    private readonly ILlamaServerEndpointBinding? _endpointBinding;
 
     private IChatClient? _inner;
     private Uri? _innerEndpoint;
@@ -62,13 +63,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor,
         string modelName,
         TimeSpan networkTimeout,
-        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null)
+        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
+        ILlamaServerEndpointBinding? endpointBinding = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
         _networkTimeout = networkTimeout;
         _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
+        _endpointBinding = endpointBinding;
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -326,7 +329,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     {
         // Resolve the CURRENT endpoint for every real request. Besides allowing the supervisor to cheaply confirm the
         // process is live, this is the request-triggered due check for calibration; no timer ever polls a cached target.
-        var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
+        var endpoint = await ResolveEndpointAsync(ct).ConfigureAwait(false);
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -356,6 +359,14 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         {
             _initGate.Release();
         }
+    }
+
+    internal Task<LlamaServerEndpoint> ResolveEndpointAsync(CancellationToken ct)
+    {
+        var bound = _endpointBinding?.GetBoundEndpoint(_modelName, ModelRole.Chat);
+        return bound is not null
+            ? Task.FromResult(bound)
+            : _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct);
     }
 
     // Drops the cached adapter so the next EnsureInnerAsync re-resolves the endpoint and re-spawns the server via the
