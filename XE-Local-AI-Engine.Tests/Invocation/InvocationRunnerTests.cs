@@ -3329,7 +3329,7 @@ public sealed class InvocationRunnerTests
 
         var factory = Substitute.For<IOrchestrationAgentFactory>();
         factory.CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromResult<IOrchestrationRunSession>(capturedRef.Value!));
+               .Returns(_ => Task.FromResult<IOrchestrationRunSession>(capturedRef.Value));
 
         return factory;
     }

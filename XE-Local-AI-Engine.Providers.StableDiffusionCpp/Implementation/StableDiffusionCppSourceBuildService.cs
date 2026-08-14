@@ -586,7 +586,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
     private async Task PublishLoopAsync()
     {
-        await foreach (var statusEvent in _publishQueue.Reader.ReadAllAsync().ConfigureAwait(false))
+        await foreach (var statusEvent in _publishQueue.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
         {
             try
             {

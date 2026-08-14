@@ -74,7 +74,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
-        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
+        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }
 
     /// <inheritdoc />

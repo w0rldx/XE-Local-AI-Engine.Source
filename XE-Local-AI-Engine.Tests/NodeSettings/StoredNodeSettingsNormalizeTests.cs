@@ -87,7 +87,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Equal(expected: false, loaded.EnableTools);
         AssertEx.NotNull(loaded.ToolCapableModels);
         AssertEx.Equal(expected: 2, loaded.ToolCapableModels!.Count);
-        AssertEx.Equal("qwen3:8b", loaded.ToolCapableModels![0]);
+        AssertEx.Equal("qwen3:8b", loaded.ToolCapableModels[0]);
         AssertEx.Equal("http://127.0.0.1:12345", loaded.OllamaEndpoint);
         AssertEx.Equal("Q5_K_M", loaded.HuggingFaceDefaultQuant);
         AssertEx.Equal(expected: 2_000_000_000L, loaded.HuggingFaceDiskMarginBytes);
@@ -340,10 +340,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
 
         AssertEx.NotNull(loaded.UsageRates);
         AssertEx.NotNull(loaded.UsageRates!.Models);
-        AssertEx.Equal(expected: 1, loaded.UsageRates!.Models!.Count);
+        AssertEx.Equal(expected: 1, loaded.UsageRates.Models!.Count);
         // Key was trimmed to "gpt-5" and is now matched case-insensitively.
-        AssertEx.Equal(expected: 1.25d, loaded.UsageRates!.Models!["GPT-5"].InputPer1M);
-        AssertEx.Equal(expected: 10d, loaded.UsageRates!.Models!["GPT-5"].OutputPer1M);
+        AssertEx.Equal(expected: 1.25d, loaded.UsageRates.Models["GPT-5"].InputPer1M);
+        AssertEx.Equal(expected: 10d, loaded.UsageRates.Models["GPT-5"].OutputPer1M);
     }
 
     [Test]

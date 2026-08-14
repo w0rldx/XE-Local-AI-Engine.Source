@@ -51,7 +51,7 @@ internal static class DevelopmentTestWritePolicy
                                     change.Path,
                                     change.PreviousPath
                                 })
-                                .Where(path => !string.IsNullOrWhiteSpace(path) && profile.IsProtectedTestPath(path!))
+                                .Where(path => !string.IsNullOrWhiteSpace(path) && profile.IsProtectedTestPath(path))
                                 .Distinct(StringComparer.Ordinal)
                                 .ToArray();
         if (offending.Length > 0)

@@ -22,7 +22,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         using var handler = new DelegateHandler(async (request, cancellationToken) =>
         {
             captured = request;
-            payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+            payload = await (request.Content ?? throw new ArgumentNullException(nameof(request))).ReadAsStringAsync(cancellationToken);
             return JsonResponse(TokenArray(tokenCount));
         });
         using var client = new HttpClient(handler);

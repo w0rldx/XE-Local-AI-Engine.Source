@@ -81,7 +81,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
         var instructions = string.IsNullOrWhiteSpace(request.Instructions)
             ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
-            : request.Instructions!;
+            : request.Instructions;
         var binding = CreateBinding(modelId,
             instructions,
             agentDefinitionId: null,

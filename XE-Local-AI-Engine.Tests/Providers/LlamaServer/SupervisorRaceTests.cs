@@ -69,7 +69,7 @@ public sealed class SupervisorRaceTests
         AssertEx.False(ensure.IsCompleted);
         AssertEx.Equal(0, launcher.LaunchCount);
 
-        await lease!.DisposeAsync();
+        await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
         await ensure;
         AssertEx.Equal(1, launcher.LaunchCount);
     }
@@ -88,7 +88,7 @@ public sealed class SupervisorRaceTests
 
         var disposal = supervisor.DisposeAsync().AsTask();
         await Task.Delay(50);
-        await lease!.DisposeAsync();
+        await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
 
         await AssertEx.ThrowsAsync<ObjectDisposedException>(() => ensure);
         await disposal;
@@ -110,7 +110,7 @@ public sealed class SupervisorRaceTests
 
         var disposal = supervisor.DisposeAsync().AsTask();
         await Task.Delay(50);
-        await blocker!.DisposeAsync();
+        await (blocker ?? throw new InvalidOperationException("blocker must not be null.")).DisposeAsync();
 
         await AssertEx.ThrowsAsync<ObjectDisposedException>(() => pending);
         await disposal;
@@ -140,7 +140,7 @@ public sealed class SupervisorRaceTests
         AssertEx.NotNull(lease);
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
 
-        await lease!.DisposeAsync();
+        await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
         AssertEx.False(supervisor.IsKeepWarmSuppressed());
     }
 
@@ -160,7 +160,7 @@ public sealed class SupervisorRaceTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => pendingAttempt);
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
 
-        await ownedLease!.DisposeAsync();
+        await (ownedLease ?? throw new InvalidOperationException("ownedLease must not be null.")).DisposeAsync();
         AssertEx.False(supervisor.IsKeepWarmSuppressed());
     }
 
@@ -176,7 +176,7 @@ public sealed class SupervisorRaceTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
             supervisor.EnsureRunningAsync("cancelled", ModelRole.Chat, cancelled.Token));
 
-        await lease!.DisposeAsync();
+        await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
         await lease.DisposeAsync();
         var endpoint = await supervisor.EnsureRunningAsync("healthy", ModelRole.Chat, CancellationToken.None);
         AssertEx.NotNull(endpoint);
