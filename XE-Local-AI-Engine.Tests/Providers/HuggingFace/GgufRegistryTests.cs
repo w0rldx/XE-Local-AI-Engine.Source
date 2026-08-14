@@ -197,19 +197,19 @@ public sealed class GgufRegistryTests
     }
 
     [Test]
-    public async Task GgufStore_DeleteThroughLegacyAlias_RemovesFileAndBothEntries()
+    public async Task GgufStore_DirectDeleteThroughLegacyAlias_IsRejectedWithoutMutation()
     {
         await AssertDeleteRemovesBothEntriesAsync(deleteThroughAlias: true);
     }
 
     [Test]
-    public async Task GgufStore_DeleteThroughCanonicalName_RemovesFileAndBothEntries()
+    public async Task GgufStore_DirectDeleteThroughCanonicalName_IsRejectedWithoutMutation()
     {
         await AssertDeleteRemovesBothEntriesAsync(deleteThroughAlias: false);
     }
 
-    // Sets up a duplicate-path manifest (legacy alias + canonical for one file), deletes through the chosen identity via
-    // the store, and asserts the file is gone and NEITHER identity remains — deleting one alias must not orphan the other.
+    // Direct provider deletion cannot participate in the application composite lease/journal. It must fail closed and
+    // leave the complete legacy alias set untouched; the application deletion coordinator owns the actual mutation.
     private static async Task AssertDeleteRemovesBothEntriesAsync(bool deleteThroughAlias)
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
@@ -225,12 +225,14 @@ public sealed class GgufRegistryTests
         var downloadClient = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         var store = Infra.Store(downloadClient, Infra.DiscoveryWith(), registry, options);
 
-        await store.DeleteModelAsync(deleteThroughAlias ? FilenameAliasName : Infra.ModelName, CancellationToken.None);
+        _ = await AssertEx.ThrowsAsync<NotSupportedException>(() =>
+                store.DeleteModelAsync(deleteThroughAlias ? FilenameAliasName : Infra.ModelName, CancellationToken.None))
+            .ConfigureAwait(false);
 
-        AssertEx.False(File.Exists(filePath), "the shared backing file must be deleted");
-        AssertEx.Equal(expected: 0, (await registry.ListAsync(CancellationToken.None)).Count);
-        AssertEx.Null(await registry.FindAsync(FilenameAliasName, CancellationToken.None));
-        AssertEx.Null(await registry.FindAsync(Infra.ModelName, CancellationToken.None));
+        AssertEx.True(File.Exists(filePath), "a bypass attempt must not delete the shared backing file");
+        AssertEx.Equal(expected: 1, (await registry.ListAsync(CancellationToken.None)).Count);
+        AssertEx.NotNull(await registry.FindAsync(FilenameAliasName, CancellationToken.None));
+        AssertEx.NotNull(await registry.FindAsync(Infra.ModelName, CancellationToken.None));
     }
 
     // The filename-derived identity a manifest-absent rescan assigns to the downloaded file (stem + quant).

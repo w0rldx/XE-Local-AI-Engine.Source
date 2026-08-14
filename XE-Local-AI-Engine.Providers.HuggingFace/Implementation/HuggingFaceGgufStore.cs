@@ -305,31 +305,11 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     }
 
     /// <inheritdoc />
-    public async Task DeleteModelAsync(string modelName, CancellationToken ct)
+    public Task DeleteModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-
-        var entry = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
-        if (entry is not null)
-        {
-            TryDeleteFile(entry.LocalPath);
-            TryDeleteFile(entry.LocalPath + ".part");
-            TryDeleteFile(entry.LocalPath + GgufAcquisitionSidecar.Suffix);
-            // Remove the paired mmproj projector too — it is keyed by this model's file stem, so no other model shares it.
-            if (entry.ProjectorLocalPath is not null)
-            {
-                TryDeleteFile(entry.ProjectorLocalPath);
-                TryDeleteFile(entry.ProjectorLocalPath + ".part");
-            }
-
-            // A legacy first-download alias may share this file under a second name — remove EVERY entry pointing at it,
-            // so deleting through either identity leaves no manifest entry dangling on the now-removed file.
-            await _registry.RemoveByLocalPathAsync(entry.LocalPath, ct).ConfigureAwait(false);
-            return;
-        }
-
-        // No entry resolves this name (already gone); the name-based removal keeps delete idempotent.
-        await _registry.RemoveAsync(modelName, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        throw new NotSupportedException("Installed GGUF deletion must use the coordinated journaled deletion service.");
     }
 
     /// <inheritdoc />
@@ -589,21 +569,6 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         {
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                 "The repository returned an unsafe model file path.");
-        }
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            // Best-effort delete; the registry entry is removed regardless so the model is no longer offered.
         }
     }
 

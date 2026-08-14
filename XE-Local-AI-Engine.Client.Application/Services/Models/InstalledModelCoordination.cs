@@ -16,7 +16,8 @@ public sealed record IntendedInstalledModelMember(string RelativePath, Installed
 public sealed record InstalledModelMutationRequest(
     string ModelName,
     InstalledModelMutationKind Kind,
-    IReadOnlyList<IntendedInstalledModelMember>? IntendedMembers = null);
+    IReadOnlyList<IntendedInstalledModelMember>? IntendedMembers = null,
+    IReadOnlyList<string>? IntendedModelNames = null);
 
 public sealed record InstalledModelSnapshot(
     string ModelName,
@@ -141,6 +142,14 @@ public sealed class InstalledModelSnapshotCoordinator(
             ModelCoordinationKeys.Model(request.ModelName),
             ModelCoordinationKeys.ProviderMap(request.ModelName)
         };
+        if (request.IntendedModelNames is not null)
+        {
+            keys.AddRange(request.IntendedModelNames.SelectMany(static modelName => new[]
+            {
+                ModelCoordinationKeys.Model(modelName),
+                ModelCoordinationKeys.ProviderMap(modelName)
+            }));
+        }
         if (request.IntendedMembers is not null)
         {
             keys.AddRange(request.IntendedMembers.Select(static member => ModelCoordinationKeys.Path(member.RelativePath)));

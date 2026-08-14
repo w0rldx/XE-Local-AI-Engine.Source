@@ -112,6 +112,12 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
                 services.GetRequiredService<ICoordinatedModelProviderMapStore>()));
         builder.Services.AddScoped<ICoordinatedModelProviderMapStore>(static services =>
             new CoordinatedModelProviderMapStore(services.GetRequiredService<IModelProviderMapStore>()));
+        builder.Services.AddScoped<LocalModelDeletionCoordinator>();
+        builder.Services.AddScoped<ILocalModelDeletionCoordinator>(static services =>
+            services.GetRequiredService<LocalModelDeletionCoordinator>());
+        builder.Services.AddScoped<ILocalModelDeletionJournalReconciler>(static services =>
+            services.GetRequiredService<LocalModelDeletionCoordinator>());
+        builder.Services.AddHostedService<LocalModelDeletionStartupReconciler>();
         builder.Services.AddScoped<IGgufAcquisitionStateProbe, GgufAcquisitionStateProbe>();
         builder.Services.AddSingleton<GgufAcquisitionIdentityResolver>();
         builder.Services.AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>();

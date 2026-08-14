@@ -75,6 +75,90 @@ public interface IInstalledGgufSnapshotStore
         CancellationToken cancellationToken);
 }
 
+/// <summary>One physical member moved into operation-owned quarantine.</summary>
+public sealed record GgufDeletionStagedMember(
+    string OriginalRelativePath,
+    string QuarantineRelativePath,
+    InstalledModelPhysicalMember Member);
+
+/// <summary>Deterministic, complete plan/receipt for staging an installed GGUF deletion.</summary>
+public sealed record GgufDeletionStageReceipt(
+    Guid OperationId,
+    string RequestedModelName,
+    IReadOnlyList<InstalledModelRegistryAliasSnapshot> RemovalAliases,
+    IReadOnlyList<InstalledModelPhysicalMember> RetainedMembers,
+    IReadOnlyList<GgufDeletionStagedMember> StagedMembers,
+    string RegistryAliasSetHash,
+    string PhysicalMemberSetHash)
+{
+    public static GgufDeletionStageReceipt Create(InstalledGgufSnapshot snapshot, Guid operationId)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (operationId == Guid.Empty)
+        {
+            throw new ArgumentException("A deletion operation identifier is required.", nameof(operationId));
+        }
+
+        var requested = snapshot.RegistryAliases.Single(alias =>
+            string.Equals(alias.ModelName, snapshot.ModelName, StringComparison.OrdinalIgnoreCase));
+        var removalAliases = snapshot.RegistryAliases
+                                     .Where(alias => string.Equals(alias.WeightRelativePath,
+                                         requested.WeightRelativePath,
+                                         StringComparison.OrdinalIgnoreCase))
+                                     .OrderBy(static alias => alias.ModelName, StringComparer.OrdinalIgnoreCase)
+                                     .ThenBy(static alias => alias.ModelName, StringComparer.Ordinal)
+                                     .ToArray();
+        var removedNames = removalAliases.Select(static alias => alias.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var staged = snapshot.Members
+                             .Where(member => member.OwningAliases.Count > 0
+                                              && member.OwningAliases.All(removedNames.Contains))
+                             .OrderBy(static member => member.RelativePath, StringComparer.Ordinal)
+                             .Select(member => new GgufDeletionStagedMember(member.RelativePath,
+                                 BuildQuarantineRelativePath(operationId, member.RelativePath),
+                                 member))
+                             .ToArray();
+        var retained = snapshot.Members
+                               .Where(member => member.OwningAliases.Any(alias => !removedNames.Contains(alias)))
+                               .OrderBy(static member => member.RelativePath, StringComparer.Ordinal)
+                               .ToArray();
+        return new GgufDeletionStageReceipt(operationId,
+            snapshot.ModelName,
+            Array.AsReadOnly(removalAliases),
+            Array.AsReadOnly(retained),
+            Array.AsReadOnly(staged),
+            GgufRegistryAliasSetHash.ComputeV1(removalAliases),
+            snapshot.PhysicalMemberSetHash);
+    }
+
+    private static string BuildQuarantineRelativePath(Guid operationId, string originalRelativePath)
+    {
+        var normalized = GgufModelContentFingerprint.NormalizeRelativePath(originalRelativePath);
+        return $".operations/delete/{operationId:N}/quarantine/{normalized}";
+    }
+}
+
+/// <summary>Exact complete registry-alias removal receipt used for conditional restore.</summary>
+public sealed record GgufRegistryAliasMutationReceipt(
+    IReadOnlyList<InstalledModelRegistryAliasSnapshot> RemovedAliases,
+    string ExpectedBeforeAliasSetHash,
+    string ExpectedAfterAliasSetHash);
+
+/// <summary>Provider-owned staged deletion and exact registry compare/restore operations.</summary>
+public interface IInstalledGgufDeletionStore
+{
+    Task<GgufDeletionStageReceipt> StageAsync(InstalledGgufSnapshot snapshot, Guid operationId, CancellationToken cancellationToken);
+
+    Task<GgufRegistryAliasMutationReceipt> RemoveAliasesByLocalPathAsync(GgufDeletionStageReceipt stageReceipt,
+        IReadOnlyList<InstalledModelRegistryAliasSnapshot> expectedAliases,
+        CancellationToken cancellationToken);
+
+    Task RestoreAsync(GgufDeletionStageReceipt stageReceipt,
+        GgufRegistryAliasMutationReceipt? registryAliasReceipt,
+        CancellationToken cancellationToken);
+
+    Task PurgeAsync(GgufDeletionStageReceipt stageReceipt, CancellationToken cancellationToken);
+}
+
 /// <summary>Sanitized installed-snapshot verification failure.</summary>
 public sealed class InstalledGgufSnapshotException : Exception
 {

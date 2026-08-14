@@ -13,7 +13,9 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
@@ -264,13 +266,18 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
-    public async Task DeleteLocalModel_WhenValid_UsesGgufModelStore()
+    public async Task DeleteLocalModel_WhenValid_UsesJournaledGgufCoordinator()
     {
         // Local models are GGUF files served by the bundled llama.cpp runtime (Ollama is no longer a runtime), so the
         // delete endpoint routes to IGgufModelStore.DeleteModelAsync — assert the GGUF store is the deletion path.
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        var deletionCoordinator = DeletionCoordinator("orca-mini:latest");
+        await using var context = CreateContext(modelService,
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            LlamaCppProviderName,
+            ggufModelStore,
+            deletionCoordinator);
         using var client = context.Factory.CreateClient();
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/orca-mini:latest");
@@ -280,7 +287,9 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("orca-mini:latest", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
-        await ggufModelStore.Received(1).DeleteModelAsync("orca-mini:latest", Arg.Any<CancellationToken>());
+        await deletionCoordinator.Received(1).CommitDeleteAsync("orca-mini:latest", Arg.Any<CancellationToken>());
+        await deletionCoordinator.Received(1).PurgeAfterSuccessAsync(Arg.Any<CommittedModelDeletion>(), CancellationToken.None);
+        await ggufModelStore.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await modelService.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -291,7 +300,12 @@ public sealed class LocalModelEndpointTests
         // so the bound name arrives as "hf.co%2F...". The endpoint must decode it and delete the canonical HF reference.
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        var deletionCoordinator = DeletionCoordinator("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL");
+        await using var context = CreateContext(modelService,
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            LlamaCppProviderName,
+            ggufModelStore,
+            deletionCoordinator);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory,
@@ -303,8 +317,8 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
-        await ggufModelStore.Received(1)
-                            .DeleteModelAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+        await deletionCoordinator.Received(1)
+                                 .CommitDeleteAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -312,7 +326,12 @@ public sealed class LocalModelEndpointTests
     {
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        var deletionCoordinator = DeletionCoordinator("llama3:8b");
+        await using var context = CreateContext(modelService,
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            LlamaCppProviderName,
+            ggufModelStore,
+            deletionCoordinator);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b");
@@ -321,7 +340,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", deleted.ModelName);
-        await ggufModelStore.Received(1).DeleteModelAsync("llama3:8b", Arg.Any<CancellationToken>());
+        await deletionCoordinator.Received(1).CommitDeleteAsync("llama3:8b", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -331,14 +350,44 @@ public sealed class LocalModelEndpointTests
         // cannot smuggle path traversal past the guard.
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        var deletionCoordinator = DeletionCoordinator("unused");
+        await using var context = CreateContext(modelService,
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            LlamaCppProviderName,
+            ggufModelStore,
+            deletionCoordinator);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await deletionCoordinator.DidNotReceiveWithAnyArgs().CommitDeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await ggufModelStore.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteLocalModel_WhenNonGgufProvider_PreservesProviderDeletionPath()
+    {
+        var modelService = Substitute.For<IOllamaModelService>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        var deletionCoordinator = DeletionCoordinator("other:model");
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(OllamaProviderName);
+        await using var context = CreateContext(modelService,
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            OllamaProviderName,
+            ggufModelStore,
+            deletionCoordinator,
+            provider);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/other:model");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await provider.Received(1).DeleteModelAsync("other:model", Arg.Any<CancellationToken>());
+        await deletionCoordinator.DidNotReceiveWithAnyArgs().CommitDeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -533,9 +582,26 @@ public sealed class LocalModelEndpointTests
     private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
         StubNodeSettingsStore settingsStore,
         string providerName,
-        IGgufModelStore ggufModelStore)
+        IGgufModelStore ggufModelStore,
+        ILocalModelDeletionCoordinator? deletionCoordinator = null,
+        ILocalModelProvider? localProvider = null)
     {
-        return new LocalModelEndpointTestContext(modelService, settingsStore, providerName, ggufModelStore);
+        return new LocalModelEndpointTestContext(modelService, settingsStore, providerName, ggufModelStore, deletionCoordinator, localProvider);
+    }
+
+    private static ILocalModelDeletionCoordinator DeletionCoordinator(string modelName)
+    {
+        var coordinator = Substitute.For<ILocalModelDeletionCoordinator>();
+        var receipt = new GgufDeletionStageReceipt(Guid.NewGuid(),
+            modelName,
+            Array.Empty<InstalledModelRegistryAliasSnapshot>(),
+            Array.Empty<InstalledModelPhysicalMember>(),
+            Array.Empty<GgufDeletionStagedMember>(),
+            GgufRegistryAliasSetHash.ComputeV1([]),
+            GgufPhysicalMemberSetHash.ComputeV1([]));
+        coordinator.CommitDeleteAsync(modelName, Arg.Any<CancellationToken>())
+                   .Returns(new CommittedModelDeletion(receipt.OperationId, modelName, [modelName], receipt));
+        return coordinator;
     }
 
     private static LocalModelEndpointTestContext CreateContextWithClassification(IModelClassificationService classificationService)
@@ -608,14 +674,18 @@ public sealed class LocalModelEndpointTests
         public LocalModelEndpointTestContext(IOllamaModelService modelService,
             StubNodeSettingsStore settingsStore,
             string providerName,
-            IGgufModelStore ggufModelStore)
+            IGgufModelStore ggufModelStore,
+            ILocalModelDeletionCoordinator? deletionCoordinator,
+            ILocalModelProvider? localProvider)
         {
             SettingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
             ArgumentNullException.ThrowIfNull(ggufModelStore);
             Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)),
                 SettingsStore,
                 providerName,
-                ggufModelStore);
+                ggufModelStore,
+                deletionCoordinator,
+                localProvider);
         }
 
         public LocalModelEndpointTestContext(IModelClassificationService classificationService)
@@ -662,7 +732,9 @@ public sealed class LocalModelEndpointTests
         private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService,
             StubNodeSettingsStore settingsStore,
             string providerName,
-            IGgufModelStore ggufModelStore)
+            IGgufModelStore ggufModelStore,
+            ILocalModelDeletionCoordinator? deletionCoordinator,
+            ILocalModelProvider? localProvider)
         {
             return new TestingWebAppFactory
             {
@@ -674,10 +746,15 @@ public sealed class LocalModelEndpointTests
                     services.AddSingleton<INodeSettingsStore>(settingsStore);
                     services.RemoveAll<IGgufModelStore>();
                     services.AddSingleton(ggufModelStore);
+                    if (deletionCoordinator is not null)
+                    {
+                        services.RemoveAll<ILocalModelDeletionCoordinator>();
+                        services.AddSingleton(deletionCoordinator);
+                    }
                     StubNoCodexSession(services);
                     // Override the default (ollama) resolver from StubNoCodexSession so this context routes the details
                     // endpoint to the requested provider (llamacpp for the GGUF branch).
-                    StubProviderResolver(services, providerName);
+                    StubProviderResolver(services, providerName, localProvider);
                 }
             };
         }
@@ -716,11 +793,17 @@ public sealed class LocalModelEndpointTests
         // Replaces the real ILocalModelProviderResolver with a substitute that routes EVERY model to a single provider
         // name. The details endpoint only calls ResolveProviderNameForModelAsync, so the other members stay
         // unimplemented (an NSubstitute default), keeping these endpoint tests deterministic and provider-stack-free.
-        private static void StubProviderResolver(IServiceCollection services, string providerName)
+        private static void StubProviderResolver(IServiceCollection services,
+            string providerName,
+            ILocalModelProvider? localProvider = null)
         {
             var resolver = Substitute.For<ILocalModelProviderResolver>();
             resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns(_ => Task.FromResult(providerName));
+            if (localProvider is not null)
+            {
+                resolver.ResolveProvider(providerName).Returns(localProvider);
+            }
             services.RemoveAll<ILocalModelProviderResolver>();
             services.AddSingleton(resolver);
         }
