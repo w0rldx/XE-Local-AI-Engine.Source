@@ -47,7 +47,14 @@ export function toGgufAcquisitionStatus(raw: Partial<AcquisitionWireStatus>): Gg
 	if (!raw.operationId || !raw.modelName || (raw.operationKind !== "Download" && raw.operationKind !== "Import")) {
 		return null;
 	}
-	const phase = raw.phase === "Running" ? "Downloading" : phases.has(raw.phase as GgufAcquisitionPhase) ? (raw.phase as GgufAcquisitionPhase) : "Failed";
+	const phase =
+		raw.phase === "Running"
+			? raw.operationKind === "Import"
+				? "Copying"
+				: "Downloading"
+			: phases.has(raw.phase as GgufAcquisitionPhase)
+				? (raw.phase as GgufAcquisitionPhase)
+				: "Failed";
 	const pct = raw.totalBytes && raw.completedBytes != null ? Math.round((raw.completedBytes / raw.totalBytes) * 100) : undefined;
 	return {
 		operationId: raw.operationId,

@@ -72,8 +72,18 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import {
+	toGgufAcquisitionStatus,
+	type GgufAcquisitionStatus,
+} from "@/features/models/models/GgufAcquisitionModels";
 import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
-import { useActiveGgufAcquisitions } from "@/features/models/queries/useGgufAcquisitions";
+import {
+	ACQUISITION_TERMINAL_RETENTION_LIMIT,
+	mergeStatuses,
+	pruneAcquisitionStatuses,
+	pruneCompletedHandled,
+	useActiveGgufAcquisitions,
+} from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 const STATUS_CHANGED = "ggufDownload.statusChanged";
@@ -91,11 +101,35 @@ function renderActiveDownloads(enabled = true) {
 }
 
 function renderActiveAcquisitions() {
+	handlers.clear();
+	signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
+		handlers.set(name, handler);
+	});
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
 	return renderHook(() => useActiveGgufAcquisitions(), { wrapper: Wrapper });
+}
+
+function acquisitionStatus(
+	operationId: string,
+	phase: GgufAcquisitionStatus["phase"],
+	updatedAtUtc: string,
+): GgufAcquisitionStatus {
+	return {
+		operationId,
+		operationKind: "Import",
+		modelName: `${operationId}:Q4_K_M`,
+		phase,
+		pct: undefined,
+		completedBytes: null,
+		totalBytes: null,
+		startedAtUtc: updatedAtUtc,
+		updatedAtUtc,
+		errorCode: null,
+		sanitizedMessage: null,
+	};
 }
 
 describe("useActiveGgufDownloads", () => {
@@ -305,6 +339,76 @@ describe("useActiveGgufDownloads", () => {
 			});
 		});
 		expect(downloads.result.current.has("private:Q4_K_M")).toBe(false);
+	});
+
+	it("maps legacy Running imports to acquisition-neutral copying rather than downloading", () => {
+		const status = toGgufAcquisitionStatus({
+			operationId: "legacy-import",
+			operationKind: "Import",
+			modelName: "private:Q4_K_M",
+			phase: "Running",
+		});
+
+		expect(status?.phase).toBe("Copying");
+	});
+
+	it("ignores stale live and REST statuses after a newer terminal update", () => {
+		const operationId = "monotonic-import";
+		const completed = acquisitionStatus(operationId, "Completed", "2026-08-14T10:00:02Z");
+		const delayedRunning = acquisitionStatus(operationId, "Copying", "2026-08-14T10:00:01Z");
+		const afterLive = mergeStatuses(new Map(), [completed], Date.parse("2026-08-14T10:00:03Z"));
+
+		const afterDelayedLive = mergeStatuses(afterLive, [delayedRunning], Date.parse("2026-08-14T10:00:03Z"));
+		const afterStaleRest = mergeStatuses(afterDelayedLive, [delayedRunning], Date.parse("2026-08-14T10:00:03Z"));
+
+		expect(afterDelayedLive.get(operationId)?.phase).toBe("Completed");
+		expect(afterStaleRest.get(operationId)?.phase).toBe("Completed");
+	});
+
+	it("does not regress a terminal live status when a delayed Running push arrives", () => {
+		const { result } = renderActiveAcquisitions();
+		const base = {
+			operationId: "live-monotonic-import",
+			operationKind: "Import",
+			modelName: "private:Q4_K_M",
+		};
+
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Completed", updatedAtUtc: "2026-08-14T10:00:02Z" });
+			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Running", updatedAtUtc: "2026-08-14T10:00:01Z" });
+		});
+
+		expect(result.current.get(base.operationId)?.phase).toBe("Completed");
+	});
+
+	it("bounds terminal acquisition and completed-handled retention without evicting active operations", () => {
+		const now = Date.parse("2026-08-14T12:00:00Z");
+		const statuses = new Map<string, GgufAcquisitionStatus>();
+		statuses.set("active", acquisitionStatus("active", "Copying", "2026-08-10T00:00:00Z"));
+		statuses.set("expired", acquisitionStatus("expired", "Failed", "2026-08-13T11:59:59Z"));
+		for (let index = 0; index <= ACQUISITION_TERMINAL_RETENTION_LIMIT; index += 1) {
+			const id = `terminal-${index.toString().padStart(3, "0")}`;
+			statuses.set(id, acquisitionStatus(id, "Completed", new Date(now - index * 1000).toISOString()));
+		}
+
+		const prunedStatuses = pruneAcquisitionStatuses(statuses, now);
+		expect(prunedStatuses.has("active")).toBe(true);
+		expect(prunedStatuses.has("expired")).toBe(false);
+		expect(prunedStatuses.has("terminal-000")).toBe(true);
+		expect(prunedStatuses.has(`terminal-${ACQUISITION_TERMINAL_RETENTION_LIMIT}`)).toBe(false);
+		expect([...prunedStatuses.values()].filter((status) => status.phase === "Completed")).toHaveLength(
+			ACQUISITION_TERMINAL_RETENTION_LIMIT,
+		);
+
+		const handled = new Map<string, number>([["expired", now - 24 * 60 * 60 * 1000 - 1]]);
+		for (let index = 0; index <= ACQUISITION_TERMINAL_RETENTION_LIMIT; index += 1) {
+			handled.set(`handled-${index.toString().padStart(3, "0")}`, now - index);
+		}
+		const prunedHandled = pruneCompletedHandled(handled, now);
+		expect(prunedHandled).toHaveLength(ACQUISITION_TERMINAL_RETENTION_LIMIT);
+		expect(prunedHandled.has("expired")).toBe(false);
+		expect(prunedHandled.has("handled-000")).toBe(true);
+		expect(prunedHandled.has(`handled-${ACQUISITION_TERMINAL_RETENTION_LIMIT}`)).toBe(false);
 	});
 
 	it("stops the connection on unmount", async () => {
