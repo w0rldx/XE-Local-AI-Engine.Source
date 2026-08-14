@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -172,6 +173,25 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         var restored = await coordinated.TryRestoreAsync(lease, created.Receipt);
         AssertEx.Equal(ProviderMapRestoreResult.Restored, restored);
         AssertEx.Null(await rawStore.ReadAsync("PHI-3"));
+    }
+
+    [Test]
+    public async Task TryInsertAsync_NonUniqueDatabaseFailurePropagates()
+    {
+        var databasePath = GetDatabasePath("insert-failure.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        await context.Database.ExecuteSqlRawAsync("""
+            CREATE TRIGGER reject_provider_map_insert
+            BEFORE INSERT ON model_provider_map
+            BEGIN
+                SELECT RAISE(ABORT, 'injected persistence failure');
+            END;
+            """);
+        var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.TryInsertAsync("mistral", "llamacpp"));
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

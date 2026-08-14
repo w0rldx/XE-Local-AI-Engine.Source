@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -9,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     name with a <c>NOCASE</c> collation, so name lookups and the upsert key are case-insensitive without any
 ///     LINQ-side comparer. No column is encrypted.
 /// </summary>
-public sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IModelProviderMapStore
+internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IModelProviderMapStore
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -100,7 +101,7 @@ public sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimeProvi
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return ToRecord(entity);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception) when (exception.InnerException is SqliteException { SqliteExtendedErrorCode: 1555 or 2067 })
         {
             _dbContext.Entry(entity).State = EntityState.Detached;
             return null;

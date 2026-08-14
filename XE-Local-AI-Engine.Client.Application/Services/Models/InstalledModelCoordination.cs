@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+
 public enum InstalledModelMutationKind
 {
     Acquire,
@@ -7,7 +9,7 @@ public enum InstalledModelMutationKind
     Replace
 }
 
-public sealed record IntendedInstalledModelMember(string RelativePath, string Role);
+public sealed record IntendedInstalledModelMember(string RelativePath, InstalledModelPhysicalMemberRole Role);
 
 public sealed record InstalledModelMutationRequest(
     string ModelName,

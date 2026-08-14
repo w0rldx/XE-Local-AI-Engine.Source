@@ -1,19 +1,19 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using System.Collections.Concurrent;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Default <see cref="ILocalModelProviderResolver" />. Holds the registered provider set keyed by provider name
 ///     and reads the persisted per-model→provider map through a fresh DI scope per lookup (so a singleton router can
-///     consume the scoped <see cref="IModelProviderMapStore" /> safely). Unmapped models route to the configured
+///     consume the scoped <see cref="ICoordinatedModelProviderMapStore" /> safely). Unmapped models route to the configured
 ///     default provider.
 /// </summary>
 /// <remarks>
 ///     AUD4-16: the <c>ModelName → ProviderName</c> lookup is memoized in a short-TTL, bounded cache. Provider
 ///     resolution runs several times per chat turn (capability gating, model resolution, per-orchestration-participant),
-///     each previously opening a fresh DI scope + <see cref="IModelProviderMapStore" /> read; the map is effectively
+///     each previously opening a fresh DI scope + coordinated map read; the map is effectively
 ///     write-once per model (a GGUF is always <c>llamacpp</c>, an Ollama model always <c>ollama</c>), so caching the name
 ///     for a few seconds collapses that to one read per turn. Only non-secret model/provider names are cached. Writers of
 ///     the map call <see cref="InvalidateModelProviderMap" /> after an upsert so a new row is visible immediately; the
@@ -92,11 +92,27 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     /// <inheritdoc />
     public async Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default)
     {
+        return await ResolveProviderNameCoreAsync(modelName, existingLease: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> ResolveProviderNameForModelAsync(string modelName,
+        IModelProviderMapReadLease existingLease,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(existingLease);
+        return await ResolveProviderNameCoreAsync(modelName, existingLease, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> ResolveProviderNameCoreAsync(string modelName,
+        IModelProviderMapReadLease? existingLease,
+        CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
         var cachingEnabled = _mapCacheTtl > TimeSpan.Zero;
         var nowTicks = _timeProvider.GetUtcNow().UtcTicks;
-        if (cachingEnabled
+        if (existingLease is null
+            && cachingEnabled
             && _providerNameCache.TryGetValue(modelName, out var cached)
             && cached.ExpiresAtTicks > nowTicks)
         {
@@ -104,24 +120,48 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         }
 
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var mapStore = scope.ServiceProvider.GetRequiredService<IModelProviderMapStore>();
-        var mapped = await mapStore.GetProviderForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
-
-        // An unmapped model routes to the configured default provider; a mapped row wins.
-        var resolved = string.IsNullOrWhiteSpace(mapped) ? _defaultProviderName : mapped;
-
-        if (cachingEnabled)
+        var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
+        ModelProviderMapReadLease? acquiredLease = null;
+        IModelProviderMapReadLease lease;
+        if (existingLease is null)
         {
-            // Defensive bound: model names are few, but never let an odd flood of distinct names grow the cache unbounded.
-            if (_providerNameCache.Count >= MaxCacheEntries)
-            {
-                _providerNameCache.Clear();
-            }
-
-            _providerNameCache[modelName] = new ProviderNameCacheEntry(resolved, nowTicks + _mapCacheTtl.Ticks);
+            var leaseCoordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
+            acquiredLease = await leaseCoordinator.AcquireMapReadAsync(modelName, cancellationToken).ConfigureAwait(false);
+            lease = acquiredLease;
+        }
+        else
+        {
+            lease = existingLease;
         }
 
-        return resolved;
+        try
+        {
+            var mapping = await mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
+            var mapped = mapping?.ProviderName;
+
+            // An unmapped model routes to the configured default provider; a mapped row wins.
+            var resolved = string.IsNullOrWhiteSpace(mapped) ? _defaultProviderName : mapped;
+
+            if (cachingEnabled)
+            {
+                // Defensive bound: model names are few, but never let an odd flood of distinct names grow the cache unbounded.
+                if (_providerNameCache.Count >= MaxCacheEntries)
+                {
+                    _providerNameCache.Clear();
+                }
+
+                _providerNameCache[modelName] = new ProviderNameCacheEntry(resolved, nowTicks + _mapCacheTtl.Ticks);
+            }
+
+            return resolved;
+        }
+        finally
+        {
+            if (acquiredLease is not null)
+            {
+                await acquiredLease.DisposeAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     /// <inheritdoc />

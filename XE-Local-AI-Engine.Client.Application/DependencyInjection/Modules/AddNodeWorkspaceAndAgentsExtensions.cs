@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
@@ -101,6 +102,18 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // restarts. Unencrypted — model names and provider keys are not secrets. Scoped to match the
         // scoped, DbContext-backed store; the singleton resolver reads it through a fresh scope per lookup.
         builder.Services.AddScoped<IModelProviderMapStore, ModelProviderMapStore>();
+        builder.Services.AddSingleton<KeyedCompositeLockDomain>();
+        builder.Services.AddSingleton<IModelProviderMapLeaseCoordinator, ModelProviderMapLeaseCoordinator>();
+        builder.Services.AddSingleton<IInstalledModelSnapshotCoordinator>(static services =>
+            new InstalledModelSnapshotCoordinator(
+                services.GetRequiredService<KeyedCompositeLockDomain>(),
+                services.GetRequiredService<IInstalledModelSnapshotSource>()));
+        builder.Services.AddScoped<ICoordinatedModelProviderMapStore>(static services =>
+            new CoordinatedModelProviderMapStore(services.GetRequiredService<IModelProviderMapStore>()));
+        builder.Services.AddScoped<IGgufAcquisitionStateProbe, GgufAcquisitionStateProbe>();
+        builder.Services.AddSingleton<GgufAcquisitionIdentityResolver>();
+        builder.Services.AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>();
+        builder.Services.AddScoped<IOllamaProviderMapBackfillCoordinator, OllamaProviderMapBackfillCoordinator>();
         builder.Services.AddScoped<IModelLaunchArgumentsStore, ModelLaunchArgumentsStore>();
         // Feedback-insights read store. Pure analytics over node-local feedback/tool-event rows; it reads only
         // plaintext columns and writes nothing.

@@ -1,12 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Default <see cref="IGgufDownloadCoordinator" />. Starts each download on a detached task wired to a per-model
@@ -139,8 +138,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     }
 
     // Writes the model_provider_map row pointing the canonical GGUF name at the llama.cpp provider. The coordinator is a
-    // SINGLETON and IModelProviderMapStore is SCOPED, so the write goes through a fresh DI scope (same pattern the
-    // provider resolver uses). Caller-cancellation propagates; any other failure is swallowed with a warning so a
+    // singleton and the coordinated map facade is scoped, so the write goes through a fresh DI scope. Caller cancellation
+    // propagates; any other failure is swallowed with a warning so a
     // successful download is never reported as failed because the routing row could not be persisted.
     /// <summary>
     ///     Adds the just-installed model to the tool-capable allow-list when its GGUF chat template advertises tool
@@ -172,8 +171,19 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            var mapStore = scope.ServiceProvider.GetRequiredService<IModelProviderMapStore>();
-            await mapStore.UpsertAsync(modelName, LlamaServerProviderConstants.ProviderName, token).ConfigureAwait(false);
+            var leaseCoordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
+            var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
+            await using var lease = await leaseCoordinator.AcquireMapMutationAsync(modelName,
+                ModelProviderMapMutationKind.MapClaim,
+                token).ConfigureAwait(false);
+            var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, token).ConfigureAwait(false);
+            if (claim is ProviderMapClaimResult.Conflict conflict)
+            {
+                _logger.LogWarning("Could not map {ModelName} to llamacpp because it is already mapped to {ProviderName}.",
+                    modelName,
+                    conflict.ExistingProvider);
+                return;
+            }
 
             // AUD4-16: the just-written row must be visible immediately, so drop the resolver's short-TTL provider-name
             // cache. Optional resolve — the singleton resolver may be absent in a narrow test host; the TTL is the backstop.

@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -57,39 +57,36 @@ public sealed class LocalModelProviderResolverCacheTests
         AssertEx.Equal(expected: 2, store.ReadCount);
     }
 
-    private static LocalModelProviderResolver CreateResolver(IModelProviderMapStore store, TimeSpan ttl)
+    private static LocalModelProviderResolver CreateResolver(CountingMapStore store, TimeSpan ttl)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns("llamacpp");
 
         var services = new ServiceCollection();
-        services.AddScoped(_ => store);
+        services.AddSingleton<IModelProviderMapLeaseCoordinator>(new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()));
+        services.AddScoped<ICoordinatedModelProviderMapStore>(_ => store);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         return new LocalModelProviderResolver([provider], scopeFactory, "llamacpp", maxLoadedProcesses: 3, mapCacheTtl: ttl);
     }
 
-    private sealed class CountingMapStore : IModelProviderMapStore
+    private sealed class CountingMapStore : ICoordinatedModelProviderMapStore
     {
         private int _readCount;
 
         public int ReadCount => Volatile.Read(ref _readCount);
 
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
+        public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
+            string modelName,
+            CancellationToken cancellationToken = default)
         {
             _ = Interlocked.Increment(ref _readCount);
-            // Return null so the resolver falls back to the configured default (llamacpp) — the read still counts.
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<ModelProviderMapRecord?>(null);
         }
 
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>([]);
-        }
-
-        public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
-        }
+        public Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease, string modelName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease, string modelName, string providerName, string? expectedRevision = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease, ProviderMapMutationReceipt receipt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease, string modelName, string expectedProvider, string expectedRevision, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
