@@ -29,7 +29,10 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService
         try
         {
             var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse { Items = [.. agents.Select(static agent => agent.ToResponse())] }, ct)
+            await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse
+                      {
+                          Items = [.. agents.Select(static agent => agent.ToResponse())]
+                      }, ct)
                       .ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
@@ -55,7 +58,10 @@ public sealed class ListEligibleBenchmarkModelsEndpoint(IBenchmarkCatalogService
         try
         {
             var models = await _catalog.ListEligibleModelsAsync(req.ContextTokens, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListEligibleBenchmarkModelsResponse { Items = [.. models.Select(static model => model.ToResponse())] }, ct)
+            await Send.OkAsync(new ListEligibleBenchmarkModelsResponse
+                      {
+                          Items = [.. models.Select(static model => model.ToResponse())]
+                      }, ct)
                       .ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))

@@ -4,10 +4,9 @@ using System.Text;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -80,21 +79,24 @@ public sealed class BenchmarkRuntimeSnapshotTests
     private static ResolvedAgentRuntime CreateRuntime(IReadOnlyList<AllowedToolDto> tools) =>
         new("prompt", tools, null, null, 4, Guid.NewGuid(), "Agent", Kind: AgentDefinitionKind.Single);
 
-    private static AllowedToolDto Tool(string name, ToolCategory category, bool requiresApproval) => new()
-    {
-        Id = Guid.NewGuid(),
-        Name = name,
-        Location = ToolLocation.ApiSide,
-        Category = category,
-        RequiresApproval = requiresApproval
-    };
+    private static AllowedToolDto Tool(string name, ToolCategory category, bool requiresApproval) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ApiSide,
+            Category = category,
+            RequiresApproval = requiresApproval
+        };
 
     private static BenchmarkInstalledModelSnapshotV1 CreateModel()
     {
         var v1 = "v1:" + new string('a', 64);
         return new BenchmarkInstalledModelSnapshotV1("model.gguf", v1, [new BenchmarkRegistryAliasSnapshotV1("model.gguf", v1)], v1,
-            [new BenchmarkPhysicalMemberSnapshotV1("model.gguf", InstalledModelPhysicalMemberRole.Weight, 12, new string('c', 64), ["model.gguf"], true, 1,
-                "sha256:" + new string('c', 64) + ":12")],
+            [
+                new BenchmarkPhysicalMemberSnapshotV1("model.gguf", InstalledModelPhysicalMemberRole.Weight, 12, new string('c', 64), ["model.gguf"], true, 1,
+                    "sha256:" + new string('c', 64) + ":12")
+            ],
             v1, LocalModelOrigin.Imported, "llamacpp", "revision", null, null, "model.gguf", "Q4_K_M", "chat", v1);
     }
 }

@@ -132,8 +132,10 @@ public sealed class BenchmarkRunFreezeServiceTests
             v1,
             [],
             v1,
-            [new InstalledModelPhysicalMember(name, InstalledModelPhysicalMemberRole.Weight, 12, new string('b', 64),
-                "sha256:" + new string('b', 64) + ":12", [name], true, null)],
+            [
+                new InstalledModelPhysicalMember(name, InstalledModelPhysicalMemberRole.Weight, 12, new string('b', 64),
+                    "sha256:" + new string('b', 64) + ":12", [name], true, null)
+            ],
             v1,
             LocalModelOrigin.Imported,
             "llamacpp",
@@ -145,7 +147,8 @@ public sealed class BenchmarkRunFreezeServiceTests
             v1);
     }
 
-    private static BenchmarkFreezeDependencySetV1 Dependencies(string value) => new(value, value, value, value, value, value);
+    private static BenchmarkFreezeDependencySetV1 Dependencies(string value) =>
+        new(value, value, value, value, value, value);
 
     private static BenchmarkRuntimeSnapshotV1 CreateRuntimeSnapshot(BenchmarkRuntimeSnapshotInput input) =>
         new(1, input.ProjectId, input.AgentDefinitionId, input.AgentVersion, input.CoreTask, input.RequestedContextTokens,

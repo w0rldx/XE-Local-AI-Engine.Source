@@ -49,8 +49,7 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
         }
     }
 
-    public async Task<GgufRegistryAliasMutationReceipt> RemoveAliasesByLocalPathAsync(
-        GgufDeletionStageReceipt stageReceipt,
+    public async Task<GgufRegistryAliasMutationReceipt> RemoveAliasesByLocalPathAsync(GgufDeletionStageReceipt stageReceipt,
         IReadOnlyList<InstalledModelRegistryAliasSnapshot> expectedAliases,
         CancellationToken cancellationToken)
     {
@@ -68,8 +67,9 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
             throw new InvalidOperationException("InstalledModelRegistrySuperseded");
         }
 
-        return new GgufRegistryAliasMutationReceipt(
-            Array.AsReadOnly(expectedAliases.Select(static alias => alias with { }).ToArray()),
+        return new GgufRegistryAliasMutationReceipt(Array.AsReadOnly(expectedAliases.Select(static alias => alias with
+            {
+            }).ToArray()),
             GgufRegistryAliasSetHash.ComputeV1(expectedAliases),
             GgufRegistryAliasSetHash.ComputeV1([]));
     }
@@ -173,7 +173,8 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
         };
     }
 
-    private string Resolve(string relativePath) => GgufFilePath.ResolveContainedPath(options.ModelsDirectory, relativePath);
+    private string Resolve(string relativePath) =>
+        GgufFilePath.ResolveContainedPath(options.ModelsDirectory, relativePath);
 
     private static void ValidateReceipt(GgufDeletionStageReceipt receipt)
     {

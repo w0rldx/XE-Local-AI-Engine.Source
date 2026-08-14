@@ -26,6 +26,8 @@ internal sealed class BenchmarkInstalledModelLeaseProvider(IInstalledModelSnapsh
     {
         private readonly InstalledModelReadLease _inner = inner;
         public InstalledModelSnapshot Snapshot => _inner.Snapshot;
-        public ValueTask DisposeAsync() => _inner.DisposeAsync();
+
+        public ValueTask DisposeAsync() =>
+            _inner.DisposeAsync();
     }
 }

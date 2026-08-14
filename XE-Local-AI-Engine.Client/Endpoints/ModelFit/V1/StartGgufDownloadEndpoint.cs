@@ -52,12 +52,13 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
             return;
         }
         catch (HuggingFaceDownloadException exception) when (exception.Reason is HuggingFaceDownloadFailure.DestinationConflict
-                                                               or HuggingFaceDownloadFailure.HashMismatch)
+                                                                 or HuggingFaceDownloadFailure.HashMismatch)
         {
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
                 title: "The repository did not provide exact metadata compatible with this acquisition.")).ConfigureAwait(false);
             return;
         }
+
         await Send.OkAsync(new StartGgufDownloadResponse
             {
                 ModelName = ticket.ModelName,

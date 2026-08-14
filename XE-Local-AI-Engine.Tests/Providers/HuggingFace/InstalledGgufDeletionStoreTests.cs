@@ -16,7 +16,7 @@ public sealed class InstalledGgufDeletionStoreTests
         var entry = await SeedLegacyAsync(directory.Path, registry).ConfigureAwait(false);
         var snapshotStore = new InstalledGgufSnapshotStore(registry, options);
         var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None)
-                                                           .ConfigureAwait(false));
+                                                            .ConfigureAwait(false));
         var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
         var store = new InstalledGgufDeletionStore(registry, options);
 
@@ -42,7 +42,7 @@ public sealed class InstalledGgufDeletionStoreTests
         var entry = await SeedLegacyAsync(directory.Path, registry).ConfigureAwait(false);
         var snapshotStore = new InstalledGgufSnapshotStore(registry, options);
         var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None)
-                                                           .ConfigureAwait(false));
+                                                            .ConfigureAwait(false));
         var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
         var store = new InstalledGgufDeletionStore(registry, options);
         var unrelated = Path.Combine(directory.Path, "unrelated-Q4_K_M.gguf");
@@ -66,7 +66,7 @@ public sealed class InstalledGgufDeletionStoreTests
         var entry = await SeedLegacyAsync(directory.Path, registry).ConfigureAwait(false);
         var snapshotStore = new InstalledGgufSnapshotStore(registry, options);
         var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None)
-                                                           .ConfigureAwait(false));
+                                                            .ConfigureAwait(false));
         var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
         var store = new InstalledGgufDeletionStore(registry, options);
         var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
@@ -76,7 +76,12 @@ public sealed class InstalledGgufDeletionStoreTests
                           .ConfigureAwait(false);
 
         var racedBytes = await File.ReadAllBytesAsync(entry.LocalPath).ConfigureAwait(false);
-        AssertEx.True(new byte[] { 8, 8, 8 }.AsSpan().SequenceEqual(racedBytes));
+        AssertEx.True(new byte[]
+        {
+            8,
+            8,
+            8
+        }.AsSpan().SequenceEqual(racedBytes));
         AssertEx.True(File.Exists(Path.Combine(directory.Path, staged.StagedMembers.Single().QuarantineRelativePath)));
     }
 
@@ -118,7 +123,13 @@ public sealed class InstalledGgufDeletionStoreTests
     private static async Task<GgufModelRegistryEntry> SeedLegacyAsync(string root, GgufModelRegistry registry)
     {
         var path = Path.Combine(root, "demo-Q4_K_M.gguf");
-        var bytes = new byte[] { 1, 2, 3, 4 };
+        var bytes = new byte[]
+        {
+            1,
+            2,
+            3,
+            4
+        };
         await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
         var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var entry = new GgufModelRegistryEntry

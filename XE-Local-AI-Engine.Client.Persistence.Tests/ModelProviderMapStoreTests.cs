@@ -183,12 +183,12 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         await context.Database.ExecuteSqlRawAsync("""
-            CREATE TRIGGER reject_provider_map_insert
-            BEFORE INSERT ON model_provider_map
-            BEGIN
-                SELECT RAISE(ABORT, 'injected persistence failure');
-            END;
-            """);
+                                                  CREATE TRIGGER reject_provider_map_insert
+                                                  BEFORE INSERT ON model_provider_map
+                                                  BEGIN
+                                                      SELECT RAISE(ABORT, 'injected persistence failure');
+                                                  END;
+                                                  """);
         var store = new ModelProviderMapStore(context, TimeProvider.System);
 
         _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.TryInsertAsync("mistral", "llamacpp"));

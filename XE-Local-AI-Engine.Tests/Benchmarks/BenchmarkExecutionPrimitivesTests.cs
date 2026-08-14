@@ -145,7 +145,11 @@ public sealed class BenchmarkExecutionPrimitivesTests
     public async Task CancellationService_RunningPrimaryPersistsRequestThenSignalsOwnedToken()
     {
         var run = Run(BenchmarkPrimaryStatus.Running, BenchmarkJudgeStatus.Pending, version: 4);
-        var requested = run with { PrimaryStatus = BenchmarkPrimaryStatus.CancelRequested, Version = 5 };
+        var requested = run with
+        {
+            PrimaryStatus = BenchmarkPrimaryStatus.CancelRequested,
+            Version = 5
+        };
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         store.CancelAsync(run.Id, run.Version, Arg.Any<CancellationToken>()).Returns(requested);
@@ -192,14 +196,15 @@ public sealed class BenchmarkExecutionPrimitivesTests
         AssertEx.Equal(fingerprint, result.JudgeModelContentFingerprint);
     }
 
-    private static InvocationGenerationAdmissionContext Context(int? effective) => new()
-    {
-        InvocationId = Guid.NewGuid(),
-        RequestedContextTokens = 8192,
-        EffectiveContextTokens = effective,
-        ModelId = "model.gguf",
-        ProviderName = "llamacpp"
-    };
+    private static InvocationGenerationAdmissionContext Context(int? effective) =>
+        new()
+        {
+            InvocationId = Guid.NewGuid(),
+            RequestedContextTokens = 8192,
+            EffectiveContextTokens = effective,
+            ModelId = "model.gguf",
+            ProviderName = "llamacpp"
+        };
 
     private static BenchmarkEventBuffer Buffer(int maxEvents, int maxBytes) =>
         new(Options.Create(new BenchmarkEventBufferOptions
@@ -209,6 +214,9 @@ public sealed class BenchmarkExecutionPrimitivesTests
         }));
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary, BenchmarkJudgeStatus judge, long version) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), new byte[] { 1 }, "model.gguf", null, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
+        new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
+            {
+                1
+            }, "model.gguf", null, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
             primary, null, null, null, null, null, 0, null, judge, null, null, null, version, 1, 1, null, null, null, 1);
 }

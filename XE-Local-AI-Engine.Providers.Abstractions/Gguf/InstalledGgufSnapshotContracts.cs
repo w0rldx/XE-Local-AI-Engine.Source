@@ -213,9 +213,9 @@ public static class GgufPhysicalMemberSetHash
             }
 
             if (member.Role == InstalledModelPhysicalMemberRole.Sidecar
-                ? member.MemberFingerprint is not null || member.MetadataSchemaVersion is null
-                : !string.Equals(member.MemberFingerprint, GgufMemberFingerprint.Compute(member.Sha256, member.SizeBytes), StringComparison.Ordinal)
-                  || member.MetadataSchemaVersion is not null)
+                    ? member.MemberFingerprint is not null || member.MetadataSchemaVersion is null
+                    : !string.Equals(member.MemberFingerprint, GgufMemberFingerprint.Compute(member.Sha256, member.SizeBytes), StringComparison.Ordinal)
+                      || member.MetadataSchemaVersion is not null)
             {
                 throw new ArgumentException("The physical member fingerprint/schema combination is invalid.", nameof(members));
             }

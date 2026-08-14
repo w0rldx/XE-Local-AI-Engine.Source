@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -267,7 +268,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             };
 
             var registryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
-            entry = entry with { RegistryRevision = registryRevision };
+            entry = entry with
+            {
+                RegistryRevision = registryRevision
+            };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
@@ -432,9 +436,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         }
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+    [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Acquisition metadata requires the canonical lowercase SHA-256 representation validated by the universal sidecar.")]
-    private static string? NormalizeSha256(string? sha256) => sha256?.ToLowerInvariant();
+    private static string? NormalizeSha256(string? sha256) =>
+        sha256?.ToLowerInvariant();
 
     private async Task<LocalModelDescriptor> ToDescriptorAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {

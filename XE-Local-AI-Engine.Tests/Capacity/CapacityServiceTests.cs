@@ -663,10 +663,10 @@ public sealed class CapacityServiceTests
             Supervisor.CheckHealthAsync(Arg.Any<CancellationToken>())
                       .Returns(Task.FromResult(RunningLlama));
             FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(),
-                                     Arg.Any<ModelRole>(),
-                                     Arg.Any<HardwareProfile>(),
-                                     Arg.Any<int?>(),
-                                     Arg.Any<CancellationToken>())
+                                 Arg.Any<ModelRole>(),
+                                 Arg.Any<HardwareProfile>(),
+                                 Arg.Any<int?>(),
+                                 Arg.Any<CancellationToken>())
                              .Returns(call =>
                              {
                                  if (!string.Equals(ProviderName, Llamacpp, StringComparison.OrdinalIgnoreCase)

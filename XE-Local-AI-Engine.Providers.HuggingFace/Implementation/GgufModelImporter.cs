@@ -52,7 +52,7 @@ internal sealed class GgufModelImporter(
         try
         {
             var (hash, copied) = await CopyAndHashAsync(openedSource, temporaryPath, inspection.SizeBytes, progress, cancellationToken)
-                                         .ConfigureAwait(false);
+                .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             var copiedInspection = GgufImportInspector.Classify(Path.GetFileName(finalPath),
                 copied,
@@ -90,7 +90,10 @@ internal sealed class GgufModelImporter(
                 ModelContentFingerprint = modelFingerprint
             };
             var registryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
-            entry = entry with { RegistryRevision = registryRevision };
+            entry = entry with
+            {
+                RegistryRevision = registryRevision
+            };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
@@ -216,8 +219,8 @@ internal sealed class GgufModelImporter(
         }
 
         var conflictingOwner = entries.Any(entry => string.Equals(entry.ModelName, commitReceipt.RegistryEntry.ModelName,
-                                                       StringComparison.OrdinalIgnoreCase)
-                                                   || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath));
+                                                        StringComparison.OrdinalIgnoreCase)
+                                                    || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath));
         if (conflictingOwner)
         {
             throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
@@ -402,7 +405,8 @@ internal sealed class GgufModelImporter(
 
     // FlushAsync drains managed buffers but exposes no flush-to-disk overload. This short synchronous durability
     // boundary runs only after the async flush and before the staged file can be committed by rename.
-    private static void FlushToDisk(FileStream stream) => stream.Flush(flushToDisk: true);
+    private static void FlushToDisk(FileStream stream) =>
+        stream.Flush(flushToDisk: true);
 
     private static void EnsureNoCaseInsensitiveCollision(string finalPath)
     {

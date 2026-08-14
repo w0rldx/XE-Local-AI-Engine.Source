@@ -105,8 +105,7 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         ValidateDownloadMetadata(intent);
         ValidateProjectorMetadata(intent);
         var projectorFileName = intent.Projector is not null ? $"{slug}-projector-{identityHash}.gguf" : null;
-        return new ResolvedGgufAcquisitionIdentity(
-            canonicalModelName,
+        return new ResolvedGgufAcquisitionIdentity(canonicalModelName,
             reservationKey,
             quantization,
             fileName,
@@ -234,8 +233,7 @@ public sealed class GgufAcquisitionPreflight(
             members.Add(new IntendedInstalledModelMember(identity.ProjectorRelativePath, InstalledModelPhysicalMemberRole.Projector));
         }
 
-        var lease = await _snapshotCoordinator.AcquireMutationAsync(
-            new InstalledModelMutationRequest(identity.CanonicalModelName, InstalledModelMutationKind.Acquire, members),
+        var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(identity.CanonicalModelName, InstalledModelMutationKind.Acquire, members),
             cancellationToken).ConfigureAwait(false);
         try
         {

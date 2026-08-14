@@ -21,11 +21,11 @@ public sealed class LocalImportAndBenchmarksE2ETests : XEE2ETestBase
 
         await Expect(Page.GetByTestId("installed-models-table")).ToBeVisibleAsync().ConfigureAwait(false);
         await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-            {
-                Name = "Import model"
-            }))
-            .ToHaveCountAsync(0)
-            .ConfigureAwait(false);
+              {
+                  Name = "Import model"
+              }))
+              .ToHaveCountAsync(0)
+              .ConfigureAwait(false);
     }
 
     [Test]
@@ -37,19 +37,19 @@ public sealed class LocalImportAndBenchmarksE2ETests : XEE2ETestBase
         }).ConfigureAwait(false);
 
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
-            {
-                Name = "Local model benchmarks"
-            }))
-            .ToBeVisibleAsync()
-            .ConfigureAwait(false);
+              {
+                  Name = "Local model benchmarks"
+              }))
+              .ToBeVisibleAsync()
+              .ConfigureAwait(false);
         await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-            {
-                Name = "New project"
-            }))
-            .ToBeVisibleAsync()
-            .ConfigureAwait(false);
+              {
+                  Name = "New project"
+              }))
+              .ToBeVisibleAsync()
+              .ConfigureAwait(false);
         await Expect(Page.GetByText("Create a project to freeze one task and compare models."))
-            .ToBeVisibleAsync()
-            .ConfigureAwait(false);
+              .ToBeVisibleAsync()
+              .ConfigureAwait(false);
     }
 }

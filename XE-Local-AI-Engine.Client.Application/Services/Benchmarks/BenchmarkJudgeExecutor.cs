@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -84,21 +83,21 @@ public sealed class BenchmarkJudgeExecutor(
             }
 
             _ = await supervisor.RunExclusiveBenchmarkAsync(judgeModel.ModelName,
-                    ModelRole.Chat,
-                    runtime.ToResolvedLaunchArguments(),
-                    runtime.LaunchPolicy,
-                    async (profiling, profilingToken) =>
-                    {
-                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
-                        using var context = InvocationExecutionContext.CreatePlain(package,
-                            Guid.Empty,
-                            generationAdmissionPolicy: admission);
-                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
-                        return true;
-                    },
-                    token)
-                .ConfigureAwait(false);
+                                    ModelRole.Chat,
+                                    runtime.ToResolvedLaunchArguments(),
+                                    runtime.LaunchPolicy,
+                                    async (profiling, profilingToken) =>
+                                    {
+                                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
+                                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                        using var context = InvocationExecutionContext.CreatePlain(package,
+                                            Guid.Empty,
+                                            generationAdmissionPolicy: admission);
+                                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                        return true;
+                                    },
+                                    token)
+                                .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
@@ -114,11 +113,17 @@ public sealed class BenchmarkJudgeExecutor(
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
             var persisted = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
-                    work.Version,
-                    BenchmarkExecutionSerialization.SerializeJudge(parsed),
-                    terminalEvent.Sequence), CancellationToken.None)
-                .ConfigureAwait(false);
-            events.PublishReserved(terminalEvent with { Payload = terminalEvent.Payload with { RunVersion = persisted.Version } });
+                                           work.Version,
+                                           BenchmarkExecutionSerialization.SerializeJudge(parsed),
+                                           terminalEvent.Sequence), CancellationToken.None)
+                                       .ConfigureAwait(false);
+            events.PublishReserved(terminalEvent with
+            {
+                Payload = terminalEvent.Payload with
+                {
+                    RunVersion = persisted.Version
+                }
+            });
             events.EvictPlaintext(work.RunId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -146,25 +151,26 @@ public sealed class BenchmarkJudgeExecutor(
             task = snapshot.CoreTask,
             primaryOutputParts = output,
             outputSchema = snapshot.Judge.OutputSchemaJson
-                         ?? throw new BenchmarkExecutionException("The frozen judge output schema is unavailable.")
+                           ?? throw new BenchmarkExecutionException("The frozen judge output schema is unavailable.")
         });
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             snapshot.Judge.SystemPrompt ?? throw new BenchmarkExecutionException("The frozen judge prompt is unavailable."),
-            [new ConversationMessageDto
-            {
-                Id = Guid.NewGuid(),
-                Role = MessageRole.User,
-                Content = promptPayload,
-                SortOrder = 0
-            }],
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = promptPayload,
+                    SortOrder = 0
+                }
+            ],
             judgeModel.ModelName,
             AgentDefinitionVersion: 1,
             ClientNodeId: LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: [],
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(
-                snapshot.Judge.Sampling ?? throw new BenchmarkExecutionException("The frozen judge sampling policy is unavailable."),
+            SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(snapshot.Judge.Sampling ?? throw new BenchmarkExecutionException("The frozen judge sampling policy is unavailable."),
                 snapshot.Judge.RequestedContextTokens!.Value),
             IsUnattended: true));
     }
@@ -210,7 +216,10 @@ public sealed class BenchmarkJudgeExecutor(
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkExecutionException(InvalidResultMessage) { Source = exception.Source };
+            throw new BenchmarkExecutionException(InvalidResultMessage)
+            {
+                Source = exception.Source
+            };
         }
     }
 
@@ -236,7 +245,13 @@ public sealed class BenchmarkJudgeExecutor(
         try
         {
             var persisted = await store.MarkJudgeCancelledAsync(runId, run.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
-            events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
+            events.PublishReserved(terminal with
+            {
+                Payload = terminal.Payload with
+                {
+                    RunVersion = persisted.Version
+                }
+            });
         }
         catch (BenchmarkConflictException)
         {
@@ -246,6 +261,7 @@ public sealed class BenchmarkJudgeExecutor(
                 throw;
             }
         }
+
         events.EvictPlaintext(runId);
     }
 
@@ -263,7 +279,13 @@ public sealed class BenchmarkJudgeExecutor(
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Failed.ToString(), RunVersion: run.Version + 1));
         var persisted = await store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
-        events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
+        events.PublishReserved(terminal with
+        {
+            Payload = terminal.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
         events.EvictPlaintext(runId);
     }
 }

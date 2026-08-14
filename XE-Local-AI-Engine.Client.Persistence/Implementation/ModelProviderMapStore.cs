@@ -122,9 +122,9 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
         var affected = await _dbContext.ModelProviderMaps
                                        .Where(mapping => mapping.ModelName == modelName && mapping.Revision == expectedRevision)
                                        .ExecuteUpdateAsync(setters => setters
-                                               .SetProperty(mapping => mapping.ProviderName, providerName)
-                                               .SetProperty(mapping => mapping.UpdatedAtUtc, updatedAtUtc)
-                                               .SetProperty(mapping => mapping.Revision, revision),
+                                                                      .SetProperty(mapping => mapping.ProviderName, providerName)
+                                                                      .SetProperty(mapping => mapping.UpdatedAtUtc, updatedAtUtc)
+                                                                      .SetProperty(mapping => mapping.Revision, revision),
                                            cancellationToken)
                                        .ConfigureAwait(false);
 
@@ -167,5 +167,6 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
         }
     }
 
-    private static string CreateRevision() => Guid.NewGuid().ToString("N");
+    private static string CreateRevision() =>
+        Guid.NewGuid().ToString("N");
 }

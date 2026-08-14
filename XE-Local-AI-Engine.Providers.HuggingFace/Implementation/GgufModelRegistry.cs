@@ -182,8 +182,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
     }
 
-    internal async Task<IReadOnlyList<GgufModelRegistryEntry>?> RemoveAliasSetIfMatchAsync(
-        IReadOnlyList<GgufModelRegistryEntry> expectedAliases,
+    internal async Task<IReadOnlyList<GgufModelRegistryEntry>?> RemoveAliasSetIfMatchAsync(IReadOnlyList<GgufModelRegistryEntry> expectedAliases,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(expectedAliases);
@@ -358,7 +357,10 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                         continue;
                     }
 
-                    entries.Add(entry with { RegistryRevision = computed });
+                    entries.Add(entry with
+                    {
+                        RegistryRevision = computed
+                    });
                 }
                 catch (ArgumentException)
                 {
@@ -510,11 +512,13 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             throw new ArgumentException("The registry revision does not match the material entry value.", nameof(entry));
         }
 
-        return entry with { RegistryRevision = computed };
+        return entry with
+        {
+            RegistryRevision = computed
+        };
     }
 
-    private async Task<(IReadOnlyList<GgufModelRegistryEntry> Entries, bool Changed)> ReconcileWithSidecarsAsync(
-        IReadOnlyList<GgufModelRegistryEntry> manifestEntries,
+    private async Task<(IReadOnlyList<GgufModelRegistryEntry> Entries, bool Changed)> ReconcileWithSidecarsAsync(IReadOnlyList<GgufModelRegistryEntry> manifestEntries,
         CancellationToken ct)
     {
         if (!Directory.Exists(_modelsDirectory))
@@ -588,7 +592,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
 
         var invalidAcquisitions = entries.Where(entry => entry.Origin is not null
-                                                          && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
+                                                         && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
                                          .ToArray();
         if (invalidAcquisitions.Length > 0)
         {
@@ -620,7 +624,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         var stem = Path.GetFileNameWithoutExtension(fileName);
         var separator = stem.LastIndexOf('-');
         if (separator <= 0 || stem.Length - separator - 1 != 24
-            || !stem.AsSpan(separator + 1).ToString().All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+                           || !stem.AsSpan(separator + 1).ToString().All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
         {
             return false;
         }

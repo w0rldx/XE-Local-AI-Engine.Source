@@ -66,7 +66,8 @@ public sealed class BenchmarkRunHubTests
         AssertEx.Equal(NodeAuthorizationPolicies.Operator, authorize!.Policy);
     }
 
-    private static BenchmarkEventBuffer Buffer() => new(Options.Create(new BenchmarkEventBufferOptions()));
+    private static BenchmarkEventBuffer Buffer() =>
+        new(Options.Create(new BenchmarkEventBufferOptions()));
 
     private static bool MatchesEvent(object?[] arguments, BenchmarkRunStreamEvent expected) =>
         arguments.Length == 1 && arguments[0] is BenchmarkRunStreamEvent streamEvent && streamEvent == expected;
@@ -98,34 +99,35 @@ public sealed class BenchmarkRunHubTests
         return new HubFixture(hub, groups, caller);
     }
 
-    private static BenchmarkRunRecord Run(Guid runId, long lastStreamSequence) => new(runId,
-        Guid.NewGuid(),
-        ReadOnlyMemory<byte>.Empty,
-        "model",
-        PrimaryModelOrigin: null,
-        "v1:fingerprint",
-        "agent",
-        AgentVersion: 1,
-        RequestedContextTokens: 4096,
-        BenchmarkPrimaryStatus.Succeeded,
-        EffectiveContextTokens: 4096,
-        DurationMs: 1,
-        TotalTokens: 1,
-        TokensPerSecond: 1,
-        OutputPartsJson: null,
-        lastStreamSequence,
-        UserScore: null,
-        BenchmarkJudgeStatus.Disabled,
-        JudgeResultJson: null,
-        PrimaryErrorMessage: null,
-        JudgeErrorMessage: null,
-        Version: 4,
-        CreatedAtUtc: 1,
-        StartedAtUtc: 1,
-        PrimaryCompletedAtUtc: 2,
-        JudgeStartedAtUtc: null,
-        JudgeCompletedAtUtc: null,
-        UpdatedAtUtc: 2);
+    private static BenchmarkRunRecord Run(Guid runId, long lastStreamSequence) =>
+        new(runId,
+            Guid.NewGuid(),
+            ReadOnlyMemory<byte>.Empty,
+            "model",
+            PrimaryModelOrigin: null,
+            "v1:fingerprint",
+            "agent",
+            AgentVersion: 1,
+            RequestedContextTokens: 4096,
+            BenchmarkPrimaryStatus.Succeeded,
+            EffectiveContextTokens: 4096,
+            DurationMs: 1,
+            TotalTokens: 1,
+            TokensPerSecond: 1,
+            OutputPartsJson: null,
+            lastStreamSequence,
+            UserScore: null,
+            BenchmarkJudgeStatus.Disabled,
+            JudgeResultJson: null,
+            PrimaryErrorMessage: null,
+            JudgeErrorMessage: null,
+            Version: 4,
+            CreatedAtUtc: 1,
+            StartedAtUtc: 1,
+            PrimaryCompletedAtUtc: 2,
+            JudgeStartedAtUtc: null,
+            JudgeCompletedAtUtc: null,
+            UpdatedAtUtc: 2);
 
     private sealed class HubFixture(BenchmarkRunHub hub, IGroupManager groups, ISingleClientProxy caller) : IDisposable
     {
@@ -133,6 +135,7 @@ public sealed class BenchmarkRunHubTests
         public IGroupManager Groups { get; } = groups;
         public ISingleClientProxy Caller { get; } = caller;
 
-        public void Dispose() => Hub.Dispose();
+        public void Dispose() =>
+            Hub.Dispose();
     }
 }

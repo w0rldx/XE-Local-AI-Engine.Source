@@ -35,7 +35,13 @@ public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
 
         var runs = await _store.ListRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
         var items = runs.Skip((req.Page - 1) * req.PageSize).Take(req.PageSize).Select(static run => run.ToSummary()).ToArray();
-        await Send.OkAsync(new ListBenchmarkRunsResponse { Items = items, Page = req.Page, PageSize = req.PageSize, TotalCount = runs.Count }, ct)
+        await Send.OkAsync(new ListBenchmarkRunsResponse
+                  {
+                      Items = items,
+                      Page = req.Page,
+                      PageSize = req.PageSize,
+                      TotalCount = runs.Count
+                  }, ct)
                   .ConfigureAwait(false);
     }
 }

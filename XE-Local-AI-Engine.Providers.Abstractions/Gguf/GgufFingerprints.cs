@@ -57,7 +57,8 @@ public static class GgufMemberFingerprint
     }
 
     /// <summary>Returns whether a raw SHA-256 is exactly 64 lowercase hexadecimal characters.</summary>
-    public static bool IsCanonicalSha256(string? value) => value is not null && IsLowercaseSha256(value);
+    public static bool IsCanonicalSha256(string? value) =>
+        value is not null && IsLowercaseSha256(value);
 
     internal static void ValidateHash(string sha256)
     {
@@ -82,11 +83,11 @@ public static class GgufModelContentFingerprint
     {
         ArgumentNullException.ThrowIfNull(members);
         var canonicalMembers = members
-                              .Where(static member => member.Role is InstalledModelPhysicalMemberRole.Weight or InstalledModelPhysicalMemberRole.Projector)
-                              .Select(Normalize)
-                              .OrderBy(static member => member.RelativePath, StringComparer.Ordinal)
-                              .ThenBy(static member => member.Role)
-                              .ToArray();
+                               .Where(static member => member.Role is InstalledModelPhysicalMemberRole.Weight or InstalledModelPhysicalMemberRole.Projector)
+                               .Select(Normalize)
+                               .OrderBy(static member => member.RelativePath, StringComparer.Ordinal)
+                               .ThenBy(static member => member.Role)
+                               .ToArray();
 
         if (canonicalMembers.Length == 0 || canonicalMembers.All(static member => member.Role != InstalledModelPhysicalMemberRole.Weight))
         {
@@ -123,6 +124,7 @@ public static class GgufModelContentFingerprint
         {
             throw new ArgumentOutOfRangeException(nameof(member), "The member size cannot be negative.");
         }
+
         GgufMemberFingerprint.ValidateHash(member.Sha256);
         var path = NormalizeRelativePath(member.RelativePath);
         var aliases = member.OwningAliases
@@ -131,7 +133,11 @@ public static class GgufModelContentFingerprint
                             .OrderBy(static alias => alias, StringComparer.OrdinalIgnoreCase)
                             .ThenBy(static alias => alias, StringComparer.Ordinal)
                             .ToArray();
-        return member with { RelativePath = path, OwningAliases = aliases };
+        return member with
+        {
+            RelativePath = path,
+            OwningAliases = aliases
+        };
     }
 
     internal static string NormalizeRelativePath(string path)

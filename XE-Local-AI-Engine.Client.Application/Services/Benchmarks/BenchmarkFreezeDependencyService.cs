@@ -51,8 +51,7 @@ public sealed class BenchmarkFreezeDependencyService(
         var customToolRows = await LoadAssignedCustomToolsAsync(agent, cancellationToken).ConfigureAwait(false);
         var profiles = await _inferenceProfiles.ListAsync(cancellationToken).ConfigureAwait(false);
 
-        return new BenchmarkFreezeDependencySetV1(
-            Hash(agent),
+        return new BenchmarkFreezeDependencySetV1(Hash(agent),
             Hash(playbookRows.OrderBy(static item => item.Id).ToArray()),
             Hash(skillRows),
             Hash(customToolRows),
@@ -68,7 +67,11 @@ public sealed class BenchmarkFreezeDependencyService(
             var skill = await _skills.GetByIdAsync(id, cancellationToken).ConfigureAwait(false)
                         ?? throw new BenchmarkEligibilityException("An assigned benchmark skill no longer exists.");
             var resources = await _skills.ListResourcesAsync(id, cancellationToken).ConfigureAwait(false);
-            result.Add(new { Skill = skill, Resources = resources.OrderBy(static resource => resource.Id).ToArray() });
+            result.Add(new
+            {
+                Skill = skill,
+                Resources = resources.OrderBy(static resource => resource.Id).ToArray()
+            });
         }
 
         return result;

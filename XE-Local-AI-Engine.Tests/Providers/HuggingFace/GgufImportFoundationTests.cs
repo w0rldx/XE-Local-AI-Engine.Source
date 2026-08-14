@@ -4,6 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
@@ -51,8 +52,14 @@ public sealed class GgufImportFoundationTests
             DownloadedAtUtc = DateTimeOffset.UnixEpoch.AddYears(10),
             RegistryRevision = "v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
         }, root));
-        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with { RepoId = "other/repo" }, root));
-        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with { Origin = LocalModelOrigin.HuggingFace }, root));
+        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with
+        {
+            RepoId = "other/repo"
+        }, root));
+        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with
+        {
+            Origin = LocalModelOrigin.HuggingFace
+        }, root));
         AssertEx.Throws<ArgumentException>(() => GgufRegistryRevision.ComputeV1(entry with
         {
             LocalPath = Path.GetFullPath(Path.Combine(root, "..", "escaped.gguf"))
@@ -113,7 +120,7 @@ public sealed class GgufImportFoundationTests
         using var paths = new ImportPaths();
         var source = paths.WriteSource(BuildCausalGguf(architecture), fileName);
         var result = await new GgufImportInspector(Infra.Options(paths.ModelsDirectory))
-                          .InspectAsync(new GgufImportSource(source), CancellationToken.None);
+            .InspectAsync(new GgufImportSource(source), CancellationToken.None);
         AssertEx.Contains(result.Rejections, expected);
         AssertEx.Null(result.Workload);
     }
@@ -235,8 +242,7 @@ public sealed class GgufImportFoundationTests
         var options = Infra.Options(paths.ModelsDirectory);
         using var registry = Infra.Registry(options);
         var importer = NewImporter(options, registry);
-        var prepared = await importer.PrepareAsync(
-            new GgufImportSource(paths.WriteSource(BuildCausalGguf(), "source.gguf")),
+        var prepared = await importer.PrepareAsync(new GgufImportSource(paths.WriteSource(BuildCausalGguf(), "source.gguf")),
             Destination(),
             progress: null,
             CancellationToken.None);
@@ -381,10 +387,16 @@ public sealed class GgufImportFoundationTests
             ModelContentFingerprint = null,
             RegistryRevision = null
         };
-        unrelated = unrelated with { RegistryRevision = GgufRegistryRevision.ComputeV1(unrelated, paths.ModelsDirectory) };
+        unrelated = unrelated with
+        {
+            RegistryRevision = GgufRegistryRevision.ComputeV1(unrelated, paths.ModelsDirectory)
+        };
         await File.WriteAllTextAsync(Path.Combine(paths.ModelsDirectory, "index.json"), JsonSerializer.Serialize(new
         {
-            Models = new[] { unrelated }
+            Models = new[]
+            {
+                unrelated
+            }
         }));
 
         using var reconciled = Infra.Registry(options);
@@ -610,8 +622,8 @@ public sealed class GgufImportFoundationTests
         var snapshot = await snapshots.LoadVerifiedAsync(entry.ModelName, candidate!, CancellationToken.None);
 
         AssertEx.ContainsSingle(snapshot.Members, static member => member.Role == InstalledModelPhysicalMemberRole.Projector
-                                                                  && member.SizeBytes == 3
-                                                                  && member.MemberFingerprint is not null);
+                                                                   && member.SizeBytes == 3
+                                                                   && member.MemberFingerprint is not null);
     }
 
     [Test]
@@ -645,7 +657,10 @@ public sealed class GgufImportFoundationTests
             MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
             ModelContentFingerprint = modelFingerprint
         };
-        entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, paths.ModelsDirectory) };
+        entry = entry with
+        {
+            RegistryRevision = GgufRegistryRevision.ComputeV1(entry, paths.ModelsDirectory)
+        };
         var sidecar = AcquisitionMetadata(entry, hash, modelFingerprint);
         await GgufAcquisitionSidecar.WriteAsync(weightPath + GgufAcquisitionSidecar.Suffix, sidecar, CancellationToken.None);
         AssertEx.NotNull(await GgufAcquisitionSidecar.ReadValidAsync(weightPath + GgufAcquisitionSidecar.Suffix,
@@ -688,7 +703,7 @@ public sealed class GgufImportFoundationTests
         };
     }
 
-    private static GgufModelImporter NewImporter(XE_Local_AI_Engine.Providers.HuggingFace.Options.HuggingFaceOptions options,
+    private static GgufModelImporter NewImporter(HuggingFaceOptions options,
         GgufModelRegistry registry)
     {
         return new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
@@ -706,8 +721,8 @@ public sealed class GgufImportFoundationTests
     private static byte[] BuildCausalGguf(string architecture = "llama", bool includeFileType = true)
     {
         var builder = new GgufHeaderBytesBuilder()
-                     .WithString("general.architecture", architecture)
-                     .WithString("general.type", "model");
+                      .WithString("general.architecture", architecture)
+                      .WithString("general.type", "model");
         if (includeFileType)
         {
             builder.WithUint32("general.file_type", value: 15);
@@ -738,7 +753,8 @@ public sealed class GgufImportFoundationTests
 
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
     {
-        public void Report(T value) => report(value);
+        public void Report(T value) =>
+            report(value);
     }
 
     private sealed class ImportPaths : IDisposable

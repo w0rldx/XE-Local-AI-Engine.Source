@@ -106,8 +106,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddSingleton<KeyedCompositeLockDomain>();
         builder.Services.AddSingleton<IModelProviderMapLeaseCoordinator, ModelProviderMapLeaseCoordinator>();
         builder.Services.AddScoped<IInstalledModelSnapshotCoordinator>(static services =>
-            new InstalledModelSnapshotCoordinator(
-                services.GetRequiredService<KeyedCompositeLockDomain>(),
+            new InstalledModelSnapshotCoordinator(services.GetRequiredService<KeyedCompositeLockDomain>(),
                 services.GetRequiredService<IInstalledGgufSnapshotStore>(),
                 services.GetRequiredService<ICoordinatedModelProviderMapStore>()));
         builder.Services.AddScoped<ICoordinatedModelProviderMapStore>(static services =>

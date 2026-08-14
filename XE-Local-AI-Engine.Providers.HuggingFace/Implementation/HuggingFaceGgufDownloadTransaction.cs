@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -18,6 +19,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
         {
             throw new ArgumentException("The repository id is required.", nameof(request));
         }
+
         var detail = await discovery.ListRepoFilesAsync(request.RepoId, cancellationToken).ConfigureAwait(false);
         var selected = ResolveFile(detail.Files, request, options.DefaultQuant);
         EnsureSafeSource(selected.FileName, selected.SizeBytes, selected.Sha256, selected.Revision);
@@ -175,7 +177,10 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
                 ModelContentFingerprint = modelFingerprint
             };
             var registryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
-            entry = entry with { RegistryRevision = registryRevision };
+            entry = entry with
+            {
+                RegistryRevision = registryRevision
+            };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
@@ -263,6 +268,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
                 File.Move(preparedDownload.TemporaryProjectorPath!, finalProjectorPath, overwrite: false);
                 movedProjector = true;
             }
+
             EnsureNoCollision(finalWeightPath);
             File.Move(preparedDownload.TemporaryGgufPath, finalWeightPath, overwrite: false);
             movedWeight = true;
@@ -323,7 +329,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
         }
 
         if (!exactOwner && entries.Any(entry => string.Equals(entry.ModelName, commitReceipt.RegistryEntry.ModelName, StringComparison.OrdinalIgnoreCase)
-                                               || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath)))
+                                                || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath)))
         {
             throw IntegrityFailure("The committed download is now owned by a different registry entry.");
         }
@@ -431,7 +437,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
         var directory = Path.GetDirectoryName(path);
         var name = Path.GetFileName(path);
         if (directory is not null && Directory.Exists(directory)
-            && Directory.EnumerateFileSystemEntries(directory).Any(existing => string.Equals(Path.GetFileName(existing), name, StringComparison.OrdinalIgnoreCase)))
+                                  && Directory.EnumerateFileSystemEntries(directory).Any(existing => string.Equals(Path.GetFileName(existing), name, StringComparison.OrdinalIgnoreCase)))
         {
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.DestinationConflict,
                 "The model download destination already exists.");
@@ -441,9 +447,10 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
     private static bool PathsEqual(string left, string right) =>
         string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+    [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Acquisition metadata requires canonical lowercase SHA-256 values.")]
-    private static string NormalizeSha256(string value) => value.ToLowerInvariant();
+    private static string NormalizeSha256(string value) =>
+        value.ToLowerInvariant();
 
     private static HuggingFaceDownloadException IntegrityFailure(string message) =>
         new(HuggingFaceDownloadFailure.HashMismatch, message);

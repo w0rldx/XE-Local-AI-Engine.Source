@@ -147,15 +147,15 @@ public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null
         }
 
         var expectedMembers = weight.Select(member => new GgufModelContentMember(member.RelativePath,
-                member.Role,
-                download.DeclaredSizeBytes,
-                download.DeclaredSha256,
-                member.OwningAliases))
-            .Concat(projectors.Select(member => new GgufModelContentMember(member.RelativePath,
-                member.Role,
-                projector!.DeclaredSizeBytes,
-                projector.DeclaredSha256,
-                member.OwningAliases)));
+                                        member.Role,
+                                        download.DeclaredSizeBytes,
+                                        download.DeclaredSha256,
+                                        member.OwningAliases))
+                                    .Concat(projectors.Select(member => new GgufModelContentMember(member.RelativePath,
+                                        member.Role,
+                                        projector!.DeclaredSizeBytes,
+                                        projector.DeclaredSha256,
+                                        member.OwningAliases)));
         return string.Equals(GgufModelContentFingerprint.ComputeV1(expectedMembers),
             snapshot.ModelContentFingerprint,
             StringComparison.Ordinal);
@@ -193,7 +193,7 @@ public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null
         try
         {
             var contentMembers = snapshot.Members.Where(static member => member.Role is InstalledModelPhysicalMemberRole.Weight
-                                                                         or InstalledModelPhysicalMemberRole.Projector)
+                                             or InstalledModelPhysicalMemberRole.Projector)
                                          .Select(static member => new GgufModelContentMember(member.RelativePath,
                                              member.Role,
                                              member.SizeBytes,

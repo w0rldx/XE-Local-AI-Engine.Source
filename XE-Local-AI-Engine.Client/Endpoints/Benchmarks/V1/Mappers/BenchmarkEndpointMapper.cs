@@ -111,7 +111,12 @@ internal static class BenchmarkEndpointMapper
         };
 
     public static EligibleBenchmarkAgentResponse ToResponse(this BenchmarkEligibleAgent agent) =>
-        new() { Id = agent.Id, Name = agent.Name, Version = agent.Version };
+        new()
+        {
+            Id = agent.Id,
+            Name = agent.Name,
+            Version = agent.Version
+        };
 
     public static EligibleBenchmarkModelResponse ToResponse(this BenchmarkEligibleModel model) =>
         new()

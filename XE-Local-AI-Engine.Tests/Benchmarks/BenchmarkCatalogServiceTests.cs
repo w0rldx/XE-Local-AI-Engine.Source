@@ -61,7 +61,10 @@ public sealed class BenchmarkCatalogServiceTests
             capabilities,
             new BenchmarkEligibilityPolicy(),
             models,
-            new LeaseProvider(new Dictionary<string, InstalledModelSnapshot> { ["model"] = CreateSnapshot("model", null) }));
+            new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>
+            {
+                ["model"] = CreateSnapshot("model", null)
+            }));
 
         var result = await service.ListEligibleAgentsAsync("model").ConfigureAwait(false);
 
@@ -79,16 +82,17 @@ public sealed class BenchmarkCatalogServiceTests
         return new BenchmarkCatalogService(definitions, resolver, capabilities, new BenchmarkEligibilityPolicy(), models, leases);
     }
 
-    private static LocalModelDescriptor Descriptor(string name, int context) => new()
-    {
-        ModelName = name,
-        ProviderName = "llamacpp",
-        IsAvailable = true,
-        SizeBytes = 12,
-        ModifiedAt = DateTimeOffset.UnixEpoch,
-        MaxContextTokens = context,
-        IsToolCapable = true
-    };
+    private static LocalModelDescriptor Descriptor(string name, int context) =>
+        new()
+        {
+            ModelName = name,
+            ProviderName = "llamacpp",
+            IsAvailable = true,
+            SizeBytes = 12,
+            ModifiedAt = DateTimeOffset.UnixEpoch,
+            MaxContextTokens = context,
+            IsToolCapable = true
+        };
 
     private static AgentDefinitionRecord Definition(Guid id, string name, AgentDefinitionKind kind) =>
         new(id, name, null, "instructions", null, null, kind, [], new Dictionary<string, bool>(), null, 7, 1, 1);
@@ -100,8 +104,10 @@ public sealed class BenchmarkCatalogServiceTests
             identity,
             [],
             identity,
-            [new InstalledModelPhysicalMember(name, InstalledModelPhysicalMemberRole.Weight, 12, new string('b', 64),
-                "sha256:" + new string('b', 64) + ":12", [name], true, null)],
+            [
+                new InstalledModelPhysicalMember(name, InstalledModelPhysicalMemberRole.Weight, 12, new string('b', 64),
+                    "sha256:" + new string('b', 64) + ":12", [name], true, null)
+            ],
             identity,
             origin,
             "llamacpp",
@@ -127,6 +133,8 @@ public sealed class BenchmarkCatalogServiceTests
     private sealed class Lease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
     {
         public InstalledModelSnapshot Snapshot { get; } = snapshot;
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public ValueTask DisposeAsync() =>
+            ValueTask.CompletedTask;
     }
 }

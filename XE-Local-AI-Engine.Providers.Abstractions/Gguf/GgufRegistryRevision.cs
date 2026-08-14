@@ -32,7 +32,9 @@ public static class GgufRegistryRevision
         WriteNullable(entry.MetadataSchemaVersion?.ToString(CultureInfo.InvariantCulture));
         return "v1:" + Convert.ToHexStringLower(SHA256.HashData(buffer.ToArray()));
 
-        void Write(string value) => GgufModelContentFingerprint.WriteField(buffer, value);
+        void Write(string value) =>
+            GgufModelContentFingerprint.WriteField(buffer, value);
+
         void WriteNullable(string? value)
         {
             Write(value is null ? "null" : "value");

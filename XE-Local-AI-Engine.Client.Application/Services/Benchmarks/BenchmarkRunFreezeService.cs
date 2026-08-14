@@ -60,7 +60,11 @@ public sealed class BenchmarkRunFreezeService(
             throw new BenchmarkConflictException("VersionConflict");
         }
 
-        var requestedModels = new[] { primaryModelName.Trim(), project.JudgeEnabled ? project.JudgeModelName : null }
+        var requestedModels = new[]
+                              {
+                                  primaryModelName.Trim(),
+                                  project.JudgeEnabled ? project.JudgeModelName : null
+                              }
                               .Where(static name => !string.IsNullOrWhiteSpace(name))
                               .Select(static name => name!)
                               .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -94,21 +98,21 @@ public sealed class BenchmarkRunFreezeService(
                                ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
             var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
-                               primaryModelName,
-                               exactCoreTask,
-                               capabilities.SupportsTools,
-                               honorModelProfile: false,
-                               activeModelIsCloud: false,
-                               cancellationToken)
-                           .ConfigureAwait(false)
+                                                   primaryModelName,
+                                                   exactCoreTask,
+                                                   capabilities.SupportsTools,
+                                                   honorModelProfile: false,
+                                                   activeModelIsCloud: false,
+                                                   cancellationToken)
+                                               .ConfigureAwait(false)
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
             var eligible = _eligibilityPolicy.Apply(resolved);
             var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
-                                    eligible,
-                                    primaryModelName,
-                                    judge?.ModelName,
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                                       eligible,
+                                                       primaryModelName,
+                                                       judge?.ModelName,
+                                                       cancellationToken)
+                                                   .ConfigureAwait(false);
             var primarySnapshot = ToSnapshot(primary);
             var primaryRuntime = await ResolveRuntimeAsync(primary.ModelName, project.ContextTokens, cancellationToken).ConfigureAwait(false);
             var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling();
@@ -159,11 +163,17 @@ public sealed class BenchmarkRunFreezeService(
         {
             throw new BenchmarkEligibilityException("The benchmark judge prompt or output schema version is not supported.");
         }
+
         if (!project.JudgeEnabled)
         {
             return new BenchmarkJudgeSnapshotV1(false, null, project.JudgePromptVersion, project.JudgeOutputSchemaVersion, null,
                 null, null, null, null,
-                Hash(new { project.JudgePromptVersion, project.JudgeOutputSchemaVersion, Enabled = false }));
+                Hash(new
+                {
+                    project.JudgePromptVersion,
+                    project.JudgeOutputSchemaVersion,
+                    Enabled = false
+                }));
         }
 
         var model = ToSnapshot(judge ?? throw new BenchmarkEligibilityException("The selected judge model is not installed."));
@@ -225,14 +235,14 @@ public sealed class BenchmarkRunFreezeService(
             source.RegistryAliases.Select(static alias => new BenchmarkRegistryAliasSnapshotV1(alias.ModelName, alias.RegistryRevision)).ToArray(),
             source.RegistryAliasSetHash,
             source.Members.Select(static member => new BenchmarkPhysicalMemberSnapshotV1(member.RelativePath,
-                    member.Role,
-                    member.SizeBytes,
-                    member.Sha256,
-                    member.OwningAliases.ToArray(),
-                    member.Required,
-                    member.MetadataSchemaVersion,
-                    member.MemberFingerprint))
-                .ToArray(),
+                      member.Role,
+                      member.SizeBytes,
+                      member.Sha256,
+                      member.OwningAliases.ToArray(),
+                      member.Required,
+                      member.MetadataSchemaVersion,
+                      member.MemberFingerprint))
+                  .ToArray(),
             source.PhysicalMemberSetHash,
             source.Origin,
             source.ProviderName!,
@@ -271,7 +281,7 @@ public sealed class BenchmarkRunFreezeService(
             try
             {
                 var current = await dependencies.CaptureAsync(agentDefinitionId, runtime, primaryModelName, judgeModelName, cancellationToken)
-                                  .ConfigureAwait(false);
+                                                .ConfigureAwait(false);
                 return current == expected;
             }
             catch (BenchmarkEligibilityException)

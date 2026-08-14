@@ -18,7 +18,8 @@ internal sealed class InMemoryCoordinatedModelProviderMapStore : ICoordinatedMod
         _mappings[modelName] = Create(modelName, providerName);
     }
 
-    public void ResetMutationCount() => MutationCount = 0;
+    public void ResetMutationCount() =>
+        MutationCount = 0;
 
     public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
         string modelName,
@@ -45,8 +46,7 @@ internal sealed class InMemoryCoordinatedModelProviderMapStore : ICoordinatedMod
         var inserted = Create(modelName, LlamaServerProviderConstants.ProviderName);
         _mappings[modelName] = inserted;
         MutationCount++;
-        return Task.FromResult<ProviderMapClaimResult>(new ProviderMapClaimResult.Created(
-            new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false)));
+        return Task.FromResult<ProviderMapClaimResult>(new ProviderMapClaimResult.Created(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false)));
     }
 
     public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease,
@@ -66,8 +66,7 @@ internal sealed class InMemoryCoordinatedModelProviderMapStore : ICoordinatedMod
         var mutation = Create(modelName, providerName);
         _mappings[modelName] = mutation;
         MutationCount++;
-        return Task.FromResult<ProviderMapMutationResult>(new ProviderMapMutationResult.Mutated(
-            new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: mutation, WasRemoval: false)));
+        return Task.FromResult<ProviderMapMutationResult>(new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: mutation, WasRemoval: false)));
     }
 
     public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,

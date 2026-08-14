@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -38,9 +40,9 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var capacity = new JudgeCapacityService(CapacityVerdict.Allow);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        XE_Local_AI_Engine.Client.Models.RuntimePackage? assignedPackage = null;
+        RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Do<XE_Local_AI_Engine.Client.Models.RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
                   .Returns(assignment);
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -69,17 +71,18 @@ public sealed class BenchmarkJudgeExecutorTests
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal<int?>(4096, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
         AssertEx.True(persisted.LastStreamSequence > run.LastStreamSequence);
-        AssertEx.Contains(System.Text.Encoding.UTF8.GetString(persisted.JudgeResultJson.Span), "excellent");
+        AssertEx.Contains(Encoding.UTF8.GetString(persisted.JudgeResultJson.Span), "excellent");
         AssertEx.True(assignment.Disposed);
         AssertEx.True(capacity.Reservation.Disposed);
         AssertEx.True(lease.Disposed);
         var package = AssertEx.NotNull(assignedPackage);
         AssertEx.Equal(BenchmarkFrozenPolicies.JudgeSystemPrompt, package.ResolvedSystemPrompt);
-        using (var promptPayload = System.Text.Json.JsonDocument.Parse(package.ConversationContext[0].Content))
+        using (var promptPayload = JsonDocument.Parse(package.ConversationContext[0].Content))
         {
             AssertEx.Equal(BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
                 promptPayload.RootElement.GetProperty("outputSchema").GetString());
         }
+
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
         _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("judge.gguf"),
             ModelRole.Chat,
@@ -99,10 +102,10 @@ public sealed class BenchmarkJudgeExecutorTests
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
         store.MarkJudgeFailedAsync(run.Id,
-                2,
-                Arg.Any<string>(),
-                Arg.Any<long>(),
-                Arg.Any<CancellationToken>())
+                 2,
+                 Arg.Any<string>(),
+                 Arg.Any<long>(),
+                 Arg.Any<CancellationToken>())
              .Returns(call => failed = run with
              {
                  JudgeStatus = BenchmarkJudgeStatus.Failed,
@@ -136,10 +139,14 @@ public sealed class BenchmarkJudgeExecutorTests
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         store.MarkJudgeCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(call => run with { JudgeStatus = BenchmarkJudgeStatus.Cancelled, Version = run.Version + 1 });
+             .Returns(call => run with
+             {
+                 JudgeStatus = BenchmarkJudgeStatus.Cancelled,
+                 Version = run.Version + 1
+             });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Any<XE_Local_AI_Engine.Client.Models.RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
         var cancellations = new BenchmarkCancellationRegistry();
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(call =>
@@ -189,20 +196,24 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkCancellationRegistry(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
-    private static InvocationState State(Guid invocationId, string content) => new()
-    {
-        InvocationId = invocationId,
-        ConversationId = Guid.NewGuid(),
-        Status = InvocationStatus.Completed,
-        StreamedContent = content,
-        StartedAt = DateTimeOffset.UnixEpoch,
-        LastUpdatedAt = DateTimeOffset.UnixEpoch
-    };
+    private static InvocationState State(Guid invocationId, string content) =>
+        new()
+        {
+            InvocationId = invocationId,
+            ConversationId = Guid.NewGuid(),
+            Status = InvocationStatus.Completed,
+            StreamedContent = content,
+            StartedAt = DateTimeOffset.UnixEpoch,
+            LastUpdatedAt = DateTimeOffset.UnixEpoch
+        };
 
     private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, BenchmarkJudgeStatus judgeStatus, long version) =>
         new(Guid.NewGuid(),
             snapshot.ProjectId,
-            new byte[] { 1 },
+            new byte[]
+            {
+                1
+            },
             snapshot.PrimaryModel.ModelName,
             snapshot.PrimaryModel.Origin,
             snapshot.PrimaryModel.ModelContentFingerprint,
@@ -236,14 +247,16 @@ public sealed class BenchmarkJudgeExecutorTests
             revision,
             [],
             revision,
-            [new InstalledModelPhysicalMember("judge.gguf",
-                InstalledModelPhysicalMemberRole.Weight,
-                12,
-                new string('b', 64),
-                $"sha256:{new string('b', 64)}:12",
-                ["judge.gguf"],
-                true,
-                null)],
+            [
+                new InstalledModelPhysicalMember("judge.gguf",
+                    InstalledModelPhysicalMemberRole.Weight,
+                    12,
+                    new string('b', 64),
+                    $"sha256:{new string('b', 64)}:12",
+                    ["judge.gguf"],
+                    true,
+                    null)
+            ],
             revision,
             LocalModelOrigin.Imported,
             "llamacpp",
@@ -262,14 +275,14 @@ public sealed class BenchmarkJudgeExecutorTests
             [],
             installed.RegistryAliasSetHash,
             installed.Members.Select(static member => new BenchmarkPhysicalMemberSnapshotV1(member.RelativePath,
-                    member.Role,
-                    member.SizeBytes,
-                    member.Sha256,
-                    member.OwningAliases,
-                    member.Required,
-                    member.MetadataSchemaVersion,
-                    member.MemberFingerprint))
-                .ToArray(),
+                         member.Role,
+                         member.SizeBytes,
+                         member.Sha256,
+                         member.OwningAliases,
+                         member.Required,
+                         member.MetadataSchemaVersion,
+                         member.MemberFingerprint))
+                     .ToArray(),
             installed.PhysicalMemberSetHash,
             installed.Origin,
             installed.ProviderName!,
@@ -306,7 +319,8 @@ public sealed class BenchmarkJudgeExecutorTests
             "hash");
     }
 
-    private static string V1(char value) => $"v1:{new string(value, 64)}";
+    private static string V1(char value) =>
+        $"v1:{new string(value, 64)}";
 
     private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens) =>
         new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
@@ -322,17 +336,17 @@ public sealed class BenchmarkJudgeExecutorTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
-                Arg.Any<ModelRole>(),
-                Arg.Any<ResolvedLaunchArguments>(),
-                Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
-                Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
-                Arg.Any<CancellationToken>())
-            .Returns(call =>
-            {
-                var modelName = call.ArgAt<string>(0);
-                var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19001")), []);
-                return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
-            });
+                      Arg.Any<ModelRole>(),
+                      Arg.Any<ResolvedLaunchArguments>(),
+                      Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                      Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                      Arg.Any<CancellationToken>())
+                  .Returns(call =>
+                  {
+                      var modelName = call.ArgAt<string>(0);
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19001")), []);
+                      return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
+                  });
         return supervisor;
     }
 
@@ -345,9 +359,14 @@ public sealed class BenchmarkJudgeExecutorTests
 
     private sealed class FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
     {
-        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) => throw new NotSupportedException();
-        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) => throw new NotSupportedException();
-        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) => snapshot;
+        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
+            throw new NotSupportedException();
+
+        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) =>
+            throw new NotSupportedException();
+
+        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) =>
+            snapshot;
     }
 
     private sealed class FixedLeaseProvider(FakeLease lease) : IBenchmarkInstalledModelLeaseProvider
@@ -390,7 +409,9 @@ public sealed class BenchmarkJudgeExecutorTests
     private sealed class TrackingDisposable : IDisposable
     {
         public bool Disposed { get; private set; }
-        public void Dispose() => Disposed = true;
+
+        public void Dispose() =>
+            Disposed = true;
     }
 
     private sealed class TrackingAsyncDisposable : IAsyncDisposable

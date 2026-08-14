@@ -1,20 +1,23 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using GgufAcquisitionOperationKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 public sealed class GgufImportTransactionCoordinatorTests
 {
@@ -25,7 +28,7 @@ public sealed class GgufImportTransactionCoordinatorTests
         var coordinator = BuildCoordinator(sourcePath);
 
         var result = await coordinator.PreviewAsync(sourcePath);
-        var serialized = System.Text.Json.JsonSerializer.Serialize(result);
+        var serialized = JsonSerializer.Serialize(result);
 
         AssertEx.Equal("example", result.ModelBaseName);
         AssertEx.Equal("example:Q4_K_M", result.CanonicalModelName);
@@ -42,11 +45,10 @@ public sealed class GgufImportTransactionCoordinatorTests
         var coordinator = BuildCoordinator(sourcePath);
         var preview = await coordinator.PreviewAsync(sourcePath);
 
-        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(
-            new StartGgufImportCommand(sourcePath + ".replacement",
-                preview.PreviewToken,
-                preview.ModelBaseName,
-                "Q4_K_M")));
+        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(new StartGgufImportCommand(sourcePath + ".replacement",
+            preview.PreviewToken,
+            preview.ModelBaseName,
+            "Q4_K_M")));
 
         AssertEx.Equal("InvalidPreviewToken", exception!.ErrorCode);
         AssertEx.False(exception.Message.Contains(sourcePath, StringComparison.Ordinal));
@@ -57,15 +59,17 @@ public sealed class GgufImportTransactionCoordinatorTests
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
         var first = AcceptedInspection(Path.GetFileName(sourcePath));
-        var second = first with { SourceIdentityToken = $"v1:{new string('b', 64)}" };
+        var second = first with
+        {
+            SourceIdentityToken = $"v1:{new string('b', 64)}"
+        };
         var coordinator = BuildCoordinator(sourcePath, inspector: new SequenceInspector(first, second));
         var preview = await coordinator.PreviewAsync(sourcePath);
 
-        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(
-            new StartGgufImportCommand(sourcePath,
-                preview.PreviewToken,
-                preview.ModelBaseName,
-                "Q4_K_M")));
+        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+            preview.PreviewToken,
+            preview.ModelBaseName,
+            "Q4_K_M")));
 
         AssertEx.Equal("StalePreview", exception!.ErrorCode);
     }
@@ -77,7 +81,10 @@ public sealed class GgufImportTransactionCoordinatorTests
         var inspection = AcceptedInspection(Path.GetFileName(sourcePath)) with
         {
             DetectedQuantization = null,
-            Rejections = new[] { GgufImportRejectionCode.QuantizationRequired }
+            Rejections = new[]
+            {
+                GgufImportRejectionCode.QuantizationRequired
+            }
         };
         var coordinator = BuildCoordinator(sourcePath, inspection: inspection);
 
@@ -85,8 +92,7 @@ public sealed class GgufImportTransactionCoordinatorTests
 
         AssertEx.True(result.CanonicalQuantizationChoices.Count > 0);
         AssertEx.True(result.CanonicalQuantizationChoices.Contains("Q4_K_M", StringComparer.Ordinal));
-        AssertEx.True(result.CanonicalQuantizationChoices.SequenceEqual(
-            GgufAcquisitionIdentityResolver.CanonicalQuantizationChoices,
+        AssertEx.True(result.CanonicalQuantizationChoices.SequenceEqual(GgufAcquisitionIdentityResolver.CanonicalQuantizationChoices,
             StringComparer.Ordinal));
     }
 
@@ -108,11 +114,10 @@ public sealed class GgufImportTransactionCoordinatorTests
         var coordinator = BuildCoordinator(sourcePath);
         var preview = await coordinator.PreviewAsync(sourcePath);
 
-        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(
-            new StartGgufImportCommand(sourcePath,
-                preview.PreviewToken,
-                preview.ModelBaseName,
-                "Q5_K_M")));
+        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+            preview.PreviewToken,
+            preview.ModelBaseName,
+            "Q5_K_M")));
 
         AssertEx.Equal("UnsupportedQuantization", exception!.ErrorCode);
     }
@@ -123,8 +128,7 @@ public sealed class GgufImportTransactionCoordinatorTests
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
         var security = Options.Create(new SecurityOptions());
         var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(security));
-        var identity = resolver.Resolve(new GgufAcquisitionIntent(
-            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
             "example",
             "Q4_K_M"));
         var importer = new BlockingCommitImporter(identity);
@@ -156,8 +160,7 @@ public sealed class GgufImportTransactionCoordinatorTests
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
         var security = Options.Create(new SecurityOptions());
         var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(security));
-        var identity = resolver.Resolve(new GgufAcquisitionIntent(
-            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
             "example",
             "Q4_K_M"));
         var importer = new BlockingCommitImporter(identity);
@@ -193,8 +196,7 @@ public sealed class GgufImportTransactionCoordinatorTests
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
         var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
-        var identity = resolver.Resolve(new GgufAcquisitionIntent(
-            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
             "example",
             "Q4_K_M"));
         var importer = new BlockingCommitImporter(identity)
@@ -226,8 +228,7 @@ public sealed class GgufImportTransactionCoordinatorTests
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
         var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
-        var identity = resolver.Resolve(new GgufAcquisitionIntent(
-            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
             "example",
             "Q4_K_M"));
         var importer = new BlockingCommitImporter(identity);
@@ -250,8 +251,7 @@ public sealed class GgufImportTransactionCoordinatorTests
         await WaitForPhaseAsync(coordinator, ticket.OperationId, GgufAcquisitionPhase.Completed);
 
         var events = publisher.Events.ToArray();
-        AssertEx.True(events.Select(static value => value.Phase).SequenceEqual(
-            ["Validating", "Copying", "Committing", "Completed"],
+        AssertEx.True(events.Select(static value => value.Phase).SequenceEqual(["Validating", "Copying", "Committing", "Completed"],
             StringComparer.Ordinal));
         AssertEx.True(events.All(static value => value.UpdatedAtUtc is not null));
         AssertEx.True(events.Zip(events.Skip(1), static (left, right) => left.UpdatedAtUtc < right.UpdatedAtUtc).All(static value => value));
@@ -269,8 +269,7 @@ public sealed class GgufImportTransactionCoordinatorTests
     {
         var security = Options.Create(new SecurityOptions());
         services ??= new ServiceCollection().BuildServiceProvider();
-        return new GgufImportTransactionCoordinator(
-            inspector ?? new AcceptedInspector(inspection ?? AcceptedInspection(Path.GetFileName(sourcePath))),
+        return new GgufImportTransactionCoordinator(inspector ?? new AcceptedInspector(inspection ?? AcceptedInspection(Path.GetFileName(sourcePath))),
             importer ?? new UnusedImporter(),
             resolver ?? new GgufAcquisitionIdentityResolver(new ModelNameValidator(security)),
             new GgufAcquisitionOperationRegistry(TimeProvider.System),
@@ -303,17 +302,18 @@ public sealed class GgufImportTransactionCoordinatorTests
         throw new TimeoutException($"Import operation '{operationId}' did not reach phase {phase}.");
     }
 
-    private static GgufImportInspection AcceptedInspection(string displayName) => new(42,
-        GgufVersion: 3,
-        Architecture: "llama",
-        GgufImportWorkload.CausalChat,
-        "Q4_K_M",
-        displayName,
-        Array.Empty<GgufImportRejectionCode>(),
-        Array.Empty<string>())
-    {
-        SourceIdentityToken = $"v1:{new string('a', 64)}"
-    };
+    private static GgufImportInspection AcceptedInspection(string displayName) =>
+        new(42,
+            GgufVersion: 3,
+            Architecture: "llama",
+            GgufImportWorkload.CausalChat,
+            "Q4_K_M",
+            displayName,
+            Array.Empty<GgufImportRejectionCode>(),
+            Array.Empty<string>())
+        {
+            SourceIdentityToken = $"v1:{new string('a', 64)}"
+        };
 
     private sealed class AcceptedInspector(GgufImportInspection inspection) : IGgufImportInspector
     {
@@ -334,7 +334,8 @@ public sealed class GgufImportTransactionCoordinatorTests
 
     private sealed class FixedFreeSpaceProbe(long availableBytes) : IFreeSpaceProbe
     {
-        public long GetAvailableFreeBytes(string path) => availableBytes;
+        public long GetAvailableFreeBytes(string path) =>
+            availableBytes;
     }
 
     private sealed class UnusedImporter : IGgufModelImporter
@@ -342,7 +343,8 @@ public sealed class GgufImportTransactionCoordinatorTests
         public Task<PreparedGgufImport> PrepareAsync(GgufImportSource source,
             GgufImportDestination destination,
             IProgress<GgufImportProgress>? progress,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<GgufImportCommitReceipt> CommitAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -389,6 +391,7 @@ public sealed class GgufImportTransactionCoordinatorTests
     private sealed class BlockingCommitImporter(ResolvedGgufAcquisitionIdentity identity) : IGgufModelImporter
     {
         private static readonly string Hash = new('a', 64);
+
         private readonly GgufModelRegistryEntry _entry = new()
         {
             RegistryRevision = $"v1:{Hash}",
@@ -494,7 +497,8 @@ public sealed class GgufImportTransactionCoordinatorTests
 
         public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
             string modelName,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public async Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease,
             string modelName,
@@ -509,22 +513,25 @@ public sealed class GgufImportTransactionCoordinatorTests
             string modelName,
             string providerName,
             string? expectedRevision = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,
             ProviderMapMutationReceipt receipt,
-            CancellationToken cancellationToken = default) => Task.FromResult(ProviderMapRestoreResult.Superseded);
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ProviderMapRestoreResult.Superseded);
 
         public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease,
             string modelName,
             string expectedProvider,
             string expectedRevision,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class RecordingPublisher : IGgufDownloadEventPublisher
     {
-        public System.Collections.Concurrent.ConcurrentQueue<GgufDownloadStatusHubEvent> Events { get; } = new();
+        public ConcurrentQueue<GgufDownloadStatusHubEvent> Events { get; } = new();
 
         public Task PublishStatusAsync(GgufDownloadStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
         {

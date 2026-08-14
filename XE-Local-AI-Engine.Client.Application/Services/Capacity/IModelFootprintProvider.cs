@@ -29,7 +29,8 @@ public interface IModelFootprintProvider
         ModelRole role,
         HardwareProfile profile,
         int? requiredContextTokens,
-        CancellationToken ct) => ResolveFootprintAsync(modelName, role, profile, ct);
+        CancellationToken ct) =>
+        ResolveFootprintAsync(modelName, role, profile, ct);
 
     /// <summary>
     /// Purely recomputes the next smaller automatic hardware-tier footprint candidate for admission. Frozen and

@@ -751,6 +751,7 @@ public sealed class LocalModelEndpointTests
                         services.RemoveAll<ILocalModelDeletionCoordinator>();
                         services.AddSingleton(deletionCoordinator);
                     }
+
                     StubNoCodexSession(services);
                     // Override the default (ollama) resolver from StubNoCodexSession so this context routes the details
                     // endpoint to the requested provider (llamacpp for the GGUF branch).
@@ -804,6 +805,7 @@ public sealed class LocalModelEndpointTests
             {
                 resolver.ResolveProvider(providerName).Returns(localProvider);
             }
+
             services.RemoveAll<ILocalModelProviderResolver>();
             services.AddSingleton(resolver);
         }

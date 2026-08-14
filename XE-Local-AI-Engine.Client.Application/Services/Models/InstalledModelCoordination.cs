@@ -150,6 +150,7 @@ public sealed class InstalledModelSnapshotCoordinator(
                 ModelCoordinationKeys.ProviderMap(modelName)
             }));
         }
+
         if (request.IntendedMembers is not null)
         {
             keys.AddRange(request.IntendedMembers.Select(static member => ModelCoordinationKeys.Path(member.RelativePath)));
@@ -188,7 +189,8 @@ public sealed class InstalledModelSnapshotCoordinator(
         return ModelCoordinationKeys.NormalizeSet(keys);
     }
 
-    private static bool KeysMatch(IReadOnlyList<string> left, IReadOnlyList<string> right) => left.SequenceEqual(right, StringComparer.Ordinal);
+    private static bool KeysMatch(IReadOnlyList<string> left, IReadOnlyList<string> right) =>
+        left.SequenceEqual(right, StringComparer.Ordinal);
 
     private async Task<ModelProviderMapRecord?> ReadMappingAsync(ModelCoordinationLockLease inner,
         bool isMutation,
@@ -201,7 +203,9 @@ public sealed class InstalledModelSnapshotCoordinator(
 
     private static InstalledModelSnapshot FreezeSnapshot(InstalledGgufSnapshot snapshot, ModelProviderMapRecord? mapping)
     {
-        var aliases = snapshot.RegistryAliases.Select(static alias => alias with { }).ToArray();
+        var aliases = snapshot.RegistryAliases.Select(static alias => alias with
+        {
+        }).ToArray();
         var members = snapshot.Members.Select(static member => member with
         {
             OwningAliases = Array.AsReadOnly(member.OwningAliases.ToArray())
@@ -230,12 +234,16 @@ public sealed class InstalledModelSnapshotCoordinator(
         private readonly ModelCoordinationLockLease _inner = inner;
 
         public IReadOnlyList<string> MapKeys { get; } = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal)).ToArray();
+
         public IReadOnlyList<string> ModelKeys { get; } = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal))
                                                                .Select(static key => key["2:provider-map:".Length..])
                                                                .ToArray();
+
         public bool IsDisposed => _inner.IsDisposed;
         public bool IsMutation { get; } = isMutation;
-        public bool ContainsModel(string modelName) => MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
+
+        public bool ContainsModel(string modelName) =>
+            MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
 
         public ValueTask DisposeAsync()
         {
@@ -262,7 +270,9 @@ public class InstalledModelReadLease : IModelProviderMapReadLease
     public IReadOnlyList<string> MapKeys { get; }
     public bool IsDisposed => _inner is null;
     public virtual bool IsMutation => false;
-    public bool ContainsModel(string modelName) => MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
+
+    public bool ContainsModel(string modelName) =>
+        MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
 
     public async ValueTask DisposeAsync()
     {
@@ -301,7 +311,9 @@ public sealed class InstalledModelMutationLease : IModelProviderMapMutationLease
     public IReadOnlyList<string> MapKeys { get; }
     public bool IsDisposed => _inner is null;
     public bool IsMutation => true;
-    public bool ContainsModel(string modelName) => MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
+
+    public bool ContainsModel(string modelName) =>
+        MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
 
     public async ValueTask DisposeAsync()
     {

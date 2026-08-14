@@ -47,7 +47,10 @@ public sealed class BenchmarkStoreTests : IDisposable
         await store.DeleteRunAsync(run.Id, scored.Version);
         var editable = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         AssertEx.False(editable.IsFrozen, "Deleting the last terminal run should derive an editable project.");
-        var updated = await store.UpdateProjectAsync(project.Id, editable.Version, CreateProject(project.Id) with { Name = "Updated" });
+        var updated = await store.UpdateProjectAsync(project.Id, editable.Version, CreateProject(project.Id) with
+        {
+            Name = "Updated"
+        });
         AssertEx.Equal("Updated", updated.Name);
     }
 
@@ -88,8 +91,16 @@ public sealed class BenchmarkStoreTests : IDisposable
         var primaryRun = await store.StartRunAsync(CreateRun(projectA));
         var primaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
 
-        var projectB = await store.CreateProjectAsync(CreateProject() with { JudgeEnabled = true, JudgeModelName = "judge.gguf", JudgeContextTokens = 2048 });
-        var judgeRun = await store.StartRunAsync(CreateRun(projectB) with { JudgeEnabled = true });
+        var projectB = await store.CreateProjectAsync(CreateProject() with
+        {
+            JudgeEnabled = true,
+            JudgeModelName = "judge.gguf",
+            JudgeContextTokens = 2048
+        });
+        var judgeRun = await store.StartRunAsync(CreateRun(projectB) with
+        {
+            JudgeEnabled = true
+        });
         var judgePrimaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         var primarySucceeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(judgeRun.Id, judgePrimaryClaim.Run.Version,
             Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null));
@@ -129,7 +140,10 @@ public sealed class BenchmarkStoreTests : IDisposable
             JudgeModelName = "judge.gguf",
             JudgeContextTokens = 2048
         });
-        var run = await store.StartRunAsync(CreateRun(project) with { JudgeEnabled = true });
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            JudgeEnabled = true
+        });
         var claim = AssertEx.NotNull(await store.ClaimNextAsync());
         var requested = await store.CancelAsync(run.Id, claim.Run.Version);
 
@@ -158,7 +172,10 @@ public sealed class BenchmarkStoreTests : IDisposable
             JudgeModelName = "judge.gguf",
             JudgeContextTokens = 2048
         });
-        var run = await store.StartRunAsync(CreateRun(project) with { JudgeEnabled = true });
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            JudgeEnabled = true
+        });
 
         var cancelled = await store.CancelAsync(run.Id, run.Version);
 
@@ -246,7 +263,10 @@ public sealed class BenchmarkStoreTests : IDisposable
             JudgeModelName = "judge.gguf",
             JudgeContextTokens = 2048
         });
-        var run = await store.StartRunAsync(CreateRun(project) with { JudgeEnabled = true });
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            JudgeEnabled = true
+        });
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
 
         _ = await store.CancelAsync(run.Id, primary.Run.Version);
@@ -277,7 +297,10 @@ public sealed class BenchmarkStoreTests : IDisposable
         var guard = new RejectingFreezeCommitGuard();
 
         var exception = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() =>
-            store.StartRunAsync(CreateRun(project) with { FreezeCommitGuard = guard }));
+            store.StartRunAsync(CreateRun(project) with
+            {
+                FreezeCommitGuard = guard
+            }));
 
         AssertEx.Equal("FreezeDependencyChanged", exception.Code);
         AssertEx.True(guard.WasCalled, "The dependency guard must execute before persistence mutation.");
@@ -307,7 +330,11 @@ public sealed class BenchmarkStoreTests : IDisposable
                 JudgeModelName = "judge.gguf",
                 JudgeContextTokens = 2048
             });
-            var run = await store.StartRunAsync(CreateRun(project) with { RuntimeSnapshotJson = snapshot, JudgeEnabled = true });
+            var run = await store.StartRunAsync(CreateRun(project) with
+            {
+                RuntimeSnapshotJson = snapshot,
+                JudgeEnabled = true
+            });
             var primary = AssertEx.NotNull(await store.ClaimNextAsync());
             var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version, output, 1, 4096, 4, 1, 250));
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
@@ -349,11 +376,13 @@ public sealed class BenchmarkStoreTests : IDisposable
             var first = await store.StartRunAsync(CreateRun(project));
             project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
             var second = await store.StartRunAsync(CreateRun(project));
-            await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE benchmark_runs SET runtime_snapshot_json = (SELECT runtime_snapshot_json FROM benchmark_runs WHERE id = {first.Id}) WHERE id = {second.Id}");
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE benchmark_runs SET runtime_snapshot_json = (SELECT runtime_snapshot_json FROM benchmark_runs WHERE id = {first.Id}) WHERE id = {second.Id}");
         }
 
         await using var fresh = CreateContext(databasePath);
-        _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() => new BenchmarkStore(fresh, TimeProvider.System).ListRunsAsync(fresh.BenchmarkProjects.Select(static item => item.Id).Single()));
+        _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() =>
+            new BenchmarkStore(fresh, TimeProvider.System).ListRunsAsync(fresh.BenchmarkProjects.Select(static item => item.Id).Single()));
     }
 
     [Test]
@@ -365,9 +394,15 @@ public sealed class BenchmarkStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new BenchmarkStore(context, TimeProvider.System);
         var project = await store.CreateProjectAsync(CreateProject());
-        var withoutOrigin = await store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = null });
+        var withoutOrigin = await store.StartRunAsync(CreateRun(project) with
+        {
+            PrimaryModelOrigin = null
+        });
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
-        var huggingFace = await store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = LocalModelOrigin.HuggingFace });
+        var huggingFace = await store.StartRunAsync(CreateRun(project) with
+        {
+            PrimaryModelOrigin = LocalModelOrigin.HuggingFace
+        });
 
         AssertEx.Null(AssertEx.NotNull(await store.GetRunAsync(withoutOrigin.Id)).PrimaryModelOrigin);
         AssertEx.Equal(LocalModelOrigin.HuggingFace, AssertEx.NotNull(await store.GetRunAsync(huggingFace.Id)).PrimaryModelOrigin);
@@ -384,7 +419,10 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
 
         var exception = await AssertEx.ThrowsAsync<DbUpdateException>(() =>
-            store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = (LocalModelOrigin)999 }));
+            store.StartRunAsync(CreateRun(project) with
+            {
+                PrimaryModelOrigin = (LocalModelOrigin)999
+            }));
 
         AssertEx.True(exception.GetBaseException() is InvalidOperationException invalidOperation
                       && invalidOperation.Message == "Unknown benchmark model origin enum value.",
@@ -414,13 +452,16 @@ public sealed class BenchmarkStoreTests : IDisposable
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(runId));
     }
 
-    private NodeChatDbContext CreateContext(string path) => AgentDefinitionTestContextFactory.Create(path, _keyHolder);
+    private NodeChatDbContext CreateContext(string path) =>
+        AgentDefinitionTestContextFactory.Create(path, _keyHolder);
 
-    private static BenchmarkProjectInput CreateProject(Guid? id = null) => new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"),
-        4096, Guid.NewGuid(), false, null, null);
+    private static BenchmarkProjectInput CreateProject(Guid? id = null) =>
+        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"),
+            4096, Guid.NewGuid(), false, null, null);
 
-    private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) => new(Guid.NewGuid(), project.Id, project.Version,
-        Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096, project.JudgeEnabled);
+    private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
+        new(Guid.NewGuid(), project.Id, project.Version,
+            Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096, project.JudgeEnabled);
 
     private static async Task<BenchmarkClaimedWork> CreateRunningJudgeAsync(BenchmarkStore store)
     {
@@ -430,7 +471,10 @@ public sealed class BenchmarkStoreTests : IDisposable
             JudgeModelName = "judge.gguf",
             JudgeContextTokens = 2048
         });
-        var run = await store.StartRunAsync(CreateRun(project) with { JudgeEnabled = true });
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            JudgeEnabled = true
+        });
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id,
             primary.Run.Version,

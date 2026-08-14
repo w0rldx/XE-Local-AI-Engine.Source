@@ -89,21 +89,17 @@ public static class HuggingFaceServiceCollectionExtensions
         services.TryAddSingleton(static sp => new GgufModelRegistry(sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<GgufModelRegistry>>()));
         services.TryAddSingleton<IGgufModelRegistry>(static sp => sp.GetRequiredService<GgufModelRegistry>());
-        services.TryAddSingleton<IInstalledGgufSnapshotStore>(static sp => new InstalledGgufSnapshotStore(
-            sp.GetRequiredService<GgufModelRegistry>(),
+        services.TryAddSingleton<IInstalledGgufSnapshotStore>(static sp => new InstalledGgufSnapshotStore(sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<HuggingFaceOptions>()));
-        services.TryAddSingleton<IInstalledGgufDeletionStore>(static sp => new InstalledGgufDeletionStore(
-            sp.GetRequiredService<GgufModelRegistry>(),
+        services.TryAddSingleton<IInstalledGgufDeletionStore>(static sp => new InstalledGgufDeletionStore(sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<HuggingFaceOptions>()));
         services.TryAddSingleton(static sp => new GgufImportInspector(sp.GetRequiredService<HuggingFaceOptions>()));
         services.TryAddSingleton<IGgufImportInspector>(static sp => sp.GetRequiredService<GgufImportInspector>());
-        services.TryAddSingleton<IGgufModelImporter>(static sp => new GgufModelImporter(
-            sp.GetRequiredService<GgufModelRegistry>(),
+        services.TryAddSingleton<IGgufModelImporter>(static sp => new GgufModelImporter(sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<IFreeSpaceProbe>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System));
-        services.TryAddSingleton<IGgufDownloadTransaction>(static sp => new HuggingFaceGgufDownloadTransaction(
-            sp.GetRequiredService<HfDownloadClient>(),
+        services.TryAddSingleton<IGgufDownloadTransaction>(static sp => new HuggingFaceGgufDownloadTransaction(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),
             sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<HuggingFaceOptions>(),

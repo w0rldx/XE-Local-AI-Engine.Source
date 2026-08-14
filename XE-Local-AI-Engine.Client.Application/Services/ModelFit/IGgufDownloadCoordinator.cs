@@ -35,7 +35,8 @@ public interface IGgufDownloadCoordinator
     /// <summary>Returns the latest sanitized status for <paramref name="modelName" />, or <c>null</c> when unknown.</summary>
     GgufDownloadStatus? GetStatus(string modelName);
 
-    GgufDownloadStatus? GetStatus(Guid operationId) => null;
+    GgufDownloadStatus? GetStatus(Guid operationId) =>
+        null;
 
     /// <summary>Returns a snapshot of all tracked download statuses (in-flight and recently finished).</summary>
     IReadOnlyList<GgufDownloadStatus> ListStatuses();

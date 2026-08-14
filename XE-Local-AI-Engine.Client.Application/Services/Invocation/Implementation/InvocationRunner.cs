@@ -832,7 +832,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         };
     }
 
-    private readonly record struct LocalRuntimePreparationResult(int? EffectiveContextTokens,
+    private readonly record struct LocalRuntimePreparationResult(
+        int? EffectiveContextTokens,
         string? ProviderName,
         ExceptionDispatchInfo? WarmFailure);
 

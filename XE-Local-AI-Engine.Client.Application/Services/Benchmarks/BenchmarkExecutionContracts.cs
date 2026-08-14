@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -308,25 +306,25 @@ internal static class BenchmarkSnapshotModelComparer
 
     private static IEnumerable<string> Members(IEnumerable<BenchmarkPhysicalMemberSnapshotV1> members) =>
         members.Select(static member => Member(member.RelativePath,
-                member.Role,
-                member.SizeBytes,
-                member.Sha256,
-                member.OwningAliases,
-                member.Required,
-                member.MetadataSchemaVersion,
-                member.MemberFingerprint))
-            .Order(StringComparer.Ordinal);
+                   member.Role,
+                   member.SizeBytes,
+                   member.Sha256,
+                   member.OwningAliases,
+                   member.Required,
+                   member.MetadataSchemaVersion,
+                   member.MemberFingerprint))
+               .Order(StringComparer.Ordinal);
 
     private static IEnumerable<string> Members(IEnumerable<InstalledModelPhysicalMember> members) =>
         members.Select(static member => Member(member.RelativePath,
-                member.Role,
-                member.SizeBytes,
-                member.Sha256,
-                member.OwningAliases,
-                member.Required,
-                member.MetadataSchemaVersion,
-                member.MemberFingerprint))
-            .Order(StringComparer.Ordinal);
+                   member.Role,
+                   member.SizeBytes,
+                   member.Sha256,
+                   member.OwningAliases,
+                   member.Required,
+                   member.MetadataSchemaVersion,
+                   member.MemberFingerprint))
+               .Order(StringComparer.Ordinal);
 
     private static string Member(string path,
         InstalledModelPhysicalMemberRole role,
@@ -350,5 +348,6 @@ internal static class BenchmarkExecutionSerialization
         JsonSerializer.Deserialize<BenchmarkOutputPart[]>(payload, JsonOptions)
         ?? throw new BenchmarkSnapshotException("Benchmark output parts are invalid.");
 
-    public static byte[] SerializeJudge(BenchmarkJudgeResultV1 result) => JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
+    public static byte[] SerializeJudge(BenchmarkJudgeResultV1 result) =>
+        JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
 }

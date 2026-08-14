@@ -43,7 +43,10 @@ public sealed class BenchmarkProjectService(
         BenchmarkProjectDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var input = await ValidateAsync(draft with { Id = projectId }, cancellationToken).ConfigureAwait(false);
+        var input = await ValidateAsync(draft with
+        {
+            Id = projectId
+        }, cancellationToken).ConfigureAwait(false);
         return await _benchmarkStore.UpdateProjectAsync(projectId, expectedVersion, input, cancellationToken).ConfigureAwait(false);
     }
 
@@ -94,11 +97,17 @@ public sealed class BenchmarkProjectService(
             }
             catch (KeyNotFoundException exception)
             {
-                throw new BenchmarkValidationException("The selected judge model is not installed or eligible.") { Source = exception.Source };
+                throw new BenchmarkValidationException("The selected judge model is not installed or eligible.")
+                {
+                    Source = exception.Source
+                };
             }
             catch (BenchmarkEligibilityException exception)
             {
-                throw new BenchmarkValidationException(exception.Message) { Source = exception.Source };
+                throw new BenchmarkValidationException(exception.Message)
+                {
+                    Source = exception.Source
+                };
             }
 
             judgeContext = requestedJudgeContext;

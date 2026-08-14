@@ -1,13 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
-using AcquisitionKind = XE_Local_AI_Engine.Client.Services.ModelFit.GgufAcquisitionOperationKind;
+using AcquisitionKind = GgufAcquisitionOperationKind;
 using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 public sealed record PreviewGgufImportResult(
@@ -98,10 +99,13 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
         var quantizationChoices = inspection.DetectedQuantization is null
             ? GgufAcquisitionIdentityResolver.CanonicalQuantizationChoices
-            : new[] { inspection.DetectedQuantization };
+            : new[]
+            {
+                inspection.DetectedQuantization
+            };
 
         RemoveExpiredPreviews();
-        var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var expiresAt = _timeProvider.GetUtcNow().Add(PreviewLifetime);
         _previews[token] = new PreviewState(sourcePath, inspection, quantizationChoices, expiresAt);
         return new PreviewGgufImportResult(modelBaseName,
@@ -146,8 +150,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         ResolvedGgufAcquisitionIdentity requestedIdentity;
         try
         {
-            requestedIdentity = _resolver.Resolve(
-                new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization));
+            requestedIdentity = _resolver.Resolve(new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization));
         }
         catch (ArgumentException exception)
         {
@@ -166,8 +169,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
-            reservation = await preflight.ResolveAndReserveAsync(
-                new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization),
+            reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ArgumentException exception)
@@ -203,8 +205,9 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         }
     }
 
-    public bool Cancel(Guid operationId) => _operations.GetStatus(operationId)?.OperationKind == AcquisitionKind.Import
-                                            && _operations.Cancel(operationId);
+    public bool Cancel(Guid operationId) =>
+        _operations.GetStatus(operationId)?.OperationKind == AcquisitionKind.Import
+        && _operations.Cancel(operationId);
 
     public GgufAcquisitionStatus? GetStatus(Guid operationId)
     {
@@ -212,7 +215,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         return status?.OperationKind == AcquisitionKind.Import ? status : null;
     }
 
-    public IReadOnlyList<GgufAcquisitionStatus> ListStatuses() => _operations.List(AcquisitionKind.Import);
+    public IReadOnlyList<GgufAcquisitionStatus> ListStatuses() =>
+        _operations.List(AcquisitionKind.Import);
 
     private async Task RunImportAsync(Guid operationId,
         string sourcePath,
@@ -473,11 +477,11 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             return _freeSpaceProbe.GetAvailableFreeBytes(_options.ModelsDirectory) >= requiredBytes;
         }
         catch (Exception exception) when (exception is ArgumentException
-                                          or IOException
-                                          or InvalidOperationException
-                                          or NotSupportedException
-                                          or OverflowException
-                                          or UnauthorizedAccessException)
+                                              or IOException
+                                              or InvalidOperationException
+                                              or NotSupportedException
+                                              or OverflowException
+                                              or UnauthorizedAccessException)
         {
             return null;
         }
@@ -505,16 +509,17 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         return baseName.Replace(':', '-').Trim();
     }
 
-    private static string MapRejectionCode(GgufImportRejectionCode rejection) => rejection switch
-    {
-        GgufImportRejectionCode.InvalidSource => "InvalidPath",
-        GgufImportRejectionCode.DestinationConflict => "DestinationConflict",
-        GgufImportRejectionCode.UnsupportedVersion => "UnsupportedGgufVersion",
-        GgufImportRejectionCode.UnsupportedModelType or GgufImportRejectionCode.SplitModel => "UnsupportedModelKind",
-        GgufImportRejectionCode.UnsupportedArchitecture => "UnsupportedArchitecture",
-        GgufImportRejectionCode.QuantizationRequired or GgufImportRejectionCode.UnsupportedQuantization => "UnsupportedQuantization",
-        _ => "UnsupportedFileType"
-    };
+    private static string MapRejectionCode(GgufImportRejectionCode rejection) =>
+        rejection switch
+        {
+            GgufImportRejectionCode.InvalidSource => "InvalidPath",
+            GgufImportRejectionCode.DestinationConflict => "DestinationConflict",
+            GgufImportRejectionCode.UnsupportedVersion => "UnsupportedGgufVersion",
+            GgufImportRejectionCode.UnsupportedModelType or GgufImportRejectionCode.SplitModel => "UnsupportedModelKind",
+            GgufImportRejectionCode.UnsupportedArchitecture => "UnsupportedArchitecture",
+            GgufImportRejectionCode.QuantizationRequired or GgufImportRejectionCode.UnsupportedQuantization => "UnsupportedQuantization",
+            _ => "UnsupportedFileType"
+        };
 
     private sealed record PreviewState(
         string SourcePath,
