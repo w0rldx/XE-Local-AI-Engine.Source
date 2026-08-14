@@ -30,6 +30,11 @@ public sealed class ProviderMapCoordinationArchitectureTests
     [Test]
     public void ProductionCallers_CannotBypassCoordinatedProviderMapFacade()
     {
+        AssertEx.True(ContainsIdentifier("IModelProviderMapStore store", "IModelProviderMapStore"));
+        AssertEx.True(ContainsIdentifier("new ModelProviderMapStore()", "ModelProviderMapStore"));
+        AssertEx.False(ContainsIdentifier("ICoordinatedModelProviderMapStore store", "IModelProviderMapStore"));
+        AssertEx.False(ContainsIdentifier("ICoordinatedModelProviderMapStore store", "ModelProviderMapStore"));
+
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             "XE-Local-AI-Engine.Client.Application/DependencyInjection/Modules/AddNodeWorkspaceAndAgentsExtensions.cs",
@@ -50,8 +55,8 @@ public sealed class ProviderMapCoordinationArchitectureTests
                 }
 
                 var source = File.ReadAllText(path);
-                if (source.Contains("IModelProviderMapStore", StringComparison.Ordinal)
-                    || source.Contains("ModelProviderMapStore", StringComparison.Ordinal))
+                if (ContainsIdentifier(source, "IModelProviderMapStore")
+                    || ContainsIdentifier(source, "ModelProviderMapStore"))
                 {
                     violations.Add(relative);
                 }
@@ -61,4 +66,25 @@ public sealed class ProviderMapCoordinationArchitectureTests
         AssertEx.Empty(violations,
             $"Provider-map persistence must be accessed only through ICoordinatedModelProviderMapStore: {string.Join(", ", violations)}");
     }
+
+    private static bool ContainsIdentifier(string source, string identifier)
+    {
+        var startIndex = 0;
+        while ((startIndex = source.IndexOf(identifier, startIndex, StringComparison.Ordinal)) >= 0)
+        {
+            var endIndex = startIndex + identifier.Length;
+            var hasIdentifierStart = startIndex == 0 || !IsIdentifierCharacter(source[startIndex - 1]);
+            var hasIdentifierEnd = endIndex == source.Length || !IsIdentifierCharacter(source[endIndex]);
+            if (hasIdentifierStart && hasIdentifierEnd)
+            {
+                return true;
+            }
+
+            startIndex = endIndex;
+        }
+
+        return false;
+    }
+
+    private static bool IsIdentifierCharacter(char value) => value == '_' || char.IsLetterOrDigit(value);
 }
