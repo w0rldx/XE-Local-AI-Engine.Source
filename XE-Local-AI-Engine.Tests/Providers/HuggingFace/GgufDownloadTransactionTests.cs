@@ -67,7 +67,7 @@ public sealed class GgufDownloadTransactionTests
     }
 
     [Test]
-    public async Task Commit_ProjectorDestinationAppearsAfterPrepare_RollsBackMovedSidecarAndNeverOverwrites()
+    public async Task Commit_ProjectorDestinationAppearsAfterPrepare_ReturnsPartialReceiptForSafeRollback()
     {
         using var dir = new Infra.TempModelsDir();
         var options = Infra.Options(dir.Path);
@@ -81,7 +81,11 @@ public sealed class GgufDownloadTransactionTests
         var collision = dir.FilePath(destination.ProjectorRelativePath!);
         await File.WriteAllTextAsync(collision, "preserve");
 
-        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => transaction.CommitAsync(prepared, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<GgufDownloadCommitException>(() => transaction.CommitAsync(prepared, CancellationToken.None));
+        AssertEx.False(exception.CommitReceipt.OwnsFinalGguf);
+        AssertEx.True(exception.CommitReceipt.OwnsFinalSidecar);
+        AssertEx.False(exception.CommitReceipt.OwnsFinalProjector);
+        await transaction.RollbackCommittedAsync(exception.CommitReceipt, CancellationToken.None);
 
         AssertEx.Equal("preserve", await File.ReadAllTextAsync(collision));
         AssertEx.False(File.Exists(dir.FilePath(destination.RelativeGgufPath)));

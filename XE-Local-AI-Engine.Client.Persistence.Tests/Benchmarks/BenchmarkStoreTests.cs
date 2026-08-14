@@ -168,6 +168,23 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task CancelJudge_WhenAlreadyCancelled_ReturnsCurrentRunWithoutVersionConflict()
+    {
+        var databasePath = GetDatabasePath("cancel-judge-idempotent.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var judge = await CreateRunningJudgeAsync(store);
+
+        var cancelled = await store.CancelAsync(judge.RunId, judge.Run.Version);
+        var repeated = await store.CancelAsync(judge.RunId, judge.Run.Version);
+
+        AssertEx.Equal(BenchmarkJudgeStatus.Cancelled, repeated.JudgeStatus);
+        AssertEx.Equal(cancelled.Version, repeated.Version);
+    }
+
+    [Test]
     public async Task JudgeTerminalization_PersistsLatestStreamSequenceForSuccessFailureAndCancellation()
     {
         var databasePath = GetDatabasePath("judge-cursors.sqlite");
