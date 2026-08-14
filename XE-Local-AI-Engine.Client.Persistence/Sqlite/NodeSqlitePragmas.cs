@@ -139,24 +139,26 @@ public static class NodeSqlitePragmas
         return $"PRAGMA synchronous={settings.Synchronous.ToString().ToUpperInvariant()};";
     }
 
-    // WAL and synchronous are only meaningful for an on-disk database. An in-memory database ignores/refuses WAL
-    // ("PRAGMA journal_mode=WAL" returns "memory"), so skip both there rather than log a spurious warning every open.
+    // WAL and synchronous are only meaningful for a writable, on-disk database. An in-memory database ignores/refuses WAL
+    // ("PRAGMA journal_mode=WAL" returns "memory"), and a read-only connection (e.g. the knowledge-downgrade safety check)
+    // rejects the write with SQLite error 8 ("attempt to write a readonly database"). Skip both cases rather than log a
+    // spurious warning every open.
     private static bool ShouldApplyWal(DbConnection connection, NodeSqlitePragmaSettings settings)
     {
-        return settings.EnableWriteAheadLog && !IsMemoryDatabase(connection);
+        return settings.EnableWriteAheadLog && !IsMemoryOrReadOnlyDatabase(connection);
     }
 
-    private static bool IsMemoryDatabase(DbConnection connection)
+    private static bool IsMemoryOrReadOnlyDatabase(DbConnection connection)
     {
         try
         {
             var builder = new SqliteConnectionStringBuilder(connection.ConnectionString);
-            return builder.Mode == SqliteOpenMode.Memory
+            return builder.Mode is SqliteOpenMode.Memory or SqliteOpenMode.ReadOnly
                    || string.Equals(builder.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase);
         }
         catch (ArgumentException)
         {
-            // A non-SQLite or unparseable connection string: treat as on-disk and let the pragma itself no-op if unsupported.
+            // A non-SQLite or unparseable connection string: treat as writable on-disk and let the pragma itself no-op if unsupported.
             return false;
         }
     }
