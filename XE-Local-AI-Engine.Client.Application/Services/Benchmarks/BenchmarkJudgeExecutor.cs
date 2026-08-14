@@ -89,7 +89,7 @@ public sealed class BenchmarkJudgeExecutor(
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
             var persisted = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
-                    work.Run.Version,
+                    work.Version,
                     BenchmarkExecutionSerialization.SerializeJudge(parsed),
                     terminalEvent.Sequence), CancellationToken.None)
                 .ConfigureAwait(false);
@@ -103,12 +103,12 @@ public sealed class BenchmarkJudgeExecutor(
         }
         catch (OperationCanceledException)
         {
-            await TerminalizeCancelledAsync(work.RunId).ConfigureAwait(false);
+            await TerminalizeCancelledAsync(work).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Benchmark judge work {RunId} failed.", work.RunId);
-            await TerminalizeFailedAsync(work.RunId, exception is BenchmarkExecutionException safe ? safe.Message : InvocationFailedMessage).ConfigureAwait(false);
+            await TerminalizeFailedAsync(work, exception is BenchmarkExecutionException safe ? safe.Message : InvocationFailedMessage).ConfigureAwait(false);
         }
     }
 
@@ -188,8 +188,9 @@ public sealed class BenchmarkJudgeExecutor(
         }
     }
 
-    private async Task TerminalizeCancelledAsync(Guid runId)
+    private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work)
     {
+        var runId = work.RunId;
         var run = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
         if (run is null || run.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
         {
@@ -206,13 +207,14 @@ public sealed class BenchmarkJudgeExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkJudgeCancelledAsync(runId, run.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+        var persisted = await store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
         events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
         events.EvictPlaintext(runId);
     }
 
-    private async Task TerminalizeFailedAsync(Guid runId, string message)
+    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work, string message)
     {
+        var runId = work.RunId;
         var run = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
         if (run is null || run.JudgeStatus is BenchmarkJudgeStatus.Succeeded or BenchmarkJudgeStatus.Failed or BenchmarkJudgeStatus.Cancelled)
         {
@@ -223,7 +225,7 @@ public sealed class BenchmarkJudgeExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Failed.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkJudgeFailedAsync(runId, run.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+        var persisted = await store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
         events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
         events.EvictPlaintext(runId);
     }

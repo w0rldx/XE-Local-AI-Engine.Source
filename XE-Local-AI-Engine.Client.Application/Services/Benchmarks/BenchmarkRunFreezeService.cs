@@ -22,7 +22,7 @@ public sealed class BenchmarkRunFreezeService(
     IBenchmarkStore benchmarkStore,
     IAgentDefinitionStore agentDefinitions,
     IAgentDefinitionResolver agentResolver,
-    IModelCapabilityResolver modelCapabilities,
+    IGgufModelCapabilityResolver modelCapabilities,
     IBenchmarkInstalledModelLeaseProvider installedModels,
     IBenchmarkEligibilityPolicy eligibilityPolicy,
     IBenchmarkFreezeDependencyService dependencies,
@@ -33,7 +33,7 @@ public sealed class BenchmarkRunFreezeService(
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
     private readonly IAgentDefinitionResolver _agentResolver = agentResolver ?? throw new ArgumentNullException(nameof(agentResolver));
-    private readonly IModelCapabilityResolver _modelCapabilities = modelCapabilities ?? throw new ArgumentNullException(nameof(modelCapabilities));
+    private readonly IGgufModelCapabilityResolver _modelCapabilities = modelCapabilities ?? throw new ArgumentNullException(nameof(modelCapabilities));
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
     private readonly IBenchmarkFreezeDependencyService _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
@@ -84,16 +84,13 @@ public sealed class BenchmarkRunFreezeService(
             }
 
             var exactCoreTask = BenchmarkProjectService.DecodeCoreTask(project.CoreTaskJson.Span);
-            var (_, supportsTools, isCloud) = await _modelCapabilities.ResolveAsync(primaryModelName, cancellationToken).ConfigureAwait(false);
-            if (isCloud)
-            {
-                throw new BenchmarkEligibilityException("Benchmark primary models must be local.");
-            }
+            var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken).ConfigureAwait(false)
+                               ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
             var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
                                primaryModelName,
                                exactCoreTask,
-                               supportsTools,
+                               capabilities.SupportsTools,
                                honorModelProfile: false,
                                activeModelIsCloud: false,
                                cancellationToken)

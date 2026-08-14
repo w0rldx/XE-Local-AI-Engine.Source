@@ -177,14 +177,14 @@ public sealed class BenchmarkStoreTests : IDisposable
         var store = new BenchmarkStore(context, TimeProvider.System);
 
         var successful = await CreateRunningJudgeAsync(store);
-        var success = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(successful.Id,
+        var success = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(successful.RunId,
             successful.Version,
             Encoding.UTF8.GetBytes("{}"),
             LastStreamSequence: 12));
         var failing = await CreateRunningJudgeAsync(store);
-        var failure = await store.MarkJudgeFailedAsync(failing.Id, failing.Version, "safe", lastStreamSequence: 22);
+        var failure = await store.MarkJudgeFailedAsync(failing.RunId, failing.Version, "safe", lastStreamSequence: 22);
         var cancelling = await CreateRunningJudgeAsync(store);
-        var cancelled = await store.MarkJudgeCancelledAsync(cancelling.Id, cancelling.Version, lastStreamSequence: 32);
+        var cancelled = await store.MarkJudgeCancelledAsync(cancelling.RunId, cancelling.Version, lastStreamSequence: 32);
 
         AssertEx.Equal(12L, success.LastStreamSequence);
         AssertEx.Equal(22L, failure.LastStreamSequence);
@@ -192,6 +192,60 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal(BenchmarkJudgeStatus.Succeeded, success.JudgeStatus);
         AssertEx.Equal(BenchmarkJudgeStatus.Failed, failure.JudgeStatus);
         AssertEx.Equal(BenchmarkJudgeStatus.Cancelled, cancelled.JudgeStatus);
+    }
+
+    [Test]
+    public async Task JudgeCompletion_AfterUserScoreUpdate_UsesWorkCasAndPreservesBothResults()
+    {
+        var databasePath = GetDatabasePath("judge-score-race.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var judge = await CreateRunningJudgeAsync(store);
+
+        var scored = await store.SetUserScoreAsync(judge.RunId, 5, judge.Run.Version);
+        var completed = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(judge.RunId,
+            judge.Version,
+            Encoding.UTF8.GetBytes("{\"score\":4}"),
+            LastStreamSequence: 41));
+
+        AssertEx.Equal(expected: 5, completed.UserScore);
+        AssertEx.Equal(BenchmarkJudgeStatus.Succeeded, completed.JudgeStatus);
+        AssertEx.True(completed.Version > scored.Version);
+    }
+
+    [Test]
+    public async Task PrimaryCompletion_AfterCancellationRequest_ReconcilesToCancelled()
+    {
+        var databasePath = GetDatabasePath("primary-cancel-race.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject() with
+        {
+            JudgeEnabled = true,
+            JudgeModelName = "judge.gguf",
+            JudgeContextTokens = 2048
+        });
+        var run = await store.StartRunAsync(CreateRun(project) with { JudgeEnabled = true });
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
+
+        _ = await store.CancelAsync(run.Id, primary.Run.Version);
+        var completed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id,
+            primary.Version,
+            Encoding.UTF8.GetBytes("[]"),
+            9,
+            4096,
+            10,
+            null,
+            null));
+
+        AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, completed.PrimaryStatus);
+        AssertEx.Equal(BenchmarkJudgeStatus.Skipped, completed.JudgeStatus);
+        AssertEx.Null(completed.OutputPartsJson);
+        AssertEx.Null(await store.ClaimNextAsync(), "Cancellation must not leave primary or judge work claimable.");
     }
 
     [Test]
@@ -240,7 +294,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             var primary = AssertEx.NotNull(await store.ClaimNextAsync());
             var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version, output, 1, 4096, 4, 1, 250));
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
-            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Run.Version, judge));
+            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Version, judge));
             projectId = project.Id;
             runId = run.Id;
             _ = primaryDone;
@@ -285,6 +339,60 @@ public sealed class BenchmarkStoreTests : IDisposable
         _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() => new BenchmarkStore(fresh, TimeProvider.System).ListRunsAsync(fresh.BenchmarkProjects.Select(static item => item.Id).Single()));
     }
 
+    [Test]
+    public async Task ModelOrigin_NullAndExactLowercaseValues_RoundTrip()
+    {
+        var databasePath = GetDatabasePath("model-origin-roundtrip.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var withoutOrigin = await store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = null });
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var huggingFace = await store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = LocalModelOrigin.HuggingFace });
+
+        AssertEx.Null(AssertEx.NotNull(await store.GetRunAsync(withoutOrigin.Id)).PrimaryModelOrigin);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, AssertEx.NotNull(await store.GetRunAsync(huggingFace.Id)).PrimaryModelOrigin);
+    }
+
+    [Test]
+    public async Task ModelOrigin_UnknownEnumValue_FailsClosed()
+    {
+        var databasePath = GetDatabasePath("model-origin-enum.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            store.StartRunAsync(CreateRun(project) with { PrimaryModelOrigin = (LocalModelOrigin)999 }));
+    }
+
+    [Test]
+    [Arguments("HuggingFace")]
+    [Arguments("IMPORTED")]
+    [Arguments("unknown")]
+    public async Task ModelOrigin_UnknownOrCaseVariantDatabaseValue_FailsClosed(string persistedValue)
+    {
+        var databasePath = GetDatabasePath($"model-origin-db-{persistedValue}.sqlite");
+        Guid runId;
+        await using (var context = CreateContext(databasePath))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var store = new BenchmarkStore(context, TimeProvider.System);
+            var project = await store.CreateProjectAsync(CreateProject());
+            runId = (await store.StartRunAsync(CreateRun(project))).Id;
+            _ = await context.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON;");
+            _ = await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE benchmark_runs SET primary_model_origin = {persistedValue} WHERE id = {runId}");
+        }
+
+        await using var fresh = CreateContext(databasePath);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(runId));
+    }
+
     private NodeChatDbContext CreateContext(string path) => AgentDefinitionTestContextFactory.Create(path, _keyHolder);
 
     private static BenchmarkProjectInput CreateProject(Guid? id = null) => new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"),
@@ -293,7 +401,7 @@ public sealed class BenchmarkStoreTests : IDisposable
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) => new(Guid.NewGuid(), project.Id, project.Version,
         Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096, project.JudgeEnabled);
 
-    private static async Task<BenchmarkRunRecord> CreateRunningJudgeAsync(BenchmarkStore store)
+    private static async Task<BenchmarkClaimedWork> CreateRunningJudgeAsync(BenchmarkStore store)
     {
         var project = await store.CreateProjectAsync(CreateProject() with
         {
@@ -313,7 +421,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             TokensPerSecond: null));
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judge.Kind);
-        return judge.Run;
+        return judge;
     }
 
     private static async Task<byte[]> ReadProjectCoreTaskAsync(SqliteConnection connection, Guid id)

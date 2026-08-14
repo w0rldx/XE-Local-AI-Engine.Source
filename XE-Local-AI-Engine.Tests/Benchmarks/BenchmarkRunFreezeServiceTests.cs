@@ -31,8 +31,8 @@ public sealed class BenchmarkRunFreezeServiceTests
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(agentId, "a-primary.gguf", "exact task", true, false, false, Arg.Any<CancellationToken>())
                 .Returns(Runtime(agentId));
-        var capabilities = Substitute.For<IModelCapabilityResolver>();
-        capabilities.ResolveAsync("a-primary.gguf", Arg.Any<CancellationToken>()).Returns((false, true, false));
+        var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
+        capabilities.TryResolveAsync("a-primary.gguf", Arg.Any<CancellationToken>()).Returns(new GgufModelCapabilities(false, true, false));
         var leaseProvider = new RecordingLeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
         {
             ["a-primary.gguf"] = CreateInstalledModel("a-primary.gguf"),
@@ -82,8 +82,8 @@ public sealed class BenchmarkRunFreezeServiceTests
         definitions.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(Definition(agentId));
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(agentId, "model.gguf", "exact task", true, false, false, Arg.Any<CancellationToken>()).Returns(Runtime(agentId));
-        var capabilities = Substitute.For<IModelCapabilityResolver>();
-        capabilities.ResolveAsync("model.gguf", Arg.Any<CancellationToken>()).Returns((false, true, false));
+        var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
+        capabilities.TryResolveAsync("model.gguf", Arg.Any<CancellationToken>()).Returns(new GgufModelCapabilities(false, true, false));
         var leaseProvider = new RecordingLeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
         {
             ["model.gguf"] = CreateInstalledModel("model.gguf")

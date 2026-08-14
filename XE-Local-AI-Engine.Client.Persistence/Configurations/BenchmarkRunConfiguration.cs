@@ -23,8 +23,18 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.PrimaryModelOrigin)
                .HasColumnName("primary_model_origin")
                .HasConversion(
-                   static value => value == LocalModelOrigin.HuggingFace ? "huggingface" : value == LocalModelOrigin.Imported ? "imported" : null,
-                   static value => value == "huggingface" ? LocalModelOrigin.HuggingFace : value == "imported" ? LocalModelOrigin.Imported : null);
+                   static value => value switch
+                   {
+                       LocalModelOrigin.HuggingFace => "huggingface",
+                       LocalModelOrigin.Imported => "imported",
+                       _ => throw new InvalidOperationException("Unknown benchmark model origin enum value.")
+                   },
+                   static value => value switch
+                   {
+                       "huggingface" => LocalModelOrigin.HuggingFace,
+                       "imported" => LocalModelOrigin.Imported,
+                       _ => throw new InvalidOperationException("Unknown benchmark model origin database value.")
+                   });
         builder.Property(entity => entity.ModelContentFingerprint).HasColumnName("model_content_fingerprint").HasMaxLength(67).IsRequired();
         builder.Property(entity => entity.AgentName).HasColumnName("agent_name").HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.AgentVersion).HasColumnName("agent_version");
