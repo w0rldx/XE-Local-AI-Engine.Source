@@ -141,7 +141,7 @@ public sealed partial class LlamaCppBinaryManager
                     requestedCommit,
                     sourceCommit))
             {
-                throw new LlamaRuntimeException("Official source builds must use the canonical repository and engine-pinned revision.");
+                throw new LlamaRuntimeException("Official source builds must use the canonical repository at the engine-pinned or an explicitly requested revision.");
             }
 
             if (!IsValidTag(tag))

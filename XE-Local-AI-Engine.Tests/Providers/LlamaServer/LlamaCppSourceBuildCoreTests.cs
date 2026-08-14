@@ -62,11 +62,67 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
-    public void Normalize_OfficialWithWellFormedCommit_Rejects()
+    public void Normalize_OfficialWithWellFormedCommit_AcceptsAndCanonicalizes()
+    {
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
+            LlamaCppSourceSelection.Official,
+            Commit: "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"));
+
+        AssertEx.Equal(LlamaCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
+        AssertEx.Equal("abcdefabcdefabcdefabcdefabcdefabcdefabcd", normalized.Commit);
+
+        var twice = LlamaCppSourceBuildRequestValidation.Normalize(normalized);
+        AssertEx.Equal(normalized, twice);
+    }
+
+    [Test]
+    [Arguments("abc123")]
+    [Arguments("not-a-commit-sha-not-a-commit-sha-not-a-")]
+    public void Normalize_OfficialWithMalformedCommit_Rejects(string commit)
     {
         Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
             LlamaCppSourceSelection.Official,
-            Commit: new string('a', 40))));
+            Commit: commit)));
+    }
+
+    [Test]
+    public void OfficialProvenance_ExplicitCommit_RequiresMatchingResolvedCommitOnCanonicalRepository()
+    {
+        var commit = new string('a', 40);
+
+        AssertEx.True(LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(LlamaCppSourceSelection.Official,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppSourceRevisionMode.ExplicitCommit,
+            commit,
+            commit.ToUpperInvariant()));
+
+        // Resolved commit differing from the requested one is a provenance violation.
+        AssertEx.False(LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(LlamaCppSourceSelection.Official,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppSourceRevisionMode.ExplicitCommit,
+            commit,
+            new string('b', 40)));
+
+        // A non-canonical repository never counts as official, whatever the revision mode.
+        AssertEx.False(LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(LlamaCppSourceSelection.Official,
+            "https://github.com/example/fork",
+            LlamaCppSourceRevisionMode.ExplicitCommit,
+            commit,
+            commit));
+
+        // Explicit-commit provenance requires the requested commit to be recorded as a full SHA.
+        AssertEx.False(LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(LlamaCppSourceSelection.Official,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppSourceRevisionMode.ExplicitCommit,
+            null,
+            commit));
+
+        // DefaultBranch remains invalid for the official source.
+        AssertEx.False(LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(LlamaCppSourceSelection.Official,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppSourceRevisionMode.DefaultBranch,
+            null,
+            commit));
     }
 
     [Test]

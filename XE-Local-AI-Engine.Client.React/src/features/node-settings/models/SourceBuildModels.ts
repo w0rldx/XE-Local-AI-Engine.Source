@@ -53,10 +53,10 @@ const commitPattern = /^[0-9a-fA-F]{40}$/;
 const repositoryPattern = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
 
 export function sourceBuildValidationIssue(draft: SourceBuildDraft): SourceBuildValidationIssue | null {
+	if (draft.commit.trim().length > 0 && !commitPattern.test(draft.commit.trim())) {
+		return "commit";
+	}
 	if (draft.source === "custom") {
-		if (draft.commit.trim().length > 0 && !commitPattern.test(draft.commit.trim())) {
-			return "commit";
-		}
 		if (!repositoryPattern.test(draft.repository.trim())) {
 			return "repository";
 		}
@@ -133,7 +133,7 @@ export function sourceBuildRequest(draft: SourceBuildDraft) {
 		backend: draft.backend,
 		source: draft.source,
 		repository: draft.source === "custom" ? draft.repository.trim() : null,
-		commit: draft.source === "custom" && draft.commit.trim().length > 0 ? draft.commit.trim().toLowerCase() : null,
+		commit: draft.commit.trim().length > 0 ? draft.commit.trim().toLowerCase() : null,
 		acknowledgeCustomSourceRisk: draft.source === "custom" && draft.acknowledgeCustomSourceRisk,
 	};
 }

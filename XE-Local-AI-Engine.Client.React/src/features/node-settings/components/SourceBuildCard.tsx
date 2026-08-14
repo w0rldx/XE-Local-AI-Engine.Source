@@ -80,11 +80,7 @@ export function SourceBuildCard() {
 			setSource("official");
 			setRepository("");
 		}
-		setCommit(
-			installedSource === "custom" && installed.sourceRevisionMode === "explicitCommit"
-				? (installed.sourceRequestedCommit ?? "")
-				: "",
-		);
+		setCommit(installed.sourceRevisionMode === "explicitCommit" ? (installed.sourceRequestedCommit ?? "") : "");
 	}, [installed]);
 
 	if (!developerMode) {
@@ -115,6 +111,7 @@ export function SourceBuildCard() {
 			: hub.logEntries;
 	const liveLogs = liveLogEntries.map((entry) => entry.message);
 	const liveError = hub.error ?? buildStatus?.sanitizedError ?? null;
+	const revisionKey = commit.trim().length > 0 ? "explicitCommit" : source === "official" ? "enginePinned" : "defaultBranch";
 	const backendOptions = (["cpu", "vulkan", "cuda"] as const).map((value) => ({
 		value,
 		label: t(`pages.nodeSettings.llamaCpp.sourceBuild.backends.${value}`),
@@ -159,13 +156,13 @@ export function SourceBuildCard() {
 							if (value) {
 								setSource(value as LlamaCppSourceSelection);
 								setAcknowledged(false);
-								if (value === "official") {
-									setCommit("");
-								}
 							}
 						}}
 					/>
 				</Group>
+				<Text size="sm" c="dimmed" data-testid="source-build-revision-behavior">
+					{t(`pages.nodeSettings.llamaCpp.sourceBuild.revisionBehavior.${revisionKey}`)}
+				</Text>
 				{source === "custom" ? (
 					<Stack gap="sm">
 						<TextInput
@@ -187,13 +184,11 @@ export function SourceBuildCard() {
 						/>
 					</Stack>
 				) : null}
-				{source === "custom" ? (
-					<TextInput
-						label={t("pages.nodeSettings.llamaCpp.sourceBuild.commit")}
-						value={commit}
-						onChange={(event) => setCommit(event.currentTarget.value)}
-					/>
-				) : null}
+				<TextInput
+					label={t("pages.nodeSettings.llamaCpp.sourceBuild.commit")}
+					value={commit}
+					onChange={(event) => setCommit(event.currentTarget.value)}
+				/>
 
 				<List spacing="xs" size="sm">
 					{(prerequisites.data?.items ?? []).map((item) => {

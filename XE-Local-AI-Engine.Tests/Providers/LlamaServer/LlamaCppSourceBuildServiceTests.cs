@@ -480,6 +480,56 @@ public sealed class LlamaCppSourceBuildServiceTests
         }
     }
 
+    [Test]
+    public async Task Start_OfficialExplicitCommit_BuildsAndRecordsExplicitRevision()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var commit = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        var gitArgs = Path.Combine(temp.Path, "git.txt");
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\necho \"$@\" >> '{gitArgs}'\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ] && [ \"$3\" = \"rev-parse\" ]; then echo '{commit}'; exit 0; fi\nexit 0\n");
+        WriteScript(Path.Combine(stubs, "cmake"),
+            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-fit-params\"; chmod 755 \"$2/bin/llama-fit-params\"; exit 0; fi\nexit 0\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        var manager = new CapturingBinaryManager(store, signal);
+        ILlamaCppSourceBuildActivity activity = new LlamaCppSourceBuildActivity();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            manager,
+            store,
+            signal,
+            new LeaseOnlySupervisor(),
+            activity,
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            temp.Path);
+
+        var outcome = await service.StartAsync(
+            new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official, Commit: commit.ToUpperInvariant()),
+            CancellationToken.None);
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
+        var recorded = await store.ReadAsync(CancellationToken.None);
+        AssertEx.NotNull(recorded);
+        AssertEx.Equal(LlamaCppSourceBuildRequestValidation.OfficialRepository, recorded!.SourceRepository);
+        AssertEx.Equal(LlamaCppSourceRevisionMode.ExplicitCommit, recorded.SourceRevisionMode);
+        AssertEx.Equal(commit, recorded.SourceRequestedCommit);
+        AssertEx.Equal(commit, recorded.SourceCommit);
+        var invocations = await File.ReadAllTextAsync(gitArgs);
+        AssertEx.True(invocations.Contains($"fetch --depth 1 --no-tags origin {commit}", StringComparison.Ordinal));
+        AssertEx.True(invocations.Contains($"checkout --detach {commit}", StringComparison.Ordinal));
+    }
+
     [UnsupportedOSPlatform("windows")]
     private static void WriteScript(string path, string content)
     {

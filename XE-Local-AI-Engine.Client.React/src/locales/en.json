@@ -1482,6 +1482,11 @@
 						"defaultBranch": "Default branch",
 						"explicitCommit": "Explicit commit"
 					},
+					"revisionBehavior": {
+						"enginePinned": "Official builds use the engine-pinned commit selected by the server unless a commit SHA is entered below.",
+						"defaultBranch": "Without a commit SHA, a custom build resolves the repository's default branch.",
+						"explicitCommit": "This build uses the exact 40-character commit SHA entered below."
+					},
 					"prerequisites": {
 						"os-is-linux": "Linux host",
 						"cmake": "CMake",

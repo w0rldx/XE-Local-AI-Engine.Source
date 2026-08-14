@@ -1482,6 +1482,11 @@
 						"defaultBranch": "Standardbranch",
 						"explicitCommit": "Expliziter Commit"
 					},
+					"revisionBehavior": {
+						"enginePinned": "Offizielle Builds verwenden den vom Server ausgewählten, festgelegten Engine-Commit, sofern unten keine Commit-SHA eingegeben wird.",
+						"defaultBranch": "Ohne Commit-SHA verwendet ein benutzerdefinierter Build den Standardbranch des Repositorys.",
+						"explicitCommit": "Dieser Build verwendet exakt die unten eingegebene 40-stellige Commit-SHA."
+					},
 					"prerequisites": {
 						"os-is-linux": "Linux-Host",
 						"cmake": "CMake",

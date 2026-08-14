@@ -225,10 +225,26 @@ describe("SourceBuildCard", () => {
 		expect(acknowledgement.checked).toBe(false);
 	});
 
-	it("does not expose an explicit commit input for official upstream", () => {
+	it("submits an optional explicit commit for official upstream", () => {
+		state.prerequisites = { backend: "cpu", canBuild: true, items: [] };
 		renderCard();
 
-		expect(screen.queryByLabelText("Commit SHA (optional)")).toBeNull();
+		fireEvent.change(screen.getByLabelText("Commit SHA (optional)"), { target: { value: "A".repeat(40) } });
+		fireEvent.click(screen.getByRole("button", { name: "Build" }));
+
+		expect(state.start).toHaveBeenCalledWith(
+			expect.objectContaining({ source: "official", commit: "A".repeat(40) }),
+			expect.any(Object),
+		);
+	});
+
+	it("blocks an official build on a malformed commit", () => {
+		state.prerequisites = { backend: "cpu", canBuild: true, items: [] };
+		renderCard();
+
+		fireEvent.change(screen.getByLabelText("Commit SHA (optional)"), { target: { value: "abc123" } });
+
+		expect((screen.getByRole("button", { name: "Build" }) as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it("renders active provenance exclusively from the installed runtime", () => {

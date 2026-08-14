@@ -32,15 +32,12 @@ public static partial class LlamaCppSourceBuildRequestValidation
                 throw new LlamaRuntimeException("The official source repository is selected by the server.");
             }
 
-            if (!string.IsNullOrWhiteSpace(request.Commit))
-            {
-                throw new LlamaRuntimeException("The official source uses the engine-pinned revision; select custom source to build a specific commit.");
-            }
-
+            // An optional explicit commit is allowed for the official repository (the code is still upstream code).
+            // Without one, the engine-pinned revision is used.
             return request with
             {
                 Repository = OfficialRepository,
-                Commit = null
+                Commit = NormalizeCommit(request.Commit)
             };
         }
 
@@ -112,11 +109,27 @@ public static partial class LlamaCppSourceBuildRequestValidation
         string? requestedCommit,
         string? resolvedCommit)
     {
-        return source != LlamaCppSourceSelection.Official
-               || string.Equals(repository, OfficialRepository, StringComparison.Ordinal)
-               && revisionMode == LlamaCppSourceRevisionMode.EnginePinned
-               && requestedCommit is null
-               && string.Equals(resolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
+        if (source != LlamaCppSourceSelection.Official)
+        {
+            return true;
+        }
+
+        if (!string.Equals(repository, OfficialRepository, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return revisionMode switch
+        {
+            LlamaCppSourceRevisionMode.EnginePinned =>
+                requestedCommit is null
+                && string.Equals(resolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase),
+            LlamaCppSourceRevisionMode.ExplicitCommit =>
+                requestedCommit is { Length: 40 }
+                && requestedCommit.All(Uri.IsHexDigit)
+                && string.Equals(resolvedCommit, requestedCommit, StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
     }
 
     [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]
