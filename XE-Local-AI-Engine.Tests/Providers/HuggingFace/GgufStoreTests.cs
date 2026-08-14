@@ -430,7 +430,8 @@ public sealed class GgufStoreTests
         }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha.ToLowerInvariant(), handle.Sha256!);
+        AssertEx.True(string.Equals(correctSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -455,7 +456,8 @@ public sealed class GgufStoreTests
         }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha.ToLowerInvariant(), handle.Sha256!);
+        AssertEx.True(string.Equals(correctSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -503,12 +505,14 @@ public sealed class GgufStoreTests
             RepoId = Infra.RepoId
         }, progress: null, CancellationToken.None);
 
-        var computedSha = Infra.Sha256Upper(ModelBytes).ToLowerInvariant();
-        AssertEx.Equal(computedSha, handle.Sha256);
+        var computedSha = Infra.Sha256Upper(ModelBytes);
+        AssertEx.True(string.Equals(computedSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
 
         var stored = await registry.ListAsync(CancellationToken.None);
-        AssertEx.Equal(computedSha, stored.Single().Sha256);
+        AssertEx.True(string.Equals(computedSha, stored.Single().Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(stored.Single().Sha256));
     }
 
     [Test]
@@ -653,7 +657,8 @@ public sealed class GgufStoreTests
 
         // The download succeeds and records the sha from the probe's X-Linked-Etag — the CDN Xet ETag was ignored.
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha.ToLowerInvariant(), handle.Sha256!);
+        AssertEx.True(string.Equals(correctSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
