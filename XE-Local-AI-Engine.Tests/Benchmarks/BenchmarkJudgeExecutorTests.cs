@@ -82,7 +82,7 @@ public sealed class BenchmarkJudgeExecutorTests
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
         store.MarkJudgeFailedAsync(run.Id,
-                run.Version,
+                2,
                 Arg.Any<string>(),
                 Arg.Any<long>(),
                 Arg.Any<CancellationToken>())

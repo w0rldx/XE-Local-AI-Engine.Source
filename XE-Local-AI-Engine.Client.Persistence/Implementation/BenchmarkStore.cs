@@ -239,13 +239,31 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             throw new BenchmarkValidationException("Successful primary output cannot be empty.");
         }
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(command.RunId, BenchmarkWorkKind.Primary, command.ExpectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
         var run = await RequireRunAsync(command.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded)
         {
             return ToRecord(run);
         }
 
-        EnsureVersion(run.Version, command.ExpectedRunVersion);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, command.ExpectedWorkVersion);
+        if (run.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested)
+        {
+            var cancelledAt = Now();
+            run.PrimaryStatus = BenchmarkPrimaryStatus.Cancelled;
+            run.PrimaryErrorMessage = null;
+            run.PrimaryCompletedAtUtc = cancelledAt;
+            run.Version++;
+            run.UpdatedAtUtc = cancelledAt;
+            SkipPendingJudge(run);
+            TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, cancelledAt);
+            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return ToRecord(run);
+        }
+
         EnsurePrimaryState(run, BenchmarkPrimaryStatus.Running);
         var now = Now();
         run.PrimaryStatus = BenchmarkPrimaryStatus.Succeeded;
@@ -258,7 +276,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
-        await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Primary, BenchmarkWorkStatus.Succeeded, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+        TerminalizeWork(work, BenchmarkWorkStatus.Succeeded, errorMessage: null, now);
         if (run.JudgeStatus == BenchmarkJudgeStatus.Pending)
         {
             run.JudgeStatus = BenchmarkJudgeStatus.Queued;
@@ -304,13 +322,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             throw new BenchmarkValidationException("Successful judge output cannot be empty.");
         }
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(command.RunId, BenchmarkWorkKind.Judge, command.ExpectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
         var run = await RequireRunAsync(command.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.JudgeStatus == BenchmarkJudgeStatus.Succeeded)
         {
             return ToRecord(run);
         }
 
-        EnsureVersion(run.Version, command.ExpectedRunVersion);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, command.ExpectedWorkVersion);
         EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
         var now = Now();
         run.JudgeStatus = BenchmarkJudgeStatus.Succeeded;
@@ -319,7 +340,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.JudgeCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
-        await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Judge, BenchmarkWorkStatus.Succeeded, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+        TerminalizeWork(work, BenchmarkWorkStatus.Succeeded, errorMessage: null, now);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(run);
@@ -340,13 +361,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Judge, expectedRunVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.JudgeStatus == BenchmarkJudgeStatus.Failed)
         {
             return ToRecord(run);
         }
 
-        EnsureVersion(run.Version, expectedRunVersion);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedRunVersion);
         EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
         var now = Now();
         run.JudgeStatus = BenchmarkJudgeStatus.Failed;
@@ -355,7 +379,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.JudgeCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
-        await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Judge, BenchmarkWorkStatus.Failed, run.JudgeErrorMessage, now, cancellationToken).ConfigureAwait(false);
+        TerminalizeWork(work, BenchmarkWorkStatus.Failed, run.JudgeErrorMessage, now);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(run);
@@ -374,13 +398,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Judge, expectedRunVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
         {
             return ToRecord(run);
         }
 
-        EnsureVersion(run.Version, expectedRunVersion);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedRunVersion);
         EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
         var now = Now();
         run.JudgeStatus = BenchmarkJudgeStatus.Cancelled;
@@ -388,7 +415,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.JudgeCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
-        await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Judge, BenchmarkWorkStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+        TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(run);
@@ -409,7 +436,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         {
             run.PrimaryStatus = BenchmarkPrimaryStatus.Cancelled;
             run.PrimaryCompletedAtUtc = now;
-            await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Primary, BenchmarkWorkStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+            var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
+            TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
             SkipPendingJudge(run);
         }
         else if (run.PrimaryStatus == BenchmarkPrimaryStatus.Running)
@@ -420,7 +448,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         {
             run.JudgeStatus = BenchmarkJudgeStatus.Cancelled;
             run.JudgeCompletedAtUtc = now;
-            await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Judge, BenchmarkWorkStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+            var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
+            TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
         }
         else
         {
@@ -547,40 +576,46 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         CancellationToken cancellationToken)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Primary, expectedRunVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.PrimaryStatus == status)
         {
             return ToRecord(run);
         }
 
-        EnsureVersion(run.Version, expectedRunVersion);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedRunVersion);
         if (run.PrimaryStatus is not (BenchmarkPrimaryStatus.Running or BenchmarkPrimaryStatus.CancelRequested))
         {
             throw new BenchmarkConflictException("InvalidPrimaryTransition");
         }
 
         var now = Now();
-        run.PrimaryStatus = status;
-        run.PrimaryErrorMessage = Sanitize(errorMessage);
+        var reconciledStatus = run.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested
+            ? BenchmarkPrimaryStatus.Cancelled
+            : status;
+        var reconciledWorkStatus = reconciledStatus == BenchmarkPrimaryStatus.Cancelled
+            ? BenchmarkWorkStatus.Cancelled
+            : workStatus;
+        run.PrimaryStatus = reconciledStatus;
+        run.PrimaryErrorMessage = reconciledStatus == BenchmarkPrimaryStatus.Cancelled ? null : Sanitize(errorMessage);
         UpdateLastStreamSequence(run, lastStreamSequence);
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
         SkipPendingJudge(run);
-        await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Primary, workStatus, run.PrimaryErrorMessage, now, cancellationToken).ConfigureAwait(false);
+        TerminalizeWork(work, reconciledWorkStatus, run.PrimaryErrorMessage, now);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(run);
     }
 
-    private async Task TerminalizeWorkAsync(Guid runId,
-        BenchmarkWorkKind kind,
+    private static void TerminalizeWork(BenchmarkWorkItem work,
         BenchmarkWorkStatus status,
         string? errorMessage,
-        long now,
-        CancellationToken cancellationToken)
+        long now)
     {
-        var work = await _dbContext.BenchmarkWorkItems.SingleAsync(entity => entity.RunId == runId && entity.Kind == kind, cancellationToken).ConfigureAwait(false);
         if (work.Status is BenchmarkWorkStatus.Succeeded or BenchmarkWorkStatus.Failed or BenchmarkWorkStatus.Cancelled)
         {
             return;
@@ -590,6 +625,30 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         work.ErrorMessage = errorMessage;
         work.FinishedAtUtc = now;
         work.Version++;
+    }
+
+    private async Task<BenchmarkWorkItem> RequireWorkAsync(Guid runId, BenchmarkWorkKind kind, CancellationToken cancellationToken) =>
+        await _dbContext.BenchmarkWorkItems.SingleOrDefaultAsync(entity => entity.RunId == runId && entity.Kind == kind, cancellationToken).ConfigureAwait(false)
+        ?? throw new BenchmarkNotFoundException("Benchmark work item was not found.");
+
+    private async Task AcquireWorkCompletionAsync(Guid runId,
+        BenchmarkWorkKind kind,
+        long expectedWorkVersion,
+        CancellationToken cancellationToken)
+    {
+        // Reserve SQLite's single writer before reading the aggregate. Score and cancellation updates then serialize
+        // around phase completion without participating in the executor's work-item compare-and-swap token.
+        var acquired = await _dbContext.BenchmarkWorkItems
+                                       .Where(entity => entity.RunId == runId
+                                                        && entity.Kind == kind
+                                                        && entity.Status == BenchmarkWorkStatus.Running
+                                                        && entity.Version == expectedWorkVersion)
+                                       .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.Version, entity => entity.Version), cancellationToken)
+                                       .ConfigureAwait(false);
+        if (acquired == 0)
+        {
+            throw new BenchmarkConflictException("VersionConflict");
+        }
     }
 
     private async Task<BenchmarkProject> RequireProjectAsync(Guid projectId, CancellationToken cancellationToken) =>

@@ -87,7 +87,7 @@ public interface IBenchmarkFreezeCommitGuard
 
 public sealed record BenchmarkPrimarySuccessCommand(
     Guid RunId,
-    long ExpectedRunVersion,
+    long ExpectedWorkVersion,
     ReadOnlyMemory<byte> OutputPartsJson,
     long LastStreamSequence,
     int EffectiveContextTokens,
@@ -97,7 +97,7 @@ public sealed record BenchmarkPrimarySuccessCommand(
 
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
-    long ExpectedRunVersion,
+    long ExpectedWorkVersion,
     ReadOnlyMemory<byte> JudgeResultJson,
     long LastStreamSequence = 0);
 
