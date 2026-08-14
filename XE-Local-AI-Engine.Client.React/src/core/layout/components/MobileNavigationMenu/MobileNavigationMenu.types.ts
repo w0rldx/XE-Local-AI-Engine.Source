@@ -1,7 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
-import type { Theme } from "@/core/theme/models/AppTheme";
 
 interface IMobileNavigationMenuItem {
 	icon: ReactNode;
@@ -20,7 +19,6 @@ export interface IMobileNavigationMenuLink {
 
 export interface IMobileNavigationMenuProperties {
 	menuItemStyle: MenuItemStyles;
-	theme: Theme;
 	setDrawerOpen: Dispatch<SetStateAction<boolean>>;
 	menuItem: IMobileNavigationMenuItem;
 	drawerTitle?: string;

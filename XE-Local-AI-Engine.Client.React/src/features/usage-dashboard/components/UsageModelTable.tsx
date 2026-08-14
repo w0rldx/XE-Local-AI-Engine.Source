@@ -1,6 +1,7 @@
 import { Badge, Card, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { UsageModelRow } from "@/features/usage-dashboard/models/UsageDashboardModel";
@@ -37,7 +38,7 @@ export function UsageModelTable({ rows }: { readonly rows: readonly UsageModelRo
 							{pagination.pageItems.length === 0 ? (
 								<Table.Tr>
 									<Table.Td colSpan={7}>
-										<Text c="dimmed">{t("pages.usage.models.empty", "No model usage recorded for this range.")}</Text>
+										<EmptyState message={t("pages.usage.models.empty", "No model usage recorded for this range.")} />
 									</Table.Td>
 								</Table.Tr>
 							) : (

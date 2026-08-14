@@ -1,6 +1,7 @@
-import { Badge, type MantineColor } from "@mantine/core";
+import type { MantineColor } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { BenchmarkJudgeStatus, BenchmarkPrimaryStatus } from "@/features/benchmarks/models/BenchmarkModels";
 
 const colors: Record<BenchmarkPrimaryStatus | BenchmarkJudgeStatus, MantineColor> = {
@@ -17,9 +18,6 @@ const colors: Record<BenchmarkPrimaryStatus | BenchmarkJudgeStatus, MantineColor
 
 export function BenchmarkStatusBadge({ status }: { status: BenchmarkPrimaryStatus | BenchmarkJudgeStatus }) {
 	const { t } = useTranslation();
-	return (
-		<Badge color={colors[status]} variant="light" aria-label={t(`pages.benchmarks.status.${status}`, status)}>
-			{t(`pages.benchmarks.status.${status}`, status)}
-		</Badge>
-	);
+	const label = t(`pages.benchmarks.status.${status}`, status);
+	return <StatusBadge color={colors[status]} label={label} aria-label={label} />;
 }

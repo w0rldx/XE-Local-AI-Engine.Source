@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconThumbDown, IconThumbUp } from "@tabler/icons-rea
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { FeedbackExemplar, OverallFeedback, ToolFeedbackBreakdown } from "@/features/agents/models/FeedbackInsightsModels";
 import { useFeedbackInsights } from "@/features/agents/queries/useFeedbackInsights";
 
@@ -92,9 +93,11 @@ function FeedbackInsightsContent({ overall, byTool, exemplars, threshold }: Feed
 
 	if (overall.total === 0) {
 		return (
-			<Text size="sm" c="dimmed" data-testid="feedback-insights-empty">
-				{t("pages.agents.insights.empty", "No feedback collected for this agent yet.")}
-			</Text>
+			<EmptyState
+				size="sm"
+				message={t("pages.agents.insights.empty", "No feedback collected for this agent yet.")}
+				data-testid="feedback-insights-empty"
+			/>
 		);
 	}
 
@@ -126,9 +129,11 @@ function FeedbackInsightsContent({ overall, byTool, exemplars, threshold }: Feed
 					{t("pages.agents.insights.perTool", "By tool")}
 				</Text>
 				{byTool.length === 0 ? (
-					<Text size="xs" c="dimmed" data-testid="feedback-insights-tools-empty">
-						{t("pages.agents.insights.toolsEmpty", "No tool-attributed feedback yet.")}
-					</Text>
+					<EmptyState
+						size="xs"
+						message={t("pages.agents.insights.toolsEmpty", "No tool-attributed feedback yet.")}
+						data-testid="feedback-insights-tools-empty"
+					/>
 				) : (
 					<Table.ScrollContainer minWidth={520}>
 						<Table data-testid="feedback-insights-tools">
@@ -178,9 +183,11 @@ function FeedbackInsightsContent({ overall, byTool, exemplars, threshold }: Feed
 					{t("pages.agents.insights.exemplars", "Recent comments")}
 				</Text>
 				{exemplars.length === 0 ? (
-					<Text size="xs" c="dimmed" data-testid="feedback-insights-exemplars-empty">
-						{t("pages.agents.insights.exemplarsEmpty", "No comments left yet.")}
-					</Text>
+					<EmptyState
+						size="xs"
+						message={t("pages.agents.insights.exemplarsEmpty", "No comments left yet.")}
+						data-testid="feedback-insights-exemplars-empty"
+					/>
 				) : (
 					<Stack gap={6} data-testid="feedback-insights-exemplars">
 						{exemplars.map((exemplar) => (

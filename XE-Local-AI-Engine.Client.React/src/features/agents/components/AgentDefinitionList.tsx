@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Group, Table, Text } from "@mantine/core";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
 
 interface AgentDefinitionListProps {
@@ -18,9 +19,10 @@ export function AgentDefinitionList({ definitions, isMutating, onEdit, onDelete 
 
 	if (definitions.length === 0) {
 		return (
-			<Text c="dimmed" data-testid="agent-definitions-empty">
-				{t("pages.agents.list.empty", "No agent definitions yet. Create one to get started.")}
-			</Text>
+			<EmptyState
+				message={t("pages.agents.list.empty", "No agent definitions yet. Create one to get started.")}
+				data-testid="agent-definitions-empty"
+			/>
 		);
 	}
 

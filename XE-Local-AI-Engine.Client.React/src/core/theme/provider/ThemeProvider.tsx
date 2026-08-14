@@ -1,5 +1,6 @@
 import {
 	alpha,
+	Card,
 	createTheme,
 	defaultVariantColorsResolver,
 	MantineProvider,
@@ -45,6 +46,17 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 		fontFamily: themeConfiguration.typography.fontFamily,
 		primaryColor: "primary",
 		variantColorResolver,
+		components: {
+			// App-wide section-card look. Call sites can still opt out (withBorder={false}) or pick another
+			// radius/padding; the defaults just make the common case the consistent case.
+			Card: Card.extend({
+				defaultProps: {
+					withBorder: true,
+					radius: "md",
+					padding: "lg",
+				},
+			}),
+		},
 		colors: {
 			primary: [
 				primaryScale[0] ?? primaryMain,

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconRobot, IconSparkles, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,9 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -200,26 +203,18 @@ export function AgentsPage() {
 	const formInitialValues = editingDefinition ? toFormValues(editingDefinition) : emptyFormValues;
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<TutorialInvitation tutorialId="agents-basics" />
-				<Group justify="space-between" align="flex-start" data-tour="agents-overview">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("pages.agents.eyebrow", "Worker Node")}
-						</Text>
-						<Group gap="xs" align="center">
-							<IconRobot size={24} />
-							<Title order={2}>{t("pages.agents.title", "Agent definitions")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.agents.subtitle",
-								"Author local agent personas: instructions, model, reasoning effort, and the tools they may use.",
-							)}
-						</Text>
-					</Stack>
-					<Group gap="sm">
+		<PageShell>
+			<TutorialInvitation tutorialId="agents-basics" />
+			<PageHeader
+				title={t("pages.agents.title", "Agent definitions")}
+				icon={<IconRobot size={24} />}
+				subtitle={t(
+					"pages.agents.subtitle",
+					"Author local agent personas: instructions, model, reasoning effort, and the tools they may use.",
+				)}
+				data-tour="agents-overview"
+				actions={
+					<>
 						<Button
 							variant="default"
 							leftSection={<IconSparkles size={16} />}
@@ -237,121 +232,119 @@ export function AgentsPage() {
 						>
 							{t("pages.agents.createButton", "New agent")}
 						</Button>
+					</>
+				}
+			/>
+
+			{/* The list always renders underneath; the editor opens as a dialog on top (no more page-takeover). */}
+			<SectionCard data-tour="agents-list">
+				{definitionsQuery.isLoading ? (
+					<Group gap="sm">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.agents.list.loading", "Loading agent definitions…")}</Text>
 					</Group>
-				</Group>
+				) : null}
+				{definitionsQuery.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-list-error">
+						{apiErrorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
+					</Alert>
+				) : null}
+				{!definitionsQuery.isLoading && !definitionsQuery.error ? (
+					<AgentDefinitionList definitions={definitions} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
+				) : null}
+			</SectionCard>
 
-				{/* The list always renders underneath; the editor opens as a dialog on top (no more page-takeover). */}
-				<Card withBorder={true} radius="md" p="lg" data-tour="agents-list">
-					<Stack gap="md">
-						{definitionsQuery.isLoading ? (
-							<Group gap="sm">
-								<Loader size="sm" />
-								<Text c="dimmed">{t("pages.agents.list.loading", "Loading agent definitions…")}</Text>
-							</Group>
-						) : null}
-						{definitionsQuery.error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-list-error">
-								{apiErrorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
-							</Alert>
-						) : null}
-						{!definitionsQuery.isLoading && !definitionsQuery.error ? (
-							<AgentDefinitionList definitions={definitions} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
-						) : null}
-					</Stack>
-				</Card>
-
-				<DialogShell
-					opened={isEditorOpen}
-					onClose={requestCloseEditor}
-					title={
-						editorTarget?.mode === "edit"
-							? t("pages.agents.editor.editTitle", "Edit agent")
-							: t("pages.agents.editor.createTitle", "New agent")
-					}
-					// The page owns the single confirm-on-dirty path (requestCloseEditor, wired to onClose AND footer Cancel),
-					// so DialogShell's built-in confirmCloseWhen stays off. Block overlay/escape dismissal while dirty so the
-					// only ways out are the X and Cancel — both of which route through the same prompt.
-					closeOnClickOutside={!isEditorDirty}
-					closeOnEscape={!isEditorDirty}
-					// Sit below the unsaved-changes confirm (ConfirmProvider uses zIndex 400) so it always renders on top.
-					zIndex={300}
-					footer={
-						<>
-							<Button
-								variant="subtle"
-								leftSection={<IconX size={16} />}
-								onClick={requestCloseEditor}
-								disabled={createMutation.isPending || updateMutation.isPending}
-								data-testid="agent-form-cancel"
-							>
-								{t("common.cancel", "Cancel")}
-							</Button>
-							<Button
-								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={() => formRef.current?.submit()}
-								loading={createMutation.isPending || updateMutation.isPending}
-								data-testid="agent-form-submit"
-							>
-								{t("common.save", "Save")}
-							</Button>
-						</>
-					}
-				>
-					<Stack gap="md" data-testid="agent-editor-card">
-						<AgentDefinitionForm
-							key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
-							ref={formRef}
-							initialValues={formInitialValues}
-							modelOptions={modelOptions}
-							toolCapableModels={toolCapableModels}
-							allDefinitions={definitions}
-							selfId={editorTarget?.mode === "edit" ? editorTarget.id : ""}
-							submitError={submitError}
-							onSubmit={handleSubmit}
-							onDirtyChange={setIsEditorDirty}
-						/>
-						{/* Per-agent playbook governance. Only meaningful for a persisted agent (has an id);
+			<DialogShell
+				opened={isEditorOpen}
+				onClose={requestCloseEditor}
+				title={
+					editorTarget?.mode === "edit"
+						? t("pages.agents.editor.editTitle", "Edit agent")
+						: t("pages.agents.editor.createTitle", "New agent")
+				}
+				// The page owns the single confirm-on-dirty path (requestCloseEditor, wired to onClose AND footer Cancel),
+				// so DialogShell's built-in confirmCloseWhen stays off. Block overlay/escape dismissal while dirty so the
+				// only ways out are the X and Cancel — both of which route through the same prompt.
+				closeOnClickOutside={!isEditorDirty}
+				closeOnEscape={!isEditorDirty}
+				// Sit below the unsaved-changes confirm (ConfirmProvider uses zIndex 400) so it always renders on top.
+				zIndex={300}
+				footer={
+					<>
+						<Button
+							variant="subtle"
+							leftSection={<IconX size={16} />}
+							onClick={requestCloseEditor}
+							disabled={createMutation.isPending || updateMutation.isPending}
+							data-testid="agent-form-cancel"
+						>
+							{t("common.cancel", "Cancel")}
+						</Button>
+						<Button
+							leftSection={<IconDeviceFloppy size={16} />}
+							onClick={() => formRef.current?.submit()}
+							loading={createMutation.isPending || updateMutation.isPending}
+							data-testid="agent-form-submit"
+						>
+							{t("common.save", "Save")}
+						</Button>
+					</>
+				}
+			>
+				<Stack gap="md" data-testid="agent-editor-card">
+					<AgentDefinitionForm
+						key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
+						ref={formRef}
+						initialValues={formInitialValues}
+						modelOptions={modelOptions}
+						toolCapableModels={toolCapableModels}
+						allDefinitions={definitions}
+						selfId={editorTarget?.mode === "edit" ? editorTarget.id : ""}
+						submitError={submitError}
+						onSubmit={handleSubmit}
+						onDirtyChange={setIsEditorDirty}
+					/>
+					{/* Per-agent playbook governance. Only meaningful for a persisted agent (has an id);
 						    a brand-new agent must be saved first. Capability-gated under agentManagement. */}
-						{editingDefinition ? (
-							<PlaybookPanel
-								agentDefinitionId={editingDefinition.id}
-								agentName={editingDefinition.name}
-								enabled={nodeCapabilities.agentManagement}
-							/>
-						) : null}
-						{/* Per-agent read-only feedback insights. Only meaningful for a persisted
+					{editingDefinition ? (
+						<PlaybookPanel
+							agentDefinitionId={editingDefinition.id}
+							agentName={editingDefinition.name}
+							enabled={nodeCapabilities.agentManagement}
+						/>
+					) : null}
+					{/* Per-agent read-only feedback insights. Only meaningful for a persisted
 						    agent (has an id). Capability-gated under agentManagement; analytics-only, no mutations. */}
-						{editingDefinition ? (
-							<FeedbackInsightsPanel
-								agentDefinitionId={editingDefinition.id}
-								agentName={editingDefinition.name}
-								enabled={nodeCapabilities.agentManagement}
-							/>
-						) : null}
-						{/* Per-agent golden conversation set. The eval gate replays these cases against a
+					{editingDefinition ? (
+						<FeedbackInsightsPanel
+							agentDefinitionId={editingDefinition.id}
+							agentName={editingDefinition.name}
+							enabled={nodeCapabilities.agentManagement}
+						/>
+					) : null}
+					{/* Per-agent golden conversation set. The eval gate replays these cases against a
 						    candidate action before promotion. Only meaningful for a persisted agent (has an id).
 						    Capability-gated under agentManagement. */}
-						{editingDefinition ? (
-							<GoldenConversationPanel
-								agentDefinitionId={editingDefinition.id}
-								agentName={editingDefinition.name}
-								enabled={nodeCapabilities.agentManagement}
-							/>
-						) : null}
-						{/* Per-agent run diagnostics (adaptive-memory observability). Metadata-only table;
+					{editingDefinition ? (
+						<GoldenConversationPanel
+							agentDefinitionId={editingDefinition.id}
+							agentName={editingDefinition.name}
+							enabled={nodeCapabilities.agentManagement}
+						/>
+					) : null}
+					{/* Per-agent run diagnostics (adaptive-memory observability). Metadata-only table;
 						    only meaningful for a persisted agent. Capability-gated under agentManagement. */}
-						{editingDefinition ? (
-							<AgentExecutionLogPanel
-								agentDefinitionId={editingDefinition.id}
-								agentName={editingDefinition.name}
-								enabled={nodeCapabilities.agentManagement}
-							/>
-						) : null}
-					</Stack>
-				</DialogShell>
+					{editingDefinition ? (
+						<AgentExecutionLogPanel
+							agentDefinitionId={editingDefinition.id}
+							agentName={editingDefinition.name}
+							enabled={nodeCapabilities.agentManagement}
+						/>
+					) : null}
+				</Stack>
+			</DialogShell>
 
-				<AgentTemplateGallery opened={isGalleryOpen} onClose={() => setGalleryOpen(false)} />
-			</Stack>
-		</Container>
+			<AgentTemplateGallery opened={isGalleryOpen} onClose={() => setGalleryOpen(false)} />
+		</PageShell>
 	);
 }

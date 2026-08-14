@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Group, Switch, Table, Text } from "@mantine/core";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { McpServerRegistration } from "@/features/mcp/models/McpServerModels";
 
 interface McpServerListProps {
@@ -20,9 +21,10 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 
 	if (servers.length === 0) {
 		return (
-			<Text c="dimmed" data-testid="mcp-servers-empty">
-				{t("pages.mcp.list.empty", "No MCP servers registered yet. Register one to get started.")}
-			</Text>
+			<EmptyState
+				message={t("pages.mcp.list.empty", "No MCP servers registered yet. Register one to get started.")}
+				data-testid="mcp-servers-empty"
+			/>
 		);
 	}
 

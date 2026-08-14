@@ -11,6 +11,7 @@ import {
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { StatTile } from "@/core/ui/components/StatTile/StatTile";
 import type { DevelopmentArtifact, DevelopmentAttempt, DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
 import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
 import {
@@ -42,16 +43,7 @@ function Metric({
 	 */
 	readonly valueTestId?: string;
 }) {
-	return (
-		<Paper withBorder={true} p="sm">
-			<Text size="xs" c="dimmed">
-				{label}
-			</Text>
-			<Text fw={600} data-testid={valueTestId}>
-				{value}
-			</Text>
-		</Paper>
-	);
+	return <StatTile variant="paper" label={label} value={value} valueTestId={valueTestId} />;
 }
 
 /**

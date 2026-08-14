@@ -2,6 +2,7 @@ import { Card, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { StatTile } from "@/core/ui/components/StatTile/StatTile";
 import { formatModelFitMetric } from "@/features/model-fit/components/ModelFitFormatters";
 import type { InferenceBenchmarkMetrics } from "@/features/model-fit/models/InferenceProfileModels";
 
@@ -21,16 +22,7 @@ function formatBoolean(value: boolean, trueLabel: string, falseLabel: string): s
 }
 
 function Metric({ label, value, testId }: { label: string; value: string; testId: string }) {
-	return (
-		<Stack gap={0}>
-			<Text size="xs" c="dimmed">
-				{label}
-			</Text>
-			<Text size="sm" fw={500} data-testid={testId}>
-				{value}
-			</Text>
-		</Stack>
-	);
+	return <StatTile label={label} value={value} valueTestId={testId} />;
 }
 
 // Renders the role-appropriate metrics of a single benchmark run. Chat reports token throughput and TTFT;

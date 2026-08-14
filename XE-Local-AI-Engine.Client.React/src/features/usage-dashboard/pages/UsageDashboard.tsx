@@ -1,5 +1,5 @@
-import { Alert, Button, Card, Container, Group, Skeleton, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconChartHistogram, IconRefresh } from "@tabler/icons-react";
+import { Alert, Button, Card, Skeleton, Stack, Text, Title } from "@mantine/core";
+import { IconAlertTriangle, IconChartBar, IconChartHistogram, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -8,6 +8,8 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getAgentUsageSummaryOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { UsageDailyChart } from "@/features/usage-dashboard/components/UsageDailyChart";
 import { UsageDateRangeControl } from "@/features/usage-dashboard/components/UsageDateRangeControl";
 import { UsageModelTable } from "@/features/usage-dashboard/components/UsageModelTable";
@@ -117,59 +119,53 @@ export function UsageDashboard() {
 	const empty = isUsageEmpty(summary);
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("common.workerNode", "Worker Node")}
-						</Text>
-						<Title order={2}>{t("pages.usage.title", "Usage dashboard")}</Title>
-						<Text c="dimmed">
-							{t("pages.usage.subtitle", "Agent token usage by model and provider. Data is retained for {{days}} days.", {
-								days: retentionDays,
-							})}
-						</Text>
-					</Stack>
+		<PageShell>
+			<PageHeader
+				title={t("pages.usage.title", "Usage dashboard")}
+				icon={<IconChartBar size={24} />}
+				subtitle={t("pages.usage.subtitle", "Agent token usage by model and provider. Data is retained for {{days}} days.", {
+					days: retentionDays,
+				})}
+				actions={
 					<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={() => refetch()} disabled={isFetching}>
 						{t("common.refresh", "Refresh")}
 					</Button>
-				</Group>
+				}
+			/>
 
-				<UsageDateRangeControl
-					range={range}
-					minMs={retentionFloorMs(nowRef.current ?? Date.now(), retentionDays)}
-					maxMs={startOfUtcDay(nowRef.current ?? Date.now())}
-					onChange={handleRangeChange}
-				/>
+			<UsageDateRangeControl
+				range={range}
+				minMs={retentionFloorMs(nowRef.current ?? Date.now(), retentionDays)}
+				maxMs={startOfUtcDay(nowRef.current ?? Date.now())}
+				onChange={handleRangeChange}
+			/>
 
-				{error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="usage-error">
-						{errorMessage(error, t)}
-					</Alert>
-				) : null}
+			{error ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="usage-error">
+					{errorMessage(error, t)}
+				</Alert>
+			) : null}
 
-				{isLoading ? <UsageSkeleton /> : null}
+			{isLoading ? <UsageSkeleton /> : null}
 
-				{!isLoading && !error && summary ? (
-					empty ? (
-						<UsageEmptyState />
-					) : (
-						<>
-							<UsageTotalsCards totals={summary.totals} />
-							<Text size="xs" c="dimmed" data-testid="usage-cost-disclaimer">
-								{t(
-									"pages.usage.costDisclaimer",
-									"Costs are approximate estimates in USD, computed from the per-model rates configured in Node settings. Local and unpriced usage counts as free.",
-								)}
-							</Text>
-							<UsageDailyChart daily={daily} />
-							<UsageProviderBreakdown byProvider={summary.byProvider} />
-							<UsageModelTable rows={models} />
-						</>
-					)
-				) : null}
-			</Stack>
-		</Container>
+			{!isLoading && !error && summary ? (
+				empty ? (
+					<UsageEmptyState />
+				) : (
+					<>
+						<UsageTotalsCards totals={summary.totals} />
+						<Text size="xs" c="dimmed" data-testid="usage-cost-disclaimer">
+							{t(
+								"pages.usage.costDisclaimer",
+								"Costs are approximate estimates in USD, computed from the per-model rates configured in Node settings. Local and unpriced usage counts as free.",
+							)}
+						</Text>
+						<UsageDailyChart daily={daily} />
+						<UsageProviderBreakdown byProvider={summary.byProvider} />
+						<UsageModelTable rows={models} />
+					</>
+				)
+			) : null}
+		</PageShell>
 	);
 }
