@@ -135,6 +135,30 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 developmentEvent.ResultMetadataJson = DecryptIfPresent(developmentEvent.ResultMetadataJson, context.NodeEncryptionKey.Span, developmentEvent.ProjectId, developmentEvent.Id,
                     "development_event_result_json");
                 break;
+            case BenchmarkProject benchmarkProject:
+                benchmarkProject.CoreTaskJson = NodePayloadProtector.Decrypt(benchmarkProject.CoreTaskJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    benchmarkProject.Id,
+                    "benchmark_core_task_json");
+                break;
+            case BenchmarkRun benchmarkRun:
+                benchmarkRun.RuntimeSnapshotJson = NodePayloadProtector.Decrypt(benchmarkRun.RuntimeSnapshotJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    benchmarkRun.Id,
+                    "benchmark_runtime_snapshot_json");
+                benchmarkRun.OutputPartsJson = DecryptIfPresent(benchmarkRun.OutputPartsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    benchmarkRun.Id,
+                    "benchmark_output_parts_json");
+                benchmarkRun.JudgeResultJson = DecryptIfPresent(benchmarkRun.JudgeResultJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    benchmarkRun.Id,
+                    "benchmark_judge_result_json");
+                break;
         }
 
         return entity;
