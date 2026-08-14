@@ -27,6 +27,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.preview).toBe(true);
 	});
 
+	it("enables local benchmarks by default", () => {
+		expect(nodeCapabilities.benchmarks).toBe(true);
+	});
+
 	it("keeps node chat local-first and surfaces tool-approval controls", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
@@ -48,7 +52,7 @@ describe("nodeCapabilities", () => {
 	});
 
 	it("defines the route paths targeted by the node shell", () => {
-			expect(nodeRoutePaths).toEqual({
+		expect(nodeRoutePaths).toEqual({
 			home: "/",
 			chat: "/chat",
 			development: "/development",
@@ -59,6 +63,7 @@ describe("nodeCapabilities", () => {
 			cloudSettings: "/cloud-settings",
 			models: "/models",
 			invocations: "/invocations",
+			benchmarks: "/benchmarks",
 			usage: "/usage",
 			tools: "/tools",
 			agents: "/agents",

@@ -74,6 +74,7 @@
 		"user": "User",
 		"skills": "Skills",
 		"customTools": "Custom Tools",
+		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
 		"images": "Image Generation"
 	},
@@ -3839,6 +3840,35 @@
 		"tools": {
 			"title": "Local tools",
 			"subtitle": "Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers."
+		},
+		"benchmarks": {
+			"title": "Local model benchmarks",
+			"subtitle": "Compare local models against one frozen agent task, with optional independent judging.",
+			"projects": "Projects",
+			"runs": "Runs",
+			"status": { "Queued": "Queued", "Running": "Running", "CancelRequested": "Cancellation requested", "Succeeded": "Succeeded", "Failed": "Failed", "Cancelled": "Cancelled", "Disabled": "Disabled", "Pending": "Pending", "Skipped": "Skipped" },
+			"origin": { "huggingface": "Hugging Face", "imported": "Imported", "legacy": "Legacy / Unknown" },
+			"project": {
+				"create": "New project", "edit": "Benchmark project", "name": "Name", "task": "Core task", "context": "Requested context tokens", "agent": "Agent",
+				"judgeEnabled": "Enable automated judge", "judgeModel": "Judge model", "judgeContext": "Judge context tokens", "frozen": "Frozen",
+				"frozenExplanation": "This project is frozen while runs exist. Delete its terminal runs to edit it again.",
+				"runCount": "{{count}} runs", "empty": "Create a project to freeze one task and compare models.", "select": "Select a benchmark project."
+			},
+			"run": { "model": "Primary model", "start": "Start run", "cancel": "Cancel run", "delete": "Delete terminal run", "waiting": "Waiting for model output…", "compareSelection": "Runs to compare" },
+			"metrics": { "duration": "Duration", "tokens": "Tokens", "speed": "tok/s" },
+			"connection": { "live": "Live updates connected", "reconnecting": "Reconnecting and reconciling…", "http": "Using durable HTTP state" },
+			"score": { "label": "Operator score", "value": "Score {{score}} of 5" },
+			"judge": {
+				"title": "Automated judge", "score": "Judge score: {{score}}", "cancel": "Cancel judge",
+				"explanations": { "Disabled": "Automated judging was not requested for this project.", "Pending": "The judge will be queued only after the primary run succeeds.", "Skipped": "Judging was requested but skipped because the primary run did not succeed.", "Queued": "The judge is waiting in the durable queue.", "Running": "The judge is evaluating the successful primary result.", "Succeeded": "The judge completed independently of the primary run.", "Failed": "The judge failed; the successful primary result remains unchanged.", "Cancelled": "The judge was cancelled." }
+			},
+			"validation": { "name": "Name is required.", "task": "Core task is required.", "context": "Context must be positive.", "agent": "Select an agent.", "judgeModel": "Select a judge model." },
+			"errors": {
+				"projectsLoad": "Could not load benchmark projects.", "projectSave": "Could not save the project.", "runLoad": "Could not load the run.", "start": "Could not start the benchmark run.",
+				"cancel": "Could not cancel this run phase.", "delete": "Could not delete this terminal run.", "score": "The run changed before the score was saved. It has been refreshed.",
+				"contextRefused": "The model could not provide the requested context.", "fingerprintChanged": "The installed model changed after this run was frozen.",
+				"restartInterrupted": "This running phase was interrupted by a node restart.", "judgeFailed": "The automated judge failed; the primary result is still available."
+			}
 		}
 	},
 	"components": {

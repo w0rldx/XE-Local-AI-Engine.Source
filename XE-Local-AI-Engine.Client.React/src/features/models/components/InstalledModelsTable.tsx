@@ -30,7 +30,13 @@ export function InstalledModelsTable({
 
 	return (
 		<Table.ScrollContainer minWidth={820}>
-			<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="installed-models-table" data-tour="set-default-model">
+			<Table
+				striped={true}
+				highlightOnHover={true}
+				verticalSpacing="sm"
+				data-testid="installed-models-table"
+				data-tour="set-default-model"
+			>
 				<Table.Thead>
 					<Table.Tr>
 						<Table.Th>Name</Table.Th>
@@ -49,8 +55,10 @@ export function InstalledModelsTable({
 								<Group gap="xs" align="center" wrap="nowrap">
 									<Text fw={500}>{model.modelName}</Text>
 									{model.isSelected ? <Badge color="green">Default</Badge> : null}
-									{model.origin === "Imported" ? (
-										<Badge color="violet" variant="light">{t("pages.models.local.origin.imported", "Imported")}</Badge>
+									{model.origin === "imported" ? (
+										<Badge color="violet" variant="light">
+											{t("pages.models.local.origin.imported", "Imported")}
+										</Badge>
 									) : null}
 								</Group>
 							</Table.Td>
