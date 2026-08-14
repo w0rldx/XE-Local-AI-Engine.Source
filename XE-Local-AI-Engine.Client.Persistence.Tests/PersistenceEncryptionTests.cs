@@ -378,7 +378,9 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();
-        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        // Hang guard, not a perf budget: this is a cold build that restores NuGet and compiles two
+        // dependency projects with build-server reuse disabled, so a loaded CI runner needs real headroom.
+        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(180));
         var timedOut = false;
         try
         {
@@ -400,7 +402,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
         var combinedOutput = standardOutput + Environment.NewLine + standardError;
 
-        AssertEx.False(timedOut, $"Negative fence probe exceeded its 60-second build timeout.{Environment.NewLine}{combinedOutput}");
+        AssertEx.False(timedOut, $"Negative fence probe exceeded its 180-second build timeout.{Environment.NewLine}{combinedOutput}");
         AssertEx.False(process.ExitCode == 0, "Negative fence probe must fail to compile.");
         AssertEx.True(combinedOutput.Contains("CS0122", StringComparison.Ordinal)
                       || combinedOutput.Contains("inaccessible due to its protection level", StringComparison.OrdinalIgnoreCase),
