@@ -4,6 +4,7 @@ import { useCallback, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
@@ -215,9 +216,11 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 				) : null}
 
 				{!goldenQuery.isLoading && !goldenQuery.error && cases.length === 0 && !formOpen ? (
-					<Text size="sm" c="dimmed" data-testid="golden-empty">
-						{t("pages.agents.golden.empty", "No golden cases yet. Add one so promotion can be eval-gated.")}
-					</Text>
+					<EmptyState
+						size="sm"
+						message={t("pages.agents.golden.empty", "No golden cases yet. Add one so promotion can be eval-gated.")}
+						data-testid="golden-empty"
+					/>
 				) : null}
 
 				{pendingCases.length > 0 ? (

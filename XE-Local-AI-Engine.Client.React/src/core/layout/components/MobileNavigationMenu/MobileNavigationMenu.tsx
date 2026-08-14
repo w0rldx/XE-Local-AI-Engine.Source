@@ -51,7 +51,6 @@ function MobileNavigationRootItem({ menuItem, menuReference, onOpen }: MobileNav
 }
 
 export function MobileNavigationMenu({
-	theme,
 	menuItemStyle,
 	setDrawerOpen,
 	menuItem,
@@ -89,7 +88,6 @@ export function MobileNavigationMenu({
 	const drawerContent = (
 		<MobileNavigationDrawerPanel
 			isOpen={isDrawerOpen}
-			theme={theme}
 			width={width}
 			title={drawerTitle ?? ""}
 			onClose={() => setIsDrawerOpen(false)}

@@ -2,6 +2,7 @@ import { Alert, Badge, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import {
 	formatRunDuration,
 	formatRunTimestamp,
@@ -40,9 +41,10 @@ export function ScheduledJobRunDetail({ run, isLoading, error }: ScheduledJobRun
 
 	if (!run) {
 		return (
-			<Text c="dimmed" data-testid="scheduler-run-detail-empty">
-				{t("pages.scheduler.runs.detail.empty", "Select a run to view its details.")}
-			</Text>
+			<EmptyState
+				message={t("pages.scheduler.runs.detail.empty", "Select a run to view its details.")}
+				data-testid="scheduler-run-detail-empty"
+			/>
 		);
 	}
 

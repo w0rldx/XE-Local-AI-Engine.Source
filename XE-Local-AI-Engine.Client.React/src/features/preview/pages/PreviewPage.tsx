@@ -1,9 +1,11 @@
-import { Box, Button, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Box, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconArrowLeft, IconBinaryTree2, IconDeviceFloppy, IconPlus } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ActiveRunsPanel } from "@/features/preview/components/ActiveRunsPanel";
@@ -304,92 +306,93 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 	const handleSaveCurrent = useCallback(() => handleSave(liveGraph ?? canvasGraph), [handleSave, liveGraph, canvasGraph]);
 
 	return (
-		<Stack gap="lg" px="md" py="lg" h="100%" style={{ minHeight: 0 }}>
-			<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("pages.preview.eyebrow", "Worker Node")}
-						</Text>
-						<Group gap="xs" align="center">
-							<IconBinaryTree2 size={24} />
-							<Title order={2}>{t("pages.preview.title", "Open Canvas")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.preview.subtitle",
-								"Drag Start, Agent, Debug, Pause, and End blocks onto the canvas, wire them into a linear chain, and run the workflow with live per-node output.",
-							)}
-						</Text>
-					</Stack>
-					{isCanvasOpen ? (
-						<Group gap="xs">
-							<Button
-								variant="subtle"
-								leftSection={<IconArrowLeft size={16} />}
-								onClick={closeCanvas}
-								data-testid="preview-back"
-							>
-								{t("pages.preview.back", "Back to list")}
-							</Button>
-							<Button
-								leftSection={<IconDeviceFloppy size={16} />}
-								loading={isSaving}
-								onClick={handleSaveCurrent}
-								data-testid="preview-save"
-							>
-								{t("common.save", "Save")}
-							</Button>
-						</Group>
-					) : (
-						<Button leftSection={<IconPlus size={16} />} onClick={openNew} data-testid="preview-create-button">
-							{t("pages.preview.createButton", "New workflow")}
-						</Button>
+		<FullHeightPage>
+			<Stack gap="lg" style={{ flex: 1, minHeight: 0 }}>
+				<PageHeader
+					title={t("pages.preview.title", "Open Canvas")}
+					icon={<IconBinaryTree2 size={24} />}
+					subtitle={t(
+						"pages.preview.subtitle",
+						"Drag Start, Agent, Debug, Pause, and End blocks onto the canvas, wire them into a linear chain, and run the workflow with live per-node output.",
 					)}
-				</Group>
+					actions={
+						isCanvasOpen ? (
+							<>
+								<Button
+									variant="subtle"
+									leftSection={<IconArrowLeft size={16} />}
+									onClick={closeCanvas}
+									data-testid="preview-back"
+								>
+									{t("pages.preview.back", "Back to list")}
+								</Button>
+								<Button
+									leftSection={<IconDeviceFloppy size={16} />}
+									loading={isSaving}
+									onClick={handleSaveCurrent}
+									data-testid="preview-save"
+								>
+									{t("common.save", "Save")}
+								</Button>
+							</>
+						) : (
+							<Button leftSection={<IconPlus size={16} />} onClick={openNew} data-testid="preview-create-button">
+								{t("pages.preview.createButton", "New workflow")}
+							</Button>
+						)
+					}
+				/>
 
 				<Box style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-				{isCanvasOpen ? (
-					openId !== null && detailQuery.isLoading ? (
-						<Loader data-testid="preview-canvas-loading" />
+					{isCanvasOpen ? (
+						openId !== null && detailQuery.isLoading ? (
+							<Group gap="sm" data-testid="preview-canvas-loading">
+								<Loader size="sm" />
+								<Text c="dimmed">{t("pages.preview.canvasLoading", "Loading workflow…")}</Text>
+							</Group>
+						) : (
+							<PreviewActiveRunContext.Provider value={activeRunId}>
+								<WorkflowCanvas
+									key={openId ?? "new"}
+									initialNodes={initialNodes}
+									initialEdges={initialEdges}
+									initialStartText={canvasGraph.startText}
+									runState={{
+										isRunning: activeRun?.status === "running",
+										isPaused: activeRun?.status === "paused",
+									}}
+									isControlBusy={isControlBusy}
+									onExecute={handleExecute}
+									onCancel={handleCancel}
+									onContinue={handleContinue}
+									onGraphChange={setLiveGraph}
+								/>
+							</PreviewActiveRunContext.Provider>
+						)
+					) : workflowsQuery.isLoading ? (
+						<Group gap="sm" data-testid="preview-list-loading">
+							<Loader size="sm" />
+							<Text c="dimmed">{t("pages.preview.listLoading", "Loading workflows…")}</Text>
+						</Group>
 					) : (
-						<PreviewActiveRunContext.Provider value={activeRunId}>
-							<WorkflowCanvas
-								key={openId ?? "new"}
-								initialNodes={initialNodes}
-								initialEdges={initialEdges}
-								initialStartText={canvasGraph.startText}
-								runState={{
-									isRunning: activeRun?.status === "running",
-									isPaused: activeRun?.status === "paused",
-								}}
-								isControlBusy={isControlBusy}
-								onExecute={handleExecute}
-								onCancel={handleCancel}
-								onContinue={handleContinue}
-								onGraphChange={setLiveGraph}
+						<Stack gap="lg">
+							<ActiveRunsPanel
+								runs={runsQuery.data ?? []}
+								isCancelling={cancelMutation.isPending || cancelAllMutation.isPending}
+								onReattach={handleReattach}
+								onCancel={handleCancelRun}
+								onCancelAll={handleCancelAll}
 							/>
-						</PreviewActiveRunContext.Provider>
-					)
-				) : workflowsQuery.isLoading ? (
-					<Loader data-testid="preview-list-loading" />
-				) : (
-					<Stack gap="lg">
-						<ActiveRunsPanel
-							runs={runsQuery.data ?? []}
-							isCancelling={cancelMutation.isPending || cancelAllMutation.isPending}
-							onReattach={handleReattach}
-							onCancel={handleCancelRun}
-							onCancelAll={handleCancelAll}
-						/>
-						<WorkflowList
-							workflows={workflows}
-							isMutating={deleteMutation.isPending}
-							onOpen={openWorkflow}
-							onDelete={handleDelete}
-						/>
-					</Stack>
-				)}
-			</Box>
-		</Stack>
+							<WorkflowList
+								workflows={workflows}
+								isMutating={deleteMutation.isPending}
+								onOpen={openWorkflow}
+								onDelete={handleDelete}
+							/>
+						</Stack>
+					)}
+				</Box>
+			</Stack>
+		</FullHeightPage>
 	);
 }

@@ -10,7 +10,6 @@ import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
 import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
-import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
 import { AboutDialogButton } from "@/features/about/components/AboutDialogButton/AboutDialogButton";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Index";
@@ -20,11 +19,10 @@ export function HeaderBar() {
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const navigate = useNavigate();
 	const { logout: handleLogout, logoutPending } = useNodeLogout();
-	const theme = useTheme();
 
 	return (
 		<>
-			<div className="w-full flex flex-row h-15 md:px-8 px-2" style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
+			<div className="header-bar w-full flex flex-row h-15 md:px-8 px-2">
 				<div className="flex flex-row items-center pl-2 md:hidden">
 					<ActionIcon
 						className="flex flex-row items-center"

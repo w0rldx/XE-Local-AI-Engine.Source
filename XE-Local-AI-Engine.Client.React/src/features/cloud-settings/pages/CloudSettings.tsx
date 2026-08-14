@@ -4,7 +4,6 @@ import {
 	Badge,
 	Button,
 	Card,
-	Container,
 	Group,
 	Loader,
 	PasswordInput,
@@ -13,9 +12,8 @@ import {
 	Switch,
 	Text,
 	TextInput,
-	Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCloud, IconDeviceFloppy, IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,6 +28,9 @@ import {
 	saveCloudSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
 import { EntraConnectionFields } from "@/features/cloud-settings/entra/components/EntraConnectionFields";
@@ -93,11 +94,7 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 }
 
 function toastSettingsResult(settings: CloudSettings): void {
-	toast.success(
-		settings.azureFoundry
-			? "Cloud settings saved. Capability reporting was requested."
-			: "Cloud settings cleared.",
-	);
+	toast.success(settings.azureFoundry ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.");
 }
 
 const emptyFormValues: CloudSettingsFormValues = {
@@ -382,409 +379,403 @@ export function CloudSettings() {
 	};
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Stack gap={4}>
-					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						{t("common.workerNode", "Worker Node")}
+		<PageShell>
+			<PageHeader
+				title={t("pages.cloudSettings.title", "Cloud settings")}
+				icon={<IconCloud size={24} />}
+				subtitle={t(
+					"pages.cloudSettings.subtitle",
+					"Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.",
+				)}
+			/>
+
+			{settingsIsLoading ? (
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.cloudSettings.loading", "Loading cloud settings…")}</Text>
+				</Group>
+			) : null}
+
+			{settingsError ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{errorMessage(settingsError)}
+				</Alert>
+			) : null}
+
+			{/* Persistent egress banner — shown whenever a Codex session is active */}
+			{codexSignedIn ? (
+				<Alert color="orange" icon={<IconAlertTriangle size={16} />}>
+					<Text size="sm" fw={500}>
+						{t("pages.cloudSettings.provider.activeEgressBanner")}
 					</Text>
-					<Title order={2}>Cloud settings</Title>
-					<Text c="dimmed">
-						Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.
+				</Alert>
+			) : null}
+
+			{/* Active provider indicator (read-only) — gated on cloud capability.
+			    Priority: Codex session active > Azure credentials stored > None. */}
+			{nodeCapabilities.cloudSettings ? (
+				<Card p="md">
+					<Group justify="space-between" align="center">
+						<Stack gap={2}>
+							<Text fw={600}>{t("pages.cloudSettings.provider.label")}</Text>
+							<Text size="sm" c="dimmed">
+								{t("pages.cloudSettings.provider.egressNotice")}
+							</Text>
+						</Stack>
+						{codexSignedIn ? (
+							<Badge color="orange" variant="light" size="lg">
+								{t("pages.cloudSettings.provider.codexOAuth")}
+							</Badge>
+						) : hasStoredConnection ? (
+							<Badge color="blue" variant="light" size="lg">
+								{t("pages.cloudSettings.provider.azureFoundry")}
+							</Badge>
+						) : (
+							<Badge color="gray" variant="light" size="lg">
+								{t("pages.cloudSettings.provider.none")}
+							</Badge>
+						)}
+					</Group>
+				</Card>
+			) : null}
+
+			{/* Codex OAuth sign-in card — gated on cloud capability */}
+			{nodeCapabilities.cloudSettings ? <CodexSignInCard onSignedInChange={handleCodexSignedInChange} /> : null}
+
+			<SectionCard
+				title={t("pages.cloudSettings.azure.title", "Azure OpenAI")}
+				actions={
+					<Badge color={hasStoredConnection ? "green" : "gray"}>
+						{hasStoredConnection
+							? t("pages.cloudSettings.azure.configured", "Configured")
+							: t("pages.cloudSettings.azure.notConfigured", "Not configured")}
+					</Badge>
+				}
+			>
+				<Text c="dimmed">{t("pages.cloudSettings.azure.description")}</Text>
+				<TextInput
+					label={t("pages.cloudSettings.azure.endpointLabel", "Azure OpenAI endpoint")}
+					placeholder={t("pages.cloudSettings.azure.endpointPlaceholder", "https://example.openai.azure.com/")}
+					value={formValues.endpoint}
+					onChange={(event) => {
+						const value = event.currentTarget.value;
+						dispatch({ type: "setField", field: "endpoint", value });
+					}}
+					onBlur={() => dispatch({ type: "touchField", field: "endpoint" })}
+					error={visibleErrors.endpoint}
+				/>
+
+				<Stack gap={4}>
+					<Text size="sm" fw={500}>
+						{t("pages.cloudSettings.azure.authModeLabel", "Authentication")}
+					</Text>
+					<SegmentedControl
+						data-testid="cloud-settings-auth-mode"
+						value={formValues.authMode}
+						onChange={(value) => dispatch({ type: "setAuthMode", value: value as CloudAuthMode })}
+						data={[
+							{ value: "ApiKey", label: t("pages.cloudSettings.azure.authModeApiKey", "API key") },
+							{
+								value: "ManagedIdentity",
+								label: t("pages.cloudSettings.azure.authModeManagedIdentity", "Managed identity"),
+							},
+							{ value: "EntraId", label: t("pages.cloudSettings.azure.authModeEntraId", "Entra ID") },
+						]}
+					/>
+				</Stack>
+
+				<Stack gap={4}>
+					<Text size="sm" fw={500}>
+						{t("pages.cloudSettings.azure.apiSurfaceLabel", "API surface")}
+					</Text>
+					<SegmentedControl
+						data-testid="cloud-settings-api-surface"
+						value={formValues.apiSurface}
+						onChange={(value) => dispatch({ type: "setApiSurface", value: value as CloudApiSurface })}
+						data={[
+							{
+								value: "AzureDeployments",
+								label: t("pages.cloudSettings.azure.apiSurfaceAzureDeployments", "Azure deployments (default)"),
+							},
+							{
+								value: "OpenAiV1",
+								label: t("pages.cloudSettings.azure.apiSurfaceOpenAiV1", "OpenAI v1 (Foundry / gateway)"),
+							},
+						]}
+					/>
+					<Text size="xs" c="dimmed">
+						{t("pages.cloudSettings.azure.apiSurfaceHint")}
 					</Text>
 				</Stack>
 
-				{settingsIsLoading ? (
-					<Group gap="sm">
-						<Loader size="sm" />
-						<Text c="dimmed">Loading cloud settings…</Text>
-					</Group>
-				) : null}
+				{isManagedIdentity ? (
+					<Text size="sm" c="dimmed">
+						{t("pages.cloudSettings.azure.managedIdentityHint")}
+					</Text>
+				) : isEntraId ? (
+					<EntraConnectionFields
+						values={formValues}
+						errors={visibleErrors}
+						hasStoredClientSecret={azure?.hasStoredEntraClientSecret ?? false}
+						showDeviceCodeSignIn={showEntraDeviceCodeSignIn}
+						showAuthCodeSignIn={showEntraAuthCodeSignIn}
+						onFieldChange={(field, value) => dispatch({ type: "setField", field, value })}
+						onFieldBlur={(field) => dispatch({ type: "touchField", field })}
+						onSignInMethodChange={(value) => dispatch({ type: "setEntraSignInMethod", value })}
+					/>
+				) : (
+					<PasswordInput
+						label={t("pages.cloudSettings.azure.apiKeyLabel", "API key")}
+						description={
+							azure?.hasStoredApiKey ? t("pages.cloudSettings.azure.apiKeyStoredHint") : t("pages.cloudSettings.azure.apiKeyHint")
+						}
+						value={formValues.apiKey}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							dispatch({ type: "setField", field: "apiKey", value });
+						}}
+						onBlur={() => dispatch({ type: "touchField", field: "apiKey" })}
+						error={visibleErrors.apiKey}
+					/>
+				)}
 
-				{settingsError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(settingsError)}
-					</Alert>
-				) : null}
-
-				{/* Persistent egress banner — shown whenever a Codex session is active */}
-				{codexSignedIn ? (
-					<Alert color="orange" icon={<IconAlertTriangle size={16} />}>
-						<Text size="sm" fw={500}>
-							{t("pages.cloudSettings.provider.activeEgressBanner")}
-						</Text>
-					</Alert>
-				) : null}
-
-				{/* Active provider indicator (read-only) — gated on cloud capability.
-				    Priority: Codex session active > Azure credentials stored > None. */}
-				{nodeCapabilities.cloudSettings ? (
-					<Card withBorder={true} padding="md" radius="md">
-						<Group justify="space-between" align="center">
-							<Stack gap={2}>
-								<Text fw={600}>{t("pages.cloudSettings.provider.label")}</Text>
-								<Text size="sm" c="dimmed">
-									{t("pages.cloudSettings.provider.egressNotice")}
-								</Text>
-							</Stack>
-							{codexSignedIn ? (
-								<Badge color="orange" variant="light" size="lg">
-									{t("pages.cloudSettings.provider.codexOAuth")}
-								</Badge>
-							) : hasStoredConnection ? (
-								<Badge color="blue" variant="light" size="lg">
-									{t("pages.cloudSettings.provider.azureFoundry")}
-								</Badge>
-							) : (
-								<Badge color="gray" variant="light" size="lg">
-									{t("pages.cloudSettings.provider.none")}
-								</Badge>
-							)}
-						</Group>
-					</Card>
-				) : null}
-
-				{/* Codex OAuth sign-in card — gated on cloud capability */}
-				{nodeCapabilities.cloudSettings ? <CodexSignInCard onSignedInChange={handleCodexSignedInChange} /> : null}
-
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						<Group justify="space-between" align="center">
-							<Title order={3}>{t("pages.cloudSettings.azure.title", "Azure OpenAI")}</Title>
-							<Badge color={hasStoredConnection ? "green" : "gray"}>
-								{hasStoredConnection
-									? t("pages.cloudSettings.azure.configured", "Configured")
-									: t("pages.cloudSettings.azure.notConfigured", "Not configured")}
-							</Badge>
-						</Group>
-						<Text c="dimmed">{t("pages.cloudSettings.azure.description")}</Text>
-						<TextInput
-							label={t("pages.cloudSettings.azure.endpointLabel", "Azure OpenAI endpoint")}
-							placeholder={t("pages.cloudSettings.azure.endpointPlaceholder", "https://example.openai.azure.com/")}
-							value={formValues.endpoint}
-							onChange={(event) => {
-								const value = event.currentTarget.value;
-								dispatch({ type: "setField", field: "endpoint", value });
-							}}
-							onBlur={() => dispatch({ type: "touchField", field: "endpoint" })}
-							error={visibleErrors.endpoint}
-						/>
-
-						<Stack gap={4}>
-							<Text size="sm" fw={500}>
-								{t("pages.cloudSettings.azure.authModeLabel", "Authentication")}
-							</Text>
-							<SegmentedControl
-								data-testid="cloud-settings-auth-mode"
-								value={formValues.authMode}
-								onChange={(value) => dispatch({ type: "setAuthMode", value: value as CloudAuthMode })}
-								data={[
-									{ value: "ApiKey", label: t("pages.cloudSettings.azure.authModeApiKey", "API key") },
-									{
-										value: "ManagedIdentity",
-										label: t("pages.cloudSettings.azure.authModeManagedIdentity", "Managed identity"),
-									},
-										{ value: "EntraId", label: t("pages.cloudSettings.azure.authModeEntraId", "Entra ID") },
-								]}
-							/>
-						</Stack>
-
-						<Stack gap={4}>
-							<Text size="sm" fw={500}>
-								{t("pages.cloudSettings.azure.apiSurfaceLabel", "API surface")}
-							</Text>
-							<SegmentedControl
-								data-testid="cloud-settings-api-surface"
-								value={formValues.apiSurface}
-								onChange={(value) => dispatch({ type: "setApiSurface", value: value as CloudApiSurface })}
-								data={[
-									{
-										value: "AzureDeployments",
-										label: t("pages.cloudSettings.azure.apiSurfaceAzureDeployments", "Azure deployments (default)"),
-									},
-									{
-										value: "OpenAiV1",
-										label: t("pages.cloudSettings.azure.apiSurfaceOpenAiV1", "OpenAI v1 (Foundry / gateway)"),
-									},
-								]}
-							/>
-							<Text size="xs" c="dimmed">
-								{t("pages.cloudSettings.azure.apiSurfaceHint")}
-							</Text>
-						</Stack>
-
-						{isManagedIdentity ? (
-							<Text size="sm" c="dimmed">
-								{t("pages.cloudSettings.azure.managedIdentityHint")}
-							</Text>
-						) : isEntraId ? (
-							<EntraConnectionFields
-								values={formValues}
-								errors={visibleErrors}
-								hasStoredClientSecret={azure?.hasStoredEntraClientSecret ?? false}
-								showDeviceCodeSignIn={showEntraDeviceCodeSignIn}
-								showAuthCodeSignIn={showEntraAuthCodeSignIn}
-								onFieldChange={(field, value) => dispatch({ type: "setField", field, value })}
-								onFieldBlur={(field) => dispatch({ type: "touchField", field })}
-								onSignInMethodChange={(value) => dispatch({ type: "setEntraSignInMethod", value })}
-							/>
-						) : (
-							<PasswordInput
-								label={t("pages.cloudSettings.azure.apiKeyLabel", "API key")}
-								description={
-									azure?.hasStoredApiKey
-										? t("pages.cloudSettings.azure.apiKeyStoredHint")
-										: t("pages.cloudSettings.azure.apiKeyHint")
-								}
-								value={formValues.apiKey}
+				<Stack gap={6}>
+					<Text size="sm" fw={500}>
+						{t("pages.cloudSettings.azure.modelsLabel", "Models")}
+					</Text>
+					<Text size="xs" c="dimmed">
+						{t("pages.cloudSettings.azure.deploymentNameHelp")}
+					</Text>
+					{formValues.models.map((model, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
+						<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
+							<TextInput
+								style={{ flex: 1 }}
+								aria-label={t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name")}
+								label={index === 0 ? t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name") : undefined}
+								placeholder={t("pages.cloudSettings.azure.deploymentNamePlaceholder", "gpt-4o")}
+								value={model.deploymentName}
 								onChange={(event) => {
 									const value = event.currentTarget.value;
-									dispatch({ type: "setField", field: "apiKey", value });
+									dispatch({ type: "setModelField", index, field: "deploymentName", value });
 								}}
-								onBlur={() => dispatch({ type: "touchField", field: "apiKey" })}
-								error={visibleErrors.apiKey}
+								onBlur={() => dispatch({ type: "touchField", field: "models" })}
 							/>
-						)}
-
-						<Stack gap={6}>
-							<Text size="sm" fw={500}>
-								{t("pages.cloudSettings.azure.modelsLabel", "Models")}
-							</Text>
-							<Text size="xs" c="dimmed">
-								{t("pages.cloudSettings.azure.deploymentNameHelp")}
-							</Text>
-							{formValues.models.map((model, index) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
-								<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
-									<TextInput
-										style={{ flex: 1 }}
-										aria-label={t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name")}
-										label={index === 0 ? t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name") : undefined}
-										placeholder={t("pages.cloudSettings.azure.deploymentNamePlaceholder", "gpt-4o")}
-										value={model.deploymentName}
-										onChange={(event) => {
-											const value = event.currentTarget.value;
-											dispatch({ type: "setModelField", index, field: "deploymentName", value });
-										}}
-										onBlur={() => dispatch({ type: "touchField", field: "models" })}
-									/>
-									<TextInput
-										style={{ flex: 1 }}
-										aria-label={t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)")}
-										label={index === 0 ? t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)") : undefined}
-										placeholder={t("pages.cloudSettings.azure.displayLabelPlaceholder", "GPT-4o")}
-										value={model.displayLabel}
-										onChange={(event) => {
-											const value = event.currentTarget.value;
-											dispatch({ type: "setModelField", index, field: "displayLabel", value });
-										}}
-									/>
-									<ActionIcon
-										variant="subtle"
-										color="red"
-										size="lg"
-										data-testid={`cloud-settings-remove-model-${index}`}
-										aria-label={t("pages.cloudSettings.azure.removeModel", "Remove model")}
-										onClick={() => dispatch({ type: "removeModel", index })}
-									>
-										<IconTrash size={16} />
-									</ActionIcon>
-								</Group>
-							))}
-							{visibleErrors.models ? (
-								<Text size="xs" c="red" data-testid="cloud-settings-models-error">
-									{visibleErrors.models}
-								</Text>
-							) : null}
-							<Group>
-								<Button
-									variant="light"
-									size="xs"
-									leftSection={<IconPlus size={14} />}
-									data-testid="cloud-settings-add-model"
-									onClick={() => dispatch({ type: "addModel" })}
-								>
-									{t("pages.cloudSettings.azure.addModel", "Add model")}
-								</Button>
-							</Group>
-						</Stack>
-
-						<Stack gap={6}>
-							<Text size="sm" fw={500}>
-								{t("pages.cloudSettings.azure.headers.title", "Custom headers")}
-							</Text>
-							<Text size="xs" c="dimmed">
-								{t("pages.cloudSettings.azure.headers.description")}
-							</Text>
-							{formValues.headers.map((header, index) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
-								<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
-									<TextInput
-										style={{ flex: 1 }}
-										aria-label={t("pages.cloudSettings.azure.headers.nameLabel", "Header name")}
-										label={index === 0 ? t("pages.cloudSettings.azure.headers.nameLabel", "Header name") : undefined}
-										placeholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
-										value={header.name}
-										onChange={(event) => {
-											const value = event.currentTarget.value;
-											dispatch({ type: "setHeaderField", index, field: "name", value });
-										}}
-										onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-									/>
-									{header.isSecret ? (
-										<PasswordInput
-											style={{ flex: 1 }}
-											aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
-											label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
-											description={header.hasStoredValue ? t("pages.cloudSettings.azure.headers.secretStoredHint") : undefined}
-											placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
-											value={header.value}
-											onChange={(event) => {
-												const value = event.currentTarget.value;
-												dispatch({ type: "setHeaderField", index, field: "value", value });
-											}}
-											onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-										/>
-									) : (
-										<TextInput
-											style={{ flex: 1 }}
-											aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
-											label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
-											placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
-											value={header.value}
-											onChange={(event) => {
-												const value = event.currentTarget.value;
-												dispatch({ type: "setHeaderField", index, field: "value", value });
-											}}
-											onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-										/>
-									)}
-									<Switch
-										data-testid={`cloud-settings-header-secret-${index}`}
-										aria-label={t("pages.cloudSettings.azure.headers.secretLabel", "Secret")}
-										label={index === 0 ? t("pages.cloudSettings.azure.headers.secretLabel", "Secret") : undefined}
-										checked={header.isSecret}
-										onChange={() => dispatch({ type: "toggleHeaderSecret", index })}
-									/>
-									<ActionIcon
-										variant="subtle"
-										color="red"
-										size="lg"
-										data-testid={`cloud-settings-remove-header-${index}`}
-										aria-label={t("pages.cloudSettings.azure.headers.removeHeader", "Remove header")}
-										onClick={() => dispatch({ type: "removeHeader", index })}
-									>
-										<IconTrash size={16} />
-									</ActionIcon>
-								</Group>
-							))}
-							{visibleErrors.headers ? (
-								<Text size="xs" c="red" data-testid="cloud-settings-headers-error">
-									{visibleErrors.headers}
-								</Text>
-							) : null}
-							<Group>
-								<Button
-									variant="light"
-									size="xs"
-									leftSection={<IconPlus size={14} />}
-									data-testid="cloud-settings-add-header"
-									onClick={() => dispatch({ type: "addHeader" })}
-								>
-									{t("pages.cloudSettings.azure.headers.addHeader", "Add header")}
-								</Button>
-							</Group>
-						</Stack>
-
-						<Stack gap={6}>
-							<Text size="sm" fw={500}>
-								{t("pages.cloudSettings.azure.hostSuffixes.title", "Allowed host suffixes")}
-							</Text>
-							<Text size="xs" c="dimmed">
-								{t("pages.cloudSettings.azure.hostSuffixes.description")}
-							</Text>
-							{formValues.hostSuffixes.map((suffix, index) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
-								<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
-									<TextInput
-										style={{ flex: 1 }}
-										aria-label={t("pages.cloudSettings.azure.hostSuffixes.label", "Host suffix")}
-										label={index === 0 ? t("pages.cloudSettings.azure.hostSuffixes.label", "Host suffix") : undefined}
-										placeholder={t("pages.cloudSettings.azure.hostSuffixes.placeholder", ".azure-api.net")}
-										value={suffix}
-										onChange={(event) => {
-											const value = event.currentTarget.value;
-											dispatch({ type: "setHostSuffix", index, value });
-										}}
-										onBlur={() => dispatch({ type: "touchField", field: "hostSuffixes" })}
-									/>
-									<ActionIcon
-										variant="subtle"
-										color="red"
-										size="lg"
-										data-testid={`cloud-settings-remove-host-${index}`}
-										aria-label={t("pages.cloudSettings.azure.hostSuffixes.removeHost", "Remove allowed host")}
-										onClick={() => dispatch({ type: "removeHostSuffix", index })}
-									>
-										<IconTrash size={16} />
-									</ActionIcon>
-								</Group>
-							))}
-							{visibleErrors.hostSuffixes ? (
-								<Text size="xs" c="red" data-testid="cloud-settings-host-suffixes-error">
-									{visibleErrors.hostSuffixes}
-								</Text>
-							) : null}
-							<Group>
-								<Button
-									variant="light"
-									size="xs"
-									leftSection={<IconPlus size={14} />}
-									data-testid="cloud-settings-add-host"
-									onClick={() => dispatch({ type: "addHostSuffix" })}
-								>
-									{t("pages.cloudSettings.azure.hostSuffixes.addHost", "Add allowed host")}
-								</Button>
-							</Group>
-						</Stack>
-
-						{showManagedIdentityEgressWarning ? (
-							<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="cloud-settings-mi-egress-warning">
-								<Text size="sm">{t("pages.cloudSettings.azure.managedIdentityEgressWarning")}</Text>
-							</Alert>
-						) : null}
-
-						<Group>
-							<Button
-								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={handleSave}
-								loading={saveMutation.isPending}
-								disabled={hasErrors || isActionPending}
-							>
-								{t("pages.cloudSettings.azure.save", "Save cloud settings")}
-							</Button>
-							<Button
-								variant="outline"
-								color="red"
-								leftSection={<IconTrash size={16} />}
-								onClick={() => clearMutation.mutate({})}
-								loading={clearMutation.isPending}
-								disabled={!hasStoredConnection || isActionPending}
-							>
-								{t("pages.cloudSettings.azure.clear", "Clear saved credentials")}
-							</Button>
-							<Button
+							<TextInput
+								style={{ flex: 1 }}
+								aria-label={t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)")}
+								label={index === 0 ? t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)") : undefined}
+								placeholder={t("pages.cloudSettings.azure.displayLabelPlaceholder", "GPT-4o")}
+								value={model.displayLabel}
+								onChange={(event) => {
+									const value = event.currentTarget.value;
+									dispatch({ type: "setModelField", index, field: "displayLabel", value });
+								}}
+							/>
+							<ActionIcon
 								variant="subtle"
-								leftSection={<IconRefresh size={16} />}
-								onClick={() => settingsRefetch()}
-								disabled={settingsIsFetching}
+								color="red"
+								size="lg"
+								data-testid={`cloud-settings-remove-model-${index}`}
+								aria-label={t("pages.cloudSettings.azure.removeModel", "Remove model")}
+								onClick={() => dispatch({ type: "removeModel", index })}
 							>
-								{t("pages.cloudSettings.azure.reload", "Reload")}
-							</Button>
+								<IconTrash size={16} />
+							</ActionIcon>
 						</Group>
-					</Stack>
-				</Card>
-			</Stack>
-		</Container>
+					))}
+					{visibleErrors.models ? (
+						<Text size="xs" c="red" data-testid="cloud-settings-models-error">
+							{visibleErrors.models}
+						</Text>
+					) : null}
+					<Group>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconPlus size={14} />}
+							data-testid="cloud-settings-add-model"
+							onClick={() => dispatch({ type: "addModel" })}
+						>
+							{t("pages.cloudSettings.azure.addModel", "Add model")}
+						</Button>
+					</Group>
+				</Stack>
+
+				<Stack gap={6}>
+					<Text size="sm" fw={500}>
+						{t("pages.cloudSettings.azure.headers.title", "Custom headers")}
+					</Text>
+					<Text size="xs" c="dimmed">
+						{t("pages.cloudSettings.azure.headers.description")}
+					</Text>
+					{formValues.headers.map((header, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
+						<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
+							<TextInput
+								style={{ flex: 1 }}
+								aria-label={t("pages.cloudSettings.azure.headers.nameLabel", "Header name")}
+								label={index === 0 ? t("pages.cloudSettings.azure.headers.nameLabel", "Header name") : undefined}
+								placeholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
+								value={header.name}
+								onChange={(event) => {
+									const value = event.currentTarget.value;
+									dispatch({ type: "setHeaderField", index, field: "name", value });
+								}}
+								onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+							/>
+							{header.isSecret ? (
+								<PasswordInput
+									style={{ flex: 1 }}
+									aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
+									label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
+									description={header.hasStoredValue ? t("pages.cloudSettings.azure.headers.secretStoredHint") : undefined}
+									placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
+									value={header.value}
+									onChange={(event) => {
+										const value = event.currentTarget.value;
+										dispatch({ type: "setHeaderField", index, field: "value", value });
+									}}
+									onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+								/>
+							) : (
+								<TextInput
+									style={{ flex: 1 }}
+									aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
+									label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
+									placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
+									value={header.value}
+									onChange={(event) => {
+										const value = event.currentTarget.value;
+										dispatch({ type: "setHeaderField", index, field: "value", value });
+									}}
+									onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+								/>
+							)}
+							<Switch
+								data-testid={`cloud-settings-header-secret-${index}`}
+								aria-label={t("pages.cloudSettings.azure.headers.secretLabel", "Secret")}
+								label={index === 0 ? t("pages.cloudSettings.azure.headers.secretLabel", "Secret") : undefined}
+								checked={header.isSecret}
+								onChange={() => dispatch({ type: "toggleHeaderSecret", index })}
+							/>
+							<ActionIcon
+								variant="subtle"
+								color="red"
+								size="lg"
+								data-testid={`cloud-settings-remove-header-${index}`}
+								aria-label={t("pages.cloudSettings.azure.headers.removeHeader", "Remove header")}
+								onClick={() => dispatch({ type: "removeHeader", index })}
+							>
+								<IconTrash size={16} />
+							</ActionIcon>
+						</Group>
+					))}
+					{visibleErrors.headers ? (
+						<Text size="xs" c="red" data-testid="cloud-settings-headers-error">
+							{visibleErrors.headers}
+						</Text>
+					) : null}
+					<Group>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconPlus size={14} />}
+							data-testid="cloud-settings-add-header"
+							onClick={() => dispatch({ type: "addHeader" })}
+						>
+							{t("pages.cloudSettings.azure.headers.addHeader", "Add header")}
+						</Button>
+					</Group>
+				</Stack>
+
+				<Stack gap={6}>
+					<Text size="sm" fw={500}>
+						{t("pages.cloudSettings.azure.hostSuffixes.title", "Allowed host suffixes")}
+					</Text>
+					<Text size="xs" c="dimmed">
+						{t("pages.cloudSettings.azure.hostSuffixes.description")}
+					</Text>
+					{formValues.hostSuffixes.map((suffix, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
+						<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
+							<TextInput
+								style={{ flex: 1 }}
+								aria-label={t("pages.cloudSettings.azure.hostSuffixes.label", "Host suffix")}
+								label={index === 0 ? t("pages.cloudSettings.azure.hostSuffixes.label", "Host suffix") : undefined}
+								placeholder={t("pages.cloudSettings.azure.hostSuffixes.placeholder", ".azure-api.net")}
+								value={suffix}
+								onChange={(event) => {
+									const value = event.currentTarget.value;
+									dispatch({ type: "setHostSuffix", index, value });
+								}}
+								onBlur={() => dispatch({ type: "touchField", field: "hostSuffixes" })}
+							/>
+							<ActionIcon
+								variant="subtle"
+								color="red"
+								size="lg"
+								data-testid={`cloud-settings-remove-host-${index}`}
+								aria-label={t("pages.cloudSettings.azure.hostSuffixes.removeHost", "Remove allowed host")}
+								onClick={() => dispatch({ type: "removeHostSuffix", index })}
+							>
+								<IconTrash size={16} />
+							</ActionIcon>
+						</Group>
+					))}
+					{visibleErrors.hostSuffixes ? (
+						<Text size="xs" c="red" data-testid="cloud-settings-host-suffixes-error">
+							{visibleErrors.hostSuffixes}
+						</Text>
+					) : null}
+					<Group>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconPlus size={14} />}
+							data-testid="cloud-settings-add-host"
+							onClick={() => dispatch({ type: "addHostSuffix" })}
+						>
+							{t("pages.cloudSettings.azure.hostSuffixes.addHost", "Add allowed host")}
+						</Button>
+					</Group>
+				</Stack>
+
+				{showManagedIdentityEgressWarning ? (
+					<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="cloud-settings-mi-egress-warning">
+						<Text size="sm">{t("pages.cloudSettings.azure.managedIdentityEgressWarning")}</Text>
+					</Alert>
+				) : null}
+
+				<Group>
+					<Button
+						leftSection={<IconDeviceFloppy size={16} />}
+						onClick={handleSave}
+						loading={saveMutation.isPending}
+						disabled={hasErrors || isActionPending}
+					>
+						{t("pages.cloudSettings.azure.save", "Save cloud settings")}
+					</Button>
+					<Button
+						variant="outline"
+						color="red"
+						leftSection={<IconTrash size={16} />}
+						onClick={() => clearMutation.mutate({})}
+						loading={clearMutation.isPending}
+						disabled={!hasStoredConnection || isActionPending}
+					>
+						{t("pages.cloudSettings.azure.clear", "Clear saved credentials")}
+					</Button>
+					<Button
+						variant="subtle"
+						leftSection={<IconRefresh size={16} />}
+						onClick={() => settingsRefetch()}
+						disabled={settingsIsFetching}
+					>
+						{t("pages.cloudSettings.azure.reload", "Reload")}
+					</Button>
+				</Group>
+			</SectionCard>
+		</PageShell>
 	);
 }

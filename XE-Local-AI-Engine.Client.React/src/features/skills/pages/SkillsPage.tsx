@@ -1,10 +1,13 @@
-import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconDownload, IconPlus, IconSchool, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -160,25 +163,16 @@ export function SkillsPage() {
 	const formInitialValues = isEditing && skillQuery.data ? toFormValues(skillQuery.data) : emptyFormValues;
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("pages.skills.eyebrow", "Worker Node")}
-						</Text>
-						<Group gap="xs" align="center">
-							<IconSchool size={24} />
-							<Title order={2}>{t("pages.skills.title", "Skills")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.skills.subtitle",
-								"Author a node-wide library of reusable skills. Assign skills to an agent so its model can load the relevant expertise on demand while it works.",
-							)}
-						</Text>
-					</Stack>
-					<Group gap="sm">
+		<PageShell>
+			<PageHeader
+				title={t("pages.skills.title", "Skills")}
+				icon={<IconSchool size={24} />}
+				subtitle={t(
+					"pages.skills.subtitle",
+					"Author a node-wide library of reusable skills. Assign skills to an agent so its model can load the relevant expertise on demand while it works.",
+				)}
+				actions={
+					<>
 						<Button
 							variant="default"
 							leftSection={<IconDownload size={16} />}
@@ -190,28 +184,26 @@ export function SkillsPage() {
 						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="skill-create-button">
 							{t("pages.skills.createButton", "New skill")}
 						</Button>
-					</Group>
-				</Group>
+					</>
+				}
+			/>
 
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						{skillsQuery.isLoading ? (
-							<Group gap="sm">
-								<Loader size="sm" />
-								<Text c="dimmed">{t("pages.skills.list.loading", "Loading skills…")}</Text>
-							</Group>
-						) : null}
-						{skillsQuery.error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skills-list-error">
-								{apiErrorMessage(skillsQuery.error, t("pages.skills.errors.load", "Could not load skills."))}
-							</Alert>
-						) : null}
-						{!skillsQuery.isLoading && !skillsQuery.error ? (
-							<SkillList skills={skills} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
-						) : null}
-					</Stack>
-				</Card>
-			</Stack>
+			<SectionCard>
+				{skillsQuery.isLoading ? (
+					<Group gap="sm">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.skills.list.loading", "Loading skills…")}</Text>
+					</Group>
+				) : null}
+				{skillsQuery.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skills-list-error">
+						{apiErrorMessage(skillsQuery.error, t("pages.skills.errors.load", "Could not load skills."))}
+					</Alert>
+				) : null}
+				{!skillsQuery.isLoading && !skillsQuery.error ? (
+					<SkillList skills={skills} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
+				) : null}
+			</SectionCard>
 
 			<DialogShell
 				opened={isEditorOpen}
@@ -279,6 +271,6 @@ export function SkillsPage() {
 			</DialogShell>
 
 			<SkillImportDialog opened={isImportOpen} onClose={() => setIsImportOpen(false)} />
-		</Container>
+		</PageShell>
 	);
 }

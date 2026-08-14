@@ -1,9 +1,13 @@
-import { Alert, Badge, Button, Card, Container, Group, Loader, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
+import { Alert, Badge, Button, Group, Loader, Table, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconPlayerEject, IconServer } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { formatExpiresIn, formatLoadedModelSize } from "@/features/loaded-models/components/LoadedModelsFormatters";
@@ -142,137 +146,120 @@ export function LoadedModelsPage() {
 	};
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Stack gap={4}>
-					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						{t("pages.loadedModels.eyebrow", "Worker Node")}
-					</Text>
-					<Group gap="xs" align="center">
-						<IconServer size={24} />
-						<Title order={2}>{t("pages.loadedModels.title", "Loaded models")}</Title>
+		<PageShell>
+			<PageHeader
+				icon={<IconServer size={24} />}
+				title={t("pages.loadedModels.title", "Loaded models")}
+				subtitle={t(
+					"pages.loadedModels.subtitle",
+					"Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory — gracefully, after any in-flight generation completes.",
+				)}
+			/>
+
+			<SectionCard title={t("pages.loadedModels.ollama.title", "Ollama (in-memory)")} icon={<IconServer size={22} />}>
+				{loadedModelsQuery.isLoading ? (
+					<Group gap="sm" data-testid="loaded-models-loading">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.loadedModels.loading", "Loading loaded models…")}</Text>
 					</Group>
-					<Text c="dimmed">
-						{t(
-							"pages.loadedModels.subtitle",
-							"Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory — gracefully, after any in-flight generation completes.",
+				) : null}
+
+				{loadedModelsQuery.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="loaded-models-error">
+						{apiErrorMessage(loadedModelsQuery.error, t("pages.loadedModels.errors.load", "Could not load loaded models."))}
+					</Alert>
+				) : null}
+
+				{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && !isAvailable ? (
+					// Ollama is an optional secondary provider, deliberately absent on the desktop default. An
+					// unreachable provider is therefore an expected empty state, not an error: render a neutral,
+					// dimmed line (never a red/warning alert) and do NOT surface the raw connection-refused reason
+					// as an alarming banner. A genuine transport/shape failure still routes to the error alert above.
+					<EmptyState
+						data-testid="loaded-models-unavailable"
+						message={t(
+							"pages.loadedModels.unavailable",
+							"Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
 						)}
-					</Text>
-				</Stack>
+					/>
+				) : null}
 
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						<Group gap="xs" align="center">
-							<IconServer size={20} />
-							<Title order={4}>{t("pages.loadedModels.ollama.title", "Ollama (in-memory)")}</Title>
-						</Group>
+				{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length === 0 ? (
+					<EmptyState data-testid="loaded-models-empty" message={t("pages.loadedModels.empty", "No models currently loaded.")} />
+				) : null}
 
-						{loadedModelsQuery.isLoading ? (
-							<Group gap="sm" data-testid="loaded-models-loading">
-								<Loader size="sm" />
-								<Text c="dimmed">{t("pages.loadedModels.loading", "Loading loaded models…")}</Text>
-							</Group>
-						) : null}
-
-						{loadedModelsQuery.error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="loaded-models-error">
-								{apiErrorMessage(loadedModelsQuery.error, t("pages.loadedModels.errors.load", "Could not load loaded models."))}
-							</Alert>
-						) : null}
-
-						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && !isAvailable ? (
-							// Ollama is an optional secondary provider, deliberately absent on the desktop default. An
-							// unreachable provider is therefore an expected empty state, not an error: render a neutral,
-							// dimmed line (never a red/warning alert) and do NOT surface the raw connection-refused reason
-							// as an alarming banner. A genuine transport/shape failure still routes to the error alert above.
-							<Text c="dimmed" data-testid="loaded-models-unavailable">
-								{t(
-									"pages.loadedModels.unavailable",
-									"Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
-								)}
-							</Text>
-						) : null}
-
-						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length === 0 ? (
-							<Text c="dimmed" data-testid="loaded-models-empty">
-								{t("pages.loadedModels.empty", "No models currently loaded.")}
-							</Text>
-						) : null}
-
-						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length > 0 ? (
-							<Table.ScrollContainer minWidth={640}>
-								<Table verticalSpacing="sm" data-testid="loaded-models-table">
-									<Table.Thead>
-										<Table.Tr>
-											<Table.Th>{t("pages.loadedModels.columns.model", "Model")}</Table.Th>
-											<Table.Th>{t("pages.loadedModels.columns.memory", "Memory (RAM)")}</Table.Th>
-											<Table.Th>{t("pages.loadedModels.columns.vram", "VRAM")}</Table.Th>
-											<Table.Th>{t("pages.loadedModels.columns.expiresIn", "Expires in")}</Table.Th>
-											<Table.Th>{t("pages.loadedModels.columns.action", "Action")}</Table.Th>
+				{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length > 0 ? (
+					<Table.ScrollContainer minWidth={640}>
+						<Table verticalSpacing="sm" data-testid="loaded-models-table">
+							<Table.Thead>
+								<Table.Tr>
+									<Table.Th>{t("pages.loadedModels.columns.model", "Model")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.columns.memory", "Memory (RAM)")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.columns.vram", "VRAM")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.columns.expiresIn", "Expires in")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.columns.action", "Action")}</Table.Th>
+								</Table.Tr>
+							</Table.Thead>
+							<Table.Tbody>
+								{models.map((model: LoadedModel) => {
+									const ejectingThisRow = ejectMutation.isPending && ejectMutation.variables === model.modelName;
+									return (
+										<Table.Tr key={model.modelName} data-testid={`loaded-models-row-${model.modelName}`}>
+											<Table.Td>
+												<Text ff="monospace">{model.modelName}</Text>
+											</Table.Td>
+											<Table.Td>
+												{model.sizeBytes === null ? (
+													<Badge variant="light" color="gray">
+														{sizeUnknownLabel}
+													</Badge>
+												) : (
+													formatLoadedModelSize(model.sizeBytes)
+												)}
+											</Table.Td>
+											<Table.Td>
+												{model.sizeVramBytes === null ? (
+													<Badge variant="light" color="gray">
+														{t("pages.loadedModels.cpuOnly", "CPU only")}
+													</Badge>
+												) : (
+													formatLoadedModelSize(model.sizeVramBytes)
+												)}
+											</Table.Td>
+											<Table.Td>{formatExpiresIn(model.expiresAtUtc, expiredLabel, now)}</Table.Td>
+											<Table.Td>
+												<Tooltip
+													label={t("pages.loadedModels.eject.tooltip", "Frees memory after the current generation finishes")}
+												>
+													<Button
+														variant="light"
+														color="red"
+														size="xs"
+														leftSection={<IconPlayerEject size={16} />}
+														loading={ejectingThisRow}
+														onClick={() => handleEject(model.modelName)}
+														data-testid={`loaded-models-eject-${model.modelName}`}
+													>
+														{t("pages.loadedModels.eject.button", "Eject")}
+													</Button>
+												</Tooltip>
+											</Table.Td>
 										</Table.Tr>
-									</Table.Thead>
-									<Table.Tbody>
-										{models.map((model: LoadedModel) => {
-											const ejectingThisRow = ejectMutation.isPending && ejectMutation.variables === model.modelName;
-											return (
-												<Table.Tr key={model.modelName} data-testid={`loaded-models-row-${model.modelName}`}>
-													<Table.Td>
-														<Text ff="monospace">{model.modelName}</Text>
-													</Table.Td>
-													<Table.Td>
-														{model.sizeBytes === null ? (
-															<Badge variant="light" color="gray">
-																{sizeUnknownLabel}
-															</Badge>
-														) : (
-															formatLoadedModelSize(model.sizeBytes)
-														)}
-													</Table.Td>
-													<Table.Td>
-														{model.sizeVramBytes === null ? (
-															<Badge variant="light" color="gray">
-																{t("pages.loadedModels.cpuOnly", "CPU only")}
-															</Badge>
-														) : (
-															formatLoadedModelSize(model.sizeVramBytes)
-														)}
-													</Table.Td>
-													<Table.Td>{formatExpiresIn(model.expiresAtUtc, expiredLabel, now)}</Table.Td>
-													<Table.Td>
-														<Tooltip
-															label={t("pages.loadedModels.eject.tooltip", "Frees memory after the current generation finishes")}
-														>
-															<Button
-																variant="light"
-																color="red"
-																size="xs"
-																leftSection={<IconPlayerEject size={16} />}
-																loading={ejectingThisRow}
-																onClick={() => handleEject(model.modelName)}
-																data-testid={`loaded-models-eject-${model.modelName}`}
-															>
-																{t("pages.loadedModels.eject.button", "Eject")}
-															</Button>
-														</Tooltip>
-													</Table.Td>
-												</Table.Tr>
-											);
-										})}
-									</Table.Tbody>
-								</Table>
-							</Table.ScrollContainer>
-						) : null}
-					</Stack>
-				</Card>
+									);
+								})}
+							</Table.Tbody>
+						</Table>
+					</Table.ScrollContainer>
+				) : null}
+			</SectionCard>
 
-				<RunningModelsPanel
-					runningModels={runningModelsQuery.data ?? []}
-					isLoading={runningModelsQuery.isLoading}
-					error={runningModelsQuery.error}
-					onEject={handleEjectRunning}
-					ejectingModelName={ejectRunningMutation.isPending ? (ejectRunningMutation.variables?.modelName ?? null) : null}
-				/>
-			</Stack>
-		</Container>
+			<RunningModelsPanel
+				runningModels={runningModelsQuery.data ?? []}
+				isLoading={runningModelsQuery.isLoading}
+				error={runningModelsQuery.error}
+				onEject={handleEjectRunning}
+				ejectingModelName={ejectRunningMutation.isPending ? (ejectRunningMutation.variables?.modelName ?? null) : null}
+			/>
+		</PageShell>
 	);
 }

@@ -1,6 +1,6 @@
-import { Stack, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { ScheduledJobRunHistoryPanel } from "@/features/scheduler/components/ScheduledJobRunHistoryPanel";
 import type { ScheduledJob, ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
 
@@ -33,22 +33,19 @@ export function SchedulerRunsSection({
 	const { t } = useTranslation();
 
 	return (
-		<div data-testid="scheduler-runs-card">
-			<Stack gap="md">
-				<Title order={3}>{t("pages.scheduler.runs.title", "Run history")}</Title>
-				<ScheduledJobRunHistoryPanel
-					runs={runs}
-					jobs={jobs}
-					filters={filters}
-					isLoading={isLoading}
-					isCancelling={isCancelling}
-					error={error}
-					selectedRunId={selectedRunId}
-					onFiltersChange={onFiltersChange}
-					onSelectRun={onSelectRun}
-					onCancelRun={onCancelRun}
-				/>
-			</Stack>
-		</div>
+		<SectionCard title={t("pages.scheduler.runs.title", "Run history")} data-testid="scheduler-runs-card">
+			<ScheduledJobRunHistoryPanel
+				runs={runs}
+				jobs={jobs}
+				filters={filters}
+				isLoading={isLoading}
+				isCancelling={isCancelling}
+				error={error}
+				selectedRunId={selectedRunId}
+				onFiltersChange={onFiltersChange}
+				onSelectRun={onSelectRun}
+				onCancelRun={onCancelRun}
+			/>
+		</SectionCard>
 	);
 }

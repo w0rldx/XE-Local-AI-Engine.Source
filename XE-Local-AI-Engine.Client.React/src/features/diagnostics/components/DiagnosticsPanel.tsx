@@ -4,12 +4,24 @@
 // importing a previously exported bundle and clearing all snapshots; each row can be viewed, exported
 // or deleted. Everything is local-only — the data layer never transmits snapshot content.
 
-import { Alert, Badge, Button, Card, Container, FileButton, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconDownload, IconEye, IconTrash, IconUpload } from "@tabler/icons-react";
+import { Alert, Badge, Button, FileButton, Group, Loader, Table, Text } from "@mantine/core";
+import {
+	IconAlertTriangle,
+	IconDownload,
+	IconEye,
+	IconFileSearch,
+	IconStethoscope,
+	IconTrash,
+	IconUpload,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Snapshot } from "@/core/diagnostics/Diagnostics";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
@@ -54,23 +66,20 @@ export function DiagnosticsPanel() {
 
 	if (selected) {
 		return (
-			<Container fluid={true} py="md">
+			<PageShell>
 				<SnapshotDetail snapshot={selected} onBack={() => setSelectedId(undefined)} />
-			</Container>
+			</PageShell>
 		);
 	}
 
 	return (
-		<Container fluid={true} py="md">
-			<Stack gap="md">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Title order={3}>{t("diagnostics.title")}</Title>
-						<Text c="dimmed" size="sm" maw={640}>
-							{t("diagnostics.description")}
-						</Text>
-					</Stack>
-					<Group gap="sm">
+		<PageShell>
+			<PageHeader
+				title={t("diagnostics.title")}
+				icon={<IconStethoscope size={24} />}
+				subtitle={t("diagnostics.description")}
+				actions={
+					<>
 						<ReportProblemButton variant="button" />
 						<FileButton onChange={handleImport} accept="application/zip,.zip">
 							{(props) => (
@@ -89,38 +98,46 @@ export function DiagnosticsPanel() {
 						>
 							{t("diagnostics.clearAll")}
 						</Button>
-					</Group>
+					</>
+				}
+			/>
+
+			<Alert variant="light" color="blue" icon={<IconAlertTriangle size={16} />}>
+				{t("diagnostics.privacyNote")}
+			</Alert>
+
+			{isLoading && (
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed" size="sm">
+						{t("diagnostics.loading")}
+					</Text>
 				</Group>
+			)}
 
-				<Alert variant="light" color="blue" icon={<IconAlertTriangle size={16} />}>
-					{t("diagnostics.privacyNote")}
+			{isError && (
+				<Alert variant="light" color="red" icon={<IconAlertTriangle size={16} />}>
+					{t("diagnostics.loadError")}
 				</Alert>
+			)}
 
-				{isLoading && (
-					<Group gap="sm">
-						<Loader size="sm" />
-						<Text size="sm">{t("diagnostics.loading")}</Text>
-					</Group>
-				)}
-
-				{isError && (
-					<Alert variant="light" color="red" icon={<IconAlertTriangle size={16} />}>
-						{t("diagnostics.loadError")}
-					</Alert>
-				)}
-
-				{!isLoading && !isError && snapshots && snapshots.length === 0 && (
-					<Card withBorder={true} radius="md" padding="xl">
-						<Stack gap={4} align="center">
-							<Title order={5}>{t("diagnostics.empty.title")}</Title>
-							<Text c="dimmed" size="sm" ta="center">
-								{t("diagnostics.empty.description")}
+			{!isLoading && !isError && snapshots && snapshots.length === 0 && (
+				<EmptyState
+					icon={<IconFileSearch size={40} opacity={0.6} />}
+					message={
+						<>
+							<Text span={true} fw={600}>
+								{t("diagnostics.empty.title")}
 							</Text>
-						</Stack>
-					</Card>
-				)}
+							<br />
+							{t("diagnostics.empty.description")}
+						</>
+					}
+				/>
+			)}
 
-				{!isLoading && !isError && snapshots && snapshots.length > 0 && (
+			{!isLoading && !isError && snapshots && snapshots.length > 0 && (
+				<SectionCard>
 					<Table.ScrollContainer minWidth={720}>
 						<Table striped={true} highlightOnHover={true}>
 							<Table.Thead>
@@ -178,8 +195,8 @@ export function DiagnosticsPanel() {
 							</Table.Tbody>
 						</Table>
 					</Table.ScrollContainer>
-				)}
-			</Stack>
-		</Container>
+				</SectionCard>
+			)}
+		</PageShell>
 	);
 }

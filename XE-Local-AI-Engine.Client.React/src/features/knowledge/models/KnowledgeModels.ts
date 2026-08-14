@@ -100,7 +100,7 @@ export const KNOWLEDGE_DETERMINISTIC_TEXT_EXTENSIONS: readonly string[] = [
 ];
 
 // Structured document readers registered by DocumentTextExtractor in addition to deterministic plaintext/code.
-export const KNOWLEDGE_STRUCTURED_DOCUMENT_EXTENSIONS: readonly string[] = [".pdf", ".docx"];
+const KNOWLEDGE_STRUCTURED_DOCUMENT_EXTENSIONS: readonly string[] = [".pdf", ".docx"];
 
 // Complete backend-supported upload set. Advisory only; the endpoint remains authoritative.
 export const KNOWLEDGE_ACCEPTED_EXTENSIONS: readonly string[] = [

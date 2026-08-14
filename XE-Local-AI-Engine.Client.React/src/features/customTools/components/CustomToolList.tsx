@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Group, Table, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { CUSTOM_TOOL_NAME_PREFIX, type CustomToolView } from "@/features/customTools/models/CustomToolModels";
 
 interface CustomToolListProps {
@@ -19,9 +20,13 @@ export function CustomToolList({ tools, isMutating, onEdit, onDelete }: CustomTo
 
 	if (tools.length === 0) {
 		return (
-			<Text c="dimmed" data-testid="custom-tools-empty">
-				{t("pages.customTools.list.empty", "No custom tools yet. Create one to give your agents a host command or HTTP call.")}
-			</Text>
+			<EmptyState
+				message={t(
+					"pages.customTools.list.empty",
+					"No custom tools yet. Create one to give your agents a host command or HTTP call.",
+				)}
+				data-testid="custom-tools-empty"
+			/>
 		);
 	}
 

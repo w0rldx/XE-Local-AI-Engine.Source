@@ -2,6 +2,7 @@ import { Alert, Group, Loader, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 
@@ -31,7 +32,7 @@ export function SchedulerJobsSection({
 	const { t } = useTranslation();
 
 	return (
-		<div data-testid="scheduler-list-card">
+		<SectionCard data-testid="scheduler-list-card">
 			{isLoading ? (
 				<Group gap="sm">
 					<Loader size="sm" />
@@ -53,6 +54,6 @@ export function SchedulerJobsSection({
 					onToggleEnabled={onToggleEnabled}
 				/>
 			) : null}
-		</div>
+		</SectionCard>
 	);
 }

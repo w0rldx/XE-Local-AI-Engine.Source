@@ -132,7 +132,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 							const state = onboarding?.tutorials[tutorial.id];
 							const action = state?.hasProgress ? "resume" : state?.status !== undefined ? "restart" : "start";
 							return (
-								<Card key={tutorial.id} withBorder={true} radius="md" data-testid={`tutorial-card-${tutorial.id}`}>
+								<Card key={tutorial.id} withBorder={true} radius="md" padding="md" data-testid={`tutorial-card-${tutorial.id}`}>
 									<Stack gap="xs">
 										<Group justify="space-between" align="flex-start">
 											<Stack gap={2}>

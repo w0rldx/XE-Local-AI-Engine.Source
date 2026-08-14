@@ -9,7 +9,7 @@ import { useMobileNavigationDrawer } from "@/core/layout/hooks/useMobileNavigati
 import { useTheme } from "@/core/theme/hooks/useTheme";
 import type { IMobileNavigationThemeMenuProperties } from "@/core/layout/components/MobileNavigationThemeMenu/MobileNavigationThemeMenu.types";
 
-export function MobileNavigationThemeMenu({ theme, menuItemStyle, setDrawerOpen, width }: IMobileNavigationThemeMenuProperties) {
+export function MobileNavigationThemeMenu({ menuItemStyle, setDrawerOpen, width }: IMobileNavigationThemeMenuProperties) {
 	const { t } = useTranslation();
 	const { isDrawerOpen, setIsDrawerOpen, drawerReference, menuReference, openDrawer, closeDrawer } =
 		useMobileNavigationDrawer(setDrawerOpen);
@@ -40,7 +40,6 @@ export function MobileNavigationThemeMenu({ theme, menuItemStyle, setDrawerOpen,
 	const drawerContent = (
 		<MobileNavigationDrawerPanel
 			isOpen={isDrawerOpen}
-			theme={theme}
 			width={width}
 			title={t("theme.title")}
 			onClose={() => setIsDrawerOpen(false)}
