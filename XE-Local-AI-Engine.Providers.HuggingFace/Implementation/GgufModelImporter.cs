@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 internal sealed class GgufModelImporter(
-    IGgufImportInspector inspector,
+    GgufImportInspector inspector,
     GgufModelRegistry registry,
     IFreeSpaceProbe freeSpaceProbe,
     HuggingFaceOptions options,
@@ -22,23 +22,21 @@ internal sealed class GgufModelImporter(
         ArgumentNullException.ThrowIfNull(destination);
         ValidateDestination(destination);
 
-        var inspection = await inspector.InspectAsync(source, cancellationToken).ConfigureAwait(false);
+        await using var openedSource = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
+        var inspection = await inspector.InspectOpenedAsync(openedSource, cancellationToken).ConfigureAwait(false);
         if (!IsUsableInspection(inspection, destination.CanonicalQuant))
         {
-            throw new GgufImportException(inspection.Rejections[0], "The selected file is not a supported causal-chat GGUF.");
-        }
-
-        if (!string.Equals(inspection.DetectedQuantization, destination.CanonicalQuant, StringComparison.Ordinal))
-        {
-            throw new GgufImportException(GgufImportRejectionCode.UnsupportedQuantization,
-                "The selected quantization does not match the import destination.");
+            var reason = inspection.Rejections.Count > 0
+                ? inspection.Rejections[0]
+                : GgufImportRejectionCode.UnsupportedQuantization;
+            throw new GgufImportException(reason, "The selected file is not a supported causal-chat GGUF.");
         }
 
         var finalPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeGgufPath);
         var finalSidecarPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeSidecarPath);
-        if (File.Exists(finalPath) || File.Exists(finalSidecarPath))
+        if (HasCaseInsensitiveCollision(finalPath) || HasCaseInsensitiveCollision(finalSidecarPath))
         {
-            throw new IOException("The import destination already exists.");
+            throw new GgufImportException(GgufImportRejectionCode.DestinationConflict, "The import destination already exists.");
         }
 
         var requiredBytes = checked(inspection.SizeBytes + Math.Max(0, options.DiskMarginBytes));
@@ -54,7 +52,7 @@ internal sealed class GgufModelImporter(
         var temporarySidecarPath = finalSidecarPath + $".{operationId}.part";
         try
         {
-            var (hash, copied) = await CopyAndHashAsync(source.AbsolutePath, temporaryPath, inspection.SizeBytes, progress, cancellationToken)
+            var (hash, copied) = await CopyAndHashAsync(openedSource, temporaryPath, inspection.SizeBytes, progress, cancellationToken)
                                          .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             var copiedInspection = GgufImportInspector.Classify(Path.GetFileName(finalPath),
@@ -92,11 +90,11 @@ internal sealed class GgufModelImporter(
                 MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
                 ModelContentFingerprint = modelFingerprint
             };
-            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry) };
+            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory) };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                RegistryRevision = entry.RegistryRevision,
+                RegistryRevision = entry.RegistryRevision!,
                 ModelName = entry.ModelName,
                 Origin = LocalModelOrigin.Imported,
                 LocalFileName = entry.FileName,
@@ -115,11 +113,18 @@ internal sealed class GgufModelImporter(
             return new PreparedGgufImport(operationId, destination, temporaryPath, temporarySidecarPath, entry, sidecar,
                 memberFingerprint, modelFingerprint);
         }
-        catch
+        catch (Exception exception)
         {
             TryDelete(temporaryPath);
             TryDelete(temporarySidecarPath);
-            throw;
+            if (exception is OperationCanceledException or GgufImportException or InsufficientDiskSpaceException)
+            {
+                throw;
+            }
+
+            throw new GgufImportException(GgufImportRejectionCode.InvalidSource,
+                "The selected source could not be prepared safely.",
+                exception);
         }
     }
 
@@ -134,8 +139,10 @@ internal sealed class GgufModelImporter(
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            EnsureNoCaseInsensitiveCollision(finalPath);
             File.Move(preparedImport.TemporaryGgufPath, finalPath, overwrite: false);
             movedWeight = true;
+            EnsureNoCaseInsensitiveCollision(finalSidecarPath);
             File.Move(preparedImport.TemporarySidecarPath, finalSidecarPath, overwrite: false);
             movedSidecar = true;
             await registry.InsertIfAbsentAsync(preparedImport.RegistryEntry, cancellationToken).ConfigureAwait(false);
@@ -155,7 +162,7 @@ internal sealed class GgufModelImporter(
                 preparedImport.WeightMemberFingerprint,
                 preparedImport.ModelContentFingerprint);
         }
-        catch
+        catch (Exception exception)
         {
             if (movedWeight)
             {
@@ -164,7 +171,14 @@ internal sealed class GgufModelImporter(
 
             if (movedSidecar) TryDelete(finalSidecarPath);
             if (movedWeight) TryDelete(finalPath);
-            throw;
+            if (exception is OperationCanceledException or GgufImportException)
+            {
+                throw;
+            }
+
+            throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
+                "The import could not be committed safely.",
+                exception);
         }
     }
 
@@ -186,28 +200,21 @@ internal sealed class GgufModelImporter(
         return Task.CompletedTask;
     }
 
-    private static async Task<(string Hash, long Bytes)> CopyAndHashAsync(string sourcePath,
+    private static async Task<(string Hash, long Bytes)> CopyAndHashAsync(ValidatedGgufImportSource source,
         string destinationPath,
         long expectedBytes,
         IProgress<GgufImportProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var before = new FileInfo(sourcePath);
-        if (before.LinkTarget is not null || before.Attributes.HasFlag(FileAttributes.ReparsePoint))
-        {
-            throw new GgufImportException(GgufImportRejectionCode.InvalidSource, "The selected source is not a regular file.");
-        }
-
-        await using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var destination = new FileStream(destinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
+        source.Rewind();
         using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[81920];
         long total = 0;
         while (true)
         {
-            var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var read = await source.Stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (read == 0) break;
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             hasher.AppendData(buffer, 0, read);
@@ -217,12 +224,12 @@ internal sealed class GgufModelImporter(
 
         await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
         destination.Flush(flushToDisk: true);
-        var after = new FileInfo(sourcePath);
-        if (total != expectedBytes || before.Length != after.Length || before.LastWriteTimeUtc != after.LastWriteTimeUtc
-            || after.LinkTarget is not null || after.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        if (total != expectedBytes)
         {
             throw new GgufImportException(GgufImportRejectionCode.InvalidSource, "The selected source changed while it was copied.");
         }
+
+        source.VerifyStillCurrent();
 
         return (Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
     }
@@ -236,6 +243,10 @@ internal sealed class GgufModelImporter(
 
         ArgumentException.ThrowIfNullOrWhiteSpace(destination.CanonicalModelName);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination.CanonicalQuant);
+        if (!GgufQuantDetector.IsCanonical(destination.CanonicalQuant))
+        {
+            throw new ArgumentException("The import destination quantization is not canonical.", nameof(destination));
+        }
     }
 
     private static bool IsUsableInspection(GgufImportInspection inspection, string selectedQuantization)
@@ -251,13 +262,34 @@ internal sealed class GgufModelImporter(
         }
 
         return inspection.Rejections.All(static rejection => rejection == GgufImportRejectionCode.QuantizationRequired)
-               && string.Equals(GgufQuantParser.TryParse($"model-{selectedQuantization}.gguf"), selectedQuantization,
-                   StringComparison.Ordinal);
+               && GgufQuantDetector.IsCanonical(selectedQuantization);
     }
 
     private static void TryDelete(string path)
     {
         try { File.Delete(path); }
-        catch (IOException) { }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException) { }
+    }
+
+    private static void EnsureNoCaseInsensitiveCollision(string finalPath)
+    {
+        if (HasCaseInsensitiveCollision(finalPath))
+        {
+            throw new GgufImportException(GgufImportRejectionCode.DestinationConflict, "The import destination already exists.");
+        }
+    }
+
+    private static bool HasCaseInsensitiveCollision(string finalPath)
+    {
+        var directory = Path.GetDirectoryName(finalPath);
+        if (directory is null || !Directory.Exists(directory))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(finalPath);
+        return Directory.EnumerateFileSystemEntries(directory)
+                        .Select(Path.GetFileName)
+                        .Any(existing => string.Equals(existing, fileName, StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -8,22 +8,23 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 public static class GgufRegistryRevision
 {
     /// <summary>Computes the V1 token from all stable material registry fields.</summary>
-    public static string ComputeV1(GgufModelRegistryEntry entry)
+    public static string ComputeV1(GgufModelRegistryEntry entry, string modelsDirectory)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelsDirectory);
         using var buffer = new MemoryStream();
         Write("gguf-registry-v1");
         Write(entry.ModelName);
         Write(entry.RepoId);
         Write(entry.FileName);
         Write(entry.Quant);
-        Write(NormalizeStoredPath(entry.LocalPath, entry.FileName));
+        Write(GgufFilePath.GetRelativeContainedPath(modelsDirectory, entry.LocalPath));
         Write(entry.SizeBytes.ToString(CultureInfo.InvariantCulture));
         WriteNullable(entry.Sha256);
         Write(entry.SourceRevision);
         Write(((int)entry.Role).ToString(CultureInfo.InvariantCulture));
         WriteNullable(entry.ProjectorFileName);
-        WriteNullable(entry.ProjectorLocalPath is null ? null : NormalizeStoredPath(entry.ProjectorLocalPath, entry.ProjectorFileName));
+        WriteNullable(entry.ProjectorLocalPath is null ? null : GgufFilePath.GetRelativeContainedPath(modelsDirectory, entry.ProjectorLocalPath));
         WriteNullable(entry.ProjectorSizeBytes?.ToString(CultureInfo.InvariantCulture));
         WriteNullable(entry.ProjectorSha256);
         WriteNullable(entry.Origin is null ? null : SerializeOrigin(entry.Origin.Value));
@@ -48,29 +49,6 @@ public static class GgufRegistryRevision
         return value is { Length: 67 }
                && value.StartsWith("v1:", StringComparison.Ordinal)
                && GgufMemberFingerprint.IsLowercaseSha256(value[3..]);
-    }
-
-    private static string NormalizeStoredPath(string path, string? expectedFileName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (!Path.IsPathRooted(path))
-        {
-            return GgufModelContentFingerprint.NormalizeRelativePath(path);
-        }
-
-        var parent = Path.GetFileName(Path.GetDirectoryName(path));
-        if (string.Equals(parent, "projectors", StringComparison.Ordinal))
-        {
-            return $"projectors/{Path.GetFileName(path)}";
-        }
-
-        if (string.IsNullOrWhiteSpace(expectedFileName)
-            || !string.Equals(Path.GetFileName(path), Path.GetFileName(expectedFileName), StringComparison.Ordinal))
-        {
-            throw new ArgumentException("The stored path cannot be reduced to a contained relative path.", nameof(path));
-        }
-
-        return Path.GetFileName(path);
     }
 
     private static string SerializeOrigin(LocalModelOrigin origin)

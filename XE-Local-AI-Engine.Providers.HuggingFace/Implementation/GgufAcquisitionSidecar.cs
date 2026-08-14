@@ -116,7 +116,7 @@ internal static class GgufAcquisitionSidecar
             MetadataSchemaVersion = metadata.SchemaVersion,
             ModelContentFingerprint = metadata.ModelContentFingerprint
         };
-        return entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry) };
+        return entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, modelsDirectory) };
     }
 
     public static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
@@ -135,9 +135,11 @@ internal static class GgufAcquisitionSidecar
             || !string.Equals(Path.GetFileName(weightPath), metadata.LocalFileName, StringComparison.Ordinal)
             || !GgufMemberFingerprint.IsCanonical(metadata.WeightMemberFingerprint)
             || !GgufRegistryRevision.IsCanonical(metadata.ModelContentFingerprint)
+            || !GgufMemberFingerprint.IsCanonicalSha256(metadata.WeightContentSha256)
             || metadata.WeightSizeBytes < 0
             || metadata.Role == GgufRole.Unknown
-            || metadata.SourceDisplayName != Path.GetFileName(metadata.SourceDisplayName))
+            || metadata.SourceDisplayName != Path.GetFileName(metadata.SourceDisplayName)
+            || !GgufQuantDetector.IsCanonical(metadata.Quantization))
         {
             return false;
         }
@@ -148,6 +150,9 @@ internal static class GgufAcquisitionSidecar
                    && metadata.RegistrySourceRevision == $"sha256:{metadata.WeightContentSha256}"
                    && metadata.Role == GgufRole.Chat
                    && metadata.ProjectorRelativePath is null
+                   && metadata.ProjectorSourceDisplayName is null
+                   && metadata.ProjectorSourceSha256 is null
+                   && metadata.ProjectorSourceSizeBytes is null
                    && metadata.ProjectorContentSha256 is null
                    && metadata.ProjectorContentSizeBytes is null
                    && metadata.ProjectorMemberFingerprint is null;
@@ -156,10 +161,21 @@ internal static class GgufAcquisitionSidecar
         if (metadata.ProjectorRelativePath is not null)
         {
             _ = GgufFilePath.ResolveContainedPath(modelsDirectory, metadata.ProjectorRelativePath);
-            return metadata.ProjectorSourceDisplayName == Path.GetFileName(metadata.ProjectorSourceDisplayName)
+            return metadata.ProjectorSourceDisplayName is not null
+                   && metadata.ProjectorSourceDisplayName == Path.GetFileName(metadata.ProjectorSourceDisplayName)
+                   && metadata.ProjectorContentSha256 is not null
+                   && GgufMemberFingerprint.IsCanonicalSha256(metadata.ProjectorContentSha256)
+                   && metadata.ProjectorContentSizeBytes is >= 0
+                   && (metadata.ProjectorSourceSha256 is null || GgufMemberFingerprint.IsCanonicalSha256(metadata.ProjectorSourceSha256))
+                   && metadata.ProjectorSourceSizeBytes is null or >= 0
                    && GgufMemberFingerprint.IsCanonical(metadata.ProjectorMemberFingerprint);
         }
 
-        return true;
+        return metadata.ProjectorSourceDisplayName is null
+               && metadata.ProjectorSourceSha256 is null
+               && metadata.ProjectorSourceSizeBytes is null
+               && metadata.ProjectorContentSha256 is null
+               && metadata.ProjectorContentSizeBytes is null
+               && metadata.ProjectorMemberFingerprint is null;
     }
 }

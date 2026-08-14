@@ -56,6 +56,9 @@ public static class GgufMemberFingerprint
         return IsLowercaseSha256(hash) && string.Equals(value, Compute(hash, size), StringComparison.Ordinal);
     }
 
+    /// <summary>Returns whether a raw SHA-256 is exactly 64 lowercase hexadecimal characters.</summary>
+    public static bool IsCanonicalSha256(string? value) => value is not null && IsLowercaseSha256(value);
+
     internal static void ValidateHash(string sha256)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sha256);
@@ -116,7 +119,10 @@ public static class GgufModelContentFingerprint
             return member;
         }
 
-        ArgumentOutOfRangeException.ThrowIfNegative(member.SizeBytes);
+        if (member.SizeBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(member), "The member size cannot be negative.");
+        }
         GgufMemberFingerprint.ValidateHash(member.Sha256);
         var path = NormalizeRelativePath(member.RelativePath);
         var aliases = member.OwningAliases

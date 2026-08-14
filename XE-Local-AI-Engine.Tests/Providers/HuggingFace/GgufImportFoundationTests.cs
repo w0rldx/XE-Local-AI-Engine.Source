@@ -42,15 +42,20 @@ public sealed class GgufImportFoundationTests
     public void RegistryRevision_MatchesGoldenVector_AndIgnoresTimestampAndToken()
     {
         var entry = GoldenEntry();
+        var root = Path.GetFullPath(".");
         const string expected = "v1:2c3638368aed92e8104a1b83063ca5dc99519bb0b44e64b2e29fb84eb15bfe2a";
-        AssertEx.Equal(expected, GgufRegistryRevision.ComputeV1(entry));
+        AssertEx.Equal(expected, GgufRegistryRevision.ComputeV1(entry, root));
         AssertEx.Equal(expected, GgufRegistryRevision.ComputeV1(entry with
         {
             DownloadedAtUtc = DateTimeOffset.UnixEpoch.AddYears(10),
             RegistryRevision = "v1:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-        }));
-        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with { RepoId = "other/repo" }));
-        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with { Origin = LocalModelOrigin.HuggingFace }));
+        }, root));
+        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with { RepoId = "other/repo" }, root));
+        AssertEx.NotEqual(expected, GgufRegistryRevision.ComputeV1(entry with { Origin = LocalModelOrigin.HuggingFace }, root));
+        AssertEx.Throws<ArgumentException>(() => GgufRegistryRevision.ComputeV1(entry with
+        {
+            LocalPath = Path.GetFullPath(Path.Combine(root, "..", "escaped.gguf"))
+        }, root));
     }
 
     [Test]
@@ -105,6 +110,25 @@ public sealed class GgufImportFoundationTests
     }
 
     [Test]
+    public async Task Inspector_RejectsSymlinkAncestor_AndUsesFilenameQuantBeforeHeader()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(), "model-Q8_0.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+        var filenameQuant = await inspector.InspectAsync(new GgufImportSource(source), CancellationToken.None);
+        AssertEx.Equal("Q8_0", filenameQuant.DetectedQuantization);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var linkedDirectory = Path.Combine(paths.Root, "linked-sources");
+            Directory.CreateSymbolicLink(linkedDirectory, paths.SourceDirectoryPath);
+            var linkedSource = Path.Combine(linkedDirectory, Path.GetFileName(source));
+            var linkedResult = await inspector.InspectAsync(new GgufImportSource(linkedSource), CancellationToken.None);
+            AssertEx.Contains(linkedResult.Rejections, GgufImportRejectionCode.InvalidSource);
+        }
+    }
+
+    [Test]
     public async Task Importer_PreparesCommitsRecoversAndRollsBack_WithoutPersistingSourcePath()
     {
         using var paths = new ImportPaths();
@@ -132,6 +156,25 @@ public sealed class GgufImportFoundationTests
         AssertEx.Equal(receipt.RegistryEntry.RegistryRevision!, recovered.RegistryRevision);
         AssertEx.Equal(receipt.ModelContentFingerprint, recovered.ModelContentFingerprint);
 
+        await File.WriteAllTextAsync(Path.Combine(paths.ModelsDirectory, "index.json"), "{\"models\":[]}");
+        using var partialRegistry = Infra.Registry(options);
+        var reconciled = await partialRegistry.FindAsync(destination.CanonicalModelName, CancellationToken.None);
+        AssertEx.NotNull(reconciled);
+        AssertEx.Equal(receipt.RegistryEntry.RegistryRevision!, reconciled!.RegistryRevision);
+
+        var snapshotStore = new InstalledGgufSnapshotStore(partialRegistry, options);
+        var candidate = await snapshotStore.DiscoverCandidateAsync(destination.CanonicalModelName, CancellationToken.None);
+        AssertEx.NotNull(candidate);
+        var snapshot = await snapshotStore.LoadVerifiedAsync(destination.CanonicalModelName, candidate!, CancellationToken.None);
+        AssertEx.Equal(expected: 2, snapshot.Members.Count);
+        AssertEx.ContainsSingle(snapshot.Members, static member => member.Role == InstalledModelPhysicalMemberRole.Weight);
+        AssertEx.ContainsSingle(snapshot.Members, static member => member.Role == InstalledModelPhysicalMemberRole.Sidecar);
+        AssertEx.ContainsSingle(snapshot.RegistryAliases, alias => alias.RegistryRevision == receipt.RegistryEntry.RegistryRevision);
+        AssertEx.True(GgufRegistryRevision.IsCanonical(snapshot.RegistryAliasSetHash));
+        AssertEx.True(GgufRegistryRevision.IsCanonical(snapshot.PhysicalMemberSetHash));
+        AssertEx.Equal(receipt.ModelContentFingerprint, snapshot.ModelContentFingerprint);
+        AssertEx.False(JsonSerializer.Serialize(snapshot).Contains(paths.Root, StringComparison.Ordinal));
+
         await importer.RollbackCommittedAsync(receipt, CancellationToken.None);
         AssertEx.False(File.Exists(receipt.FinalGgufPath));
         AssertEx.False(File.Exists(receipt.FinalSidecarPath));
@@ -149,8 +192,9 @@ public sealed class GgufImportFoundationTests
         var finalPath = Path.Combine(paths.ModelsDirectory, prepared.Destination.RelativeGgufPath);
         await File.WriteAllTextAsync(finalPath, "do-not-overwrite");
 
-        await AssertEx.ThrowsAsync<IOException>(() => importer.CommitAsync(prepared, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<GgufImportException>(() => importer.CommitAsync(prepared, CancellationToken.None));
 
+        AssertEx.Equal(GgufImportRejectionCode.DestinationConflict, exception.Reason);
         AssertEx.Equal("do-not-overwrite", await File.ReadAllTextAsync(finalPath));
         await importer.DiscardPreparedAsync(prepared, CancellationToken.None);
         AssertEx.False(File.Exists(prepared.TemporaryGgufPath));
@@ -175,6 +219,146 @@ public sealed class GgufImportFoundationTests
         AssertEx.Equal(expected: 0, Directory.EnumerateFiles(paths.ModelsDirectory, "*.part", SearchOption.TopDirectoryOnly).Count());
     }
 
+    [Test]
+    public async Task Importer_CopiesFromValidatedHandle_AndRejectsPathReplacement()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var paths = new ImportPaths();
+        var bytes = BuildCausalGguf().Concat(new byte[200_000]).ToArray();
+        var source = paths.WriteSource(bytes, "source.gguf");
+        var replacement = paths.WriteSource(bytes.Select(static value => (byte)(value ^ 0x5a)).ToArray(), "replacement.gguf");
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+        var replaced = false;
+        var progress = new InlineProgress<GgufImportProgress>(_ =>
+        {
+            if (replaced) return;
+            File.Move(replacement, source, overwrite: true);
+            replaced = true;
+        });
+
+        var exception = await AssertEx.ThrowsAsync<GgufImportException>(() =>
+            importer.PrepareAsync(new GgufImportSource(source), Destination(), progress, CancellationToken.None));
+
+        AssertEx.Equal(GgufImportRejectionCode.InvalidSource, exception.Reason);
+        AssertEx.False(exception.Message.Contains(paths.Root, StringComparison.Ordinal));
+        AssertEx.Equal(expected: 0, Directory.EnumerateFiles(paths.ModelsDirectory, "*.part", SearchOption.TopDirectoryOnly).Count());
+    }
+
+    [Test]
+    public async Task Importer_AllowsCanonicalQuantOverrideOnlyWhenDetectionIsUnavailable()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(includeFileType: false), "model.gguf");
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+
+        var prepared = await importer.PrepareAsync(new GgufImportSource(source), Destination(), progress: null, CancellationToken.None);
+        await importer.DiscardPreparedAsync(prepared, CancellationToken.None);
+
+        var detectedSource = paths.WriteSource(BuildCausalGguf(), "model-Q8_0.gguf");
+        var mismatch = await AssertEx.ThrowsAsync<GgufImportException>(() =>
+            importer.PrepareAsync(new GgufImportSource(detectedSource), Destination(), progress: null, CancellationToken.None));
+        AssertEx.Equal(GgufImportRejectionCode.UnsupportedQuantization, mismatch.Reason);
+    }
+
+    [Test]
+    public async Task Importer_CommitRejectsCaseOnlyCollisionCreatedAfterPrepare()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(), "source.gguf");
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+        var prepared = await importer.PrepareAsync(new GgufImportSource(source), Destination(), progress: null, CancellationToken.None);
+        var caseCollision = Path.Combine(paths.ModelsDirectory, prepared.Destination.RelativeGgufPath.ToUpperInvariant());
+        await File.WriteAllTextAsync(caseCollision, "existing");
+
+        var exception = await AssertEx.ThrowsAsync<GgufImportException>(() => importer.CommitAsync(prepared, CancellationToken.None));
+
+        AssertEx.Equal(GgufImportRejectionCode.DestinationConflict, exception.Reason);
+        AssertEx.Equal("existing", await File.ReadAllTextAsync(caseCollision));
+        await importer.DiscardPreparedAsync(prepared, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Importer_SanitizesMissingSourceFailure()
+    {
+        using var paths = new ImportPaths();
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+        var missing = Path.Combine(paths.SourceDirectoryPath, "private-missing.gguf");
+
+        var exception = await AssertEx.ThrowsAsync<GgufImportException>(() =>
+            importer.PrepareAsync(new GgufImportSource(missing), Destination(), progress: null, CancellationToken.None));
+
+        AssertEx.False(exception.Message.Contains(paths.Root, StringComparison.Ordinal));
+        AssertEx.NotNull(exception.InnerException);
+    }
+
+    [Test]
+    public async Task Sidecar_RejectsNoncanonicalQuantAndPartialProjectorCombination()
+    {
+        using var paths = new ImportPaths();
+        var weightPath = Path.Combine(paths.ModelsDirectory, "demo-Q4_K_M.gguf");
+        await File.WriteAllBytesAsync(weightPath, [1, 2, 3, 4]);
+        var hash = await GgufAcquisitionSidecar.ComputeSha256Async(weightPath, CancellationToken.None);
+        var fingerprint = GgufMemberFingerprint.Compute(hash, sizeBytes: 4);
+        var modelFingerprint = GgufModelContentFingerprint.ComputeV1([
+            new GgufModelContentMember("demo-Q4_K_M.gguf", InstalledModelPhysicalMemberRole.Weight, 4, hash, ["Local/Demo:Q4_K_M"])
+        ]);
+        var entry = new GgufModelRegistryEntry
+        {
+            ModelName = "Local/Demo:Q4_K_M",
+            RepoId = "Local/Demo:Q4_K_M",
+            FileName = "demo-Q4_K_M.gguf",
+            Quant = "Q4_K_M",
+            LocalPath = weightPath,
+            SizeBytes = 4,
+            Sha256 = hash,
+            SourceRevision = $"sha256:{hash}",
+            DownloadedAtUtc = DateTimeOffset.UnixEpoch,
+            Role = GgufRole.Chat,
+            Origin = LocalModelOrigin.Imported,
+            SourceDisplayName = "source.gguf",
+            MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            ModelContentFingerprint = modelFingerprint
+        };
+        var revision = GgufRegistryRevision.ComputeV1(entry, paths.ModelsDirectory);
+        var sidecar = new GgufAcquisitionMetadata
+        {
+            SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            RegistryRevision = revision,
+            ModelName = entry.ModelName,
+            Origin = LocalModelOrigin.Imported,
+            LocalFileName = entry.FileName,
+            Quantization = "q4_k_m",
+            WeightContentSha256 = hash,
+            WeightSizeBytes = 4,
+            WeightMemberFingerprint = fingerprint,
+            SourceDisplayName = "source.gguf",
+            AcquiredAtUtc = DateTimeOffset.UnixEpoch,
+            RegistryRepoId = entry.RepoId,
+            RegistrySourceRevision = entry.SourceRevision,
+            Role = GgufRole.Chat,
+            ProjectorContentSha256 = hash,
+            ModelContentFingerprint = modelFingerprint
+        };
+        var sidecarPath = weightPath + GgufAcquisitionSidecar.Suffix;
+        await GgufAcquisitionSidecar.WriteAsync(sidecarPath, sidecar, CancellationToken.None);
+
+        var valid = await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, weightPath, paths.ModelsDirectory, CancellationToken.None);
+
+        AssertEx.Null(valid);
+    }
+
     private static GgufModelImporter NewImporter(XE_Local_AI_Engine.Providers.HuggingFace.Options.HuggingFaceOptions options,
         GgufModelRegistry registry)
     {
@@ -190,13 +374,17 @@ public sealed class GgufImportFoundationTests
             LocalModelOrigin.Imported);
     }
 
-    private static byte[] BuildCausalGguf(string architecture = "llama")
+    private static byte[] BuildCausalGguf(string architecture = "llama", bool includeFileType = true)
     {
-        return new GgufHeaderBytesBuilder()
-              .WithString("general.architecture", architecture)
-              .WithString("general.type", "model")
-              .WithUint32("general.file_type", value: 15)
-              .Build();
+        var builder = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", architecture)
+                     .WithString("general.type", "model");
+        if (includeFileType)
+        {
+            builder.WithUint32("general.file_type", value: 15);
+        }
+
+        return builder.Build();
     }
 
     private static GgufModelRegistryEntry GoldenEntry()
@@ -230,18 +418,18 @@ public sealed class GgufImportFoundationTests
         {
             Root = Path.Combine(Path.GetTempPath(), "xe-import-foundation-" + Guid.NewGuid().ToString("N"));
             ModelsDirectory = Path.Combine(Root, "models");
-            SourceDirectory = Path.Combine(Root, "sources");
+            SourceDirectoryPath = Path.Combine(Root, "sources");
             Directory.CreateDirectory(ModelsDirectory);
-            Directory.CreateDirectory(SourceDirectory);
+            Directory.CreateDirectory(SourceDirectoryPath);
         }
 
         public string Root { get; }
         public string ModelsDirectory { get; }
-        private string SourceDirectory { get; }
+        public string SourceDirectoryPath { get; }
 
         public string WriteSource(byte[] bytes, string fileName)
         {
-            var path = Path.Combine(SourceDirectory, fileName);
+            var path = Path.Combine(SourceDirectoryPath, fileName);
             File.WriteAllBytes(path, bytes);
             return path;
         }

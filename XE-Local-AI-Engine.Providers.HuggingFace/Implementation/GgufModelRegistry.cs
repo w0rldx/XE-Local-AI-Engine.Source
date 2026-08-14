@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -13,7 +12,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///     calls the internal write methods, while the public interface stays read-only. Self-heals by rescanning the
 ///     directory when the manifest is missing or corrupt.
 /// </summary>
-internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposable
+internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 {
     private const string ManifestFileName = "index.json";
 
@@ -60,6 +59,19 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
             // it never touches the file, only the in-memory view; a later write persists the collapse.
             var entries = await LoadEntriesAsync(ct).ConfigureAwait(false);
             return CollapseDuplicatePaths(entries);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    internal async Task<IReadOnlyList<GgufModelRegistryEntry>> ListAllAsync(CancellationToken ct)
+    {
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await LoadEntriesAsync(ct).ConfigureAwait(false);
         }
         finally
         {
@@ -250,7 +262,7 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
 
                 try
                 {
-                    var computed = GgufRegistryRevision.ComputeV1(entry);
+                    var computed = GgufRegistryRevision.ComputeV1(entry, _modelsDirectory);
                     if (entry.RegistryRevision is not null
                         && !string.Equals(entry.RegistryRevision, computed, StringComparison.Ordinal))
                     {
@@ -266,7 +278,13 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
                 }
             }
 
-            return entries;
+            var (reconciled, changed) = await ReconcileWithSidecarsAsync(entries, ct).ConfigureAwait(false);
+            if (changed)
+            {
+                await WriteManifestAsync(reconciled, ct).ConfigureAwait(false);
+            }
+
+            return reconciled;
         }
         catch (JsonException exception)
         {
@@ -315,7 +333,7 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
                 continue;
             }
 
-            if (DeterministicAcquisitionFileName().IsMatch(fileName))
+            if (IsDeterministicAcquisitionFileName(fileName))
             {
                 _logger.LogWarning("Skipping acquired GGUF {FileName}: recovery sidecar is missing.", fileName);
                 continue;
@@ -332,7 +350,7 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
             {
                 info = new FileInfo(path);
             }
-            catch (IOException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 continue;
             }
@@ -379,9 +397,9 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
         return entries;
     }
 
-    private static GgufModelRegistryEntry EnsureRevision(GgufModelRegistryEntry entry)
+    private GgufModelRegistryEntry EnsureRevision(GgufModelRegistryEntry entry)
     {
-        var computed = GgufRegistryRevision.ComputeV1(entry);
+        var computed = GgufRegistryRevision.ComputeV1(entry, _modelsDirectory);
         if (entry.RegistryRevision is not null && !string.Equals(entry.RegistryRevision, computed, StringComparison.Ordinal))
         {
             throw new ArgumentException("The registry revision does not match the material entry value.", nameof(entry));
@@ -390,8 +408,97 @@ internal sealed partial class GgufModelRegistry : IGgufModelRegistry, IDisposabl
         return entry with { RegistryRevision = computed };
     }
 
-    [GeneratedRegex(@"^[a-z0-9][a-z0-9._-]*-[A-Za-z0-9_]+-[0-9a-f]{24}\.gguf$", RegexOptions.CultureInvariant)]
-    private static partial Regex DeterministicAcquisitionFileName();
+    private async Task<(IReadOnlyList<GgufModelRegistryEntry> Entries, bool Changed)> ReconcileWithSidecarsAsync(
+        IReadOnlyList<GgufModelRegistryEntry> manifestEntries,
+        CancellationToken ct)
+    {
+        if (!Directory.Exists(_modelsDirectory))
+        {
+            return ([], manifestEntries.Count != 0);
+        }
+
+        var entries = manifestEntries.ToList();
+        var changed = false;
+        foreach (var path in Directory.EnumerateFiles(_modelsDirectory, "*.gguf", SearchOption.TopDirectoryOnly))
+        {
+            var sidecarPath = path + GgufAcquisitionSidecar.Suffix;
+            if (File.Exists(sidecarPath))
+            {
+                var metadata = await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
+                if (metadata is null)
+                {
+                    changed |= RemoveEntriesForPath(entries, path) > 0;
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: invalid acquisition sidecar.", Path.GetFileName(path));
+                    continue;
+                }
+
+                var recovered = GgufAcquisitionSidecar.ToRegistryEntry(metadata, path, _modelsDirectory);
+                if (!string.Equals(recovered.RegistryRevision, metadata.RegistryRevision, StringComparison.Ordinal))
+                {
+                    changed |= RemoveEntriesForPath(entries, path) > 0;
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: RegistryRevisionMismatch.", Path.GetFileName(path));
+                    continue;
+                }
+
+                var matches = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path))
+                                                     || string.Equals(entry.ModelName, recovered.ModelName, StringComparison.OrdinalIgnoreCase))
+                                     .ToArray();
+                if (matches.Length == 1 && matches[0] == recovered)
+                {
+                    continue;
+                }
+
+                entries.RemoveAll(entry => matches.Contains(entry));
+                entries.Add(recovered);
+                changed = true;
+                continue;
+            }
+
+            if (IsDeterministicAcquisitionFileName(Path.GetFileName(path)))
+            {
+                changed |= RemoveEntriesForPath(entries, path) > 0;
+                _logger.LogWarning("Skipping acquired GGUF {FileName}: recovery sidecar is missing.", Path.GetFileName(path));
+            }
+        }
+
+        var invalidAcquisitions = entries.Where(entry => entry.Origin is not null
+                                                          && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
+                                         .ToArray();
+        if (invalidAcquisitions.Length > 0)
+        {
+            entries.RemoveAll(entry => invalidAcquisitions.Contains(entry));
+            changed = true;
+        }
+
+        return (entries, changed);
+    }
+
+    private static int RemoveEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
+    {
+        return entries.RemoveAll(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
+    }
+
+    private static bool IsDeterministicAcquisitionFileName(string fileName)
+    {
+        if (!string.Equals(Path.GetExtension(fileName), ".gguf", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var separator = stem.LastIndexOf('-');
+        if (separator <= 0 || stem.Length - separator - 1 != 24
+            || !stem.AsSpan(separator + 1).ToString().All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+        {
+            return false;
+        }
+
+        var prefix = stem[..separator];
+        var quant = GgufQuantParser.TryParse(prefix);
+        return quant is not null
+               && (prefix.EndsWith(quant, StringComparison.OrdinalIgnoreCase)
+                   || prefix.EndsWith(quant.Replace("UD-", "UD_", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase));
+    }
 
     // Caller holds the lock.
     private async Task WriteManifestAsync(IReadOnlyList<GgufModelRegistryEntry> entries, CancellationToken ct)

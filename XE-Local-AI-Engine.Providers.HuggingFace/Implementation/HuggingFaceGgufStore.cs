@@ -178,28 +178,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var existing = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
             if (existing is not null && File.Exists(existing.LocalPath))
             {
-                // Backfill a missing projector: a vision GGUF installed before this feature, or one whose projector
-                // download failed transiently, has weights but no usable mmproj — without this it would stay text-only
-                // forever, since the reuse path never re-downloads. Paired to the installed weights' revision. A projector
-                // failure still degrades to text-only. Skipped for a draft file (never a projector consumer).
-                if (!GgufDraftModel.IsDraftQuant(existing.Quant)
-                    && (existing.ProjectorLocalPath is null || !File.Exists(existing.ProjectorLocalPath)))
-                {
-                    var backfill = await TryEnsureProjectorAsync(existing.RepoId, existing.FileName, existing.SourceRevision, ct).ConfigureAwait(false);
-                    if (backfill.LocalPath is not null)
-                    {
-                        existing = existing with
-                        {
-                            ProjectorFileName = backfill.SourceDisplayName,
-                            ProjectorLocalPath = backfill.LocalPath,
-                            ProjectorSizeBytes = backfill.SizeBytes,
-                            ProjectorSha256 = backfill.ContentSha256,
-                            RegistryRevision = null
-                        };
-                        existing = existing with { RegistryRevision = GgufRegistryRevision.ComputeV1(existing) };
-                        await _registry.UpsertAsync(existing, ct).ConfigureAwait(false);
-                    }
-                }
+                // Projector backfill is intentionally fail-closed here. Retrofitting a projector changes the complete
+                // member set, aggregate fingerprint, universal sidecar, and registry revision and therefore belongs to
+                // the coordinated acquisition transaction rather than this legacy offline-reuse fast path.
 
                 progress?.Report(new PullProgress
                 {
@@ -279,11 +260,11 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 ModelContentFingerprint = modelContentFingerprint
             };
 
-            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry) };
+            entry = entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory) };
             var sidecar = new GgufAcquisitionMetadata
             {
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                RegistryRevision = entry.RegistryRevision,
+                RegistryRevision = entry.RegistryRevision!,
                 ModelName = modelName,
                 Origin = LocalModelOrigin.HuggingFace,
                 LocalFileName = entry.FileName,
@@ -291,7 +272,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 WeightContentSha256 = weightHash,
                 WeightSizeBytes = entry.SizeBytes,
                 WeightMemberFingerprint = weightFingerprint,
-                SourceDisplayName = entry.SourceDisplayName,
+                SourceDisplayName = entry.SourceDisplayName!,
                 AcquiredAtUtc = acquiredAt,
                 RegistryRepoId = entry.RepoId,
                 RegistrySourceRevision = entry.SourceRevision,
@@ -609,7 +590,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 File.Delete(path);
             }
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             // Best-effort delete; the registry entry is removed regardless so the model is no longer offered.
         }

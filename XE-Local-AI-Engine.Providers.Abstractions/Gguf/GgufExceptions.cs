@@ -19,7 +19,10 @@ public enum HuggingFaceDownloadFailure
     HashMismatch = 4,
 
     /// <summary>The requested repo, revision, or file was not found.</summary>
-    NotFound = 5
+    NotFound = 5,
+
+    /// <summary>The final managed destination already exists, including a case-only filesystem collision.</summary>
+    DestinationConflict = 6
 }
 
 /// <summary>
