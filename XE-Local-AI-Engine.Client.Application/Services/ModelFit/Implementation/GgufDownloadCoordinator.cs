@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using AcquisitionKind = XE_Local_AI_Engine.Client.Services.ModelFit.GgufAcquisitionOperationKind;
+using AcquisitionKind = GgufAcquisitionOperationKind;
 using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 /// <summary>
@@ -127,7 +127,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         return MapStatus(_operations.GetNewest(AcquisitionKind.Download, modelName));
     }
 
-    public GgufDownloadStatus? GetStatus(Guid operationId) => MapStatus(_operations.GetStatus(operationId));
+    public GgufDownloadStatus? GetStatus(Guid operationId) =>
+        MapStatus(_operations.GetStatus(operationId));
 
     public IReadOnlyList<GgufDownloadStatus> ListStatuses() =>
         _operations.List(AcquisitionKind.Download).Select(MapStatus).OfType<GgufDownloadStatus>().ToArray();
@@ -562,10 +563,10 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             status.ErrorCode);
     }
 
-    private static bool IsActive(GgufAcquisitionPhase phase) => phase is GgufAcquisitionPhase.Validating
-        or GgufAcquisitionPhase.Downloading
-        or GgufAcquisitionPhase.Copying
-        or GgufAcquisitionPhase.Committing
-        or GgufAcquisitionPhase.Running;
-
+    private static bool IsActive(GgufAcquisitionPhase phase) =>
+        phase is GgufAcquisitionPhase.Validating
+            or GgufAcquisitionPhase.Downloading
+            or GgufAcquisitionPhase.Copying
+            or GgufAcquisitionPhase.Committing
+            or GgufAcquisitionPhase.Running;
 }

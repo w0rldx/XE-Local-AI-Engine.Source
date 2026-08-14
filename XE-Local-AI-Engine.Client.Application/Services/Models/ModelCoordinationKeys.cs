@@ -33,11 +33,14 @@ public static class ModelCoordinationKeys
         return string.Join('/', segments).ToUpper(CultureInfo.InvariantCulture);
     }
 
-    public static string Model(string modelName) => $"0:model:{NormalizeModelName(modelName)}";
+    public static string Model(string modelName) =>
+        $"0:model:{NormalizeModelName(modelName)}";
 
-    public static string Path(string relativePath) => $"1:path:{NormalizeRelativePath(relativePath)}";
+    public static string Path(string relativePath) =>
+        $"1:path:{NormalizeRelativePath(relativePath)}";
 
-    public static string ProviderMap(string modelName) => $"2:provider-map:{NormalizeModelName(modelName)}";
+    public static string ProviderMap(string modelName) =>
+        $"2:provider-map:{NormalizeModelName(modelName)}";
 
     public static IReadOnlyList<string> NormalizeSet(IEnumerable<string> keys)
     {

@@ -21,7 +21,15 @@ internal sealed class BenchmarkWorkItemConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.FinishedAtUtc).HasColumnName("finished_at_utc");
         builder.Property(entity => entity.ErrorMessage).HasColumnName("error_message").HasMaxLength(1024);
         builder.HasOne<BenchmarkRun>().WithMany().HasForeignKey(entity => entity.RunId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(entity => new { entity.RunId, entity.Kind }).IsUnique().HasDatabaseName("ux_benchmark_work_items_run_kind");
-        builder.HasIndex(entity => new { entity.Status, entity.QueueSequence }).HasDatabaseName("ix_benchmark_work_items_status_sequence");
+        builder.HasIndex(entity => new
+        {
+            entity.RunId,
+            entity.Kind
+        }).IsUnique().HasDatabaseName("ux_benchmark_work_items_run_kind");
+        builder.HasIndex(entity => new
+        {
+            entity.Status,
+            entity.QueueSequence
+        }).HasDatabaseName("ix_benchmark_work_items_status_sequence");
     }
 }

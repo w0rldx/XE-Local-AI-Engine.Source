@@ -16,36 +16,50 @@ public interface IBenchmarkStore
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
         long lastStreamSequence,
-        CancellationToken cancellationToken = default) => MarkPrimaryFailedAsync(runId, expectedRunVersion, errorMessage, cancellationToken);
+        CancellationToken cancellationToken = default) =>
+        MarkPrimaryFailedAsync(runId, expectedRunVersion, errorMessage, cancellationToken);
+
     Task<BenchmarkRunRecord> MarkPrimaryCancelledAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkPrimaryCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
-        CancellationToken cancellationToken = default) => MarkPrimaryCancelledAsync(runId, expectedRunVersion, cancellationToken);
+        CancellationToken cancellationToken = default) =>
+        MarkPrimaryCancelledAsync(runId, expectedRunVersion, cancellationToken);
+
     Task<BenchmarkRunRecord> MarkJudgeSucceededAsync(BenchmarkJudgeSuccessCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
         long lastStreamSequence,
-        CancellationToken cancellationToken = default) => MarkJudgeFailedAsync(runId, expectedRunVersion, errorMessage, cancellationToken);
+        CancellationToken cancellationToken = default) =>
+        MarkJudgeFailedAsync(runId, expectedRunVersion, errorMessage, cancellationToken);
+
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
-        CancellationToken cancellationToken = default) => MarkJudgeCancelledAsync(runId, expectedRunVersion, cancellationToken);
+        CancellationToken cancellationToken = default) =>
+        MarkJudgeCancelledAsync(runId, expectedRunVersion, cancellationToken);
+
     Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> SetUserScoreAsync(Guid runId, int score, long expectedRunVersion, CancellationToken cancellationToken = default);
     Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default);
+
     async Task<IReadOnlyList<BenchmarkRunRecord>> RecoverRunsOnStartupAsync(CancellationToken cancellationToken = default)
     {
         _ = await RecoverOnStartupAsync(cancellationToken).ConfigureAwait(false);
         return [];
     }
+
     Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
 }
 
@@ -156,9 +170,12 @@ public sealed record BenchmarkClaimedWork(
     BenchmarkRunRecord Run);
 
 public abstract class BenchmarkStoreException(string message) : InvalidOperationException(message);
+
 public sealed class BenchmarkNotFoundException(string message) : BenchmarkStoreException(message);
+
 public sealed class BenchmarkConflictException(string code) : BenchmarkStoreException(code)
 {
     public string Code { get; } = code;
 }
+
 public sealed class BenchmarkValidationException(string message) : BenchmarkStoreException(message);

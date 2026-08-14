@@ -14,7 +14,6 @@ public interface IRuntimePackageValidator
     ///         re-validated the same row and failed again, so the user had to abandon the conversation.
     ///     </para>
     /// </summary>
-    RuntimePackageValidationResult Validate(
-        global::XE_Local_AI_Engine.Client.Models.RuntimePackage package,
+    RuntimePackageValidationResult Validate(Client.Models.RuntimePackage package,
         bool enforceMessageSizeCap = true);
 }

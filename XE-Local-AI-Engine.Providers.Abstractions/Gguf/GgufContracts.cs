@@ -49,6 +49,7 @@ public sealed record GgufModelRegistryEntry
 
     /// <summary>Typed acquisition provenance; <see langword="null" /> only for legacy entries.</summary>
     public LocalModelOrigin? Origin { get; init; }
+
     /// <summary>Registry key — repo + quant identity, e.g. <c>bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M</c>.</summary>
     public required string ModelName { get; init; }
 

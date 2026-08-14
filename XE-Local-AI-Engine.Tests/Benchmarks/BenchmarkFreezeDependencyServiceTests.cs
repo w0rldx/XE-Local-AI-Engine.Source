@@ -22,7 +22,10 @@ public sealed class BenchmarkFreezeDependencyServiceTests
         skills.GetByIdAsync(skillId, Arg.Any<CancellationToken>()).Returns(Skill(skillId));
         var resourceContent = "first";
         skills.ListResourcesAsync(skillId, Arg.Any<CancellationToken>()).Returns(_ =>
-            new[] { new AgentSkillResourceRecord(Guid.Parse("11111111-1111-1111-1111-111111111111"), skillId, "notes.md", "notes", "text/markdown", resourceContent, resourceContent.Length) });
+            new[]
+            {
+                new AgentSkillResourceRecord(Guid.Parse("11111111-1111-1111-1111-111111111111"), skillId, "notes.md", "notes", "text/markdown", resourceContent, resourceContent.Length)
+            });
         var customTools = Substitute.For<ICustomToolStore>();
         customTools.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         var profiles = Substitute.For<IInferenceProfileStore>();

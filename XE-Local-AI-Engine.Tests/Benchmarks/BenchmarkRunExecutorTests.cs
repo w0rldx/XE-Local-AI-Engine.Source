@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -31,10 +32,10 @@ public sealed class BenchmarkRunExecutorTests
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
         store.MarkPrimaryFailedAsync(run.Id,
-                run.Version,
-                Arg.Do<string>(message => AssertEx.Contains(message, "installed model changed")),
-                Arg.Do<long>(sequence => AssertEx.True(sequence > 0)),
-                Arg.Any<CancellationToken>())
+                 run.Version,
+                 Arg.Do<string>(message => AssertEx.Contains(message, "installed model changed")),
+                 Arg.Do<long>(sequence => AssertEx.True(sequence > 0)),
+                 Arg.Any<CancellationToken>())
              .Returns(call => failed = run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -73,7 +74,10 @@ public sealed class BenchmarkRunExecutorTests
     [Test]
     public async Task Execute_SuccessUsesFrozenContextPersistsCanonicalPartsAndDisposesOwnedResources()
     {
-        var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with { JudgeStatus = BenchmarkJudgeStatus.Pending };
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
+        {
+            JudgeStatus = BenchmarkJudgeStatus.Pending
+        };
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
         BenchmarkPrimarySuccessCommand? command = null;
@@ -87,9 +91,9 @@ public sealed class BenchmarkRunExecutorTests
              });
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        XE_Local_AI_Engine.Client.Models.RuntimePackage? assignedPackage = null;
+        RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Do<XE_Local_AI_Engine.Client.Models.RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
                   .Returns(assignment);
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -159,7 +163,7 @@ public sealed class BenchmarkRunExecutorTests
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Any<XE_Local_AI_Engine.Client.Models.RuntimePackage>(), Arg.Any<CancellationToken>())
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                   .Returns(assignment);
         var cancellationRegistry = new BenchmarkCancellationRegistry();
         var runner = Substitute.For<IInvocationRunner>();
@@ -196,7 +200,7 @@ public sealed class BenchmarkRunExecutorTests
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Any<XE_Local_AI_Engine.Client.Models.RuntimePackage>(), Arg.Any<CancellationToken>())
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                   .Returns(assignment);
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -223,7 +227,10 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status, long version) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), new byte[] { 1 }, "model.gguf", LocalModelOrigin.Imported, V1('a'), "Agent", 1, 8192,
+        new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
+            {
+                1
+            }, "model.gguf", LocalModelOrigin.Imported, V1('a'), "Agent", 1, 8192,
             status, null, null, null, null, null, 0, null, BenchmarkJudgeStatus.Disabled, null, null, null, version,
             1, 1, null, null, null, 1);
 
@@ -253,17 +260,18 @@ public sealed class BenchmarkRunExecutorTests
         InvocationStatus status,
         string content,
         int? totalTokens = null,
-        long? durationMs = null) => new()
-    {
-        InvocationId = invocationId,
-        ConversationId = Guid.NewGuid(),
-        Status = status,
-        StreamedContent = content,
-        StartedAt = DateTimeOffset.UnixEpoch,
-        LastUpdatedAt = DateTimeOffset.UnixEpoch,
-        TotalTokens = totalTokens,
-        GenerationDurationMs = durationMs
-    };
+        long? durationMs = null) =>
+        new()
+        {
+            InvocationId = invocationId,
+            ConversationId = Guid.NewGuid(),
+            Status = status,
+            StreamedContent = content,
+            StartedAt = DateTimeOffset.UnixEpoch,
+            LastUpdatedAt = DateTimeOffset.UnixEpoch,
+            TotalTokens = totalTokens,
+            GenerationDurationMs = durationMs
+        };
 
     private static InstalledModelSnapshot Installed(string name, char fingerprintCharacter)
     {
@@ -273,14 +281,16 @@ public sealed class BenchmarkRunExecutorTests
             revision,
             [],
             revision,
-            [new InstalledModelPhysicalMember(name,
-                InstalledModelPhysicalMemberRole.Weight,
-                12,
-                new string('d', 64),
-                $"sha256:{new string('d', 64)}:12",
-                [name],
-                true,
-                null)],
+            [
+                new InstalledModelPhysicalMember(name,
+                    InstalledModelPhysicalMemberRole.Weight,
+                    12,
+                    new string('d', 64),
+                    $"sha256:{new string('d', 64)}:12",
+                    [name],
+                    true,
+                    null)
+            ],
             revision,
             LocalModelOrigin.Imported,
             "llamacpp",
@@ -299,14 +309,14 @@ public sealed class BenchmarkRunExecutorTests
             [],
             model.RegistryAliasSetHash,
             model.Members.Select(static member => new BenchmarkPhysicalMemberSnapshotV1(member.RelativePath,
-                    member.Role,
-                    member.SizeBytes,
-                    member.Sha256,
-                    member.OwningAliases,
-                    member.Required,
-                    member.MetadataSchemaVersion,
-                    member.MemberFingerprint))
-                .ToArray(),
+                     member.Role,
+                     member.SizeBytes,
+                     member.Sha256,
+                     member.OwningAliases,
+                     member.Required,
+                     member.MetadataSchemaVersion,
+                     member.MemberFingerprint))
+                 .ToArray(),
             model.PhysicalMemberSetHash,
             model.Origin,
             model.ProviderName!,
@@ -334,7 +344,8 @@ public sealed class BenchmarkRunExecutorTests
             "hash");
     }
 
-    private static string V1(char value) => $"v1:{new string(value, 64)}";
+    private static string V1(char value) =>
+        $"v1:{new string(value, 64)}";
 
     private static BenchmarkLlamaRuntimeSnapshotV1 Runtime() =>
         new(GpuVariant.Cpu, 8192, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
@@ -350,17 +361,17 @@ public sealed class BenchmarkRunExecutorTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
-                Arg.Any<ModelRole>(),
-                Arg.Any<ResolvedLaunchArguments>(),
-                Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
-                Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
-                Arg.Any<CancellationToken>())
-            .Returns(call =>
-            {
-                var modelName = call.ArgAt<string>(0);
-                var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), []);
-                return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
-            });
+                      Arg.Any<ModelRole>(),
+                      Arg.Any<ResolvedLaunchArguments>(),
+                      Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                      Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                      Arg.Any<CancellationToken>())
+                  .Returns(call =>
+                  {
+                      var modelName = call.ArgAt<string>(0);
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), []);
+                      return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
+                  });
         return supervisor;
     }
 
@@ -371,13 +382,19 @@ public sealed class BenchmarkRunExecutorTests
         return binding;
     }
 
-    private static BenchmarkEventBuffer Buffer() => new(Options.Create(new BenchmarkEventBufferOptions()));
+    private static BenchmarkEventBuffer Buffer() =>
+        new(Options.Create(new BenchmarkEventBufferOptions()));
 
     private sealed class FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
     {
-        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) => throw new NotSupportedException();
-        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) => throw new NotSupportedException();
-        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) => snapshot;
+        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
+            throw new NotSupportedException();
+
+        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) =>
+            throw new NotSupportedException();
+
+        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) =>
+            snapshot;
     }
 
     private sealed class FixedLeaseProvider(FakeLease lease) : IBenchmarkInstalledModelLeaseProvider
@@ -405,7 +422,7 @@ public sealed class BenchmarkRunExecutorTests
         public CapacityRequest? LastRequest { get; private set; }
         public TrackingDisposable? Reservation { get; private set; }
 
-        public Task<CapacityDecision> DecideAsync(string modelName, XE_Local_AI_Engine.Providers.LlamaServer.ModelRole role, CancellationToken ct)
+        public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct)
         {
             DecisionCount++;
             return Task.FromResult(new CapacityDecision(CapacityVerdict.Allow, "allowed", false));
@@ -423,7 +440,9 @@ public sealed class BenchmarkRunExecutorTests
     private sealed class TrackingDisposable : IDisposable
     {
         public bool Disposed { get; private set; }
-        public void Dispose() => Disposed = true;
+
+        public void Dispose() =>
+            Disposed = true;
     }
 
     private sealed class TrackingAsyncDisposable : IAsyncDisposable

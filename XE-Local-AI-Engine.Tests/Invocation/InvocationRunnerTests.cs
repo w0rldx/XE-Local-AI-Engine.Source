@@ -3789,14 +3789,12 @@ public sealed class InvocationRunnerTests
 
             if (context.EffectiveContextTokens is null)
             {
-                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(
-                    InvocationGenerationAdmissionReasonCodes.EffectiveContextUnavailable));
+                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(InvocationGenerationAdmissionReasonCodes.EffectiveContextUnavailable));
             }
 
             if (context.EffectiveContextTokens < requiredContextTokens)
             {
-                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(
-                    InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient));
+                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient));
             }
 
             return Task.FromResult(InvocationGenerationAdmissionDecision.Allow);

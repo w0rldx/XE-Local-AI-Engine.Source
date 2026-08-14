@@ -174,7 +174,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             var candidate = await _dbContext.BenchmarkWorkItems.AsNoTracking()
                                             .Where(entity => entity.Status == BenchmarkWorkStatus.Queued)
                                             .OrderBy(entity => entity.QueueSequence)
-                                            .Select(entity => new { entity.QueueSequence, entity.Version })
+                                            .Select(entity => new
+                                            {
+                                                entity.QueueSequence,
+                                                entity.Version
+                                            })
                                             .FirstOrDefaultAsync(cancellationToken)
                                             .ConfigureAwait(false);
             if (candidate is null)
@@ -189,9 +193,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                                            && entity.Version == candidate.Version
                                                            && entity.Status == BenchmarkWorkStatus.Queued)
                                           .ExecuteUpdateAsync(setters => setters
-                                              .SetProperty(entity => entity.Status, BenchmarkWorkStatus.Running)
-                                              .SetProperty(entity => entity.StartedAtUtc, now)
-                                              .SetProperty(entity => entity.Version, nextVersion), cancellationToken)
+                                                                         .SetProperty(entity => entity.Status, BenchmarkWorkStatus.Running)
+                                                                         .SetProperty(entity => entity.StartedAtUtc, now)
+                                                                         .SetProperty(entity => entity.Version, nextVersion), cancellationToken)
                                           .ConfigureAwait(false);
             if (claimed == 0)
             {
@@ -238,6 +242,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         {
             throw new BenchmarkValidationException("Successful primary output cannot be empty.");
         }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         await AcquireWorkCompletionAsync(command.RunId, BenchmarkWorkKind.Primary, command.ExpectedWorkVersion, cancellationToken).ConfigureAwait(false);
         _dbContext.ChangeTracker.Clear();
@@ -327,6 +332,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         {
             throw new BenchmarkValidationException("Successful judge output cannot be empty.");
         }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         await AcquireWorkCompletionAsync(command.RunId, BenchmarkWorkKind.Judge, command.ExpectedWorkVersion, cancellationToken).ConfigureAwait(false);
         _dbContext.ChangeTracker.Clear();
@@ -552,8 +558,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return recoveredRunIds
-                         .Select(id => ToRecord(_dbContext.BenchmarkRuns.Local.Single(run => run.Id == id)))
-                         .ToArray();
+               .Select(id => ToRecord(_dbContext.BenchmarkRuns.Local.Single(run => run.Id == id)))
+               .ToArray();
     }
 
     public async Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
@@ -682,11 +688,17 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            throw new BenchmarkConflictException("VersionConflict") { Source = exception.Source };
+            throw new BenchmarkConflictException("VersionConflict")
+            {
+                Source = exception.Source
+            };
         }
         catch (DbUpdateException exception) when (exception.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true)
         {
-            throw new BenchmarkConflictException("DuplicateWork") { Source = exception.Source };
+            throw new BenchmarkConflictException("DuplicateWork")
+            {
+                Source = exception.Source
+            };
         }
     }
 
@@ -756,7 +768,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return normalized.Length <= 1024 ? normalized : normalized[..1024];
     }
 
-    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private static void UpdateLastStreamSequence(BenchmarkRun run, long sequence)
     {
         if (sequence > run.LastStreamSequence)
@@ -765,7 +779,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
     }
 
-    private long Now() => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+    private long Now() =>
+        _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId, entity.JudgeEnabled,

@@ -7,8 +7,7 @@ public sealed class ProviderMapCoordinationArchitectureTests
     [Test]
     public void ProductionComposition_RegistersSharedCoordinationDomainAndFacades()
     {
-        var source = File.ReadAllText(RepositoryPaths.Combine(
-            "XE-Local-AI-Engine.Client.Application",
+        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.Application",
             "DependencyInjection",
             "Modules",
             "AddNodeWorkspaceAndAgentsExtensions.cs"));
@@ -41,7 +40,11 @@ public sealed class ProviderMapCoordinationArchitectureTests
             "XE-Local-AI-Engine.Client.Application/Services/Models/CoordinatedModelProviderMapStore.cs"
         };
         var violations = new List<string>();
-        foreach (var project in new[] { "XE-Local-AI-Engine.Client.Application", "XE-Local-AI-Engine.Client" })
+        foreach (var project in new[]
+                 {
+                     "XE-Local-AI-Engine.Client.Application",
+                     "XE-Local-AI-Engine.Client"
+                 })
         {
             var projectRoot = RepositoryPaths.Combine(project);
             foreach (var path in Directory.EnumerateFiles(projectRoot, "*.cs", SearchOption.AllDirectories)
@@ -86,5 +89,6 @@ public sealed class ProviderMapCoordinationArchitectureTests
         return false;
     }
 
-    private static bool IsIdentifierCharacter(char value) => value == '_' || char.IsLetterOrDigit(value);
+    private static bool IsIdentifierCharacter(char value) =>
+        value == '_' || char.IsLetterOrDigit(value);
 }

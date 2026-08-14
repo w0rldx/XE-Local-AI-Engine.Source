@@ -39,7 +39,9 @@ public sealed class BenchmarkEndpointTests
         using var request = new HttpRequestMessage(new HttpMethod(method), Api + path);
         if (method is "POST" or "PUT" or "DELETE")
         {
-            request.Content = JsonContent.Create(new { });
+            request.Content = JsonContent.Create(new
+            {
+            });
         }
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -51,50 +53,54 @@ public sealed class BenchmarkEndpointTests
     public async Task ListProjects_ReturnsSafeSummariesWithoutCoreTask()
     {
         await using var context = CreateContext();
-            context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
-            context.Store.ListRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([Run()]);
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
+        context.Store.ListRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([Run()]);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-            AssertEx.Contains(body, "\"runCount\":1", StringComparison.Ordinal);
-            AssertEx.Contains(body, "\"isFrozen\":true", StringComparison.Ordinal);
-            AssertEx.False(body.Contains("coreTask", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(body, "\"runCount\":1", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"isFrozen\":true", StringComparison.Ordinal);
+        AssertEx.False(body.Contains("coreTask", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
     public async Task GetRun_ReturnsPersistentOutputButNeverRuntimeSnapshot()
     {
         await using var context = CreateContext();
-            context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(output: "[{\"type\":\"text\",\"text\":\"ok\"}]"));
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(output: "[{\"type\":\"text\",\"text\":\"ok\"}]"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-            AssertEx.Contains(body, "\"outputParts\"", StringComparison.Ordinal);
-            AssertEx.Contains(body, "\"text\":\"ok\"", StringComparison.Ordinal);
-            AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
-            AssertEx.False(body.Contains("secret-runtime", StringComparison.Ordinal));
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(body, "\"outputParts\"", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"text\":\"ok\"", StringComparison.Ordinal);
+        AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
+        AssertEx.False(body.Contains("secret-runtime", StringComparison.Ordinal));
     }
 
     [Test]
     public async Task StartRun_ReturnsAcceptedWithSafeRunDetail()
     {
         await using var context = CreateContext();
-            context.RunFreeze.StartAsync(ProjectId, "model", 4, Arg.Any<CancellationToken>()).Returns(Run());
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
-                new { modelName = "model", expectedProjectVersion = 4 });
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, Arg.Any<CancellationToken>()).Returns(Run());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-            AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
-            AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
+        AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
@@ -121,99 +127,108 @@ public sealed class BenchmarkEndpointTests
     public async Task CreateProject_WhenAgentIsIneligible_ReturnsUnprocessableEntity()
     {
         await using var context = CreateContext();
-            context.Projects.CreateAsync(Arg.Any<BenchmarkProjectDraft>(), Arg.Any<CancellationToken>())
-                   .Returns<Task<BenchmarkProjectRecord>>(_ => throw new BenchmarkEligibilityException("The selected agent is not eligible."));
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Post, Api + "/projects", ProjectMutation());
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        context.Projects.CreateAsync(Arg.Any<BenchmarkProjectDraft>(), Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkProjectRecord>>(_ => throw new BenchmarkEligibilityException("The selected agent is not eligible."));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + "/projects", ProjectMutation());
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-            using var document = JsonDocument.Parse(body);
-            AssertEx.Equal(nameof(BenchmarkErrorCode.IneligibleAgent), document.RootElement.GetProperty("code").GetString());
+        AssertEx.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(nameof(BenchmarkErrorCode.IneligibleAgent), document.RootElement.GetProperty("code").GetString());
     }
 
     [Test]
     public async Task UpdateProject_WhenFrozen_ReturnsConflictWithSafeCode()
     {
         await using var context = CreateContext();
-            context.Projects.UpdateAsync(ProjectId, 4, Arg.Any<BenchmarkProjectDraft>(), Arg.Any<CancellationToken>())
-                   .Returns<Task<BenchmarkProjectRecord>>(_ => throw new BenchmarkConflictException("ProjectFrozen"));
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/projects/{ProjectId}", ProjectMutation(expectedVersion: 4));
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        context.Projects.UpdateAsync(ProjectId, 4, Arg.Any<BenchmarkProjectDraft>(), Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkProjectRecord>>(_ => throw new BenchmarkConflictException("ProjectFrozen"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/projects/{ProjectId}", ProjectMutation(expectedVersion: 4));
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            using var document = JsonDocument.Parse(body);
-            AssertEx.Equal(nameof(BenchmarkErrorCode.ProjectFrozen), document.RootElement.GetProperty("code").GetString());
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(nameof(BenchmarkErrorCode.ProjectFrozen), document.RootElement.GetProperty("code").GetString());
     }
 
     [Test]
     public async Task ScoreRun_WhenScoreIsInvalid_ReturnsBadRequest()
     {
         await using var context = CreateContext();
-            context.Store.SetUserScoreAsync(RunId, 6, 3, Arg.Any<CancellationToken>())
-                   .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkValidationException("Score must be between 1 and 5."));
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new { score = 6, expectedVersion = 3 });
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+        context.Store.SetUserScoreAsync(RunId, 6, 3, Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkValidationException("Score must be between 1 and 5."));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
+        {
+            score = 6,
+            expectedVersion = 3
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Test]
     public async Task CancelPrimary_AfterPrimarySucceeded_MapsCancellationServiceConflict()
     {
         await using var context = CreateContext();
-            context.Cancellation.CancelAsync(RunId,
-                    3,
-                    BenchmarkCancellationTarget.Primary,
-                    Arg.Any<CancellationToken>())
-                   .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("PrimaryAlreadySucceeded"));
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/runs/{RunId}/cancel",
-                new { target = "Primary", expectedVersion = 3 });
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+        context.Cancellation.CancelAsync(RunId,
+                   3,
+                   BenchmarkCancellationTarget.Primary,
+                   Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("PrimaryAlreadySucceeded"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/runs/{RunId}/cancel",
+            new
+            {
+                target = "Primary",
+                expectedVersion = 3
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            await context.Cancellation.Received(1).CancelAsync(RunId,
-                3,
-                BenchmarkCancellationTarget.Primary,
-                Arg.Any<CancellationToken>());
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await context.Cancellation.Received(1).CancelAsync(RunId,
+            3,
+            BenchmarkCancellationTarget.Primary,
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task EligibleModels_SerializesSharedOriginExactlyLowercase()
     {
         await using var context = CreateContext();
-            context.Catalog.ListEligibleModelsAsync(null, Arg.Any<CancellationToken>())
-                   .Returns([new BenchmarkEligibleModel("model", 8192, null, LocalModelOrigin.Imported, "v1:aggregate", true)]);
-            using var client = context.Factory.CreateClient();
-            using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/eligible-models");
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        context.Catalog.ListEligibleModelsAsync(null, Arg.Any<CancellationToken>())
+               .Returns([new BenchmarkEligibleModel("model", 8192, null, LocalModelOrigin.Imported, "v1:aggregate", true)]);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/eligible-models");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-            AssertEx.Contains(body, "\"origin\":\"imported\"", StringComparison.Ordinal);
-            AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(body, "\"origin\":\"imported\"", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
     }
 
     private static readonly Guid ProjectId = Guid.Parse("10000000-0000-0000-0000-000000000001");
     private static readonly Guid RunId = Guid.Parse("20000000-0000-0000-0000-000000000002");
     private static readonly Guid AgentId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
-    private static object ProjectMutation(long? expectedVersion = null) => new
-    {
-        name = "Project",
-        coreTask = "Answer exactly.",
-        contextTokens = 4096,
-        agentDefinitionId = AgentId,
-        judgeEnabled = false,
-        judgePromptVersion = 1,
-        judgeOutputSchemaVersion = 1,
-        expectedVersion
-    };
+    private static object ProjectMutation(long? expectedVersion = null) =>
+        new
+        {
+            name = "Project",
+            coreTask = "Answer exactly.",
+            contextTokens = 4096,
+            agentDefinitionId = AgentId,
+            judgeEnabled = false,
+            judgePromptVersion = 1,
+            judgeOutputSchemaVersion = 1,
+            expectedVersion
+        };
 
     private static BenchmarkProjectRecord Project(bool isFrozen) =>
         new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, false, null, null, 1, 1,
@@ -264,7 +279,8 @@ public sealed class BenchmarkEndpointTests
         return request;
     }
 
-    private static Context CreateContext() => new();
+    private static Context CreateContext() =>
+        new();
 
     private sealed class Context : IAsyncDisposable
     {
@@ -296,7 +312,7 @@ public sealed class BenchmarkEndpointTests
             };
         }
 
-        public ValueTask DisposeAsync() => Factory.DisposeAsync();
+        public ValueTask DisposeAsync() =>
+            Factory.DisposeAsync();
     }
-
 }

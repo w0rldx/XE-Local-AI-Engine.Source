@@ -62,7 +62,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
             var requested = current.RegistryAliases.First(alias => string.Equals(alias.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
             var members = await LoadMembersAsync(current.RegistryAliases, cancellationToken).ConfigureAwait(false);
             var contentMembers = members.Where(static member => member.Role is InstalledModelPhysicalMemberRole.Weight
-                                                                or InstalledModelPhysicalMemberRole.Projector)
+                                            or InstalledModelPhysicalMemberRole.Projector)
                                         .Select(static member => new GgufModelContentMember(member.RelativePath,
                                             member.Role,
                                             member.SizeBytes,
@@ -106,8 +106,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         }
     }
 
-    private async Task<IReadOnlyList<InstalledModelPhysicalMember>> LoadMembersAsync(
-        IReadOnlyList<InstalledModelRegistryAliasSnapshot> aliases,
+    private async Task<IReadOnlyList<InstalledModelPhysicalMember>> LoadMembersAsync(IReadOnlyList<InstalledModelRegistryAliasSnapshot> aliases,
         CancellationToken cancellationToken)
     {
         var observations = new Dictionary<string, MemberObservation>(StringComparer.OrdinalIgnoreCase);
@@ -212,8 +211,14 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
     private static IReadOnlyList<GgufModelRegistryEntry> DiscoverAliasClosure(IReadOnlyList<GgufModelRegistryEntry> entries,
         GgufModelRegistryEntry requested)
     {
-        var closure = new List<GgufModelRegistryEntry> { requested };
-        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(requested.LocalPath) };
+        var closure = new List<GgufModelRegistryEntry>
+        {
+            requested
+        };
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            Path.GetFullPath(requested.LocalPath)
+        };
         if (requested.ProjectorLocalPath is not null)
         {
             paths.Add(Path.GetFullPath(requested.ProjectorLocalPath));
@@ -291,7 +296,10 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         }
 
         observations[relativePath] = new MemberObservation(relativePath, role, metadataSchemaVersion,
-            new HashSet<string>(StringComparer.Ordinal) { alias });
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                alias
+            });
     }
 
     private static void VerifyRegistryFingerprints(IReadOnlyList<InstalledModelRegistryAliasSnapshot> aliases,
@@ -325,7 +333,8 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         }
     }
 
-    private sealed record MemberObservation(string RelativePath,
+    private sealed record MemberObservation(
+        string RelativePath,
         InstalledModelPhysicalMemberRole Role,
         int? MetadataSchemaVersion,
         HashSet<string> OwningAliases);

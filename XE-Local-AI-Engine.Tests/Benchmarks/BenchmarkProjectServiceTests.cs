@@ -37,10 +37,8 @@ public sealed class BenchmarkProjectServiceTests
         agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(Definition(agentId, AgentDefinitionKind.Orchestrator));
         var service = new BenchmarkProjectService(store, agents, JudgeModels());
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(
-            new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 1234, agentId, false, null, null)));
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(
-            new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 4096, agentId, false, null, null)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 1234, agentId, false, null, null)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 4096, agentId, false, null, null)));
 
         _ = store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<CancellationToken>());
     }
@@ -57,8 +55,7 @@ public sealed class BenchmarkProjectServiceTests
         agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(Definition(agentId, AgentDefinitionKind.Single));
         var service = new BenchmarkProjectService(store, agents, JudgeModels());
 
-        _ = await service.CreateAsync(new BenchmarkProjectDraft(
-            Guid.NewGuid(),
+        _ = await service.CreateAsync(new BenchmarkProjectDraft(Guid.NewGuid(),
             "Benchmark",
             "task",
             4096,
@@ -83,12 +80,11 @@ public sealed class BenchmarkProjectServiceTests
         missingModels.AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns<Task<IBenchmarkInstalledModelLease>>(_ => throw new KeyNotFoundException());
         var service = new BenchmarkProjectService(store, agents, missingModels);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(new BenchmarkProjectDraft(
-            Guid.NewGuid(), "Benchmark", "task", 4096, agentId, true, "missing", 4096)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 4096, agentId, true, "missing", 4096)));
 
         var installedService = new BenchmarkProjectService(store, agents, JudgeModels());
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => installedService.CreateAsync(new BenchmarkProjectDraft(
-            Guid.NewGuid(), "Benchmark", "task", 4096, agentId, true, "judge", 4096, JudgePromptVersion: 2)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            installedService.CreateAsync(new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 4096, agentId, true, "judge", 4096, JudgePromptVersion: 2)));
 
         _ = store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<CancellationToken>());
     }
@@ -116,14 +112,16 @@ public sealed class BenchmarkProjectServiceTests
             revision,
             [],
             revision,
-            [new InstalledModelPhysicalMember(modelName,
-                InstalledModelPhysicalMemberRole.Weight,
-                12,
-                new string('b', 64),
-                $"sha256:{new string('b', 64)}:12",
-                [modelName],
-                true,
-                null)],
+            [
+                new InstalledModelPhysicalMember(modelName,
+                    InstalledModelPhysicalMemberRole.Weight,
+                    12,
+                    new string('b', 64),
+                    $"sha256:{new string('b', 64)}:12",
+                    [modelName],
+                    true,
+                    null)
+            ],
             revision,
             LocalModelOrigin.Imported,
             "llamacpp",
@@ -138,6 +136,8 @@ public sealed class BenchmarkProjectServiceTests
     private sealed class JudgeLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
     {
         public InstalledModelSnapshot Snapshot { get; } = snapshot;
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public ValueTask DisposeAsync() =>
+            ValueTask.CompletedTask;
     }
 }

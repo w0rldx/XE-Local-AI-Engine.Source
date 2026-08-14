@@ -48,8 +48,8 @@ public sealed class LocalModelDeletionCoordinatorTests
         });
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
-            .ConfigureAwait(false);
+                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
+                          .ConfigureAwait(false);
 
         AssertEx.True(File.Exists(context.WeightPath));
         AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
@@ -86,7 +86,13 @@ public sealed class LocalModelDeletionCoordinatorTests
             var registry = GgufStoreTestInfrastructure.Registry(options);
 #pragma warning restore CA2000
             var weightPath = Path.Combine(directory.Path, "coordinator-Q4_K_M.gguf");
-            var bytes = new byte[] { 1, 3, 3, 7 };
+            var bytes = new byte[]
+            {
+                1,
+                3,
+                3,
+                7
+            };
             await File.WriteAllBytesAsync(weightPath, bytes).ConfigureAwait(false);
             var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
             const string modelName = "local/coordinator:Q4_K_M";
@@ -130,7 +136,8 @@ public sealed class LocalModelDeletionCoordinatorTests
         public void Seed(string modelName) =>
             _rows[modelName] = new ModelProviderMapRecord(modelName, LlamaServerProviderConstants.ProviderName, 1, "revision-1");
 
-        public bool HasMapping(string modelName) => _rows.ContainsKey(modelName);
+        public bool HasMapping(string modelName) =>
+            _rows.ContainsKey(modelName);
 
         public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
             string modelName,
@@ -142,13 +149,15 @@ public sealed class LocalModelDeletionCoordinatorTests
 
         public Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease,
             string modelName,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease,
             string modelName,
             string providerName,
             string? expectedRevision = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,
             ProviderMapMutationReceipt receipt,
@@ -183,8 +192,7 @@ public sealed class LocalModelDeletionCoordinatorTests
             }
 
             _rows.Remove(modelName);
-            return Task.FromResult<ProviderMapRemovalResult>(new ProviderMapRemovalResult.Removed(
-                new ProviderMapMutationReceipt(modelName, current, Mutation: null, WasRemoval: true)));
+            return Task.FromResult<ProviderMapRemovalResult>(new ProviderMapRemovalResult.Removed(new ProviderMapMutationReceipt(modelName, current, Mutation: null, WasRemoval: true)));
         }
 
         private static void Validate(IModelProviderMapReadLease lease, string modelName, bool mutation)

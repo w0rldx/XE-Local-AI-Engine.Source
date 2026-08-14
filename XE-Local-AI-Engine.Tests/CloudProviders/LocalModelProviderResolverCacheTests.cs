@@ -84,9 +84,18 @@ public sealed class LocalModelProviderResolverCacheTests
             return Task.FromResult<ModelProviderMapRecord?>(null);
         }
 
-        public Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease, string modelName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease, string modelName, string providerName, string? expectedRevision = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease, ProviderMapMutationReceipt receipt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease, string modelName, string expectedProvider, string expectedRevision, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease, string modelName, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease, string modelName, string providerName, string? expectedRevision = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease, ProviderMapMutationReceipt receipt, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease, string modelName, string expectedProvider, string expectedRevision,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

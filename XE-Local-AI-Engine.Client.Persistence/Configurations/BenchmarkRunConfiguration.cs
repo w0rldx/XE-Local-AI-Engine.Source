@@ -22,8 +22,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.PrimaryModelName).HasColumnName("primary_model_name").HasMaxLength(255).UseCollation("NOCASE").IsRequired();
         builder.Property(entity => entity.PrimaryModelOrigin)
                .HasColumnName("primary_model_origin")
-               .HasConversion(
-                   static value => ConvertOriginToStore(value),
+               .HasConversion(static value => ConvertOriginToStore(value),
                    static value => ConvertOriginFromStore(value));
         builder.Property(entity => entity.ModelContentFingerprint).HasColumnName("model_content_fingerprint").HasMaxLength(67).IsRequired();
         builder.Property(entity => entity.AgentName).HasColumnName("agent_name").HasMaxLength(200).IsRequired();
@@ -49,22 +48,28 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.JudgeCompletedAtUtc).HasColumnName("judge_completed_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
         builder.HasOne<BenchmarkProject>().WithMany().HasForeignKey(entity => entity.ProjectId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(entity => new { entity.ProjectId, entity.CreatedAtUtc }).HasDatabaseName("ix_benchmark_runs_project_created_at");
+        builder.HasIndex(entity => new
+        {
+            entity.ProjectId,
+            entity.CreatedAtUtc
+        }).HasDatabaseName("ix_benchmark_runs_project_created_at");
     }
 
-    private static string? ConvertOriginToStore(LocalModelOrigin? value) => value switch
-    {
-        null => null,
-        LocalModelOrigin.HuggingFace => "huggingface",
-        LocalModelOrigin.Imported => "imported",
-        _ => throw new InvalidOperationException("Unknown benchmark model origin enum value.")
-    };
+    private static string? ConvertOriginToStore(LocalModelOrigin? value) =>
+        value switch
+        {
+            null => null,
+            LocalModelOrigin.HuggingFace => "huggingface",
+            LocalModelOrigin.Imported => "imported",
+            _ => throw new InvalidOperationException("Unknown benchmark model origin enum value.")
+        };
 
-    private static LocalModelOrigin? ConvertOriginFromStore(string? value) => value switch
-    {
-        null => null,
-        "huggingface" => LocalModelOrigin.HuggingFace,
-        "imported" => LocalModelOrigin.Imported,
-        _ => throw new InvalidOperationException("Unknown benchmark model origin database value.")
-    };
+    private static LocalModelOrigin? ConvertOriginFromStore(string? value) =>
+        value switch
+        {
+            null => null,
+            "huggingface" => LocalModelOrigin.HuggingFace,
+            "imported" => LocalModelOrigin.Imported,
+            _ => throw new InvalidOperationException("Unknown benchmark model origin database value.")
+        };
 }

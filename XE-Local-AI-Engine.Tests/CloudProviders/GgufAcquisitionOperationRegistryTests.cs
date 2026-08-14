@@ -130,8 +130,10 @@ public sealed class GgufAcquisitionOperationRegistryTests
     {
         private DateTimeOffset _utcNow = utcNow;
 
-        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public override DateTimeOffset GetUtcNow() =>
+            _utcNow;
 
-        public void Advance(TimeSpan elapsed) => _utcNow += elapsed;
+        public void Advance(TimeSpan elapsed) =>
+            _utcNow += elapsed;
     }
 }

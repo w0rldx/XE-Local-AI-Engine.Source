@@ -13,14 +13,14 @@ internal sealed class BenchmarkRunHubEventRelay(
     IHubContext<BenchmarkRunHub> hubContext,
     ILogger<BenchmarkRunHubEventRelay> logger) : BackgroundService
 {
-    private readonly Channel<BenchmarkRunStreamEvent> _channel = Channel.CreateBounded<BenchmarkRunStreamEvent>(new BoundedChannelOptions(
-        BenchmarkEventBufferOptions.DefaultMaxEventCount)
+    private readonly Channel<BenchmarkRunStreamEvent> _channel = Channel.CreateBounded<BenchmarkRunStreamEvent>(new BoundedChannelOptions(BenchmarkEventBufferOptions.DefaultMaxEventCount)
     {
         SingleReader = true,
         SingleWriter = false,
         AllowSynchronousContinuations = false,
         FullMode = BoundedChannelFullMode.Wait
     });
+
     private readonly IBenchmarkEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly IHubContext<BenchmarkRunHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
     private readonly ILogger<BenchmarkRunHubEventRelay> _logger = logger ?? throw new ArgumentNullException(nameof(logger));

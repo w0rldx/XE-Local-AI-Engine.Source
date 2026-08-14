@@ -25,7 +25,8 @@ public sealed class BenchmarkRunHub(IBenchmarkStore store, IBenchmarkEventBuffer
     private readonly IBenchmarkEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
-    public static string RunGroup(Guid runId) => $"benchmark-run-{runId:N}";
+    public static string RunGroup(Guid runId) =>
+        $"benchmark-run-{runId:N}";
 
     public async Task Subscribe(Guid runId, long afterSeq)
     {
@@ -49,9 +50,9 @@ public sealed class BenchmarkRunHub(IBenchmarkStore store, IBenchmarkEventBuffer
         if (replay.ResetRequired || run.LastStreamSequence > replay.LatestSequence)
         {
             await Clients.Caller.SendAsync(BenchmarkRunHubEvents.ReplayReset,
-                    new BenchmarkRunReplayReset(runId, latestSequence, run.Version),
-                    cancellationToken)
-                .ConfigureAwait(false);
+                             new BenchmarkRunReplayReset(runId, latestSequence, run.Version),
+                             cancellationToken)
+                         .ConfigureAwait(false);
             return;
         }
 
@@ -61,5 +62,6 @@ public sealed class BenchmarkRunHub(IBenchmarkStore store, IBenchmarkEventBuffer
         }
     }
 
-    public Task Unsubscribe(Guid runId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, RunGroup(runId));
+    public Task Unsubscribe(Guid runId) =>
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, RunGroup(runId));
 }

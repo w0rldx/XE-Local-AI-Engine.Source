@@ -8,7 +8,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-public sealed record CommittedModelDeletion(Guid OperationId,
+public sealed record CommittedModelDeletion(
+    Guid OperationId,
     string RequestedModelName,
     IReadOnlyList<string> RemovedModelNames,
     GgufDeletionStageReceipt StageReceipt);
@@ -33,13 +34,13 @@ public sealed class LocalModelDeletionCoordinator(
     ILogger<LocalModelDeletionCoordinator> logger) : ILocalModelDeletionCoordinator, ILocalModelDeletionJournalReconciler
 {
     private readonly DeletionJournalStore _journals = new(options?.ModelsDirectory
-        ?? throw new ArgumentNullException(nameof(options)), logger);
+                                                          ?? throw new ArgumentNullException(nameof(options)), logger);
 
     public async Task<CommittedModelDeletion> CommitDeleteAsync(string modelName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        await using var lease = await snapshotCoordinator.AcquireMutationAsync(
-            new InstalledModelMutationRequest(modelName, InstalledModelMutationKind.Delete), cancellationToken).ConfigureAwait(false);
+        await using var lease = await snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(modelName, InstalledModelMutationKind.Delete), cancellationToken)
+                                                         .ConfigureAwait(false);
         var snapshot = lease.Snapshot ?? throw new KeyNotFoundException("The installed model was not found.");
         var stagePlan = GgufDeletionStageReceipt.Create(ToProviderSnapshot(snapshot), Guid.NewGuid());
         var mappings = await ReadAliasMappingsAsync(lease, stagePlan.RemovalAliases, cancellationToken).ConfigureAwait(false);
@@ -52,12 +53,20 @@ public sealed class LocalModelDeletionCoordinator(
         try
         {
             staged = await deletionStore.StageAsync(ToProviderSnapshot(snapshot), stagePlan.OperationId, cancellationToken).ConfigureAwait(false);
-            journal = journal with { Phase = DeletionJournalPhase.Staged, StageReceipt = staged };
+            journal = journal with
+            {
+                Phase = DeletionJournalPhase.Staged,
+                StageReceipt = staged
+            };
             await _journals.WriteAsync(journal, cancellationToken).ConfigureAwait(false);
 
             aliasReceipt = await deletionStore.RemoveAliasesByLocalPathAsync(staged, staged.RemovalAliases, cancellationToken)
-                                               .ConfigureAwait(false);
-            journal = journal with { Phase = DeletionJournalPhase.AliasesRemoved, RegistryReceipt = aliasReceipt };
+                                              .ConfigureAwait(false);
+            journal = journal with
+            {
+                Phase = DeletionJournalPhase.AliasesRemoved,
+                RegistryReceipt = aliasReceipt
+            };
             await _journals.WriteAsync(journal, cancellationToken).ConfigureAwait(false);
 
             foreach (var aliasModelName in staged.RemovalAliases.Select(static alias => alias.ModelName))
@@ -126,11 +135,10 @@ public sealed class LocalModelDeletionCoordinator(
             var aliasNames = journal.StageReceipt.RemovalAliases.Select(static alias => alias.ModelName).ToArray();
             var intendedMembers = journal.Snapshot.Members.Select(static member =>
                 new IntendedInstalledModelMember(member.RelativePath, member.Role)).ToArray();
-            await using var lease = await snapshotCoordinator.AcquireMutationAsync(
-                new InstalledModelMutationRequest(journal.RequestedModelName,
-                    InstalledModelMutationKind.Delete,
-                    intendedMembers,
-                    aliasNames), cancellationToken).ConfigureAwait(false);
+            await using var lease = await snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(journal.RequestedModelName,
+                InstalledModelMutationKind.Delete,
+                intendedMembers,
+                aliasNames), cancellationToken).ConfigureAwait(false);
             if (journal.Phase == DeletionJournalPhase.Committed)
             {
                 providerResolver.InvalidateModelProviderMap();
@@ -192,7 +200,10 @@ public sealed class LocalModelDeletionCoordinator(
 
         await deletionStore.RestoreAsync(stageReceipt, aliasReceipt, cancellationToken).ConfigureAwait(false);
         providerResolver.InvalidateModelProviderMap();
-        await _journals.WriteAsync(journal with { Phase = DeletionJournalPhase.RolledBack }, cancellationToken).ConfigureAwait(false);
+        await _journals.WriteAsync(journal with
+        {
+            Phase = DeletionJournalPhase.RolledBack
+        }, cancellationToken).ConfigureAwait(false);
         await _journals.DeleteAsync(journal.OperationId).ConfigureAwait(false);
     }
 
@@ -252,8 +263,12 @@ public sealed class LocalModelDeletionCoordinator(
         private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
         {
             WriteIndented = true,
-            Converters = { new JsonStringEnumConverter() }
+            Converters =
+            {
+                new JsonStringEnumConverter()
+            }
         };
+
         private readonly string _modelsDirectory;
         private readonly string _root;
         private readonly ILogger _logger;
@@ -351,9 +366,9 @@ public sealed class LocalModelDeletionCoordinator(
                     GgufRegistryAliasSetHash.ComputeV1(journal.StageReceipt.RemovalAliases), StringComparison.Ordinal)
                 || !StageReceiptMatches(expectedStage, journal.StageReceipt)
                 || !journal.AliasMappings.Select(static mapping => mapping.ModelName)
-                          .OrderBy(static modelName => modelName, StringComparer.OrdinalIgnoreCase)
-                          .ThenBy(static modelName => modelName, StringComparer.Ordinal)
-                          .SequenceEqual(expectedStage.RemovalAliases.Select(static alias => alias.ModelName), StringComparer.OrdinalIgnoreCase)
+                           .OrderBy(static modelName => modelName, StringComparer.OrdinalIgnoreCase)
+                           .ThenBy(static modelName => modelName, StringComparer.Ordinal)
+                           .SequenceEqual(expectedStage.RemovalAliases.Select(static alias => alias.ModelName), StringComparer.OrdinalIgnoreCase)
                 || journal.ProviderMapReceipts.Any(receipt =>
                     expectedStage.RemovalAliases.All(alias =>
                         !string.Equals(alias.ModelName, receipt.ModelName, StringComparison.OrdinalIgnoreCase))
@@ -366,10 +381,19 @@ public sealed class LocalModelDeletionCoordinator(
 
             var hasAbsolutePath = journal.Snapshot.Members.Select(static member => member.RelativePath)
                                          .Concat(journal.Snapshot.RegistryAliases.SelectMany(static alias =>
-                                             new[] { alias.WeightRelativePath, alias.ProjectorRelativePath, alias.SidecarRelativePath }
+                                             new[]
+                                                 {
+                                                     alias.WeightRelativePath,
+                                                     alias.ProjectorRelativePath,
+                                                     alias.SidecarRelativePath
+                                                 }
                                                  .OfType<string>()))
                                          .Concat(journal.StageReceipt.StagedMembers.SelectMany(static member =>
-                                             new[] { member.OriginalRelativePath, member.QuarantineRelativePath }))
+                                             new[]
+                                             {
+                                                 member.OriginalRelativePath,
+                                                 member.QuarantineRelativePath
+                                             }))
                                          .Any(Path.IsPathRooted);
             if (hasAbsolutePath)
             {
@@ -412,5 +436,6 @@ public sealed class LocalModelDeletionStartupReconciler(
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

@@ -317,8 +317,7 @@ public sealed class SupervisorLaunchSpecProfileTests
             SpeculativeDraftGpuLayers = 12
         };
 
-        var benchmark = LlamaServerProcessSupervisor.ResolveChatLaunchTuning(
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
+        var benchmark = LlamaServerProcessSupervisor.ResolveChatLaunchTuning(LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             liveOptions);
         var spec = BuildGpuSpec(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24),
             benchmark.ChatCacheReuse,

@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -104,13 +103,14 @@ public sealed record BenchmarkLlamaRuntimeSnapshotV1(
     bool FlashAttention,
     LlamaServerBenchmarkLaunchPolicy LaunchPolicy)
 {
-    public ResolvedLaunchArguments ToResolvedLaunchArguments() => ResolvedLaunchArguments.Replay(ContextTokens,
-        GpuLayers,
-        TensorSplit,
-        OverrideTensor,
-        KvTypeK,
-        KvTypeV,
-        FlashAttention);
+    public ResolvedLaunchArguments ToResolvedLaunchArguments() =>
+        ResolvedLaunchArguments.Replay(ContextTokens,
+            GpuLayers,
+            TensorSplit,
+            OverrideTensor,
+            KvTypeK,
+            KvTypeV,
+            FlashAttention);
 }
 
 public sealed record BenchmarkSamplingSnapshotV1(
@@ -132,10 +132,15 @@ public static class BenchmarkFrozenPolicies
     public const int JudgePromptVersion = 1;
     public const int JudgeOutputSchemaVersion = 1;
     public const string FixedSeedPolicy = "fixed";
-    public const string JudgeOutputSchemaJson = "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"schemaVersion\",\"score\",\"rationale\"],\"properties\":{\"schemaVersion\":{\"const\":1},\"score\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":5},\"rationale\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192}}}";
-    public const string JudgeSystemPrompt = "Evaluate only the supplied benchmark task and primary output. Return exactly one JSON object matching the supplied output schema. Return no markdown or extra properties.";
 
-    public static BenchmarkSamplingSnapshotV1 DeterministicSampling() => new(0, null, null, null, null, null, null, null, null, [], FixedSeedPolicy, "0");
+    public const string JudgeOutputSchemaJson =
+        "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"schemaVersion\",\"score\",\"rationale\"],\"properties\":{\"schemaVersion\":{\"const\":1},\"score\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":5},\"rationale\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192}}}";
+
+    public const string JudgeSystemPrompt =
+        "Evaluate only the supplied benchmark task and primary output. Return exactly one JSON object matching the supplied output schema. Return no markdown or extra properties.";
+
+    public static BenchmarkSamplingSnapshotV1 DeterministicSampling() =>
+        new(0, null, null, null, null, null, null, null, null, [], FixedSeedPolicy, "0");
 
     public static bool SupportsVersions(int promptVersion, int outputSchemaVersion) =>
         promptVersion == JudgePromptVersion && outputSchemaVersion == JudgeOutputSchemaVersion;
@@ -152,11 +157,13 @@ public sealed record BenchmarkFreezeDependencySetV1(
 public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy eligibilityPolicy) : IBenchmarkRuntimeSnapshotFactory
 {
     private static readonly SearchValues<char> LowerHexCharacters = SearchValues.Create("0123456789abcdef");
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         PropertyNameCaseInsensitive = false
     };
+
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
 
     public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input)
@@ -170,7 +177,10 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         var unhashed = new BenchmarkRuntimeSnapshotV1(1, input.ProjectId, input.AgentDefinitionId, input.AgentVersion,
             input.CoreTask, input.RequestedContextTokens, eligibleRuntime, input.PrimaryRuntime, input.PrimarySampling, input.PrimaryModel, input.Judge, input.Dependencies,
             input.ApplicationVersion, input.CreatedAtUtc, string.Empty);
-        return unhashed with { ConfigurationHash = ComputeHash(unhashed) };
+        return unhashed with
+        {
+            ConfigurationHash = ComputeHash(unhashed)
+        };
     }
 
     public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot)
@@ -199,7 +209,10 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         ValidateSampling(snapshot.PrimarySampling);
         ValidateModel(snapshot.PrimaryModel);
         ValidateJudge(snapshot.Judge);
-        var expected = ComputeHash(snapshot with { ConfigurationHash = string.Empty });
+        var expected = ComputeHash(snapshot with
+        {
+            ConfigurationHash = string.Empty
+        });
         if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(snapshot.ConfigurationHash)))
         {
             throw new BenchmarkSnapshotException("Benchmark snapshot configuration hash is invalid.");
@@ -247,7 +260,10 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         }
         catch (ArgumentException exception)
         {
-            throw new BenchmarkSnapshotException("The frozen llama.cpp runtime configuration is invalid.") { Source = exception.Source };
+            throw new BenchmarkSnapshotException("The frozen llama.cpp runtime configuration is invalid.")
+            {
+                Source = exception.Source
+            };
         }
 
         if (runtime.ContextTokens < minimumContextTokens)
@@ -284,9 +300,10 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         }
     }
 
-    private static bool IsV1Hash(string value) => value.Length == 67
-                                                   && value.StartsWith("v1:", StringComparison.Ordinal)
-                                                   && value.AsSpan(3).IndexOfAnyExcept(LowerHexCharacters) < 0;
+    private static bool IsV1Hash(string value) =>
+        value.Length == 67
+        && value.StartsWith("v1:", StringComparison.Ordinal)
+        && value.AsSpan(3).IndexOfAnyExcept(LowerHexCharacters) < 0;
 
     private static string ComputeHash(BenchmarkRuntimeSnapshotV1 snapshot)
     {

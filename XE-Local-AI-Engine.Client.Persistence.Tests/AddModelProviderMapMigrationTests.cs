@@ -81,9 +81,8 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
         await using (var context = CreateContext(databasePath))
         {
             await context.Database.GetService<IMigrator>().MigrateAsync(PreRevisionMigrationId).ConfigureAwait(false);
-            await context.Database.ExecuteSqlRawAsync(
-                "INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);")
-                .ConfigureAwait(false);
+            await context.Database.ExecuteSqlRawAsync("INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);")
+                         .ConfigureAwait(false);
             await context.Database.MigrateAsync().ConfigureAwait(false);
         }
 

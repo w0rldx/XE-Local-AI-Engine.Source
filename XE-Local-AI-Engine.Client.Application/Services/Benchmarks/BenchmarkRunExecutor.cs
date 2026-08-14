@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -51,9 +49,9 @@ public sealed class BenchmarkRunExecutor(
             }
 
             var decision = await capacity.DecideAsync(new CapacityRequest(snapshot.PrimaryModel.ModelName,
-                    ModelRole.Chat,
-                    snapshot.RequestedContextTokens), token)
-                .ConfigureAwait(false);
+                                             ModelRole.Chat,
+                                             snapshot.RequestedContextTokens), token)
+                                         .ConfigureAwait(false);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 throw new BenchmarkExecutionException(CapacityRejectedMessage);
@@ -74,21 +72,21 @@ public sealed class BenchmarkRunExecutor(
             }
 
             _ = await supervisor.RunExclusiveBenchmarkAsync(snapshot.PrimaryModel.ModelName,
-                    ModelRole.Chat,
-                    snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
-                    snapshot.PrimaryRuntime.LaunchPolicy,
-                    async (profiling, profilingToken) =>
-                    {
-                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
-                        using var context = InvocationExecutionContext.CreatePlain(package,
-                            Guid.Empty,
-                            generationAdmissionPolicy: admission);
-                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
-                        return true;
-                    },
-                    token)
-                .ConfigureAwait(false);
+                                    ModelRole.Chat,
+                                    snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
+                                    snapshot.PrimaryRuntime.LaunchPolicy,
+                                    async (profiling, profilingToken) =>
+                                    {
+                                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
+                                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                        using var context = InvocationExecutionContext.CreatePlain(package,
+                                            Guid.Empty,
+                                            generationAdmissionPolicy: admission);
+                                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                        return true;
+                                    },
+                                    token)
+                                .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
             var terminal = capture.TerminalState;
@@ -113,16 +111,22 @@ public sealed class BenchmarkRunExecutor(
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
             var persisted = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(work.RunId,
-                    work.Version,
-                    BenchmarkExecutionSerialization.SerializeParts(capture.Parts),
-                    terminalEvent.Sequence,
-                    effectiveContext,
-                    durationMs,
-                    terminal.TotalTokens,
-                    tokensPerSecond), CancellationToken.None)
-                .ConfigureAwait(false);
+                                           work.Version,
+                                           BenchmarkExecutionSerialization.SerializeParts(capture.Parts),
+                                           terminalEvent.Sequence,
+                                           effectiveContext,
+                                           durationMs,
+                                           terminal.TotalTokens,
+                                           tokensPerSecond), CancellationToken.None)
+                                       .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
-            events.PublishReserved(terminalEvent with { Payload = terminalEvent.Payload with { RunVersion = persisted.Version } });
+            events.PublishReserved(terminalEvent with
+            {
+                Payload = terminalEvent.Payload with
+                {
+                    RunVersion = persisted.Version
+                }
+            });
             events.EvictPlaintext(work.RunId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -147,13 +151,15 @@ public sealed class BenchmarkRunExecutor(
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             runtime.ResolvedSystemPrompt,
-            [new ConversationMessageDto
-            {
-                Id = Guid.NewGuid(),
-                Role = MessageRole.User,
-                Content = snapshot.CoreTask,
-                SortOrder = 0
-            }],
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = snapshot.CoreTask,
+                    SortOrder = 0
+                }
+            ],
             snapshot.PrimaryModel.ModelName,
             runtime.AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
@@ -166,21 +172,22 @@ public sealed class BenchmarkRunExecutor(
             CustomTools: runtime.CustomTools));
     }
 
-    internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) => new()
-    {
-        Temperature = sampling.Temperature,
-        TopP = sampling.TopP,
-        TopK = sampling.TopK,
-        MinP = sampling.MinP,
-        MaxOutputTokens = sampling.MaxOutputTokens,
-        RepeatPenalty = sampling.RepeatPenalty,
-        RepeatLastN = sampling.RepeatLastN,
-        PresencePenalty = sampling.PresencePenalty,
-        FrequencyPenalty = sampling.FrequencyPenalty,
-        Stop = sampling.Stop,
-        Seed = sampling.SeedValue,
-        NumCtx = contextTokens
-    };
+    internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) =>
+        new()
+        {
+            Temperature = sampling.Temperature,
+            TopP = sampling.TopP,
+            TopK = sampling.TopK,
+            MinP = sampling.MinP,
+            MaxOutputTokens = sampling.MaxOutputTokens,
+            RepeatPenalty = sampling.RepeatPenalty,
+            RepeatLastN = sampling.RepeatLastN,
+            PresencePenalty = sampling.PresencePenalty,
+            FrequencyPenalty = sampling.FrequencyPenalty,
+            Stop = sampling.Stop,
+            Seed = sampling.SeedValue,
+            NumCtx = contextTokens
+        };
 
     private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work)
     {
@@ -202,7 +209,13 @@ public sealed class BenchmarkRunExecutor(
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
         var persisted = await store.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
-        events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
+        events.PublishReserved(terminal with
+        {
+            Payload = terminal.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
         events.EvictPlaintext(runId);
     }
 
@@ -220,7 +233,13 @@ public sealed class BenchmarkRunExecutor(
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Failed.ToString(), RunVersion: run.Version + 1));
         var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
-        events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
+        events.PublishReserved(terminal with
+        {
+            Payload = terminal.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
         events.EvictPlaintext(runId);
     }
 }

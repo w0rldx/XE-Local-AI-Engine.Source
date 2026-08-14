@@ -54,13 +54,13 @@ internal sealed class BenchmarkCatalogService(
         foreach (var definition in definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single))
         {
             var runtime = await _agentResolver.ResolveAsync(definition.Id,
-                              modelName,
-                              retrievalQuery: string.Empty,
-                              supportsTools,
-                              honorModelProfile: false,
-                              activeModelIsCloud: false,
-                              cancellationToken)
-                          .ConfigureAwait(false);
+                                                  modelName,
+                                                  retrievalQuery: string.Empty,
+                                                  supportsTools,
+                                                  honorModelProfile: false,
+                                                  activeModelIsCloud: false,
+                                                  cancellationToken)
+                                              .ConfigureAwait(false);
             if (runtime is null)
             {
                 continue;
@@ -134,7 +134,10 @@ internal sealed class BenchmarkCatalogService(
         }
         catch (KeyNotFoundException exception)
         {
-            throw new BenchmarkNotFoundException("Benchmark model was not found.") { Source = exception.Source };
+            throw new BenchmarkNotFoundException("Benchmark model was not found.")
+            {
+                Source = exception.Source
+            };
         }
 
         try

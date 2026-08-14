@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -26,7 +27,8 @@ internal static class GgufAcquisitionSidecar
 
     // FlushAsync drains managed buffers but exposes no flush-to-disk overload. This short synchronous durability
     // boundary runs only after the async flush and before the sidecar is eligible for an atomic commit rename.
-    private static void FlushToDisk(FileStream stream) => stream.Flush(flushToDisk: true);
+    private static void FlushToDisk(FileStream stream) =>
+        stream.Flush(flushToDisk: true);
 
     public static async Task<GgufAcquisitionMetadata?> ReadValidAsync(string sidecarPath,
         string weightPath,
@@ -140,14 +142,17 @@ internal static class GgufAcquisitionSidecar
             MetadataSchemaVersion = metadata.SchemaVersion,
             ModelContentFingerprint = metadata.ModelContentFingerprint
         };
-        return entry with { RegistryRevision = GgufRegistryRevision.ComputeV1(entry, modelsDirectory) };
+        return entry with
+        {
+            RegistryRevision = GgufRegistryRevision.ComputeV1(entry, modelsDirectory)
+        };
     }
 
     public static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return Convert.ToHexStringLower(await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
     }
 
     private static bool ValidateShape(GgufAcquisitionMetadata metadata, string weightPath, string modelsDirectory)

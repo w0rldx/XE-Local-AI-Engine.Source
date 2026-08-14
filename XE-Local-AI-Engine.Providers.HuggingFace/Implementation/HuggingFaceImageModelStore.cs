@@ -156,8 +156,7 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                     // weakening the download client's no-overwrite boundary for every caller.
                     if (!TryDeleteFile(destinationPath))
                     {
-                        throw new ImageModelInUseException(
-                            "The stale image model file is still in use and could not be replaced. Eject the image runtime and try again.");
+                        throw new ImageModelInUseException("The stale image model file is still in use and could not be replaced. Eject the image runtime and try again.");
                     }
 
                     // Report set-relative bytes so a multi-part download shows one advancing bar instead of a bar that

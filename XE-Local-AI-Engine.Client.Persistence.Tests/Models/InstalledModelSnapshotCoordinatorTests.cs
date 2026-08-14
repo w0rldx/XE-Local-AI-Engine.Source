@@ -35,7 +35,10 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         AssertEx.Equal(expected: 1, lease.Snapshot.RegistryAliases.Count);
         AssertEx.True(lease.ContainsModel(fixture.Snapshot.ModelName));
 
-        fixture.Aliases[0] = fixture.Aliases[0] with { ModelName = "changed" };
+        fixture.Aliases[0] = fixture.Aliases[0] with
+        {
+            ModelName = "changed"
+        };
         fixture.MemberOwners[0] = "changed";
         AssertEx.Equal("foo:Q4_K_M", lease.Snapshot.RegistryAliases[0].ModelName);
         AssertEx.Equal("foo:Q4_K_M", lease.Snapshot.Members[0].OwningAliases[0]);
@@ -94,11 +97,17 @@ public sealed class InstalledModelSnapshotCoordinatorTests
 
         var missingHash = CreateDownloadIntent() with
         {
-            Download = CreateDownloadIntent().Download! with { DeclaredSha256 = null }
+            Download = CreateDownloadIntent().Download! with
+            {
+                DeclaredSha256 = null
+            }
         };
         var wrongRevision = CreateDownloadIntent() with
         {
-            Download = CreateDownloadIntent().Download! with { ResolvedRevision = "source-r2" }
+            Download = CreateDownloadIntent().Download! with
+            {
+                ResolvedRevision = "source-r2"
+            }
         };
 
         AssertEx.Equal(GgufAcquisitionDisposition.Conflict,
@@ -141,7 +150,8 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             failuresBeforeSuccess);
     }
 
-    private static SnapshotFixture CreateLegacyFixture() => CreateFixture("legacy/foo.gguf", sidecarPath: null, origin: null);
+    private static SnapshotFixture CreateLegacyFixture() =>
+        CreateFixture("legacy/foo.gguf", sidecarPath: null, origin: null);
 
     private static SnapshotFixture CreateFixture(string weightPath,
         string? sidecarPath,
@@ -149,7 +159,10 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         int failuresBeforeSuccess = 0)
     {
         const string modelName = "foo:Q4_K_M";
-        var owners = new[] { modelName };
+        var owners = new[]
+        {
+            modelName
+        };
         var registryValue = new InstalledGgufRegistryValue("org/repo",
             Path.GetFileName(weightPath),
             "Q4_K_M",
@@ -201,12 +214,12 @@ public sealed class InstalledModelSnapshotCoordinatorTests
 
         var memberArray = members.ToArray();
         var contentFingerprint = GgufModelContentFingerprint.ComputeV1(memberArray
-            .Where(static member => member.Role != InstalledModelPhysicalMemberRole.Sidecar)
-            .Select(static member => new GgufModelContentMember(member.RelativePath,
-                member.Role,
-                member.SizeBytes,
-                member.Sha256,
-                member.OwningAliases)));
+                                                                       .Where(static member => member.Role != InstalledModelPhysicalMemberRole.Sidecar)
+                                                                       .Select(static member => new GgufModelContentMember(member.RelativePath,
+                                                                           member.Role,
+                                                                           member.SizeBytes,
+                                                                           member.Sha256,
+                                                                           member.OwningAliases)));
         var snapshot = new InstalledGgufSnapshot(modelName,
             "registry-r1",
             aliases,
@@ -228,12 +241,14 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             new FakeSnapshotStore(candidate, snapshot, failuresBeforeSuccess));
     }
 
-    private sealed record SnapshotFixture(InstalledGgufSnapshot Snapshot,
+    private sealed record SnapshotFixture(
+        InstalledGgufSnapshot Snapshot,
         InstalledModelRegistryAliasSnapshot[] Aliases,
         string[] MemberOwners,
         FakeSnapshotStore Store);
 
-    private sealed class FakeSnapshotStore(InstalledGgufCandidate candidate,
+    private sealed class FakeSnapshotStore(
+        InstalledGgufCandidate candidate,
         InstalledGgufSnapshot snapshot,
         int failuresBeforeSuccess) : IInstalledGgufSnapshotStore
     {
@@ -268,22 +283,26 @@ public sealed class InstalledModelSnapshotCoordinatorTests
 
         public Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease,
             string modelName,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease,
             string modelName,
             string providerName,
             string? expectedRevision = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,
             ProviderMapMutationReceipt receipt,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease,
             string modelName,
             string expectedProvider,
             string expectedRevision,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

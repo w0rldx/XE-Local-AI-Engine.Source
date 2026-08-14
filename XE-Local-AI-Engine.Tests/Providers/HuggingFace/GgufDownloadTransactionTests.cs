@@ -2,11 +2,10 @@ namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
 using System.Net;
 using System.Security.Cryptography;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
@@ -18,14 +17,18 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task PrepareAndCommit_ProjectorPair_PublishesAllArtifactsAndExactFingerprints()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, index) => Download(index == 0 ? WeightBytes : ProjectorBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, index) => Download(index == 0 ? WeightBytes : ProjectorBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var discovery = Discovery(includeProjector: true);
         var transaction = Transaction(http, discovery, registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
         var destination = Destination(withProjector: true);
 
         var prepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
@@ -47,15 +50,19 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Prepare_ProjectorFailure_RemovesWeightAndProjectorTempsWithoutTextOnlySuccess()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, index) => index == 0
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, index) => index == 0
             ? Download(WeightBytes)
             : new HttpResponseMessage(HttpStatusCode.NotFound));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: true), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
 
         _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => transaction.PrepareAsync(source,
             Destination(withProjector: true),
@@ -69,13 +76,17 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Commit_ProjectorDestinationAppearsAfterPrepare_ReturnsPartialReceiptForSafeRollback()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, index) => Download(index == 0 ? WeightBytes : ProjectorBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, index) => Download(index == 0 ? WeightBytes : ProjectorBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: true), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
         var destination = Destination(withProjector: true);
         var prepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
         var collision = dir.FilePath(destination.ProjectorRelativePath!);
@@ -97,13 +108,17 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Commit_PostRenameRegistryFailure_ReturnsOwnedReceiptForApplicationRollback()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => Download(WeightBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Download(WeightBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
         var prepared = await transaction.PrepareAsync(source, Destination(withProjector: false), progress: null, CancellationToken.None);
         var manifestPath = dir.FilePath("index.json");
         Directory.CreateDirectory(manifestPath);
@@ -123,13 +138,17 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task RollbackAndDiscard_ReportOwnedArtifactsThatCouldNotBeDeleted()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => Download(WeightBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Download(WeightBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant }, CancellationToken.None);
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant
+        }, CancellationToken.None);
         var destination = Destination(withProjector: false);
         var committedPrepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
         var receipt = await transaction.CommitAsync(committedPrepared, CancellationToken.None);
@@ -154,16 +173,19 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Resolve_ProjectorWithoutExactHash_FailsBeforeAnyArtifactIsReserved()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => throw new InvalidOperationException("No bytes may be requested."));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => throw new InvalidOperationException("No bytes may be requested."));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var discovery = Discovery(includeProjector: true, projectorSha: null);
         var transaction = Transaction(http, discovery, registry, options);
 
-        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => transaction.ResolveAsync(
-            new GgufModelRequest { RepoId = Infra.RepoId, Quant = Infra.Quant },
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => transaction.ResolveAsync(new GgufModelRequest
+            {
+                RepoId = Infra.RepoId,
+                Quant = Infra.Quant
+            },
             CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
@@ -173,7 +195,7 @@ public sealed class GgufDownloadTransactionTests
     private static HuggingFaceGgufDownloadTransaction Transaction(HttpClient http,
         IHuggingFaceGgufDiscovery discovery,
         GgufModelRegistry registry,
-        XE_Local_AI_Engine.Providers.HuggingFace.Options.HuggingFaceOptions options) =>
+        HuggingFaceOptions options) =>
         new(Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options),
             discovery,
             registry,
@@ -206,10 +228,12 @@ public sealed class GgufDownloadTransactionTests
             withProjector ? "demo-projector.gguf" : null);
     }
 
-    private static HttpResponseMessage Download(byte[] bytes) => new(HttpStatusCode.OK)
-    {
-        Content = new ByteArrayContent(bytes)
-    };
+    private static HttpResponseMessage Download(byte[] bytes) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(bytes)
+        };
 
-    private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static string Sha(byte[] bytes) =>
+        Convert.ToHexStringLower(SHA256.HashData(bytes));
 }

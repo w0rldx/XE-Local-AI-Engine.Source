@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -8,8 +9,26 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
 {
     private static readonly HashSet<string> CausalArchitectures = new(StringComparer.Ordinal)
     {
-        "llama", "mistral", "mixtral", "qwen2", "qwen2moe", "qwen3", "qwen3moe", "gemma", "gemma2", "gemma3",
-        "phi2", "phi3", "phi3moe", "deepseek2", "command-r", "cohere2", "gpt2", "gptneox", "starcoder2", "internlm2"
+        "llama",
+        "mistral",
+        "mixtral",
+        "qwen2",
+        "qwen2moe",
+        "qwen3",
+        "qwen3moe",
+        "gemma",
+        "gemma2",
+        "gemma3",
+        "phi2",
+        "phi3",
+        "phi3moe",
+        "deepseek2",
+        "command-r",
+        "cohere2",
+        "gpt2",
+        "gptneox",
+        "starcoder2",
+        "internlm2"
     };
 
     public async Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken)
@@ -36,7 +55,10 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
     {
         var header = await GgufStrictHeaderParser.ReadAsync(source.Stream, cancellationToken).ConfigureAwait(false);
         source.Rewind();
-        return Classify(source.DisplayName, source.Length, header) with { SourceIdentityToken = source.SourceIdentityToken };
+        return Classify(source.DisplayName, source.Length, header) with
+        {
+            SourceIdentityToken = source.SourceIdentityToken
+        };
     }
 
     internal static GgufImportInspection Classify(string displayName, long size, GgufStrictHeaderParser.StrictHeader header)
@@ -66,7 +88,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
 
         var architecture = NormalizeArchitecture(header.GetString("general.architecture"));
         if (architecture is null || !CausalArchitectures.Contains(architecture)
-            || IsRejectedArchitecture(architecture, displayName))
+                                 || IsRejectedArchitecture(architecture, displayName))
         {
             rejections.Add(GgufImportRejectionCode.UnsupportedArchitecture);
         }
@@ -80,7 +102,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         }
 
         var workloadRejected = rejections.Any(static rejection => rejection is not GgufImportRejectionCode.QuantizationRequired
-                                                                  and not GgufImportRejectionCode.UnsupportedQuantization);
+            and not GgufImportRejectionCode.UnsupportedQuantization);
         return new GgufImportInspection(size,
             header.Version,
             architecture,
@@ -91,9 +113,10 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             []);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+    [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "GGUF architecture identifiers are externally defined lowercase tokens and the inspection contract preserves that canonical form.")]
-    private static string? NormalizeArchitecture(string? architecture) => architecture?.Trim().ToLowerInvariant();
+    private static string? NormalizeArchitecture(string? architecture) =>
+        architecture?.Trim().ToLowerInvariant();
 
     private static bool IsShardName(string displayName)
     {

@@ -9,6 +9,7 @@ public sealed record LocalModelDescriptor
 
     /// <summary>Aggregate content identity across weight and optional projector members.</summary>
     public string? ModelContentFingerprint { get; init; }
+
     [JsonRequired]
     public required string ModelName { get; init; }
 

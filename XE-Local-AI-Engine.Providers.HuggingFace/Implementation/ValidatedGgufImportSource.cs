@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -107,7 +108,8 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         }
     }
 
-    public void Rewind() => _stream.Position = 0;
+    public void Rewind() =>
+        _stream.Position = 0;
 
     public void VerifyStillCurrent()
     {
@@ -134,7 +136,8 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         }
     }
 
-    public ValueTask DisposeAsync() => _stream.DisposeAsync();
+    public ValueTask DisposeAsync() =>
+        _stream.DisposeAsync();
 
     private static void EnsureNoReparseComponents(string canonicalPath)
     {
@@ -210,7 +213,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         {
             var descriptor = handle.DangerousGetHandle().ToInt64();
             var openedPath = new FileInfo(string.Create(CultureInfo.InvariantCulture, $"/proc/self/fd/{descriptor}"))
-                            .ResolveLinkTarget(returnFinalTarget: true)?.FullName;
+                             .ResolveLinkTarget(returnFinalTarget: true)?.FullName;
             if (!string.Equals(openedPath, canonicalPath, StringComparison.Ordinal))
             {
                 throw new UnauthorizedAccessException("The selected source handle did not resolve to the validated path.");
@@ -317,9 +320,9 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
     private struct ByHandleFileInformation
     {
         public uint FileAttributes;
-        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public FILETIME CreationTime;
+        public FILETIME LastAccessTime;
+        public FILETIME LastWriteTime;
         public uint VolumeSerialNumber;
         public uint FileSizeHigh;
         public uint FileSizeLow;

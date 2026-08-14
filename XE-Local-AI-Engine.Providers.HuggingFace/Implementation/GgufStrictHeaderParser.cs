@@ -10,12 +10,37 @@ internal static class GgufStrictHeaderParser
 
     private static readonly IReadOnlyDictionary<long, string> Quantizations = new Dictionary<long, string>
     {
-        [0] = "F32", [1] = "F16", [2] = "Q4_0", [3] = "Q4_1", [6] = "Q5_0", [7] = "Q5_1",
-        [8] = "Q8_0", [10] = "Q2_K", [11] = "Q3_K_S", [12] = "Q3_K_M", [13] = "Q3_K_L",
-        [14] = "Q4_K_S", [15] = "Q4_K_M", [16] = "Q5_K_S", [17] = "Q5_K_M", [18] = "Q6_K",
-        [19] = "IQ2_XXS", [20] = "IQ2_XS", [21] = "IQ3_XXS", [22] = "IQ1_S", [23] = "IQ4_NL",
-        [24] = "IQ3_S", [25] = "IQ2_S", [26] = "IQ4_XS", [27] = "I8", [28] = "I16",
-        [29] = "I32", [30] = "I64", [31] = "F64", [32] = "IQ1_M", [33] = "BF16"
+        [0] = "F32",
+        [1] = "F16",
+        [2] = "Q4_0",
+        [3] = "Q4_1",
+        [6] = "Q5_0",
+        [7] = "Q5_1",
+        [8] = "Q8_0",
+        [10] = "Q2_K",
+        [11] = "Q3_K_S",
+        [12] = "Q3_K_M",
+        [13] = "Q3_K_L",
+        [14] = "Q4_K_S",
+        [15] = "Q4_K_M",
+        [16] = "Q5_K_S",
+        [17] = "Q5_K_M",
+        [18] = "Q6_K",
+        [19] = "IQ2_XXS",
+        [20] = "IQ2_XS",
+        [21] = "IQ3_XXS",
+        [22] = "IQ1_S",
+        [23] = "IQ4_NL",
+        [24] = "IQ3_S",
+        [25] = "IQ2_S",
+        [26] = "IQ4_XS",
+        [27] = "I8",
+        [28] = "I16",
+        [29] = "I32",
+        [30] = "I64",
+        [31] = "F64",
+        [32] = "IQ1_M",
+        [33] = "BF16"
     };
 
     public static async Task<StrictHeader> ReadAsync(string path, CancellationToken cancellationToken)
@@ -49,9 +74,9 @@ internal static class GgufStrictHeaderParser
     {
         var reader = new Reader(bytes);
         if (!reader.TryReadUInt32(out var magic) || magic != Magic
-            || !reader.TryReadUInt32(out var version)
-            || !reader.TryReadUInt64(out _)
-            || !reader.TryReadUInt64(out var count))
+                                                 || !reader.TryReadUInt32(out var version)
+                                                 || !reader.TryReadUInt64(out _)
+                                                 || !reader.TryReadUInt64(out var count))
         {
             return StrictHeader.Invalid;
         }
@@ -152,7 +177,8 @@ internal static class GgufStrictHeaderParser
             new Dictionary<string, object>(StringComparer.Ordinal),
             IsComplete: false);
 
-        public string? GetString(string key) => Values.TryGetValue(key, out var value) ? value as string : null;
+        public string? GetString(string key) =>
+            Values.TryGetValue(key, out var value) ? value as string : null;
 
         public bool TryGetInt64(string key, out long value)
         {
@@ -172,14 +198,92 @@ internal static class GgufStrictHeaderParser
         private readonly ReadOnlySpan<byte> _bytes = bytes;
         private int _position;
 
-        public bool TrySkip(int count) => TryTake(count, out _);
-        public bool TryReadByte(out byte value) { if (TryTake(1, out var s)) { value = s[0]; return true; } value = 0; return false; }
-        public bool TryReadUInt16(out ushort value) { if (TryTake(2, out var s)) { value = BinaryPrimitives.ReadUInt16LittleEndian(s); return true; } value = 0; return false; }
-        public bool TryReadInt16(out short value) { if (TryTake(2, out var s)) { value = BinaryPrimitives.ReadInt16LittleEndian(s); return true; } value = 0; return false; }
-        public bool TryReadUInt32(out uint value) { if (TryTake(4, out var s)) { value = BinaryPrimitives.ReadUInt32LittleEndian(s); return true; } value = 0; return false; }
-        public bool TryReadInt32(out int value) { if (TryTake(4, out var s)) { value = BinaryPrimitives.ReadInt32LittleEndian(s); return true; } value = 0; return false; }
-        public bool TryReadUInt64(out ulong value) { if (TryTake(8, out var s)) { value = BinaryPrimitives.ReadUInt64LittleEndian(s); return true; } value = 0; return false; }
-        public bool TryReadInt64(out long value) { if (TryTake(8, out var s)) { value = BinaryPrimitives.ReadInt64LittleEndian(s); return true; } value = 0; return false; }
+        public bool TrySkip(int count) =>
+            TryTake(count, out _);
+
+        public bool TryReadByte(out byte value)
+        {
+            if (TryTake(1, out var s))
+            {
+                value = s[0];
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadUInt16(out ushort value)
+        {
+            if (TryTake(2, out var s))
+            {
+                value = BinaryPrimitives.ReadUInt16LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadInt16(out short value)
+        {
+            if (TryTake(2, out var s))
+            {
+                value = BinaryPrimitives.ReadInt16LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadUInt32(out uint value)
+        {
+            if (TryTake(4, out var s))
+            {
+                value = BinaryPrimitives.ReadUInt32LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadInt32(out int value)
+        {
+            if (TryTake(4, out var s))
+            {
+                value = BinaryPrimitives.ReadInt32LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadUInt64(out ulong value)
+        {
+            if (TryTake(8, out var s))
+            {
+                value = BinaryPrimitives.ReadUInt64LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadInt64(out long value)
+        {
+            if (TryTake(8, out var s))
+            {
+                value = BinaryPrimitives.ReadInt64LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
 
         public bool TryReadString(out string value)
         {

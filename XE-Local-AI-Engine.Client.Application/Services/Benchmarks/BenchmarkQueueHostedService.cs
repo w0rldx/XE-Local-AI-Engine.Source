@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -30,7 +31,8 @@ public sealed class BenchmarkQueueSignal : IBenchmarkQueueSignal, IDisposable
         _ = await _signal.WaitAsync(pollInterval, cancellationToken).ConfigureAwait(false);
     }
 
-    public void Dispose() => _signal.Dispose();
+    public void Dispose() =>
+        _signal.Dispose();
 }
 
 public sealed class BenchmarkQueueOptions
@@ -42,7 +44,7 @@ public sealed class BenchmarkQueueHostedService(
     IServiceScopeFactory scopeFactory,
     IBenchmarkQueueSignal signal,
     IBenchmarkEventBuffer events,
-    Microsoft.Extensions.Options.IOptions<BenchmarkQueueOptions> options,
+    IOptions<BenchmarkQueueOptions> options,
     ILogger<BenchmarkQueueHostedService> logger) : BackgroundService
 {
     private readonly TimeSpan _pollInterval = options?.Value.PollInterval > TimeSpan.Zero

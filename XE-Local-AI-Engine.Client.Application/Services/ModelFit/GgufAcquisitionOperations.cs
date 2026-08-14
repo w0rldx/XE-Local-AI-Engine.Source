@@ -46,6 +46,7 @@ public interface IGgufAcquisitionOperationRegistry
     GgufAcquisitionStatus? GetStatus(Guid operationId);
     GgufAcquisitionStatus? GetNewest(GgufAcquisitionOperationKind operationKind, string modelName);
     IReadOnlyList<GgufAcquisitionStatus> List(GgufAcquisitionOperationKind operationKind);
+
     GgufAcquisitionStatus RecordTerminal(GgufAcquisitionOperationKind operationKind,
         string modelName,
         GgufAcquisitionPhase phase,
@@ -53,6 +54,7 @@ public interface IGgufAcquisitionOperationRegistry
         long? totalBytes = null,
         string? errorCode = null,
         string? sanitizedError = null);
+
     GgufAcquisitionStatus Update(Guid operationId,
         GgufAcquisitionPhase phase,
         long? completedBytes = null,
@@ -265,11 +267,12 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
         return result;
     }
 
-    private static bool IsActive(GgufAcquisitionPhase phase) => phase is GgufAcquisitionPhase.Validating
-        or GgufAcquisitionPhase.Downloading
-        or GgufAcquisitionPhase.Copying
-        or GgufAcquisitionPhase.Committing
-        or GgufAcquisitionPhase.Running;
+    private static bool IsActive(GgufAcquisitionPhase phase) =>
+        phase is GgufAcquisitionPhase.Validating
+            or GgufAcquisitionPhase.Downloading
+            or GgufAcquisitionPhase.Copying
+            or GgufAcquisitionPhase.Committing
+            or GgufAcquisitionPhase.Running;
 
     private DateTimeOffset NextTimestamp(DateTimeOffset? after = null)
     {
@@ -311,5 +314,4 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
             }
         }
     }
-
 }

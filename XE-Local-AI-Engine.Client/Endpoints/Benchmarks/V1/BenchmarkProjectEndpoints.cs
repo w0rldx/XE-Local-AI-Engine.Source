@@ -28,7 +28,10 @@ public sealed class ListBenchmarkProjectsEndpoint(IBenchmarkStore store)
             items.Add(project.ToSummary(count));
         }
 
-        await Send.OkAsync(new ListBenchmarkProjectsResponse { Items = items }, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListBenchmarkProjectsResponse
+        {
+            Items = items
+        }, ct).ConfigureAwait(false);
     }
 }
 
@@ -48,7 +51,10 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
         try
         {
             var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new { projectId = project.Id }, project.ToDetail(runCount: 0), cancellation: ct)
+            await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
+                      {
+                          projectId = project.Id
+                      }, project.ToDetail(runCount: 0), cancellation: ct)
                       .ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))

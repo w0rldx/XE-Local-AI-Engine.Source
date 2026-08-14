@@ -16,6 +16,9 @@ public sealed class GetGgufImportCapabilityEndpoint : EndpointWithoutRequest<Ggu
     public override async Task HandleAsync(CancellationToken ct)
     {
         var available = DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged());
-        await Send.OkAsync(new GgufImportCapabilityResponse { Available = available }, ct).ConfigureAwait(false);
+        await Send.OkAsync(new GgufImportCapabilityResponse
+        {
+            Available = available
+        }, ct).ConfigureAwait(false);
     }
 }

@@ -31,7 +31,12 @@ public sealed class AddBenchmarksMigrationTests : IDisposable
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        foreach (var table in new[] { "benchmark_projects", "benchmark_runs", "benchmark_work_items" })
+        foreach (var table in new[]
+                 {
+                     "benchmark_projects",
+                     "benchmark_runs",
+                     "benchmark_work_items"
+                 })
         {
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";

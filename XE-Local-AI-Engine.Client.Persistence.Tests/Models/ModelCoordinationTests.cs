@@ -12,7 +12,12 @@ public sealed class ModelCoordinationTests
     public async Task MapBatch_NormalizesDeduplicatesAndOrdersKeys()
     {
         var coordinator = new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain());
-        await using var lease = await coordinator.AcquireMapReadAsync(new[] { " zeta ", "ALPHA", "alpha" });
+        await using var lease = await coordinator.AcquireMapReadAsync(new[]
+        {
+            " zeta ",
+            "ALPHA",
+            "alpha"
+        });
 
         AssertEx.Equal(expected: 2, lease.MapKeys.Count);
         AssertEx.Equal("2:provider-map:ALPHA", lease.MapKeys[0]);
@@ -100,8 +105,7 @@ public sealed class ModelCoordinationTests
     public void DeterministicIdentity_SlugIsContainedAndBounded()
     {
         var resolver = CreateIdentityResolver();
-        var identity = resolver.Resolve(new GgufAcquisitionIntent(
-            GgufAcquisitionOperationKind.Import,
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
             new string('A', 90),
             "F16"));
 
@@ -114,15 +118,13 @@ public sealed class ModelCoordinationTests
     {
         var resolver = CreateIdentityResolver();
         var projector = new GgufProjectorAcquisitionMetadata("mmproj-model.gguf", new string('a', 64), DeclaredSizeBytes: 42);
-        var download = resolver.Resolve(new GgufAcquisitionIntent(
-            GgufAcquisitionOperationKind.Download,
+        var download = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Download,
             "foo",
             "Q4_K_M",
             projector));
 
         AssertEx.Equal("foo-projector-849525de9efce6742c0cf2b6.gguf", download.ProjectorRelativePath);
-        _ = AssertEx.Throws<ArgumentException>(() => resolver.Resolve(new GgufAcquisitionIntent(
-            GgufAcquisitionOperationKind.Import,
+        _ = AssertEx.Throws<ArgumentException>(() => resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
             "foo",
             "Q4_K_M",
             projector)));

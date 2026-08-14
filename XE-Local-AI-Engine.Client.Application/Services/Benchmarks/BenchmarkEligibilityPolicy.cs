@@ -30,7 +30,10 @@ public sealed class BenchmarkEligibilityPolicy : IBenchmarkEligibilityPolicy
             throw new BenchmarkEligibilityException("The resolved agent tool offer is not safe for unattended benchmark execution.");
         }
 
-        return runtime with { AllowedTools = tools };
+        return runtime with
+        {
+            AllowedTools = tools
+        };
     }
 }
 
