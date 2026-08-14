@@ -10,10 +10,15 @@ public enum GgufAcquisitionOperationKind
 
 public enum GgufAcquisitionPhase
 {
-    Running,
-    Completed,
-    Cancelled,
-    Failed
+    // Kept for wire/backward compatibility with callers that only understand a generic active phase.
+    Running = 0,
+    Completed = 1,
+    Cancelled = 2,
+    Failed = 3,
+    Validating = 4,
+    Downloading = 5,
+    Copying = 6,
+    Committing = 7
 }
 
 public sealed record GgufAcquisitionStatus(
@@ -41,6 +46,13 @@ public interface IGgufAcquisitionOperationRegistry
     GgufAcquisitionStatus? GetStatus(Guid operationId);
     GgufAcquisitionStatus? GetNewest(GgufAcquisitionOperationKind operationKind, string modelName);
     IReadOnlyList<GgufAcquisitionStatus> List(GgufAcquisitionOperationKind operationKind);
+    GgufAcquisitionStatus RecordTerminal(GgufAcquisitionOperationKind operationKind,
+        string modelName,
+        GgufAcquisitionPhase phase,
+        long? completedBytes = null,
+        long? totalBytes = null,
+        string? errorCode = null,
+        string? sanitizedError = null);
     GgufAcquisitionStatus Update(Guid operationId,
         GgufAcquisitionPhase phase,
         long? completedBytes = null,
@@ -49,23 +61,50 @@ public interface IGgufAcquisitionOperationRegistry
         string? sanitizedError = null);
 }
 
-public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) : IGgufAcquisitionOperationRegistry
+public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperationRegistry
 {
+    public const int DefaultMaxTerminalCount = 256;
+    public static readonly TimeSpan DefaultTerminalMaxAge = TimeSpan.FromHours(24);
+
     private readonly ConcurrentDictionary<(GgufAcquisitionOperationKind Kind, string ModelKey), Guid> _active = new();
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _cancellations = new();
     private readonly ConcurrentDictionary<Guid, GgufAcquisitionStatus> _statuses = new();
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly int _maxTerminalCount;
+    private readonly object _pruneGate = new();
+    private readonly TimeSpan _terminalMaxAge;
+    private readonly TimeProvider _timeProvider;
+    private long _lastTimestampTicks;
+
+    public GgufAcquisitionOperationRegistry(TimeProvider timeProvider,
+        TimeSpan? terminalMaxAge = null,
+        int maxTerminalCount = DefaultMaxTerminalCount)
+    {
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _terminalMaxAge = terminalMaxAge ?? DefaultTerminalMaxAge;
+        if (_terminalMaxAge <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(terminalMaxAge), "Terminal retention age must be positive.");
+        }
+
+        if (maxTerminalCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxTerminalCount), "Terminal retention count must be positive.");
+        }
+
+        _maxTerminalCount = maxTerminalCount;
+    }
 
     public GgufAcquisitionRegistration Start(GgufAcquisitionOperationKind operationKind, string modelName, long? totalBytes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        PruneTerminals();
         var normalizedName = modelName.Trim();
         var activeKey = (operationKind, normalizedName.ToUpperInvariant());
         while (true)
         {
             if (_active.TryGetValue(activeKey, out var existingId)
                 && _statuses.TryGetValue(existingId, out var existing)
-                && existing.Phase == GgufAcquisitionPhase.Running
+                && IsActive(existing.Phase)
                 && _cancellations.TryGetValue(existingId, out var existingCancellation))
             {
                 return new GgufAcquisitionRegistration(existing, AlreadyInFlight: true, existingCancellation.Token);
@@ -73,11 +112,11 @@ public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) 
 
             var operationId = Guid.NewGuid();
             var cancellation = new CancellationTokenSource();
-            var now = _timeProvider.GetUtcNow();
+            var now = NextTimestamp();
             var status = new GgufAcquisitionStatus(operationId,
                 operationKind,
                 normalizedName,
-                GgufAcquisitionPhase.Running,
+                GgufAcquisitionPhase.Validating,
                 CompletedBytes: null,
                 totalBytes,
                 now,
@@ -124,11 +163,16 @@ public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) 
         return _active.TryGetValue(key, out var operationId) && Cancel(operationId);
     }
 
-    public GgufAcquisitionStatus? GetStatus(Guid operationId) => _statuses.GetValueOrDefault(operationId);
+    public GgufAcquisitionStatus? GetStatus(Guid operationId)
+    {
+        PruneTerminals();
+        return _statuses.GetValueOrDefault(operationId);
+    }
 
     public GgufAcquisitionStatus? GetNewest(GgufAcquisitionOperationKind operationKind, string modelName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        PruneTerminals();
         return _statuses.Values
                         .Where(status => status.OperationKind == operationKind
                                          && string.Equals(status.ModelName, modelName.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -137,11 +181,44 @@ public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) 
                         .FirstOrDefault();
     }
 
-    public IReadOnlyList<GgufAcquisitionStatus> List(GgufAcquisitionOperationKind operationKind) =>
-        _statuses.Values.Where(status => status.OperationKind == operationKind)
-                 .OrderByDescending(static status => status.StartedAtUtc)
-                 .ThenByDescending(static status => status.OperationId)
-                 .ToArray();
+    public IReadOnlyList<GgufAcquisitionStatus> List(GgufAcquisitionOperationKind operationKind)
+    {
+        PruneTerminals();
+        return _statuses.Values.Where(status => status.OperationKind == operationKind)
+                        .OrderByDescending(static status => status.StartedAtUtc)
+                        .ThenByDescending(static status => status.OperationId)
+                        .ToArray();
+    }
+
+    public GgufAcquisitionStatus RecordTerminal(GgufAcquisitionOperationKind operationKind,
+        string modelName,
+        GgufAcquisitionPhase phase,
+        long? completedBytes = null,
+        long? totalBytes = null,
+        string? errorCode = null,
+        string? sanitizedError = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        if (IsActive(phase))
+        {
+            throw new ArgumentException("A directly-recorded acquisition status must be terminal.", nameof(phase));
+        }
+
+        var now = NextTimestamp();
+        var status = new GgufAcquisitionStatus(Guid.NewGuid(),
+            operationKind,
+            modelName.Trim(),
+            phase,
+            completedBytes,
+            totalBytes,
+            now,
+            now,
+            errorCode,
+            sanitizedError);
+        _statuses[status.OperationId] = status;
+        PruneTerminals();
+        return status;
+    }
 
     public GgufAcquisitionStatus Update(Guid operationId,
         GgufAcquisitionPhase phase,
@@ -155,7 +232,7 @@ public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) 
             static id => throw new KeyNotFoundException($"The acquisition operation '{id}' was not found."),
             (_, current) =>
             {
-                if (current.Phase != GgufAcquisitionPhase.Running)
+                if (!IsActive(current.Phase))
                 {
                     updated = current;
                     return current;
@@ -166,14 +243,14 @@ public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) 
                     Phase = phase,
                     CompletedBytes = completedBytes ?? current.CompletedBytes,
                     TotalBytes = totalBytes ?? current.TotalBytes,
-                    UpdatedAtUtc = _timeProvider.GetUtcNow(),
+                    UpdatedAtUtc = NextTimestamp(current.UpdatedAtUtc),
                     ErrorCode = errorCode,
                     SanitizedError = sanitizedError
                 };
                 return updated;
             });
         var result = updated ?? throw new InvalidOperationException("The acquisition status update did not produce a result.");
-        if (phase != GgufAcquisitionPhase.Running)
+        if (!IsActive(phase))
         {
             var key = (result.OperationKind, result.ModelName.ToUpperInvariant());
             _active.TryRemove(KeyValuePair.Create(key, operationId));
@@ -181,9 +258,58 @@ public sealed class GgufAcquisitionOperationRegistry(TimeProvider timeProvider) 
             {
                 cancellation.Dispose();
             }
+
+            PruneTerminals();
         }
 
         return result;
+    }
+
+    private static bool IsActive(GgufAcquisitionPhase phase) => phase is GgufAcquisitionPhase.Validating
+        or GgufAcquisitionPhase.Downloading
+        or GgufAcquisitionPhase.Copying
+        or GgufAcquisitionPhase.Committing
+        or GgufAcquisitionPhase.Running;
+
+    private DateTimeOffset NextTimestamp(DateTimeOffset? after = null)
+    {
+        while (true)
+        {
+            var observed = Volatile.Read(ref _lastTimestampTicks);
+            var candidate = Math.Max(_timeProvider.GetUtcNow().UtcTicks, observed + 1);
+            if (after is not null)
+            {
+                candidate = Math.Max(candidate, after.Value.UtcTicks + 1);
+            }
+
+            if (Interlocked.CompareExchange(ref _lastTimestampTicks, candidate, observed) == observed)
+            {
+                return new DateTimeOffset(candidate, TimeSpan.Zero);
+            }
+        }
+    }
+
+    private void PruneTerminals()
+    {
+        lock (_pruneGate)
+        {
+            var cutoff = _timeProvider.GetUtcNow() - _terminalMaxAge;
+            var terminals = _statuses.Values.Where(static status => !IsActive(status.Phase))
+                                     .OrderBy(static status => status.UpdatedAtUtc)
+                                     .ThenBy(static status => status.OperationId)
+                                     .ToArray();
+            foreach (var expired in terminals.Where(status => status.UpdatedAtUtc < cutoff))
+            {
+                _statuses.TryRemove(expired.OperationId, out _);
+            }
+
+            var retained = terminals.Where(status => status.UpdatedAtUtc >= cutoff).ToArray();
+            var excess = retained.Length - _maxTerminalCount;
+            for (var index = 0; index < excess; index++)
+            {
+                _statuses.TryRemove(retained[index].OperationId, out _);
+            }
+        }
     }
 
 }

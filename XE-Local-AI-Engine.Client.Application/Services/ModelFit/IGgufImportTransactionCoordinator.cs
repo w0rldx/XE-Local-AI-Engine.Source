@@ -228,9 +228,10 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             try
             {
                 var progress = new Progress<GgufImportProgress>(value => UpdateAndPublish(operationId,
-                    GgufAcquisitionPhase.Running,
+                    GgufAcquisitionPhase.Copying,
                     value.CompletedBytes,
                     value.TotalBytes));
+                UpdateAndPublish(operationId, GgufAcquisitionPhase.Copying);
                 prepared = await _importer.PrepareAsync(new GgufImportSource(sourcePath),
                     new GgufImportDestination(identity.CanonicalModelName,
                         identity.CanonicalQuantization,
@@ -240,6 +241,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                     progress,
                     cancellationToken).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
+                UpdateAndPublish(operationId, GgufAcquisitionPhase.Committing);
                 committed = await _importer.CommitAsync(prepared, CancellationToken.None).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -343,9 +345,12 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
         try
         {
-            if (committed is not null && mayRollbackCommittedArtifacts)
+            if (committed is not null)
             {
-                await _importer.RollbackCommittedAsync(committed, CancellationToken.None).ConfigureAwait(false);
+                if (mayRollbackCommittedArtifacts)
+                {
+                    await _importer.RollbackCommittedAsync(committed, CancellationToken.None).ConfigureAwait(false);
+                }
             }
             else if (prepared is not null)
             {
@@ -413,7 +418,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             status.SanitizedError,
             status.OperationId,
             status.OperationKind.ToString(),
-            status.ErrorCode));
+            status.ErrorCode,
+            status.UpdatedAtUtc));
     }
 
     private async Task PublishAsync(GgufDownloadStatusHubEvent statusEvent)
