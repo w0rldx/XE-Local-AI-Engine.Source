@@ -148,31 +148,30 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     }
 
     [Test]
-    public async Task ReadOnlyConnection_SkipsWalWithoutLoggingAWarning()
+    public async Task SharedCacheConnection_SkipsWalWithoutLoggingAWarning()
     {
-        var path = Path.Combine(_dir, "readonly.sqlite");
-
-        // Seed the file so a read-only open has something to attach to.
-        await using (var seed = new SqliteConnection($"Data Source={path}"))
-        {
-            await seed.OpenAsync();
-            await ExecuteAsync(seed, "CREATE TABLE t(id INTEGER PRIMARY KEY);");
-        }
-
-        SqliteConnection.ClearAllPools();
-
-        var logger = new WarningCapturingLogger();
-        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        // Reproduces the Aspire-dev connection posture: the CommunityToolkit Sqlite integration hands EF a
+        // "Data Source=…;Cache=Shared;Mode=ReadWriteCreate" string. Several services open the node database
+        // concurrently at startup, so applying PRAGMA journal_mode=WAL on a shared-cache handle is refused
+        // (SQLite error 6/8) and used to log 'could not apply PRAGMA journal_mode' on every first run.
+        var path = Path.Combine(_dir, "shared-cache.sqlite");
+        var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = path,
-            Mode = SqliteOpenMode.ReadOnly
-        }.ToString());
+            Cache = SqliteCacheMode.Shared,
+            Mode = SqliteOpenMode.ReadWriteCreate
+        }.ToString();
+
+        var logger = new WarningCapturingLogger();
+        await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
 
-        // Must not attempt PRAGMA journal_mode=WAL on a read-only handle (SQLite error 8) — so no warning is logged.
         await NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None);
 
-        AssertEx.Empty(logger.Warnings, "A read-only connection must not log a PRAGMA warning.");
+        AssertEx.Empty(logger.Warnings, "A shared-cache connection must skip WAL rather than log a PRAGMA warning.");
+        // Proves the guard took the skip branch: WAL was never attempted, so the DB stays in its default journal mode.
+        AssertEx.True(!string.Equals(await ScalarAsync<string>(connection, "PRAGMA journal_mode;"), "wal", StringComparison.OrdinalIgnoreCase),
+            "WAL must be skipped on a shared-cache connection.");
     }
 
     private static async Task<SqliteConnection> OpenConfiguredAsync(string path, NodeSqlitePragmaSettings settings)
