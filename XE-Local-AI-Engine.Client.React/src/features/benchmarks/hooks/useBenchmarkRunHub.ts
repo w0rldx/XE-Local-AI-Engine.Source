@@ -40,6 +40,7 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 	const cursorRef = useRef(run?.lastStreamSequence ?? 0);
 	const refetchRef = useRef(refetch);
 	const runRef = useRef(run);
+	const activeRunIdRef = useRef(run?.id);
 	refetchRef.current = refetch;
 	runRef.current = run;
 	const serverRevision = run ? `${run.id}:${run.updatedAtUtc}` : "";
@@ -49,9 +50,18 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 			setParts([]);
 			cursorRef.current = 0;
 			setLastSequence(0);
+			activeRunIdRef.current = undefined;
 			return;
 		}
 		const current = runRef.current;
+		if (!current) {
+			return;
+		}
+		const changedRun = activeRunIdRef.current !== current.id;
+		if (!changedRun && current.lastStreamSequence < cursorRef.current) {
+			return;
+		}
+		activeRunIdRef.current = current.id;
 		setParts(current?.outputParts ?? []);
 		const cursor = current?.lastStreamSequence ?? 0;
 		cursorRef.current = cursor;
@@ -69,7 +79,7 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 		let disposed = false;
 		let reconciling = false;
 
-		const reconcileFromHttp = async (): Promise<void> => {
+		const reconcileFromHttp = async (authoritative = false): Promise<void> => {
 			if (reconciling || disposed) {
 				return;
 			}
@@ -77,7 +87,7 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 			setReconnecting(true);
 			try {
 				const current = await refetchRef.current();
-				if (!disposed && current?.id === runId) {
+				if (!disposed && current?.id === runId && (authoritative || current.lastStreamSequence >= cursorRef.current)) {
 					setParts(current.outputParts);
 					cursorRef.current = current.lastStreamSequence;
 					setLastSequence(current.lastStreamSequence);
@@ -107,13 +117,13 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 			setLastSequence(event.sequence);
 			setParts((current) => applyBenchmarkEvent(current, event));
 			if (event.kind === "TerminalSnapshotAvailable") {
-				reconcileFromHttp().catch(() => undefined);
+				reconcileFromHttp(true).catch(() => undefined);
 			}
 		};
 		const resetHandler = (value: unknown): void => {
 			const parsed = benchmarkReplayResetSchema.safeParse(value);
 			if (parsed.success && parsed.data.runId === runId) {
-				reconcileFromHttp().catch(() => undefined);
+				reconcileFromHttp(true).catch(() => undefined);
 			}
 		};
 		connection.on(benchmarkHubEvents.event, eventHandler);
