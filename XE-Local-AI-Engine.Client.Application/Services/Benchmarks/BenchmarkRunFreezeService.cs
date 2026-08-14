@@ -27,7 +27,8 @@ public sealed class BenchmarkRunFreezeService(
     IBenchmarkEligibilityPolicy eligibilityPolicy,
     IBenchmarkFreezeDependencyService dependencies,
     IBenchmarkRuntimeSnapshotFactory snapshots,
-    TimeProvider timeProvider) : IBenchmarkRunFreezeService
+    TimeProvider timeProvider,
+    IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkRunFreezeService
 {
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
@@ -38,6 +39,7 @@ public sealed class BenchmarkRunFreezeService(
     private readonly IBenchmarkFreezeDependencyService _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IBenchmarkQueueSignal? _queueSignal = queueSignal;
 
     public async Task<BenchmarkRunRecord> StartAsync(Guid projectId,
         string primaryModelName,
@@ -129,7 +131,9 @@ public sealed class BenchmarkRunFreezeService(
                 project.ContextTokens,
                 project.JudgeEnabled,
                 new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName, judge?.ModelName));
-            return await _benchmarkStore.StartRunAsync(command, cancellationToken).ConfigureAwait(false);
+            var run = await _benchmarkStore.StartRunAsync(command, cancellationToken).ConfigureAwait(false);
+            _queueSignal?.Wake();
+            return run;
         }
         finally
         {

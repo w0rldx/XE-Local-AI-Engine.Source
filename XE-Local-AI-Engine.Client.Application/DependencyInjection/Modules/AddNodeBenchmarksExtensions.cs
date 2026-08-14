@@ -16,6 +16,15 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkRunFreezeService, BenchmarkRunFreezeService>();
         builder.Services.AddSingleton<IBenchmarkEligibilityPolicy, BenchmarkEligibilityPolicy>();
         builder.Services.AddSingleton<IBenchmarkRuntimeSnapshotFactory, BenchmarkRuntimeSnapshotFactory>();
+        builder.Services.AddOptions<BenchmarkEventBufferOptions>();
+        builder.Services.AddOptions<BenchmarkQueueOptions>();
+        builder.Services.AddSingleton<IBenchmarkEventBuffer, BenchmarkEventBuffer>();
+        builder.Services.AddSingleton<IBenchmarkCancellationRegistry, BenchmarkCancellationRegistry>();
+        builder.Services.AddScoped<IBenchmarkCancellationService, BenchmarkCancellationService>();
+        builder.Services.AddSingleton<IBenchmarkQueueSignal, BenchmarkQueueSignal>();
+        builder.Services.AddScoped<IBenchmarkRunExecutor, BenchmarkRunExecutor>();
+        builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
+        builder.Services.AddHostedService<BenchmarkQueueHostedService>();
         return builder;
     }
 }

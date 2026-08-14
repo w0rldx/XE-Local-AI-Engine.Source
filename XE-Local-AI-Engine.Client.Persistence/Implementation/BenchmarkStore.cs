@@ -279,10 +279,23 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
-        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage, cancellationToken);
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage, lastStreamSequence: 0, cancellationToken);
+
+    public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId,
+        long expectedRunVersion,
+        string errorMessage,
+        long lastStreamSequence,
+        CancellationToken cancellationToken = default) =>
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage, lastStreamSequence, cancellationToken);
 
     public Task<BenchmarkRunRecord> MarkPrimaryCancelledAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default) =>
-        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty, cancellationToken);
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty, lastStreamSequence: 0, cancellationToken);
+
+    public Task<BenchmarkRunRecord> MarkPrimaryCancelledAsync(Guid runId,
+        long expectedRunVersion,
+        long lastStreamSequence,
+        CancellationToken cancellationToken = default) =>
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty, lastStreamSequence, cancellationToken);
 
     public async Task<BenchmarkRunRecord> MarkJudgeSucceededAsync(BenchmarkJudgeSuccessCommand command, CancellationToken cancellationToken = default)
     {
@@ -302,6 +315,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var now = Now();
         run.JudgeStatus = BenchmarkJudgeStatus.Succeeded;
         run.JudgeResultJson = command.JudgeResultJson.ToArray();
+        UpdateLastStreamSequence(run, command.LastStreamSequence);
         run.JudgeCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
@@ -316,6 +330,15 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         string errorMessage,
         CancellationToken cancellationToken = default)
     {
+        return await MarkJudgeFailedAsync(runId, expectedRunVersion, errorMessage, lastStreamSequence: 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
+        long expectedRunVersion,
+        string errorMessage,
+        long lastStreamSequence,
+        CancellationToken cancellationToken = default)
+    {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.JudgeStatus == BenchmarkJudgeStatus.Failed)
@@ -328,10 +351,44 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var now = Now();
         run.JudgeStatus = BenchmarkJudgeStatus.Failed;
         run.JudgeErrorMessage = Sanitize(errorMessage);
+        UpdateLastStreamSequence(run, lastStreamSequence);
         run.JudgeCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
         await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Judge, BenchmarkWorkStatus.Failed, run.JudgeErrorMessage, now, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(run);
+    }
+
+    public async Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
+        long expectedRunVersion,
+        CancellationToken cancellationToken = default)
+    {
+        return await MarkJudgeCancelledAsync(runId, expectedRunVersion, lastStreamSequence: 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
+        long expectedRunVersion,
+        long lastStreamSequence,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (run.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
+        {
+            return ToRecord(run);
+        }
+
+        EnsureVersion(run.Version, expectedRunVersion);
+        EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
+        var now = Now();
+        run.JudgeStatus = BenchmarkJudgeStatus.Cancelled;
+        UpdateLastStreamSequence(run, lastStreamSequence);
+        run.JudgeCompletedAtUtc = now;
+        run.Version++;
+        run.UpdatedAtUtc = now;
+        await TerminalizeWorkAsync(run.Id, BenchmarkWorkKind.Judge, BenchmarkWorkStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(run);
@@ -401,23 +458,29 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return ToRecord(run);
     }
 
-    public async Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default)
+    public async Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default) =>
+        (await RecoverRunsOnStartupAsync(cancellationToken).ConfigureAwait(false)).Count;
+
+    public async Task<IReadOnlyList<BenchmarkRunRecord>> RecoverRunsOnStartupAsync(CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var activeWork = await _dbContext.BenchmarkWorkItems.Where(entity => entity.Status == BenchmarkWorkStatus.Running).ToListAsync(cancellationToken).ConfigureAwait(false);
         var cancelRequested = await _dbContext.BenchmarkRuns.Where(entity => entity.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var recoveredRunIds = new HashSet<Guid>();
         var now = Now();
         foreach (var work in activeWork)
         {
             var run = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == work.RunId, cancellationToken).ConfigureAwait(false);
-            work.Status = BenchmarkWorkStatus.Failed;
-            work.ErrorMessage = InterruptedMessage;
+            var cancelledPrimary = work.Kind == BenchmarkWorkKind.Primary
+                                   && run.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested;
+            work.Status = cancelledPrimary ? BenchmarkWorkStatus.Cancelled : BenchmarkWorkStatus.Failed;
+            work.ErrorMessage = cancelledPrimary ? null : InterruptedMessage;
             work.FinishedAtUtc = now;
             work.Version++;
             if (work.Kind == BenchmarkWorkKind.Primary)
             {
-                run.PrimaryStatus = BenchmarkPrimaryStatus.Failed;
-                run.PrimaryErrorMessage = InterruptedMessage;
+                run.PrimaryStatus = cancelledPrimary ? BenchmarkPrimaryStatus.Cancelled : BenchmarkPrimaryStatus.Failed;
+                run.PrimaryErrorMessage = cancelledPrimary ? null : InterruptedMessage;
                 run.PrimaryCompletedAtUtc = now;
                 SkipPendingJudge(run);
             }
@@ -429,7 +492,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             }
 
             run.Version++;
+            run.LastStreamSequence = checked(run.LastStreamSequence + 1);
             run.UpdatedAtUtc = now;
+            recoveredRunIds.Add(run.Id);
         }
 
         foreach (var run in cancelRequested.Where(run => activeWork.All(work => work.RunId != run.Id)))
@@ -437,13 +502,17 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.PrimaryStatus = BenchmarkPrimaryStatus.Cancelled;
             run.PrimaryCompletedAtUtc = now;
             run.Version++;
+            run.LastStreamSequence = checked(run.LastStreamSequence + 1);
             run.UpdatedAtUtc = now;
             SkipPendingJudge(run);
+            recoveredRunIds.Add(run.Id);
         }
 
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return activeWork.Count + cancelRequested.Count(run => activeWork.All(work => work.RunId != run.Id));
+        return recoveredRunIds
+                         .Select(id => ToRecord(_dbContext.BenchmarkRuns.Local.Single(run => run.Id == id)))
+                         .ToArray();
     }
 
     public async Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
@@ -474,6 +543,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         BenchmarkPrimaryStatus status,
         BenchmarkWorkStatus workStatus,
         string errorMessage,
+        long lastStreamSequence,
         CancellationToken cancellationToken)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -492,6 +562,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var now = Now();
         run.PrimaryStatus = status;
         run.PrimaryErrorMessage = Sanitize(errorMessage);
+        UpdateLastStreamSequence(run, lastStreamSequence);
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
@@ -615,6 +686,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static void UpdateLastStreamSequence(BenchmarkRun run, long sequence)
+    {
+        if (sequence > run.LastStreamSequence)
+        {
+            run.LastStreamSequence = sequence;
+        }
+    }
+
     private long Now() => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
