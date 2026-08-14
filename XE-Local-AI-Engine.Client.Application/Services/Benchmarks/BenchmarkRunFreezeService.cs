@@ -215,7 +215,8 @@ public sealed class BenchmarkRunFreezeService(
             resolved.OverrideTensor,
             resolved.KvTypeK,
             resolved.KvTypeV,
-            resolved.FlashAttn);
+            resolved.FlashAttn,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
     }
 
     private static BenchmarkInstalledModelSnapshotV1 ToSnapshot(InstalledModelSnapshot source) =>

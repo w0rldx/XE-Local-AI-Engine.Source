@@ -81,13 +81,12 @@ public sealed class BenchmarkJudgeExecutorTests
                 promptPayload.RootElement.GetProperty("outputSchema").GetString());
         }
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
-        _ = supervisor.Received(1).RunExclusiveProfilingAsync(Arg.Is<string>("judge.gguf"),
+        _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("judge.gguf"),
             ModelRole.Chat,
             Arg.Is<ResolvedLaunchArguments>(arguments => !arguments.ExploreMode && arguments.CtxSize == 4096),
-            false,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
-            Arg.Any<CancellationToken>(),
-            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>());
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -158,6 +157,7 @@ public sealed class BenchmarkJudgeExecutorTests
             runner,
             PassthroughSupervisor(),
             FixedVariantSelector(),
+            EndpointBinding(),
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations,
             NullLogger<BenchmarkJudgeExecutor>.Instance);
@@ -184,6 +184,7 @@ public sealed class BenchmarkJudgeExecutorTests
             runner,
             supervisor ?? PassthroughSupervisor(),
             FixedVariantSelector(),
+            EndpointBinding(),
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             new BenchmarkCancellationRegistry(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
@@ -308,7 +309,7 @@ public sealed class BenchmarkJudgeExecutorTests
     private static string V1(char value) => $"v1:{new string(value, 64)}";
 
     private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens) =>
-        new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false);
+        new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
     private static IGpuVariantSelector FixedVariantSelector()
     {
@@ -320,15 +321,26 @@ public sealed class BenchmarkJudgeExecutorTests
     private static ILlamaServerProcessSupervisor PassthroughSupervisor()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
+        supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
                 Arg.Any<ModelRole>(),
                 Arg.Any<ResolvedLaunchArguments>(),
-                Arg.Any<bool>(),
+                Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
                 Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
-                Arg.Any<CancellationToken>(),
-                Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>())
-            .Returns(call => call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(default!, call.ArgAt<CancellationToken>(5)));
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var modelName = call.ArgAt<string>(0);
+                var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19001")), []);
+                return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
+            });
         return supervisor;
+    }
+
+    private static ILlamaServerEndpointBinding EndpointBinding()
+    {
+        var binding = Substitute.For<ILlamaServerEndpointBinding>();
+        binding.Bind(Arg.Any<LlamaServerEndpoint>()).Returns(Substitute.For<IDisposable>());
+        return binding;
     }
 
     private sealed class FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory

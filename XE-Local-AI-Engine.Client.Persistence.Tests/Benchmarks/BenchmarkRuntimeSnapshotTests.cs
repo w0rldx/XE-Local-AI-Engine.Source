@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class BenchmarkRuntimeSnapshotTests
 {
@@ -44,7 +45,8 @@ public sealed class BenchmarkRuntimeSnapshotTests
         var model = CreateModel();
         var snapshot = factory.Create(new BenchmarkRuntimeSnapshotInput(Guid.NewGuid(), Guid.NewGuid(), 4, "exact task", 4096,
             CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: false)]),
-            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false),
+            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false,
+                LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             model,
             new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, null, null, null, null, "sha256:" + new string('b', 64)),
@@ -65,7 +67,8 @@ public sealed class BenchmarkRuntimeSnapshotTests
             "exact task",
             4096,
             CreateRuntime([]),
-            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false),
+            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false,
+                LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             model,
             new BenchmarkJudgeSnapshotV1(false, null, 2, 1, null, null, null, null, null, "hash"),
