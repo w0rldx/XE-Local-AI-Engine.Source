@@ -9,7 +9,7 @@ public sealed class InvocationExecutionContext : IDisposable
 {
     private byte[]? _ownedEpochKey;
 
-    public required Models.RuntimePackage Package { get; init; }
+    public required global::XE_Local_AI_Engine.Client.Models.RuntimePackage Package { get; init; }
 
     public required Guid MessageId { get; init; }
 
@@ -47,7 +47,7 @@ public sealed class InvocationExecutionContext : IDisposable
         }
     }
 
-    public static InvocationExecutionContext Create(Models.RuntimePackage package,
+    public static InvocationExecutionContext Create(global::XE_Local_AI_Engine.Client.Models.RuntimePackage package,
         Guid messageId,
         int epochVersion,
         ReadOnlyMemory<byte> epochKey,
@@ -70,7 +70,7 @@ public sealed class InvocationExecutionContext : IDisposable
         };
     }
 
-    public static InvocationExecutionContext CreatePlain(Models.RuntimePackage package,
+    public static InvocationExecutionContext CreatePlain(global::XE_Local_AI_Engine.Client.Models.RuntimePackage package,
         Guid messageId,
         long? harnessStartedTimestamp = null,
         double? preRunDurationMs = null,
