@@ -16,6 +16,9 @@ public sealed partial class InvocationRunner
     {
         return exception switch
         {
+            // Admission policies supply sanitized, user-facing refusal text. Surface it verbatim as an ordinary
+            // terminal agent-runtime failure; the policy runs after warm-up but before any generation method is called.
+            InvocationGenerationRejectedException generationRejected => (FailureCategory.AgentRuntime, generationRejected.Message),
             // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),

@@ -20,6 +20,12 @@ public sealed class InvocationExecutionContext : IDisposable
     public required bool IsEncrypted { get; init; }
 
     /// <summary>
+    ///     Optional post-warm, pre-generation admission policy. Existing chat, scheduler, and platform callers leave it
+    ///     unset and retain their current behavior.
+    /// </summary>
+    public IInvocationGenerationAdmissionPolicy? GenerationAdmissionPolicy { get; init; }
+
+    /// <summary>
     ///     Optional monotonic timestamp captured by the product entry path before chat admission/context/persistence.
     ///     The runner uses it only for end-to-end harness latency; external/platform invocations leave it unset and use
     ///     the runner-entry timestamp.
@@ -41,7 +47,11 @@ public sealed class InvocationExecutionContext : IDisposable
         }
     }
 
-    public static InvocationExecutionContext Create(Models.RuntimePackage package, Guid messageId, int epochVersion, ReadOnlyMemory<byte> epochKey)
+    public static InvocationExecutionContext Create(Models.RuntimePackage package,
+        Guid messageId,
+        int epochVersion,
+        ReadOnlyMemory<byte> epochKey,
+        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(package);
 
@@ -55,6 +65,7 @@ public sealed class InvocationExecutionContext : IDisposable
             EpochVersion = epochVersion,
             EpochKey = ownedEpochKey,
             IsEncrypted = isEncrypted,
+            GenerationAdmissionPolicy = generationAdmissionPolicy,
             _ownedEpochKey = ownedEpochKey
         };
     }
@@ -63,7 +74,8 @@ public sealed class InvocationExecutionContext : IDisposable
         Guid messageId,
         long? harnessStartedTimestamp = null,
         double? preRunDurationMs = null,
-        double? queueDurationMs = null)
+        double? queueDurationMs = null,
+        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(package);
 
@@ -74,6 +86,7 @@ public sealed class InvocationExecutionContext : IDisposable
             EpochVersion = 0,
             EpochKey = ReadOnlyMemory<byte>.Empty,
             IsEncrypted = false,
+            GenerationAdmissionPolicy = generationAdmissionPolicy,
             HarnessStartedTimestamp = harnessStartedTimestamp,
             PreRunDurationMs = preRunDurationMs,
             QueueDurationMs = queueDurationMs

@@ -2593,16 +2593,112 @@ public sealed class InvocationRunnerTests
             FailureCategory.ContextWindowExceeded);
     }
 
+    [Test]
+    public async Task RunAsync_WhenGenerationAdmissionRejectsUnknownEffectiveContext_DoesNotCallProviderGeneration()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var generationCalls = 0;
+        var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
+        var runner = CreateRunner(sender,
+            CreateGenerationSpyFactory(() => generationCalls++),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: null));
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 8192
+                                           })
+                                           .Build();
+
+        await RunAsync(runner, package, generationAdmissionPolicy: policy);
+
+        AssertEx.Equal(expected: 0, generationCalls);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            MinimumEffectiveContextAdmissionPolicy.EffectiveContextUnavailableMessage,
+            FailureCategory.AgentRuntime);
+        await dispatcher.DidNotReceive().ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenGenerationAdmissionRejectsUndersizedEffectiveContext_DoesNotCallProviderGeneration()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var generationCalls = 0;
+        var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
+        var runner = CreateRunner(sender,
+            CreateGenerationSpyFactory(() => generationCalls++),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 4096));
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 8192
+                                           })
+                                           .Build();
+
+        await RunAsync(runner, package, generationAdmissionPolicy: policy);
+
+        AssertEx.Equal(expected: 0, generationCalls);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "Requested context 8192 tokens exceeds effective context 4096 tokens.",
+            FailureCategory.AgentRuntime);
+        AssertEx.Equal(expected: 8192, AssertEx.NotNull(policy.LastContext).RequestedContextTokens);
+        AssertEx.Equal(expected: 4096, policy.LastContext.EffectiveContextTokens);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenGenerationAdmissionAllowsEffectiveContext_CallsProviderGenerationOnce()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var generationCalls = 0;
+        var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
+        var runner = CreateRunner(sender,
+            CreateGenerationSpyFactory(() => generationCalls++),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 16384));
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 8192
+                                           })
+                                           .Build();
+
+        await RunAsync(runner, package, generationAdmissionPolicy: policy);
+
+        AssertEx.Equal(expected: 1, generationCalls);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, AssertEx.NotNull(policy.LastContext).ProviderName);
+        AssertEx.Equal(expected: 16384, policy.LastContext.EffectiveContextTokens);
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>());
+    }
+
     /// <summary>
     ///     A resolver whose model is served by the llama.cpp provider (the only one the runner warms) reporting
     ///     <paramref name="effectiveContextTokens" /> as its launched per-slot context window.
     /// </summary>
-    private static ILocalModelProviderResolver CreateLlamaCppResolver(int effectiveContextTokens)
+    private static ILocalModelProviderResolver CreateLlamaCppResolver(int? effectiveContextTokens)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<LocalModelRuntimeInfo?>(new LocalModelRuntimeInfo(effectiveContextTokens)));
+                .Returns(Task.FromResult(effectiveContextTokens is { } effective
+                    ? new LocalModelRuntimeInfo(effective)
+                    : null));
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -2955,9 +3051,16 @@ public sealed class InvocationRunnerTests
             NullLogger<InvocationRunner>.Instance);
     }
 
-    private static async Task RunAsync(InvocationRunner runner, RuntimePackage package, CancellationToken cancellationToken = default)
+    private static async Task RunAsync(InvocationRunner runner,
+        RuntimePackage package,
+        CancellationToken cancellationToken = default,
+        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
     {
-        using var context = InvocationExecutionContext.Create(package, Guid.NewGuid(), epochVersion: 1, new byte[32]);
+        using var context = InvocationExecutionContext.Create(package,
+            Guid.NewGuid(),
+            epochVersion: 1,
+            new byte[32],
+            generationAdmissionPolicy);
         await runner.RunAsync(context, cancellationToken);
     }
 
@@ -3017,6 +3120,26 @@ public sealed class InvocationRunnerTests
                    return Task.FromResult(new InvocationAgentContext
                    {
                        Agent = new FakeAIAgent(updatesFactory, onSessionObserved),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    private static IInvocationAgentFactory CreateGenerationSpyFactory(Action onGeneration)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(_ => CreateUpdates("ok"), onStreamingRun: onGeneration),
                        Session = null,
                        SeedMessages = definition.ConversationContext
                                                 .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
@@ -3529,6 +3652,7 @@ public sealed class InvocationRunnerTests
     {
         private readonly Action<IReadOnlyList<ChatMessage>>? _onMessagesObserved;
         private readonly Action<bool>? _onSessionObserved;
+        private readonly Action? _onStreamingRun;
         private readonly Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> _updatesFactory;
 
         public FakeAIAgent(IAsyncEnumerable<AgentResponseUpdate> updates)
@@ -3538,11 +3662,13 @@ public sealed class InvocationRunnerTests
 
         public FakeAIAgent(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory,
             Action<bool>? onSessionObserved = null,
-            Action<IReadOnlyList<ChatMessage>>? onMessagesObserved = null)
+            Action<IReadOnlyList<ChatMessage>>? onMessagesObserved = null,
+            Action? onStreamingRun = null)
         {
             _updatesFactory = updatesFactory;
             _onSessionObserved = onSessionObserved;
             _onMessagesObserved = onMessagesObserved;
+            _onStreamingRun = onStreamingRun;
         }
 
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
@@ -3579,7 +3705,35 @@ public sealed class InvocationRunnerTests
         {
             _onSessionObserved?.Invoke(session is null);
             _onMessagesObserved?.Invoke(messages.ToList());
+            _onStreamingRun?.Invoke();
             return _updatesFactory(cancellationToken);
+        }
+    }
+
+    private sealed class MinimumEffectiveContextAdmissionPolicy(int requiredContextTokens) : IInvocationGenerationAdmissionPolicy
+    {
+        public const string EffectiveContextUnavailableMessage = "Effective context unavailable.";
+
+        public InvocationGenerationAdmissionContext? LastContext { get; private set; }
+
+        public Task<InvocationGenerationAdmissionDecision> EvaluateAsync(InvocationGenerationAdmissionContext context,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastContext = context;
+
+            if (context.EffectiveContextTokens is null)
+            {
+                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(EffectiveContextUnavailableMessage));
+            }
+
+            if (context.EffectiveContextTokens < requiredContextTokens)
+            {
+                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(
+                    $"Requested context {requiredContextTokens} tokens exceeds effective context {context.EffectiveContextTokens} tokens."));
+            }
+
+            return Task.FromResult(InvocationGenerationAdmissionDecision.Allow);
         }
     }
 
