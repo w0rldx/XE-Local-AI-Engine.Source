@@ -2439,6 +2439,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("provider_name");
 
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revision");
+
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");

@@ -48,6 +48,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
         {
             "model_name",
             "provider_name",
+            "revision",
             "updated_at_utc"
         }), "model_provider_map should expose the mapped columns.");
 
