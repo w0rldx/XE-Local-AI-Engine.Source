@@ -92,6 +92,23 @@ public sealed class GgufStoreTests
         AssertEx.Equal(Infra.ModelName, handle.ModelName);
         AssertEx.True(File.Exists(handle.LocalPath));
         AssertEx.Equal(Infra.FileName, Path.GetFileName(handle.LocalPath));
+        AssertEx.True(File.Exists(handle.LocalPath + GgufAcquisitionSidecar.Suffix));
+        var installed = await registry.FindAsync(handle.ModelName, CancellationToken.None);
+        AssertEx.NotNull(installed);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, installed!.Origin);
+        AssertEx.True(GgufRegistryRevision.IsCanonical(installed.RegistryRevision));
+        AssertEx.True(GgufRegistryRevision.IsCanonical(installed.ModelContentFingerprint));
+        AssertEx.Equal(64, installed.Sha256!.Length);
+        AssertEx.Equal(installed.Sha256, installed.Sha256.ToLowerInvariant());
+
+        // The universal sidecar is authoritative when the manifest is corrupt and reconstructs exact provenance/fingerprints.
+        await File.WriteAllTextAsync(Path.Combine(dir.Path, "index.json"), "{ corrupt manifest");
+        using var recoveredRegistry = Infra.Registry(options);
+        var recovered = await recoveredRegistry.FindAsync(handle.ModelName, CancellationToken.None);
+        AssertEx.NotNull(recovered);
+        AssertEx.Equal(installed.RegistryRevision!, recovered!.RegistryRevision);
+        AssertEx.Equal(installed.ModelContentFingerprint!, recovered.ModelContentFingerprint);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, recovered.Origin);
     }
 
     [Test]
