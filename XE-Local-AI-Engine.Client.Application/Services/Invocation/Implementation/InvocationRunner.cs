@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -400,13 +401,40 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // stream-idle watchdog — the primary cause of the audited "big model can never load through chat" hang.
             // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
             // the supervisor, so a user who cancels merely abandons the wait while the load continues in the background.
-            var effectiveContextTokens = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+            var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
+            var localRuntime = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+            var effectiveContextTokens = localRuntime.EffectiveContextTokens;
 
             // AUD4-02: fold the launched effective context window into the turn policy so the OUTER conversation
             // budgeter sizes history against the real window rather than the configured default (see
             // TurnPolicy.WithEffectiveContext for the precedence). The same value is threaded into the agent definition
             // below so the INNER provider-round budgeter (num_ctx side channel) resolves the identical window.
             turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
+
+            if (context.GenerationAdmissionPolicy is { } admissionPolicy)
+            {
+                // The normal chat path deliberately lets generation retry a failed warm so the provider boundary can
+                // surface its authoritative error. An admission-gated caller cannot do that: null effective context
+                // would reject first and mask the captured provider failure. Preserve and rethrow that original failure
+                // before consulting the policy; callers without a policy retain the existing retry-on-send behavior.
+                localRuntime.WarmFailure?.Throw();
+
+                var admissionContext = new InvocationGenerationAdmissionContext
+                {
+                    InvocationId = package.InvocationId,
+                    RequestedContextTokens = requestedContextTokens,
+                    EffectiveContextTokens = effectiveContextTokens,
+                    ModelId = resolvedModel,
+                    ProviderName = localRuntime.ProviderName
+                };
+                var decision = await admissionPolicy.EvaluateAsync(admissionContext, invocationToken).ConfigureAwait(false)
+                               ?? throw new InvalidOperationException("The invocation generation admission policy returned no decision.");
+                if (!decision.IsAllowed)
+                {
+                    throw new InvocationGenerationRejectedException(BuildGenerationAdmissionRejectionMessage(decision.RejectionReasonCode,
+                        admissionContext));
+                }
+            }
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
@@ -714,9 +742,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///         cancellation abandons THIS wait (rethrown so the turn terminates as cancelled) while the load continues in
     ///         the background and the model becomes warm for the next send. A warm FAILURE is swallowed here so the
     ///         streaming send surfaces the real, classified error through its normal path rather than a duplicate here.
+    ///         Admission-gated callers receive that captured failure before policy evaluation, because otherwise an
+    ///         unknown-context rejection would mask the authoritative provider failure.
     ///     </para>
     /// </summary>
-    private async Task<int?> PrepareLocalRuntimeAsync(string resolvedModel,
+    private async Task<LocalRuntimePreparationResult> PrepareLocalRuntimeAsync(string resolvedModel,
         IWorkerEventDispatcher dispatcher,
         Guid invocationId,
         StreamState stream,
@@ -731,7 +761,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // measurable local warm. The send-to-load-start histogram is deliberately local-only, so it is not recorded.
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
-            return null;
+            return new LocalRuntimePreparationResult(EffectiveContextTokens: null, ProviderName: null, WarmFailure: null);
         }
 
         // AUD4-19: this turn pays a real local cold-load. Record how long the turn waited before the load even began
@@ -761,12 +791,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         catch (Exception exception)
         {
-            // Readiness failed (e.g. model incompatible / OOM). Record it and let the streaming send surface the real,
-            // classified failure — it hits the same supervisor path and produces the proper error.
+            // Readiness failed (e.g. model incompatible / OOM). Record and capture it. The normal path still lets the
+            // streaming send surface the real classified failure through its provider boundary; an admission-gated path
+            // rethrows this captured failure before policy evaluation so a null-context refusal cannot mask it.
             stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "failed");
             readinessActivity?.SetTag("outcome", "failed");
             _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
-            return null;
+            return new LocalRuntimePreparationResult(EffectiveContextTokens: null,
+                provider.ProviderName,
+                ExceptionDispatchInfo.Capture(exception));
         }
 
         var durationMs = RecordReadiness(startedUtc, "ready");
@@ -783,8 +816,25 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // AUD4-02: with the model now ready, read the effective per-slot context window it actually loaded so the turn's
         // budgeters + the num_ctx side channel size against the REAL window (llama.cpp's -c) rather than the app default.
         // Best-effort — a null here just keeps the configured default. A cancellation propagates (the turn is terminating).
-        return await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+        var effectiveContextTokens = await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+        return new LocalRuntimePreparationResult(effectiveContextTokens, provider.ProviderName, WarmFailure: null);
     }
+
+    private static string BuildGenerationAdmissionRejectionMessage(string? reasonCode,
+        InvocationGenerationAdmissionContext context)
+    {
+        return reasonCode switch
+        {
+            InvocationGenerationAdmissionReasonCodes.EffectiveContextUnavailable => "Effective context unavailable.",
+            InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient when context.EffectiveContextTokens is { } effectiveContext =>
+                $"Requested context {context.RequestedContextTokens} tokens exceeds effective context {effectiveContext} tokens.",
+            _ => "Invocation generation was rejected by policy."
+        };
+    }
+
+    private readonly record struct LocalRuntimePreparationResult(int? EffectiveContextTokens,
+        string? ProviderName,
+        ExceptionDispatchInfo? WarmFailure);
 
     /// <summary>
     ///     Reads the launched effective context window for <paramref name="resolvedModel" /> from the warm local provider

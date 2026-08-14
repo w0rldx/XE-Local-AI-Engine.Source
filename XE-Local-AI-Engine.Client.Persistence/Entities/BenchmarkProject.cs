@@ -1,0 +1,24 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Entities;
+
+internal sealed record class BenchmarkProject
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
+    ///     <c>benchmark_core_task_json</c>.
+    /// </summary>
+    public byte[] CoreTaskJson { get; set; } = [];
+
+    public int ContextTokens { get; set; }
+    public Guid AgentDefinitionId { get; set; }
+    public bool JudgeEnabled { get; set; }
+    public string? JudgeModelName { get; set; }
+    public int? JudgeContextTokens { get; set; }
+    public int JudgePromptVersion { get; set; }
+    public int JudgeOutputSchemaVersion { get; set; }
+    public long Version { get; set; }
+    public long CreatedAtUtc { get; set; }
+    public long UpdatedAtUtc { get; set; }
+}

@@ -92,6 +92,48 @@ public sealed class GgufStoreTests
         AssertEx.Equal(Infra.ModelName, handle.ModelName);
         AssertEx.True(File.Exists(handle.LocalPath));
         AssertEx.Equal(Infra.FileName, Path.GetFileName(handle.LocalPath));
+        AssertEx.True(File.Exists(handle.LocalPath + GgufAcquisitionSidecar.Suffix));
+        var installed = await registry.FindAsync(handle.ModelName, CancellationToken.None);
+        AssertEx.NotNull(installed);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, installed!.Origin);
+        AssertEx.True(GgufRegistryRevision.IsCanonical(installed.RegistryRevision));
+        AssertEx.True(GgufRegistryRevision.IsCanonical(installed.ModelContentFingerprint));
+        AssertEx.Equal(64, installed.Sha256!.Length);
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(installed.Sha256));
+
+        // The universal sidecar is authoritative when the manifest is corrupt and reconstructs exact provenance/fingerprints.
+        await File.WriteAllTextAsync(Path.Combine(dir.Path, "index.json"), "{ corrupt manifest");
+        using var recoveredRegistry = Infra.Registry(options);
+        var recovered = await recoveredRegistry.FindAsync(handle.ModelName, CancellationToken.None);
+        AssertEx.NotNull(recovered);
+        AssertEx.Equal(installed.RegistryRevision!, recovered!.RegistryRevision);
+        AssertEx.Equal(installed.ModelContentFingerprint!, recovered.ModelContentFingerprint);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, recovered.Origin);
+    }
+
+    [Test]
+    public async Task GgufStore_DownloadCommitRejectsCaseOnlyDestinationCollision()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var collisionPath = dir.FilePath(Infra.FileName.ToUpperInvariant());
+        await File.WriteAllTextAsync(collisionPath, "preserve-existing");
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(download,
+            Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length)),
+            registry,
+            options);
+
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, progress: null, CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.DestinationConflict, exception.Reason);
+        AssertEx.Equal("preserve-existing", await File.ReadAllTextAsync(collisionPath));
     }
 
     [Test]
@@ -388,7 +430,8 @@ public sealed class GgufStoreTests
         }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.True(string.Equals(correctSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -413,7 +456,8 @@ public sealed class GgufStoreTests
         }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.True(string.Equals(correctSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -443,12 +487,12 @@ public sealed class GgufStoreTests
     }
 
     [Test]
-    public async Task GgufStore_NoShaAnywhere_PersistsNullSha_NotDiscoveryValue()
+    public async Task GgufStore_NoShaAnywhere_PersistsComputedCanonicalSha()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest → nothing to verify, so the
-        // persisted sha256 MUST be null rather than an unverified echo.
+        // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest. The universal acquisition
+        // contract still persists the hash computed from the completed local bytes in canonical lowercase form.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -461,11 +505,14 @@ public sealed class GgufStoreTests
             RepoId = Infra.RepoId
         }, progress: null, CancellationToken.None);
 
-        AssertEx.Null(handle.Sha256);
+        var computedSha = Infra.Sha256Upper(ModelBytes);
+        AssertEx.True(string.Equals(computedSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
 
         var stored = await registry.ListAsync(CancellationToken.None);
-        AssertEx.Null(stored.Single().Sha256);
+        AssertEx.True(string.Equals(computedSha, stored.Single().Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(stored.Single().Sha256));
     }
 
     [Test]
@@ -610,7 +657,8 @@ public sealed class GgufStoreTests
 
         // The download succeeds and records the sha from the probe's X-Linked-Etag — the CDN Xet ETag was ignored.
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.True(string.Equals(correctSha, handle.Sha256, StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(handle.Sha256));
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 

@@ -47,7 +47,7 @@ public sealed class CapacityServiceTests
         await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await harness.Supervisor.DidNotReceive().CheckHealthAsync(Arg.Any<CancellationToken>());
         await harness.FootprintProvider.DidNotReceive()
-                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -76,7 +76,7 @@ public sealed class CapacityServiceTests
         AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
         await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await harness.FootprintProvider.DidNotReceive()
-                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -100,6 +100,24 @@ public sealed class CapacityServiceTests
         decision.Reservation.Dispose();
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
         AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
+    }
+
+    [Test]
+    public async Task Capacity_ContextAwareRequest_ForwardsRequiredContextToFootprintProbe()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(4 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, RequiredContextTokens: 32768), CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        _ = harness.FootprintProvider.Received(1)
+                   .ResolveFootprintAsync(Model, ModelRole.Chat, harness.Profile, 32768, Arg.Any<CancellationToken>());
+        decision.Reservation?.Dispose();
     }
 
     [Test]
@@ -220,7 +238,7 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(CapacityVerdict.QueueSameModel, decision.Verdict);
         // No fit math runs on the same-model path.
         await harness.FootprintProvider.DidNotReceive()
-                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -644,7 +662,11 @@ public sealed class CapacityServiceTests
                         }));
             Supervisor.CheckHealthAsync(Arg.Any<CancellationToken>())
                       .Returns(Task.FromResult(RunningLlama));
-            FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>())
+            FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(),
+                                     Arg.Any<ModelRole>(),
+                                     Arg.Any<HardwareProfile>(),
+                                     Arg.Any<int?>(),
+                                     Arg.Any<CancellationToken>())
                              .Returns(call =>
                              {
                                  if (!string.Equals(ProviderName, Llamacpp, StringComparison.OrdinalIgnoreCase)

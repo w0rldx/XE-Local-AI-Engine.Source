@@ -44,11 +44,16 @@ public sealed class GetGgufDownloadStatusEndpoint(IGgufDownloadCoordinator downl
 
         await Send.OkAsync(new GgufDownloadStatusResponse
             {
+                OperationId = status.OperationId,
+                OperationKind = status.OperationKind,
                 ModelName = status.ModelName,
                 Phase = status.Phase.ToString(),
                 CompletedBytes = status.CompletedBytes,
                 TotalBytes = status.TotalBytes,
-                SanitizedError = status.SanitizedError
+                SanitizedError = status.SanitizedError,
+                ErrorCode = status.ErrorCode,
+                StartedAtUtc = status.StartedAtUtc,
+                UpdatedAtUtc = status.UpdatedAtUtc
             },
             ct).ConfigureAwait(false);
     }

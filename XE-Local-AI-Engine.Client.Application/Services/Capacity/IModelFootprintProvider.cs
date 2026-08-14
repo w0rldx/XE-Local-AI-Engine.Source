@@ -22,6 +22,16 @@ public interface IModelFootprintProvider
     Task<ModelFootprint> ResolveFootprintAsync(string modelName, ModelRole role, HardwareProfile profile, CancellationToken ct);
 
     /// <summary>
+    ///     Resolves a footprint that can satisfy <paramref name="requiredContextTokens" />. The default preserves
+    ///     source compatibility for providers that do not need a context-specific path.
+    /// </summary>
+    Task<ModelFootprint> ResolveFootprintAsync(string modelName,
+        ModelRole role,
+        HardwareProfile profile,
+        int? requiredContextTokens,
+        CancellationToken ct) => ResolveFootprintAsync(modelName, role, profile, ct);
+
+    /// <summary>
     /// Purely recomputes the next smaller automatic hardware-tier footprint candidate for admission. Frozen and
     /// deterministic allocations cannot be adjusted; shared launch state is unchanged until the explicit commit.
     /// </summary>

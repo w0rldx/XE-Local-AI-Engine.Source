@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 
 /// <summary>
 ///     One-time startup backfill that closes the FRR-2 upgrade gap: before the unmapped-routing default was flipped to
@@ -59,17 +56,14 @@ public sealed class OllamaProviderMapBackfillService(
         ArgumentNullException.ThrowIfNull(logger);
 
         await using var scope = scopeFactory.CreateAsyncScope();
-        var ollamaModelService = scope.ServiceProvider.GetRequiredService<IOllamaModelService>();
-        var mapStore = scope.ServiceProvider.GetRequiredService<IModelProviderMapStore>();
-
-        IReadOnlyList<string> installedModelNames;
+        var coordinator = scope.ServiceProvider.GetRequiredService<IOllamaProviderMapBackfillCoordinator>();
         try
         {
-            var installed = await ollamaModelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
-            installedModelNames = installed
-                                  .Select(model => model.Name)
-                                  .Where(name => !string.IsNullOrWhiteSpace(name))
-                                  .ToArray();
+            var mapped = await coordinator.BackfillAsync(cancellationToken).ConfigureAwait(false);
+            if (mapped > 0)
+            {
+                logger.LogInformation("Backfilled {Count} pre-existing Ollama model(s) to the ollama provider map.", mapped);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -80,48 +74,6 @@ public sealed class OllamaProviderMapBackfillService(
             // Ollama is optional and may be absent/unreachable: there is simply nothing to backfill. Pre-existing rows
             // (if any) are untouched; a later boot with Ollama running will complete the backfill.
             logger.LogDebug(exception, "Skipping Ollama provider-map backfill: the installed-model list could not be read.");
-            return;
-        }
-
-        if (installedModelNames.Count == 0)
-        {
-            return;
-        }
-
-        var mapped = 0;
-        foreach (var modelName in installedModelNames)
-        {
-            try
-            {
-                var existing = await mapStore.GetProviderForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
-                if (existing is not null)
-                {
-                    // Already mapped (e.g. a forward pull, or a deliberate operator override): leave it untouched.
-                    continue;
-                }
-
-                _ = await mapStore.UpsertAsync(modelName, OllamaLocalModelProvider.OllamaProviderName, cancellationToken).ConfigureAwait(false);
-                mapped++;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception) when (exception is InvalidOperationException or IOException)
-            {
-                // A single row failing to persist must not abort the whole backfill — the model keeps the (wrong) default
-                // until the next boot, but the remaining models are still repaired.
-                logger.LogWarning(exception, "Could not backfill the Ollama provider mapping for an installed model; skipping it.");
-            }
-        }
-
-        if (mapped > 0)
-        {
-            logger.LogInformation("Backfilled {Count} pre-existing Ollama model(s) to the ollama provider map.", mapped);
-
-            // AUD4-16: rows changed, so drop the resolver's short-TTL provider-name cache to avoid a stale default-route
-            // read for a just-mapped Ollama model. Optional resolve — the TTL is the backstop if the resolver is absent.
-            scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
         }
     }
 }

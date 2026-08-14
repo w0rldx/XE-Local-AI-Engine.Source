@@ -9,7 +9,7 @@ public sealed class InvocationExecutionContext : IDisposable
 {
     private byte[]? _ownedEpochKey;
 
-    public required Models.RuntimePackage Package { get; init; }
+    public required global::XE_Local_AI_Engine.Client.Models.RuntimePackage Package { get; init; }
 
     public required Guid MessageId { get; init; }
 
@@ -18,6 +18,12 @@ public sealed class InvocationExecutionContext : IDisposable
     public required ReadOnlyMemory<byte> EpochKey { get; init; }
 
     public required bool IsEncrypted { get; init; }
+
+    /// <summary>
+    ///     Optional post-warm, pre-generation admission policy. Existing chat, scheduler, and platform callers leave it
+    ///     unset and retain their current behavior.
+    /// </summary>
+    public IInvocationGenerationAdmissionPolicy? GenerationAdmissionPolicy { get; init; }
 
     /// <summary>
     ///     Optional monotonic timestamp captured by the product entry path before chat admission/context/persistence.
@@ -41,7 +47,11 @@ public sealed class InvocationExecutionContext : IDisposable
         }
     }
 
-    public static InvocationExecutionContext Create(Models.RuntimePackage package, Guid messageId, int epochVersion, ReadOnlyMemory<byte> epochKey)
+    public static InvocationExecutionContext Create(global::XE_Local_AI_Engine.Client.Models.RuntimePackage package,
+        Guid messageId,
+        int epochVersion,
+        ReadOnlyMemory<byte> epochKey,
+        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(package);
 
@@ -55,15 +65,17 @@ public sealed class InvocationExecutionContext : IDisposable
             EpochVersion = epochVersion,
             EpochKey = ownedEpochKey,
             IsEncrypted = isEncrypted,
+            GenerationAdmissionPolicy = generationAdmissionPolicy,
             _ownedEpochKey = ownedEpochKey
         };
     }
 
-    public static InvocationExecutionContext CreatePlain(Models.RuntimePackage package,
+    public static InvocationExecutionContext CreatePlain(global::XE_Local_AI_Engine.Client.Models.RuntimePackage package,
         Guid messageId,
         long? harnessStartedTimestamp = null,
         double? preRunDurationMs = null,
-        double? queueDurationMs = null)
+        double? queueDurationMs = null,
+        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(package);
 
@@ -74,6 +86,7 @@ public sealed class InvocationExecutionContext : IDisposable
             EpochVersion = 0,
             EpochKey = ReadOnlyMemory<byte>.Empty,
             IsEncrypted = false,
+            GenerationAdmissionPolicy = generationAdmissionPolicy,
             HarnessStartedTimestamp = harnessStartedTimestamp,
             PreRunDurationMs = preRunDurationMs,
             QueueDurationMs = queueDurationMs

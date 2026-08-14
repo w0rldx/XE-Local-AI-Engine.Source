@@ -21,9 +21,11 @@ import {
 	browseGgufRepositories,
 	browseImageRepositories,
 	cancelAllPreviewRuns,
+	cancelBenchmarkRun,
 	cancelCudaBuild,
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
+	cancelGgufImport,
 	cancelImageJob,
 	cancelImageModelDownload,
 	cancelLlamaCppSourceBuild,
@@ -42,6 +44,7 @@ import {
 	connectConnection,
 	continuePreviewRun,
 	createAgentDefinition,
+	createBenchmarkProject,
 	createCustomTool,
 	createDevelopmentProject,
 	createDevelopmentRepositoryFromTemplate,
@@ -57,6 +60,8 @@ import {
 	createSlashCommand,
 	createWorkspace,
 	deleteAgentDefinition,
+	deleteBenchmarkProject,
+	deleteBenchmarkRun,
 	deleteConversationFile,
 	deleteCustomTool,
 	deleteGoldenConversation,
@@ -99,6 +104,8 @@ import {
 	getAgentPlaybookMonitor,
 	getAgentUsageSummary,
 	getAppUpdateStatus,
+	getBenchmarkProject,
+	getBenchmarkRun,
 	getCloudSettings,
 	getConnectionStatus,
 	getCudaBuildPrerequisites,
@@ -108,8 +115,12 @@ import {
 	getDevelopmentCapability,
 	getDevelopmentProject,
 	getDevelopmentTask,
+	getGgufDownloadOperationStatus,
 	getGgufDownloads,
 	getGgufDownloadStatus,
+	getGgufImportCapability,
+	getGgufImports,
+	getGgufImportStatus,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
@@ -155,6 +166,8 @@ import {
 	listAgentExecutionLogs,
 	listAgentPlaybookActions,
 	listAgentTemplates,
+	listBenchmarkProjects,
+	listBenchmarkRuns,
 	listConversationFiles,
 	listCustomTools,
 	listDevelopmentArtifacts,
@@ -162,6 +175,8 @@ import {
 	listDevelopmentProjects,
 	listDevelopmentRepositories,
 	listDevelopmentTemplates,
+	listEligibleBenchmarkAgents,
+	listEligibleBenchmarkModels,
 	listGoldenConversations,
 	listImageJobs,
 	listImageModelDownloads,
@@ -194,6 +209,7 @@ import {
 	pinNodeChatConversation,
 	pollNodeBinding,
 	previewDevelopmentPatch,
+	previewGgufImport,
 	previewSkillImport,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
@@ -220,6 +236,7 @@ import {
 	saveCloudSettings,
 	saveNodeSettings,
 	saveTutorialState,
+	scoreBenchmarkRun,
 	searchKnowledge,
 	selectLocalModel,
 	setHfToken,
@@ -227,9 +244,11 @@ import {
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
+	startBenchmarkRun,
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
+	startGgufImport,
 	startImageModelDownload,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
@@ -238,6 +257,7 @@ import {
 	unhandledExceptionProbe,
 	unloadLocalModel,
 	updateAgentDefinition,
+	updateBenchmarkProject,
 	updateCustomTool,
 	updateLlamaCppRuntime,
 	updateMcpServer,
@@ -273,12 +293,16 @@ import type {
 	BrowseImageRepositoriesResponse,
 	CancelAllPreviewRunsData,
 	CancelAllPreviewRunsResponse,
+	CancelBenchmarkRunData,
+	CancelBenchmarkRunResponse,
 	CancelCudaBuildData,
 	CancelCudaBuildResponse,
 	CancelDevelopmentAttemptData,
 	CancelDevelopmentAttemptResponse,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
+	CancelGgufImportData,
+	CancelGgufImportResponse,
 	CancelImageJobData,
 	CancelImageJobResponse,
 	CancelImageModelDownloadData,
@@ -316,6 +340,8 @@ import type {
 	ContinuePreviewRunResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
+	CreateBenchmarkProjectData,
+	CreateBenchmarkProjectResponse,
 	CreateCustomToolData,
 	CreateCustomToolResponse,
 	CreateDevelopmentProjectData,
@@ -349,6 +375,10 @@ import type {
 	CreateWorkspaceResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
+	DeleteBenchmarkProjectData,
+	DeleteBenchmarkProjectResponse,
+	DeleteBenchmarkRunData,
+	DeleteBenchmarkRunResponse,
 	DeleteConversationFileData,
 	DeleteConversationFileResponse,
 	DeleteCustomToolData,
@@ -438,6 +468,10 @@ import type {
 	GetAgentUsageSummaryResponse,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusResponse,
+	GetBenchmarkProjectData,
+	GetBenchmarkProjectResponse,
+	GetBenchmarkRunData,
+	GetBenchmarkRunResponse,
 	GetCloudSettingsData,
 	GetCloudSettingsResponse,
 	GetConnectionStatusData,
@@ -456,10 +490,18 @@ import type {
 	GetDevelopmentProjectResponse,
 	GetDevelopmentTaskData,
 	GetDevelopmentTaskResponse,
+	GetGgufDownloadOperationStatusData,
+	GetGgufDownloadOperationStatusResponse,
 	GetGgufDownloadsData,
 	GetGgufDownloadsResponse,
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusResponse,
+	GetGgufImportCapabilityData,
+	GetGgufImportCapabilityResponse,
+	GetGgufImportsData,
+	GetGgufImportsResponse,
+	GetGgufImportStatusData,
+	GetGgufImportStatusResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -554,6 +596,10 @@ import type {
 	ListAgentPlaybookActionsResponse,
 	ListAgentTemplatesData,
 	ListAgentTemplatesResponse,
+	ListBenchmarkProjectsData,
+	ListBenchmarkProjectsResponse,
+	ListBenchmarkRunsData,
+	ListBenchmarkRunsResponse,
 	ListConversationFilesData,
 	ListConversationFilesResponse,
 	ListCustomToolsData,
@@ -568,6 +614,10 @@ import type {
 	ListDevelopmentRepositoriesResponse,
 	ListDevelopmentTemplatesData,
 	ListDevelopmentTemplatesResponse,
+	ListEligibleBenchmarkAgentsData,
+	ListEligibleBenchmarkAgentsResponse,
+	ListEligibleBenchmarkModelsData,
+	ListEligibleBenchmarkModelsResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
@@ -634,6 +684,8 @@ import type {
 	PollNodeBindingResponse,
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchResponse,
+	PreviewGgufImportData,
+	PreviewGgufImportResponse,
 	PreviewSkillImportData,
 	PreviewSkillImportResponse,
 	PromoteSuggestedPlaybookActionData,
@@ -692,6 +744,8 @@ import type {
 	SaveNodeSettingsResponse,
 	SaveTutorialStateData,
 	SaveTutorialStateResponse,
+	ScoreBenchmarkRunData,
+	ScoreBenchmarkRunResponse,
 	SearchKnowledgeData,
 	SearchKnowledgeResponse,
 	SelectLocalModelData,
@@ -708,12 +762,16 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
+	StartBenchmarkRunData,
+	StartBenchmarkRunResponse,
 	StartCudaBuildData,
 	StartCudaBuildResponse,
 	StartDevelopmentNextActionData,
 	StartDevelopmentNextActionResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadResponse,
+	StartGgufImportData,
+	StartGgufImportResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
 	StartLlamaCppSourceBuildData,
@@ -733,6 +791,8 @@ import type {
 	UnloadLocalModelResponse,
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
+	UpdateBenchmarkProjectData,
+	UpdateBenchmarkProjectResponse,
 	UpdateCustomToolData,
 	UpdateCustomToolResponse,
 	UpdateLlamaCppRuntimeData,
@@ -1799,6 +1859,22 @@ export const cancelGgufDownloadMutation = (
 	return mutationOptions;
 };
 
+export const cancelGgufImportMutation = (
+	options?: Partial<Options<CancelGgufImportData>>,
+): UseMutationOptions<CancelGgufImportResponse, AxiosError<DefaultError>, Options<CancelGgufImportData>> => {
+	const mutationOptions: UseMutationOptions<CancelGgufImportResponse, AxiosError<DefaultError>, Options<CancelGgufImportData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelGgufImport({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const cancelLlamaCppSourceBuildMutation = (
 	options?: Partial<Options<CancelLlamaCppSourceBuildData>>,
 ): UseMutationOptions<CancelLlamaCppSourceBuildResponse, AxiosError<DefaultError>, Options<CancelLlamaCppSourceBuildData>> => {
@@ -1943,6 +2019,28 @@ export const getCudaBuildStatusOptions = (options?: Options<GetCudaBuildStatusDa
 		queryKey: getCudaBuildStatusQueryKey(options),
 	});
 
+export const getGgufDownloadOperationStatusQueryKey = (options: Options<GetGgufDownloadOperationStatusData>) =>
+	createQueryKey("getGgufDownloadOperationStatus", options);
+
+export const getGgufDownloadOperationStatusOptions = (options: Options<GetGgufDownloadOperationStatusData>) =>
+	queryOptions<
+		GetGgufDownloadOperationStatusResponse,
+		AxiosError<DefaultError>,
+		GetGgufDownloadOperationStatusResponse,
+		ReturnType<typeof getGgufDownloadOperationStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufDownloadOperationStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufDownloadOperationStatusQueryKey(options),
+	});
+
 export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) => createQueryKey("getGgufDownloads", options);
 
 export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>) =>
@@ -1984,6 +2082,71 @@ export const getGgufDownloadStatusOptions = (options: Options<GetGgufDownloadSta
 			return data;
 		},
 		queryKey: getGgufDownloadStatusQueryKey(options),
+	});
+
+export const getGgufImportCapabilityQueryKey = (options?: Options<GetGgufImportCapabilityData>) =>
+	createQueryKey("getGgufImportCapability", options);
+
+export const getGgufImportCapabilityOptions = (options?: Options<GetGgufImportCapabilityData>) =>
+	queryOptions<
+		GetGgufImportCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetGgufImportCapabilityResponse,
+		ReturnType<typeof getGgufImportCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufImportCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufImportCapabilityQueryKey(options),
+	});
+
+export const getGgufImportsQueryKey = (options?: Options<GetGgufImportsData>) => createQueryKey("getGgufImports", options);
+
+export const getGgufImportsOptions = (options?: Options<GetGgufImportsData>) =>
+	queryOptions<
+		GetGgufImportsResponse,
+		AxiosError<DefaultError>,
+		GetGgufImportsResponse,
+		ReturnType<typeof getGgufImportsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufImports({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufImportsQueryKey(options),
+	});
+
+export const getGgufImportStatusQueryKey = (options: Options<GetGgufImportStatusData>) =>
+	createQueryKey("getGgufImportStatus", options);
+
+export const getGgufImportStatusOptions = (options: Options<GetGgufImportStatusData>) =>
+	queryOptions<
+		GetGgufImportStatusResponse,
+		AxiosError<DefaultError>,
+		GetGgufImportStatusResponse,
+		ReturnType<typeof getGgufImportStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufImportStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufImportStatusQueryKey(options),
 	});
 
 export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
@@ -2263,6 +2426,26 @@ export const listRunningModelsOptions = (options?: Options<ListRunningModelsData
 		queryKey: listRunningModelsQueryKey(options),
 	});
 
+export const previewGgufImportMutation = (
+	options?: Partial<Options<PreviewGgufImportData>>,
+): UseMutationOptions<PreviewGgufImportResponse, AxiosError<DefaultError>, Options<PreviewGgufImportData>> => {
+	const mutationOptions: UseMutationOptions<
+		PreviewGgufImportResponse,
+		AxiosError<DefaultError>,
+		Options<PreviewGgufImportData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await previewGgufImport({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const refreshModelCatalogMutation = (
 	options?: Partial<Options<RefreshModelCatalogData>>,
 ): UseMutationOptions<RefreshModelCatalogResponse, AxiosError<DefaultError>, Options<RefreshModelCatalogData>> => {
@@ -2369,6 +2552,22 @@ export const startGgufDownloadMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startGgufDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startGgufImportMutation = (
+	options?: Partial<Options<StartGgufImportData>>,
+): UseMutationOptions<StartGgufImportResponse, AxiosError<DefaultError>, Options<StartGgufImportData>> => {
+	const mutationOptions: UseMutationOptions<StartGgufImportResponse, AxiosError<DefaultError>, Options<StartGgufImportData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startGgufImport({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -4814,6 +5013,346 @@ export const codexStatusOptions = (options?: Options<CodexStatusData>) =>
 		queryKey: codexStatusQueryKey(options),
 	});
 
+export const listEligibleBenchmarkAgentsQueryKey = (options: Options<ListEligibleBenchmarkAgentsData>) =>
+	createQueryKey("listEligibleBenchmarkAgents", options);
+
+export const listEligibleBenchmarkAgentsOptions = (options: Options<ListEligibleBenchmarkAgentsData>) =>
+	queryOptions<
+		ListEligibleBenchmarkAgentsResponse,
+		AxiosError<DefaultError>,
+		ListEligibleBenchmarkAgentsResponse,
+		ReturnType<typeof listEligibleBenchmarkAgentsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listEligibleBenchmarkAgents({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listEligibleBenchmarkAgentsQueryKey(options),
+	});
+
+export const listEligibleBenchmarkModelsQueryKey = (options?: Options<ListEligibleBenchmarkModelsData>) =>
+	createQueryKey("listEligibleBenchmarkModels", options);
+
+export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibleBenchmarkModelsData>) =>
+	queryOptions<
+		ListEligibleBenchmarkModelsResponse,
+		AxiosError<DefaultError>,
+		ListEligibleBenchmarkModelsResponse,
+		ReturnType<typeof listEligibleBenchmarkModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listEligibleBenchmarkModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listEligibleBenchmarkModelsQueryKey(options),
+	});
+
+export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>
+	createQueryKey("listBenchmarkProjects", options);
+
+export const listBenchmarkProjectsOptions = (options?: Options<ListBenchmarkProjectsData>) =>
+	queryOptions<
+		ListBenchmarkProjectsResponse,
+		AxiosError<DefaultError>,
+		ListBenchmarkProjectsResponse,
+		ReturnType<typeof listBenchmarkProjectsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkProjects({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkProjectsQueryKey(options),
+	});
+
+export const createBenchmarkProjectMutation = (
+	options?: Partial<Options<CreateBenchmarkProjectData>>,
+): UseMutationOptions<CreateBenchmarkProjectResponse, AxiosError<DefaultError>, Options<CreateBenchmarkProjectData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateBenchmarkProjectResponse,
+		AxiosError<DefaultError>,
+		Options<CreateBenchmarkProjectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createBenchmarkProject({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteBenchmarkProjectMutation = (
+	options?: Partial<Options<DeleteBenchmarkProjectData>>,
+): UseMutationOptions<DeleteBenchmarkProjectResponse, AxiosError<DefaultError>, Options<DeleteBenchmarkProjectData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteBenchmarkProjectResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteBenchmarkProjectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteBenchmarkProject({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getBenchmarkProjectQueryKey = (options: Options<GetBenchmarkProjectData>) =>
+	createQueryKey("getBenchmarkProject", options);
+
+export const getBenchmarkProjectOptions = (options: Options<GetBenchmarkProjectData>) =>
+	queryOptions<
+		GetBenchmarkProjectResponse,
+		AxiosError<DefaultError>,
+		GetBenchmarkProjectResponse,
+		ReturnType<typeof getBenchmarkProjectQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkProject({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkProjectQueryKey(options),
+	});
+
+export const updateBenchmarkProjectMutation = (
+	options?: Partial<Options<UpdateBenchmarkProjectData>>,
+): UseMutationOptions<UpdateBenchmarkProjectResponse, AxiosError<DefaultError>, Options<UpdateBenchmarkProjectData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateBenchmarkProjectResponse,
+		AxiosError<DefaultError>,
+		Options<UpdateBenchmarkProjectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateBenchmarkProject({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listBenchmarkRunsQueryKey = (options: Options<ListBenchmarkRunsData>) =>
+	createQueryKey("listBenchmarkRuns", options);
+
+export const listBenchmarkRunsOptions = (options: Options<ListBenchmarkRunsData>) =>
+	queryOptions<
+		ListBenchmarkRunsResponse,
+		AxiosError<DefaultError>,
+		ListBenchmarkRunsResponse,
+		ReturnType<typeof listBenchmarkRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkRunsQueryKey(options),
+	});
+
+const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
+	queryKey: QueryKey<Options>,
+	page: K,
+) => {
+	const params = { ...queryKey[0] };
+	if (page.body) {
+		params.body = {
+			...(queryKey[0].body as any),
+			...(page.body as any),
+		};
+	}
+	if (page.headers) {
+		params.headers = {
+			...queryKey[0].headers,
+			...page.headers,
+		};
+	}
+	if (page.path) {
+		params.path = {
+			...(queryKey[0].path as any),
+			...(page.path as any),
+		};
+	}
+	if (page.query) {
+		params.query = {
+			...(queryKey[0].query as any),
+			...(page.query as any),
+		};
+	}
+	return params as unknown as typeof page;
+};
+
+export const listBenchmarkRunsInfiniteQueryKey = (
+	options: Options<ListBenchmarkRunsData>,
+): QueryKey<Options<ListBenchmarkRunsData>> => createQueryKey("listBenchmarkRuns", options, true);
+
+export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkRunsData>) =>
+	infiniteQueryOptions<
+		ListBenchmarkRunsResponse,
+		AxiosError<DefaultError>,
+		InfiniteData<ListBenchmarkRunsResponse>,
+		QueryKey<Options<ListBenchmarkRunsData>>,
+		number | Pick<QueryKey<Options<ListBenchmarkRunsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListBenchmarkRunsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									page: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listBenchmarkRuns({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listBenchmarkRunsInfiniteQueryKey(options),
+		},
+	);
+
+export const startBenchmarkRunMutation = (
+	options?: Partial<Options<StartBenchmarkRunData>>,
+): UseMutationOptions<StartBenchmarkRunResponse, AxiosError<DefaultError>, Options<StartBenchmarkRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartBenchmarkRunResponse,
+		AxiosError<DefaultError>,
+		Options<StartBenchmarkRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteBenchmarkRunMutation = (
+	options?: Partial<Options<DeleteBenchmarkRunData>>,
+): UseMutationOptions<DeleteBenchmarkRunResponse, AxiosError<DefaultError>, Options<DeleteBenchmarkRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteBenchmarkRunResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteBenchmarkRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getBenchmarkRunQueryKey = (options: Options<GetBenchmarkRunData>) => createQueryKey("getBenchmarkRun", options);
+
+export const getBenchmarkRunOptions = (options: Options<GetBenchmarkRunData>) =>
+	queryOptions<
+		GetBenchmarkRunResponse,
+		AxiosError<DefaultError>,
+		GetBenchmarkRunResponse,
+		ReturnType<typeof getBenchmarkRunQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkRunQueryKey(options),
+	});
+
+export const cancelBenchmarkRunMutation = (
+	options?: Partial<Options<CancelBenchmarkRunData>>,
+): UseMutationOptions<CancelBenchmarkRunResponse, AxiosError<DefaultError>, Options<CancelBenchmarkRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelBenchmarkRunResponse,
+		AxiosError<DefaultError>,
+		Options<CancelBenchmarkRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const scoreBenchmarkRunMutation = (
+	options?: Partial<Options<ScoreBenchmarkRunData>>,
+): UseMutationOptions<ScoreBenchmarkRunResponse, AxiosError<DefaultError>, Options<ScoreBenchmarkRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		ScoreBenchmarkRunResponse,
+		AxiosError<DefaultError>,
+		Options<ScoreBenchmarkRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await scoreBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listSlashCommandsQueryKey = (options?: Options<ListSlashCommandsData>) =>
 	createQueryKey("listSlashCommands", options);
 
@@ -5553,38 +6092,6 @@ export const listAgentExecutionLogsOptions = (options: Options<ListAgentExecutio
 		},
 		queryKey: listAgentExecutionLogsQueryKey(options),
 	});
-
-const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
-	queryKey: QueryKey<Options>,
-	page: K,
-) => {
-	const params = { ...queryKey[0] };
-	if (page.body) {
-		params.body = {
-			...(queryKey[0].body as any),
-			...(page.body as any),
-		};
-	}
-	if (page.headers) {
-		params.headers = {
-			...queryKey[0].headers,
-			...page.headers,
-		};
-	}
-	if (page.path) {
-		params.path = {
-			...(queryKey[0].path as any),
-			...(page.path as any),
-		};
-	}
-	if (page.query) {
-		params.query = {
-			...(queryKey[0].query as any),
-			...(page.query as any),
-		};
-	}
-	return params as unknown as typeof page;
-};
 
 export const listAgentExecutionLogsInfiniteQueryKey = (
 	options: Options<ListAgentExecutionLogsData>,

@@ -19,7 +19,10 @@ public enum HuggingFaceDownloadFailure
     HashMismatch = 4,
 
     /// <summary>The requested repo, revision, or file was not found.</summary>
-    NotFound = 5
+    NotFound = 5,
+
+    /// <summary>The final managed destination already exists, including a case-only filesystem collision.</summary>
+    DestinationConflict = 6
 }
 
 /// <summary>
@@ -66,4 +69,14 @@ public sealed class InsufficientDiskSpaceException : Exception
 
     /// <summary>Bytes currently free on the target volume.</summary>
     public long AvailableBytes { get; }
+}
+
+/// <summary>Signals that acquisition-owned temporary artifacts remained after provider cleanup was attempted.</summary>
+public sealed class GgufAcquisitionCleanupException : Exception
+{
+    /// <summary>Creates a sanitized cleanup failure while retaining internal diagnostics in the inner exception.</summary>
+    public GgufAcquisitionCleanupException(string sanitizedMessage, Exception innerException)
+        : base(sanitizedMessage, innerException)
+    {
+    }
 }

@@ -5,4 +5,4 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 ///     serves it. Read by the model-routing client and the preview/embeddings resolvers to dispatch a model to the
 ///     right local runtime.
 /// </summary>
-public sealed record ModelProviderMapRecord(string ModelName, string ProviderName, long UpdatedAtUtc);
+public sealed record ModelProviderMapRecord(string ModelName, string ProviderName, long UpdatedAtUtc, string Revision = "");

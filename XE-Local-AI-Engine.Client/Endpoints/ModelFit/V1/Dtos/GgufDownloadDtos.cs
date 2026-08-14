@@ -138,6 +138,10 @@ public sealed class StartGgufDownloadResponse
     public required string ModelName { get; init; }
 
     public required bool AlreadyInFlight { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required string OperationKind { get; init; }
 }
 
 /// <summary>Body for <c>POST model-fit/download/cancel</c>. Identifies the in-flight download by its model name.</summary>
@@ -167,6 +171,10 @@ public sealed class CancelGgufDownloadResponse
 /// </summary>
 public sealed class GgufDownloadStatusResponse
 {
+    public required Guid OperationId { get; init; }
+
+    public required string OperationKind { get; init; }
+
     public required string ModelName { get; init; }
 
     /// <summary>Phase string: <c>Running</c>, <c>Completed</c>, <c>Cancelled</c>, or <c>Failed</c>.</summary>
@@ -180,6 +188,12 @@ public sealed class GgufDownloadStatusResponse
 
     /// <summary>Operator-safe error reason; non-<c>null</c> only when <see cref="Phase" /> is <c>Failed</c>.</summary>
     public string? SanitizedError { get; init; }
+
+    public string? ErrorCode { get; init; }
+
+    public DateTimeOffset? StartedAtUtc { get; init; }
+
+    public DateTimeOffset? UpdatedAtUtc { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/gguf/downloads</c>.</summary>
@@ -192,4 +206,9 @@ public sealed class ListGgufDownloadsResponse
 public sealed class GetGgufDownloadStatusRequest
 {
     public string? ModelName { get; init; }
+}
+
+public sealed class GetGgufDownloadOperationStatusRequest
+{
+    public Guid OperationId { get; init; }
 }

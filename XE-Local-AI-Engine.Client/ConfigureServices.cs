@@ -42,6 +42,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using LoggerExtensions = XE_Local_AI_Engine.Client.Common.Extensions.LoggerExtensions;
@@ -156,6 +157,10 @@ public static class ConfigureServices
         // Hub-backed preview-workflow event publisher — supersedes the no-op default registered in AddNodePreviewWorkflows
         // so run/node lifecycle events broadcast to the connected operator (PreviewWorkflowHub mapped in Program).
         builder.Services.AddSingleton<IPreviewWorkflowEventPublisher, PreviewWorkflowEventPublisher>();
+
+        // Ordered per-run benchmark output relay. The application buffer remains the bounded replay authority; this
+        // host service only bridges its published events to the Operator-scoped benchmark hub.
+        builder.Services.AddHostedService<BenchmarkRunHubEventRelay>();
 
         // Hub-backed GGUF download event publisher — supersedes the no-op default registered in AddNodeModelFit so
         // download status changes push live to operator clients (GgufDownloadHub mapped in Program), replacing the
@@ -505,6 +510,11 @@ public static class ConfigureServices
         if (!options.Converters.OfType<SlashCommandActionTypeDtoJsonConverter>().Any())
         {
             options.Converters.Insert(index: 0, new SlashCommandActionTypeDtoJsonConverter());
+        }
+
+        if (!options.Converters.OfType<LocalModelOriginJsonConverter>().Any())
+        {
+            options.Converters.Insert(index: 0, new LocalModelOriginJsonConverter());
         }
 
         if (!options.Converters.OfType<JsonStringEnumConverter>().Any())

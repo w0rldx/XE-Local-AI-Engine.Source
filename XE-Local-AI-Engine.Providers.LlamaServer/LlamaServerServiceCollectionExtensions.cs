@@ -122,6 +122,7 @@ public static class LlamaServerServiceCollectionExtensions
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
+        services.TryAddSingleton<ILlamaServerEndpointBinding, LlamaServerEndpointBinding>();
 
         // AUD4-02/05/17: the central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
         // CPU threads) plus its persistent safe-fallback store. Options default here; the host overrides from node config.
@@ -226,7 +227,8 @@ public static class LlamaServerServiceCollectionExtensions
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>(),
                 sp.GetRequiredService<LlamaServerSupervisorOptions>(),
-                sp.GetRequiredService<ITokenEstimatorCalibrationScheduler>()));
+                sp.GetRequiredService<ITokenEstimatorCalibrationScheduler>(),
+                sp.GetRequiredService<ILlamaServerEndpointBinding>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net.Sockets;
 using Microsoft.Extensions.AI;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -19,6 +20,26 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DeferredLlamaServerChatClientServerGoneTests
 {
+    [Test]
+    public async Task BoundBenchmarkEndpoint_BypassesSupervisorAndExternalEndpointResolution()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var externalEndpoint = new LlamaServerEndpoint("model-a", ModelRole.Chat, new Uri("http://external.example/v1"));
+        supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, Arg.Any<CancellationToken>()).Returns(externalEndpoint);
+        var binding = Substitute.For<ILlamaServerEndpointBinding>();
+        var pinnedEndpoint = new LlamaServerEndpoint("model-a", ModelRole.Chat, new Uri("http://127.0.0.1:19002/v1"));
+        binding.GetBoundEndpoint("model-a", ModelRole.Chat).Returns(pinnedEndpoint);
+        using var client = new DeferredLlamaServerChatClient(supervisor,
+            "model-a",
+            TimeSpan.FromSeconds(5),
+            endpointBinding: binding);
+
+        var resolved = await client.ResolveEndpointAsync(CancellationToken.None);
+
+        AssertEx.Equal(pinnedEndpoint, resolved);
+        _ = supervisor.DidNotReceiveWithAnyArgs().EnsureRunningAsync(default!, default, default);
+    }
+
     [Test]
     public async Task ResponseEndedMidStream_IsServerGone()
     {

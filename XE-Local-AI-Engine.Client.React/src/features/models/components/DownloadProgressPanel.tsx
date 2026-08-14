@@ -49,7 +49,7 @@ export function DownloadProgressPanel({
 						const pct = status?.pct;
 						const hasDeterminate = pct !== undefined;
 						const estimate = rateEstimates.get(modelName);
-						const isActiveDownload = status?.phase === "Running";
+						const isActiveDownload = status?.phase === "Downloading";
 						const speedLabel =
 							estimate?.bytesPerSecond !== undefined
 								? t("pages.models.gguf.download.speed", "{{value}}/s", { value: humanizeBytes(estimate.bytesPerSecond) })

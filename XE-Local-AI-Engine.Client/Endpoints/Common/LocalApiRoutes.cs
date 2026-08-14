@@ -237,6 +237,22 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Operator-managed benchmark projects, durable runs, scoring, cancellation, and eligibility catalogs.
+    /// </summary>
+    public static class Benchmarks
+    {
+        public const string Projects = "benchmarks/projects";
+        public const string ProjectById = "benchmarks/projects/{projectId}";
+        public const string ProjectRuns = "benchmarks/projects/{projectId}/runs";
+        public const string RunById = "benchmarks/runs/{runId}";
+        public const string RunCancel = "benchmarks/runs/{runId}/cancel";
+        public const string RunScore = "benchmarks/runs/{runId}/score";
+        public const string EligibleAgents = "benchmarks/eligible-agents";
+        public const string EligibleModels = "benchmarks/eligible-models";
+        public const string Hub = "/api/local/v1/benchmarks/hub";
+    }
+
+    /// <summary>
     ///     Node-wide agent skill library routes. Skills are SKILL.md documents (name + description + markdown body)
     ///     that agent definitions select into via <c>AllowedSkillIds</c> and load on demand at runtime.
     /// </summary>
@@ -378,10 +394,18 @@ public static class LocalApiRoutes
         // the one-shot hydrate on mount; live progress streams over the DownloadHub below (no more per-second poll).
         public const string Downloads = "model-fit/gguf/downloads";
         public const string DownloadStatus = "model-fit/gguf/downloads/{modelName}";
+        public const string DownloadOperationStatus = "model-fit/gguf/downloads/operations/{operationId:guid}";
 
         // SignalR push hub for GGUF download status changes. Full path (mapped via MapHub, not the FastEndpoints prefix),
         // mirroring the other local hubs. Replaces the per-second downloads poll; each push carries the sanitized status.
         public const string DownloadHub = "/api/local/v1/model-fit/gguf/downloads/hub";
+
+        public const string ImportCapability = "model-fit/gguf/import/capability";
+        public const string ImportPreview = "model-fit/gguf/import/preview";
+        public const string Import = "model-fit/gguf/import";
+        public const string Imports = "model-fit/gguf/imports";
+        public const string ImportStatus = "model-fit/gguf/imports/{operationId:guid}";
+        public const string ImportCancel = "model-fit/gguf/imports/{operationId:guid}/cancel";
 
         // Running llama-server processes derived from the supervisor health snapshot; eject tree-kills one.
         public const string Running = "model-fit/running";

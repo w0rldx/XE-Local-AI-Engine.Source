@@ -112,6 +112,12 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<DevelopmentTemplateMaterialization> DevelopmentTemplateMaterializations => Set<DevelopmentTemplateMaterialization>();
 
+    internal DbSet<BenchmarkProject> BenchmarkProjects => Set<BenchmarkProject>();
+
+    internal DbSet<BenchmarkRun> BenchmarkRuns => Set<BenchmarkRun>();
+
+    internal DbSet<BenchmarkWorkItem> BenchmarkWorkItems => Set<BenchmarkWorkItem>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -358,5 +364,8 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DevelopmentEventConfiguration());
         modelBuilder.ApplyConfiguration(new DevelopmentTemplateConfiguration());
         modelBuilder.ApplyConfiguration(new DevelopmentTemplateMaterializationConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkProjectConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkRunConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkWorkItemConfiguration());
     }
 }

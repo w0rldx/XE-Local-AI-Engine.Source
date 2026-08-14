@@ -59,4 +59,27 @@ public static class GgufFilePath
 
         return combined;
     }
+
+    /// <summary>
+    ///     Proves that an absolute or relative stored path resolves under <paramref name="baseDirectory" /> and returns
+    ///     its canonical slash-separated relative form.
+    /// </summary>
+    public static string GetRelativeContainedPath(string baseDirectory, string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var baseFull = Path.GetFullPath(baseDirectory);
+        var resolved = Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : ResolveContainedPath(baseFull, path);
+        var relative = Path.GetRelativePath(baseFull, resolved).Replace('\\', '/');
+        if (!IsSafeRelativePath(relative))
+        {
+            throw new ArgumentException("The stored path resolves outside the models directory.", nameof(path));
+        }
+
+        _ = ResolveContainedPath(baseFull, relative);
+        return string.Join('/', relative.Split('/', StringSplitOptions.RemoveEmptyEntries));
+    }
 }

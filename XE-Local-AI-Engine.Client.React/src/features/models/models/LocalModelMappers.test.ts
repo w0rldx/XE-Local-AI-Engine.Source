@@ -8,6 +8,7 @@ describe("local model mappers", () => {
 			toLocalModelViewModel({
 				modelName: "llama3:8b",
 				provider: "llamacpp",
+				origin: "imported",
 				sizeBytes: 1_073_741_824,
 				modifiedAtUtc: Date.UTC(2026, 4, 24),
 				family: "llama",
@@ -24,6 +25,7 @@ describe("local model mappers", () => {
 		).toEqual({
 			modelName: "llama3:8b",
 			provider: "llamacpp",
+			origin: "imported",
 			sizeLabel: "1.0 GB",
 			modifiedDateLabel: "2026-05-24",
 			familyLabel: "llama",
@@ -52,6 +54,7 @@ describe("local model mappers", () => {
 		).toEqual({
 			modelName: "",
 			provider: "Ollama",
+			origin: null,
 			sizeLabel: "—",
 			modifiedDateLabel: "—",
 			familyLabel: "—",
@@ -64,5 +67,4 @@ describe("local model mappers", () => {
 			isOverridden: false,
 		});
 	});
-
 });

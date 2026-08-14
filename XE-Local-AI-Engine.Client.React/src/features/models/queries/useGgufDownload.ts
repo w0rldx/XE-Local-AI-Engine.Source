@@ -1,18 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 import {
 	browseGgufRepositoriesOptions,
 	cancelGgufDownloadMutation,
-	getGgufDownloadsOptions,
 	getGgufDownloadsQueryKey,
 	inspectGgufRepositoryOptions,
-	listLocalModelsQueryKey,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { toGgufRepository, toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
+import type { GgufAcquisitionStatus } from "@/features/models/models/GgufAcquisitionModels";
+import { useActiveGgufAcquisitions } from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 // Server state for the Hugging Face GGUF browse + download flow on the Model Management page. Reads use the generated
@@ -117,46 +116,10 @@ export function useCancelGgufDownload() {
 }
 
 // Domain view-model for a single active GGUF download, derived from the backend DTO.
-export interface GgufDownloadStatus {
-	modelName: string;
-	phase: "Running" | "Completed" | "Cancelled" | "Failed";
-	/** 0–100 when totalBytes is known; undefined when Content-Length is absent (indeterminate). */
-	pct: number | undefined;
-	completedBytes: number | null | undefined;
-	totalBytes: number | null | undefined;
-	sanitizedError: string | null | undefined;
-}
-
-// The single SignalR client-method name the GgufDownloadHub invokes. Each push carries the full sanitized status, so the
-// client reconciles by model name with no follow-up REST poll. Must match GgufDownloadHubEvents.StatusChanged.
-const DOWNLOAD_STATUS_CHANGED = "ggufDownload.statusChanged";
-
-// The sanitized status push payload — mirrors the REST GgufDownloadStatusResponse field-for-field (PascalCase off the
-// wire is normalized to camelCase by the SignalR JSON protocol the server configures, matching the generated REST DTO).
-interface GgufDownloadStatusPush {
-	modelName?: string | null;
-	phase?: string | null;
-	completedBytes?: number | null;
-	totalBytes?: number | null;
-	sanitizedError?: string | null;
-}
-
-// Maps a raw status (REST list item or hub push, identical shape) into the strict domain view-model. Returns null when
-// the model name is absent (nothing to key on).
-function toDownloadStatus(raw: GgufDownloadStatusPush): GgufDownloadStatus | null {
-	if (!raw.modelName) {
-		return null;
-	}
-	const pct = raw.totalBytes && raw.completedBytes != null ? Math.round((raw.completedBytes / raw.totalBytes) * 100) : undefined;
-	return {
-		modelName: raw.modelName,
-		phase: (raw.phase ?? "Running") as GgufDownloadStatus["phase"],
-		pct,
-		completedBytes: raw.completedBytes,
-		totalBytes: raw.totalBytes,
-		sanitizedError: raw.sanitizedError,
-	};
-}
+export type GgufDownloadStatus = GgufAcquisitionStatus & {
+	readonly operationKind: "Download";
+	readonly sanitizedError: string | null | undefined;
+};
 
 // Live GGUF download progress. Does ONE initial fetch of GET model-fit/gguf/downloads to hydrate on mount (no polling),
 // then opens the GgufDownloadHub SignalR connection and merges each pushed status into a local map — replacing the old
@@ -171,79 +134,20 @@ function toDownloadStatus(raw: GgufDownloadStatusPush): GgufDownloadStatus | nul
 export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean } = {}): ReadonlyMap<string, GgufDownloadStatus> {
 	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
 	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
-	const queryClient = useQueryClient();
-
-	// Model names whose terminal "Completed" status we've already reacted to. A completed download adds a file to the
-	// local model store, so we invalidate the installed-models list — but completion arrives ONLY as a hub push (no REST
-	// mutation fires), and that same status re-arrives on hub reconnect / hydrate refetch. Tracking handled names keeps
-	// the invalidation to exactly once per model instead of on every reconcile render.
-	const completedHandled = useRef<Set<string>>(new Set());
-
-	// Live merged status map: seeded from the one-shot hydrate, then updated in place by each hub push.
-	const [statuses, setStatuses] = useState<ReadonlyMap<string, GgufDownloadStatus>>(() => new Map());
-
-	// One-shot hydrate on mount. No refetchInterval — live updates arrive over the hub. staleTime keeps a remount within
-	// the session from refetching; the start/cancel mutations invalidate this key to force a fresh hydrate when needed.
-	const { data } = useQuery({
-		...withResponseValidation(getGgufDownloadsOptions()),
-		enabled,
-		staleTime: 30_000,
-	});
-
-	// Merge the hydrate snapshot into the live map (without clobbering newer hub pushes for the same model: a push that
-	// arrived first stays unless the hydrate carries a different — i.e. more recent on (re)fetch — phase/bytes).
-	useEffect(() => {
-		const items = data?.items;
-		if (!items || items.length === 0) {
-			return;
-		}
-		setStatuses((previous) => {
-			const next = new Map(previous);
-			for (const item of items) {
-				const status = toDownloadStatus(item);
-				if (status) {
-					next.set(status.modelName, status);
-				}
+	const acquisitions = useActiveGgufAcquisitions({ enabled });
+	const statuses = useMemo(() => {
+		const downloads = new Map<string, GgufDownloadStatus>();
+		for (const status of acquisitions.values()) {
+			if (status.operationKind === "Download") {
+				downloads.set(status.modelName, {
+					...status,
+					operationKind: "Download",
+					sanitizedError: status.sanitizedMessage,
+				});
 			}
-			return next;
-		});
-	}, [data]);
-
-	// Live push channel. Mounted for the hook's lifetime (the poller mounts it globally), gated on auth like the
-	// scheduler hub. Each push replaces that model's entry in the live map. StrictMode-safe connect/disconnect mirrors
-	// useSchedulerHub: stop only after start settles, tolerate a start aborted by our own cleanup.
-	useEffect(() => {
-		if (!enabled) {
-			return;
 		}
-
-		// Shared refcounted connection: reused across mounts so the globally-mounted download poller does not pay a fresh
-		// negotiate + WebSocket upgrade on every navigation. The status handler below stays per-mount so this subscriber
-		// coexists with any other subscriber to the same hub.
-		const hub = acquireHubConnection("model-fit/gguf/downloads/hub");
-		const { connection } = hub;
-
-		const onStatus = (push: GgufDownloadStatusPush): void => {
-			const status = toDownloadStatus(push);
-			if (!status) {
-				return;
-			}
-			setStatuses((previous) => {
-				const next = new Map(previous);
-				next.set(status.modelName, status);
-				return next;
-			});
-		};
-
-		connection.on(DOWNLOAD_STATUS_CHANGED, onStatus);
-
-		return () => {
-			connection.off(DOWNLOAD_STATUS_CHANGED, onStatus);
-			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
-			// once the start promise settles (so cleanup never aborts an in-flight negotiation — the StrictMode race).
-			hub.release();
-		};
-	}, [enabled]);
+		return downloads;
+	}, [acquisitions]);
 
 	// Reconcile the store with the live map: Running → markInFlight (show progress), terminal → removeInFlight (clear).
 	// On a Completed download, also invalidate the installed-models list so the freshly downloaded GGUF appears without a
@@ -251,17 +155,13 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 	// hook point. Guarded by completedHandled so a re-pushed/re-hydrated Completed status refetches exactly once.
 	useEffect(() => {
 		for (const status of statuses.values()) {
-			if (status.phase === "Running") {
+			if (status.phase === "Queued" || status.phase === "Validating" || status.phase === "Downloading" || status.phase === "Committing") {
 				markInFlight(status.modelName);
 				continue;
 			}
 			removeInFlight(status.modelName);
-			if (status.phase === "Completed" && !completedHandled.current.has(status.modelName)) {
-				completedHandled.current.add(status.modelName);
-				queryClient.invalidateQueries({ queryKey: listLocalModelsQueryKey() }).catch(() => undefined);
-			}
 		}
-	}, [statuses, markInFlight, removeInFlight, queryClient]);
+	}, [statuses, markInFlight, removeInFlight]);
 
 	return statuses;
 }

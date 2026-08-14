@@ -66,6 +66,19 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
     }
 
+    internal async Task<IReadOnlyList<GgufModelRegistryEntry>> ListAllAsync(CancellationToken ct)
+    {
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await LoadEntriesAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     /// <inheritdoc />
     public async Task<GgufModelRegistryEntry?> FindAsync(string modelName, CancellationToken ct)
     {
@@ -97,6 +110,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            entry = EnsureRevision(entry);
             var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
             var normalizedPath = NormalizeLocalPath(entry.LocalPath);
             entries.RemoveAll(existing =>
@@ -104,6 +118,151 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 || PathComparer.Equals(NormalizeLocalPath(existing.LocalPath), normalizedPath));
             entries.Add(entry);
             await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>Inserts a new exact entry without replacing any model-name or backing-path collision.</summary>
+    internal async Task InsertIfAbsentAsync(GgufModelRegistryEntry entry, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        entry = EnsureRevision(entry);
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
+            var normalizedPath = NormalizeLocalPath(entry.LocalPath);
+            if (entries.Any(existing => existing == entry
+                                        && string.Equals(existing.RegistryRevision, entry.RegistryRevision, StringComparison.Ordinal)))
+            {
+                return;
+            }
+
+            if (entries.Any(existing => string.Equals(existing.ModelName, entry.ModelName, StringComparison.OrdinalIgnoreCase)
+                                        || PathComparer.Equals(NormalizeLocalPath(existing.LocalPath), normalizedPath)))
+            {
+                throw new IOException("The model registry destination already exists.");
+            }
+
+            entries.Add(entry);
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>Removes an entry only while its complete immutable value and revision still match.</summary>
+    internal async Task<bool> RemoveExactAsync(GgufModelRegistryEntry expected, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        expected = EnsureRevision(expected);
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
+            var index = entries.FindIndex(entry => entry == expected
+                                                   && string.Equals(entry.RegistryRevision, expected.RegistryRevision, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                return false;
+            }
+
+            entries.RemoveAt(index);
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    internal async Task<IReadOnlyList<GgufModelRegistryEntry>?> RemoveAliasSetIfMatchAsync(
+        IReadOnlyList<GgufModelRegistryEntry> expectedAliases,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(expectedAliases);
+        if (expectedAliases.Count == 0)
+        {
+            throw new ArgumentException("At least one expected registry alias is required.", nameof(expectedAliases));
+        }
+
+        var expected = expectedAliases.Select(EnsureRevision)
+                                      .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                      .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                      .ToArray();
+        var expectedPath = NormalizeLocalPath(expected[0].LocalPath);
+        if (expected.Any(entry => !PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath)))
+        {
+            throw new ArgumentException("Every expected alias must reference the same backing weight.", nameof(expectedAliases));
+        }
+
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadManifestEntriesForMutationAsync(ct).ConfigureAwait(false)).ToList();
+            var current = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath))
+                                 .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                 .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                 .ToArray();
+            if (!current.SequenceEqual(expected))
+            {
+                return null;
+            }
+
+            entries.RemoveAll(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath));
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+            return Array.AsReadOnly(current);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    internal async Task<bool> RestoreAliasSetIfMatchAsync(IReadOnlyList<GgufModelRegistryEntry> expectedAliases,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(expectedAliases);
+        if (expectedAliases.Count == 0)
+        {
+            throw new ArgumentException("At least one expected registry alias is required.", nameof(expectedAliases));
+        }
+
+        var expected = expectedAliases.Select(EnsureRevision)
+                                      .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                      .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                      .ToArray();
+        var expectedPath = NormalizeLocalPath(expected[0].LocalPath);
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadManifestEntriesForMutationAsync(ct).ConfigureAwait(false)).ToList();
+            var current = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath)
+                                                 || expected.Any(expectedEntry => string.Equals(expectedEntry.ModelName,
+                                                     entry.ModelName,
+                                                     StringComparison.OrdinalIgnoreCase)))
+                                 .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                 .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                 .ToArray();
+            if (current.SequenceEqual(expected))
+            {
+                return true;
+            }
+
+            if (current.Length != 0)
+            {
+                return false;
+            }
+
+            entries.AddRange(expected);
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+            return true;
         }
         finally
         {
@@ -166,7 +325,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     {
         if (!File.Exists(_manifestPath))
         {
-            return Rescan();
+            return await RecoverAndPersistAsync(ct).ConfigureAwait(false);
         }
 
         try
@@ -178,30 +337,76 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
             if (manifest?.Models is null)
             {
-                return Rescan();
+                return await RecoverAndPersistAsync(ct).ConfigureAwait(false);
             }
 
-            // Drop entries whose backing file disappeared since the manifest was written (manual deletion).
-            return manifest.Models
-                           .Where(entry => File.Exists(entry.LocalPath))
-                           .ToList();
+            var entries = new List<GgufModelRegistryEntry>(manifest.Models.Count);
+            foreach (var entry in manifest.Models.Where(static entry => entry.LocalPath is not null))
+            {
+                if (!File.Exists(entry.LocalPath))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var computed = GgufRegistryRevision.ComputeV1(entry, _modelsDirectory);
+                    if (entry.RegistryRevision is not null
+                        && !string.Equals(entry.RegistryRevision, computed, StringComparison.Ordinal))
+                    {
+                        _logger.LogWarning("Skipping GGUF registry entry {ModelName}: RegistryRevisionMismatch.", entry.ModelName);
+                        continue;
+                    }
+
+                    entries.Add(entry with { RegistryRevision = computed });
+                }
+                catch (ArgumentException)
+                {
+                    _logger.LogWarning("Skipping GGUF registry entry {ModelName}: invalid contained path metadata.", entry.ModelName);
+                }
+            }
+
+            var (reconciled, changed) = await ReconcileWithSidecarsAsync(entries, ct).ConfigureAwait(false);
+            if (changed)
+            {
+                await WriteManifestAsync(reconciled, ct).ConfigureAwait(false);
+            }
+
+            return reconciled;
         }
         catch (JsonException exception)
         {
             _logger.LogWarning(exception, "GGUF registry manifest is corrupt. Rebuilding by rescanning the models directory.");
-            return Rescan();
+            return await RecoverAndPersistAsync(ct).ConfigureAwait(false);
         }
         catch (IOException exception)
         {
             _logger.LogWarning(exception, "GGUF registry manifest could not be read. Rebuilding by rescanning the models directory.");
-            return Rescan();
+            return await RecoverAndPersistAsync(ct).ConfigureAwait(false);
         }
+    }
+
+    private async Task<IReadOnlyList<GgufModelRegistryEntry>> LoadManifestEntriesForMutationAsync(CancellationToken ct)
+    {
+        if (!File.Exists(_manifestPath))
+        {
+            return [];
+        }
+
+        await using var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var manifest = await JsonSerializer.DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct).ConfigureAwait(false);
+        if (manifest?.Models is null)
+        {
+            throw new IOException("The GGUF registry manifest is invalid.");
+        }
+
+        return manifest.Models.Where(static entry => entry.LocalPath is not null).Select(EnsureRevision).ToArray();
     }
 
     // Best-effort rebuild from the .gguf files on disk when the manifest is unavailable. Metadata not derivable from the
     // file alone (sha256, source revision) is left empty — the store re-verifies on the next ensure. The role stays
     // Unknown EXCEPT for a speculative-decoding drafter, which the file name alone identifies (see GgufDraftModel).
-    private IReadOnlyList<GgufModelRegistryEntry> Rescan()
+    private async Task<IReadOnlyList<GgufModelRegistryEntry>> RescanAsync(CancellationToken ct)
     {
         if (!Directory.Exists(_modelsDirectory))
         {
@@ -212,6 +417,33 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         foreach (var path in Directory.EnumerateFiles(_modelsDirectory, "*.gguf", SearchOption.TopDirectoryOnly))
         {
             var fileName = Path.GetFileName(path);
+            var sidecarPath = path + GgufAcquisitionSidecar.Suffix;
+            if (File.Exists(sidecarPath))
+            {
+                var metadata = await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
+                if (metadata is null)
+                {
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: invalid acquisition sidecar.", fileName);
+                    continue;
+                }
+
+                var recovered = GgufAcquisitionSidecar.ToRegistryEntry(metadata, path, _modelsDirectory);
+                if (!string.Equals(recovered.RegistryRevision, metadata.RegistryRevision, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: RegistryRevisionMismatch.", fileName);
+                    continue;
+                }
+
+                entries.Add(recovered);
+                continue;
+            }
+
+            if (IsDeterministicAcquisitionFileName(fileName))
+            {
+                _logger.LogWarning("Skipping acquired GGUF {FileName}: recovery sidecar is missing.", fileName);
+                continue;
+            }
+
             var quant = GgufQuantParser.TryParse(fileName);
             if (quant is null)
             {
@@ -223,7 +455,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             {
                 info = new FileInfo(path);
             }
-            catch (IOException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 continue;
             }
@@ -240,7 +472,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
             // A rescanned entry has no recoverable repo/revision; key it by the file stem so it is at least resolvable.
             var modelName = GgufModelName.Format(Path.GetFileNameWithoutExtension(fileName), quant);
-            entries.Add(new GgufModelRegistryEntry
+            var legacy = new GgufModelRegistryEntry
             {
                 ModelName = modelName,
                 RepoId = Path.GetFileNameWithoutExtension(fileName),
@@ -252,10 +484,152 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 SourceRevision = string.Empty,
                 DownloadedAtUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
                 Role = isDraft ? GgufRole.Draft : GgufRole.Unknown
-            });
+            };
+            entries.Add(EnsureRevision(legacy));
         }
 
         return entries;
+    }
+
+    private async Task<IReadOnlyList<GgufModelRegistryEntry>> RecoverAndPersistAsync(CancellationToken ct)
+    {
+        var entries = await RescanAsync(ct).ConfigureAwait(false);
+        if (entries.Count > 0)
+        {
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+        }
+
+        return entries;
+    }
+
+    private GgufModelRegistryEntry EnsureRevision(GgufModelRegistryEntry entry)
+    {
+        var computed = GgufRegistryRevision.ComputeV1(entry, _modelsDirectory);
+        if (entry.RegistryRevision is not null && !string.Equals(entry.RegistryRevision, computed, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The registry revision does not match the material entry value.", nameof(entry));
+        }
+
+        return entry with { RegistryRevision = computed };
+    }
+
+    private async Task<(IReadOnlyList<GgufModelRegistryEntry> Entries, bool Changed)> ReconcileWithSidecarsAsync(
+        IReadOnlyList<GgufModelRegistryEntry> manifestEntries,
+        CancellationToken ct)
+    {
+        if (!Directory.Exists(_modelsDirectory))
+        {
+            return ([], manifestEntries.Count != 0);
+        }
+
+        var entries = manifestEntries.ToList();
+        var changed = false;
+        foreach (var path in Directory.EnumerateFiles(_modelsDirectory, "*.gguf", SearchOption.TopDirectoryOnly))
+        {
+            var sidecarPath = path + GgufAcquisitionSidecar.Suffix;
+            if (File.Exists(sidecarPath))
+            {
+                var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
+                if (metadata is null)
+                {
+                    changed |= RemoveEntriesForPath(entries, path) > 0;
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: invalid acquisition sidecar.", Path.GetFileName(path));
+                    continue;
+                }
+
+                var recovered = GgufAcquisitionSidecar.ToRegistryEntry(metadata, path, _modelsDirectory);
+                if (!string.Equals(recovered.RegistryRevision, metadata.RegistryRevision, StringComparison.Ordinal))
+                {
+                    changed |= RemoveEntriesForPath(entries, path) > 0;
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: RegistryRevisionMismatch.", Path.GetFileName(path));
+                    continue;
+                }
+
+                var samePath = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)))
+                                      .ToArray();
+                if (samePath.Length == 1
+                    && string.Equals(samePath[0].ModelName, recovered.ModelName, StringComparison.Ordinal)
+                    && string.Equals(samePath[0].RegistryRevision, recovered.RegistryRevision, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var nameCollision = entries.Any(entry => !samePath.Contains(entry)
+                                                         && string.Equals(entry.ModelName, recovered.ModelName,
+                                                             StringComparison.OrdinalIgnoreCase));
+                if (nameCollision)
+                {
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: its model name conflicts with another registry path.",
+                        Path.GetFileName(path));
+                    continue;
+                }
+
+                // Recovery is the only normal registry path that needs to establish file-byte integrity. Existing exact
+                // manifest rows are deliberately served from stable registry/sidecar facts; explicit snapshots perform
+                // the full content verification required for mutation and benchmark boundaries.
+                if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false) is null)
+                {
+                    changed |= RemoveEntriesForPath(entries, path) > 0;
+                    _logger.LogWarning("Skipping acquired GGUF {FileName}: acquisition content verification failed.", Path.GetFileName(path));
+                    continue;
+                }
+
+                entries.RemoveAll(entry => samePath.Contains(entry));
+                entries.Add(recovered);
+                changed = true;
+                continue;
+            }
+
+            if (IsDeterministicAcquisitionFileName(Path.GetFileName(path)))
+            {
+                changed |= RemoveAcquiredEntriesForPath(entries, path) > 0;
+                _logger.LogWarning("Skipping acquired GGUF {FileName}: recovery sidecar is missing.", Path.GetFileName(path));
+            }
+        }
+
+        var invalidAcquisitions = entries.Where(entry => entry.Origin is not null
+                                                          && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
+                                         .ToArray();
+        if (invalidAcquisitions.Length > 0)
+        {
+            entries.RemoveAll(entry => invalidAcquisitions.Contains(entry));
+            changed = true;
+        }
+
+        return (entries, changed);
+    }
+
+    private static int RemoveEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
+    {
+        return entries.RemoveAll(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
+    }
+
+    private static int RemoveAcquiredEntriesForPath(List<GgufModelRegistryEntry> entries, string path)
+    {
+        return entries.RemoveAll(entry => entry.Origin is not null
+                                          && PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(path)));
+    }
+
+    private static bool IsDeterministicAcquisitionFileName(string fileName)
+    {
+        if (!string.Equals(Path.GetExtension(fileName), ".gguf", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var separator = stem.LastIndexOf('-');
+        if (separator <= 0 || stem.Length - separator - 1 != 24
+            || !stem.AsSpan(separator + 1).ToString().All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+        {
+            return false;
+        }
+
+        var prefix = stem[..separator];
+        var quant = GgufQuantParser.TryParse(prefix);
+        return quant is not null
+               && (prefix.EndsWith(quant, StringComparison.OrdinalIgnoreCase)
+                   || prefix.EndsWith(quant.Replace("UD-", "UD_", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase));
     }
 
     // Caller holds the lock.
