@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class BenchmarkRunExecutor(
     IBenchmarkStore store,
@@ -19,6 +20,8 @@ public sealed class BenchmarkRunExecutor(
     ILocalChatRuntimePackageBuilder packageBuilder,
     IWorkerEventDispatcher dispatcher,
     IInvocationRunner runner,
+    ILlamaServerProcessSupervisor supervisor,
+    IGpuVariantSelector variantSelector,
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
@@ -63,11 +66,27 @@ public sealed class BenchmarkRunExecutor(
                 BenchmarkRunStreamEventKind.PrimaryState,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Running.ToString()));
 
-            await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, token).ConfigureAwait(false);
-            using var context = InvocationExecutionContext.CreatePlain(package,
-                Guid.Empty,
-                generationAdmissionPolicy: admission);
-            await runner.RunAsync(context, token).ConfigureAwait(false);
+            var currentVariant = await variantSelector.SelectVariantAsync(token).ConfigureAwait(false);
+            if (currentVariant != snapshot.PrimaryRuntime.Variant)
+            {
+                throw new BenchmarkExecutionException("The selected llama.cpp runtime changed after the benchmark was created.");
+            }
+
+            _ = await supervisor.RunExclusiveProfilingAsync(snapshot.PrimaryModel.ModelName,
+                    ModelRole.Chat,
+                    snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
+                    enableMetrics: false,
+                    async (_, profilingToken) =>
+                    {
+                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                        using var context = InvocationExecutionContext.CreatePlain(package,
+                            Guid.Empty,
+                            generationAdmissionPolicy: admission);
+                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                        return true;
+                    },
+                    token)
+                .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
             var terminal = capture.TerminalState;
@@ -139,11 +158,27 @@ public sealed class BenchmarkRunExecutor(
             runtime.AllowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: runtime.ReasoningEffort,
-            SamplingOptions: new SamplingOptions { NumCtx = snapshot.RequestedContextTokens },
+            SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
             Skills: runtime.Skills,
             IsUnattended: true,
             CustomTools: runtime.CustomTools));
     }
+
+    internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) => new()
+    {
+        Temperature = sampling.Temperature,
+        TopP = sampling.TopP,
+        TopK = sampling.TopK,
+        MinP = sampling.MinP,
+        MaxOutputTokens = sampling.MaxOutputTokens,
+        RepeatPenalty = sampling.RepeatPenalty,
+        RepeatLastN = sampling.RepeatLastN,
+        PresencePenalty = sampling.PresencePenalty,
+        FrequencyPenalty = sampling.FrequencyPenalty,
+        Stop = sampling.Stop,
+        Seed = sampling.SeedValue,
+        NumCtx = contextTokens
+    };
 
     private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work)
     {

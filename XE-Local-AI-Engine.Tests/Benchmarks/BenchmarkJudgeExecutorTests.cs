@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class BenchmarkJudgeExecutorTests
@@ -37,8 +38,9 @@ public sealed class BenchmarkJudgeExecutorTests
              });
         var capacity = new JudgeCapacityService(CapacityVerdict.Allow);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        XE_Local_AI_Engine.Client.Models.RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Any<XE_Local_AI_Engine.Client.Models.RuntimePackage>(), Arg.Any<CancellationToken>())
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<XE_Local_AI_Engine.Client.Models.RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
                   .Returns(assignment);
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -59,7 +61,8 @@ public sealed class BenchmarkJudgeExecutorTests
                           "{\"schemaVersion\":1,\"score\":5,\"rationale\":\"excellent\"}")));
               });
         await using var lease = new FakeLease(installed);
-        var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner);
+        var supervisor = PassthroughSupervisor();
+        var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
 
@@ -70,6 +73,21 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.True(assignment.Disposed);
         AssertEx.True(capacity.Reservation.Disposed);
         AssertEx.True(lease.Disposed);
+        var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeSystemPrompt, package.ResolvedSystemPrompt);
+        using (var promptPayload = System.Text.Json.JsonDocument.Parse(package.ConversationContext[0].Content))
+        {
+            AssertEx.Equal(BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
+                promptPayload.RootElement.GetProperty("outputSchema").GetString());
+        }
+        AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
+        _ = supervisor.Received(1).RunExclusiveProfilingAsync(Arg.Is<string>("judge.gguf"),
+            ModelRole.Chat,
+            Arg.Is<ResolvedLaunchArguments>(arguments => !arguments.ExploreMode && arguments.CtxSize == 4096),
+            false,
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>());
     }
 
     [Test]
@@ -110,12 +128,53 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.True(lease.Disposed);
     }
 
+    [Test]
+    public async Task Execute_WhenOwnedCancellationWins_UsesCurrentRunVersionAndIsIdempotent()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 7);
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkJudgeCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with { JudgeStatus = BenchmarkJudgeStatus.Cancelled, Version = run.Version + 1 });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<XE_Local_AI_Engine.Client.Models.RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var cancellations = new BenchmarkCancellationRegistry();
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            AssertEx.True(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
+            return Task.FromCanceled(call.ArgAt<CancellationToken>(1));
+        });
+        await using var lease = new FakeLease(installed);
+        var executor = new BenchmarkJudgeExecutor(store,
+            new FixedSnapshotFactory(snapshot),
+            new FixedLeaseProvider(lease),
+            new JudgeCapacityService(CapacityVerdict.Allow),
+            new LocalChatRuntimePackageBuilder(),
+            dispatcher,
+            runner,
+            PassthroughSupervisor(),
+            FixedVariantSelector(),
+            new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
+            cancellations,
+            NullLogger<BenchmarkJudgeExecutor>.Instance);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+
+        _ = store.Received(1).MarkJudgeCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>());
+        AssertEx.False(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
+    }
+
     private static BenchmarkJudgeExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,
         FakeLease lease,
         ICapacityService capacity,
         IWorkerEventDispatcher dispatcher,
-        IInvocationRunner runner) =>
+        IInvocationRunner runner,
+        ILlamaServerProcessSupervisor? supervisor = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -123,6 +182,8 @@ public sealed class BenchmarkJudgeExecutorTests
             new LocalChatRuntimePackageBuilder(),
             dispatcher,
             runner,
+            supervisor ?? PassthroughSupervisor(),
+            FixedVariantSelector(),
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             new BenchmarkCancellationRegistry(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
@@ -225,8 +286,19 @@ public sealed class BenchmarkJudgeExecutorTests
             "task",
             8192,
             new ResolvedAgentRuntime("prompt", [], null, null, 1, AgentName: "Agent"),
+            Runtime(8192),
+            BenchmarkFrozenPolicies.DeterministicSampling(),
             model,
-            new BenchmarkJudgeSnapshotV1(true, model, 1, 1, 4096, "judge-hash"),
+            new BenchmarkJudgeSnapshotV1(true,
+                model,
+                1,
+                1,
+                4096,
+                BenchmarkFrozenPolicies.JudgeSystemPrompt,
+                BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
+                Runtime(4096),
+                BenchmarkFrozenPolicies.DeterministicSampling(),
+                "judge-hash"),
             new BenchmarkFreezeDependencySetV1("a", "b", "c", "d", "e", "f"),
             "test",
             1,
@@ -234,6 +306,30 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     private static string V1(char value) => $"v1:{new string(value, 64)}";
+
+    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens) =>
+        new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false);
+
+    private static IGpuVariantSelector FixedVariantSelector()
+    {
+        var selector = Substitute.For<IGpuVariantSelector>();
+        selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Cpu);
+        return selector;
+    }
+
+    private static ILlamaServerProcessSupervisor PassthroughSupervisor()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
+                Arg.Any<ModelRole>(),
+                Arg.Any<ResolvedLaunchArguments>(),
+                Arg.Any<bool>(),
+                Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>())
+            .Returns(call => call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(default!, call.ArgAt<CancellationToken>(5)));
+        return supervisor;
+    }
 
     private sealed class FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
     {

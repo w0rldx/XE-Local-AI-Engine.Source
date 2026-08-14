@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class BenchmarkJudgeExecutor(
     IBenchmarkStore store,
@@ -19,6 +20,8 @@ public sealed class BenchmarkJudgeExecutor(
     ILocalChatRuntimePackageBuilder packageBuilder,
     IWorkerEventDispatcher dispatcher,
     IInvocationRunner runner,
+    ILlamaServerProcessSupervisor supervisor,
+    IGpuVariantSelector variantSelector,
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
@@ -72,11 +75,28 @@ public sealed class BenchmarkJudgeExecutor(
                 BenchmarkRunStreamEventKind.JudgeState,
                 new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Running.ToString()));
 
-            await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, token).ConfigureAwait(false);
-            using var context = InvocationExecutionContext.CreatePlain(package,
-                Guid.Empty,
-                generationAdmissionPolicy: admission);
-            await runner.RunAsync(context, token).ConfigureAwait(false);
+            var runtime = judge.Runtime ?? throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
+            var currentVariant = await variantSelector.SelectVariantAsync(token).ConfigureAwait(false);
+            if (currentVariant != runtime.Variant)
+            {
+                throw new BenchmarkExecutionException("The selected judge llama.cpp runtime changed after the benchmark was created.");
+            }
+
+            _ = await supervisor.RunExclusiveProfilingAsync(judgeModel.ModelName,
+                    ModelRole.Chat,
+                    runtime.ToResolvedLaunchArguments(),
+                    enableMetrics: false,
+                    async (_, profilingToken) =>
+                    {
+                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                        using var context = InvocationExecutionContext.CreatePlain(package,
+                            Guid.Empty,
+                            generationAdmissionPolicy: admission);
+                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                        return true;
+                    },
+                    token)
+                .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
@@ -84,7 +104,10 @@ public sealed class BenchmarkJudgeExecutor(
                 throw new BenchmarkExecutionException(InvocationFailedMessage);
             }
 
-            var parsed = ParseResult(terminal.StreamedContent, judgeModel.ModelContentFingerprint, judge.PromptVersion);
+            var parsed = ParseResult(terminal.StreamedContent,
+                judgeModel.ModelContentFingerprint,
+                judge.PromptVersion,
+                judge.OutputSchemaVersion);
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
@@ -116,10 +139,16 @@ public sealed class BenchmarkJudgeExecutor(
         BenchmarkInstalledModelSnapshotV1 judgeModel,
         IReadOnlyList<BenchmarkOutputPart> output)
     {
-        var promptPayload = JsonSerializer.Serialize(new { task = snapshot.CoreTask, primaryOutputParts = output });
+        var promptPayload = JsonSerializer.Serialize(new
+        {
+            task = snapshot.CoreTask,
+            primaryOutputParts = output,
+            outputSchema = snapshot.Judge.OutputSchemaJson
+                         ?? throw new BenchmarkExecutionException("The frozen judge output schema is unavailable.")
+        });
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
-            BuildJudgeSystemPrompt(snapshot.Judge.PromptVersion, snapshot.Judge.OutputSchemaVersion),
+            snapshot.Judge.SystemPrompt ?? throw new BenchmarkExecutionException("The frozen judge prompt is unavailable."),
             [new ConversationMessageDto
             {
                 Id = Guid.NewGuid(),
@@ -132,21 +161,16 @@ public sealed class BenchmarkJudgeExecutor(
             ClientNodeId: LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: [],
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            SamplingOptions: new SamplingOptions
-            {
-                NumCtx = snapshot.Judge.RequestedContextTokens,
-                Temperature = 0,
-                Seed = "0"
-            },
+            SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(
+                snapshot.Judge.Sampling ?? throw new BenchmarkExecutionException("The frozen judge sampling policy is unavailable."),
+                snapshot.Judge.RequestedContextTokens!.Value),
             IsUnattended: true));
     }
 
-    private static string BuildJudgeSystemPrompt(int promptVersion, int outputSchemaVersion) =>
-        $"You are benchmark judge prompt version {promptVersion}. Evaluate only the supplied task and primary output. "
-        + $"Return exactly one JSON object for schema version {outputSchemaVersion} with properties schemaVersion, score, and rationale. "
-        + "schemaVersion must be 1, score must be an integer from 1 through 5, and rationale must be a non-empty string. Return no markdown or extra properties.";
-
-    internal static BenchmarkJudgeResultV1 ParseResult(string content, string fingerprint, int promptVersion)
+    internal static BenchmarkJudgeResultV1 ParseResult(string content,
+        string fingerprint,
+        int promptVersion,
+        int outputSchemaVersion = BenchmarkFrozenPolicies.JudgeOutputSchemaVersion)
     {
         try
         {
@@ -163,7 +187,7 @@ public sealed class BenchmarkJudgeExecutor(
                               .SetEquals(["schemaVersion", "score", "rationale"])
                 || !root.TryGetProperty("schemaVersion", out var schemaElement)
                 || !schemaElement.TryGetInt32(out var schemaVersion)
-                || schemaVersion != 1
+                || schemaVersion != outputSchemaVersion
                 || !root.TryGetProperty("score", out var scoreElement)
                 || !scoreElement.TryGetInt32(out var score)
                 || score is < 1 or > 5
@@ -180,7 +204,7 @@ public sealed class BenchmarkJudgeExecutor(
                 throw new JsonException();
             }
 
-            return new BenchmarkJudgeResultV1(1, score, rationale, fingerprint, promptVersion);
+            return new BenchmarkJudgeResultV1(outputSchemaVersion, score, rationale, fingerprint, promptVersion);
         }
         catch (JsonException exception)
         {
@@ -207,8 +231,19 @@ public sealed class BenchmarkJudgeExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
-        events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
+        try
+        {
+            var persisted = await store.MarkJudgeCancelledAsync(runId, run.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+            events.PublishReserved(terminal with { Payload = terminal.Payload with { RunVersion = persisted.Version } });
+        }
+        catch (BenchmarkConflictException)
+        {
+            var current = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
+            if (current?.JudgeStatus != BenchmarkJudgeStatus.Cancelled)
+            {
+                throw;
+            }
+        }
         events.EvictPlaintext(runId);
     }
 

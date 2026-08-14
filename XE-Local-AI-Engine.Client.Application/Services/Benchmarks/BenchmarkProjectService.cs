@@ -25,10 +25,12 @@ public interface IBenchmarkProjectService
 
 public sealed class BenchmarkProjectService(
     IBenchmarkStore benchmarkStore,
-    IAgentDefinitionStore agentDefinitionStore) : IBenchmarkProjectService
+    IAgentDefinitionStore agentDefinitionStore,
+    IBenchmarkInstalledModelLeaseProvider installedModels) : IBenchmarkProjectService
 {
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
 
     public async Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default)
     {
@@ -84,7 +86,26 @@ public sealed class BenchmarkProjectService(
             }
 
             ValidateContext(requestedJudgeContext, "judge");
+            ValidateJudgeVersions(draft.JudgePromptVersion, draft.JudgeOutputSchemaVersion);
+            try
+            {
+                await using var judgeLease = await _installedModels.AcquireAsync(judgeModel, cancellationToken).ConfigureAwait(false);
+                BenchmarkModelEligibility.Validate(judgeLease.Snapshot, "judge");
+            }
+            catch (KeyNotFoundException exception)
+            {
+                throw new BenchmarkValidationException("The selected judge model is not installed or eligible.") { Source = exception.Source };
+            }
+            catch (BenchmarkEligibilityException exception)
+            {
+                throw new BenchmarkValidationException(exception.Message) { Source = exception.Source };
+            }
+
             judgeContext = requestedJudgeContext;
+        }
+        else
+        {
+            ValidateJudgeVersions(draft.JudgePromptVersion, draft.JudgeOutputSchemaVersion);
         }
 
         return new BenchmarkProjectInput(draft.Id,
@@ -104,6 +125,14 @@ public sealed class BenchmarkProjectService(
         if (!LlamaServerLaunchPolicyOptions.ChatContextTiers.Contains(contextTokens))
         {
             throw new BenchmarkValidationException($"The {role} context budget is not supported.");
+        }
+    }
+
+    private static void ValidateJudgeVersions(int promptVersion, int outputSchemaVersion)
+    {
+        if (!BenchmarkFrozenPolicies.SupportsVersions(promptVersion, outputSchemaVersion))
+        {
+            throw new BenchmarkValidationException("The benchmark judge prompt or output schema version is not supported.");
         }
     }
 }
