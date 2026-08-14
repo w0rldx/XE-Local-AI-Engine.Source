@@ -3,14 +3,18 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 public sealed class DeleteLocalModelEndpoint(
-    IGgufModelStore ggufModelStore,
+    ILocalModelDeletionCoordinator deletionCoordinator,
+    ILocalModelProviderResolver providerResolver,
     ModelNameValidator modelNameValidator) : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>
 {
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+    private readonly ILocalModelDeletionCoordinator _deletionCoordinator = deletionCoordinator ?? throw new ArgumentNullException(nameof(deletionCoordinator));
+    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
 
     public override void Configure()
@@ -31,15 +35,27 @@ public sealed class DeleteLocalModelEndpoint(
 
         var modelName = decodedModelName!.Trim();
 
-        // Local models are GGUF files served by the bundled llama.cpp runtime (Ollama is no longer a runtime), so delete
-        // via the GGUF store. Its DeleteModelAsync is idempotent — an already-ejected/uninstalled model removes cleanly
-        // rather than 500ing — so no pre-existence probe is needed.
-        await _ggufModelStore.DeleteModelAsync(modelName, ct).ConfigureAwait(false);
+        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
+        CommittedModelDeletion? committed = null;
+        if (string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            committed = await _deletionCoordinator.CommitDeleteAsync(modelName, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await _providerResolver.ResolveProvider(providerName).DeleteModelAsync(modelName, ct).ConfigureAwait(false);
+            _providerResolver.InvalidateModelProviderMap();
+        }
+
         await Send.OkAsync(new DeleteLocalModelResponse
         {
             ModelName = modelName,
             Deleted = true
         }, ct).ConfigureAwait(false);
+        if (committed is not null)
+        {
+            await _deletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None).ConfigureAwait(false);
+        }
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)

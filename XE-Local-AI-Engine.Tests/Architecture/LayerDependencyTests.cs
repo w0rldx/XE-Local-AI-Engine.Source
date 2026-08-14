@@ -93,7 +93,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
-            ["XE-Local-AI-Engine.Client.Persistence"] = [],
+            ["XE-Local-AI-Engine.Client.Persistence"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Client.Testing"] =
             [
                 "XE-Local-AI-Engine.Client",
@@ -120,7 +120,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.AI.Contracts",
                 "XE-Local-AI-Engine.Providers.Abstractions"
             ],
-            [PersistenceAssembly] = [],
+            [PersistenceAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [ServiceDefaultsAssembly] = ["XE-Local-AI-Engine.AI.Contracts"],
             [WindowsLauncherAssembly] = [],
             [AbstractionsAssembly] = [],

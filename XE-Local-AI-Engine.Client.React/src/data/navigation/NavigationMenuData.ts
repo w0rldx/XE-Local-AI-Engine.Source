@@ -5,6 +5,7 @@ import {
 	IconCpu,
 	IconDashboard,
 	IconDatabase,
+	IconFlask,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
@@ -141,6 +142,12 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.images", to: nodeRoutePaths.images, capability: "images" },
 			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development" },
 		],
+	},
+	{
+		id: "benchmarks",
+		icon: IconFlask,
+		translationKey: "navigation.benchmarks",
+		to: nodeRoutePaths.benchmarks,
 	},
 	{
 		id: "invocations",

@@ -2,9 +2,8 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -44,7 +43,14 @@ public sealed class LocalModelProviderResolverDefaultTests
     private static LocalModelProviderResolver BuildResolver(IReadOnlyDictionary<string, string> mappings)
     {
         var services = new ServiceCollection();
-        services.AddScoped<IModelProviderMapStore>(_ => new FakeModelProviderMapStore(mappings));
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
+        foreach (var mapping in mappings)
+        {
+            mapStore.Seed(mapping.Key, mapping.Value);
+        }
+
+        services.AddSingleton<IModelProviderMapLeaseCoordinator>(new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()));
+        services.AddScoped<ICoordinatedModelProviderMapStore>(_ => mapStore);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         // Both runtimes registered; the flipped default = llamacpp (mirrors AddNodeModelRuntimeExtensions post-flip).
@@ -55,27 +61,6 @@ public sealed class LocalModelProviderResolverDefaultTests
         ];
 
         return new LocalModelProviderResolver(providers, scopeFactory, LlamaServerProviderConstants.ProviderName, maxLoadedProcesses: 3);
-    }
-
-    private sealed class FakeModelProviderMapStore(IReadOnlyDictionary<string, string> mappings) : IModelProviderMapStore
-    {
-        private readonly Dictionary<string, string> _mappings = new(mappings, StringComparer.OrdinalIgnoreCase);
-
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_mappings.TryGetValue(modelName, out var provider) ? provider : null);
-        }
-
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, UpdatedAtUtc: 0)).ToArray());
-        }
-
-        public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
-        {
-            _mappings[modelName] = providerName;
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
-        }
     }
 
     /// <summary>A minimal provider used only for its <see cref="ILocalModelProvider.ProviderName" /> key.</summary>

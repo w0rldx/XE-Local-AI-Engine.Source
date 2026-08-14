@@ -9,5 +9,6 @@
 	"/api/local/v1/knowledge-base/hub",
 	"/api/local/v1/images/hub",
 	"/api/local/v1/images/runtime/source-build/hub",
-	"/api/local/v1/development/hub"
+	"/api/local/v1/development/hub",
+	"/api/local/v1/benchmarks/hub"
 ]

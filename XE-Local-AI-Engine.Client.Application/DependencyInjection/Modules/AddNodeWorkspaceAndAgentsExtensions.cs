@@ -12,8 +12,10 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 internal static class AddNodeWorkspaceAndAgentsExtensions
 {
@@ -101,6 +103,25 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // restarts. Unencrypted — model names and provider keys are not secrets. Scoped to match the
         // scoped, DbContext-backed store; the singleton resolver reads it through a fresh scope per lookup.
         builder.Services.AddScoped<IModelProviderMapStore, ModelProviderMapStore>();
+        builder.Services.AddSingleton<KeyedCompositeLockDomain>();
+        builder.Services.AddSingleton<IModelProviderMapLeaseCoordinator, ModelProviderMapLeaseCoordinator>();
+        builder.Services.AddScoped<IInstalledModelSnapshotCoordinator>(static services =>
+            new InstalledModelSnapshotCoordinator(
+                services.GetRequiredService<KeyedCompositeLockDomain>(),
+                services.GetRequiredService<IInstalledGgufSnapshotStore>(),
+                services.GetRequiredService<ICoordinatedModelProviderMapStore>()));
+        builder.Services.AddScoped<ICoordinatedModelProviderMapStore>(static services =>
+            new CoordinatedModelProviderMapStore(services.GetRequiredService<IModelProviderMapStore>()));
+        builder.Services.AddScoped<LocalModelDeletionCoordinator>();
+        builder.Services.AddScoped<ILocalModelDeletionCoordinator>(static services =>
+            services.GetRequiredService<LocalModelDeletionCoordinator>());
+        builder.Services.AddScoped<ILocalModelDeletionJournalReconciler>(static services =>
+            services.GetRequiredService<LocalModelDeletionCoordinator>());
+        builder.Services.AddHostedService<LocalModelDeletionStartupReconciler>();
+        builder.Services.AddScoped<IGgufAcquisitionStateProbe, GgufAcquisitionStateProbe>();
+        builder.Services.AddSingleton<GgufAcquisitionIdentityResolver>();
+        builder.Services.AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>();
+        builder.Services.AddScoped<IOllamaProviderMapBackfillCoordinator, OllamaProviderMapBackfillCoordinator>();
         builder.Services.AddScoped<IModelLaunchArgumentsStore, ModelLaunchArgumentsStore>();
         // Feedback-insights read store. Pure analytics over node-local feedback/tool-event rows; it reads only
         // plaintext columns and writes nothing.

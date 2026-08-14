@@ -20,7 +20,9 @@ public sealed class LocalModelsGgufMappingTests
         long? sizeBytes = 1024,
         bool isToolCapable = false,
         bool isReasoningCapable = false,
-        IReadOnlyList<string>? capabilities = null)
+        IReadOnlyList<string>? capabilities = null,
+        LocalModelOrigin? origin = null,
+        string? modelContentFingerprint = null)
     {
         return new LocalModelDescriptor
         {
@@ -30,10 +32,25 @@ public sealed class LocalModelsGgufMappingTests
             SizeBytes = sizeBytes,
             ModifiedAt = DateTimeOffset.UnixEpoch,
             MaxContextTokens = null,
+            Origin = origin,
+            ModelContentFingerprint = modelContentFingerprint,
             IsToolCapable = isToolCapable,
             IsReasoningCapable = isReasoningCapable,
             Capabilities = capabilities ?? []
         };
+    }
+
+    [Test]
+    public void ToLlamaCppModelResponses_SurfacesOriginAndAggregateFingerprint()
+    {
+        const string fingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([
+                Gguf("local-import:Q4_K_M", origin: LocalModelOrigin.Imported, modelContentFingerprint: fingerprint)
+            ],
+            selectedModelName: null);
+
+        AssertEx.Equal(LocalModelOrigin.Imported, response[0].Origin);
+        AssertEx.Equal(fingerprint, response[0].ModelContentFingerprint);
     }
 
     [Test]

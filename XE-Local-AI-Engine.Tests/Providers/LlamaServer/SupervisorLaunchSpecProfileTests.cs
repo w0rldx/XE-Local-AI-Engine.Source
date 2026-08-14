@@ -305,6 +305,40 @@ public sealed class SupervisorLaunchSpecProfileTests
     }
 
     [Test]
+    public void BenchmarkLaunchPolicy_IgnoresLiveCacheAndSpeculativeOptions()
+    {
+        var liveOptions = new LlamaServerSupervisorOptions
+        {
+            ChatCacheReuse = 777,
+            ChatCacheRamMiB = 4096,
+            SpeculativeMode = "draft-simple",
+            SpeculativeDraftModelPath = "/fake/models/live-draft.gguf",
+            SpeculativeDraftMaxTokens = 5,
+            SpeculativeDraftGpuLayers = 12
+        };
+
+        var benchmark = LlamaServerProcessSupervisor.ResolveChatLaunchTuning(
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
+            liveOptions);
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24),
+            benchmark.ChatCacheReuse,
+            benchmark.Speculative,
+            benchmark.ChatCacheRamMiB);
+
+        AssertEx.False(spec.Arguments.Contains("--cache-reuse"),
+            "The frozen benchmark policy must not inherit live prompt-prefix cache reuse.");
+        AssertEx.Equal("0", spec.Arguments[IndexOf(spec.Arguments, "--cache-ram") + 1]);
+        AssertEx.False(spec.Arguments.Any(argument => argument.StartsWith("--spec-", StringComparison.Ordinal)),
+            "The frozen benchmark policy must not inherit live speculative decoding or its draft model.");
+
+        var ordinary = LlamaServerProcessSupervisor.ResolveChatLaunchTuning(benchmarkPolicy: null, liveOptions);
+        AssertEx.Equal(777, ordinary.ChatCacheReuse);
+        AssertEx.Equal(4096, ordinary.ChatCacheRamMiB);
+        AssertEx.Equal("draft-simple", ordinary.Speculative.Mode);
+        AssertEx.Equal("/fake/models/live-draft.gguf", ordinary.Speculative.DraftModelPath);
+    }
+
+    [Test]
     public async Task LaunchSpec_WhenDraftModeMissingPath_FailsValidation()
     {
         // A draft-* mode with no draft model path is a deterministic misconfig — reject at build time, don't spawn.
@@ -475,7 +509,8 @@ public sealed class SupervisorLaunchSpecProfileTests
 
     private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved,
         int chatCacheReuse = 256,
-        SpeculativeDecodingSettings speculative = default)
+        SpeculativeDecodingSettings speculative = default,
+        int chatCacheRamMiB = 0)
     {
         return LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
@@ -484,7 +519,8 @@ public sealed class SupervisorLaunchSpecProfileTests
             GpuVariant.Cuda,
             resolved,
             chatCacheReuse,
-            speculative);
+            speculative,
+            chatCacheRamMiB: chatCacheRamMiB);
     }
 
     private static int IndexOf(IReadOnlyList<string> args, string flag)

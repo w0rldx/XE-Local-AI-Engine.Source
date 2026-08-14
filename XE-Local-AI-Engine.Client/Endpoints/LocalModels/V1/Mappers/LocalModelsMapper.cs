@@ -80,6 +80,8 @@ internal static class LocalModelsMapper
                        Provider = LocalModelProviders.LlamaCpp,
                        SizeBytes = descriptor.SizeBytes,
                        ModifiedAtUtc = descriptor.ModifiedAt?.ToUnixTimeMilliseconds(),
+                       Origin = descriptor.Origin,
+                       ModelContentFingerprint = descriptor.ModelContentFingerprint,
                        IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
                        Kind = kind.ToString(),
                        DetectedKind = kind.ToString(),
@@ -336,6 +338,8 @@ internal static class LocalModelsMapper
             ModelName = modelName,
             MaxContextTokens = descriptor.MaxContextTokens,
             EffectiveContextTokens = effectiveContextTokens,
+            Origin = descriptor.Origin,
+            ModelContentFingerprint = descriptor.ModelContentFingerprint,
             Template = null,
             System = null,
             License = null

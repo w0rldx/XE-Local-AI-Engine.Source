@@ -35,6 +35,9 @@ import type {
 	CancelAllPreviewRunsData,
 	CancelAllPreviewRunsErrors,
 	CancelAllPreviewRunsResponses,
+	CancelBenchmarkRunData,
+	CancelBenchmarkRunErrors,
+	CancelBenchmarkRunResponses,
 	CancelCudaBuildData,
 	CancelCudaBuildErrors,
 	CancelCudaBuildResponses,
@@ -44,6 +47,9 @@ import type {
 	CancelGgufDownloadData,
 	CancelGgufDownloadErrors,
 	CancelGgufDownloadResponses,
+	CancelGgufImportData,
+	CancelGgufImportErrors,
+	CancelGgufImportResponses,
 	CancelImageJobData,
 	CancelImageJobErrors,
 	CancelImageJobResponses,
@@ -98,6 +104,9 @@ import type {
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
+	CreateBenchmarkProjectData,
+	CreateBenchmarkProjectErrors,
+	CreateBenchmarkProjectResponses,
 	CreateCustomToolData,
 	CreateCustomToolErrors,
 	CreateCustomToolResponses,
@@ -143,6 +152,12 @@ import type {
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
+	DeleteBenchmarkProjectData,
+	DeleteBenchmarkProjectErrors,
+	DeleteBenchmarkProjectResponses,
+	DeleteBenchmarkRunData,
+	DeleteBenchmarkRunErrors,
+	DeleteBenchmarkRunResponses,
 	DeleteConversationFileData,
 	DeleteConversationFileErrors,
 	DeleteConversationFileResponses,
@@ -269,6 +284,12 @@ import type {
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusErrors,
 	GetAppUpdateStatusResponses,
+	GetBenchmarkProjectData,
+	GetBenchmarkProjectErrors,
+	GetBenchmarkProjectResponses,
+	GetBenchmarkRunData,
+	GetBenchmarkRunErrors,
+	GetBenchmarkRunResponses,
 	GetCloudSettingsData,
 	GetCloudSettingsErrors,
 	GetCloudSettingsResponses,
@@ -296,12 +317,24 @@ import type {
 	GetDevelopmentTaskData,
 	GetDevelopmentTaskErrors,
 	GetDevelopmentTaskResponses,
+	GetGgufDownloadOperationStatusData,
+	GetGgufDownloadOperationStatusErrors,
+	GetGgufDownloadOperationStatusResponses,
 	GetGgufDownloadsData,
 	GetGgufDownloadsErrors,
 	GetGgufDownloadsResponses,
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusErrors,
 	GetGgufDownloadStatusResponses,
+	GetGgufImportCapabilityData,
+	GetGgufImportCapabilityErrors,
+	GetGgufImportCapabilityResponses,
+	GetGgufImportsData,
+	GetGgufImportsErrors,
+	GetGgufImportsResponses,
+	GetGgufImportStatusData,
+	GetGgufImportStatusErrors,
+	GetGgufImportStatusResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -437,6 +470,12 @@ import type {
 	ListAgentTemplatesData,
 	ListAgentTemplatesErrors,
 	ListAgentTemplatesResponses,
+	ListBenchmarkProjectsData,
+	ListBenchmarkProjectsErrors,
+	ListBenchmarkProjectsResponses,
+	ListBenchmarkRunsData,
+	ListBenchmarkRunsErrors,
+	ListBenchmarkRunsResponses,
 	ListConversationFilesData,
 	ListConversationFilesErrors,
 	ListConversationFilesResponses,
@@ -458,6 +497,12 @@ import type {
 	ListDevelopmentTemplatesData,
 	ListDevelopmentTemplatesErrors,
 	ListDevelopmentTemplatesResponses,
+	ListEligibleBenchmarkAgentsData,
+	ListEligibleBenchmarkAgentsErrors,
+	ListEligibleBenchmarkAgentsResponses,
+	ListEligibleBenchmarkModelsData,
+	ListEligibleBenchmarkModelsErrors,
+	ListEligibleBenchmarkModelsResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -549,6 +594,9 @@ import type {
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchErrors,
 	PreviewDevelopmentPatchResponses,
+	PreviewGgufImportData,
+	PreviewGgufImportErrors,
+	PreviewGgufImportResponses,
 	PreviewSkillImportData,
 	PreviewSkillImportErrors,
 	PreviewSkillImportResponses,
@@ -627,6 +675,9 @@ import type {
 	SaveTutorialStateData,
 	SaveTutorialStateErrors,
 	SaveTutorialStateResponses,
+	ScoreBenchmarkRunData,
+	ScoreBenchmarkRunErrors,
+	ScoreBenchmarkRunResponses,
 	SearchKnowledgeData,
 	SearchKnowledgeErrors,
 	SearchKnowledgeResponses,
@@ -648,6 +699,9 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathErrors,
 	SetNodeChatSelectedPathResponses,
+	StartBenchmarkRunData,
+	StartBenchmarkRunErrors,
+	StartBenchmarkRunResponses,
 	StartCudaBuildData,
 	StartCudaBuildErrors,
 	StartCudaBuildResponses,
@@ -657,6 +711,9 @@ import type {
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
+	StartGgufImportData,
+	StartGgufImportErrors,
+	StartGgufImportResponses,
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
@@ -681,6 +738,9 @@ import type {
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionErrors,
 	UpdateAgentDefinitionResponses,
+	UpdateBenchmarkProjectData,
+	UpdateBenchmarkProjectErrors,
+	UpdateBenchmarkProjectResponses,
 	UpdateCustomToolData,
 	UpdateCustomToolErrors,
 	UpdateCustomToolResponses,
@@ -743,11 +803,16 @@ import {
 	zBrowseImageRepositoriesQuery,
 	zBrowseImageRepositoriesResponse,
 	zCancelAllPreviewRunsResponse,
+	zCancelBenchmarkRunBody,
+	zCancelBenchmarkRunPath,
+	zCancelBenchmarkRunResponse,
 	zCancelCudaBuildResponse,
 	zCancelDevelopmentAttemptPath,
 	zCancelDevelopmentAttemptResponse,
 	zCancelGgufDownloadBody,
 	zCancelGgufDownloadResponse,
+	zCancelGgufImportPath,
+	zCancelGgufImportResponse,
 	zCancelImageJobPath,
 	zCancelImageJobResponse,
 	zCancelImageModelDownloadBody,
@@ -778,6 +843,8 @@ import {
 	zContinuePreviewRunResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
+	zCreateBenchmarkProjectBody,
+	zCreateBenchmarkProjectResponse,
 	zCreateCustomToolBody,
 	zCreateCustomToolResponse,
 	zCreateDevelopmentProjectBody,
@@ -810,6 +877,12 @@ import {
 	zCreateWorkspaceResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
+	zDeleteBenchmarkProjectBody,
+	zDeleteBenchmarkProjectPath,
+	zDeleteBenchmarkProjectResponse,
+	zDeleteBenchmarkRunBody,
+	zDeleteBenchmarkRunPath,
+	zDeleteBenchmarkRunResponse,
 	zDeleteConversationFilePath,
 	zDeleteConversationFileResponse,
 	zDeleteCustomToolPath,
@@ -884,6 +957,10 @@ import {
 	zGetAgentUsageSummaryResponse,
 	zGetAppUpdateStatusQuery,
 	zGetAppUpdateStatusResponse,
+	zGetBenchmarkProjectPath,
+	zGetBenchmarkProjectResponse,
+	zGetBenchmarkRunPath,
+	zGetBenchmarkRunResponse,
 	zGetCloudSettingsResponse,
 	zGetConnectionStatusResponse,
 	zGetCudaBuildPrerequisitesResponse,
@@ -897,9 +974,15 @@ import {
 	zGetDevelopmentProjectResponse,
 	zGetDevelopmentTaskPath,
 	zGetDevelopmentTaskResponse,
+	zGetGgufDownloadOperationStatusPath,
+	zGetGgufDownloadOperationStatusResponse,
 	zGetGgufDownloadsResponse,
 	zGetGgufDownloadStatusPath,
 	zGetGgufDownloadStatusResponse,
+	zGetGgufImportCapabilityResponse,
+	zGetGgufImportsResponse,
+	zGetGgufImportStatusPath,
+	zGetGgufImportStatusResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -975,6 +1058,10 @@ import {
 	zListAgentPlaybookActionsQuery,
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
+	zListBenchmarkProjectsResponse,
+	zListBenchmarkRunsPath,
+	zListBenchmarkRunsQuery,
+	zListBenchmarkRunsResponse,
 	zListConversationFilesPath,
 	zListConversationFilesResponse,
 	zListCustomToolsResponse,
@@ -985,6 +1072,10 @@ import {
 	zListDevelopmentProjectsResponse,
 	zListDevelopmentRepositoriesResponse,
 	zListDevelopmentTemplatesResponse,
+	zListEligibleBenchmarkAgentsQuery,
+	zListEligibleBenchmarkAgentsResponse,
+	zListEligibleBenchmarkModelsQuery,
+	zListEligibleBenchmarkModelsResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
@@ -1032,6 +1123,8 @@ import {
 	zPreviewDevelopmentPatchBody,
 	zPreviewDevelopmentPatchPath,
 	zPreviewDevelopmentPatchResponse,
+	zPreviewGgufImportBody,
+	zPreviewGgufImportResponse,
 	zPreviewSkillImportBody,
 	zPreviewSkillImportResponse,
 	zPromoteSuggestedPlaybookActionPath,
@@ -1082,6 +1175,9 @@ import {
 	zSaveNodeSettingsResponse,
 	zSaveTutorialStateBody,
 	zSaveTutorialStateResponse,
+	zScoreBenchmarkRunBody,
+	zScoreBenchmarkRunPath,
+	zScoreBenchmarkRunResponse,
 	zSearchKnowledgeBody,
 	zSearchKnowledgeResponse,
 	zSelectLocalModelBody,
@@ -1100,12 +1196,17 @@ import {
 	zSetNodeChatSelectedPathBody,
 	zSetNodeChatSelectedPathPath,
 	zSetNodeChatSelectedPathResponse,
+	zStartBenchmarkRunBody,
+	zStartBenchmarkRunPath,
+	zStartBenchmarkRunResponse,
 	zStartCudaBuildResponse,
 	zStartDevelopmentNextActionBody,
 	zStartDevelopmentNextActionPath,
 	zStartDevelopmentNextActionResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
+	zStartGgufImportBody,
+	zStartGgufImportResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
 	zStartLlamaCppSourceBuildBody,
@@ -1121,6 +1222,9 @@ import {
 	zUpdateAgentDefinitionBody,
 	zUpdateAgentDefinitionPath,
 	zUpdateAgentDefinitionResponse,
+	zUpdateBenchmarkProjectBody,
+	zUpdateBenchmarkProjectPath,
+	zUpdateBenchmarkProjectResponse,
 	zUpdateCustomToolBody,
 	zUpdateCustomToolPath,
 	zUpdateCustomToolResponse,
@@ -2282,6 +2386,26 @@ export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const cancelGgufImport = <ThrowOnError extends boolean = false>(options: Options<CancelGgufImportData, ThrowOnError>) =>
+	(options.client ?? client).post<CancelGgufImportResponses, CancelGgufImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelGgufImportPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelGgufImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/imports/{operationId}/cancel",
+		...options,
+	});
+
 export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options?: Options<CancelLlamaCppSourceBuildData, ThrowOnError>,
 ) =>
@@ -2450,6 +2574,28 @@ export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = false>(
+	options: Options<GetGgufDownloadOperationStatusData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetGgufDownloadOperationStatusResponses, GetGgufDownloadOperationStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGgufDownloadOperationStatusPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufDownloadOperationStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/downloads/operations/{operationId}",
+		...options,
+	});
+
 export const getGgufDownloads = <ThrowOnError extends boolean = false>(options?: Options<GetGgufDownloadsData, ThrowOnError>) =>
 	(options?.client ?? client).get<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -2489,6 +2635,70 @@ export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/gguf/downloads/{modelName}",
+		...options,
+	});
+
+export const getGgufImportCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetGgufImportCapabilityData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetGgufImportCapabilityResponses, GetGgufImportCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufImportCapabilityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/import/capability",
+		...options,
+	});
+
+export const getGgufImports = <ThrowOnError extends boolean = false>(options?: Options<GetGgufImportsData, ThrowOnError>) =>
+	(options?.client ?? client).get<GetGgufImportsResponses, GetGgufImportsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufImportsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/imports",
+		...options,
+	});
+
+export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
+	options: Options<GetGgufImportStatusData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetGgufImportStatusResponses, GetGgufImportStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGgufImportStatusPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufImportStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/imports/{operationId}",
 		...options,
 	});
 
@@ -2784,6 +2994,30 @@ export const listRunningModels = <ThrowOnError extends boolean = false>(options?
 		...options,
 	});
 
+export const previewGgufImport = <ThrowOnError extends boolean = false>(options: Options<PreviewGgufImportData, ThrowOnError>) =>
+	(options.client ?? client).post<PreviewGgufImportResponses, PreviewGgufImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPreviewGgufImportBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPreviewGgufImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/import/preview",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
 	options?: Options<RefreshModelCatalogData, ThrowOnError>,
 ) =>
@@ -2911,6 +3145,30 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(options:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/download",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startGgufImport = <ThrowOnError extends boolean = false>(options: Options<StartGgufImportData, ThrowOnError>) =>
+	(options.client ?? client).post<StartGgufImportResponses, StartGgufImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartGgufImportBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartGgufImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/import",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
@@ -5649,6 +5907,310 @@ export const codexStatus = <ThrowOnError extends boolean = false>(options?: Opti
 		],
 		url: "/api/local/v1/cloud/codex/status",
 		...options,
+	});
+
+export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = false>(
+	options: Options<ListEligibleBenchmarkAgentsData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListEligibleBenchmarkAgentsResponses, ListEligibleBenchmarkAgentsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListEligibleBenchmarkAgentsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListEligibleBenchmarkAgentsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/eligible-agents",
+		...options,
+	});
+
+export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false>(
+	options?: Options<ListEligibleBenchmarkModelsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListEligibleBenchmarkModelsResponses, ListEligibleBenchmarkModelsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListEligibleBenchmarkModelsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListEligibleBenchmarkModelsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/eligible-models",
+		...options,
+	});
+
+export const listBenchmarkProjects = <ThrowOnError extends boolean = false>(
+	options?: Options<ListBenchmarkProjectsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListBenchmarkProjectsResponses, ListBenchmarkProjectsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkProjectsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects",
+		...options,
+	});
+
+export const createBenchmarkProject = <ThrowOnError extends boolean = false>(
+	options: Options<CreateBenchmarkProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CreateBenchmarkProjectResponses, CreateBenchmarkProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateBenchmarkProjectBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateBenchmarkProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteBenchmarkProject = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteBenchmarkProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteBenchmarkProjectResponses, DeleteBenchmarkProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteBenchmarkProjectBody,
+					path: zDeleteBenchmarkProjectPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteBenchmarkProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getBenchmarkProject = <ThrowOnError extends boolean = false>(
+	options: Options<GetBenchmarkProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetBenchmarkProjectResponses, GetBenchmarkProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBenchmarkProjectPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBenchmarkProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}",
+		...options,
+	});
+
+export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateBenchmarkProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<UpdateBenchmarkProjectResponses, UpdateBenchmarkProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateBenchmarkProjectBody,
+					path: zUpdateBenchmarkProjectPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateBenchmarkProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(options: Options<ListBenchmarkRunsData, ThrowOnError>) =>
+	(options.client ?? client).get<ListBenchmarkRunsResponses, ListBenchmarkRunsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkRunsPath,
+					query: zListBenchmarkRunsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkRunsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/runs",
+		...options,
+	});
+
+export const startBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<StartBenchmarkRunData, ThrowOnError>) =>
+	(options.client ?? client).post<StartBenchmarkRunResponses, StartBenchmarkRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartBenchmarkRunBody,
+					path: zStartBenchmarkRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartBenchmarkRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/runs",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteBenchmarkRun = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteBenchmarkRunData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteBenchmarkRunResponses, DeleteBenchmarkRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteBenchmarkRunBody,
+					path: zDeleteBenchmarkRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteBenchmarkRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<GetBenchmarkRunData, ThrowOnError>) =>
+	(options.client ?? client).get<GetBenchmarkRunResponses, GetBenchmarkRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBenchmarkRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBenchmarkRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}",
+		...options,
+	});
+
+export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
+	options: Options<CancelBenchmarkRunData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelBenchmarkRunResponses, CancelBenchmarkRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelBenchmarkRunBody,
+					path: zCancelBenchmarkRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelBenchmarkRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<ScoreBenchmarkRunData, ThrowOnError>) =>
+	(options.client ?? client).put<ScoreBenchmarkRunResponses, ScoreBenchmarkRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zScoreBenchmarkRunBody,
+					path: zScoreBenchmarkRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zScoreBenchmarkRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/score",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listSlashCommands = <ThrowOnError extends boolean = false>(options?: Options<ListSlashCommandsData, ThrowOnError>) =>

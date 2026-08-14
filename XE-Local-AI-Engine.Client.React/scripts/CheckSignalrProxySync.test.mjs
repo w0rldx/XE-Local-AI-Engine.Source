@@ -1,7 +1,32 @@
+import { checkSignalrProxySync, compareProxyPaths, extractMappedHubPaths } from "./CheckSignalrProxySync.mjs";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { compareProxyPaths, extractMappedHubPaths } from "./CheckSignalrProxySync.mjs";
+const acquisitionHubPath = "/api/local/v1/model-fit/gguf/downloads/hub";
+const benchmarkHubPath = "/api/local/v1/benchmarks/hub";
+
+test("configures the benchmark hub as a specific WebSocket proxy before the generic API fallback", () => {
+	const proxyPaths = JSON.parse(readFileSync(new URL("../config/signalr-proxy-paths.json", import.meta.url), "utf8"));
+	assert.equal(proxyPaths.filter((path) => path === benchmarkHubPath).length, 1);
+	const viteConfig = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+	const signalrSpread = viteConfig.indexOf("...Object.fromEntries(signalrProxyPaths.map");
+	const genericApi = viteConfig.indexOf('"/api": localProxy(proxyTarget)');
+	assert.ok(signalrSpread >= 0 && genericApi > signalrSpread, "SignalR ws:true entries must precede the generic HTTP /api proxy");
+});
+
+test("keeps the generalized GGUF acquisition hub on the single compatible download path", () => {
+	const proxyPaths = JSON.parse(readFileSync(new URL("../config/signalr-proxy-paths.json", import.meta.url), "utf8"));
+	assert.equal(proxyPaths.filter((path) => path === acquisitionHubPath).length, 1);
+	assert.ok(checkSignalrProxySync() > 0);
+	const routes = readFileSync(
+		new URL("../../XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs", import.meta.url),
+		"utf8",
+	);
+	const program = readFileSync(new URL("../../XE-Local-AI-Engine.Client/Program.cs", import.meta.url), "utf8");
+	assert.ok(routes.includes(`public const string DownloadHub = "${acquisitionHubPath}"`));
+	assert.ok(extractMappedHubPaths(program, routes).includes(acquisitionHubPath));
+});
 
 test("extracts Program.cs hub paths and reports missing and stale proxies", () => {
 	const routes = `
@@ -51,10 +76,7 @@ app.MapHub<
 );
 app.MapHub<LiteralHub>("/api/local/v1/literal/hub");`;
 
-	assert.deepEqual(extractMappedHubPaths(program, routes), [
-		"/api/local/v1/chat/hub",
-		"/api/local/v1/literal/hub",
-	]);
+	assert.deepEqual(extractMappedHubPaths(program, routes), ["/api/local/v1/chat/hub", "/api/local/v1/literal/hub"]);
 });
 
 test("rejects every unrecognized active MapHub route form", () => {

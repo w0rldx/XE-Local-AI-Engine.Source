@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -42,11 +42,26 @@ const getGgufDownloadsOptionsMock = vi.fn(() => ({
 	queryKey: [{ _id: "getGgufDownloads" }],
 	queryFn: () => Promise.resolve({ items: [] }),
 }));
+interface ImportStatusFixture {
+	operationId: string;
+	operationKind: string;
+	modelName: string;
+	phase: string;
+	startedAtUtc: string;
+	updatedAtUtc: string;
+}
+
+const getGgufImportsOptionsMock = vi.fn(() => ({
+	// biome-ignore lint/style/useNamingConvention: generated query key discriminator.
+	queryKey: [{ _id: "getGgufImports" }],
+	queryFn: (): Promise<{ items: ImportStatusFixture[] }> => Promise.resolve({ items: [] }),
+}));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	browseGgufRepositoriesOptions: vi.fn(),
 	cancelGgufDownloadMutation: vi.fn(),
 	getGgufDownloadsOptions: () => getGgufDownloadsOptionsMock(),
+	getGgufImportsOptions: () => getGgufImportsOptionsMock(),
 	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	getGgufDownloadsQueryKey: () => [{ _id: "getGgufDownloads" }],
 	inspectGgufRepositoryOptions: vi.fn(),
@@ -57,7 +72,18 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import {
+	toGgufAcquisitionStatus,
+	type GgufAcquisitionStatus,
+} from "@/features/models/models/GgufAcquisitionModels";
 import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
+import {
+	ACQUISITION_TERMINAL_RETENTION_LIMIT,
+	mergeStatuses,
+	pruneAcquisitionStatuses,
+	pruneCompletedHandled,
+	useActiveGgufAcquisitions,
+} from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 const STATUS_CHANGED = "ggufDownload.statusChanged";
@@ -72,6 +98,38 @@ function renderActiveDownloads(enabled = true) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
 	return { ...renderHook(() => useActiveGgufDownloads({ enabled }), { wrapper: Wrapper }), queryClient };
+}
+
+function renderActiveAcquisitions() {
+	handlers.clear();
+	signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
+		handlers.set(name, handler);
+	});
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	function Wrapper({ children }: { children: ReactNode }) {
+		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+	}
+	return renderHook(() => useActiveGgufAcquisitions(), { wrapper: Wrapper });
+}
+
+function acquisitionStatus(
+	operationId: string,
+	phase: GgufAcquisitionStatus["phase"],
+	updatedAtUtc: string,
+): GgufAcquisitionStatus {
+	return {
+		operationId,
+		operationKind: "Import",
+		modelName: `${operationId}:Q4_K_M`,
+		phase,
+		pct: undefined,
+		completedBytes: null,
+		totalBytes: null,
+		startedAtUtc: updatedAtUtc,
+		updatedAtUtc,
+		errorCode: null,
+		sanitizedMessage: null,
+	};
 }
 
 describe("useActiveGgufDownloads", () => {
@@ -118,6 +176,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Running",
 				completedBytes: 50,
@@ -127,7 +187,7 @@ describe("useActiveGgufDownloads", () => {
 		});
 
 		const status = result.current.get("unsloth/x:Q4_K_M");
-		expect(status?.phase).toBe("Running");
+		expect(status?.phase).toBe("Downloading");
 		expect(status?.pct).toBe(25);
 		expect(useGgufBrowseStore.getState().inFlightDownloads).toContain("unsloth/x:Q4_K_M");
 	});
@@ -137,6 +197,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Running",
 				completedBytes: 10,
@@ -148,6 +210,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Completed",
 				completedBytes: 20,
@@ -166,6 +230,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Completed",
 				completedBytes: 20,
@@ -182,6 +248,8 @@ describe("useActiveGgufDownloads", () => {
 		// A re-pushed Completed status (hub reconnect / hydrate refetch) must not trigger another refetch.
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Completed",
 				completedBytes: 20,
@@ -202,6 +270,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Running",
 				completedBytes: 10,
@@ -221,6 +291,8 @@ describe("useActiveGgufDownloads", () => {
 
 		act(() => {
 			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
 				modelName: "unsloth/x:Q4_K_M",
 				phase: "Failed",
 				completedBytes: null,
@@ -233,6 +305,110 @@ describe("useActiveGgufDownloads", () => {
 		expect(status?.phase).toBe("Failed");
 		expect(status?.pct).toBeUndefined();
 		expect(status?.sanitizedError).toBe("Download failed.");
+	});
+
+	it("hydrates acquisition-neutral imports by operation id and keeps them out of the download-only wrapper", async () => {
+		getGgufImportsOptionsMock.mockReturnValueOnce({
+			// biome-ignore lint/style/useNamingConvention: generated query key discriminator.
+			queryKey: [{ _id: "getGgufImports" }],
+			queryFn: () =>
+				Promise.resolve({
+					items: [
+						{
+							operationId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+							operationKind: "Import",
+							modelName: "private:Q4_K_M",
+							phase: "Copying",
+							startedAtUtc: "2026-08-14T10:00:00Z",
+							updatedAtUtc: "2026-08-14T10:00:01Z",
+						},
+					],
+				}),
+		});
+		const acquisitions = renderActiveAcquisitions();
+		await waitFor(() => expect(acquisitions.result.current.get("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?.modelName).toBe("private:Q4_K_M"));
+		acquisitions.unmount();
+
+		const downloads = renderActiveDownloads();
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({
+				operationId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+				operationKind: "Import",
+				modelName: "private:Q4_K_M",
+				phase: "Copying",
+			});
+		});
+		expect(downloads.result.current.has("private:Q4_K_M")).toBe(false);
+	});
+
+	it("maps legacy Running imports to acquisition-neutral copying rather than downloading", () => {
+		const status = toGgufAcquisitionStatus({
+			operationId: "legacy-import",
+			operationKind: "Import",
+			modelName: "private:Q4_K_M",
+			phase: "Running",
+		});
+
+		expect(status?.phase).toBe("Copying");
+	});
+
+	it("ignores stale live and REST statuses after a newer terminal update", () => {
+		const operationId = "monotonic-import";
+		const completed = acquisitionStatus(operationId, "Completed", "2026-08-14T10:00:02Z");
+		const delayedRunning = acquisitionStatus(operationId, "Copying", "2026-08-14T10:00:01Z");
+		const afterLive = mergeStatuses(new Map(), [completed], Date.parse("2026-08-14T10:00:03Z"));
+
+		const afterDelayedLive = mergeStatuses(afterLive, [delayedRunning], Date.parse("2026-08-14T10:00:03Z"));
+		const afterStaleRest = mergeStatuses(afterDelayedLive, [delayedRunning], Date.parse("2026-08-14T10:00:03Z"));
+
+		expect(afterDelayedLive.get(operationId)?.phase).toBe("Completed");
+		expect(afterStaleRest.get(operationId)?.phase).toBe("Completed");
+	});
+
+	it("does not regress a terminal live status when a delayed Running push arrives", () => {
+		const { result } = renderActiveAcquisitions();
+		const base = {
+			operationId: "live-monotonic-import",
+			operationKind: "Import",
+			modelName: "private:Q4_K_M",
+		};
+
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Completed", updatedAtUtc: "2026-08-14T10:00:02Z" });
+			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Running", updatedAtUtc: "2026-08-14T10:00:01Z" });
+		});
+
+		expect(result.current.get(base.operationId)?.phase).toBe("Completed");
+	});
+
+	it("bounds terminal acquisition and completed-handled retention without evicting active operations", () => {
+		const now = Date.parse("2026-08-14T12:00:00Z");
+		const statuses = new Map<string, GgufAcquisitionStatus>();
+		statuses.set("active", acquisitionStatus("active", "Copying", "2026-08-10T00:00:00Z"));
+		statuses.set("expired", acquisitionStatus("expired", "Failed", "2026-08-13T11:59:59Z"));
+		for (let index = 0; index <= ACQUISITION_TERMINAL_RETENTION_LIMIT; index += 1) {
+			const id = `terminal-${index.toString().padStart(3, "0")}`;
+			statuses.set(id, acquisitionStatus(id, "Completed", new Date(now - index * 1000).toISOString()));
+		}
+
+		const prunedStatuses = pruneAcquisitionStatuses(statuses, now);
+		expect(prunedStatuses.has("active")).toBe(true);
+		expect(prunedStatuses.has("expired")).toBe(false);
+		expect(prunedStatuses.has("terminal-000")).toBe(true);
+		expect(prunedStatuses.has(`terminal-${ACQUISITION_TERMINAL_RETENTION_LIMIT}`)).toBe(false);
+		expect([...prunedStatuses.values()].filter((status) => status.phase === "Completed")).toHaveLength(
+			ACQUISITION_TERMINAL_RETENTION_LIMIT,
+		);
+
+		const handled = new Map<string, number>([["expired", now - 24 * 60 * 60 * 1000 - 1]]);
+		for (let index = 0; index <= ACQUISITION_TERMINAL_RETENTION_LIMIT; index += 1) {
+			handled.set(`handled-${index.toString().padStart(3, "0")}`, now - index);
+		}
+		const prunedHandled = pruneCompletedHandled(handled, now);
+		expect(prunedHandled).toHaveLength(ACQUISITION_TERMINAL_RETENTION_LIMIT);
+		expect(prunedHandled.has("expired")).toBe(false);
+		expect(prunedHandled.has("handled-000")).toBe(true);
+		expect(prunedHandled.has(`handled-${ACQUISITION_TERMINAL_RETENTION_LIMIT}`)).toBe(false);
 	});
 
 	it("stops the connection on unmount", async () => {

@@ -74,6 +74,7 @@
 		"user": "Benutzer",
 		"skills": "Skills",
 		"customTools": "Eigene Tools",
+		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
 		"images": "Bildgenerierung"
 	},
@@ -488,7 +489,9 @@
 			"windowTitle": "Chatfenster",
 			"lockedState": "Diese Unterhaltung ist gesperrt. Entsperre sie, um Nachrichten anzuzeigen.",
 			"inputPlaceholder": "Nachricht eingeben",
-			"commands": { "menuLabel": "Slash-Befehle" },
+			"commands": {
+				"menuLabel": "Slash-Befehle"
+			},
 			"send": "Senden",
 			"modelLabel": "Modell",
 			"modelPlaceholder": "Modell auswählen",
@@ -1950,7 +1953,13 @@
 				"subtitle": "Installierte lokale Modelle auflisten, auswählen und löschen.",
 				"loading": "Lokale Modelle werden geladen …",
 				"installedTitle": "Installierte Modelle",
-				"empty": "Keine lokalen Modelle gefunden."
+				"empty": "Keine lokalen Modelle gefunden.",
+				"origin": {
+					"label": "Herkunft",
+					"imported": "Importiert",
+					"huggingFace": "Hugging Face",
+					"legacy": "Altbestand / unbekannt"
+				}
 			},
 			"gguf": {
 				"browse": {
@@ -2017,6 +2026,54 @@
 					"eta": "~{{duration}} verbleibend",
 					"progressAriaLabel": "Downloadfortschritt",
 					"failedTitle": "Download fehlgeschlagen"
+				},
+				"import": {
+					"action": "Modell importieren",
+					"dialogTitle": "GGUF-Modell importieren",
+					"pathHelp": "Gib den absoluten Pfad zu einer eigenständigen GGUF-Datei auf diesem Computer ein.",
+					"sourcePath": "Pfad zur GGUF-Datei",
+					"pathPlaceholder": "/pfad/zum/modell.gguf",
+					"preview": "Import prüfen",
+					"modelBaseName": "Modellbasisname",
+					"quantization": "Quantisierung",
+					"metadata": "GGUF v{{version}} · {{architecture}}",
+					"resultingName": "Installiertes Modell: {{name}}",
+					"storageInsufficient": "Für diesen Import ist nicht genügend freier Speicher vorhanden.",
+					"storageUnknown": "Der verfügbare Speicher konnte nicht geprüft werden.",
+					"warnings": "Warnungen",
+					"confirm": "Modell importieren",
+					"started": "Import gestartet.",
+					"progressRegion": "Status der Modellimporte",
+					"progressTitle": "Modellimporte",
+					"progressAria": "Importfortschritt",
+					"cancel": "Import abbrechen",
+					"cancelError": "Der Import konnte nicht abgebrochen werden.",
+					"failed": "Import fehlgeschlagen",
+					"phases": {
+						"Queued": "In Warteschlange",
+						"Validating": "Wird geprüft",
+						"Copying": "Wird kopiert",
+						"Downloading": "Wird heruntergeladen",
+						"Committing": "Wird abgeschlossen",
+						"Completed": "Abgeschlossen",
+						"Cancelled": "Abgebrochen",
+						"Failed": "Fehlgeschlagen"
+					},
+					"errors": {
+						"InvalidPath": "Gib einen gültigen absoluten Dateipfad ein.",
+						"SourceNotFound": "Die ausgewählte GGUF-Datei wurde nicht gefunden.",
+						"UnsupportedFileType": "Wähle eine unterstützte GGUF-Datei aus.",
+						"UnsupportedGgufVersion": "Diese GGUF-Version wird nicht unterstützt.",
+						"UnsupportedModelKind": "Dieser GGUF-Modelltyp kann nicht importiert werden.",
+						"UnsupportedArchitecture": "Diese GGUF-Architektur wird nicht unterstützt.",
+						"UnsupportedQuantization": "Wähle eine der unterstützten Quantisierungen aus.",
+						"ModelConflict": "Ein Modell mit diesem Namen ist bereits installiert.",
+						"DestinationConflict": "Das verwaltete Ziel wird bereits verwendet.",
+						"AcquisitionAlreadyActive": "Ein anderer Vorgang verwendet dieses Modell oder diese Datei bereits.",
+						"InsufficientStorage": "Für diesen Import ist nicht genügend freier Speicher vorhanden.",
+						"OperationNotFound": "Dieser Importvorgang ist nicht mehr verfügbar.",
+						"ImportFailed": "Das Modell konnte nicht importiert werden."
+					}
 				}
 			}
 		},
@@ -3596,8 +3653,14 @@
 				"action": "Aktion",
 				"builtIn": "Integriert"
 			},
-			"editor": { "createTitle": "Neuer Befehl", "editTitle": "Befehl bearbeiten" },
-			"delete": { "title": "Befehl löschen", "description": "'/{{name}}' löschen? Dies kann nicht rückgängig gemacht werden." },
+			"editor": {
+				"createTitle": "Neuer Befehl",
+				"editTitle": "Befehl bearbeiten"
+			},
+			"delete": {
+				"title": "Befehl löschen",
+				"description": "'/{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
 			"errors": {
 				"load": "Befehle konnten nicht geladen werden.",
 				"save": "Der Befehl konnte nicht gespeichert werden.",
@@ -3610,8 +3673,14 @@
 					"placeholder": "review",
 					"invalid": "Geben Sie einen gültigen kleingeschriebenen Befehlsnamen ein."
 				},
-				"description": { "label": "Beschreibung", "placeholder": "Optionale Zusammenfassung für die Autovervollständigung" },
-				"action": { "label": "Aktion", "sendPrompt": "Prompt senden" },
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Zusammenfassung für die Autovervollständigung"
+				},
+				"action": {
+					"label": "Aktion",
+					"sendPrompt": "Prompt senden"
+				},
 				"prompt": {
 					"label": "Prompt",
 					"description": "Wird beim Aufruf des Befehls im aktuellen Chat an den Agenten gesendet.",
@@ -3771,6 +3840,34 @@
 		"tools": {
 			"title": "Lokale Werkzeuge",
 			"subtitle": "Werkzeuge, die dem lokalen Node-Agenten zur Verfügung stehen: integrierte In-Process-Werkzeuge sowie Werkzeuge aus aktivierten MCP-Servern."
+		},
+		"benchmarks": {
+			"title": "Lokale Modell-Benchmarks",
+			"subtitle": "Lokale Modelle mit derselben eingefrorenen Agentenaufgabe und optionaler unabhängiger Bewertung vergleichen.",
+			"projects": "Projekte", "runs": "Läufe",
+			"status": { "Queued": "Wartend", "Running": "Läuft", "CancelRequested": "Abbruch angefordert", "Succeeded": "Erfolgreich", "Failed": "Fehlgeschlagen", "Cancelled": "Abgebrochen", "Disabled": "Deaktiviert", "Pending": "Ausstehend", "Skipped": "Übersprungen" },
+			"origin": { "huggingface": "Hugging Face", "imported": "Importiert", "legacy": "Altbestand / Unbekannt" },
+			"project": {
+				"create": "Neues Projekt", "edit": "Benchmark-Projekt", "name": "Name", "task": "Kernaufgabe", "context": "Angeforderte Kontext-Tokens", "agent": "Agent",
+				"judgeEnabled": "Automatische Bewertung aktivieren", "judgeModel": "Bewertungsmodell", "judgeContext": "Kontext-Tokens der Bewertung", "frozen": "Eingefroren",
+				"frozenExplanation": "Dieses Projekt ist eingefroren, solange Läufe existieren. Löschen Sie die abgeschlossenen Läufe, um es wieder zu bearbeiten.",
+				"runCount": "{{count}} Läufe", "empty": "Erstellen Sie ein Projekt, um eine Aufgabe einzufrieren und Modelle zu vergleichen.", "select": "Wählen Sie ein Benchmark-Projekt."
+			},
+			"run": { "model": "Primärmodell", "start": "Lauf starten", "cancel": "Lauf abbrechen", "delete": "Abgeschlossenen Lauf löschen", "waiting": "Warten auf Modellausgabe…", "compareSelection": "Zu vergleichende Läufe" },
+			"metrics": { "duration": "Dauer", "tokens": "Tokens", "speed": "Tok/s" },
+			"connection": { "live": "Live-Aktualisierungen verbunden", "reconnecting": "Verbindung und Zustand werden abgeglichen…", "http": "Dauerhafter HTTP-Zustand wird verwendet" },
+			"score": { "label": "Betreiberbewertung", "value": "Bewertung {{score}} von 5" },
+			"judge": {
+				"title": "Automatische Bewertung", "score": "Bewertung: {{score}}", "cancel": "Bewertung abbrechen",
+				"explanations": { "Disabled": "Für dieses Projekt wurde keine automatische Bewertung angefordert.", "Pending": "Die Bewertung wird erst nach einem erfolgreichen Primärlauf eingereiht.", "Skipped": "Die Bewertung war angefordert, wurde aber übersprungen, weil der Primärlauf nicht erfolgreich war.", "Queued": "Die Bewertung wartet in der dauerhaften Warteschlange.", "Running": "Das erfolgreiche Primärergebnis wird bewertet.", "Succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.", "Failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.", "Cancelled": "Die Bewertung wurde abgebrochen." }
+			},
+			"validation": { "name": "Ein Name ist erforderlich.", "task": "Eine Kernaufgabe ist erforderlich.", "context": "Der Kontext muss positiv sein.", "agent": "Wählen Sie einen Agenten.", "judgeModel": "Wählen Sie ein Bewertungsmodell." },
+			"errors": {
+				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.", "projectSave": "Das Projekt konnte nicht gespeichert werden.", "runLoad": "Der Lauf konnte nicht geladen werden.", "start": "Der Benchmark-Lauf konnte nicht gestartet werden.",
+				"cancel": "Diese Laufphase konnte nicht abgebrochen werden.", "delete": "Dieser abgeschlossene Lauf konnte nicht gelöscht werden.", "score": "Der Lauf wurde vor dem Speichern der Bewertung geändert und deshalb aktualisiert.",
+				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.", "fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
+				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Knotens unterbrochen.", "judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar."
+			}
 		}
 	},
 	"components": {
@@ -4019,13 +4116,34 @@
 				"title": "Schnellstart",
 				"description": "Richte den Chat nur bei Bedarf ein und erhalte deine erste Antwort.",
 				"steps": {
-					"navModels": { "title": "Deine lokalen Modelle", "content": "Modelle ermöglichen lokalen Chat. Falls dieser Knoten noch eines benötigt, zeigen die nächsten Schritte Installation und Auswahl." },
-					"recommendationInstall": { "title": "Bei Bedarf ein Chat-Modell installieren", "content": "Wähle ein empfohlenes Chat-Modell, wenn keines verfügbar ist. Falls die Bereitstellung noch geprüft wird, kannst du später sicher hierher zurückkehren." },
-					"setDefaultModel": { "title": "Standardmodell auswählen", "content": "Wähle ein installiertes chatfähiges Modell als Standard für neue Unterhaltungen." },
-					"navChat": { "title": "Chat öffnen", "content": "Der Chat ist bereit für deine erste Unterhaltung." },
-					"chatInput": { "title": "Erste Nachricht schreiben", "content": "Frage etwas, das dir nützt — bitte zum Beispiel um eine kurze Vorstellung." },
-					"chatSend": { "title": "Nachricht senden", "content": "Starte die lokale Generierung mit der Senden-Schaltfläche." },
-					"firstResponse": { "title": "Deine erste Antwort", "content": "Die Antwort erscheint in der Unterhaltung. Du bist startklar; weitere optionale Tutorials findest du unter Informationen → Tutorials." }
+					"navModels": {
+						"title": "Deine lokalen Modelle",
+						"content": "Modelle ermöglichen lokalen Chat. Falls dieser Knoten noch eines benötigt, zeigen die nächsten Schritte Installation und Auswahl."
+					},
+					"recommendationInstall": {
+						"title": "Bei Bedarf ein Chat-Modell installieren",
+						"content": "Wähle ein empfohlenes Chat-Modell, wenn keines verfügbar ist. Falls die Bereitstellung noch geprüft wird, kannst du später sicher hierher zurückkehren."
+					},
+					"setDefaultModel": {
+						"title": "Standardmodell auswählen",
+						"content": "Wähle ein installiertes chatfähiges Modell als Standard für neue Unterhaltungen."
+					},
+					"navChat": {
+						"title": "Chat öffnen",
+						"content": "Der Chat ist bereit für deine erste Unterhaltung."
+					},
+					"chatInput": {
+						"title": "Erste Nachricht schreiben",
+						"content": "Frage etwas, das dir nützt — bitte zum Beispiel um eine kurze Vorstellung."
+					},
+					"chatSend": {
+						"title": "Nachricht senden",
+						"content": "Starte die lokale Generierung mit der Senden-Schaltfläche."
+					},
+					"firstResponse": {
+						"title": "Deine erste Antwort",
+						"content": "Die Antwort erscheint in der Unterhaltung. Du bist startklar; weitere optionale Tutorials findest du unter Informationen → Tutorials."
+					}
 				}
 			},
 			"agents-basics": {
@@ -4034,10 +4152,22 @@
 				"invitationTitle": "Neu: Tutorial zu Agenten-Grundlagen",
 				"invitationBody": "Erhalte eine kurze optionale Führung durch diese Seite. Sie erklärt nur die Steuerelemente und erstellt oder ändert keinen Agenten.",
 				"steps": {
-					"agentsOverview": { "title": "Wiederverwendbare Agentendefinitionen", "content": "Agenten verbinden Anweisungen, ein Modell, Tools und Fähigkeiten zu wiederverwendbaren Assistenten." },
-					"agentsTemplates": { "title": "Startvorlagen", "content": "Durchsuche Startagenten, wenn du einen geführten Ausgangspunkt möchtest. Dieses Tutorial öffnet oder installiert sie nicht." },
-					"agentsCreate": { "title": "Agenten erstellen", "content": "Beginne hier eine eigene Definition, wenn du bereit bist. Während des Tutorials wird nichts erstellt." },
-					"agentsList": { "title": "Definitionen verwalten", "content": "Gespeicherte Agenten erscheinen hier zur späteren Bearbeitung und Nutzung im Chat." }
+					"agentsOverview": {
+						"title": "Wiederverwendbare Agentendefinitionen",
+						"content": "Agenten verbinden Anweisungen, ein Modell, Tools und Fähigkeiten zu wiederverwendbaren Assistenten."
+					},
+					"agentsTemplates": {
+						"title": "Startvorlagen",
+						"content": "Durchsuche Startagenten, wenn du einen geführten Ausgangspunkt möchtest. Dieses Tutorial öffnet oder installiert sie nicht."
+					},
+					"agentsCreate": {
+						"title": "Agenten erstellen",
+						"content": "Beginne hier eine eigene Definition, wenn du bereit bist. Während des Tutorials wird nichts erstellt."
+					},
+					"agentsList": {
+						"title": "Definitionen verwalten",
+						"content": "Gespeicherte Agenten erscheinen hier zur späteren Bearbeitung und Nutzung im Chat."
+					}
 				}
 			},
 			"knowledge-base-basics": {
@@ -4046,10 +4176,22 @@
 				"invitationTitle": "Neu: Tutorial zu Wissensdatenbank-Grundlagen",
 				"invitationBody": "Erhalte eine kurze optionale Führung durch Upload, Indexierung und Suche. Sie lädt niemals Dokumente hoch und verändert sie nicht.",
 				"steps": {
-					"knowledgeOverview": { "title": "Chat auf deine Dokumente stützen", "content": "Die Wissensdatenbank hält Dokumentverarbeitung und Abruf lokal auf diesem Knoten." },
-					"knowledgeUpload": { "title": "Dokumente hinzufügen", "content": "Wenn du Dateien auswählst, extrahiert, segmentiert, bettet und indexiert der Knoten sie. Dieses Tutorial lädt nichts hoch." },
-					"knowledgeDocuments": { "title": "Indexierung verfolgen", "content": "Dokumentstatus und Wartungsaktionen erscheinen nach einem Upload hier." },
-					"knowledgeSearch": { "title": "Abruf testen", "content": "Durchsuche indexierte Inhalte hier, bevor du die Wissensdatenbank im Chat aktivierst." }
+					"knowledgeOverview": {
+						"title": "Chat auf deine Dokumente stützen",
+						"content": "Die Wissensdatenbank hält Dokumentverarbeitung und Abruf lokal auf diesem Knoten."
+					},
+					"knowledgeUpload": {
+						"title": "Dokumente hinzufügen",
+						"content": "Wenn du Dateien auswählst, extrahiert, segmentiert, bettet und indexiert der Knoten sie. Dieses Tutorial lädt nichts hoch."
+					},
+					"knowledgeDocuments": {
+						"title": "Indexierung verfolgen",
+						"content": "Dokumentstatus und Wartungsaktionen erscheinen nach einem Upload hier."
+					},
+					"knowledgeSearch": {
+						"title": "Abruf testen",
+						"content": "Durchsuche indexierte Inhalte hier, bevor du die Wissensdatenbank im Chat aktivierst."
+					}
 				}
 			}
 		}

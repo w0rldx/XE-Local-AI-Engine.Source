@@ -44,6 +44,8 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 		getLatestRecommendations: vi.fn(),
 		browseGgufRepositories: vi.fn(),
 		inspectGgufRepository: vi.fn(),
+		getGgufImportCapability: vi.fn(),
+		getGgufImports: vi.fn(),
 	},
 	mutationFns: {
 		selectLocalModel: vi.fn(),
@@ -52,6 +54,9 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 		deleteModelKind: vi.fn(),
 		startGgufDownload: vi.fn(),
 		cancelGgufDownload: vi.fn(),
+		previewGgufImport: vi.fn(),
+		startGgufImport: vi.fn(),
+		cancelGgufImport: vi.fn(),
 	},
 }));
 
@@ -98,6 +103,15 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: fakeQueryKey("getGgufDownloads"),
 		queryFn: async () => ({ items: [] }),
 	}),
+	getGgufImportCapabilityOptions: () => ({
+		queryKey: fakeQueryKey("getGgufImportCapability"),
+		queryFn: queryFns.getGgufImportCapability,
+	}),
+	getGgufImportsQueryKey: () => fakeQueryKey("getGgufImports"),
+	getGgufImportsOptions: () => ({ queryKey: fakeQueryKey("getGgufImports"), queryFn: queryFns.getGgufImports }),
+	previewGgufImportMutation: () => ({ mutationFn: mutationFns.previewGgufImport }),
+	startGgufImportMutation: () => ({ mutationFn: mutationFns.startGgufImport }),
+	cancelGgufImportMutation: () => ({ mutationFn: mutationFns.cancelGgufImport }),
 }));
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
@@ -200,8 +214,11 @@ describe("ModelManagement", () => {
 		// GGUF browse + download defaults. The browse query is gated until the operator submits a search term.
 		queryFns.browseGgufRepositories.mockResolvedValue({ items: [] });
 		queryFns.inspectGgufRepository.mockResolvedValue({ repoId: "", files: [] });
+		queryFns.getGgufImportCapability.mockResolvedValue({ available: false });
+		queryFns.getGgufImports.mockResolvedValue({ items: [] });
 		mutationFns.startGgufDownload.mockResolvedValue({ modelName: "unsloth/llama-3.1-8b-gguf", alreadyInFlight: false });
 		mutationFns.cancelGgufDownload.mockResolvedValue({ cancelled: true });
+		mutationFns.cancelGgufImport.mockResolvedValue({ cancellationRequested: true });
 		// The committed GGUF browse term + the shared in-flight download set survive a remount — reset both so each test
 		// starts blank (the in-flight set is now shared, since the advisor hands recommendation-row downloads off here).
 		useGgufBrowseStore.setState({ browseQuery: "", inFlightDownloads: [] });
@@ -483,5 +500,115 @@ describe("ModelManagement", () => {
 				body: { repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q4_K_M" },
 			}),
 		);
+	});
+
+	it("gates the import action on capability and completes the path-preview-confirm flow", async () => {
+		queryFns.getGgufImportCapability.mockResolvedValue({ available: true });
+		mutationFns.previewGgufImport.mockResolvedValue({
+			modelBaseName: "private-model",
+			detectedQuantization: "Q4_K_M",
+			canonicalQuantizationChoices: ["Q4_K_M", "Q5_K_M"],
+			canonicalModelName: "private-model:Q4_K_M",
+			finalFileName: "private-model-Q4_K_M-abc.gguf",
+			sizeBytes: 1_048_576,
+			sourceDisplayName: "private-model.gguf",
+			architecture: "llama",
+			ggufVersion: 3,
+			warnings: ["Review the chat template."],
+			hasSufficientStorage: true,
+			previewToken: "opaque-preview",
+			expiresAtUtc: "2026-08-14T12:00:00Z",
+		});
+		mutationFns.startGgufImport.mockResolvedValue({
+			operationId: "11111111-1111-1111-1111-111111111111",
+			operationKind: "Import",
+			modelName: "private-model:Q4_K_M",
+		});
+
+		renderWithProviders(<ModelManagement />);
+		fireEvent.click(await screen.findByRole("button", { name: "Import model" }));
+		const dialog = await screen.findByRole("dialog");
+		fireEvent.change(within(dialog).getByPlaceholderText("/path/to/model.gguf"), {
+			target: { value: "/private/models/private-model.gguf" },
+		});
+		fireEvent.click(within(dialog).getByRole("button", { name: "Preview import" }));
+
+		expect(await within(dialog).findByText("private-model.gguf")).toBeTruthy();
+		expect(within(dialog).getByText("Review the chat template.")).toBeTruthy();
+		fireEvent.click(within(dialog).getByRole("button", { name: "Import model" }));
+
+		await waitFor(() =>
+			expect(mutationFns.startGgufImport.mock.calls[0]?.[0]).toEqual({
+				body: {
+					sourcePath: "/private/models/private-model.gguf",
+					previewToken: "opaque-preview",
+					modelBaseName: "private-model",
+					quantization: "Q4_K_M",
+				},
+			}),
+		);
+	});
+
+	it("hides import when capability is unavailable and labels imported provenance from the typed origin", async () => {
+		queryFns.listLocalModels.mockResolvedValue({
+			isAvailable: true,
+			items: [
+				{
+					modelName: "private-model:Q4_K_M",
+					provider: "llamacpp",
+					origin: "imported",
+					isSelected: false,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: [],
+					isReasoningCapable: false,
+					isToolCapable: false,
+					isOverridden: false,
+				},
+			],
+		});
+
+		renderWithProviders(<ModelManagement />);
+		expect(await screen.findByText("Imported")).toBeTruthy();
+		expect(screen.queryByRole("button", { name: "Import model" })).toBeNull();
+	});
+
+	it("announces import progress, exposes cancellation, and renders failure text only from the safe error code", async () => {
+		queryFns.getGgufImports.mockResolvedValue({
+			items: [
+				{
+					operationId: "22222222-2222-2222-2222-222222222222",
+					operationKind: "Import",
+					modelName: "copying:Q4_K_M",
+					phase: "Copying",
+					completedBytes: 5,
+					totalBytes: 10,
+					startedAtUtc: "2026-08-14T10:00:00Z",
+					updatedAtUtc: "2026-08-14T10:00:01Z",
+				},
+				{
+					operationId: "33333333-3333-3333-3333-333333333333",
+					operationKind: "Import",
+					modelName: "failed:Q4_K_M",
+					phase: "Failed",
+					errorCode: "SourceNotFound",
+					sanitizedMessage: "/private/models/secret.gguf was not found",
+					startedAtUtc: "2026-08-14T10:00:00Z",
+					updatedAtUtc: "2026-08-14T10:00:01Z",
+				},
+			],
+		});
+
+		renderWithProviders(<ModelManagement />);
+		const region = await screen.findByLabelText("Model import status");
+		expect(within(region).getByLabelText("Import progress")).toBeTruthy();
+		fireEvent.click(within(region).getByRole("button", { name: "Cancel import" }));
+		await waitFor(() =>
+			expect(mutationFns.cancelGgufImport.mock.calls[0]?.[0]).toEqual({
+				path: { operationId: "22222222-2222-2222-2222-222222222222" },
+			}),
+		);
+		expect(within(region).getByText("The model could not be imported.")).toBeTruthy();
+		expect(region.textContent).not.toContain("/private/models");
 	});
 });

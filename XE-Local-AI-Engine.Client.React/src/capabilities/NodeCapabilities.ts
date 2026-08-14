@@ -34,6 +34,7 @@ export interface NodeCapabilityConfig {
 	readonly cloudSettings: boolean;
 	readonly modelManagement: boolean;
 	readonly invocationMonitor: boolean;
+	readonly benchmarks: boolean;
 	readonly agentManagement: boolean;
 	readonly mcpServers: boolean;
 	readonly scheduler: boolean;
@@ -97,6 +98,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	cloudSettings: true,
 	modelManagement: true,
 	invocationMonitor: true,
+	benchmarks: true,
 	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,
 	// MCP server registration surface (dynamic tool-catalog). On by default; node-local SQLite-backed CRUD. Registered
@@ -139,6 +141,7 @@ export const nodeRoutePaths = {
 	cloudSettings: "/cloud-settings",
 	models: "/models",
 	invocations: "/invocations",
+	benchmarks: "/benchmarks",
 	// agent token-usage dashboard (per-provider/model/day rollups) — operator observability, always available like
 	// invocations (both are backed by operator-gated endpoints; the authenticated _layout is the operator gate).
 	usage: "/usage",

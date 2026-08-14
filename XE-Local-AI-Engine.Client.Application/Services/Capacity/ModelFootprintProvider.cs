@@ -24,13 +24,22 @@ public sealed class ModelFootprintProvider(
         HardwareProfile profile,
         CancellationToken ct)
     {
+        return await ResolveFootprintAsync(modelName, role, profile, requiredContextTokens: null, ct).ConfigureAwait(false);
+    }
+
+    public async Task<ModelFootprint> ResolveFootprintAsync(string modelName,
+        ModelRole role,
+        HardwareProfile profile,
+        int? requiredContextTokens,
+        CancellationToken ct)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(profile);
 
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var resolved = await _profileResolver.ResolveAsync(modelName, role, variant, ct).ConfigureAwait(false);
         var allocation = await _allocationResolver.ResolveAsync(modelName, role, variant, resolved, ct).ConfigureAwait(false);
-        return allocation is null
+        return allocation is null || requiredContextTokens is <= 0 || requiredContextTokens > allocation.ProcessContextTokens
             ? ModelFootprint.Unknown
             : ModelFootprint.Known(new ProcessLaunchAdmission(modelName, role, variant, resolved, allocation));
     }

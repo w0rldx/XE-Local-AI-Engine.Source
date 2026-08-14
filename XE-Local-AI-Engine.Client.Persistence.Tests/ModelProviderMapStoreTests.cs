@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.Models;
 
 public sealed class ModelProviderMapStoreTests : IDisposable
 {
@@ -122,6 +124,74 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         AssertEx.Equal("alpaca", all[0].ModelName);
         AssertEx.Equal("mistral", all[1].ModelName);
         AssertEx.Equal("zephyr", all[2].ModelName);
+    }
+
+    [Test]
+    public async Task ConditionalMutation_ChangedRevisionCannotBeRemovedOrRestored()
+    {
+        var databasePath = GetDatabasePath("conditional.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var rawStore = new ModelProviderMapStore(context, TimeProvider.System);
+        var domain = new KeyedCompositeLockDomain();
+        var leaseCoordinator = new ModelProviderMapLeaseCoordinator(domain);
+        var coordinated = new CoordinatedModelProviderMapStore(rawStore);
+
+        await using var lease = await leaseCoordinator.AcquireMapMutationAsync("mistral", ModelProviderMapMutationKind.MapClaim);
+        var claim = await coordinated.TryClaimLlamaCppAsync(lease, "mistral");
+        var created = claim as ProviderMapClaimResult.Created;
+        AssertEx.NotNull(created);
+
+        var replacement = await rawStore.UpsertAsync("mistral", "ollama");
+        AssertEx.True(replacement.Revision.Length > 0);
+        var restore = await coordinated.TryRestoreAsync(lease, created!.Receipt);
+        AssertEx.Equal(ProviderMapRestoreResult.Superseded, restore);
+
+        var removal = await coordinated.TryRemoveIfMatchAsync(lease, "mistral", "llamacpp", created.Receipt.Mutation!.Revision);
+        AssertEx.True(removal is ProviderMapRemovalResult.Superseded,
+            "A conditional removal must preserve a newer provider/revision.");
+        AssertEx.Equal("ollama", await rawStore.GetProviderForModelAsync("mistral"));
+    }
+
+    [Test]
+    public async Task CoordinatedClaim_CreateAndRestore_RemovesOnlyClaimedRevision()
+    {
+        var databasePath = GetDatabasePath("claim-restore.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var rawStore = new ModelProviderMapStore(context, TimeProvider.System);
+        var leaseCoordinator = new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain());
+        var coordinated = new CoordinatedModelProviderMapStore(rawStore);
+
+        await using var lease = await leaseCoordinator.AcquireMapMutationAsync("Phi-3", ModelProviderMapMutationKind.MapClaim);
+        var claim = await coordinated.TryClaimLlamaCppAsync(lease, "phi-3");
+        var created = AssertEx.NotNull(claim as ProviderMapClaimResult.Created);
+        AssertEx.True(created.Receipt.Mutation!.Revision.Length > 0);
+
+        var restored = await coordinated.TryRestoreAsync(lease, created.Receipt);
+        AssertEx.Equal(ProviderMapRestoreResult.Restored, restored);
+        AssertEx.Null(await rawStore.ReadAsync("PHI-3"));
+    }
+
+    [Test]
+    public async Task TryInsertAsync_NonUniqueDatabaseFailurePropagates()
+    {
+        var databasePath = GetDatabasePath("insert-failure.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        await context.Database.ExecuteSqlRawAsync("""
+            CREATE TRIGGER reject_provider_map_insert
+            BEFORE INSERT ON model_provider_map
+            BEGIN
+                SELECT RAISE(ABORT, 'injected persistence failure');
+            END;
+            """);
+        var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.TryInsertAsync("mistral", "llamacpp"));
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

@@ -83,6 +83,14 @@ function ModelDetailsBody({
 					<Text>Parameter size: {model.parameterSizeLabel}</Text>
 					<Text>Family: {model.familyLabel}</Text>
 					<Text>Quantization: {model.quantizationLabel}</Text>
+					<Text>
+						{t("pages.models.local.origin.label", "Origin")}:{" "}
+						{model.origin === "imported"
+							? t("pages.models.local.origin.imported", "Imported")
+							: model.origin === "huggingface"
+								? t("pages.models.local.origin.huggingFace", "Hugging Face")
+								: t("pages.models.local.origin.legacy", "Legacy / unknown")}
+					</Text>
 					<Text>Context length: {details?.maxContextTokens?.toLocaleString() ?? "Unknown"}</Text>
 					{details?.system ? <Alert color="blue">System prompt: {details.system}</Alert> : null}
 				</Stack>

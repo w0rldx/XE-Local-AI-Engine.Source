@@ -2,11 +2,14 @@
 // hey-api SDK (the migrated page reads them directly); the mappers that coalesce the optional-field generated
 // responses into these view-models live in LocalModelMappers.ts.
 
+import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } from "@/core/api/generated";
+
 export interface LocalModelViewModel {
 	modelName: string;
 	// The runtime that serves this model ("llamacpp", "Ollama", "CodexOAuth", "AzureFoundry"). Only "llamacpp" models
 	// honor a per-model launch-argument override, so the Advanced tab is gated on this.
 	provider: string;
+	origin: LocalModelOrigin | null;
 	sizeLabel: string;
 	modifiedDateLabel: string;
 	familyLabel: string;
@@ -18,6 +21,8 @@ export interface LocalModelViewModel {
 	capabilities: string[];
 	isOverridden: boolean;
 }
+
+export type LocalModelOrigin = XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin;
 
 export const emptyModelValue = "—";
 

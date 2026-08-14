@@ -198,7 +198,22 @@ internal sealed class HfDownloadClient
             var verifiedSha = await VerifyHashAsync(partPath, expectedSha, ct).ConfigureAwait(false);
 
             // Atomic-on-complete: only now is the file a real model file.
-            File.Move(partPath, destinationPath, overwrite: true);
+            if (HasCaseInsensitiveCollision(destinationPath))
+            {
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.DestinationConflict,
+                    "The model download destination already exists.");
+            }
+
+            try
+            {
+                File.Move(partPath, destinationPath, overwrite: false);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.DestinationConflict,
+                    "The model download could not be committed safely.",
+                    exception);
+            }
 
             var finalSize = new FileInfo(destinationPath).Length;
             progress?.Report(new PullProgress
@@ -211,6 +226,20 @@ internal sealed class HfDownloadClient
 
             return new HfDownloadResult(destinationPath, finalSize, verifiedSha, resolvedRevision);
         }
+    }
+
+    private static bool HasCaseInsensitiveCollision(string destinationPath)
+    {
+        var directory = Path.GetDirectoryName(destinationPath);
+        if (directory is null || !Directory.Exists(directory))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(destinationPath);
+        return Directory.EnumerateFileSystemEntries(directory)
+                        .Select(Path.GetFileName)
+                        .Any(existing => string.Equals(existing, fileName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task CopyToPartAsync(HttpResponseMessage response,
@@ -493,7 +522,7 @@ internal sealed class HfDownloadClient
                 File.Delete(path);
             }
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             // Best-effort cleanup of a rejected partial file.
         }

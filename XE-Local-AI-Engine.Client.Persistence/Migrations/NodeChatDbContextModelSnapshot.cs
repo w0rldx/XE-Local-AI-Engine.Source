@@ -365,6 +365,289 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("agent_skill_resources", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<int>("ContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("context_tokens");
+
+                    b.Property<byte[]>("CoreTaskJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("core_task_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int?>("JudgeContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_context_tokens");
+
+                    b.Property<bool>("JudgeEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_enabled");
+
+                    b.Property<string>("JudgeModelName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_model_name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("JudgeOutputSchemaVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_output_schema_version");
+
+                    b.Property<int>("JudgePromptVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_prompt_version");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentDefinitionId")
+                        .HasDatabaseName("ix_benchmark_projects_agent_definition_id");
+
+                    b.ToTable("benchmark_projects", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_projects_context_tokens", "context_tokens > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_projects_judge_context_tokens", "judge_context_tokens IS NULL OR judge_context_tokens > 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_name");
+
+                    b.Property<long>("AgentVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("agent_version");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<int?>("EffectiveContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("effective_context_tokens");
+
+                    b.Property<long?>("JudgeCompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_completed_at_utc");
+
+                    b.Property<string>("JudgeErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_error_message");
+
+                    b.Property<byte[]>("JudgeResultJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("judge_result_json");
+
+                    b.Property<long?>("JudgeStartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_started_at_utc");
+
+                    b.Property<string>("JudgeStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_status");
+
+                    b.Property<long>("LastStreamSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_stream_sequence");
+
+                    b.Property<string>("ModelContentFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_content_fingerprint");
+
+                    b.Property<byte[]>("OutputPartsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("output_parts_json");
+
+                    b.Property<long?>("PrimaryCompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_completed_at_utc");
+
+                    b.Property<string>("PrimaryErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_error_message");
+
+                    b.Property<string>("PrimaryModelName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_model_name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("PrimaryModelOrigin")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_model_origin");
+
+                    b.Property<string>("PrimaryStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_status");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<int>("RequestedContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("requested_context_tokens");
+
+                    b.Property<byte[]>("RuntimeSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("runtime_snapshot_json");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<double?>("TokensPerSecond")
+                        .HasColumnType("REAL")
+                        .HasColumnName("tokens_per_second");
+
+                    b.Property<int?>("TotalTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_tokens");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<int?>("UserScore")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_score");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_benchmark_runs_project_created_at");
+
+                    b.ToTable("benchmark_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported')");
+
+                            t.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 1 AND user_score <= 5)");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkWorkItem", b =>
+                {
+                    b.Property<long>("QueueSequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("queue_sequence");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt");
+
+                    b.Property<long>("EnqueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<long?>("FinishedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("QueueSequence");
+
+                    b.HasIndex("RunId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_work_items_run_kind");
+
+                    b.HasIndex("Status", "QueueSequence")
+                        .HasDatabaseName("ix_benchmark_work_items_status_sequence");
+
+                    b.ToTable("benchmark_work_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_work_items_attempt", "attempt = 1");
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.CanvasWorkflow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1595,11 +1878,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique()
                         .HasFilter("source_kind <> 'repository'");
 
+                    b.HasIndex("CollectionId", "Status");
+
                     b.HasIndex("CollectionId", "SourceKind", "SourceId", "SourcePath")
                         .IsUnique()
                         .HasFilter("source_kind = 'repository' AND source_id IS NOT NULL AND source_path IS NOT NULL");
-
-                    b.HasIndex("CollectionId", "Status");
 
                     b.ToTable("knowledge_documents", (string)null);
                 });
@@ -2439,6 +2722,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("provider_name");
 
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revision");
+
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");
@@ -3095,6 +3384,24 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .WithMany()
                         .HasForeignKey("SkillId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkWorkItem", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

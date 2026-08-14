@@ -34,6 +34,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
+    private readonly ILlamaServerEndpointBinding? _endpointBinding;
 
     /// <summary>
     ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
@@ -43,12 +44,14 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
         IGgufModelStore modelStore,
         LlamaServerSupervisorOptions? options = null,
-        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null)
+        ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
+        ILlamaServerEndpointBinding? endpointBinding = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _networkTimeout = (options ?? new LlamaServerSupervisorOptions()).HttpNetworkTimeout;
         _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
+        _endpointBinding = endpointBinding;
     }
 
     /// <inheritdoc />
@@ -163,7 +166,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout, _calibrationScheduler);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout, _calibrationScheduler, _endpointBinding);
     }
 
     /// <inheritdoc />
