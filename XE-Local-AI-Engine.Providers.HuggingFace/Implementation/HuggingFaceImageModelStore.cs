@@ -149,6 +149,17 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                         continue;
                     }
 
+                    // The shared download client commits with create-new semantics so GGUF acquisitions can never
+                    // overwrite an installed model. Image sets have an older, different contract: a part whose declared
+                    // size does not match (or has no declared size) is explicitly stale and must be replaced. Remove only
+                    // this already-contained model-owned path before downloading; a locked file fails closed instead of
+                    // weakening the download client's no-overwrite boundary for every caller.
+                    if (!TryDeleteFile(destinationPath))
+                    {
+                        throw new ImageModelInUseException(
+                            "The stale image model file is still in use and could not be replaced. Eject the image runtime and try again.");
+                    }
+
                     // Report set-relative bytes so a multi-part download shows one advancing bar instead of a bar that
                     // fills and snaps back to zero once per part.
                     var partProgress = progress is null
