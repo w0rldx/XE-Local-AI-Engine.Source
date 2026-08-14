@@ -263,12 +263,22 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             }
             catch (OperationCanceledException)
             {
-                await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false);
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                {
+                    PublishCompensationFailure(operationId);
+                    return;
+                }
+
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Cancelled);
             }
             catch (GgufImportException exception)
             {
-                await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false);
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                {
+                    PublishCompensationFailure(operationId);
+                    return;
+                }
+
                 UpdateAndPublish(operationId,
                     GgufAcquisitionPhase.Failed,
                     errorCode: MapRejectionCode(exception.Reason),
@@ -276,42 +286,64 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             }
             catch (GgufImportApplicationException exception)
             {
-                await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false);
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                {
+                    PublishCompensationFailure(operationId);
+                    return;
+                }
+
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Failed, errorCode: exception.ErrorCode, sanitizedError: exception.Message);
             }
             catch (Exception exception)
             {
-                await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false);
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                {
+                    PublishCompensationFailure(operationId);
+                    _logger.LogWarning(exception, "GGUF import failed for {ModelName} and compensation was incomplete.", identity.CanonicalModelName);
+                    return;
+                }
+
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Failed, errorCode: "ImportFailed", sanitizedError: "Import failed.");
                 _logger.LogWarning(exception, "GGUF import failed for {ModelName}.", identity.CanonicalModelName);
             }
         }
     }
 
-    private async Task CompensateAsync(PreparedGgufImport? prepared,
+    private async Task<bool> CompensateAsync(PreparedGgufImport? prepared,
         GgufImportCommitReceipt? committed,
         ProviderMapMutationReceipt? mapReceipt,
         InstalledModelMutationLease lease,
         string modelName)
     {
+        var compensationSucceeded = true;
+        var mayRollbackCommittedArtifacts = true;
         try
         {
             if (mapReceipt is not null)
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-                _ = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
+                var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
                 scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
+                if (restore == ProviderMapRestoreResult.Superseded)
+                {
+                    compensationSucceeded = false;
+                    mayRollbackCommittedArtifacts = false;
+                    _logger.LogError("Provider mapping changed while compensating import for {ModelName}; committed artifacts were preserved.",
+                        modelName);
+                }
             }
         }
         catch (Exception exception)
         {
+            compensationSucceeded = false;
+            mayRollbackCommittedArtifacts = false;
             _logger.LogError(exception, "Could not restore the provider mapping while compensating import for {ModelName}.", modelName);
         }
 
         try
         {
-            if (committed is not null)
+            if (committed is not null && mayRollbackCommittedArtifacts)
             {
                 await _importer.RollbackCommittedAsync(committed, CancellationToken.None).ConfigureAwait(false);
             }
@@ -322,11 +354,23 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         }
         catch (Exception exception)
         {
+            compensationSucceeded = false;
             _logger.LogError(exception, "Could not remove import-owned artifacts while compensating import for {ModelName}.", modelName);
         }
 
-        _logger.LogDebug("Compensated GGUF import operation for {ModelName}.", modelName);
+        if (compensationSucceeded)
+        {
+            _logger.LogDebug("Compensated GGUF import operation for {ModelName}.", modelName);
+        }
+
+        return compensationSucceeded;
     }
+
+    private void PublishCompensationFailure(Guid operationId) =>
+        UpdateAndPublish(operationId,
+            GgufAcquisitionPhase.Failed,
+            errorCode: "ImportCompensationFailed",
+            sanitizedError: "Import cleanup requires recovery.");
 
     private async Task<GgufImportInspection> InspectSupportedAsync(string sourcePath,
         bool allowQuantizationRequired,

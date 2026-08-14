@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -147,6 +148,44 @@ public sealed class GgufImportTransactionCoordinatorTests
 
         AssertEx.Equal(expected: 1, importer.RollbackCount);
         AssertEx.Equal(GgufAcquisitionPhase.Cancelled, coordinator.GetStatus(ticket.OperationId)!.Phase);
+    }
+
+    [Test]
+    public async Task Cancel_AfterMapClaim_WhenRestoreIsSuperseded_PreservesCommittedArtifactsAndFailsClosed()
+    {
+        var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
+        var security = Options.Create(new SecurityOptions());
+        var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(security));
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(
+            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+            "example",
+            "Q4_K_M"));
+        var importer = new BlockingCommitImporter(identity);
+        importer.ReleaseCommit.SetResult();
+        var mapStore = new SupersedingMapStore(identity.CanonicalModelName);
+        var serviceCollection = new ServiceCollection();
+        serviceCollection.AddSingleton<IGgufAcquisitionPreflight>(new AvailablePreflight(identity));
+        serviceCollection.AddSingleton<ICoordinatedModelProviderMapStore>(mapStore);
+        var services = serviceCollection.BuildServiceProvider();
+        var coordinator = BuildCoordinator(sourcePath,
+            importer: importer,
+            resolver: resolver,
+            services: services);
+        var preview = await coordinator.PreviewAsync(sourcePath);
+
+        var ticket = await coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+            preview.PreviewToken,
+            preview.ModelBaseName,
+            "Q4_K_M"));
+        await mapStore.ClaimEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        AssertEx.True(coordinator.Cancel(ticket.OperationId));
+        mapStore.ReleaseClaim.SetResult();
+        await WaitForPhaseAsync(coordinator, ticket.OperationId, GgufAcquisitionPhase.Failed);
+
+        var status = coordinator.GetStatus(ticket.OperationId)!;
+        AssertEx.Equal("ImportCompensationFailed", status.ErrorCode);
+        AssertEx.Equal(expected: 0, importer.RollbackCount);
     }
 
     private static GgufImportTransactionCoordinator BuildCoordinator(string sourcePath,
@@ -356,5 +395,45 @@ public sealed class GgufImportTransactionCoordinatorTests
 
         public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken) =>
             Task.CompletedTask;
+    }
+
+    private sealed class SupersedingMapStore(string modelName) : ICoordinatedModelProviderMapStore
+    {
+        private readonly ProviderMapMutationReceipt _receipt = new(modelName,
+            Prior: null,
+            new ModelProviderMapRecord(modelName, "llamacpp", 1, "revision"),
+            WasRemoval: false);
+
+        public TaskCompletionSource ClaimEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseClaim { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
+            string modelName,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public async Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease,
+            string modelName,
+            CancellationToken cancellationToken = default)
+        {
+            ClaimEntered.SetResult();
+            await ReleaseClaim.Task.ConfigureAwait(false);
+            return new ProviderMapClaimResult.Created(_receipt);
+        }
+
+        public Task<ProviderMapMutationResult> TryUpsertAsync(IModelProviderMapMutationLease lease,
+            string modelName,
+            string providerName,
+            string? expectedRevision = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,
+            ProviderMapMutationReceipt receipt,
+            CancellationToken cancellationToken = default) => Task.FromResult(ProviderMapRestoreResult.Superseded);
+
+        public Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease,
+            string modelName,
+            string expectedProvider,
+            string expectedRevision,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
