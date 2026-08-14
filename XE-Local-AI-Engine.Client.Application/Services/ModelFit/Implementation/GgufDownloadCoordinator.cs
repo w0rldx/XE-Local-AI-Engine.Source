@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using AcquisitionKind = XE_Local_AI_Engine.Client.Services.ModelFit.GgufAcquisitionOperationKind;
+using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 /// <summary>
 ///     Default <see cref="IGgufDownloadCoordinator" />. Starts each download on a detached task wired to a per-model
@@ -14,7 +15,7 @@ using AcquisitionKind = XE_Local_AI_Engine.Client.Services.ModelFit.GgufAcquisit
 ///     lets a separate request cancel the in-flight download by model name.
 ///     <para>
 ///         <b>Singleton.</b> The registry must outlive any one request scope (the download runs after the HTTP request
-///         that started it returns). It composes the singleton Hugging Face GGUF store <see cref="IGgufModelStore" />.
+///         that started it returns). It composes the singleton staged Hugging Face transaction <see cref="IGgufDownloadTransaction" />.
 ///     </para>
 ///     <para>
 ///         <b>Honest limits.</b> Progress and cancellation are best-effort and process-local: the registry is RAM-only
@@ -31,22 +32,26 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
 
     private readonly IGgufDownloadEventPublisher _eventPublisher;
+    private readonly ConcurrentDictionary<Guid, ResolvedGgufDownload> _activeSources = new();
+    private readonly IGgufDownloadTransaction _downloadTransaction;
+    private readonly GgufAcquisitionIdentityResolver _identityResolver;
     private readonly IGgufAcquisitionOperationRegistry _operations;
 
     // Last instant a Running progress push was broadcast per model, so high-frequency byte callbacks are throttled to at
     // most one push per ProgressPushInterval. Keyed by canonical model name; the entry is dropped on terminal phase.
     private readonly ConcurrentDictionary<string, long> _lastProgressPushTicks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<GgufDownloadCoordinator> _logger;
-    private readonly IGgufModelStore _modelStore;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public GgufDownloadCoordinator(IGgufModelStore modelStore,
+    public GgufDownloadCoordinator(IGgufDownloadTransaction downloadTransaction,
+        GgufAcquisitionIdentityResolver identityResolver,
         IServiceScopeFactory scopeFactory,
         IGgufAcquisitionOperationRegistry operations,
         IGgufDownloadEventPublisher eventPublisher,
         ILogger<GgufDownloadCoordinator> logger)
     {
-        _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+        _downloadTransaction = downloadTransaction ?? throw new ArgumentNullException(nameof(downloadTransaction));
+        _identityResolver = identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
@@ -56,28 +61,68 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     public async Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-
-        // Canonical identity the operator tracks/cancels by — resolved the SAME way the store registers it, so the
-        // track/cancel key matches the installed-model identity even when a base-quant request resolves to a different
-        // file (e.g. an Unsloth Dynamic variant). If resolution fails (discovery unreachable), fall back to the
-        // request-derived label so Start never throws — the detached download then surfaces the failure under that name.
-        var modelName = await ResolveModelNameAsync(request, ct).ConfigureAwait(false);
-
-        var registration = _operations.Start(AcquisitionKind.Download, modelName);
-        if (registration.AlreadyInFlight)
+        var source = await _downloadTransaction.ResolveAsync(request, ct).ConfigureAwait(false);
+        var intent = ToIntent(source);
+        var identity = _identityResolver.Resolve(intent);
+        var active = _operations.GetNewest(AcquisitionKind.Download, identity.CanonicalModelName);
+        if (active?.Phase == GgufAcquisitionPhase.Running && _activeSources.TryGetValue(active.OperationId, out var activeSource))
         {
-            return new GgufDownloadTicket(modelName, AlreadyInFlight: true, registration.Status.OperationId);
+            if (activeSource == source)
+            {
+                return new GgufDownloadTicket(active.ModelName, AlreadyInFlight: true, active.OperationId);
+            }
+
+            throw new InvalidOperationException("ModelConflict");
         }
 
-        // Initial Running status: write it and push immediately (bypass the progress throttle) so the operator UI shows
-        // the new download the instant it is accepted, even before the first byte callback arrives.
-        BroadcastStatus(registration.Status, isInitialOrTerminal: true);
+        PreparedGgufAcquisition reservation;
+        await using (var scope = _scopeFactory.CreateAsyncScope())
+        {
+            var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
+            reservation = await preflight.ResolveAndReserveAsync(intent, ct).ConfigureAwait(false);
+        }
 
-        // The detached task owns the rest of the CTS lifetime: it captures only the token (a struct), and disposes the
-        // CTS by re-reading it from the registry in its finally — so no IDisposable instance is passed into an un-awaited
-        // task (CA2025), while Cancel can still signal it via the registry until then.
-        _ = RunDownloadAsync(registration.Status.OperationId, modelName, request, registration.CancellationToken);
-        return new GgufDownloadTicket(modelName, AlreadyInFlight: false, registration.Status.OperationId);
+        await using (reservation.ConfigureAwait(false))
+        {
+            var totalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
+            var registration = _operations.Start(AcquisitionKind.Download, reservation.Identity.CanonicalModelName, totalBytes);
+            if (registration.AlreadyInFlight)
+            {
+                return new GgufDownloadTicket(registration.Status.ModelName, AlreadyInFlight: true, registration.Status.OperationId);
+            }
+
+            if (reservation.Disposition is GgufAcquisitionDisposition.VerifiedInstalled or GgufAcquisitionDisposition.VerifiedLegacyInstalled)
+            {
+                try
+                {
+                    await CompleteVerifiedInstalledAsync(registration.Status.OperationId,
+                        reservation.Identity.CanonicalModelName,
+                        totalBytes,
+                        reservation.Lease,
+                        ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    SetStatus(registration.Status.OperationId,
+                        GgufAcquisitionPhase.Failed,
+                        errorCode: "DownloadFailed",
+                        sanitizedError: "Download failed.",
+                        isInitialOrTerminal: true);
+                    throw;
+                }
+                return new GgufDownloadTicket(registration.Status.ModelName, AlreadyInFlight: false, registration.Status.OperationId);
+            }
+
+            var lease = reservation.TransferLease();
+            _activeSources[registration.Status.OperationId] = source;
+            BroadcastStatus(registration.Status, isInitialOrTerminal: true);
+            _ = RunDownloadAsync(registration.Status.OperationId,
+                reservation.Identity,
+                source,
+                lease,
+                registration.CancellationToken);
+            return new GgufDownloadTicket(registration.Status.ModelName, AlreadyInFlight: false, registration.Status.OperationId);
+        }
     }
 
     public bool Cancel(string modelName)
@@ -98,28 +143,21 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     public IReadOnlyList<GgufDownloadStatus> ListStatuses() =>
         _operations.List(AcquisitionKind.Download).Select(MapStatus).OfType<GgufDownloadStatus>().ToArray();
 
-    // Resolves the canonical model name via the store; on a discovery/transport failure (or HttpClient request TIMEOUT,
-    // which surfaces as a non-caller OperationCanceledException) falls back to the request-derived label so a download
-    // can still be started and surface its own failure. Genuine caller cancellation propagates.
-    private async Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
-    {
-        try
-        {
-            return await _modelStore.ResolveModelNameAsync(request, ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or IOException or TimeoutException or InvalidOperationException
-                                              or OperationCanceledException)
-        {
-            _logger.LogDebug(exception, "Could not pre-resolve the GGUF model name for {RepoId}; using the request-derived key.", request.RepoId);
-            return string.IsNullOrWhiteSpace(request.Quant)
-                ? request.RepoId
-                : GgufModelName.Format(request.RepoId, request.Quant);
-        }
-    }
+    private static GgufAcquisitionIntent ToIntent(ResolvedGgufDownload source) =>
+        new(PreflightKind.Download,
+            source.ModelBaseName,
+            source.CanonicalQuant,
+            source.Projector is null
+                ? null
+                : new GgufProjectorAcquisitionMetadata(source.Projector.SourceDisplayName,
+                    source.Projector.SourceSha256,
+                    source.Projector.SourceSizeBytes),
+            new GgufDownloadAcquisitionMetadata(source.RepoId,
+                source.ResolvedRevision,
+                source.SourceDisplayName,
+                source.SourceSizeBytes,
+                source.SourceSha256,
+                source.Role));
 
     /// <summary>
     ///     Adds the just-installed model to the tool-capable allow-list when its GGUF chat template advertises tool
@@ -146,67 +184,27 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
     }
 
-    private async Task<RoutingFinalizationResult> FinalizeRoutingAsync(Guid operationId, string modelName, CancellationToken token)
+    private async Task CompleteVerifiedInstalledAsync(Guid operationId,
+        string modelName,
+        long totalBytes,
+        InstalledModelMutationLease lease,
+        CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var leaseCoordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
         var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-        await using var lease = await leaseCoordinator.AcquireMapMutationAsync(modelName,
-            ModelProviderMapMutationKind.MapClaim,
-            token).ConfigureAwait(false);
-        ProviderMapMutationReceipt? mapReceipt = null;
-        try
+        var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
+        if (claim is ProviderMapClaimResult.Conflict)
         {
-            var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, token).ConfigureAwait(false);
-            if (claim is ProviderMapClaimResult.Conflict)
-            {
-                return RoutingFinalizationResult.Conflict;
-            }
-
-            mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
-            token.ThrowIfCancellationRequested();
-            scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
-            token.ThrowIfCancellationRequested();
-
-            var last = _operations.GetStatus(operationId);
             SetStatus(operationId,
-                GgufAcquisitionPhase.Completed,
-                last?.CompletedBytes ?? last?.TotalBytes,
-                last?.TotalBytes,
+                GgufAcquisitionPhase.Failed,
+                errorCode: "ModelConflict",
+                sanitizedError: "The model is mapped to an incompatible provider.",
                 isInitialOrTerminal: true);
-            return RoutingFinalizationResult.Completed;
+            return;
         }
-        catch
-        {
-            if (mapReceipt is not null)
-            {
-                await RestoreRoutingAsync(scope.ServiceProvider, mapStore, lease, mapReceipt, modelName).ConfigureAwait(false);
-            }
 
-            throw;
-        }
-    }
-
-    private async Task RestoreRoutingAsync(IServiceProvider services,
-        ICoordinatedModelProviderMapStore mapStore,
-        IModelProviderMapMutationLease lease,
-        ProviderMapMutationReceipt mapReceipt,
-        string modelName)
-    {
-        try
-        {
-            var restored = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
-            if (restored == ProviderMapRestoreResult.Superseded)
-            {
-                _logger.LogWarning("Provider routing compensation was superseded for {ModelName}; the concurrent mapping was preserved.", modelName);
-            }
-
-            services.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "Could not compensate provider routing for failed GGUF download {ModelName}.", modelName);
-        }
+        scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
+        SetStatus(operationId, GgufAcquisitionPhase.Completed, totalBytes, totalBytes, isInitialOrTerminal: true);
     }
 
     // Records the latest status in the registry and broadcasts it to connected operator clients. Running progress pushes
@@ -285,61 +283,137 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
     }
 
-    private async Task RunDownloadAsync(Guid operationId, string modelName, GgufModelRequest request, CancellationToken token)
+    private async Task RunDownloadAsync(Guid operationId,
+        ResolvedGgufAcquisitionIdentity identity,
+        ResolvedGgufDownload source,
+        InstalledModelMutationLease lease,
+        CancellationToken token)
     {
+        var modelName = identity.CanonicalModelName;
         var progress = new Progress<PullProgress>(update => SetStatus(operationId,
             GgufAcquisitionPhase.Running,
             update.CompletedBytes,
             update.TotalBytes,
             sanitizedError: null));
 
-        try
+        PreparedGgufDownload? prepared = null;
+        GgufDownloadCommitReceipt? committed = null;
+        ProviderMapMutationReceipt? mapReceipt = null;
+        await using (lease.ConfigureAwait(false))
         {
-            await _modelStore.EnsureModelAsync(request, progress, token).ConfigureAwait(false);
-
-            // Routing is part of acquisition publication: a conflicting or failed provider-map claim must never be
-            // masked by a Completed status. Keep the map lease through the retained terminal-status boundary and
-            // compensate only a claim owned by this operation if publication fails.
-            var routing = await FinalizeRoutingAsync(operationId, modelName, token).ConfigureAwait(false);
-            if (routing == RoutingFinalizationResult.Conflict)
+            try
             {
+                prepared = await _downloadTransaction.PrepareAsync(source,
+                    new GgufDownloadDestination(modelName,
+                        identity.CanonicalQuantization,
+                        identity.RelativeGgufPath,
+                        identity.RelativeSidecarPath,
+                        identity.ProjectorRelativePath),
+                    progress,
+                    token).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+                committed = await _downloadTransaction.CommitAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
+                var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, CancellationToken.None).ConfigureAwait(false);
+                if (claim is ProviderMapClaimResult.Conflict)
+                {
+                    throw new InvalidOperationException("ModelConflict");
+                }
+
+                mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
+                token.ThrowIfCancellationRequested();
+                scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
+                token.ThrowIfCancellationRequested();
+                var completedBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
+                SetStatus(operationId, GgufAcquisitionPhase.Completed, completedBytes, completedBytes, isInitialOrTerminal: true);
+                await RegisterToolCapabilityAsync(modelName, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false);
+                SetStatus(operationId, GgufAcquisitionPhase.Cancelled, isInitialOrTerminal: true);
+                _logger.LogInformation("Operator cancelled the GGUF download for {ModelName}.", modelName);
+            }
+            catch (HuggingFaceDownloadException exception)
+            {
+                await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false);
+                SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: exception.Reason.ToString(), sanitizedError: exception.Message, isInitialOrTerminal: true);
+                _logger.LogWarning("GGUF download failed for {ModelName} ({Reason}).", modelName, exception.Reason);
+            }
+            catch (InsufficientDiskSpaceException exception)
+            {
+                await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false);
+                SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: "InsufficientStorage", sanitizedError: exception.Message, isInitialOrTerminal: true);
+                _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
+            }
+            catch (InvalidOperationException exception) when (string.Equals(exception.Message, "ModelConflict", StringComparison.Ordinal))
+            {
+                await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false);
                 SetStatus(operationId,
                     GgufAcquisitionPhase.Failed,
                     errorCode: "ModelConflict",
                     sanitizedError: "The model is mapped to an incompatible provider.",
                     isInitialOrTerminal: true);
-                return;
+                _logger.LogWarning(exception, "GGUF download failed for {ModelName}: provider map conflict.", modelName);
             }
+            catch (Exception exception)
+            {
+                await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false);
+                SetStatus(operationId,
+                    GgufAcquisitionPhase.Failed,
+                    errorCode: "DownloadFailed",
+                    sanitizedError: "Download failed.",
+                    isInitialOrTerminal: true);
+                _logger.LogWarning(exception, "GGUF download failed for {ModelName}.", modelName);
+            }
+            finally
+            {
+                _activeSources.TryRemove(operationId, out _);
+            }
+        }
+    }
 
-            // Admit the model to the tool-capable allow-list when its chat template says it supports tool calls. Without
-            // this, a user who followed the app's own recommendation downloaded a tool-capable model and silently got no
-            // tool calling, because the gate is exact membership of a list whose shipped default named only two
-            // previous-generation models. This runs only after the durable in-process publication boundary and remains
-            // best-effort; it cannot downgrade a successful acquisition.
-            await RegisterToolCapabilityAsync(modelName, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
+    private async Task CompensateAsync(PreparedGgufDownload? prepared,
+        GgufDownloadCommitReceipt? committed,
+        ProviderMapMutationReceipt? mapReceipt,
+        InstalledModelMutationLease lease,
+        string modelName)
+    {
+        try
         {
-            SetStatus(operationId, GgufAcquisitionPhase.Cancelled, isInitialOrTerminal: true);
-            _logger.LogInformation("Operator cancelled the GGUF download for {ModelName}.", modelName);
-        }
-        catch (HuggingFaceDownloadException exception)
-        {
-            // Message is contractually sanitized (no token / Bearer / path) — safe to surface to the operator.
-            SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: exception.Reason.ToString(), sanitizedError: exception.Message, isInitialOrTerminal: true);
-            _logger.LogWarning("GGUF download failed for {ModelName} ({Reason}).", modelName, exception.Reason);
-        }
-        catch (InsufficientDiskSpaceException exception)
-        {
-            SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: "InsufficientStorage", sanitizedError: exception.Message, isInitialOrTerminal: true);
-            _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
+            if (mapReceipt is not null)
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
+                _ = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
+                scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
+            }
         }
         catch (Exception exception)
         {
-            // Never surface the raw transport message (it can carry a URL/path): collapse to a generic sanitized reason.
-            SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: "DownloadFailed", sanitizedError: "Download failed.", isInitialOrTerminal: true);
-            _logger.LogWarning(exception, "GGUF download failed for {ModelName}.", modelName);
+            _logger.LogError(exception, "Could not restore provider routing while compensating download for {ModelName}.", modelName);
         }
+
+        try
+        {
+            if (committed is not null)
+            {
+                await _downloadTransaction.RollbackCommittedAsync(committed, CancellationToken.None).ConfigureAwait(false);
+            }
+            else if (prepared is not null)
+            {
+                await _downloadTransaction.DiscardPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Could not remove download-owned artifacts while compensating download for {ModelName}.", modelName);
+        }
+
+        _logger.LogDebug("Compensated GGUF download operation for {ModelName}.", modelName);
     }
 
     private static GgufDownloadStatus? MapStatus(GgufAcquisitionStatus? status)
@@ -361,9 +435,4 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             status.ErrorCode);
     }
 
-    private enum RoutingFinalizationResult
-    {
-        Completed,
-        Conflict
-    }
 }
