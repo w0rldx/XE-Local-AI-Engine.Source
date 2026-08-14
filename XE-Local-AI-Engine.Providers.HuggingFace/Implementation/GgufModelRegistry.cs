@@ -182,6 +182,94 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
     }
 
+    internal async Task<IReadOnlyList<GgufModelRegistryEntry>?> RemoveAliasSetIfMatchAsync(
+        IReadOnlyList<GgufModelRegistryEntry> expectedAliases,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(expectedAliases);
+        if (expectedAliases.Count == 0)
+        {
+            throw new ArgumentException("At least one expected registry alias is required.", nameof(expectedAliases));
+        }
+
+        var expected = expectedAliases.Select(EnsureRevision)
+                                      .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                      .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                      .ToArray();
+        var expectedPath = NormalizeLocalPath(expected[0].LocalPath);
+        if (expected.Any(entry => !PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath)))
+        {
+            throw new ArgumentException("Every expected alias must reference the same backing weight.", nameof(expectedAliases));
+        }
+
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadManifestEntriesForMutationAsync(ct).ConfigureAwait(false)).ToList();
+            var current = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath))
+                                 .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                 .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                 .ToArray();
+            if (!current.SequenceEqual(expected))
+            {
+                return null;
+            }
+
+            entries.RemoveAll(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath));
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+            return Array.AsReadOnly(current);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    internal async Task<bool> RestoreAliasSetIfMatchAsync(IReadOnlyList<GgufModelRegistryEntry> expectedAliases,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(expectedAliases);
+        if (expectedAliases.Count == 0)
+        {
+            throw new ArgumentException("At least one expected registry alias is required.", nameof(expectedAliases));
+        }
+
+        var expected = expectedAliases.Select(EnsureRevision)
+                                      .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                      .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                      .ToArray();
+        var expectedPath = NormalizeLocalPath(expected[0].LocalPath);
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadManifestEntriesForMutationAsync(ct).ConfigureAwait(false)).ToList();
+            var current = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), expectedPath)
+                                                 || expected.Any(expectedEntry => string.Equals(expectedEntry.ModelName,
+                                                     entry.ModelName,
+                                                     StringComparison.OrdinalIgnoreCase)))
+                                 .OrderBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                 .ThenBy(static entry => entry.ModelName, StringComparer.Ordinal)
+                                 .ToArray();
+            if (current.SequenceEqual(expected))
+            {
+                return true;
+            }
+
+            if (current.Length != 0)
+            {
+                return false;
+            }
+
+            entries.AddRange(expected);
+            await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     /// <summary>Removes the entry keyed by <paramref name="modelName" />. Idempotent — absent is a no-op.</summary>
     public async Task RemoveAsync(string modelName, CancellationToken ct)
     {
@@ -296,6 +384,23 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             _logger.LogWarning(exception, "GGUF registry manifest could not be read. Rebuilding by rescanning the models directory.");
             return await RecoverAndPersistAsync(ct).ConfigureAwait(false);
         }
+    }
+
+    private async Task<IReadOnlyList<GgufModelRegistryEntry>> LoadManifestEntriesForMutationAsync(CancellationToken ct)
+    {
+        if (!File.Exists(_manifestPath))
+        {
+            return [];
+        }
+
+        await using var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var manifest = await JsonSerializer.DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct).ConfigureAwait(false);
+        if (manifest?.Models is null)
+        {
+            throw new IOException("The GGUF registry manifest is invalid.");
+        }
+
+        return manifest.Models.Where(static entry => entry.LocalPath is not null).Select(EnsureRevision).ToArray();
     }
 
     // Best-effort rebuild from the .gguf files on disk when the manifest is unavailable. Metadata not derivable from the

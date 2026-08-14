@@ -92,6 +92,9 @@ public static class HuggingFaceServiceCollectionExtensions
         services.TryAddSingleton<IInstalledGgufSnapshotStore>(static sp => new InstalledGgufSnapshotStore(
             sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<HuggingFaceOptions>()));
+        services.TryAddSingleton<IInstalledGgufDeletionStore>(static sp => new InstalledGgufDeletionStore(
+            sp.GetRequiredService<GgufModelRegistry>(),
+            sp.GetRequiredService<HuggingFaceOptions>()));
         services.TryAddSingleton(static sp => new GgufImportInspector(sp.GetRequiredService<HuggingFaceOptions>()));
         services.TryAddSingleton<IGgufImportInspector>(static sp => sp.GetRequiredService<GgufImportInspector>());
         services.TryAddSingleton<IGgufModelImporter>(static sp => new GgufModelImporter(
