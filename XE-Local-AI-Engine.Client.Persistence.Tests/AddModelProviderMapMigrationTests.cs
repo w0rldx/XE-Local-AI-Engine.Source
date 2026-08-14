@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class AddModelProviderMapMigrationTests : IDisposable
 {
     private const string PreModelProviderMapMigrationId = "20260610165152_EncryptConversationTitle";
+    private const string PreRevisionMigrationId = "20260813121930_AddKnowledgeCollectionsAndProvenance";
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -71,6 +72,39 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
 
         AssertEx.False(await TableExistsAsync(connection, "model_provider_map").ConfigureAwait(false),
             "Rollback should drop the model_provider_map table.");
+    }
+
+    [Test]
+    public async Task RevisionMigration_BackfillsExistingRowsAndRollsBackWithoutDataLoss()
+    {
+        var databasePath = GetDatabasePath("model-provider-map-revision.sqlite");
+        await using (var context = CreateContext(databasePath))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevisionMigrationId).ConfigureAwait(false);
+            await context.Database.ExecuteSqlRawAsync(
+                "INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);")
+                .ConfigureAwait(false);
+            await context.Database.MigrateAsync().ConfigureAwait(false);
+        }
+
+        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT revision FROM model_provider_map WHERE model_name = 'legacy-model';";
+            AssertEx.Equal("legacy", await command.ExecuteScalarAsync().ConfigureAwait(false) as string);
+        }
+
+        await using (var context = CreateContext(databasePath))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevisionMigrationId).ConfigureAwait(false);
+        }
+
+        await using var rolledBack = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        var columns = await GetColumnsAsync(rolledBack).ConfigureAwait(false);
+        AssertEx.False(columns.Contains("revision"), "Rollback should remove only the revision column.");
+        await using var providerCommand = rolledBack.CreateCommand();
+        providerCommand.CommandText = "SELECT provider_name FROM model_provider_map WHERE model_name = 'legacy-model';";
+        AssertEx.Equal("ollama", await providerCommand.ExecuteScalarAsync().ConfigureAwait(false) as string);
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

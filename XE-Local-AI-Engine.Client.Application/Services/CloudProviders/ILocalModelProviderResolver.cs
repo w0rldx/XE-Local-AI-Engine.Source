@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Client.Services.Models;
 
 /// <summary>
 ///     Routes a model to the local runtime that serves it. Two lookups compose the route:
@@ -34,6 +35,15 @@ public interface ILocalModelProviderResolver
     ///     otherwise the configured default provider. Never returns <c>null</c>.
     /// </summary>
     Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default);
+
+    /// <summary>Resolves through an already-held installed-model composite or map-only read lease without nesting.</summary>
+    Task<string> ResolveProviderNameForModelAsync(string modelName,
+        IModelProviderMapReadLease existingLease,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(existingLease);
+        return ResolveProviderNameForModelAsync(modelName, cancellationToken);
+    }
 
     /// <summary>
     ///     Resolves the registered <see cref="ILocalModelProvider" /> whose <see cref="ILocalModelProvider.ProviderName" />

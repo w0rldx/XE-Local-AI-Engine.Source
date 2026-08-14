@@ -23,14 +23,21 @@ public sealed class ModelCoordinationTests
     public async Task MutationWait_CancellationLeaksNoReservation()
     {
         var domain = new KeyedCompositeLockDomain();
-        await using var owner = await domain.AcquireMutationAsync(new[] { "0:model:ALPHA", "1:path:a.gguf" });
+        var ownerAcquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseOwner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var owner = HoldMutationUntilReleasedAsync(domain,
+            ["0:model:ALPHA", "1:path:a.gguf"],
+            ownerAcquired,
+            releaseOwner.Task);
+        await ownerAcquired.Task;
         using var cancellation = new CancellationTokenSource();
-        var waiting = RunWithoutExecutionContext(() => domain.AcquireMutationAsync(new[] { "1:path:a.gguf", "2:provider-map:ALPHA" }, cancellation.Token).AsTask());
+        var waiting = WaitForMutationAsync(domain, cancellation.Token);
         cancellation.Cancel();
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => waiting);
 
-        await owner.DisposeAsync();
-        var acquired = await RunWithoutExecutionContext(() => domain.AcquireMutationAsync(new[] { "1:path:a.gguf" }).AsTask());
+        releaseOwner.SetResult();
+        await owner;
+        var acquired = await AcquireMutationAsync(domain, "1:path:a.gguf");
         await acquired.DisposeAsync();
     }
 
@@ -38,25 +45,41 @@ public sealed class ModelCoordinationTests
     public async Task CompositeReadsCoexistAndBlockOverlappingMutation()
     {
         var domain = new KeyedCompositeLockDomain();
-        await using var first = await domain.AcquireReadAsync(new[] { "0:model:ALPHA", "1:path:a.gguf" });
-        var secondTask = RunWithoutExecutionContext(() => domain.AcquireReadAsync(new[] { "1:path:a.gguf" }).AsTask());
-        await using var second = await secondTask.WaitAsync(TimeSpan.FromSeconds(2));
-        var writerTask = RunWithoutExecutionContext(() => domain.AcquireMutationAsync(new[] { "1:path:a.gguf" }).AsTask());
+        var releaseReaders = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstAcquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondAcquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = HoldReadUntilReleasedAsync(domain, ["0:model:ALPHA", "1:path:a.gguf"], firstAcquired, releaseReaders.Task);
+        var second = HoldReadUntilReleasedAsync(domain, ["1:path:a.gguf"], secondAcquired, releaseReaders.Task);
+        await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(2));
+        var writerTask = AcquireAndReleaseMutationAsync(domain, "1:path:a.gguf");
 
         await Task.Delay(50);
         AssertEx.False(writerTask.IsCompleted, "An overlapping mutation must wait for every read lease.");
-        await second.DisposeAsync();
-        await first.DisposeAsync();
-        await using var writer = await writerTask.WaitAsync(TimeSpan.FromSeconds(2));
+        releaseReaders.SetResult();
+        await Task.WhenAll(first, second);
+        await writerTask.WaitAsync(TimeSpan.FromSeconds(2));
     }
 
     [Test]
     public async Task SameFlowNestedAcquisitionIsRejected()
     {
         var domain = new KeyedCompositeLockDomain();
-        await using var lease = await domain.AcquireReadAsync(new[] { "2:provider-map:ALPHA" });
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => AcquireNestedAsync(domain));
+    }
 
-        _ = AssertEx.Throws<InvalidOperationException>(() => domain.AcquireReadAsync(new[] { "2:provider-map:BETA" }));
+    [Test]
+    public async Task SiblingLogicalFlows_DoNotShareReentrancyOwnership()
+    {
+        var domain = new KeyedCompositeLockDomain();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstAcquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondAcquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = HoldReadUntilReleasedAsync(domain, ["0:model:ALPHA"], firstAcquired, release.Task);
+        var second = HoldReadUntilReleasedAsync(domain, ["0:model:BETA"], secondAcquired, release.Task);
+
+        await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(2));
+        release.SetResult();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(2));
     }
 
     [Test]
@@ -86,19 +109,73 @@ public sealed class ModelCoordinationTests
         AssertEx.Equal(expected: 72, identity.FinalFileName[..identity.FinalFileName.IndexOf("-F16-", StringComparison.Ordinal)].Length);
     }
 
+    [Test]
+    public void DeterministicIdentity_ProjectorMetadataIsDownloadOnlyAndProducesReservedPath()
+    {
+        var resolver = CreateIdentityResolver();
+        var projector = new GgufProjectorAcquisitionMetadata("mmproj-model.gguf", new string('a', 64), DeclaredSizeBytes: 42);
+        var download = resolver.Resolve(new GgufAcquisitionIntent(
+            GgufAcquisitionOperationKind.Download,
+            "foo",
+            "Q4_K_M",
+            projector));
+
+        AssertEx.Equal("foo-projector-849525de9efce6742c0cf2b6.gguf", download.ProjectorRelativePath);
+        _ = AssertEx.Throws<ArgumentException>(() => resolver.Resolve(new GgufAcquisitionIntent(
+            GgufAcquisitionOperationKind.Import,
+            "foo",
+            "Q4_K_M",
+            projector)));
+    }
+
     private static GgufAcquisitionIdentityResolver CreateIdentityResolver()
     {
         return new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
     }
 
-    private static Task<T> RunWithoutExecutionContext<T>(Func<Task<T>> action)
+    private static async Task<ModelCoordinationLockLease> AcquireReadAsync(KeyedCompositeLockDomain domain, string key)
     {
-        Task<T> task;
-        using (ExecutionContext.SuppressFlow())
-        {
-            task = Task.Run(action);
-        }
+        return await domain.AcquireReadAsync([key]);
+    }
 
-        return task;
+    private static async Task<ModelCoordinationLockLease> AcquireMutationAsync(KeyedCompositeLockDomain domain, string key)
+    {
+        return await domain.AcquireMutationAsync([key]);
+    }
+
+    private static async Task<ModelCoordinationLockLease> WaitForMutationAsync(KeyedCompositeLockDomain domain, CancellationToken cancellationToken)
+    {
+        return await domain.AcquireMutationAsync(["1:path:a.gguf", "2:provider-map:ALPHA"], cancellationToken);
+    }
+
+    private static async Task AcquireAndReleaseMutationAsync(KeyedCompositeLockDomain domain, string key)
+    {
+        await using var lease = await domain.AcquireMutationAsync([key]);
+    }
+
+    private static async Task AcquireNestedAsync(KeyedCompositeLockDomain domain)
+    {
+        await using var lease = await domain.AcquireReadAsync(["2:provider-map:ALPHA"]);
+        _ = await domain.AcquireReadAsync(["2:provider-map:BETA"]);
+    }
+
+    private static async Task HoldReadUntilReleasedAsync(KeyedCompositeLockDomain domain,
+        IReadOnlyList<string> keys,
+        TaskCompletionSource acquired,
+        Task release)
+    {
+        await using var lease = await domain.AcquireReadAsync(keys);
+        acquired.SetResult();
+        await release;
+    }
+
+    private static async Task HoldMutationUntilReleasedAsync(KeyedCompositeLockDomain domain,
+        IReadOnlyList<string> keys,
+        TaskCompletionSource acquired,
+        Task release)
+    {
+        await using var lease = await domain.AcquireMutationAsync(keys);
+        acquired.SetResult();
+        await release;
     }
 }

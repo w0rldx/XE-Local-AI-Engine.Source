@@ -22,7 +22,21 @@ public sealed record GgufAcquisitionIntent(
     GgufAcquisitionOperationKind OperationKind,
     string ModelBaseName,
     string Quantization,
-    bool HasProjector = false);
+    GgufProjectorAcquisitionMetadata? Projector = null);
+
+public sealed record GgufProjectorAcquisitionMetadata(
+    string SourceDisplayName,
+    string DeclaredSha256,
+    long DeclaredSizeBytes);
+
+public enum GgufAcquisitionDisposition
+{
+    VerifiedInstalled,
+    VerifiedLegacyInstalled,
+    ActiveCompatible,
+    Conflict,
+    Available
+}
 
 public sealed record ResolvedGgufAcquisitionIdentity(
     string CanonicalModelName,
@@ -35,10 +49,10 @@ public sealed record ResolvedGgufAcquisitionIdentity(
     string? ProjectorRelativePath);
 
 public sealed record GgufAcquisitionState(
-    bool HasRegistryCollision,
-    bool HasMemberCollision,
+    GgufAcquisitionDisposition Disposition,
     ProviderMapDisposition ProviderMapDisposition,
-    string? ConflictingProvider = null);
+    string? ConflictingProvider = null,
+    Guid? ActiveOperationId = null);
 
 public interface IGgufAcquisitionStateProbe
 {
@@ -75,7 +89,8 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(reservationKey));
         var identityHash = Convert.ToHexString(hashBytes.AsSpan(0, 12)).ToLowerInvariant();
         var fileName = $"{slug}-{quantization}-{identityHash}.gguf";
-        var projectorFileName = intent.HasProjector ? $"{slug}-projector-{identityHash}.gguf" : null;
+        ValidateProjectorMetadata(intent);
+        var projectorFileName = intent.Projector is not null ? $"{slug}-projector-{identityHash}.gguf" : null;
         return new ResolvedGgufAcquisitionIdentity(
             canonicalModelName,
             reservationKey,
@@ -85,6 +100,28 @@ public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelName
             $"{fileName}.xe-model.json",
             projectorFileName,
             projectorFileName);
+    }
+
+    private static void ValidateProjectorMetadata(GgufAcquisitionIntent intent)
+    {
+        if (intent.OperationKind == GgufAcquisitionOperationKind.Import && intent.Projector is not null)
+        {
+            throw new ArgumentException("Local imports cannot include a projector.", nameof(intent));
+        }
+
+        if (intent.Projector is not { } projector)
+        {
+            return;
+        }
+
+        if (!string.Equals(projector.SourceDisplayName, Path.GetFileName(projector.SourceDisplayName), StringComparison.Ordinal)
+            || projector.DeclaredSizeBytes <= 0
+            || projector.DeclaredSha256.Length != 64
+            || projector.DeclaredSha256.Any(static character => !Uri.IsHexDigit(character))
+            || !string.Equals(projector.DeclaredSha256, projector.DeclaredSha256.ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The projector metadata is invalid.", nameof(intent));
+        }
     }
 
     private static string NormalizeQuantization(string quantization)
@@ -149,12 +186,12 @@ public sealed class GgufAcquisitionPreflight(
         var identity = _identityResolver.Resolve(intent);
         var members = new List<IntendedInstalledModelMember>
         {
-            new(identity.RelativeGgufPath, "weight"),
-            new(identity.RelativeSidecarPath, "sidecar")
+            new(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
+            new(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
         };
         if (identity.ProjectorRelativePath is not null)
         {
-            members.Add(new IntendedInstalledModelMember(identity.ProjectorRelativePath, "projector"));
+            members.Add(new IntendedInstalledModelMember(identity.ProjectorRelativePath, InstalledModelPhysicalMemberRole.Projector));
         }
 
         var lease = await _snapshotCoordinator.AcquireMutationAsync(
@@ -163,12 +200,20 @@ public sealed class GgufAcquisitionPreflight(
         try
         {
             var state = await _stateProbe.ProbeAsync(identity, lease, cancellationToken).ConfigureAwait(false);
-            if (state.HasRegistryCollision || state.HasMemberCollision || state.ProviderMapDisposition == ProviderMapDisposition.ConflictingProvider)
+            if (state.Disposition == GgufAcquisitionDisposition.Conflict
+                || state.ProviderMapDisposition == ProviderMapDisposition.ConflictingProvider
+                || (intent.OperationKind == GgufAcquisitionOperationKind.Import && state.Disposition != GgufAcquisitionDisposition.Available))
             {
                 throw new InvalidOperationException("ModelConflict");
             }
 
-            return new PreparedGgufAcquisition(identity, state.ProviderMapDisposition, lease);
+            if (state.Disposition != GgufAcquisitionDisposition.Available)
+            {
+                await lease.DisposeAsync().ConfigureAwait(false);
+                return new PreparedGgufAcquisition(identity, state.Disposition, state.ProviderMapDisposition, lease: null, state.ActiveOperationId);
+            }
+
+            return new PreparedGgufAcquisition(identity, state.Disposition, state.ProviderMapDisposition, lease, state.ActiveOperationId);
         }
         catch
         {
@@ -183,16 +228,22 @@ public sealed class PreparedGgufAcquisition : IAsyncDisposable
     private InstalledModelMutationLease? _lease;
 
     internal PreparedGgufAcquisition(ResolvedGgufAcquisitionIdentity identity,
+        GgufAcquisitionDisposition disposition,
         ProviderMapDisposition providerMapDisposition,
-        InstalledModelMutationLease lease)
+        InstalledModelMutationLease? lease,
+        Guid? activeOperationId)
     {
         Identity = identity;
+        Disposition = disposition;
         ProviderMapDisposition = providerMapDisposition;
         _lease = lease;
+        ActiveOperationId = activeOperationId;
     }
 
     public ResolvedGgufAcquisitionIdentity Identity { get; }
+    public GgufAcquisitionDisposition Disposition { get; }
     public ProviderMapDisposition ProviderMapDisposition { get; }
+    public Guid? ActiveOperationId { get; }
     public InstalledModelMutationLease Lease => _lease ?? throw new ObjectDisposedException(nameof(PreparedGgufAcquisition));
 
     public InstalledModelMutationLease TransferLease()

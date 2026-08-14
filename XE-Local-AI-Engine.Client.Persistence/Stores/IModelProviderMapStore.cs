@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     validation and applies no routing default; the caller (the application-layer provider resolver) owns the
 ///     "unmapped model → default provider" policy.
 /// </summary>
-public interface IModelProviderMapStore
+internal interface IModelProviderMapStore
 {
     /// <summary>
     ///     Returns the provider key mapped to <paramref name="modelName" /> (case-insensitive), or <c>null</c> when the

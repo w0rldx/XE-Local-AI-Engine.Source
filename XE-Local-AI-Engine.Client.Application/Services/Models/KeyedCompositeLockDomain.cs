@@ -10,8 +10,9 @@ public enum ModelCoordinationLockMode
 
 public sealed class KeyedCompositeLockDomain
 {
-    private static readonly AsyncLocal<FlowState?> CurrentFlow = new();
+    private static readonly AsyncLocal<OwnershipToken?> CurrentOwnership = new();
     private readonly object _gate = new();
+    private readonly HashSet<Guid> _activeOwnerships = [];
     private readonly Dictionary<string, KeyState> _keys = new(StringComparer.Ordinal);
     private readonly LinkedList<Waiter> _waiters = new();
 
@@ -26,23 +27,28 @@ public sealed class KeyedCompositeLockDomain
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var flow = CurrentFlow.Value ??= new FlowState();
-        if (flow.HeldDomains.Contains(this))
+        var inheritedOwnership = CurrentOwnership.Value;
+        lock (_gate)
         {
-            throw new InvalidOperationException("Nested or re-entrant model coordination acquisition is not permitted.");
+            if (inheritedOwnership is not null && _activeOwnerships.Contains(inheritedOwnership.Value))
+            {
+                throw new InvalidOperationException("Nested or re-entrant model coordination acquisition is not permitted.");
+            }
         }
 
         var normalizedKeys = ModelCoordinationKeys.NormalizeSet(keys);
+        var ownership = new OwnershipToken(Guid.NewGuid());
+        CurrentOwnership.Value = ownership;
         lock (_gate)
         {
+            _activeOwnerships.Add(ownership.Value);
             if (_waiters.Count == 0 && CanGrant(normalizedKeys, mode))
             {
                 Grant(normalizedKeys, mode);
-                MarkHeld(flow);
-                return ValueTask.FromResult(CreateLease(normalizedKeys, mode));
+                return ValueTask.FromResult(CreateLease(normalizedKeys, mode, ownership));
             }
 
-            var waiter = new Waiter(normalizedKeys, mode);
+            var waiter = new Waiter(normalizedKeys, mode, ownership);
             waiter.Node = _waiters.AddLast(waiter);
             if (cancellationToken.CanBeCanceled)
             {
@@ -53,17 +59,15 @@ public sealed class KeyedCompositeLockDomain
                 }, new CancellationState(this, waiter, cancellationToken));
             }
 
-            return AwaitWaiterAsync(waiter, flow);
+            return AwaitWaiterAsync(waiter);
         }
     }
 
-    private async ValueTask<ModelCoordinationLockLease> AwaitWaiterAsync(Waiter waiter, FlowState flow)
+    private static async ValueTask<ModelCoordinationLockLease> AwaitWaiterAsync(Waiter waiter)
     {
         try
         {
-            var lease = await waiter.Completion.Task.ConfigureAwait(false);
-            MarkHeld(flow);
-            return lease;
+            return await waiter.Completion.Task.ConfigureAwait(false);
         }
         finally
         {
@@ -82,6 +86,7 @@ public sealed class KeyedCompositeLockDomain
 
             _waiters.Remove(waiter.Node);
             waiter.Node = null;
+            _activeOwnerships.Remove(waiter.Ownership.Value);
             _ = waiter.Completion.TrySetCanceled(cancellationToken);
             GrantWaiters();
         }
@@ -126,20 +131,14 @@ public sealed class KeyedCompositeLockDomain
         }
     }
 
-    private ModelCoordinationLockLease CreateLease(IReadOnlyList<string> keys, ModelCoordinationLockMode mode)
+    private ModelCoordinationLockLease CreateLease(IReadOnlyList<string> keys,
+        ModelCoordinationLockMode mode,
+        OwnershipToken ownership)
     {
-        return new ModelCoordinationLockLease(this, new ReadOnlyCollection<string>(keys.ToArray()), mode);
+        return new ModelCoordinationLockLease(this, new ReadOnlyCollection<string>(keys.ToArray()), mode, ownership);
     }
 
-    private void MarkHeld(FlowState flow)
-    {
-        if (!flow.HeldDomains.Add(this))
-        {
-            throw new InvalidOperationException("Nested or re-entrant model coordination acquisition is not permitted.");
-        }
-    }
-
-    internal void Release(IReadOnlyList<string> keys, ModelCoordinationLockMode mode)
+    internal void Release(IReadOnlyList<string> keys, ModelCoordinationLockMode mode, OwnershipToken ownership)
     {
         lock (_gate)
         {
@@ -161,7 +160,7 @@ public sealed class KeyedCompositeLockDomain
                 }
             }
 
-            CurrentFlow.Value?.HeldDomains.Remove(this);
+            _activeOwnerships.Remove(ownership.Value);
             GrantWaiters();
         }
     }
@@ -179,7 +178,7 @@ public sealed class KeyedCompositeLockDomain
             _waiters.RemoveFirst();
             waiter.Node = null;
             Grant(waiter.Keys, waiter.Mode);
-            _ = waiter.Completion.TrySetResult(CreateLease(waiter.Keys, waiter.Mode));
+            _ = waiter.Completion.TrySetResult(CreateLease(waiter.Keys, waiter.Mode, waiter.Ownership));
         }
     }
 
@@ -189,21 +188,19 @@ public sealed class KeyedCompositeLockDomain
         public bool Writer { get; set; }
     }
 
-    private sealed class FlowState
-    {
-        public HashSet<KeyedCompositeLockDomain> HeldDomains { get; } = [];
-    }
-
-    private sealed class Waiter(IReadOnlyList<string> keys, ModelCoordinationLockMode mode)
+    private sealed class Waiter(IReadOnlyList<string> keys, ModelCoordinationLockMode mode, OwnershipToken ownership)
     {
         public IReadOnlyList<string> Keys { get; } = keys;
         public ModelCoordinationLockMode Mode { get; } = mode;
+        public OwnershipToken Ownership { get; } = ownership;
         public TaskCompletionSource<ModelCoordinationLockLease> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public LinkedListNode<Waiter>? Node { get; set; }
         public CancellationTokenRegistration CancellationRegistration { get; set; }
     }
 
     private sealed record CancellationState(KeyedCompositeLockDomain Domain, Waiter Waiter, CancellationToken Token);
+
+    internal sealed record OwnershipToken(Guid Value);
 }
 
 public sealed class ModelCoordinationLockLease : IAsyncDisposable
@@ -212,21 +209,24 @@ public sealed class ModelCoordinationLockLease : IAsyncDisposable
 
     internal ModelCoordinationLockLease(KeyedCompositeLockDomain domain,
         IReadOnlyList<string> keys,
-        ModelCoordinationLockMode mode)
+        ModelCoordinationLockMode mode,
+        KeyedCompositeLockDomain.OwnershipToken ownership)
     {
         _domain = domain;
         Keys = keys;
         Mode = mode;
+        Ownership = ownership;
     }
 
     public IReadOnlyList<string> Keys { get; }
     public ModelCoordinationLockMode Mode { get; }
     public bool IsDisposed => _domain is null;
+    private KeyedCompositeLockDomain.OwnershipToken Ownership { get; }
 
     public ValueTask DisposeAsync()
     {
         var domain = Interlocked.Exchange(ref _domain, null);
-        domain?.Release(Keys, Mode);
+        domain?.Release(Keys, Mode, Ownership);
         return ValueTask.CompletedTask;
     }
 }

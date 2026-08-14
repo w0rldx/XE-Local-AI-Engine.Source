@@ -2,8 +2,7 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -24,7 +23,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     [Test]
     public async Task SuccessfulDownload_WritesLlamaCppMapRow_ForCanonicalName()
     {
-        var mapStore = new RecordingMapStore();
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
         var store = new ProvisioningModelStore();
         var coordinator = BuildCoordinator(store, mapStore);
 
@@ -38,14 +37,14 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
         var canonical = GgufModelName.Format(Repo, Quant);
         AssertEx.Equal(canonical, ticket.ModelName);
-        AssertEx.True(mapStore.Mappings.TryGetValue(canonical, out var provider), "a map row must be written for the canonical name");
-        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, provider);
+        AssertEx.True(mapStore.Mappings.TryGetValue(canonical, out var mapping), "a map row must be written for the canonical name");
+        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, mapping!.ProviderName);
     }
 
     [Test]
     public async Task FailedDownload_WritesNoMapRow()
     {
-        var mapStore = new RecordingMapStore();
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
         var store = new ProvisioningModelStore
         {
             FailDownload = true
@@ -63,10 +62,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         AssertEx.Equal(expected: 0, mapStore.Mappings.Count);
     }
 
-    private static GgufDownloadCoordinator BuildCoordinator(IGgufModelStore store, IModelProviderMapStore mapStore)
+    private static GgufDownloadCoordinator BuildCoordinator(IGgufModelStore store, ICoordinatedModelProviderMapStore mapStore)
     {
         var services = new ServiceCollection();
-        services.AddScoped<IModelProviderMapStore>(_ => mapStore);
+        services.AddSingleton<IModelProviderMapLeaseCoordinator>(new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()));
+        services.AddScoped(_ => mapStore);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         return new GgufDownloadCoordinator(store, scopeFactory, new NullGgufDownloadEventPublisher(), NullLogger<GgufDownloadCoordinator>.Instance);
@@ -142,25 +142,4 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         }
     }
 
-    /// <summary>An in-memory map store that records upserts (case-insensitive).</summary>
-    private sealed class RecordingMapStore : IModelProviderMapStore
-    {
-        public Dictionary<string, string> Mappings { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(Mappings.TryGetValue(modelName, out var provider) ? provider : null);
-        }
-
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, UpdatedAtUtc: 0)).ToArray());
-        }
-
-        public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
-        {
-            Mappings[modelName] = providerName;
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
-        }
-    }
 }

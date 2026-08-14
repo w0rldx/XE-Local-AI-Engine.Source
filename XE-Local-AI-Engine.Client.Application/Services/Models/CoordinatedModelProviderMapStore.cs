@@ -4,9 +4,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-public sealed class CoordinatedModelProviderMapStore(IModelProviderMapStore persistence) : ICoordinatedModelProviderMapStore
+public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProviderMapStore
 {
-    private readonly IModelProviderMapStore _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+    private readonly IModelProviderMapStore _persistence;
+
+    internal CoordinatedModelProviderMapStore(IModelProviderMapStore persistence)
+    {
+        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+    }
 
     public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
         string modelName,
@@ -32,7 +37,7 @@ public sealed class CoordinatedModelProviderMapStore(IModelProviderMapStore pers
         var inserted = await _persistence.TryInsertAsync(modelName, LlamaServerProviderConstants.ProviderName, cancellationToken).ConfigureAwait(false);
         if (inserted is not null)
         {
-            return new ProviderMapClaimResult.Created(new ProviderMapMutationReceipt(modelName, Prior: null, inserted, WasRemoval: false));
+            return new ProviderMapClaimResult.Created(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false));
         }
 
         current = await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false)
@@ -61,7 +66,7 @@ public sealed class CoordinatedModelProviderMapStore(IModelProviderMapStore pers
             var inserted = await _persistence.TryInsertAsync(modelName, providerName, cancellationToken).ConfigureAwait(false);
             return inserted is null
                 ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false))
-                : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: null, inserted, WasRemoval: false));
+                : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false));
         }
 
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
@@ -72,7 +77,7 @@ public sealed class CoordinatedModelProviderMapStore(IModelProviderMapStore pers
         var updated = await _persistence.TryUpdateAsync(modelName, providerName, current.Revision, cancellationToken).ConfigureAwait(false);
         return updated is null
             ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false))
-            : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, current, updated, WasRemoval: false));
+            : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: updated, WasRemoval: false));
     }
 
     public async Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,
@@ -143,7 +148,7 @@ public sealed class CoordinatedModelProviderMapStore(IModelProviderMapStore pers
             return current is null ? new ProviderMapRemovalResult.Absent() : new ProviderMapRemovalResult.Superseded(current);
         }
 
-        return new ProviderMapRemovalResult.Removed(new ProviderMapMutationReceipt(modelName, current, Mutation: null, WasRemoval: true));
+        return new ProviderMapRemovalResult.Removed(new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: null, WasRemoval: true));
     }
 
     private static void ValidateReadLease(IModelProviderMapReadLease lease, string modelName)
