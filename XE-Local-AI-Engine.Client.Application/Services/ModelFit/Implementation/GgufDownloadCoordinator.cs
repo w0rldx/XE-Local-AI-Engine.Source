@@ -121,10 +121,6 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
     }
 
-    // Writes the model_provider_map row pointing the canonical GGUF name at the llama.cpp provider. The coordinator is a
-    // singleton and the coordinated map facade is scoped, so the write goes through a fresh DI scope. Caller cancellation
-    // propagates; any other failure is swallowed with a warning so a
-    // successful download is never reported as failed because the routing row could not be persisted.
     /// <summary>
     ///     Adds the just-installed model to the tool-capable allow-list when its GGUF chat template advertises tool
     ///     calling. Best-effort: a failure here leaves the operator with the existing (possibly stale) list, which is the
@@ -150,36 +146,66 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
     }
 
-    private async Task MapModelToLlamaCppAsync(string modelName, CancellationToken token)
+    private async Task<RoutingFinalizationResult> FinalizeRoutingAsync(Guid operationId, string modelName, CancellationToken token)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var leaseCoordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
+        var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
+        await using var lease = await leaseCoordinator.AcquireMapMutationAsync(modelName,
+            ModelProviderMapMutationKind.MapClaim,
+            token).ConfigureAwait(false);
+        ProviderMapMutationReceipt? mapReceipt = null;
+        try
+        {
+            var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, token).ConfigureAwait(false);
+            if (claim is ProviderMapClaimResult.Conflict)
+            {
+                return RoutingFinalizationResult.Conflict;
+            }
+
+            mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
+            token.ThrowIfCancellationRequested();
+            scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
+            token.ThrowIfCancellationRequested();
+
+            var last = _operations.GetStatus(operationId);
+            SetStatus(operationId,
+                GgufAcquisitionPhase.Completed,
+                last?.CompletedBytes ?? last?.TotalBytes,
+                last?.TotalBytes,
+                isInitialOrTerminal: true);
+            return RoutingFinalizationResult.Completed;
+        }
+        catch
+        {
+            if (mapReceipt is not null)
+            {
+                await RestoreRoutingAsync(scope.ServiceProvider, mapStore, lease, mapReceipt, modelName).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
+    private async Task RestoreRoutingAsync(IServiceProvider services,
+        ICoordinatedModelProviderMapStore mapStore,
+        IModelProviderMapMutationLease lease,
+        ProviderMapMutationReceipt mapReceipt,
+        string modelName)
     {
         try
         {
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var leaseCoordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
-            var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-            await using var lease = await leaseCoordinator.AcquireMapMutationAsync(modelName,
-                ModelProviderMapMutationKind.MapClaim,
-                token).ConfigureAwait(false);
-            var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, token).ConfigureAwait(false);
-            if (claim is ProviderMapClaimResult.Conflict conflict)
+            var restored = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
+            if (restored == ProviderMapRestoreResult.Superseded)
             {
-                _logger.LogWarning("Could not map {ModelName} to llamacpp because it is already mapped to {ProviderName}.",
-                    modelName,
-                    conflict.ExistingProvider);
-                return;
+                _logger.LogWarning("Provider routing compensation was superseded for {ModelName}; the concurrent mapping was preserved.", modelName);
             }
 
-            // AUD4-16: the just-written row must be visible immediately, so drop the resolver's short-TTL provider-name
-            // cache. Optional resolve — the singleton resolver may be absent in a narrow test host; the TTL is the backstop.
-            scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-            throw;
+            services.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Could not persist the llamacpp provider mapping for {ModelName}; the default-provider routing still applies.", modelName);
+            _logger.LogError(exception, "Could not compensate provider routing for failed GGUF download {ModelName}.", modelName);
         }
     }
 
@@ -271,26 +297,26 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             await _modelStore.EnsureModelAsync(request, progress, token).ConfigureAwait(false);
 
-            // Route this GGUF to the llama.cpp runtime: write the model_provider_map row so the provider resolver
-            // dispatches it to "llamacpp" regardless of the unmapped-routing default. The store registers the GGUF in
-            // its own registry (index.json) but does NOT touch the provider map, so this is the single production
-            // writer that makes a downloaded GGUF reachable. Best-effort: a map-write failure must not mark the
-            // (successful) download as Failed — the default-provider flip still routes it.
-            await MapModelToLlamaCppAsync(modelName, token).ConfigureAwait(false);
+            // Routing is part of acquisition publication: a conflicting or failed provider-map claim must never be
+            // masked by a Completed status. Keep the map lease through the retained terminal-status boundary and
+            // compensate only a claim owned by this operation if publication fails.
+            var routing = await FinalizeRoutingAsync(operationId, modelName, token).ConfigureAwait(false);
+            if (routing == RoutingFinalizationResult.Conflict)
+            {
+                SetStatus(operationId,
+                    GgufAcquisitionPhase.Failed,
+                    errorCode: "ModelConflict",
+                    sanitizedError: "The model is mapped to an incompatible provider.",
+                    isInitialOrTerminal: true);
+                return;
+            }
 
             // Admit the model to the tool-capable allow-list when its chat template says it supports tool calls. Without
             // this, a user who followed the app's own recommendation downloaded a tool-capable model and silently got no
             // tool calling, because the gate is exact membership of a list whose shipped default named only two
-            // previous-generation models. Same best-effort contract as the provider mapping above: this must never turn
-            // a successful download into a Failed one.
-            await RegisterToolCapabilityAsync(modelName, token).ConfigureAwait(false);
-
-            var last = _operations.GetStatus(operationId);
-            SetStatus(operationId,
-                GgufAcquisitionPhase.Completed,
-                last?.CompletedBytes ?? last?.TotalBytes,
-                last?.TotalBytes,
-                isInitialOrTerminal: true);
+            // previous-generation models. This runs only after the durable in-process publication boundary and remains
+            // best-effort; it cannot downgrade a successful acquisition.
+            await RegisterToolCapabilityAsync(modelName, CancellationToken.None).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -308,7 +334,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: "InsufficientStorage", sanitizedError: exception.Message, isInitialOrTerminal: true);
             _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
+        catch (Exception exception)
         {
             // Never surface the raw transport message (it can carry a URL/path): collapse to a generic sanitized reason.
             SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: "DownloadFailed", sanitizedError: "Download failed.", isInitialOrTerminal: true);
@@ -333,5 +359,11 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             status.StartedAtUtc,
             status.UpdatedAtUtc,
             status.ErrorCode);
+    }
+
+    private enum RoutingFinalizationResult
+    {
+        Completed,
+        Conflict
     }
 }
