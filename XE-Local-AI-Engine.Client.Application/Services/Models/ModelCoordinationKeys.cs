@@ -21,7 +21,7 @@ public static class ModelCoordinationKeys
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         var normalized = relativePath.Trim().Replace('\\', '/').Normalize(NormalizationForm.FormC);
-        if (normalized.StartsWith("/", StringComparison.Ordinal)
+        if (normalized.StartsWith('/')
             || System.IO.Path.IsPathRooted(normalized)
             || normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(static segment => segment is "." or ".."))
         {

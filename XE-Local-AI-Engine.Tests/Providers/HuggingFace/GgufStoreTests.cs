@@ -99,7 +99,7 @@ public sealed class GgufStoreTests
         AssertEx.True(GgufRegistryRevision.IsCanonical(installed.RegistryRevision));
         AssertEx.True(GgufRegistryRevision.IsCanonical(installed.ModelContentFingerprint));
         AssertEx.Equal(64, installed.Sha256!.Length);
-        AssertEx.Equal(installed.Sha256, installed.Sha256.ToLowerInvariant());
+        AssertEx.True(GgufMemberFingerprint.IsCanonicalSha256(installed.Sha256));
 
         // The universal sidecar is authoritative when the manifest is corrupt and reconstructs exact provenance/fingerprints.
         await File.WriteAllTextAsync(Path.Combine(dir.Path, "index.json"), "{ corrupt manifest");

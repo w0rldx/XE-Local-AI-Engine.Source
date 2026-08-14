@@ -186,7 +186,7 @@ public sealed class InstalledModelSnapshotCoordinator(
         string modelName,
         CancellationToken cancellationToken)
     {
-        var view = new InstalledModelMapLeaseView(inner, isMutation);
+        await using var view = new InstalledModelMapLeaseView(inner, isMutation);
         return await _providerMapStore.ReadWithRevisionAsync(view, modelName, cancellationToken).ConfigureAwait(false);
     }
 
@@ -227,6 +227,12 @@ public sealed class InstalledModelSnapshotCoordinator(
         public bool IsDisposed => _inner.IsDisposed;
         public bool IsMutation { get; } = isMutation;
         public bool ContainsModel(string modelName) => MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
+
+        public ValueTask DisposeAsync()
+        {
+            GC.SuppressFinalize(this);
+            return ValueTask.CompletedTask;
+        }
     }
 }
 

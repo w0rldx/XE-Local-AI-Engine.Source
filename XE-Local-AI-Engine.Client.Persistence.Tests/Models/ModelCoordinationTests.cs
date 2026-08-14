@@ -32,7 +32,7 @@ public sealed class ModelCoordinationTests
         await ownerAcquired.Task;
         using var cancellation = new CancellationTokenSource();
         var waiting = WaitForMutationAsync(domain, cancellation.Token);
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => waiting);
 
         releaseOwner.SetResult();
@@ -131,11 +131,6 @@ public sealed class ModelCoordinationTests
     private static GgufAcquisitionIdentityResolver CreateIdentityResolver()
     {
         return new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
-    }
-
-    private static async Task<ModelCoordinationLockLease> AcquireReadAsync(KeyedCompositeLockDomain domain, string key)
-    {
-        return await domain.AcquireReadAsync([key]);
     }
 
     private static async Task<ModelCoordinationLockLease> AcquireMutationAsync(KeyedCompositeLockDomain domain, string key)
