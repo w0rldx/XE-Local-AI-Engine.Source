@@ -10,6 +10,10 @@ internal static class AddNodeBenchmarksExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         builder.Services.AddScoped<IBenchmarkStore, BenchmarkStore>();
+        builder.Services.AddScoped<IBenchmarkInstalledModelLeaseProvider, BenchmarkInstalledModelLeaseProvider>();
+        builder.Services.AddScoped<IBenchmarkProjectService, BenchmarkProjectService>();
+        builder.Services.AddScoped<IBenchmarkFreezeDependencyService, BenchmarkFreezeDependencyService>();
+        builder.Services.AddScoped<IBenchmarkRunFreezeService, BenchmarkRunFreezeService>();
         builder.Services.AddSingleton<IBenchmarkEligibilityPolicy, BenchmarkEligibilityPolicy>();
         builder.Services.AddSingleton<IBenchmarkRuntimeSnapshotFactory, BenchmarkRuntimeSnapshotFactory>();
         return builder;

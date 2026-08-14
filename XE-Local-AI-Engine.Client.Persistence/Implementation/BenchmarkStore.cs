@@ -111,6 +111,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             throw new BenchmarkConflictException("FreezeDependencyChanged");
         }
 
+        if (command.FreezeCommitGuard is not null
+            && !await command.FreezeCommitGuard.IsCurrentAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new BenchmarkConflictException("FreezeDependencyChanged");
+        }
+
         var now = Now();
         var run = new BenchmarkRun
         {

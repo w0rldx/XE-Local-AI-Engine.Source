@@ -48,7 +48,18 @@ public sealed record BenchmarkStartRunCommand(
     string AgentName,
     long AgentVersion,
     int RequestedContextTokens,
-    bool JudgeEnabled);
+    bool JudgeEnabled,
+    IBenchmarkFreezeCommitGuard? FreezeCommitGuard = null);
+
+/// <summary>
+///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
+///     transaction that verifies the project version and inserts the run/work rows. Returning <see langword="false" />
+///     aborts the transaction with <c>FreezeDependencyChanged</c>.
+/// </summary>
+public interface IBenchmarkFreezeCommitGuard
+{
+    Task<bool> IsCurrentAsync(CancellationToken cancellationToken);
+}
 
 public sealed record BenchmarkPrimarySuccessCommand(
     Guid RunId,
