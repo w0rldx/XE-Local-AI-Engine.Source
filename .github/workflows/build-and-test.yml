@@ -81,15 +81,18 @@ jobs:
       # (name ends with .Tests / contains .Tests.) so new suites need no workflow edit. E2E is excluded
       # by default (its csproj sets IsTestingPlatformApplication=false unless RunE2ETests=true, so the
       # MTP runner does not collect it); it needs Playwright browsers + builds the SPA, so it runs in the
-      # dedicated e2e workflow. --max-parallel-test-modules 1 keeps suites sequential (concurrent runs
-      # time out on shared runners). TZ=Europe/Berlin exposes non-UTC time-zone bugs (e.g.
+      # dedicated e2e workflow. --max-parallel-test-modules 2 overlaps the small suites with the big
+      # one; the explicit --maximum-parallel-tests cap keeps the combined width bounded on shared
+      # runners (TUnit's default is ProcessorCount*4 PER module, which is what made concurrent
+      # modules time out before). TZ=Europe/Berlin exposes non-UTC time-zone bugs (e.g.
       # CapabilityReporterTests). global.json pins the Microsoft.Testing.Platform runner for dotnet test.
       - name: Run backend tests (auto-enrolled)
         env:
           TZ: Europe/Berlin
         run: |
           set -o pipefail
-          dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1 \
+          dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 2 \
+            --maximum-parallel-tests 8 \
             | tee /tmp/xe-test-output.txt
           # Hollow-gate guard: MTP always emits a "Passed!" or "Failed!" summary per suite that ran.
           # If zero suites are enrolled (e.g. misnamed project, MTP not collected), the output has
