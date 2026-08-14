@@ -23,6 +23,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 	const [quantization, setQuantization] = useState<string | null>(null);
 	const previewMutation = usePreviewGgufImport();
 	const startMutation = useStartGgufImport();
+	const trimmedSourcePath = sourcePath.trim();
 
 	useEffect(() => {
 		if (!opened) {
@@ -48,7 +49,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 	}, [modelBaseName, preview, quantization]);
 
 	const runPreview = (): void => {
-		previewMutation.mutate(sourcePath.trim(), {
+		previewMutation.mutate(trimmedSourcePath, {
 			onSuccess: (response) => {
 				if (!response) {
 					return;
@@ -67,7 +68,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 			return;
 		}
 		startMutation.mutate(
-			{ sourcePath, previewToken: preview.previewToken, modelBaseName: modelBaseName.trim(), quantization },
+			{ sourcePath: trimmedSourcePath, previewToken: preview.previewToken, modelBaseName: modelBaseName.trim(), quantization },
 			{
 				onSuccess: (ticket) => {
 					if (ticket?.operationId) {
@@ -159,7 +160,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 					/>
 					{previewMutation.error ? <Alert color="red">{importErrorMessage(t, previewErrorCode)}</Alert> : null}
 					<Group justify="flex-end">
-						<Button onClick={runPreview} loading={previewMutation.isPending} disabled={!sourcePath.trim()}>
+						<Button onClick={runPreview} loading={previewMutation.isPending} disabled={!trimmedSourcePath}>
 							{t("pages.models.gguf.import.preview", "Preview import")}
 						</Button>
 					</Group>

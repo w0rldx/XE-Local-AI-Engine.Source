@@ -147,12 +147,14 @@ internal sealed class GgufModelImporter(
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            EnsureNoCaseInsensitiveCollision(finalPath);
-            File.Move(preparedImport.TemporaryGgufPath, finalPath, overwrite: false);
-            movedWeight = true;
+            // Sidecar first, then the GGUF weight: a crash between the two moves leaves an orphan sidecar (cleanable by
+            // the startup reaper) rather than a permanently sidecar-less deterministic-named GGUF that would fail closed.
             EnsureNoCaseInsensitiveCollision(finalSidecarPath);
             File.Move(preparedImport.TemporarySidecarPath, finalSidecarPath, overwrite: false);
             movedSidecar = true;
+            EnsureNoCaseInsensitiveCollision(finalPath);
+            File.Move(preparedImport.TemporaryGgufPath, finalPath, overwrite: false);
+            movedWeight = true;
             await registry.InsertIfAbsentAsync(preparedImport.RegistryEntry, cancellationToken).ConfigureAwait(false);
 
             var verified = await GgufAcquisitionSidecar.ReadValidAsync(finalSidecarPath, finalPath, options.ModelsDirectory, cancellationToken)

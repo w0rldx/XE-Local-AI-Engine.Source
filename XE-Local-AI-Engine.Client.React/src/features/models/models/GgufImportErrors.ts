@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 
 const knownImportErrorCodes = new Set([
 	"InvalidPath",
+	"InvalidRequest",
 	"SourceNotFound",
 	"UnsupportedFileType",
 	"UnsupportedGgufVersion",
@@ -12,7 +13,10 @@ const knownImportErrorCodes = new Set([
 	"DestinationConflict",
 	"AcquisitionAlreadyActive",
 	"InsufficientStorage",
+	"InvalidPreviewToken",
+	"StalePreview",
 	"OperationNotFound",
+	"ImportCompensationFailed",
 	"ImportFailed",
 ]);
 
