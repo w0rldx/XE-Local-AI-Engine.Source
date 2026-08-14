@@ -25,12 +25,10 @@ public interface IBenchmarkProjectService
 
 public sealed class BenchmarkProjectService(
     IBenchmarkStore benchmarkStore,
-    IAgentDefinitionStore agentDefinitionStore,
-    IBenchmarkInstalledModelLeaseProvider installedModels) : IBenchmarkProjectService
+    IAgentDefinitionStore agentDefinitionStore) : IBenchmarkProjectService
 {
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
 
     public async Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default)
     {
@@ -86,8 +84,6 @@ public sealed class BenchmarkProjectService(
             }
 
             ValidateContext(requestedJudgeContext, "judge");
-            await using var judgeLease = await _installedModels.AcquireAsync(judgeModel, cancellationToken).ConfigureAwait(false);
-            BenchmarkModelEligibility.Validate(judgeLease.Snapshot, "judge");
             judgeContext = requestedJudgeContext;
         }
 

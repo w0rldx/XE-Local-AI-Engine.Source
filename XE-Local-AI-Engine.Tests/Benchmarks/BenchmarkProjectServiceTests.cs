@@ -16,10 +16,9 @@ public sealed class BenchmarkProjectServiceTests
         store.CreateProjectAsync(Arg.Do<BenchmarkProjectInput>(input => captured = input), Arg.Any<CancellationToken>())
              .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
         var agents = Substitute.For<IAgentDefinitionStore>();
-        var modelLeases = Substitute.For<IBenchmarkInstalledModelLeaseProvider>();
         var agentId = Guid.NewGuid();
         agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(Definition(agentId, AgentDefinitionKind.Single));
-        var service = new BenchmarkProjectService(store, agents, modelLeases);
+        var service = new BenchmarkProjectService(store, agents);
 
         _ = await service.CreateAsync(new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "  exact task  ", 4096, agentId, false, null, null));
 
@@ -31,10 +30,9 @@ public sealed class BenchmarkProjectServiceTests
     {
         var store = Substitute.For<IBenchmarkStore>();
         var agents = Substitute.For<IAgentDefinitionStore>();
-        var modelLeases = Substitute.For<IBenchmarkInstalledModelLeaseProvider>();
         var agentId = Guid.NewGuid();
         agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(Definition(agentId, AgentDefinitionKind.Orchestrator));
-        var service = new BenchmarkProjectService(store, agents, modelLeases);
+        var service = new BenchmarkProjectService(store, agents);
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(
             new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 1234, agentId, false, null, null)));
@@ -42,6 +40,33 @@ public sealed class BenchmarkProjectServiceTests
             new BenchmarkProjectDraft(Guid.NewGuid(), "Benchmark", "task", 4096, agentId, false, null, null)));
 
         _ = store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Create_WithJudge_PerformsOnlyModelIndependentValidation()
+    {
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkProjectInput? captured = null;
+        store.CreateProjectAsync(Arg.Do<BenchmarkProjectInput>(input => captured = input), Arg.Any<CancellationToken>())
+             .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
+        var agents = Substitute.For<IAgentDefinitionStore>();
+        var agentId = Guid.NewGuid();
+        agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(Definition(agentId, AgentDefinitionKind.Single));
+        var service = new BenchmarkProjectService(store, agents);
+
+        _ = await service.CreateAsync(new BenchmarkProjectDraft(
+            Guid.NewGuid(),
+            "Benchmark",
+            "task",
+            4096,
+            agentId,
+            true,
+            "  judge-model  ",
+            8192));
+
+        var input = AssertEx.NotNull(captured);
+        AssertEx.Equal("judge-model", input.JudgeModelName);
+        AssertEx.Equal(8192, input.JudgeContextTokens);
     }
 
     private static AgentDefinitionRecord Definition(Guid id, AgentDefinitionKind kind) =>
