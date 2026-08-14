@@ -2687,14 +2687,77 @@ public sealed class InvocationRunnerTests
             Arg.Any<long?>());
     }
 
+    [Test]
+    public async Task RunAsync_WhenWarmFailsBeforeGenerationAdmission_PreservesProviderFailureAndDoesNotGenerate()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var generationCalls = 0;
+        var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
+        var warmFailure = new HttpRequestException("provider leaked /private/model/path", inner: null, HttpStatusCode.InternalServerError);
+        var runner = CreateRunner(sender,
+            CreateGenerationSpyFactory(() => generationCalls++),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: null, warmFailure));
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 8192
+                                           })
+                                           .Build();
+
+        await RunAsync(runner, package, generationAdmissionPolicy: policy);
+
+        AssertEx.Equal(expected: 0, generationCalls);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+        AssertEx.Null(policy.LastContext);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "The model could not be loaded or run on the provider.",
+            FailureCategory.ModelLoadFailed);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenGenerationAdmissionReturnsHostileReason_SurfacesOnlyFixedPolicyMessage()
+    {
+        const string hostileReason = "../../private/model.gguf\r\nsecret-token";
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var generationCalls = 0;
+        var runner = CreateRunner(sender,
+            CreateGenerationSpyFactory(() => generationCalls++),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 16384));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner,
+            package,
+            generationAdmissionPolicy: new RejectingAdmissionPolicy(hostileReason));
+
+        AssertEx.Equal(expected: 0, generationCalls);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "Invocation generation was rejected by policy.",
+            FailureCategory.AgentRuntime);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Is<string>(message => message.Contains("private", StringComparison.Ordinal)
+                                      || message.Contains("secret-token", StringComparison.Ordinal)),
+            Arg.Any<FailureCategory>());
+    }
+
     /// <summary>
     ///     A resolver whose model is served by the llama.cpp provider (the only one the runner warms) reporting
     ///     <paramref name="effectiveContextTokens" /> as its launched per-slot context window.
     /// </summary>
-    private static ILocalModelProviderResolver CreateLlamaCppResolver(int? effectiveContextTokens)
+    private static ILocalModelProviderResolver CreateLlamaCppResolver(int? effectiveContextTokens, Exception? warmFailure = null)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        if (warmFailure is not null)
+        {
+            provider.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromException(warmFailure));
+        }
+
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(effectiveContextTokens is { } effective
                     ? new LocalModelRuntimeInfo(effective)
@@ -3724,16 +3787,27 @@ public sealed class InvocationRunnerTests
 
             if (context.EffectiveContextTokens is null)
             {
-                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(EffectiveContextUnavailableMessage));
+                return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(
+                    InvocationGenerationAdmissionReasonCodes.EffectiveContextUnavailable));
             }
 
             if (context.EffectiveContextTokens < requiredContextTokens)
             {
                 return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(
-                    $"Requested context {requiredContextTokens} tokens exceeds effective context {context.EffectiveContextTokens} tokens."));
+                    InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient));
             }
 
             return Task.FromResult(InvocationGenerationAdmissionDecision.Allow);
+        }
+    }
+
+    private sealed class RejectingAdmissionPolicy(string reasonCode) : IInvocationGenerationAdmissionPolicy
+    {
+        public Task<InvocationGenerationAdmissionDecision> EvaluateAsync(InvocationGenerationAdmissionContext context,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(reasonCode));
         }
     }
 
