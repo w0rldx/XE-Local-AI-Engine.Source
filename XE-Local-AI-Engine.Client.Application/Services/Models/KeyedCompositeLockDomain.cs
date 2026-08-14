@@ -11,7 +11,7 @@ public enum ModelCoordinationLockMode
 public sealed class KeyedCompositeLockDomain
 {
     private static readonly AsyncLocal<OwnershipToken?> CurrentOwnership = new();
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly HashSet<Guid> _activeOwnerships = [];
     private readonly Dictionary<string, KeyState> _keys = new(StringComparer.Ordinal);
     private readonly LinkedList<Waiter> _waiters = new();
@@ -71,7 +71,7 @@ public sealed class KeyedCompositeLockDomain
         }
         finally
         {
-            waiter.CancellationRegistration.Dispose();
+            await waiter.CancellationRegistration.DisposeAsync().ConfigureAwait(false);
         }
     }
 

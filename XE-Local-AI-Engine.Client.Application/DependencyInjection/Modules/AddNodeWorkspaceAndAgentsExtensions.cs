@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 internal static class AddNodeWorkspaceAndAgentsExtensions
 {
@@ -104,10 +105,11 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<IModelProviderMapStore, ModelProviderMapStore>();
         builder.Services.AddSingleton<KeyedCompositeLockDomain>();
         builder.Services.AddSingleton<IModelProviderMapLeaseCoordinator, ModelProviderMapLeaseCoordinator>();
-        builder.Services.AddSingleton<IInstalledModelSnapshotCoordinator>(static services =>
+        builder.Services.AddScoped<IInstalledModelSnapshotCoordinator>(static services =>
             new InstalledModelSnapshotCoordinator(
                 services.GetRequiredService<KeyedCompositeLockDomain>(),
-                services.GetRequiredService<IInstalledModelSnapshotSource>()));
+                services.GetRequiredService<IInstalledGgufSnapshotStore>(),
+                services.GetRequiredService<ICoordinatedModelProviderMapStore>()));
         builder.Services.AddScoped<ICoordinatedModelProviderMapStore>(static services =>
             new CoordinatedModelProviderMapStore(services.GetRequiredService<IModelProviderMapStore>()));
         builder.Services.AddScoped<IGgufAcquisitionStateProbe, GgufAcquisitionStateProbe>();

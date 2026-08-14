@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public enum InstalledModelMutationKind
@@ -18,29 +20,19 @@ public sealed record InstalledModelMutationRequest(
 
 public sealed record InstalledModelSnapshot(
     string ModelName,
-    IReadOnlyList<string> AliasModelNames,
-    IReadOnlyList<string> MemberRelativePaths,
-    string SnapshotRevision,
+    string RegistryRevision,
+    IReadOnlyList<InstalledModelRegistryAliasSnapshot> RegistryAliases,
+    string RegistryAliasSetHash,
+    IReadOnlyList<InstalledModelPhysicalMember> Members,
+    string PhysicalMemberSetHash,
+    LocalModelOrigin? Origin,
     string? ProviderName,
-    string? ProviderMappingRevision);
-
-public sealed record InstalledModelDiscovery(
-    string ModelName,
-    IReadOnlyList<string> AliasModelNames,
-    IReadOnlyList<string> MemberRelativePaths,
-    string DiscoveryRevision);
-
-/// <summary>
-///     Application-facing bridge until the provider-owned installed-GGUF snapshot contract is available. An adapter over
-///     that provider contract must implement discovery and verified reload without leaking absolute paths.
-/// </summary>
-public interface IInstalledModelSnapshotSource
-{
-    Task<InstalledModelDiscovery?> DiscoverAsync(string modelName, CancellationToken cancellationToken);
-    Task<InstalledModelSnapshot?> LoadVerifiedAsync(string modelName,
-        InstalledModelDiscovery? expectedDiscovery,
-        CancellationToken cancellationToken);
-}
+    string? ProviderMappingRevision,
+    string RepoId,
+    string SourceRevision,
+    string Quantization,
+    GgufRole Role,
+    string ModelContentFingerprint);
 
 public interface IInstalledModelSnapshotCoordinator
 {
@@ -50,27 +42,36 @@ public interface IInstalledModelSnapshotCoordinator
 
 public sealed class InstalledModelSnapshotCoordinator(
     KeyedCompositeLockDomain lockDomain,
-    IInstalledModelSnapshotSource snapshotSource) : IInstalledModelSnapshotCoordinator
+    IInstalledGgufSnapshotStore snapshotStore,
+    ICoordinatedModelProviderMapStore providerMapStore) : IInstalledModelSnapshotCoordinator
 {
     private const int MaxAttempts = 3;
     private readonly KeyedCompositeLockDomain _lockDomain = lockDomain ?? throw new ArgumentNullException(nameof(lockDomain));
-    private readonly IInstalledModelSnapshotSource _snapshotSource = snapshotSource ?? throw new ArgumentNullException(nameof(snapshotSource));
+    private readonly IInstalledGgufSnapshotStore _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
+    private readonly ICoordinatedModelProviderMapStore _providerMapStore = providerMapStore ?? throw new ArgumentNullException(nameof(providerMapStore));
 
     public async Task<InstalledModelReadLease> AcquireReadSnapshotAsync(string modelName, CancellationToken cancellationToken = default)
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var discovery = await _snapshotSource.DiscoverAsync(modelName, cancellationToken).ConfigureAwait(false)
+            var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken).ConfigureAwait(false)
                             ?? throw new KeyNotFoundException("The installed model was not found.");
-            var keys = BuildExistingKeys(discovery);
+            var keys = BuildExistingKeys(candidate);
             var inner = await _lockDomain.AcquireReadAsync(keys, cancellationToken).ConfigureAwait(false);
             try
             {
-                var snapshot = await _snapshotSource.LoadVerifiedAsync(modelName, discovery, cancellationToken).ConfigureAwait(false);
-                if (snapshot is not null && KeysMatch(keys, BuildExistingKeys(snapshot)))
+                var verified = await _snapshotStore.LoadVerifiedAsync(modelName, candidate, cancellationToken).ConfigureAwait(false);
+                if (KeysMatch(keys, BuildExistingKeys(verified)))
                 {
+                    var mapping = await ReadMappingAsync(inner, isMutation: false, verified.ModelName, cancellationToken).ConfigureAwait(false);
+                    var snapshot = FreezeSnapshot(verified, mapping);
                     return new InstalledModelReadLease(snapshot, inner);
                 }
+            }
+            catch (InstalledGgufSnapshotException exception) when (IsOptimisticConflict(exception))
+            {
+                await inner.DisposeAsync().ConfigureAwait(false);
+                continue;
             }
             catch
             {
@@ -90,17 +91,36 @@ public sealed class InstalledModelSnapshotCoordinator(
         ArgumentNullException.ThrowIfNull(request);
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var discovery = await _snapshotSource.DiscoverAsync(request.ModelName, cancellationToken).ConfigureAwait(false);
-            var keys = discovery is null ? BuildAcquisitionKeys(request) : BuildExistingKeys(discovery, request.IntendedMembers);
+            var candidate = await _snapshotStore.DiscoverCandidateAsync(request.ModelName, cancellationToken).ConfigureAwait(false);
+            var keys = candidate is null ? BuildAcquisitionKeys(request) : BuildExistingKeys(candidate, request.IntendedMembers);
             var inner = await _lockDomain.AcquireMutationAsync(keys, cancellationToken).ConfigureAwait(false);
             try
             {
-                var snapshot = await _snapshotSource.LoadVerifiedAsync(request.ModelName, discovery, cancellationToken).ConfigureAwait(false);
-                var verifiedKeys = snapshot is null ? BuildAcquisitionKeys(request) : BuildExistingKeys(snapshot, request.IntendedMembers);
+                var verified = candidate is null
+                    ? null
+                    : await _snapshotStore.LoadVerifiedAsync(request.ModelName, candidate, cancellationToken).ConfigureAwait(false);
+                var currentCandidate = candidate is null
+                    ? await _snapshotStore.DiscoverCandidateAsync(request.ModelName, cancellationToken).ConfigureAwait(false)
+                    : candidate;
+                if (candidate is null && currentCandidate is not null)
+                {
+                    await inner.DisposeAsync().ConfigureAwait(false);
+                    continue;
+                }
+
+                var verifiedKeys = verified is null ? BuildAcquisitionKeys(request) : BuildExistingKeys(verified, request.IntendedMembers);
                 if (KeysMatch(keys, verifiedKeys))
                 {
-                    return new InstalledModelMutationLease(request, snapshot, inner);
+                    var mapping = await ReadMappingAsync(inner, isMutation: true, verified?.ModelName ?? request.ModelName, cancellationToken)
+                        .ConfigureAwait(false);
+                    var snapshot = verified is null ? null : FreezeSnapshot(verified, mapping);
+                    return new InstalledModelMutationLease(request, snapshot, mapping, inner);
                 }
+            }
+            catch (InstalledGgufSnapshotException exception) when (IsOptimisticConflict(exception))
+            {
+                await inner.DisposeAsync().ConfigureAwait(false);
+                continue;
             }
             catch
             {
@@ -129,13 +149,17 @@ public sealed class InstalledModelSnapshotCoordinator(
         return ModelCoordinationKeys.NormalizeSet(keys);
     }
 
-    private static IReadOnlyList<string> BuildExistingKeys(InstalledModelDiscovery discovery,
+    private static IReadOnlyList<string> BuildExistingKeys(InstalledGgufCandidate candidate,
         IReadOnlyList<IntendedInstalledModelMember>? intendedMembers = null) =>
-        BuildKeys(discovery.AliasModelNames.Prepend(discovery.ModelName), discovery.MemberRelativePaths, intendedMembers);
+        BuildKeys(candidate.RegistryAliases.Select(static alias => alias.ModelName).Prepend(candidate.ModelName),
+            candidate.MemberRelativePaths,
+            intendedMembers);
 
-    private static IReadOnlyList<string> BuildExistingKeys(InstalledModelSnapshot snapshot,
+    private static IReadOnlyList<string> BuildExistingKeys(InstalledGgufSnapshot snapshot,
         IReadOnlyList<IntendedInstalledModelMember>? intendedMembers = null) =>
-        BuildKeys(snapshot.AliasModelNames.Prepend(snapshot.ModelName), snapshot.MemberRelativePaths, intendedMembers);
+        BuildKeys(snapshot.RegistryAliases.Select(static alias => alias.ModelName).Prepend(snapshot.ModelName),
+            snapshot.Members.Select(static member => member.RelativePath),
+            intendedMembers);
 
     private static IReadOnlyList<string> BuildKeys(IEnumerable<string> aliases,
         IEnumerable<string> memberPaths,
@@ -156,6 +180,54 @@ public sealed class InstalledModelSnapshotCoordinator(
     }
 
     private static bool KeysMatch(IReadOnlyList<string> left, IReadOnlyList<string> right) => left.SequenceEqual(right, StringComparer.Ordinal);
+
+    private async Task<ModelProviderMapRecord?> ReadMappingAsync(ModelCoordinationLockLease inner,
+        bool isMutation,
+        string modelName,
+        CancellationToken cancellationToken)
+    {
+        var view = new InstalledModelMapLeaseView(inner, isMutation);
+        return await _providerMapStore.ReadWithRevisionAsync(view, modelName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static InstalledModelSnapshot FreezeSnapshot(InstalledGgufSnapshot snapshot, ModelProviderMapRecord? mapping)
+    {
+        var aliases = snapshot.RegistryAliases.Select(static alias => alias with { }).ToArray();
+        var members = snapshot.Members.Select(static member => member with
+        {
+            OwningAliases = Array.AsReadOnly(member.OwningAliases.ToArray())
+        }).ToArray();
+        return new InstalledModelSnapshot(snapshot.ModelName,
+            snapshot.RegistryRevision,
+            Array.AsReadOnly(aliases),
+            snapshot.RegistryAliasSetHash,
+            Array.AsReadOnly(members),
+            snapshot.PhysicalMemberSetHash,
+            snapshot.Origin,
+            mapping?.ProviderName,
+            mapping?.Revision,
+            snapshot.RepoId,
+            snapshot.SourceRevision,
+            snapshot.Quantization,
+            snapshot.Role,
+            snapshot.ModelContentFingerprint);
+    }
+
+    private static bool IsOptimisticConflict(InstalledGgufSnapshotException exception) =>
+        exception.Code is "InstalledModelSnapshotUnstable" or "InstalledModelNotFound";
+
+    private sealed class InstalledModelMapLeaseView(ModelCoordinationLockLease inner, bool isMutation) : IModelProviderMapMutationLease
+    {
+        private readonly ModelCoordinationLockLease _inner = inner;
+
+        public IReadOnlyList<string> MapKeys { get; } = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal)).ToArray();
+        public IReadOnlyList<string> ModelKeys { get; } = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal))
+                                                               .Select(static key => key["2:provider-map:".Length..])
+                                                               .ToArray();
+        public bool IsDisposed => _inner.IsDisposed;
+        public bool IsMutation { get; } = isMutation;
+        public bool ContainsModel(string modelName) => MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);
+    }
 }
 
 public class InstalledModelReadLease : IModelProviderMapReadLease
@@ -179,6 +251,7 @@ public class InstalledModelReadLease : IModelProviderMapReadLease
 
     public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
         var inner = Interlocked.Exchange(ref _inner, null);
         if (inner is not null)
         {
@@ -193,10 +266,12 @@ public sealed class InstalledModelMutationLease : IModelProviderMapMutationLease
 
     internal InstalledModelMutationLease(InstalledModelMutationRequest request,
         InstalledModelSnapshot? snapshot,
+        ModelProviderMapRecord? providerMapping,
         ModelCoordinationLockLease inner)
     {
         Request = request;
         Snapshot = snapshot;
+        ProviderMapping = providerMapping;
         _inner = inner;
         MapKeys = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal)).ToArray();
         ModelKeys = MapKeys.Select(static key => key["2:provider-map:".Length..]).ToArray();
@@ -205,6 +280,7 @@ public sealed class InstalledModelMutationLease : IModelProviderMapMutationLease
 
     public InstalledModelMutationRequest Request { get; }
     public InstalledModelSnapshot? Snapshot { get; }
+    public ModelProviderMapRecord? ProviderMapping { get; }
     public IReadOnlyList<string> ReservedKeys { get; }
     public IReadOnlyList<string> ModelKeys { get; }
     public IReadOnlyList<string> MapKeys { get; }
@@ -214,6 +290,7 @@ public sealed class InstalledModelMutationLease : IModelProviderMapMutationLease
 
     public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
         var inner = Interlocked.Exchange(ref _inner, null);
         if (inner is not null)
         {

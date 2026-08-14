@@ -16,7 +16,8 @@ public sealed class ProviderMapCoordinationArchitectureTests
                  {
                      "AddSingleton<KeyedCompositeLockDomain>()",
                      "AddSingleton<IModelProviderMapLeaseCoordinator, ModelProviderMapLeaseCoordinator>()",
-                     "AddSingleton<IInstalledModelSnapshotCoordinator>",
+                     "AddScoped<IInstalledModelSnapshotCoordinator>",
+                     "GetRequiredService<IInstalledGgufSnapshotStore>()",
                      "AddScoped<ICoordinatedModelProviderMapStore>",
                      "AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>()",
                      "AddScoped<IOllamaProviderMapBackfillCoordinator, OllamaProviderMapBackfillCoordinator>()"

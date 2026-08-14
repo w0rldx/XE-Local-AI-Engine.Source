@@ -74,7 +74,6 @@ public sealed class OllamaProviderMapBackfillCoordinator(
         var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
         return installed.Select(static model => model.Name)
                         .Where(static name => !string.IsNullOrWhiteSpace(name))
-                        .Select(static name => name!)
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .Order(StringComparer.OrdinalIgnoreCase)
                         .ToArray();
