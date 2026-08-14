@@ -18,7 +18,7 @@ Backend:
 
 - `dotnet restore XE-Local-AI-Engine.slnx`
 - `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
-- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
+- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 2 --maximum-parallel-tests 8`
 
 **The `--configuration Release` in those commands is load-bearing — always finish with it.** Local Debug builds skip analyzer execution (`Directory.Build.targets`; 84s → 10s on the Tests module), so SonarAnalyzer, Meziantou, BannedApiAnalyzers and the `IDExxxx` code-style rules — including the "no bare `TODO`" rule — only fire in Release. Iterate in Debug, but a change is not verified until a Release build passes, or the packaging script will reject what compiled fine for you. `XE_FULL_ANALYSIS=1` forces the full pass in Debug.
 
