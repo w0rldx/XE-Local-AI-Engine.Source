@@ -1035,6 +1035,27 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest 
 	modelName: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse = z.object({
+	operationId: z.guid(),
+	operationKind: z.string(),
+	modelName: z.string(),
+	phase: z.string(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	startedAtUtc: z.iso.datetime({ offset: true }),
+	updatedAtUtc: z.iso.datetime({ offset: true }),
+	errorCode: z.string().nullish(),
+	sanitizedMessage: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufImportResponse = z.object({
+	operationId: z.guid(),
+	cancellationRequested: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufImportOperationRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto = z.enum(["official", "custom"]);
@@ -1137,18 +1158,33 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResp
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = z.object({
+	operationId: z.guid(),
+	operationKind: z.string(),
 	modelName: z.string(),
 	phase: z.string(),
 	completedBytes: z.int().nullish(),
 	totalBytes: z.int().nullish(),
 	sanitizedError: z.string().nullish(),
+	errorCode: z.string().nullish(),
+	startedAtUtc: z.iso.datetime({ offset: true }).nullish(),
+	updatedAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadOperationStatusRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufImportCapabilityResponse = z.object({
+	available: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListGgufImportsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse),
+});
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
 	totalRamBytes: z.int(),
@@ -1351,6 +1387,26 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse 
 	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse = z.object({
+	modelBaseName: z.string(),
+	detectedQuantization: z.string().nullish(),
+	canonicalQuantizationChoices: z.array(z.string()),
+	canonicalModelName: z.string().nullish(),
+	finalFileName: z.string().nullish(),
+	sizeBytes: z.int(),
+	sourceDisplayName: z.string(),
+	architecture: z.string().nullish(),
+	ggufVersion: z.int().nullish(),
+	warnings: z.array(z.string()),
+	hasSufficientStorage: z.boolean().nullish(),
+	previewToken: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportRequest = z.object({
+	sourcePath: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = z.object({
 	scheduledJobId: z.guid(),
 });
@@ -1393,6 +1449,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = z
 export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = z.object({
 	modelName: z.string(),
 	alreadyInFlight: z.boolean(),
+	operationId: z.guid(),
+	operationKind: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = z.object({
@@ -1400,6 +1458,19 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest =
 	fileName: z.string().nullish(),
 	quant: z.string().nullish(),
 	revision: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionTicketResponse = z.object({
+	operationId: z.guid(),
+	operationKind: z.string(),
+	modelName: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufImportRequest = z.object({
+	sourcePath: z.string(),
+	previewToken: z.string(),
+	modelBaseName: z.string(),
+	quantization: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = z.object({
@@ -1545,6 +1616,8 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsRes
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin = z.enum(["HuggingFace", "Imported"]);
+
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = z.object({
 	modelName: z.string(),
 	maxContextTokens: z
@@ -1557,6 +1630,8 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	origin: zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin.nullish(),
+	modelContentFingerprint: z.string().nullish(),
 	template: z.string().nullish(),
 	system: z.string().nullish(),
 	license: z.string().nullish(),
@@ -1586,6 +1661,8 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 	family: z.string().nullish(),
 	parameterSize: z.string().nullish(),
 	quantizationLevel: z.string().nullish(),
+	origin: zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin.nullish(),
+	modelContentFingerprint: z.string().nullish(),
 	isSelected: z.boolean(),
 	kind: z.string(),
 	detectedKind: z.string(),
@@ -4015,6 +4092,15 @@ export const zCancelGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1
  */
 export const zCancelGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
 
+export const zCancelGgufImportPath = z.object({
+	operationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCancelGgufImportResponse = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufImportResponse;
+
 /**
  * Success
  */
@@ -4058,6 +4144,15 @@ export const zGetCudaBuildPrerequisitesResponse = zXeLocalAiEngineClientEndpoint
  */
 export const zGetCudaBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
 
+export const zGetGgufDownloadOperationStatusPath = z.object({
+	operationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetGgufDownloadOperationStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+
 /**
  * Success
  */
@@ -4071,6 +4166,25 @@ export const zGetGgufDownloadStatusPath = z.object({
  * Success
  */
 export const zGetGgufDownloadStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetGgufImportCapabilityResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufImportCapabilityResponse;
+
+/**
+ * Success
+ */
+export const zGetGgufImportsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListGgufImportsResponse;
+
+export const zGetGgufImportStatusPath = z.object({
+	operationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetGgufImportStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionStatusResponse;
 
 export const zGetHardwareProfileQuery = z.object({
 	refresh: z.boolean(),
@@ -4162,6 +4276,13 @@ export const zListInferenceProfilesResponse = zXeLocalAiEngineClientEndpointsMod
  */
 export const zListRunningModelsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
 
+export const zPreviewGgufImportBody = zXeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportRequest;
+
+/**
+ * Success
+ */
+export const zPreviewGgufImportResponse = zXeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse;
+
 /**
  * Success
  */
@@ -4195,6 +4316,13 @@ export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1S
  * Success
  */
 export const zStartGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
+
+export const zStartGgufImportBody = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufImportRequest;
+
+/**
+ * Success
+ */
+export const zStartGgufImportResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufAcquisitionTicketResponse;
 
 export const zStartLlamaCppSourceBuildBody = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;
 

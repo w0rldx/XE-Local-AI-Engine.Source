@@ -44,6 +44,9 @@ import type {
 	CancelGgufDownloadData,
 	CancelGgufDownloadErrors,
 	CancelGgufDownloadResponses,
+	CancelGgufImportData,
+	CancelGgufImportErrors,
+	CancelGgufImportResponses,
 	CancelImageJobData,
 	CancelImageJobErrors,
 	CancelImageJobResponses,
@@ -296,12 +299,24 @@ import type {
 	GetDevelopmentTaskData,
 	GetDevelopmentTaskErrors,
 	GetDevelopmentTaskResponses,
+	GetGgufDownloadOperationStatusData,
+	GetGgufDownloadOperationStatusErrors,
+	GetGgufDownloadOperationStatusResponses,
 	GetGgufDownloadsData,
 	GetGgufDownloadsErrors,
 	GetGgufDownloadsResponses,
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusErrors,
 	GetGgufDownloadStatusResponses,
+	GetGgufImportCapabilityData,
+	GetGgufImportCapabilityErrors,
+	GetGgufImportCapabilityResponses,
+	GetGgufImportsData,
+	GetGgufImportsErrors,
+	GetGgufImportsResponses,
+	GetGgufImportStatusData,
+	GetGgufImportStatusErrors,
+	GetGgufImportStatusResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -549,6 +564,9 @@ import type {
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchErrors,
 	PreviewDevelopmentPatchResponses,
+	PreviewGgufImportData,
+	PreviewGgufImportErrors,
+	PreviewGgufImportResponses,
 	PreviewSkillImportData,
 	PreviewSkillImportErrors,
 	PreviewSkillImportResponses,
@@ -657,6 +675,9 @@ import type {
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
+	StartGgufImportData,
+	StartGgufImportErrors,
+	StartGgufImportResponses,
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
@@ -748,6 +769,8 @@ import {
 	zCancelDevelopmentAttemptResponse,
 	zCancelGgufDownloadBody,
 	zCancelGgufDownloadResponse,
+	zCancelGgufImportPath,
+	zCancelGgufImportResponse,
 	zCancelImageJobPath,
 	zCancelImageJobResponse,
 	zCancelImageModelDownloadBody,
@@ -897,9 +920,15 @@ import {
 	zGetDevelopmentProjectResponse,
 	zGetDevelopmentTaskPath,
 	zGetDevelopmentTaskResponse,
+	zGetGgufDownloadOperationStatusPath,
+	zGetGgufDownloadOperationStatusResponse,
 	zGetGgufDownloadsResponse,
 	zGetGgufDownloadStatusPath,
 	zGetGgufDownloadStatusResponse,
+	zGetGgufImportCapabilityResponse,
+	zGetGgufImportsResponse,
+	zGetGgufImportStatusPath,
+	zGetGgufImportStatusResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -1032,6 +1061,8 @@ import {
 	zPreviewDevelopmentPatchBody,
 	zPreviewDevelopmentPatchPath,
 	zPreviewDevelopmentPatchResponse,
+	zPreviewGgufImportBody,
+	zPreviewGgufImportResponse,
 	zPreviewSkillImportBody,
 	zPreviewSkillImportResponse,
 	zPromoteSuggestedPlaybookActionPath,
@@ -1106,6 +1137,8 @@ import {
 	zStartDevelopmentNextActionResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
+	zStartGgufImportBody,
+	zStartGgufImportResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
 	zStartLlamaCppSourceBuildBody,
@@ -2282,6 +2315,26 @@ export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const cancelGgufImport = <ThrowOnError extends boolean = false>(options: Options<CancelGgufImportData, ThrowOnError>) =>
+	(options.client ?? client).post<CancelGgufImportResponses, CancelGgufImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelGgufImportPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelGgufImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/imports/{operationId}/cancel",
+		...options,
+	});
+
 export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options?: Options<CancelLlamaCppSourceBuildData, ThrowOnError>,
 ) =>
@@ -2450,6 +2503,28 @@ export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = false>(
+	options: Options<GetGgufDownloadOperationStatusData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetGgufDownloadOperationStatusResponses, GetGgufDownloadOperationStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGgufDownloadOperationStatusPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufDownloadOperationStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/downloads/operations/{operationId}",
+		...options,
+	});
+
 export const getGgufDownloads = <ThrowOnError extends boolean = false>(options?: Options<GetGgufDownloadsData, ThrowOnError>) =>
 	(options?.client ?? client).get<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -2489,6 +2564,70 @@ export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/gguf/downloads/{modelName}",
+		...options,
+	});
+
+export const getGgufImportCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetGgufImportCapabilityData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetGgufImportCapabilityResponses, GetGgufImportCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufImportCapabilityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/import/capability",
+		...options,
+	});
+
+export const getGgufImports = <ThrowOnError extends boolean = false>(options?: Options<GetGgufImportsData, ThrowOnError>) =>
+	(options?.client ?? client).get<GetGgufImportsResponses, GetGgufImportsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufImportsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/imports",
+		...options,
+	});
+
+export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
+	options: Options<GetGgufImportStatusData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetGgufImportStatusResponses, GetGgufImportStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGgufImportStatusPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufImportStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/imports/{operationId}",
 		...options,
 	});
 
@@ -2784,6 +2923,30 @@ export const listRunningModels = <ThrowOnError extends boolean = false>(options?
 		...options,
 	});
 
+export const previewGgufImport = <ThrowOnError extends boolean = false>(options: Options<PreviewGgufImportData, ThrowOnError>) =>
+	(options.client ?? client).post<PreviewGgufImportResponses, PreviewGgufImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPreviewGgufImportBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPreviewGgufImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/import/preview",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
 	options?: Options<RefreshModelCatalogData, ThrowOnError>,
 ) =>
@@ -2911,6 +3074,30 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(options:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/download",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startGgufImport = <ThrowOnError extends boolean = false>(options: Options<StartGgufImportData, ThrowOnError>) =>
+	(options.client ?? client).post<StartGgufImportResponses, StartGgufImportErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartGgufImportBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartGgufImportResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/import",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

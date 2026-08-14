@@ -488,7 +488,9 @@
 			"windowTitle": "Chat window",
 			"lockedState": "This conversation is locked. Unlock it to view messages.",
 			"inputPlaceholder": "Type your message",
-			"commands": { "menuLabel": "Slash commands" },
+			"commands": {
+				"menuLabel": "Slash commands"
+			},
 			"send": "Send",
 			"modelLabel": "Model",
 			"modelPlaceholder": "Select model",
@@ -1950,7 +1952,13 @@
 				"subtitle": "List, select, and delete installed local models.",
 				"loading": "Loading local models…",
 				"installedTitle": "Installed models",
-				"empty": "No local models found."
+				"empty": "No local models found.",
+				"origin": {
+					"label": "Origin",
+					"imported": "Imported",
+					"huggingFace": "Hugging Face",
+					"legacy": "Legacy / unknown"
+				}
 			},
 			"gguf": {
 				"browse": {
@@ -2017,6 +2025,54 @@
 					"eta": "~{{duration}} left",
 					"progressAriaLabel": "Download progress",
 					"failedTitle": "Download failed"
+				},
+				"import": {
+					"action": "Import model",
+					"dialogTitle": "Import GGUF model",
+					"pathHelp": "Enter the absolute path to a standalone GGUF file on this computer.",
+					"sourcePath": "GGUF file path",
+					"pathPlaceholder": "/path/to/model.gguf",
+					"preview": "Preview import",
+					"modelBaseName": "Model base name",
+					"quantization": "Quantization",
+					"metadata": "GGUF v{{version}} · {{architecture}}",
+					"resultingName": "Installed model: {{name}}",
+					"storageInsufficient": "There is not enough free storage for this import.",
+					"storageUnknown": "Available storage could not be verified.",
+					"warnings": "Warnings",
+					"confirm": "Import model",
+					"started": "Import started.",
+					"progressRegion": "Model import status",
+					"progressTitle": "Model imports",
+					"progressAria": "Import progress",
+					"cancel": "Cancel import",
+					"cancelError": "Could not cancel the import.",
+					"failed": "Import failed",
+					"phases": {
+						"Queued": "Queued",
+						"Validating": "Validating",
+						"Copying": "Copying",
+						"Downloading": "Downloading",
+						"Committing": "Committing",
+						"Completed": "Completed",
+						"Cancelled": "Cancelled",
+						"Failed": "Failed"
+					},
+					"errors": {
+						"InvalidPath": "Enter a valid absolute file path.",
+						"SourceNotFound": "The selected GGUF file was not found.",
+						"UnsupportedFileType": "Select a supported GGUF file.",
+						"UnsupportedGgufVersion": "This GGUF version is not supported.",
+						"UnsupportedModelKind": "This GGUF model kind cannot be imported.",
+						"UnsupportedArchitecture": "This GGUF architecture is not supported.",
+						"UnsupportedQuantization": "Select one of the supported quantizations.",
+						"ModelConflict": "A model with this name is already installed.",
+						"DestinationConflict": "The managed destination is already in use.",
+						"AcquisitionAlreadyActive": "Another acquisition is already using this model or file.",
+						"InsufficientStorage": "There is not enough free storage for this import.",
+						"OperationNotFound": "This import operation is no longer available.",
+						"ImportFailed": "The model could not be imported."
+					}
 				}
 			}
 		},
@@ -3596,8 +3652,14 @@
 				"action": "Action",
 				"builtIn": "Built-in"
 			},
-			"editor": { "createTitle": "New command", "editTitle": "Edit command" },
-			"delete": { "title": "Delete command", "description": "Delete '/{{name}}'? This cannot be undone." },
+			"editor": {
+				"createTitle": "New command",
+				"editTitle": "Edit command"
+			},
+			"delete": {
+				"title": "Delete command",
+				"description": "Delete '/{{name}}'? This cannot be undone."
+			},
 			"errors": {
 				"load": "Could not load commands.",
 				"save": "Could not save the command.",
@@ -3610,8 +3672,14 @@
 					"placeholder": "review",
 					"invalid": "Enter a valid lowercase command name."
 				},
-				"description": { "label": "Description", "placeholder": "Optional summary shown in autocomplete" },
-				"action": { "label": "Action", "sendPrompt": "Send prompt" },
+				"description": {
+					"label": "Description",
+					"placeholder": "Optional summary shown in autocomplete"
+				},
+				"action": {
+					"label": "Action",
+					"sendPrompt": "Send prompt"
+				},
 				"prompt": {
 					"label": "Prompt",
 					"description": "Sent to the agent in the current chat when you invoke the command.",
@@ -4019,13 +4087,34 @@
 				"title": "Quick Start",
 				"description": "Set up chat only when needed and reach your first answer.",
 				"steps": {
-					"navModels": { "title": "Your local models", "content": "Models power local chat. If this node still needs one, the next steps show where to install and select it." },
-					"recommendationInstall": { "title": "Install a chat model if needed", "content": "Choose a recommended chat model when none is available. If provisioning is still resolving, you can safely return here later." },
-					"setDefaultModel": { "title": "Choose the default model", "content": "Select an installed chat-capable model as the default for new conversations." },
-					"navChat": { "title": "Open Chat", "content": "Chat is ready for your first conversation." },
-					"chatInput": { "title": "Write your first message", "content": "Ask anything useful to you — for example, request a short introduction." },
-					"chatSend": { "title": "Send your message", "content": "Use the send button to begin local generation." },
-					"firstResponse": { "title": "Your first answer", "content": "The response appears in the conversation. You are ready; more optional tutorials are available under Information → Tutorials." }
+					"navModels": {
+						"title": "Your local models",
+						"content": "Models power local chat. If this node still needs one, the next steps show where to install and select it."
+					},
+					"recommendationInstall": {
+						"title": "Install a chat model if needed",
+						"content": "Choose a recommended chat model when none is available. If provisioning is still resolving, you can safely return here later."
+					},
+					"setDefaultModel": {
+						"title": "Choose the default model",
+						"content": "Select an installed chat-capable model as the default for new conversations."
+					},
+					"navChat": {
+						"title": "Open Chat",
+						"content": "Chat is ready for your first conversation."
+					},
+					"chatInput": {
+						"title": "Write your first message",
+						"content": "Ask anything useful to you — for example, request a short introduction."
+					},
+					"chatSend": {
+						"title": "Send your message",
+						"content": "Use the send button to begin local generation."
+					},
+					"firstResponse": {
+						"title": "Your first answer",
+						"content": "The response appears in the conversation. You are ready; more optional tutorials are available under Information → Tutorials."
+					}
 				}
 			},
 			"agents-basics": {
@@ -4034,10 +4123,22 @@
 				"invitationTitle": "New: Agents Basics tutorial",
 				"invitationBody": "Take a short optional tour of this page. It only explains the controls and never creates or changes an agent.",
 				"steps": {
-					"agentsOverview": { "title": "Reusable agent definitions", "content": "Agents combine instructions, a model, tools, and skills into reusable assistants." },
-					"agentsTemplates": { "title": "Starter templates", "content": "Browse starter agents when you want a guided starting point. This tutorial does not open or install them." },
-					"agentsCreate": { "title": "Create an agent", "content": "Start a custom definition here when you are ready. Nothing is created during the tutorial." },
-					"agentsList": { "title": "Manage definitions", "content": "Saved agents appear here for later editing and use in Chat." }
+					"agentsOverview": {
+						"title": "Reusable agent definitions",
+						"content": "Agents combine instructions, a model, tools, and skills into reusable assistants."
+					},
+					"agentsTemplates": {
+						"title": "Starter templates",
+						"content": "Browse starter agents when you want a guided starting point. This tutorial does not open or install them."
+					},
+					"agentsCreate": {
+						"title": "Create an agent",
+						"content": "Start a custom definition here when you are ready. Nothing is created during the tutorial."
+					},
+					"agentsList": {
+						"title": "Manage definitions",
+						"content": "Saved agents appear here for later editing and use in Chat."
+					}
 				}
 			},
 			"knowledge-base-basics": {
@@ -4046,10 +4147,22 @@
 				"invitationTitle": "New: Knowledge Base Basics tutorial",
 				"invitationBody": "Take a short optional tour of upload, indexing, and search. It never uploads or changes your documents.",
 				"steps": {
-					"knowledgeOverview": { "title": "Ground chat in your documents", "content": "The Knowledge Base keeps document ingestion and retrieval local to this node." },
-					"knowledgeUpload": { "title": "Add documents", "content": "When you choose files, the node extracts, chunks, embeds, and indexes them. This tutorial does not upload anything." },
-					"knowledgeDocuments": { "title": "Follow indexing", "content": "Document status and maintenance actions appear here after an upload." },
-					"knowledgeSearch": { "title": "Test retrieval", "content": "Search indexed content here before opting to use the Knowledge Base in Chat." }
+					"knowledgeOverview": {
+						"title": "Ground chat in your documents",
+						"content": "The Knowledge Base keeps document ingestion and retrieval local to this node."
+					},
+					"knowledgeUpload": {
+						"title": "Add documents",
+						"content": "When you choose files, the node extracts, chunks, embeds, and indexes them. This tutorial does not upload anything."
+					},
+					"knowledgeDocuments": {
+						"title": "Follow indexing",
+						"content": "Document status and maintenance actions appear here after an upload."
+					},
+					"knowledgeSearch": {
+						"title": "Test retrieval",
+						"content": "Search indexed content here before opting to use the Knowledge Base in Chat."
+					}
 				}
 			}
 		}
