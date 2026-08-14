@@ -358,22 +358,49 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public async Task NegativeFenceProbe_WhenBuilt_FailsBecausePersistenceEntitiesAreInternal()
     {
-        var projectPath = Path.Combine(GetProjectDirectory(), "NegativeFence", "XE-Local-AI-Engine.Client.Persistence.NegativeFence.csproj");
-        var startInfo = new ProcessStartInfo("dotnet", $"build \"{projectPath}\"")
+        var projectDirectory = GetProjectDirectory();
+        var projectPath = Path.Combine(projectDirectory, "NegativeFence", "XE-Local-AI-Engine.Client.Persistence.NegativeFence.csproj");
+        var isolatedNugetConfigPath = GetDatabasePath("negative-fence.nuget.config");
+        File.Copy(Path.GetFullPath(Path.Combine(projectDirectory, "..", "nuget.config")), isolatedNugetConfigPath);
+
+        var startInfo = new ProcessStartInfo("dotnet")
         {
             RedirectStandardError = true,
             RedirectStandardOutput = true,
             UseShellExecute = false
         };
+        startInfo.ArgumentList.Add("build");
+        startInfo.ArgumentList.Add(projectPath);
+        startInfo.ArgumentList.Add("--disable-build-servers");
+        startInfo.ArgumentList.Add($"-p:RestoreConfigFile={isolatedNugetConfigPath}");
 
         using var process = AssertEx.NotNull(Process.Start(startInfo), "Expected negative fence build process to start.");
 
-        var standardOutput = await process.StandardOutput.ReadToEndAsync();
-        var standardError = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var timedOut = false;
+        try
+        {
+            await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
+        {
+            timedOut = true;
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            await process.WaitForExitAsync().ConfigureAwait(false);
+        }
+
+        var standardOutput = await standardOutputTask.ConfigureAwait(false);
+        var standardError = await standardErrorTask.ConfigureAwait(false);
 
         var combinedOutput = standardOutput + Environment.NewLine + standardError;
 
+        AssertEx.False(timedOut, $"Negative fence probe exceeded its 60-second build timeout.{Environment.NewLine}{combinedOutput}");
         AssertEx.False(process.ExitCode == 0, "Negative fence probe must fail to compile.");
         AssertEx.True(combinedOutput.Contains("CS0122", StringComparison.Ordinal)
                       || combinedOutput.Contains("inaccessible due to its protection level", StringComparison.OrdinalIgnoreCase),
