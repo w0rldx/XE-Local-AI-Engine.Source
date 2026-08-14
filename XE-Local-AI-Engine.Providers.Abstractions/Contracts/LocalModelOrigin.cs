@@ -8,9 +8,11 @@ using System.Text.Json.Serialization;
 public enum LocalModelOrigin
 {
     /// <summary>Acquired from a pinned Hugging Face repository revision.</summary>
+    [JsonStringEnumMemberName("huggingface")]
     HuggingFace = 0,
 
     /// <summary>Copied from an operator-selected local GGUF file.</summary>
+    [JsonStringEnumMemberName("imported")]
     Imported = 1
 }
 
