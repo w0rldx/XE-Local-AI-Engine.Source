@@ -82,7 +82,28 @@ public sealed record GgufImportCommitReceipt(
     string FinalGgufPath,
     string FinalSidecarPath,
     string WeightMemberFingerprint,
-    string ModelContentFingerprint);
+    string ModelContentFingerprint)
+{
+    /// <summary>Whether this operation created the final weight path.</summary>
+    public bool OwnsFinalGguf { get; init; } = true;
+
+    /// <summary>Whether this operation created the final sidecar path.</summary>
+    public bool OwnsFinalSidecar { get; init; } = true;
+}
+
+/// <summary>A failed commit that created one or more final artifacts which still require compensation.</summary>
+public sealed class GgufImportCommitException : Exception
+{
+    /// <summary>Creates a partial-commit failure with the exact ownership receipt required for retryable rollback.</summary>
+    public GgufImportCommitException(GgufImportCommitReceipt commitReceipt, string sanitizedMessage, Exception innerException)
+        : base(sanitizedMessage, innerException)
+    {
+        CommitReceipt = commitReceipt;
+    }
+
+    /// <summary>Exact final paths created before the commit failed.</summary>
+    public GgufImportCommitReceipt CommitReceipt { get; }
+}
 
 /// <summary>Staged local GGUF filesystem/registry transaction.</summary>
 public interface IGgufModelImporter

@@ -248,6 +248,23 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     }
 
     [Test]
+    public async Task PartialCommit_WhenRollbackThrows_PublishesCompensationFailure()
+    {
+        var transaction = new ProvisioningDownloadTransaction
+        {
+            ThrowPartialCommit = true,
+            ThrowRollback = true
+        };
+        var coordinator = BuildCoordinator(transaction, new InMemoryCoordinatedModelProviderMapStore());
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest { RepoId = Repo, Quant = Quant }, CancellationToken.None);
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
+
+        AssertEx.Equal("DownloadCompensationFailed", coordinator.GetStatus(ticket.OperationId)!.ErrorCode);
+        AssertEx.True(transaction.WasRolledBack);
+    }
+
+    [Test]
     public async Task SuccessfulDownload_PublishesTransactionPhasesWithStrictlyIncreasingTimestamps()
     {
         var publisher = new RecordingPublisher();
@@ -350,6 +367,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public bool WasCommitted { get; private set; }
         public bool WasRolledBack { get; private set; }
         public bool ThrowRollback { get; init; }
+        public bool ThrowPartialCommit { get; init; }
         public TaskCompletionSource PrepareStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _releasePrepare = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -402,13 +420,21 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public Task<GgufDownloadCommitReceipt> CommitAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
         {
             WasCommitted = true;
-            return Task.FromResult(new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
+            var receipt = new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
                 "/fake/final.gguf",
                 "/fake/final.json",
                 FinalProjectorPath: null,
                 preparedDownload.WeightMemberFingerprint,
                 ProjectorMemberFingerprint: null,
-                preparedDownload.ModelContentFingerprint));
+                preparedDownload.ModelContentFingerprint);
+            if (ThrowPartialCommit)
+            {
+                throw new GgufDownloadCommitException(receipt,
+                    "The download could not be committed safely.",
+                    new IOException("registry failed"));
+            }
+
+            return Task.FromResult(receipt);
         }
 
         public Task RollbackCommittedAsync(GgufDownloadCommitReceipt commitReceipt, CancellationToken cancellationToken)

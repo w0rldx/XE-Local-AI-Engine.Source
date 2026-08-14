@@ -389,6 +389,26 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 SetStatus(operationId, GgufAcquisitionPhase.Cancelled, isInitialOrTerminal: true);
                 _logger.LogInformation("Operator cancelled the GGUF download for {ModelName}.", modelName);
             }
+            catch (GgufAcquisitionCleanupException exception)
+            {
+                PublishCompensationFailure(operationId);
+                _logger.LogWarning(exception, "GGUF download preparation cleanup was incomplete for {ModelName}.", modelName);
+            }
+            catch (GgufDownloadCommitException exception)
+            {
+                committed = exception.CommitReceipt;
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                {
+                    PublishCompensationFailure(operationId);
+                    return;
+                }
+
+                SetStatus(operationId,
+                    GgufAcquisitionPhase.Failed,
+                    errorCode: "DestinationConflict",
+                    sanitizedError: exception.Message,
+                    isInitialOrTerminal: true);
+            }
             catch (HuggingFaceDownloadException exception)
             {
                 if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))

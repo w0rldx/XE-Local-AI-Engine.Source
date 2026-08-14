@@ -189,6 +189,39 @@ public sealed class GgufImportTransactionCoordinatorTests
     }
 
     [Test]
+    public async Task PartialCommit_WhenRollbackFails_PublishesImportCompensationFailure()
+    {
+        var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
+        var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
+        var identity = resolver.Resolve(new GgufAcquisitionIntent(
+            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Import,
+            "example",
+            "Q4_K_M"));
+        var importer = new BlockingCommitImporter(identity)
+        {
+            ThrowPartialCommit = true,
+            ThrowRollback = true
+        };
+        importer.ReleaseCommit.SetResult();
+        var services = new ServiceCollection();
+        services.AddSingleton<IGgufAcquisitionPreflight>(new AvailablePreflight(identity));
+        var coordinator = BuildCoordinator(sourcePath,
+            importer: importer,
+            resolver: resolver,
+            services: services.BuildServiceProvider());
+        var preview = await coordinator.PreviewAsync(sourcePath);
+
+        var ticket = await coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
+            preview.PreviewToken,
+            preview.ModelBaseName,
+            "Q4_K_M"));
+        await WaitForPhaseAsync(coordinator, ticket.OperationId, GgufAcquisitionPhase.Failed);
+
+        AssertEx.Equal("ImportCompensationFailed", coordinator.GetStatus(ticket.OperationId)!.ErrorCode);
+        AssertEx.Equal(expected: 1, importer.RollbackCount);
+    }
+
+    [Test]
     public async Task SuccessfulImport_PublishesCopyAndCommitPhasesWithMonotonicTimestamps()
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
@@ -378,6 +411,8 @@ public sealed class GgufImportTransactionCoordinatorTests
         public TaskCompletionSource CommitEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReleaseCommit { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int RollbackCount { get; private set; }
+        public bool ThrowPartialCommit { get; init; }
+        public bool ThrowRollback { get; init; }
 
         public Task<PreparedGgufImport> PrepareAsync(GgufImportSource source,
             GgufImportDestination destination,
@@ -417,16 +452,29 @@ public sealed class GgufImportTransactionCoordinatorTests
         {
             CommitEntered.SetResult();
             await ReleaseCommit.Task;
-            return new GgufImportCommitReceipt(_entry,
+            var receipt = new GgufImportCommitReceipt(_entry,
                 "final.gguf",
                 "final.xe-model.json",
                 preparedImport.WeightMemberFingerprint,
                 preparedImport.ModelContentFingerprint);
+            if (ThrowPartialCommit)
+            {
+                throw new GgufImportCommitException(receipt,
+                    "The import could not be committed safely.",
+                    new IOException("registry failed"));
+            }
+
+            return receipt;
         }
 
         public Task RollbackCommittedAsync(GgufImportCommitReceipt commitReceipt, CancellationToken cancellationToken)
         {
             RollbackCount++;
+            if (ThrowRollback)
+            {
+                throw new IOException("rollback failed");
+            }
+
             return Task.CompletedTask;
         }
 
