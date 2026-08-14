@@ -15,6 +15,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class BenchmarkRunExecutorTests
@@ -52,6 +54,8 @@ public sealed class BenchmarkRunExecutorTests
             Substitute.For<ILocalChatRuntimePackageBuilder>(),
             dispatcher,
             runner,
+            PassthroughSupervisor(),
+            FixedVariantSelector(),
             Buffer(),
             new BenchmarkCancellationRegistry(),
             NullLogger<BenchmarkRunExecutor>.Instance);
@@ -82,8 +86,9 @@ public sealed class BenchmarkRunExecutorTests
              });
         var capacity = new RecordingCapacityService();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        XE_Local_AI_Engine.Client.Models.RuntimePackage? assignedPackage = null;
         await using var assignment = new TrackingAsyncDisposable();
-        dispatcher.ReportInvocationAssignedAsync(Arg.Any<XE_Local_AI_Engine.Client.Models.RuntimePackage>(), Arg.Any<CancellationToken>())
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<XE_Local_AI_Engine.Client.Models.RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
                   .Returns(assignment);
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -106,7 +111,8 @@ public sealed class BenchmarkRunExecutorTests
               });
         await using var lease = new FakeLease(installed);
         var cancellationRegistry = new BenchmarkCancellationRegistry();
-        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, cancellationRegistry);
+        var supervisor = PassthroughSupervisor();
+        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, cancellationRegistry, supervisor);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
 
@@ -120,6 +126,17 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.True(assignment.Disposed);
         AssertEx.True(AssertEx.NotNull(capacity.Reservation).Disposed);
         AssertEx.True(lease.Disposed);
+        var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
+        AssertEx.Equal("0", package.SamplingOptions!.Seed);
+        AssertEx.Equal(8192, package.SamplingOptions.NumCtx);
+        _ = supervisor.Received(1).RunExclusiveProfilingAsync(Arg.Is<string>("model.gguf"),
+            ModelRole.Chat,
+            Arg.Is<ResolvedLaunchArguments>(arguments => !arguments.ExploreMode && arguments.CtxSize == 8192),
+            false,
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>());
         AssertEx.False(cancellationRegistry.TryCancel(run.Id, BenchmarkWorkKind.Primary));
         _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
     }
@@ -216,7 +233,8 @@ public sealed class BenchmarkRunExecutorTests
         ICapacityService capacity,
         IWorkerEventDispatcher dispatcher,
         IInvocationRunner runner,
-        IBenchmarkCancellationRegistry cancellations) =>
+        IBenchmarkCancellationRegistry cancellations,
+        ILlamaServerProcessSupervisor? supervisor = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -224,6 +242,8 @@ public sealed class BenchmarkRunExecutorTests
             new LocalChatRuntimePackageBuilder(),
             dispatcher,
             runner,
+            supervisor ?? PassthroughSupervisor(),
+            FixedVariantSelector(),
             Buffer(),
             cancellations,
             NullLogger<BenchmarkRunExecutor>.Instance);
@@ -303,8 +323,10 @@ public sealed class BenchmarkRunExecutorTests
             "task",
             8192,
             new ResolvedAgentRuntime("prompt", [], null, null, 1, AgentName: "Agent"),
+            Runtime(),
+            BenchmarkFrozenPolicies.DeterministicSampling(),
             frozen,
-            new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, "hash"),
+            new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, null, null, null, null, "hash"),
             new BenchmarkFreezeDependencySetV1("a", "b", "c", "d", "e", null),
             "test",
             1,
@@ -312,6 +334,30 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     private static string V1(char value) => $"v1:{new string(value, 64)}";
+
+    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime() =>
+        new(GpuVariant.Cpu, 8192, null, null, null, null, null, false);
+
+    private static IGpuVariantSelector FixedVariantSelector()
+    {
+        var selector = Substitute.For<IGpuVariantSelector>();
+        selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Cpu);
+        return selector;
+    }
+
+    private static ILlamaServerProcessSupervisor PassthroughSupervisor()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
+                Arg.Any<ModelRole>(),
+                Arg.Any<ResolvedLaunchArguments>(),
+                Arg.Any<bool>(),
+                Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>?>())
+            .Returns(call => call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(default!, call.ArgAt<CancellationToken>(5)));
+        return supervisor;
+    }
 
     private static BenchmarkEventBuffer Buffer() => new(Options.Create(new BenchmarkEventBufferOptions()));
 

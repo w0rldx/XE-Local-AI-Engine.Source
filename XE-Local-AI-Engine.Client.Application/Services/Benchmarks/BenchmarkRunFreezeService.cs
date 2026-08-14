@@ -9,6 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public interface IBenchmarkRunFreezeService
 {
@@ -27,6 +29,8 @@ public sealed class BenchmarkRunFreezeService(
     IBenchmarkEligibilityPolicy eligibilityPolicy,
     IBenchmarkFreezeDependencyService dependencies,
     IBenchmarkRuntimeSnapshotFactory snapshots,
+    IInferenceProfileResolver inferenceProfiles,
+    IGpuVariantSelector variantSelector,
     TimeProvider timeProvider,
     IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkRunFreezeService
 {
@@ -38,6 +42,8 @@ public sealed class BenchmarkRunFreezeService(
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
     private readonly IBenchmarkFreezeDependencyService _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
+    private readonly IInferenceProfileResolver _inferenceProfiles = inferenceProfiles ?? throw new ArgumentNullException(nameof(inferenceProfiles));
+    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IBenchmarkQueueSignal? _queueSignal = queueSignal;
 
@@ -104,13 +110,17 @@ public sealed class BenchmarkRunFreezeService(
                                     cancellationToken)
                                 .ConfigureAwait(false);
             var primarySnapshot = ToSnapshot(primary);
-            var judgeSnapshot = CreateJudgeSnapshot(project, judge);
+            var primaryRuntime = await ResolveRuntimeAsync(primary.ModelName, project.ContextTokens, cancellationToken).ConfigureAwait(false);
+            var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling();
+            var judgeSnapshot = await CreateJudgeSnapshotAsync(project, judge, cancellationToken).ConfigureAwait(false);
             var snapshot = _snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
                 definition.Id,
                 definition.Version,
                 exactCoreTask,
                 project.ContextTokens,
                 eligible,
+                primaryRuntime,
+                primarySampling,
                 primarySnapshot,
                 judgeSnapshot,
                 dependencySet,
@@ -141,21 +151,71 @@ public sealed class BenchmarkRunFreezeService(
         }
     }
 
-    private static BenchmarkJudgeSnapshotV1 CreateJudgeSnapshot(BenchmarkProjectRecord project, InstalledModelSnapshot? judge)
+    private async Task<BenchmarkJudgeSnapshotV1> CreateJudgeSnapshotAsync(BenchmarkProjectRecord project,
+        InstalledModelSnapshot? judge,
+        CancellationToken cancellationToken)
     {
+        if (!BenchmarkFrozenPolicies.SupportsVersions(project.JudgePromptVersion, project.JudgeOutputSchemaVersion))
+        {
+            throw new BenchmarkEligibilityException("The benchmark judge prompt or output schema version is not supported.");
+        }
         if (!project.JudgeEnabled)
         {
             return new BenchmarkJudgeSnapshotV1(false, null, project.JudgePromptVersion, project.JudgeOutputSchemaVersion, null,
+                null, null, null, null,
                 Hash(new { project.JudgePromptVersion, project.JudgeOutputSchemaVersion, Enabled = false }));
         }
 
         var model = ToSnapshot(judge ?? throw new BenchmarkEligibilityException("The selected judge model is not installed."));
+        var contextTokens = project.JudgeContextTokens!.Value;
+        var runtime = await ResolveRuntimeAsync(model.ModelName, contextTokens, cancellationToken).ConfigureAwait(false);
+        var sampling = BenchmarkFrozenPolicies.DeterministicSampling();
         return new BenchmarkJudgeSnapshotV1(true,
             model,
             project.JudgePromptVersion,
             project.JudgeOutputSchemaVersion,
-            project.JudgeContextTokens,
-            Hash(new { project.JudgePromptVersion, project.JudgeOutputSchemaVersion, project.JudgeContextTokens, model.ModelContentFingerprint }));
+            contextTokens,
+            BenchmarkFrozenPolicies.JudgeSystemPrompt,
+            BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
+            runtime,
+            sampling,
+            Hash(new
+            {
+                project.JudgePromptVersion,
+                project.JudgeOutputSchemaVersion,
+                ContextTokens = contextTokens,
+                model.ModelContentFingerprint,
+                Runtime = runtime,
+                Sampling = sampling,
+                BenchmarkFrozenPolicies.JudgeSystemPrompt,
+                BenchmarkFrozenPolicies.JudgeOutputSchemaJson
+            }));
+    }
+
+    private async Task<BenchmarkLlamaRuntimeSnapshotV1> ResolveRuntimeAsync(string modelName,
+        int requiredContextTokens,
+        CancellationToken cancellationToken)
+    {
+        var variant = await _variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await _inferenceProfiles.ResolveAsync(modelName, ModelRole.Chat, variant, cancellationToken).ConfigureAwait(false);
+        if (resolved.ExploreMode)
+        {
+            resolved = ResolvedLaunchArguments.Replay(requiredContextTokens);
+        }
+
+        if (resolved.CtxSize < requiredContextTokens)
+        {
+            throw new BenchmarkEligibilityException("The resolved llama.cpp runtime context is smaller than the benchmark requirement.");
+        }
+
+        return new BenchmarkLlamaRuntimeSnapshotV1(variant,
+            resolved.CtxSize,
+            resolved.NGpuLayers,
+            resolved.TensorSplit,
+            resolved.OverrideTensor,
+            resolved.KvTypeK,
+            resolved.KvTypeV,
+            resolved.FlashAttn);
     }
 
     private static BenchmarkInstalledModelSnapshotV1 ToSnapshot(InstalledModelSnapshot source) =>

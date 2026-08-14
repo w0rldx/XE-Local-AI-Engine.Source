@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 public sealed class BenchmarkRuntimeSnapshotTests
 {
@@ -42,8 +43,11 @@ public sealed class BenchmarkRuntimeSnapshotTests
         var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
         var model = CreateModel();
         var snapshot = factory.Create(new BenchmarkRuntimeSnapshotInput(Guid.NewGuid(), Guid.NewGuid(), 4, "exact task", 4096,
-            CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: false)]), model,
-            new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, "sha256:" + new string('b', 64)),
+            CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: false)]),
+            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false),
+            BenchmarkFrozenPolicies.DeterministicSampling(),
+            model,
+            new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, null, null, null, null, "sha256:" + new string('b', 64)),
             new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null), "test", 123));
 
         var payload = factory.Serialize(snapshot);
@@ -54,6 +58,20 @@ public sealed class BenchmarkRuntimeSnapshotTests
 
         var tampered = Encoding.UTF8.GetString(payload).Replace("exact task", "other task", StringComparison.Ordinal);
         _ = AssertEx.Throws<BenchmarkSnapshotException>(() => factory.Deserialize(Encoding.UTF8.GetBytes(tampered)));
+
+        _ = AssertEx.Throws<BenchmarkSnapshotException>(() => factory.Create(new BenchmarkRuntimeSnapshotInput(Guid.NewGuid(),
+            Guid.NewGuid(),
+            4,
+            "exact task",
+            4096,
+            CreateRuntime([]),
+            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false),
+            BenchmarkFrozenPolicies.DeterministicSampling(),
+            model,
+            new BenchmarkJudgeSnapshotV1(false, null, 2, 1, null, null, null, null, null, "hash"),
+            new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null),
+            "test",
+            123)));
     }
 
     private static ResolvedAgentRuntime CreateRuntime(IReadOnlyList<AllowedToolDto> tools) =>

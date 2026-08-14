@@ -11,6 +11,8 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class BenchmarkRunFreezeServiceTests
@@ -55,6 +57,8 @@ public sealed class BenchmarkRunFreezeServiceTests
             new BenchmarkEligibilityPolicy(),
             dependencyService,
             snapshotFactory,
+            Profiles(),
+            Variants(),
             TimeProvider.System);
 
         _ = await service.StartAsync(projectId, "a-primary.gguf", project.Version);
@@ -62,6 +66,13 @@ public sealed class BenchmarkRunFreezeServiceTests
         AssertEx.True(leaseProvider.Acquired.SequenceEqual(["a-primary.gguf", "z-judge.gguf"]),
             "Installed-model leases must be acquired in deterministic model-name order.");
         AssertEx.Equal("exact task", AssertEx.NotNull(snapshotInput).CoreTask);
+        AssertEx.Equal(GpuVariant.Cpu, snapshotInput!.PrimaryRuntime.Variant);
+        AssertEx.Equal(4096, snapshotInput.PrimaryRuntime.ContextTokens);
+        AssertEx.Equal(BenchmarkFrozenPolicies.FixedSeedPolicy, snapshotInput.PrimarySampling.SeedPolicy);
+        AssertEx.Equal("0", snapshotInput.PrimarySampling.SeedValue);
+        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeSystemPrompt, snapshotInput.Judge.SystemPrompt);
+        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeOutputSchemaJson, snapshotInput.Judge.OutputSchemaJson);
+        AssertEx.Equal(2048, AssertEx.NotNull(snapshotInput.Judge.Runtime).ContextTokens);
         AssertEx.NotNull(capturedCommand);
         AssertEx.NotNull(capturedCommand!.FreezeCommitGuard);
         AssertEx.True(leaseProvider.Leases.All(static lease => lease.Disposed), "All installed-model read leases must be released after commit.");
@@ -95,7 +106,7 @@ public sealed class BenchmarkRunFreezeServiceTests
         snapshots.Create(Arg.Any<BenchmarkRuntimeSnapshotInput>()).Returns(call => CreateRuntimeSnapshot(call.Arg<BenchmarkRuntimeSnapshotInput>()));
         snapshots.Serialize(Arg.Any<BenchmarkRuntimeSnapshotV1>()).Returns([1]);
         var service = new BenchmarkRunFreezeService(store, definitions, resolver, capabilities, leaseProvider,
-            new BenchmarkEligibilityPolicy(), dependencies, snapshots, TimeProvider.System);
+            new BenchmarkEligibilityPolicy(), dependencies, snapshots, Profiles(), Variants(), TimeProvider.System);
 
         _ = await service.StartAsync(projectId, "model.gguf", project.Version);
 
@@ -138,7 +149,23 @@ public sealed class BenchmarkRunFreezeServiceTests
 
     private static BenchmarkRuntimeSnapshotV1 CreateRuntimeSnapshot(BenchmarkRuntimeSnapshotInput input) =>
         new(1, input.ProjectId, input.AgentDefinitionId, input.AgentVersion, input.CoreTask, input.RequestedContextTokens,
-            input.ResolvedRuntime, input.PrimaryModel, input.Judge, input.Dependencies, input.ApplicationVersion, input.CreatedAtUtc, "hash");
+            input.ResolvedRuntime, input.PrimaryRuntime, input.PrimarySampling, input.PrimaryModel, input.Judge, input.Dependencies,
+            input.ApplicationVersion, input.CreatedAtUtc, "hash");
+
+    private static IInferenceProfileResolver Profiles()
+    {
+        var profiles = Substitute.For<IInferenceProfileResolver>();
+        profiles.ResolveAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                .Returns(call => ResolvedLaunchArguments.Replay(call.ArgAt<string>(0).StartsWith("z-", StringComparison.Ordinal) ? 2048 : 4096));
+        return profiles;
+    }
+
+    private static IGpuVariantSelector Variants()
+    {
+        var variants = Substitute.For<IGpuVariantSelector>();
+        variants.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Cpu);
+        return variants;
+    }
 
     private static BenchmarkRunRecord Run(BenchmarkStartRunCommand command) =>
         new(command.RunId, command.ProjectId, command.RuntimeSnapshotJson, command.PrimaryModelName, command.PrimaryModelOrigin,
