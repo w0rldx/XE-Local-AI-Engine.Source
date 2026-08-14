@@ -22,5 +22,10 @@ internal sealed class ModelProviderMapConfiguration : IEntityTypeConfiguration<M
 
         builder.Property(entity => entity.UpdatedAtUtc)
                .HasColumnName("updated_at_utc");
+
+        builder.Property(entity => entity.Revision)
+               .HasColumnName("revision")
+               .IsRequired()
+               .IsConcurrencyToken();
     }
 }

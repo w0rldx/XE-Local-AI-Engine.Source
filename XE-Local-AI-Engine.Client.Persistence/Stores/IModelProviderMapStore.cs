@@ -21,4 +21,34 @@ public interface IModelProviderMapStore
     ///     Inserts or updates the provider mapping for <paramref name="modelName" /> and returns the stored record.
     /// </summary>
     Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the complete row, including its compare-and-swap revision.</summary>
+    Task<ModelProviderMapRecord?> ReadAsync(string modelName, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("This provider-map store does not expose conditional persistence operations.");
+    }
+
+    /// <summary>Inserts only when the case-insensitive model key is absent.</summary>
+    Task<ModelProviderMapRecord?> TryInsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("This provider-map store does not expose conditional persistence operations.");
+    }
+
+    /// <summary>Updates only when the current row has <paramref name="expectedRevision" />.</summary>
+    Task<ModelProviderMapRecord?> TryUpdateAsync(string modelName,
+        string providerName,
+        string expectedRevision,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("This provider-map store does not expose conditional persistence operations.");
+    }
+
+    /// <summary>Deletes only the exact provider/revision pair.</summary>
+    Task<bool> TryDeleteAsync(string modelName,
+        string expectedProviderName,
+        string expectedRevision,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("This provider-map store does not expose conditional persistence operations.");
+    }
 }
