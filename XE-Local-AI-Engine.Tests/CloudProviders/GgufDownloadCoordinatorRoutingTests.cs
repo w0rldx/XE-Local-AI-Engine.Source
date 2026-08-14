@@ -64,6 +64,49 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         AssertEx.Equal(expected: 0, mapStore.Mappings.Count);
     }
 
+    [Test]
+    public async Task RoutingConflict_FailsWithoutOverwritingOrPublishingCompleted()
+    {
+        var canonical = GgufModelName.Format(Repo, Quant);
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
+        mapStore.Seed(canonical, "ollama");
+        var coordinator = BuildCoordinator(new ProvisioningModelStore(), mapStore);
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest
+        {
+            RepoId = Repo,
+            Quant = Quant
+        }, CancellationToken.None);
+
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
+
+        var status = coordinator.GetStatus(ticket.OperationId);
+        AssertEx.Equal("ModelConflict", status!.ErrorCode);
+        AssertEx.Equal("ollama", mapStore.Mappings[canonical].ProviderName);
+    }
+
+    [Test]
+    public async Task UnexpectedDetachedFailure_PublishesSanitizedTerminalFailure()
+    {
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
+        var coordinator = BuildCoordinator(new ProvisioningModelStore
+        {
+            UnexpectedFailure = new UnauthorizedAccessException("/private/models/index.json")
+        }, mapStore);
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest
+        {
+            RepoId = Repo,
+            Quant = Quant
+        }, CancellationToken.None);
+
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
+
+        var status = coordinator.GetStatus(ticket.OperationId);
+        AssertEx.Equal("DownloadFailed", status!.ErrorCode);
+        AssertEx.False(status.SanitizedError!.Contains("/private", StringComparison.Ordinal));
+    }
+
     private static GgufDownloadCoordinator BuildCoordinator(IGgufModelStore store, ICoordinatedModelProviderMapStore mapStore)
     {
         var services = new ServiceCollection();
@@ -99,6 +142,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     private sealed class ProvisioningModelStore : IGgufModelStore
     {
         public bool FailDownload { get; init; }
+        public Exception? UnexpectedFailure { get; init; }
 
         public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
         {
@@ -122,6 +166,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
         public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
         {
+            if (UnexpectedFailure is not null)
+            {
+                throw UnexpectedFailure;
+            }
+
             if (FailDownload)
             {
                 throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network, "Download failed.");
