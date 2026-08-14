@@ -2,9 +2,10 @@ namespace XE_Local_AI_Engine.Client.Services.Models;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-public sealed class GgufAcquisitionStateProbe : IGgufAcquisitionStateProbe
+public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null) : IGgufAcquisitionStateProbe
 {
     public Task<GgufAcquisitionState> ProbeAsync(GgufAcquisitionIntent intent,
         ResolvedGgufAcquisitionIdentity identity,
@@ -25,8 +26,32 @@ public sealed class GgufAcquisitionStateProbe : IGgufAcquisitionStateProbe
             _ => ProviderMapDisposition.ConflictingProvider
         };
 
-        var disposition = GetDisposition(intent, identity, lease.Snapshot, mapDisposition);
+        var disposition = lease.Snapshot is null && HasDestinationCollision(identity)
+            ? GgufAcquisitionDisposition.Conflict
+            : GetDisposition(intent, identity, lease.Snapshot, mapDisposition);
         return Task.FromResult(new GgufAcquisitionState(disposition, mapDisposition, mapping?.ProviderName));
+    }
+
+    private bool HasDestinationCollision(ResolvedGgufAcquisitionIdentity identity)
+    {
+        if (options is null)
+        {
+            return false;
+        }
+
+        return HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(options.ModelsDirectory, identity.RelativeGgufPath))
+               || HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(options.ModelsDirectory, identity.RelativeSidecarPath))
+               || identity.ProjectorRelativePath is not null
+               && HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(options.ModelsDirectory, identity.ProjectorRelativePath));
+    }
+
+    private static bool HasCaseInsensitiveCollision(string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        return directory is not null
+               && Directory.Exists(directory)
+               && Directory.EnumerateFileSystemEntries(directory)
+                           .Any(existing => string.Equals(Path.GetFileName(existing), Path.GetFileName(path), StringComparison.OrdinalIgnoreCase));
     }
 
     private static GgufAcquisitionDisposition GetDisposition(GgufAcquisitionIntent intent,

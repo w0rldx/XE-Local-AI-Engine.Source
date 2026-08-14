@@ -1,10 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -24,7 +28,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     public async Task SuccessfulDownload_WritesLlamaCppMapRow_ForCanonicalName()
     {
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        var store = new ProvisioningModelStore();
+        var store = new ProvisioningDownloadTransaction();
         var coordinator = BuildCoordinator(store, mapStore);
 
         var ticket = await coordinator.StartAsync(new GgufModelRequest
@@ -47,7 +51,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     public async Task FailedDownload_WritesNoMapRow()
     {
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        var store = new ProvisioningModelStore
+        var store = new ProvisioningDownloadTransaction
         {
             FailDownload = true
         };
@@ -70,7 +74,8 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         var canonical = GgufModelName.Format(Repo, Quant);
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
         mapStore.Seed(canonical, "ollama");
-        var coordinator = BuildCoordinator(new ProvisioningModelStore(), mapStore);
+        var transaction = new ProvisioningDownloadTransaction();
+        var coordinator = BuildCoordinator(transaction, mapStore);
 
         var ticket = await coordinator.StartAsync(new GgufModelRequest
         {
@@ -83,13 +88,81 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         var status = coordinator.GetStatus(ticket.OperationId);
         AssertEx.Equal("ModelConflict", status!.ErrorCode);
         AssertEx.Equal("ollama", mapStore.Mappings[canonical].ProviderName);
+        AssertEx.True(transaction.WasRolledBack);
+    }
+
+    [Test]
+    public async Task IdenticalDownloadWhileActive_RejoinsExistingOperationWithoutSecondPrepare()
+    {
+        var transaction = new ProvisioningDownloadTransaction { BlockPrepare = true };
+        var coordinator = BuildCoordinator(transaction, new InMemoryCoordinatedModelProviderMapStore());
+        var request = new GgufModelRequest { RepoId = Repo, Quant = Quant };
+
+        var first = await coordinator.StartAsync(request, CancellationToken.None);
+        await transaction.PrepareStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var second = await coordinator.StartAsync(request, CancellationToken.None);
+
+        AssertEx.True(second.AlreadyInFlight);
+        AssertEx.Equal(first.OperationId, second.OperationId);
+        AssertEx.Equal(expected: 1, transaction.PrepareCount);
+        transaction.ReleasePrepare();
+        await WaitForPhaseAsync(coordinator, first.ModelName, GgufDownloadPhase.Completed);
+    }
+
+    [Test]
+    public async Task DifferentResolvedArtifactWhileSameModelActive_ConflictsWithoutSecondPrepare()
+    {
+        var transaction = new ProvisioningDownloadTransaction { BlockPrepare = true };
+        var coordinator = BuildCoordinator(transaction, new InMemoryCoordinatedModelProviderMapStore());
+        var first = await coordinator.StartAsync(new GgufModelRequest { RepoId = Repo, Quant = Quant, FileName = "first.gguf" }, CancellationToken.None);
+        await transaction.PrepareStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(
+            new GgufModelRequest { RepoId = Repo, Quant = Quant, FileName = "second.gguf" },
+            CancellationToken.None));
+
+        AssertEx.Equal("ModelConflict", exception.Message);
+        AssertEx.Equal(expected: 1, transaction.PrepareCount);
+        transaction.ReleasePrepare();
+        await WaitForPhaseAsync(coordinator, first.ModelName, GgufDownloadPhase.Completed);
+    }
+
+    [Test]
+    public async Task CancelDuringPrepare_PublishesCancelledAndDiscardsPartialPreparation()
+    {
+        var transaction = new ProvisioningDownloadTransaction { BlockPrepare = true };
+        var coordinator = BuildCoordinator(transaction, new InMemoryCoordinatedModelProviderMapStore());
+        var ticket = await coordinator.StartAsync(new GgufModelRequest { RepoId = Repo, Quant = Quant }, CancellationToken.None);
+        await transaction.PrepareStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        AssertEx.True(coordinator.Cancel(ticket.ModelName));
+        transaction.ReleasePrepare();
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Cancelled);
+
+        AssertEx.False(transaction.WasCommitted);
+    }
+
+    [Test]
+    public async Task VerifiedInstalled_ReturnsFreshCompletedTicketWithoutPreparingBytesAndClaimsRouting()
+    {
+        var transaction = new ProvisioningDownloadTransaction();
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
+        var coordinator = BuildCoordinator(transaction, mapStore, GgufAcquisitionDisposition.VerifiedInstalled);
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest { RepoId = Repo, Quant = Quant }, CancellationToken.None);
+        var status = coordinator.GetStatus(ticket.OperationId);
+
+        AssertEx.False(ticket.AlreadyInFlight);
+        AssertEx.Equal(GgufDownloadPhase.Completed, status!.Phase);
+        AssertEx.Equal(expected: 0, transaction.PrepareCount);
+        AssertEx.Equal("llamacpp", mapStore.Mappings[ticket.ModelName].ProviderName);
     }
 
     [Test]
     public async Task UnexpectedDetachedFailure_PublishesSanitizedTerminalFailure()
     {
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        var coordinator = BuildCoordinator(new ProvisioningModelStore
+        var coordinator = BuildCoordinator(new ProvisioningDownloadTransaction
         {
             UnexpectedFailure = new UnauthorizedAccessException("/private/models/index.json")
         }, mapStore);
@@ -107,14 +180,23 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         AssertEx.False(status.SanitizedError!.Contains("/private", StringComparison.Ordinal));
     }
 
-    private static GgufDownloadCoordinator BuildCoordinator(IGgufModelStore store, ICoordinatedModelProviderMapStore mapStore)
+    private static GgufDownloadCoordinator BuildCoordinator(IGgufDownloadTransaction transaction,
+        ICoordinatedModelProviderMapStore mapStore,
+        GgufAcquisitionDisposition disposition = GgufAcquisitionDisposition.Available)
     {
+        var identityResolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
+        var identity = identityResolver.Resolve(new GgufAcquisitionIntent(
+            XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind.Download,
+            Repo,
+            Quant,
+            Download: ProvisioningDownloadTransaction.IntentMetadata));
         var services = new ServiceCollection();
-        services.AddSingleton<IModelProviderMapLeaseCoordinator>(new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()));
         services.AddScoped(_ => mapStore);
+        services.AddScoped<IGgufAcquisitionPreflight>(_ => new AvailablePreflight(identity, disposition));
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new GgufDownloadCoordinator(store,
+        return new GgufDownloadCoordinator(transaction,
+            identityResolver,
             scopeFactory,
             new GgufAcquisitionOperationRegistry(TimeProvider.System),
             new NullGgufDownloadEventPublisher(),
@@ -138,34 +220,41 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         throw new TimeoutException($"Download for '{modelName}' did not reach phase {phase}.");
     }
 
-    /// <summary>A GGUF store that resolves the canonical name and "downloads" instantly (or fails on request).</summary>
-    private sealed class ProvisioningModelStore : IGgufModelStore
+    private sealed class ProvisioningDownloadTransaction : IGgufDownloadTransaction
     {
+        private static readonly string Hash = new('a', 64);
+        public static GgufDownloadAcquisitionMetadata IntentMetadata { get; } = new(Repo, "revision", "model.gguf", 1, Hash, GgufRole.Chat);
         public bool FailDownload { get; init; }
         public Exception? UnexpectedFailure { get; init; }
+        public bool BlockPrepare { get; init; }
+        public int PrepareCount { get; private set; }
+        public bool WasCommitted { get; private set; }
+        public bool WasRolledBack { get; private set; }
+        public TaskCompletionSource PrepareStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _releasePrepare = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
-        {
-            return Task.FromResult<string?>("/fake/m.gguf");
-        }
+        public Task<ResolvedGgufDownload> ResolveAsync(GgufModelRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult(new ResolvedGgufDownload(Repo,
+                Quant,
+                Repo,
+                "revision",
+                request.FileName ?? "model.gguf",
+                1,
+                Hash,
+                GgufRole.Chat,
+                Projector: null));
 
-        public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
+        public async Task<PreparedGgufDownload> PrepareAsync(ResolvedGgufDownload source,
+            GgufDownloadDestination destination,
+            IProgress<PullProgress>? progress,
+            CancellationToken cancellationToken)
         {
-            return Task.FromResult<string?>(null);
-        }
-
-        public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
-        {
-            return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]);
-        }
-
-        public Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
-        {
-            return Task.FromResult(GgufModelName.Format(request.RepoId, request.Quant ?? Quant));
-        }
-
-        public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
-        {
+            PrepareCount++;
+            PrepareStarted.TrySetResult();
+            if (BlockPrepare)
+            {
+                await _releasePrepare.Task.WaitAsync(cancellationToken);
+            }
             if (UnexpectedFailure is not null)
             {
                 throw UnexpectedFailure;
@@ -176,24 +265,108 @@ public sealed class GgufDownloadCoordinatorRoutingTests
                 throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network, "Download failed.");
             }
 
-            var quant = request.Quant ?? Quant;
-            var name = GgufModelName.Format(request.RepoId, quant);
-            return Task.FromResult(new GgufModelHandle(name, "/fake/m.gguf", quant, SizeBytes: 1, Sha256: null, "rev", GgufRole.Chat));
+            var entry = Entry(destination);
+            return new PreparedGgufDownload("operation",
+                source,
+                destination,
+                "/fake/temp.gguf",
+                "/fake/temp.json",
+                TemporaryProjectorPath: null,
+                entry,
+                Sidecar(entry),
+                GgufMemberFingerprint.Compute(Hash, 1),
+                ProjectorMemberFingerprint: null,
+                entry.ModelContentFingerprint!);
         }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct)
+        public Task<GgufDownloadCommitReceipt> CommitAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
         {
+            WasCommitted = true;
+            return Task.FromResult(new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
+                "/fake/final.gguf",
+                "/fake/final.json",
+                FinalProjectorPath: null,
+                preparedDownload.WeightMemberFingerprint,
+                ProjectorMemberFingerprint: null,
+                preparedDownload.ModelContentFingerprint));
+        }
+
+        public Task RollbackCommittedAsync(GgufDownloadCommitReceipt commitReceipt, CancellationToken cancellationToken)
+        {
+            WasRolledBack = true;
             return Task.CompletedTask;
         }
 
-        public Task<bool> ExistsAsync(string modelName, CancellationToken ct)
+        public Task DiscardPreparedAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ReleasePrepare() => _releasePrepare.TrySetResult();
+
+        private static GgufModelRegistryEntry Entry(GgufDownloadDestination destination)
         {
-            return Task.FromResult(true);
+            var fingerprint = GgufModelContentFingerprint.ComputeV1([
+                new GgufModelContentMember(destination.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight, 1, Hash, [destination.CanonicalModelName])
+            ]);
+            return new GgufModelRegistryEntry
+            {
+                RegistryRevision = $"v1:{Hash}",
+                Origin = LocalModelOrigin.HuggingFace,
+                ModelName = destination.CanonicalModelName,
+                RepoId = Repo,
+                FileName = destination.RelativeGgufPath,
+                Quant = Quant,
+                LocalPath = "/fake/final.gguf",
+                SizeBytes = 1,
+                Sha256 = Hash,
+                SourceRevision = "revision",
+                DownloadedAtUtc = DateTimeOffset.UnixEpoch,
+                Role = GgufRole.Chat,
+                SourceDisplayName = "model.gguf",
+                MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+                ModelContentFingerprint = fingerprint
+            };
         }
 
-        public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)
+        private static GgufAcquisitionMetadata Sidecar(GgufModelRegistryEntry entry) => new()
         {
-            return Task.FromResult<GgufModelFootprintFacts?>(null);
+            SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            RegistryRevision = entry.RegistryRevision!,
+            ModelName = entry.ModelName,
+            Origin = LocalModelOrigin.HuggingFace,
+            LocalFileName = entry.FileName,
+            Quantization = entry.Quant,
+            WeightContentSha256 = Hash,
+            WeightSizeBytes = 1,
+            WeightMemberFingerprint = GgufMemberFingerprint.Compute(Hash, 1),
+            SourceDisplayName = "model.gguf",
+            AcquiredAtUtc = DateTimeOffset.UnixEpoch,
+            RegistryRepoId = Repo,
+            RegistrySourceRevision = "revision",
+            Role = GgufRole.Chat,
+            ModelContentFingerprint = entry.ModelContentFingerprint!
+        };
+    }
+
+    private sealed class AvailablePreflight(ResolvedGgufAcquisitionIdentity identity, GgufAcquisitionDisposition disposition) : IGgufAcquisitionPreflight
+    {
+        private readonly KeyedCompositeLockDomain _domain = new();
+
+        [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "PreparedGgufAcquisition owns the lease returned to the production coordinator.")]
+        public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
+            CancellationToken cancellationToken = default)
+        {
+            var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
+                InstalledModelMutationKind.Acquire,
+                [new(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight), new(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)]);
+            var keys = new[]
+            {
+                ModelCoordinationKeys.Model(identity.CanonicalModelName),
+                ModelCoordinationKeys.Path(identity.RelativeGgufPath),
+                ModelCoordinationKeys.Path(identity.RelativeSidecarPath),
+                ModelCoordinationKeys.ProviderMap(identity.CanonicalModelName)
+            };
+            var inner = await _domain.AcquireMutationAsync(keys, cancellationToken);
+            var lease = new InstalledModelMutationLease(request, snapshot: null, providerMapping: null, inner);
+            return new PreparedGgufAcquisition(identity, disposition, ProviderMapDisposition.Absent, lease, activeOperationId: null);
         }
     }
 

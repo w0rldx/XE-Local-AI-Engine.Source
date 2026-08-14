@@ -102,6 +102,12 @@ public static class HuggingFaceServiceCollectionExtensions
             sp.GetRequiredService<IFreeSpaceProbe>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.TryAddSingleton<IGgufDownloadTransaction>(static sp => new HuggingFaceGgufDownloadTransaction(
+            sp.GetRequiredService<HfDownloadClient>(),
+            sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),
+            sp.GetRequiredService<GgufModelRegistry>(),
+            sp.GetRequiredService<HuggingFaceOptions>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
 
         services.TryAddSingleton<IGgufModelStore>(static sp => new HuggingFaceGgufStore(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),

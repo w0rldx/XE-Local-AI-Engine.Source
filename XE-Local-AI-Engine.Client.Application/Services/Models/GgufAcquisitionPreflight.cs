@@ -247,7 +247,7 @@ public sealed class GgufAcquisitionPreflight(
                 throw new InvalidOperationException("ModelConflict");
             }
 
-            if (state.Disposition != GgufAcquisitionDisposition.Available)
+            if (state.Disposition == GgufAcquisitionDisposition.ActiveCompatible)
             {
                 await lease.DisposeAsync().ConfigureAwait(false);
                 return new PreparedGgufAcquisition(identity, state.Disposition, state.ProviderMapDisposition, lease: null, state.ActiveOperationId);
