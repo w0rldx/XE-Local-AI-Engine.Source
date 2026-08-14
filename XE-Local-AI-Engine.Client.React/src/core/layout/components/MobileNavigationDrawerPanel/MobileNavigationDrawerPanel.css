@@ -4,6 +4,8 @@
 	left: 0;
 	box-sizing: border-box;
 	z-index: 301;
+	background-color: var(--mantine-color-body);
+	border-right: 1px solid var(--mantine-color-default-border);
 	overflow-y: auto;
 }
 

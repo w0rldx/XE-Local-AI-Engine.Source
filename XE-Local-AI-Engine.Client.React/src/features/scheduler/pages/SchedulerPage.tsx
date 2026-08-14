@@ -1,16 +1,17 @@
-import { Button, Container, Stack } from "@mantine/core";
-import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
+import { Button } from "@mantine/core";
+import { IconCalendarClock, IconDeviceFloppy, IconPlus, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
 import { SchedulerJobsSection } from "@/features/scheduler/components/SchedulerJobsSection";
-import { SchedulerPageHeader } from "@/features/scheduler/components/SchedulerPageHeader";
 import { SchedulerRunDetailDialog } from "@/features/scheduler/components/SchedulerRunDetailDialog";
 import { SchedulerRunsSection } from "@/features/scheduler/components/SchedulerRunsSection";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
@@ -235,85 +236,95 @@ export function SchedulerPage() {
 	);
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<SchedulerPageHeader onCreate={openCreate} />
+		<PageShell>
+			<PageHeader
+				title={t("pages.scheduler.title", "Scheduler")}
+				icon={<IconCalendarClock size={24} />}
+				subtitle={t(
+					"pages.scheduler.subtitle",
+					"Schedule recurring and one-off jobs on this node. Jobs are disabled until you enable them, and parameters are stored encrypted.",
+				)}
+				actions={
+					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="scheduler-create-button">
+						{t("pages.scheduler.createButton", "Create job")}
+					</Button>
+				}
+			/>
 
-				{/* Editor dialog: replaces the inline card. Both the title-bar X and the footer
-				    Cancel route through requestCloseEditor so a dirty-state confirm is shown
-				    consistently from either path. Overlay and escape are disabled while dirty
-				    so accidental dismissal never silently discards work. zIndex 300 sits below
-				    the ConfirmProvider's 400 so confirmation dialogs always render on top. */}
-				<DialogShell
-					title={editorTitle}
-					opened={isEditorOpen}
-					onClose={requestCloseEditor}
-					closeOnClickOutside={!isFormDirty}
-					closeOnEscape={!isFormDirty}
-					footer={editorFooter}
-					zIndex={300}
-					data-testid="scheduler-editor-card"
-				>
-					<ScheduledJobForm
-						ref={formRef}
-						key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
-						initialValues={formInitialValues}
-						templates={templates}
-						isEditing={editorTarget?.mode === "edit"}
-						isSubmitting={isSubmitting}
-						submitError={submitError}
-						onSubmit={handleSubmit}
-						onCancel={requestCloseEditor}
-						onDirtyChange={setIsFormDirty}
-					/>
-				</DialogShell>
-
-				{/* Job list — always visible (dialog overlays it). */}
-				<SchedulerJobsSection
-					jobs={jobs}
-					isLoading={jobsQuery.isLoading}
-					error={
-						jobsQuery.error
-							? apiErrorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))
-							: undefined
-					}
-					isMutating={isMutating}
-					onEdit={openEdit}
-					onDelete={handleDelete}
-					onTrigger={handleTrigger}
-					onToggleEnabled={handleToggleEnabled}
+			{/* Editor dialog: replaces the inline card. Both the title-bar X and the footer
+			    Cancel route through requestCloseEditor so a dirty-state confirm is shown
+			    consistently from either path. Overlay and escape are disabled while dirty
+			    so accidental dismissal never silently discards work. zIndex 300 sits below
+			    the ConfirmProvider's 400 so confirmation dialogs always render on top. */}
+			<DialogShell
+				title={editorTitle}
+				opened={isEditorOpen}
+				onClose={requestCloseEditor}
+				closeOnClickOutside={!isFormDirty}
+				closeOnEscape={!isFormDirty}
+				footer={editorFooter}
+				zIndex={300}
+				data-testid="scheduler-editor-card"
+			>
+				<ScheduledJobForm
+					ref={formRef}
+					key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
+					initialValues={formInitialValues}
+					templates={templates}
+					isEditing={editorTarget?.mode === "edit"}
+					isSubmitting={isSubmitting}
+					submitError={submitError}
+					onSubmit={handleSubmit}
+					onCancel={requestCloseEditor}
+					onDirtyChange={setIsFormDirty}
 				/>
+			</DialogShell>
 
-				<SchedulerRunsSection
-					runs={runs}
-					jobs={jobs}
-					filters={runFilters}
-					isLoading={runsQuery.isLoading}
-					isCancelling={cancelMutation.isPending}
-					error={
-						runsQuery.error
-							? apiErrorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
-							: undefined
-					}
-					selectedRunId={selectedRunId}
-					onFiltersChange={setRunFilters}
-					onSelectRun={selectRun}
-					onCancelRun={handleCancelRun}
-				/>
+			{/* Job list — always visible (dialog overlays it). */}
+			<SchedulerJobsSection
+				jobs={jobs}
+				isLoading={jobsQuery.isLoading}
+				error={
+					jobsQuery.error
+						? apiErrorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))
+						: undefined
+				}
+				isMutating={isMutating}
+				onEdit={openEdit}
+				onDelete={handleDelete}
+				onTrigger={handleTrigger}
+				onToggleEnabled={handleToggleEnabled}
+			/>
 
-				{/* Run-detail dialog: read-only, separate from the editor dialog. */}
-				<SchedulerRunDetailDialog
-					run={runQuery.data}
-					isLoading={runQuery.isLoading}
-					error={
-						runQuery.error
-							? apiErrorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
-							: undefined
-					}
-					opened={selectedRunId !== null}
-					onClose={() => selectRun(null)}
-				/>
-			</Stack>
-		</Container>
+			<SchedulerRunsSection
+				runs={runs}
+				jobs={jobs}
+				filters={runFilters}
+				isLoading={runsQuery.isLoading}
+				isCancelling={cancelMutation.isPending}
+				error={
+					runsQuery.error
+						? apiErrorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
+						: undefined
+				}
+				selectedRunId={selectedRunId}
+				onFiltersChange={setRunFilters}
+				onSelectRun={selectRun}
+				onCancelRun={handleCancelRun}
+			/>
+
+			{/* Run-detail dialog: read-only, separate from the editor dialog. */}
+			<SchedulerRunDetailDialog
+				run={runQuery.data}
+				isLoading={runQuery.isLoading}
+				error={
+					runQuery.error
+						? apiErrorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
+						: undefined
+				}
+				opened={selectedRunId !== null}
+				onClose={() => selectRun(null)}
+			/>
+		</PageShell>
 	);
 }

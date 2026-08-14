@@ -1,9 +1,12 @@
-import { Card, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Card, SimpleGrid, Stack } from "@mantine/core";
 import { IconPhoto } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ImageGenerationForm } from "@/features/images/components/ImageGenerationForm";
 import { ImageJobList } from "@/features/images/components/ImageJobList";
@@ -82,28 +85,19 @@ export function ImagesPage() {
 	);
 
 	return (
-		<Stack gap="lg" px="md" py="lg">
-			<Group justify="space-between" align="flex-start">
-				<Stack gap={4}>
-					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						{t("pages.images.eyebrow", "Worker Node")}
-					</Text>
-					<Group gap="xs" align="center">
-						<IconPhoto size={24} />
-						<Title order={2}>{t("pages.images.title", "Image Generation")}</Title>
-					</Group>
-					<Text c="dimmed">
-						{t(
-							"pages.images.subtitle",
-							"Generate images locally with stable-diffusion.cpp. Jobs run one at a time and stream coarse status as they progress.",
-						)}
-					</Text>
-				</Stack>
-			</Group>
+		<PageShell>
+			<PageHeader
+				icon={<IconPhoto size={24} />}
+				title={t("pages.images.title", "Image Generation")}
+				subtitle={t(
+					"pages.images.subtitle",
+					"Generate images locally with stable-diffusion.cpp. Jobs run one at a time and stream coarse status as they progress.",
+				)}
+			/>
 
 			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
 				<Stack gap="lg">
-					<Card withBorder={true} padding="lg" radius="md">
+					<Card>
 						<ImageGenerationForm
 							models={models}
 							isSubmitting={createMutation.isPending}
@@ -111,7 +105,7 @@ export function ImagesPage() {
 							onSubmit={handleGenerate}
 						/>
 					</Card>
-					<Card withBorder={true} padding="lg" radius="md">
+					<Card>
 						<ImageModelManager
 							models={models}
 							isLoading={modelsQuery.isLoading}
@@ -119,11 +113,10 @@ export function ImagesPage() {
 						/>
 					</Card>
 				</Stack>
-				<Stack gap="sm">
-					<Text fw={600}>{t("pages.images.jobs.title", "Jobs")}</Text>
+				<SectionCard title={t("pages.images.jobs.title", "Jobs")} gap="sm">
 					<ImageJobList jobs={jobs} isLoading={jobsQuery.isLoading} cancellingJobId={cancellingJobId} onCancel={handleCancel} />
-				</Stack>
+				</SectionCard>
 			</SimpleGrid>
-		</Stack>
+		</PageShell>
 	);
 }

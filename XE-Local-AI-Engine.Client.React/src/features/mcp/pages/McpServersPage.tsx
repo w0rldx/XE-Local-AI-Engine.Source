@@ -1,10 +1,13 @@
-import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconPlug, IconPlus, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -174,59 +177,48 @@ export function McpServersPage() {
 	const formInitialValues = editingServer ? toFormValues(editingServer) : emptyFormValues;
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("pages.mcp.eyebrow", "Worker Node")}
-						</Text>
-						<Group gap="xs" align="center">
-							<IconPlug size={24} />
-							<Title order={2}>{t("pages.mcp.title", "MCP servers")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.mcp.subtitle",
-								"Register local MCP servers to extend the node tool catalog. Servers are disabled until you enable them, and every discovered tool requires approval by default.",
-							)}
-						</Text>
-					</Stack>
+		<PageShell>
+			<PageHeader
+				icon={<IconPlug size={24} />}
+				title={t("pages.mcp.title", "MCP servers")}
+				subtitle={t(
+					"pages.mcp.subtitle",
+					"Register local MCP servers to extend the node tool catalog. Servers are disabled until you enable them, and every discovered tool requires approval by default.",
+				)}
+				actions={
 					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="mcp-create-button">
 						{t("pages.mcp.createButton", "Register server")}
 					</Button>
-				</Group>
+				}
+			/>
 
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						{serversQuery.isLoading ? (
-							<Group gap="sm">
-								<Loader size="sm" />
-								<Text c="dimmed">{t("pages.mcp.list.loading", "Loading MCP servers…")}</Text>
-							</Group>
+			<SectionCard title={t("pages.mcp.list.title", "Registered servers")}>
+				{serversQuery.isLoading ? (
+					<Group gap="sm">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.mcp.list.loading", "Loading MCP servers…")}</Text>
+					</Group>
+				) : null}
+				{serversQuery.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-list-error">
+						{apiErrorMessage(serversQuery.error, t("pages.mcp.errors.load", "Could not load MCP servers."))}
+					</Alert>
+				) : null}
+				{!serversQuery.isLoading && !serversQuery.error ? (
+					<>
+						<McpServerList
+							servers={servers}
+							isMutating={isMutating}
+							onEdit={openEdit}
+							onDelete={handleDelete}
+							onToggleEnabled={handleToggleEnabled}
+						/>
+						{servers.length > 0 ? (
+							<McpServerToolsSelector servers={servers} expandedToolsId={expandedToolsId} onSelect={setExpandedToolsId} />
 						) : null}
-						{serversQuery.error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-list-error">
-								{apiErrorMessage(serversQuery.error, t("pages.mcp.errors.load", "Could not load MCP servers."))}
-							</Alert>
-						) : null}
-						{!serversQuery.isLoading && !serversQuery.error ? (
-							<>
-								<McpServerList
-									servers={servers}
-									isMutating={isMutating}
-									onEdit={openEdit}
-									onDelete={handleDelete}
-									onToggleEnabled={handleToggleEnabled}
-								/>
-								{servers.length > 0 ? (
-									<McpServerToolsSelector servers={servers} expandedToolsId={expandedToolsId} onSelect={setExpandedToolsId} />
-								) : null}
-							</>
-						) : null}
-					</Stack>
-				</Card>
-			</Stack>
+					</>
+				) : null}
+			</SectionCard>
 
 			<DialogShell
 				opened={isEditorOpen}
@@ -279,7 +271,7 @@ export function McpServersPage() {
 					/>
 				</Stack>
 			</DialogShell>
-		</Container>
+		</PageShell>
 	);
 }
 

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Container, Group, Loader, NumberInput, Stack, Switch, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Loader, NumberInput, Switch, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCode, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +16,9 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
@@ -382,158 +385,142 @@ export function NodeSettings() {
 	};
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Stack gap={4}>
-					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						{t("common.workerNode", "Worker Node")}
-					</Text>
-					<Title order={2}>Node settings</Title>
-					<Text c="dimmed">Tune non-secret local runtime settings stored on this worker.</Text>
-				</Stack>
+		<PageShell>
+			<PageHeader
+				title={t("pages.nodeSettings.title", "Node settings")}
+				icon={<IconSettings size={24} />}
+				subtitle={t("pages.nodeSettings.subtitle", "Tune non-secret local runtime settings stored on this worker.")}
+			/>
 
-				{settingsIsLoading ? (
-					<Group gap="sm">
-						<Loader size="sm" />
-						<Text c="dimmed">Loading node settings…</Text>
-					</Group>
-				) : null}
+			{settingsIsLoading ? (
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.nodeSettings.loading", "Loading node settings…")}</Text>
+				</Group>
+			) : null}
 
-				{settingsError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(settingsError)}
-					</Alert>
-				) : null}
+			{settingsError ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{errorMessage(settingsError)}
+				</Alert>
+			) : null}
 
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						<Group justify="space-between" align="center">
-							<Title order={3}>Local chat runtime</Title>
-							<IconSettings size={22} />
-						</Group>
-						<Text c="dimmed">
-							The maximum message request timeout is included in capability reports so the platform can respect this worker's
-							local runtime limit.
-						</Text>
-						<NumberInput
-							label="Maximum message request timeout"
-							description={`Allowed range: ${minTimeout}–${maxTimeout} seconds.`}
-							suffix=" seconds"
-							min={minTimeout}
-							max={maxTimeout}
-							step={5}
-							allowDecimal={false}
-							value={timeoutSeconds}
-							onChange={setTimeoutSeconds}
-							error={timeoutToSave === undefined ? `Enter a whole number from ${minTimeout} to ${maxTimeout}.` : undefined}
-						/>
-						<Group>
-							<Button
-								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={handleSave}
-								loading={saveMutation.isPending}
-								disabled={!canSave}
-								data-testid="node-settings-save-button"
-							>
-								Save settings
-							</Button>
-							<Button
-								variant="subtle"
-								leftSection={<IconRefresh size={16} />}
-								onClick={() => settingsRefetch()}
-								disabled={settingsIsFetching}
-							>
-								Reload
-							</Button>
-						</Group>
-					</Stack>
-				</Card>
-
-				<LlamaCppUpdaterPanel />
-
-				<SourceBuildCard />
-
-				<ImageRuntimeSourceBuildCard />
-
-				<NodeSettingsFieldsCard
-					form={fieldsForm}
-					bounds={fieldBounds}
-					errors={visibleFieldErrors}
-					onChange={handleFieldChange}
-					showDeveloperFields={developerMode}
-					draftModelOptions={draftModelOptions}
-					keepWarmModelOptions={keepWarmModelOptions}
-					rerankerModelOptions={rerankerModelOptions}
-					onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
-					isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}
-					isRecommendedRerankerInFlight={isRecommendedRerankerInFlight}
-					onDownloadRecommendedEmbedding={handleDownloadRecommendedEmbedding}
-					isDownloadRecommendedEmbeddingPending={downloadRecommendedEmbedding.isPending}
-					isRecommendedEmbeddingInFlight={isRecommendedEmbeddingInFlight}
+			<SectionCard title="Local chat runtime" icon={<IconSettings size={22} />}>
+				<Text c="dimmed">
+					The maximum message request timeout is included in capability reports so the platform can respect this worker's local
+					runtime limit.
+				</Text>
+				<NumberInput
+					label="Maximum message request timeout"
+					description={`Allowed range: ${minTimeout}–${maxTimeout} seconds.`}
+					suffix=" seconds"
+					min={minTimeout}
+					max={maxTimeout}
+					step={5}
+					allowDecimal={false}
+					value={timeoutSeconds}
+					onChange={setTimeoutSeconds}
+					error={timeoutToSave === undefined ? `Enter a whole number from ${minTimeout} to ${maxTimeout}.` : undefined}
 				/>
-
-				<DownloadProgressPanel
-					inFlight={[...rerankerInFlight, ...embeddingInFlight]}
-					downloadStatuses={rerankerDownloadStatuses}
-					onCancel={handleCancelRerankerDownload}
-					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
-				/>
-
 				<Group>
 					<Button
 						leftSection={<IconDeviceFloppy size={16} />}
 						onClick={handleSave}
 						loading={saveMutation.isPending}
 						disabled={!canSave}
-						data-testid="node-settings-fields-save-button"
+						data-testid="node-settings-save-button"
 					>
-						{t("pages.nodeSettings.fields.save", "Save node settings")}
+						Save settings
+					</Button>
+					<Button
+						variant="subtle"
+						leftSection={<IconRefresh size={16} />}
+						onClick={() => settingsRefetch()}
+						disabled={settingsIsFetching}
+					>
+						Reload
 					</Button>
 				</Group>
+			</SectionCard>
 
-				<HfTokenPanel
-					hasToken={hfTokenQuery.data ?? false}
-					isLoading={hfTokenQuery.isLoading}
-					tokenDraft={tokenDraft}
-					onTokenDraftChange={setTokenDraft}
-					onSave={handleSaveToken}
-					onClear={handleClearToken}
-					isSaving={setHfToken.isPending}
+			<LlamaCppUpdaterPanel />
+
+			<SourceBuildCard />
+
+			<ImageRuntimeSourceBuildCard />
+
+			<NodeSettingsFieldsCard
+				form={fieldsForm}
+				bounds={fieldBounds}
+				errors={visibleFieldErrors}
+				onChange={handleFieldChange}
+				showDeveloperFields={developerMode}
+				draftModelOptions={draftModelOptions}
+				keepWarmModelOptions={keepWarmModelOptions}
+				rerankerModelOptions={rerankerModelOptions}
+				onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
+				isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}
+				isRecommendedRerankerInFlight={isRecommendedRerankerInFlight}
+				onDownloadRecommendedEmbedding={handleDownloadRecommendedEmbedding}
+				isDownloadRecommendedEmbeddingPending={downloadRecommendedEmbedding.isPending}
+				isRecommendedEmbeddingInFlight={isRecommendedEmbeddingInFlight}
+			/>
+
+			<DownloadProgressPanel
+				inFlight={[...rerankerInFlight, ...embeddingInFlight]}
+				downloadStatuses={rerankerDownloadStatuses}
+				onCancel={handleCancelRerankerDownload}
+				cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
+			/>
+
+			<Group>
+				<Button
+					leftSection={<IconDeviceFloppy size={16} />}
+					onClick={handleSave}
+					loading={saveMutation.isPending}
+					disabled={!canSave}
+					data-testid="node-settings-fields-save-button"
+				>
+					{t("pages.nodeSettings.fields.save", "Save node settings")}
+				</Button>
+			</Group>
+
+			<HfTokenPanel
+				hasToken={hfTokenQuery.data ?? false}
+				isLoading={hfTokenQuery.isLoading}
+				tokenDraft={tokenDraft}
+				onTokenDraftChange={setTokenDraft}
+				onSave={handleSaveToken}
+				onClear={handleClearToken}
+				isSaving={setHfToken.isPending}
+			/>
+
+			<McpServerKeyPanel />
+
+			<LocalModelProxyKeyPanel />
+
+			<McpWorkspaceAllowlistPanel />
+
+			<VoiceSettingsCard />
+
+			<SectionCard title={t("pages.nodeSettings.developerMode.title", "Developer settings")} icon={<IconCode size={22} />}>
+				{/*
+				 * The recording half of this disclosure is not optional. Enabling developer mode also starts an rrweb
+				 * DOM recording of this browser session (InstallCollectors), which is captured into diagnostic
+				 * snapshots. A description that names only the visible half — "experimental controls" — understates
+				 * what the operator is switching on.
+				 */}
+				<Switch
+					label={t("pages.nodeSettings.developerMode.label", "Developer mode")}
+					description={t(
+						"pages.nodeSettings.developerMode.description",
+						"Enables advanced, experimental controls in the app (e.g. chat sampling options), and starts recording this browser session — DOM changes, clicks and navigation — so it can be attached to a diagnostic snapshot. Stored in this browser only.",
+					)}
+					checked={developerMode}
+					onChange={() => toggleDeveloperMode()}
+					data-testid="developer-mode-switch"
 				/>
-
-				<McpServerKeyPanel />
-
-				<LocalModelProxyKeyPanel />
-
-				<McpWorkspaceAllowlistPanel />
-
-				<VoiceSettingsCard />
-
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						<Group justify="space-between" align="center">
-							<Title order={3}>{t("pages.nodeSettings.developerMode.title", "Developer settings")}</Title>
-							<IconCode size={22} />
-						</Group>
-						{/*
-						 * The recording half of this disclosure is not optional. Enabling developer mode also starts an rrweb
-						 * DOM recording of this browser session (InstallCollectors), which is captured into diagnostic
-						 * snapshots. A description that names only the visible half — "experimental controls" — understates
-						 * what the operator is switching on.
-						 */}
-						<Switch
-							label={t("pages.nodeSettings.developerMode.label", "Developer mode")}
-							description={t(
-								"pages.nodeSettings.developerMode.description",
-								"Enables advanced, experimental controls in the app (e.g. chat sampling options), and starts recording this browser session — DOM changes, clicks and navigation — so it can be attached to a diagnostic snapshot. Stored in this browser only.",
-							)}
-							checked={developerMode}
-							onChange={() => toggleDeveloperMode()}
-							data-testid="developer-mode-switch"
-						/>
-					</Stack>
-				</Card>
-			</Stack>
-		</Container>
+			</SectionCard>
+		</PageShell>
 	);
 }

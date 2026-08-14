@@ -2,7 +2,6 @@ import type { CSSProperties } from "react";
 
 import type { MenuItemProperties } from "@/core/layout/models/Sidebar";
 import { useSidebarStore } from "@/core/layout/stores/SidebarStore";
-import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
 
 import "./SidebarMenuItem.css";
 
@@ -22,7 +21,6 @@ export function SidebarMenuItem({
 	className = "",
 	isMobile = false,
 }: MenuItemProperties) {
-	const theme = useTheme();
 	const isCollapsed = useSidebarStore((state) => state.collapsed) && !isMobile;
 	const shouldCenter = isCollapsed && !isMobile;
 
@@ -64,11 +62,7 @@ export function SidebarMenuItem({
 				aria-disabled={disabled}
 				data-centered={shouldCenter || undefined}
 				type="button"
-				style={{
-					color: theme.palette.text.primary,
-					backgroundColor: active ? theme.palette.action.selected : "transparent",
-					transition: theme.transitions.create(["background-color", "opacity"]),
-				}}
+				data-active={active || undefined}
 			>
 				{prefix && !isCollapsed && <div className="sidebar-menu-item-prefix">{prefix}</div>}
 

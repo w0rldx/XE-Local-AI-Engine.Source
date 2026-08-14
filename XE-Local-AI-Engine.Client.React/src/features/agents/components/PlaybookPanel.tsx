@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import {
 	MEMORY_SCOPES,
 	memoryScopeFallbacks,
@@ -273,9 +274,11 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 				) : null}
 
 				{showNoSuggestionsNotice ? (
-					<Text size="sm" c="dimmed" data-testid="playbook-no-suggestions">
-						{t("pages.agents.playbook.noSuggestions", "No new suggestions from the latest analysis.")}
-					</Text>
+					<EmptyState
+						size="sm"
+						message={t("pages.agents.playbook.noSuggestions", "No new suggestions from the latest analysis.")}
+						data-testid="playbook-no-suggestions"
+					/>
 				) : null}
 
 				{suggestedActions.length > 0 ? (
@@ -326,9 +329,11 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 				) : null}
 
 				{!actionsQuery.isLoading && !actionsQuery.error && orderedActions.length === 0 && !isEditorOpen ? (
-					<Text size="sm" c="dimmed" data-testid="playbook-empty">
-						{t("pages.agents.playbook.empty", "No playbook actions yet.")}
-					</Text>
+					<EmptyState
+						size="sm"
+						message={t("pages.agents.playbook.empty", "No playbook actions yet.")}
+						data-testid="playbook-empty"
+					/>
 				) : null}
 
 				{orderedActions.map((action, index) => (

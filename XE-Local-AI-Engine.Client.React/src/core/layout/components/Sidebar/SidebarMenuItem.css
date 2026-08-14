@@ -21,7 +21,20 @@
 	padding: 8px 20px 8px 28px;
 	border: 0;
 	border-radius: 4px;
+	color: var(--mantine-color-text);
+	background-color: transparent;
 	cursor: pointer;
+	transition:
+		background-color 200ms ease,
+		color 200ms ease,
+		opacity 200ms ease;
+}
+
+/* Translucent rather than a solid token so the selection reads correctly on whichever
+   surface the item sits on (sidebar, mobile drawer, drawer sub-panel). */
+
+.sidebar-menu-item-button[data-active="true"] {
+	background-color: light-dark(rgb(0 0 0 / 4%), rgb(255 255 255 / 8%));
 }
 
 .sidebar-menu-item-button[data-centered="true"] {

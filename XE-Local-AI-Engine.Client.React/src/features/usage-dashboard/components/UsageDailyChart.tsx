@@ -1,8 +1,9 @@
-import { Card, Stack, Text, Title } from "@mantine/core";
+import { Card, Stack, Title } from "@mantine/core";
 import { AreaChart } from "@mantine/charts";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { UsageDailyPoint } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import { formatDayLabel, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
@@ -31,7 +32,7 @@ export function UsageDailyChart({ daily }: { readonly daily: readonly UsageDaily
 						data-testid="usage-daily-area"
 					/>
 				) : (
-					<Text c="dimmed">{t("pages.usage.daily.empty", "No daily usage to plot for this range.")}</Text>
+					<EmptyState message={t("pages.usage.daily.empty", "No daily usage to plot for this range.")} />
 				)}
 			</Stack>
 		</Card>

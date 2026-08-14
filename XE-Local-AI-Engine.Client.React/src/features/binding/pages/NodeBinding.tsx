@@ -1,5 +1,5 @@
-import { Alert, Anchor, Button, Card, Container, Group, List, Stack, Table, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconExternalLink, IconInfoCircle } from "@tabler/icons-react";
+import { Alert, Anchor, Button, Group, List, SimpleGrid, Table, Text } from "@mantine/core";
+import { IconAlertTriangle, IconCheck, IconExternalLink, IconInfoCircle, IconLink } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,9 @@ import {
 	startNodeBindingMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 
 function statusColor(status: string): "blue" | "green" | "orange" | "red" {
 	const normalized = status.toLowerCase();
@@ -135,105 +138,94 @@ export function NodeBinding() {
 	const canCancel = session !== undefined && pollMutation.isPending;
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Stack gap={4}>
-					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						{t("common.workerNode", "Worker Node")}
-					</Text>
-					<Title order={2}>Bind this node to your Central Platform account</Title>
-					<Text c="dimmed">
-						Start binding here, then approve the request in the Central Platform using the displayed user code.
-					</Text>
-				</Stack>
+		<PageShell>
+			<PageHeader
+				title={t("pages.nodeBinding.title", "Bind this node to your Central Platform account")}
+				icon={<IconLink size={24} />}
+				subtitle={t(
+					"pages.nodeBinding.subtitle",
+					"Start binding here, then approve the request in the Central Platform using the displayed user code.",
+				)}
+			/>
 
-				{message ? (
-					<Alert color={statusColor(status)} icon={<IconInfoCircle size={16} />}>
-						{message}
-					</Alert>
-				) : null}
-				{error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{error}
-					</Alert>
-				) : null}
+			{message ? (
+				<Alert color={statusColor(status)} icon={<IconInfoCircle size={16} />}>
+					{message}
+				</Alert>
+			) : null}
+			{error ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{error}
+				</Alert>
+			) : null}
 
-				<Group align="stretch" grow={true}>
-					<Card withBorder={true} radius="md" p="lg">
-						<Stack gap="md">
-							<Title order={3}>Device binding</Title>
-							{session ? (
-								<>
-									<Table.ScrollContainer minWidth={480}>
-										<Table withTableBorder={true} withColumnBorders={true}>
-											<Table.Tbody>
-												<Table.Tr>
-													<Table.Th>Status</Table.Th>
-													<Table.Td>{status}</Table.Td>
-												</Table.Tr>
-												<Table.Tr>
-													<Table.Th>User code</Table.Th>
-													<Table.Td>
-														<Text component="span" fw={800} size="lg">
-															{session.userCode}
-														</Text>
-													</Table.Td>
-												</Table.Tr>
-												<Table.Tr>
-													<Table.Th>Verification URL</Table.Th>
-													<Table.Td>
-														<Anchor href={session.verificationUriComplete} target="_blank" rel="noreferrer">
-															{session.verificationUriComplete}
-														</Anchor>
-													</Table.Td>
-												</Table.Tr>
-												<Table.Tr>
-													<Table.Th>Expires</Table.Th>
-													<Table.Td>{formatDate(session.expiresAt ?? "")}</Table.Td>
-												</Table.Tr>
-											</Table.Tbody>
-										</Table>
-									</Table.ScrollContainer>
-									<Group>
-										<Button variant="outline" onClick={handleCancel} disabled={!canCancel || cancelMutation.isPending}>
-											{cancelMutation.isPending ? "Cancelling..." : "Cancel polling"}
-										</Button>
-										<Button
-											component="a"
-											href={session.verificationUriComplete}
-											target="_blank"
-											rel="noreferrer"
-											rightSection={<IconExternalLink size={14} />}
-										>
-											Open approval link
-										</Button>
-									</Group>
-								</>
-							) : (
-								<>
-									<Text c="dimmed">No binding request is active on this worker.</Text>
-									<Button onClick={handleStart} loading={startMutation.isPending} disabled={isWorking}>
-										Start binding
-									</Button>
-								</>
-							)}
-						</Stack>
-					</Card>
+			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+				<SectionCard title="Device binding">
+					{session ? (
+						<>
+							<Table.ScrollContainer minWidth={480}>
+								<Table withTableBorder={true} withColumnBorders={true}>
+									<Table.Tbody>
+										<Table.Tr>
+											<Table.Th>Status</Table.Th>
+											<Table.Td>{status}</Table.Td>
+										</Table.Tr>
+										<Table.Tr>
+											<Table.Th>User code</Table.Th>
+											<Table.Td>
+												<Text component="span" fw={800} size="lg">
+													{session.userCode}
+												</Text>
+											</Table.Td>
+										</Table.Tr>
+										<Table.Tr>
+											<Table.Th>Verification URL</Table.Th>
+											<Table.Td>
+												<Anchor href={session.verificationUriComplete} target="_blank" rel="noreferrer">
+													{session.verificationUriComplete}
+												</Anchor>
+											</Table.Td>
+										</Table.Tr>
+										<Table.Tr>
+											<Table.Th>Expires</Table.Th>
+											<Table.Td>{formatDate(session.expiresAt ?? "")}</Table.Td>
+										</Table.Tr>
+									</Table.Tbody>
+								</Table>
+							</Table.ScrollContainer>
+							<Group>
+								<Button variant="outline" onClick={handleCancel} disabled={!canCancel || cancelMutation.isPending}>
+									{cancelMutation.isPending ? "Cancelling..." : "Cancel polling"}
+								</Button>
+								<Button
+									component="a"
+									href={session.verificationUriComplete}
+									target="_blank"
+									rel="noreferrer"
+									rightSection={<IconExternalLink size={14} />}
+								>
+									Open approval link
+								</Button>
+							</Group>
+						</>
+					) : (
+						<>
+							<Text c="dimmed">No binding request is active on this worker.</Text>
+							<Button onClick={handleStart} loading={startMutation.isPending} disabled={isWorking}>
+								Start binding
+							</Button>
+						</>
+					)}
+				</SectionCard>
 
-					<Card withBorder={true} radius="md" p="lg">
-						<Stack gap="md">
-							<Title order={3}>How binding works</Title>
-							<List icon={<IconCheck size={16} />} spacing="sm">
-								<List.Item>Click Start binding to request a one-time user code.</List.Item>
-								<List.Item>Open the approval link and sign in to the Central Platform.</List.Item>
-								<List.Item>
-									The worker polls at the server-provided interval and stores credentials only after approval.
-								</List.Item>
-							</List>
-						</Stack>
-					</Card>
-				</Group>
-			</Stack>
-		</Container>
+				<SectionCard title="How binding works">
+					<List icon={<IconCheck size={16} />} spacing="sm">
+						<List.Item>Click Start binding to request a one-time user code.</List.Item>
+						<List.Item>Open the approval link and sign in to the Central Platform.</List.Item>
+						<List.Item>The worker polls at the server-provided interval and stores credentials only after approval.</List.Item>
+					</List>
+				</SectionCard>
+			</SimpleGrid>
+		</PageShell>
 	);
 }

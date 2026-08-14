@@ -3,10 +3,11 @@
 // Renders a snapshot's network entries (method/url/status/duration/transport/traceId). Bodies are
 // never present in the contract (dropped at capture), so this view is redaction-safe.
 
-import { Badge, Table, Text } from "@mantine/core";
+import { Badge, Table } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import type { NetworkEntry } from "@/core/diagnostics/Diagnostics";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 
 export interface NetworkLogProps {
 	readonly entries: readonly NetworkEntry[];
@@ -21,9 +22,7 @@ export function NetworkLog({ entries }: NetworkLogProps) {
 
 	if (entries.length === 0) {
 		return (
-			<Text c="dimmed" size="sm">
-				{t("diagnostics.network.empty")}
-			</Text>
+			<EmptyState size="sm" message={t("diagnostics.network.empty")} />
 		);
 	}
 

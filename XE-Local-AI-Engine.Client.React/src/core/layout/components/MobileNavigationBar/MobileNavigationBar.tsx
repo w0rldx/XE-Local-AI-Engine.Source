@@ -17,7 +17,6 @@ import { SidebarMenu } from "@/core/layout/components/Sidebar/SidebarMenu";
 import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuItem";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
-import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
 import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
 import { useReportProblem } from "@/features/diagnostics/hooks/useReportProblem";
 
@@ -29,7 +28,6 @@ const AboutDialog = lazy(async () => {
 
 export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNavigationBarProperties) {
 	const { width } = useWindowDimensions();
-	const theme = useTheme();
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -43,17 +41,6 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 		root: {
 			fontSize: "13px",
 			fontWeight: 400,
-		},
-		subMenuExpandIcon: {
-			color: theme.palette.text.primary,
-		},
-		subMenuContent: () => ({
-			backgroundColor: theme.palette.background.default,
-		}),
-		button: {
-			"&:hover": {
-				backgroundColor: theme.palette.background.default,
-			},
 		},
 		label: () => ({
 			fontWeight: 500,
@@ -111,7 +98,6 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 				styles={{
 					content: {
 						width: width < 420 ? "100%" : "min(400px, 100vw)",
-						backgroundColor: theme.palette.background.default,
 					},
 				}}
 			>
@@ -131,7 +117,6 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 						<MobileNavigationMenu
 							key={menu.menuId}
 							menuItemStyle={menuItemStyle}
-							theme={theme}
 							setDrawerOpen={setDrawerOpen}
 							menuItem={menu.menuItem}
 							drawerTitle={menu.drawerTitle}
@@ -142,9 +127,9 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 
 					<div className="flex-grow" />
 
-					<MobileNavigationThemeMenu theme={theme} menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+					<MobileNavigationThemeMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
 
-					<MobileNavigationLanguageMenu theme={theme} menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+					<MobileNavigationLanguageMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
 
 					{/* Report problem + About + Logout live in the desktop HeaderBar; on mobile the drawer is the
 				    only chrome, so it must offer them too. ThemeConfigurator stays desktop-only (palette editor). */}

@@ -23,12 +23,14 @@ module.exports = {
       name: "no-orphans",
       comment:
         "Orphan modules (imported by nothing, importing nothing) are usually dead code. " +
-        "Informational only: generated clients, type declarations, and config files are legitimate orphans.",
+        "Informational only: generated clients, type declarations, and config files are legitimate orphans. " +
+        "src/test/ helpers are excluded: their only importers are *.test files, which the cruise excludes.",
       severity: "warn",
       from: {
         orphan: true,
         pathNot: [
           "\\.d\\.ts$",
+          "(^|/)src/test/",
           "(^|/)src/core/api/generated/",
           "src/routeTree\\.gen\\.ts$",
           "(^|/)[^/]+\\.(config|cjs|mjs)\\.(js|ts|cjs|mjs)$",

@@ -8,7 +8,6 @@ import "./MobileNavigationDrawerPanel.css";
 
 export function MobileNavigationDrawerPanel({
 	isOpen,
-	theme,
 	width,
 	title,
 	onClose,
@@ -43,11 +42,7 @@ export function MobileNavigationDrawerPanel({
 							exit={{ opacity: 0, x: -20 }}
 							transition={{ duration: 0.2 }}
 							className="mobile-navigation-drawer-panel h-full"
-							style={{
-								backgroundColor: theme.palette.background.default,
-								borderRight: `1px solid ${theme.palette.divider}`,
-								width: panelWidth,
-							}}
+							style={{ width: panelWidth }}
 						>
 							<div className="pt-3 w-full">
 								<div className="flex flex-row justify-between items-center pb-4 px-2">

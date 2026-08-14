@@ -1,7 +1,8 @@
-import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Button, Group, Loader, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconFileImport, IconRefresh, IconRobot } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBoxMultiple, IconFileImport, IconRefresh, IconRobot } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -18,6 +19,10 @@ import {
 	selectLocalModelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
@@ -44,8 +49,8 @@ import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
-function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unexpected local model error");
+function errorMessage(error: unknown, t: TFunction): string {
+	return apiErrorMessage(error, t("pages.models.local.errors.unexpected", "Unexpected local model error"));
 }
 
 export function ModelManagement() {
@@ -118,7 +123,7 @@ export function ModelManagement() {
 			toast.success(t("pages.models.local.setDefaultSuccess", { name: selection.selectedModelName ?? "" }));
 			await invalidateListAndDetails();
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(errorMessage(error, t)),
 	});
 
 	const deleteMutation = useMutation({
@@ -129,7 +134,7 @@ export function ModelManagement() {
 			setDetailsModelName(undefined);
 			await invalidateListAndDetails();
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(errorMessage(error, t)),
 	});
 
 	const setKindMutation = useMutation({
@@ -140,7 +145,7 @@ export function ModelManagement() {
 		onSuccess: async () => {
 			await invalidateList();
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(errorMessage(error, t)),
 	});
 
 	const resetKindMutation = useMutation({
@@ -148,7 +153,7 @@ export function ModelManagement() {
 		onSuccess: async () => {
 			await invalidateList();
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(errorMessage(error, t)),
 	});
 
 	// Action errors surface via each mutation's onError toast above (no inline banner).
@@ -167,17 +172,21 @@ export function ModelManagement() {
 	const confirmDelete = useCallback(
 		async (modelName: string) => {
 			const confirmed = await confirm({
-				title: "Delete model",
-				description: `Delete '${modelName}' from the local model store? This cannot be undone.`,
-				confirmationText: "Delete",
-				cancellationText: "Cancel",
+				title: t("pages.models.local.delete.title", "Delete model"),
+				description: t(
+					"pages.models.local.delete.description",
+					"Delete '{{name}}' from the local model store? This cannot be undone.",
+					{ name: modelName },
+				),
+				confirmationText: t("common.delete", "Delete"),
+				cancellationText: t("common.cancel", "Cancel"),
 			});
 
 			if (confirmed) {
 				deleteMutation.mutate({ path: { modelName } });
 			}
 		},
-		[confirm, deleteMutation],
+		[confirm, deleteMutation, t],
 	);
 
 	// Starts a GGUF download by repo id (the model name the backend resolves rides the response). On success the model
@@ -242,17 +251,14 @@ export function ModelManagement() {
 	};
 
 	return (
-		<Container fluid={true} py="lg" data-tour="models-overview">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("common.workerNode", "Worker Node")}
-						</Text>
-						<Title order={2}>{t("pages.models.local.title", "Model management")}</Title>
-						<Text c="dimmed">{t("pages.models.local.subtitle", "List, select, and delete installed local models.")}</Text>
-					</Stack>
-					<Group gap="sm">
+		<PageShell>
+			<PageHeader
+				icon={<IconBoxMultiple size={24} />}
+				title={t("pages.models.local.title", "Model management")}
+				subtitle={t("pages.models.local.subtitle", "List, select, and delete installed local models.")}
+				data-tour="models-overview"
+				actions={
+					<>
 						{importCapability.data?.available ? (
 							<Button variant="light" leftSection={<IconFileImport size={16} />} onClick={openImportModal}>
 								{t("pages.models.gguf.import.action", "Import model")}
@@ -266,65 +272,57 @@ export function ModelManagement() {
 						>
 							{t("common.refresh", "Refresh")}
 						</Button>
-					</Group>
+					</>
+				}
+			/>
+
+			{modelsIsLoading ? (
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.models.local.loading", "Loading local models…")}</Text>
 				</Group>
+			) : null}
 
-				{modelsIsLoading ? (
-					<Group gap="sm">
-						<Loader size="sm" />
-						<Text c="dimmed">{t("pages.models.local.loading", "Loading local models…")}</Text>
-					</Group>
-				) : null}
+			{modelsError ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
+					{errorMessage(modelsError, t)}
+				</Alert>
+			) : null}
 
-				{modelsError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(modelsError)}
-					</Alert>
-				) : null}
-
-				<Card withBorder={true} radius="md" p="lg">
-					<Stack gap="md">
-						<Group justify="space-between">
-							<Title order={3}>{t("pages.models.local.installedTitle", "Installed models")}</Title>
-							<IconRobot size={22} />
-						</Group>
-						<InstalledModelsTable
-							models={modelViewModels}
-							isActionPending={isActionPending}
-							onOpenDetails={openDetails}
-							onSetDefault={(modelName) => selectMutation.mutate({ body: { modelName } })}
-							onDelete={confirmDelete}
-							onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
-						/>
-						{modelViewModels.length === 0 ? (
-								<Text c="dimmed">{t("pages.models.local.empty", "No local models found.")}</Text>
-							) : null}
-					</Stack>
-				</Card>
-
-				<DownloadProgressPanel
-					inFlight={inFlightDownloads}
-					downloadStatuses={downloadStatuses}
-					onCancel={handleCancelDownload}
-					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
+			<SectionCard title={t("pages.models.local.installedTitle", "Installed models")} icon={<IconRobot size={22} />}>
+				<InstalledModelsTable
+					models={modelViewModels}
+					isActionPending={isActionPending}
+					onOpenDetails={openDetails}
+					onSetDefault={(modelName) => selectMutation.mutate({ body: { modelName } })}
+					onDelete={confirmDelete}
+					onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
 				/>
+				{modelViewModels.length === 0 ? <EmptyState message={t("pages.models.local.empty", "No local models found.")} /> : null}
+			</SectionCard>
 
-				<ImportProgressPanel
-					operations={importStatuses}
-					onCancel={handleCancelImport}
-					cancellingOperationId={cancelGgufImportMutation.isPending ? (cancelGgufImportMutation.variables ?? null) : null}
-				/>
+			<DownloadProgressPanel
+				inFlight={inFlightDownloads}
+				downloadStatuses={downloadStatuses}
+				onCancel={handleCancelDownload}
+				cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
+			/>
 
-				<GgufBrowsePanel
-					repositories={browseQueryResult.data ?? []}
-					isLoading={browseQueryResult.isLoading && browseQuery.trim().length > 0}
-					error={browseQueryResult.error}
-					hasSearched={browseQuery.trim().length > 0}
-					onSearch={setBrowseQuery}
-					onDownload={handleBrowseDownload}
-					downloadingRepoId={downloadingRepoId}
-				/>
-			</Stack>
+			<ImportProgressPanel
+				operations={importStatuses}
+				onCancel={handleCancelImport}
+				cancellingOperationId={cancelGgufImportMutation.isPending ? (cancelGgufImportMutation.variables ?? null) : null}
+			/>
+
+			<GgufBrowsePanel
+				repositories={browseQueryResult.data ?? []}
+				isLoading={browseQueryResult.isLoading && browseQuery.trim().length > 0}
+				error={browseQueryResult.error}
+				hasSearched={browseQuery.trim().length > 0}
+				onSearch={setBrowseQuery}
+				onDownload={handleBrowseDownload}
+				downloadingRepoId={downloadingRepoId}
+			/>
 
 			<ModelDetailsDialog
 				opened={detailsModalOpened}
@@ -351,6 +349,6 @@ export function ModelManagement() {
 				onClose={closeImportModal}
 				onStarted={() => toast.success(t("pages.models.gguf.import.started", "Import started."))}
 			/>
-		</Container>
+		</PageShell>
 	);
 }

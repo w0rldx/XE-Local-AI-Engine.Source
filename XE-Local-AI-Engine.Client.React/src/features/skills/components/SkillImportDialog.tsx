@@ -9,6 +9,7 @@ import type {
 } from "@/core/api/generated";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { SkillImportCandidateCard } from "@/features/skills/components/SkillImportCandidateCard";
 import { useCommitSkillImport, usePreviewSkillImport } from "@/features/skills/queries/useSkillImport";
 
@@ -276,9 +277,10 @@ export function SkillImportDialog({ opened, onClose }: SkillImportDialogProps) {
 							</Radio.Group>
 						) : null}
 						{report.skills.length === 0 ? (
-							<Text c="dimmed" data-testid="skill-import-report-empty">
-								{t("pages.skills.import.report.empty", "This source contains no skills.")}
-							</Text>
+							<EmptyState
+								message={t("pages.skills.import.report.empty", "This source contains no skills.")}
+								data-testid="skill-import-report-empty"
+							/>
 						) : null}
 						{report.skills.map((candidate) => (
 							<SkillImportCandidateCard

@@ -1,6 +1,8 @@
-import { Box, Stack, Text, Title } from "@mantine/core";
+import { IconTool } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { LocalToolsOverview } from "@/features/chat/components/LocalToolsOverview";
 
 // The catalog rendered by LocalToolsOverview is now dynamic (dynamic tool-catalog): it fetches built-in tools plus the
@@ -11,19 +13,16 @@ export function ToolsPage() {
 	const { t } = useTranslation();
 
 	return (
-		<Box py="lg" data-testid="tools-page">
-			<Stack gap="md">
-				<div>
-					<Title order={3}>{t("pages.tools.title", "Local tools")}</Title>
-					<Text size="sm" c="dimmed">
-						{t(
-							"pages.tools.subtitle",
-							"Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers.",
-						)}
-					</Text>
-				</div>
-				<LocalToolsOverview />
-			</Stack>
-		</Box>
+		<PageShell data-testid="tools-page">
+			<PageHeader
+				title={t("pages.tools.title", "Local tools")}
+				icon={<IconTool size={24} />}
+				subtitle={t(
+					"pages.tools.subtitle",
+					"Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers.",
+				)}
+			/>
+			<LocalToolsOverview />
+		</PageShell>
 	);
 }

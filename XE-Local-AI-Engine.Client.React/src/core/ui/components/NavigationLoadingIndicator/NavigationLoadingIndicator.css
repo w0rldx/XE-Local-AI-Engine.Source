@@ -1,6 +1,9 @@
 .navigation-loading-indicator {
 	position: fixed;
 	inset: 0;
+
+	/* Above the mobile navigation drawer panel so a route change covers all app chrome */
+	z-index: 301;
 }
 
 .navigation-loading-indicator-panel {
