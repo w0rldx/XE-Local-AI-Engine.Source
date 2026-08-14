@@ -136,7 +136,14 @@ public static class GgufPhysicalMemberSetHash
                 throw new ArgumentException("The physical member fingerprint/schema combination is invalid.", nameof(members));
             }
 
-            GgufModelContentFingerprint.WriteField(buffer, member.Role.ToString().ToLowerInvariant());
+            var roleToken = member.Role switch
+            {
+                InstalledModelPhysicalMemberRole.Weight => "weight",
+                InstalledModelPhysicalMemberRole.Projector => "projector",
+                InstalledModelPhysicalMemberRole.Sidecar => "sidecar",
+                _ => throw new ArgumentOutOfRangeException(nameof(members), "The physical member role is invalid.")
+            };
+            GgufModelContentFingerprint.WriteField(buffer, roleToken);
             GgufModelContentFingerprint.WriteField(buffer, GgufModelContentFingerprint.NormalizeRelativePath(member.RelativePath));
             GgufModelContentFingerprint.WriteField(buffer, member.SizeBytes.ToString(CultureInfo.InvariantCulture));
             GgufMemberFingerprint.ValidateHash(member.Sha256);
