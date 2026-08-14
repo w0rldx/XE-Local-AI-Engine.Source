@@ -415,7 +415,10 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     }
 
     private static bool InspectionMatches(GgufImportInspection left, GgufImportInspection right) =>
-        left.SizeBytes == right.SizeBytes
+        !string.IsNullOrWhiteSpace(left.SourceIdentityToken)
+        && !string.IsNullOrWhiteSpace(right.SourceIdentityToken)
+        && string.Equals(left.SourceIdentityToken, right.SourceIdentityToken, StringComparison.Ordinal)
+        && left.SizeBytes == right.SizeBytes
         && left.GgufVersion == right.GgufVersion
         && string.Equals(left.Architecture, right.Architecture, StringComparison.Ordinal)
         && left.Workload == right.Workload

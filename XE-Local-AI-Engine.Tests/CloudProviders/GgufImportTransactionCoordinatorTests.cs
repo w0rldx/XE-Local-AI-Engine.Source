@@ -52,6 +52,24 @@ public sealed class GgufImportTransactionCoordinatorTests
     }
 
     [Test]
+    public async Task Start_SamePathAndMetadataButDifferentSourceIdentity_IsRejectedAsStale()
+    {
+        var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
+        var first = AcceptedInspection(Path.GetFileName(sourcePath));
+        var second = first with { SourceIdentityToken = $"v1:{new string('b', 64)}" };
+        var coordinator = BuildCoordinator(sourcePath, inspector: new SequenceInspector(first, second));
+        var preview = await coordinator.PreviewAsync(sourcePath);
+
+        var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(
+            new StartGgufImportCommand(sourcePath,
+                preview.PreviewToken,
+                preview.ModelBaseName,
+                "Q4_K_M")));
+
+        AssertEx.Equal("StalePreview", exception!.ErrorCode);
+    }
+
+    [Test]
     public async Task Preview_WhenQuantizationMustBeSelected_ReturnsRepositoryCanonicalChoices()
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example.gguf");
@@ -137,12 +155,13 @@ public sealed class GgufImportTransactionCoordinatorTests
         long diskMarginBytes = 0,
         IGgufModelImporter? importer = null,
         GgufAcquisitionIdentityResolver? resolver = null,
-        ServiceProvider? services = null)
+        ServiceProvider? services = null,
+        IGgufImportInspector? inspector = null)
     {
         var security = Options.Create(new SecurityOptions());
         services ??= new ServiceCollection().BuildServiceProvider();
         return new GgufImportTransactionCoordinator(
-            new AcceptedInspector(inspection ?? AcceptedInspection(Path.GetFileName(sourcePath))),
+            inspector ?? new AcceptedInspector(inspection ?? AcceptedInspection(Path.GetFileName(sourcePath))),
             importer ?? new UnusedImporter(),
             resolver ?? new GgufAcquisitionIdentityResolver(new ModelNameValidator(security)),
             new GgufAcquisitionOperationRegistry(TimeProvider.System),
@@ -182,12 +201,26 @@ public sealed class GgufImportTransactionCoordinatorTests
         "Q4_K_M",
         displayName,
         Array.Empty<GgufImportRejectionCode>(),
-        Array.Empty<string>());
+        Array.Empty<string>())
+    {
+        SourceIdentityToken = $"v1:{new string('a', 64)}"
+    };
 
     private sealed class AcceptedInspector(GgufImportInspection inspection) : IGgufImportInspector
     {
         public Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken) =>
             Task.FromResult(inspection);
+    }
+
+    private sealed class SequenceInspector(params GgufImportInspection[] inspections) : IGgufImportInspector
+    {
+        private int _index;
+
+        public Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken)
+        {
+            var index = Math.Min(Interlocked.Increment(ref _index) - 1, inspections.Length - 1);
+            return Task.FromResult(inspections[index]);
+        }
     }
 
     private sealed class FixedFreeSpaceProbe(long availableBytes) : IFreeSpaceProbe
