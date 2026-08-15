@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated TanStack options factory so the hook runs against an owned queryFn (no network). The hook
@@ -15,6 +13,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import { useFeedbackInsights } from "@/features/agents/queries/useFeedbackInsights";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // A generated-shaped response (every field optional on the wire) the mocked options' queryFn resolves.
 const generatedResponse = {
@@ -37,11 +36,8 @@ const generatedResponse = {
 };
 
 function makeWrapper() {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	const { wrapper } = createProvidersWrapper();
+	return { wrapper };
 }
 
 describe("useFeedbackInsights", () => {
@@ -58,8 +54,8 @@ describe("useFeedbackInsights", () => {
 	});
 
 	it("passes the agent id as a path param and maps the generated response into the domain insights", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useFeedbackInsights("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useFeedbackInsights("agent-1"), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -85,8 +81,8 @@ describe("useFeedbackInsights", () => {
 	});
 
 	it("is disabled (does not fetch) when no agent is selected", () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useFeedbackInsights(null), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useFeedbackInsights(null), { wrapper });
 
 		expect(result.current.fetchStatus).toBe("idle");
 		expect(result.current.isPending).toBe(true);

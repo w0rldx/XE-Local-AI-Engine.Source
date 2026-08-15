@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated SDK (list/delete), the axios instance (multipart upload posts through it directly), and the
@@ -28,13 +26,11 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 }));
 
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 function makeWrapper() {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper, queryClient };
+	const { wrapper, queryClient } = createProvidersWrapper();
+	return { wrapper, queryClient };
 }
 
 const ensureConversationId = vi.fn<() => Promise<string>>().mockResolvedValue("conversation-1");
@@ -59,9 +55,9 @@ describe("useConversationAttachments", () => {
 	});
 
 	it("loads the conversation's files and derives the attachment file ids", async () => {
-		const { Wrapper } = makeWrapper();
+		const { wrapper } = makeWrapper();
 		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
-			wrapper: Wrapper,
+			wrapper,
 		});
 
 		await waitFor(() => expect(result.current.attachments).toHaveLength(2));
@@ -72,9 +68,9 @@ describe("useConversationAttachments", () => {
 	});
 
 	it("does not load files when there is no conversation yet", () => {
-		const { Wrapper } = makeWrapper();
+		const { wrapper } = makeWrapper();
 		const { result } = renderHook(() => useConversationAttachments({ conversationId: "", ensureConversationId }), {
-			wrapper: Wrapper,
+			wrapper,
 		});
 
 		expect(listMock).not.toHaveBeenCalled();
@@ -82,9 +78,9 @@ describe("useConversationAttachments", () => {
 	});
 
 	it("uploads accepted files as multipart form data into the resolved conversation", async () => {
-		const { Wrapper } = makeWrapper();
+		const { wrapper } = makeWrapper();
 		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
-			wrapper: Wrapper,
+			wrapper,
 		});
 
 		const file = new File(["hello"], "notes.txt", { type: "text/plain" });
@@ -103,9 +99,9 @@ describe("useConversationAttachments", () => {
 	});
 
 	it("rejects an oversize file client-side with a toast and never calls the upload endpoint", async () => {
-		const { Wrapper } = makeWrapper();
+		const { wrapper } = makeWrapper();
 		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
-			wrapper: Wrapper,
+			wrapper,
 		});
 
 		// 26 MB > the 25 MB advisory cap.
@@ -118,9 +114,9 @@ describe("useConversationAttachments", () => {
 	});
 
 	it("removes an attachment via the delete endpoint", async () => {
-		const { Wrapper } = makeWrapper();
+		const { wrapper } = makeWrapper();
 		const { result } = renderHook(() => useConversationAttachments({ conversationId: "conversation-1", ensureConversationId }), {
-			wrapper: Wrapper,
+			wrapper,
 		});
 
 		result.current.removeAttachment("file-1");
