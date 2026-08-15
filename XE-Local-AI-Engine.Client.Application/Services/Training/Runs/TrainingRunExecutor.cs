@@ -261,6 +261,13 @@ public sealed class TrainingRunExecutor(
         }
     }
 
+    /// <summary>
+    ///     How often the watchdog looks. Capped at a second for a production-length bound, but scaled down with the
+    ///     bound itself so a short one is not rounded up to the poll interval.
+    /// </summary>
+    private static TimeSpan WatchdogInterval(TimeSpan inactivityTimeout) =>
+        inactivityTimeout < TimeSpan.FromSeconds(4) ? inactivityTimeout / 4 : TimeSpan.FromSeconds(1);
+
     /// <summary>Takes the kill callback rather than the handle: the watchdog's only power over the child is to end it.</summary>
     private async Task WatchdogAsync(Action killGroup, StreamState state, CancellationToken stoppingToken)
     {
@@ -268,7 +275,7 @@ public sealed class TrainingRunExecutor(
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(1), _timeProvider, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(WatchdogInterval(_options.InactivityTimeout), _timeProvider, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

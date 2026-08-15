@@ -19,9 +19,14 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 ///         with the batch/sequence lever kept linear rather than modelled precisely.
 ///     </para>
 ///     <para>
-///         Two deliberate fail-safes: a headroom fraction on the fixed cost, and a floor at 2 bytes/param on the full
-///         (unquantized) parameter count. The floor models nothing real — it catches formula errors, and it errs toward
-///         refusing a borderline run instead of admitting one that OOMs an hour in.
+///         Two deliberate fail-safes: a headroom fraction on the fixed cost, and a floor at the frozen 4-bit weights
+///         plus a CUDA context, so a checkpoint whose shape could not be read still cannot produce a tiny answer.
+///     </para>
+///     <para>
+///         The floor is deliberately NOT the fp16 weight size the research brief proposed. That floor would refuse
+///         exactly the runs this feature exists for: the published reference points the same brief cites put an 8B
+///         QLoRA run near 6 GB, well under the 16 GB its own fp16 weights would need, so an fp16 floor makes every
+///         estimate the floor and hides the batch and sequence levers entirely.
 ///     </para>
 /// </remarks>
 public static class TrainingFootprintEstimator
@@ -75,8 +80,9 @@ public static class TrainingFootprintEstimator
                        + (long)(fixedCost * ActivationHeadroomFraction)
                        + CudaContextOverheadBytes;
 
-        // The floor: training can never plausibly need less than the fp16 weights alone would for inference.
-        gpuBytes = Math.Max(gpuBytes, parameterCount * 2);
+        // The fail-safe floor: the frozen 4-bit weights plus a CUDA context have to be resident no matter what the
+        // rest of the formula says, so a shape this estimator could not read still cannot produce a tiny answer.
+        gpuBytes = Math.Max(gpuBytes, (long)(parameterCount * QuantizedBytesPerParameter) + CudaContextOverheadBytes);
         return new TrainingFootprintEstimate(gpuBytes,
             HostRamBytes,
             parameterCount,

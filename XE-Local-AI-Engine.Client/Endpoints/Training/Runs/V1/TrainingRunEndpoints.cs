@@ -114,6 +114,9 @@ public sealed class CancelTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
     {
         Post(LocalApiRoutes.Training.RunCancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        // The run id is the whole request and it comes from the route, so this POST has no body. Without declaring
+        // that, FastEndpoints requires a JSON body and a bodyless cancel is answered with 415 instead of acting.
+        Description(builder => builder.Accepts<TrainingRunByIdRequest>());
     }
 
     public override async Task HandleAsync(TrainingRunByIdRequest req, CancellationToken ct)

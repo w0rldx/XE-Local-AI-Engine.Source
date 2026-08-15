@@ -236,6 +236,9 @@ public sealed class ImageJobEndpointTests
         /// <summary>The most recent input handed to <see cref="EnqueueAsync" />; null until the first enqueue.</summary>
         public CreateImageJobInput? LastInput { get; private set; }
 
+        /// <summary>Nothing in this stub ever generates, so it is always idle.</summary>
+        public bool HasActiveJob => false;
+
         public Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(input);

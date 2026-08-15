@@ -183,10 +183,15 @@ public sealed class TrainingRunService(
             // and a seeded shuffle would only add a seed to explain.
             var take = (int)Math.Floor(ordered.Length * holdoutFraction);
             var stride = take > 0 ? ordered.Length / take : 0;
+            // Counted per stratum, not against the shared list: comparing the global count would let the first kind
+            // fill the quota and leave every later kind entirely on the training side — the exact failure stratifying
+            // exists to prevent.
+            var taken = 0;
             for (var index = 0; index < ordered.Length; index++)
             {
-                if (stride > 0 && holdout.Count < take && index % stride == 0)
+                if (stride > 0 && taken < take && index % stride == 0)
                 {
+                    taken++;
                     holdout.Add(ordered[index].Id);
                     holdoutSequences.Add(ordered[index].Sequence);
                     continue;
