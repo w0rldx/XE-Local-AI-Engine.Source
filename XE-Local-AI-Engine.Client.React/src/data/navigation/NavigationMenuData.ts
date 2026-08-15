@@ -11,6 +11,7 @@ import {
 	IconMessageCircle,
 	IconPlugConnected,
 	IconRobot,
+	IconSchool,
 	IconSettings,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
@@ -32,7 +33,8 @@ type NavigationCapabilityKey =
 	| "cloudSettings"
 	| "dashboard"
 	| "binding"
-	| "benchmarks";
+	| "benchmarks"
+	| "training";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -150,6 +152,13 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.benchmarks",
 		to: nodeRoutePaths.benchmarks,
 		capability: "benchmarks",
+	},
+	{
+		id: "training",
+		icon: IconSchool,
+		translationKey: "navigation.training",
+		capability: "training",
+		links: [{ translationKey: "navigation.trainingDatasets", to: nodeRoutePaths.trainingDatasets, capability: "training" }],
 	},
 	{
 		id: "invocations",

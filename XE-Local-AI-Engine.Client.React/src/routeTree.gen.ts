@@ -36,6 +36,7 @@ import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
 import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
 import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
+import { Route as LayoutTrainingDatasetsRouteImport } from './routes/_layout/training.datasets'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -172,6 +173,11 @@ const LayoutUsageRoute = LayoutUsageRouteImport.update({
   path: '/usage',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutTrainingDatasetsRoute = LayoutTrainingDatasetsRouteImport.update({
+  id: '/training/datasets',
+  path: '/training/datasets',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -200,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
+  '/training/datasets': typeof LayoutTrainingDatasetsRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -228,6 +235,7 @@ export interface FileRoutesByTo {
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
   '/': typeof LayoutIndexRoute
+  '/training/datasets': typeof LayoutTrainingDatasetsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/_layout/tools': typeof LayoutToolsRoute
   '/_layout/usage': typeof LayoutUsageRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/training/datasets': typeof LayoutTrainingDatasetsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -288,6 +297,7 @@ export interface FileRouteTypes {
     | '/skills'
     | '/tools'
     | '/usage'
+    | '/training/datasets'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
     | '/tools'
     | '/usage'
     | '/'
+    | '/training/datasets'
   id:
     | '__root__'
     | '/_layout'
@@ -345,6 +356,7 @@ export interface FileRouteTypes {
     | '/_layout/tools'
     | '/_layout/usage'
     | '/_layout/'
+    | '/_layout/training/datasets'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -544,6 +556,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutUsageRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/training/datasets': {
+      id: '/_layout/training/datasets'
+      path: '/training/datasets'
+      fullPath: '/training/datasets'
+      preLoaderRoute: typeof LayoutTrainingDatasetsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
@@ -572,6 +591,7 @@ interface LayoutRouteChildren {
   LayoutToolsRoute: typeof LayoutToolsRoute
   LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutTrainingDatasetsRoute: typeof LayoutTrainingDatasetsRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -599,6 +619,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutToolsRoute: LayoutToolsRoute,
   LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutTrainingDatasetsRoute: LayoutTrainingDatasetsRoute,
 }
 
 const LayoutRouteWithChildren =
