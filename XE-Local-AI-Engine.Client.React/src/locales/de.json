@@ -4525,14 +4525,62 @@
 			"title": "Datensatz-Definitionen",
 			"empty": "Noch keine Datensatz-Definitionen.",
 			"generate": "Generieren",
-			"holdout": "{{percent}}% Holdout"
+			"holdout": "{{percent}}% Holdout",
+			"new": "Neue Definition",
+			"edit": "Bearbeiten",
+			"delete": "Löschen",
+			"editor": {
+				"createTitle": "Neue Datensatz-Definition",
+				"editTitle": "Datensatz-Definition bearbeiten",
+				"name": "Name",
+				"teacher": "Lehrermodell",
+				"teacherHint": "Nur node-lokale Modelle. Cloud-Lehrer werden abgelehnt.",
+				"outputMode": "Ausgabemodus des Lehrers",
+				"mode": {
+					"Constrained": "Eingeschränktes Decoding",
+					"ValidateAfter": "Nach der Generierung prüfen"
+				},
+				"systemInstructions": "Systemanweisungen",
+				"tools": "Werkzeuge",
+				"toolsHint": "Die Werkzeuge, die dem Lehrer angeboten werden. Der Node friert ihre Schemata beim Speichern ein.",
+				"sampleKinds": "Beispielarten",
+				"addKind": "Art hinzufügen",
+				"removeKind": "Art entfernen",
+				"kind": "Art",
+				"kindPlaceholder": "z. B. single-tool-call",
+				"count": "Anzahl",
+				"label": "Label",
+				"holdout": "Holdout (%)",
+				"temperature": "Lehrer-Temperatur",
+				"baseSeed": "Basis-Seed",
+				"baseSeedHint": "Optional. Eine 64-Bit-Ganzzahl; leer lassen für keine Seed-Vorgabe.",
+				"critic": "Jedes Beispiel mit einem Kritikermodell bewerten",
+				"criticModel": "Kritikermodell",
+				"cancel": "Abbrechen",
+				"save": "Definition speichern",
+				"saveFailed": "Die Datensatz-Definition konnte nicht gespeichert werden.",
+				"errors": {
+					"name": "Eine Definition braucht einen Namen.",
+					"teacher": "Wähle ein node-lokales Lehrermodell.",
+					"holdout": "Der Holdout-Anteil muss zwischen 5 und 30 Prozent liegen.",
+					"temperature": "Die Lehrer-Temperatur muss zwischen 0 und 2 liegen.",
+					"sampleKinds": "Eine Definition braucht mindestens eine Beispielart.",
+					"sampleKind": "Eine Beispielart braucht einen Namen mit höchstens 64 Zeichen.",
+					"sampleCount": "Eine Beispielart braucht eine ganze Zielanzahl von mindestens 1.",
+					"totalSamples": "Eine Definition darf insgesamt höchstens 2000 Beispiele anstreben.",
+					"duplicateKind": "Beispielarten müssen je Label eindeutig sein.",
+					"baseSeed": "Der Basis-Seed muss eine ganze Zahl sein.",
+					"criticModel": "Wähle ein Kritikermodell oder schalte den Kritiker aus."
+				}
+			}
 		},
 		"datasets": {
 			"title": "Datensätze",
 			"empty": "Noch keine Datensätze. Generiere einen aus einer Definition.",
 			"revision": "Revision {{revision}}",
 			"counts": "{{total}} Beispiele · {{good}} gut · {{bad}} schlecht · {{rejected}} abgelehnt · {{duplicate}} doppelt",
-			"delete": "Löschen"
+			"delete": "Löschen",
+			"cancel": "Abbrechen"
 		},
 		"samples": {
 			"title": "Beispiele — {{name}}",
@@ -4704,6 +4752,11 @@
 				"resumeFailed": "Die Auswertung konnte nicht fortgesetzt werden.",
 				"progress": "{{scored}} von {{total}} bewertet, {{passed}} bestanden"
 			}
+		},
+		"drift": {
+			"run": "Der Datensatz wurde bearbeitet, nachdem dieser Lauf sein Holdout-Set eingefroren hat; die Werte sind möglicherweise nicht vergleichbar.",
+			"evaluation": "Der Datensatz wurde bearbeitet, nachdem diese Auswertung ihr Holdout-Set eingefroren hat; die Werte sind möglicherweise nicht vergleichbar.",
+			"deleted": "Der zugrunde liegende Datensatz wurde gelöscht; sein eingefrorenes Holdout-Set kann nicht mehr verglichen werden."
 		}
 	}
 }

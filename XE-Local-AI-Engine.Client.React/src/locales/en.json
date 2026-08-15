@@ -4525,14 +4525,62 @@
 			"title": "Dataset definitions",
 			"empty": "No dataset definitions yet.",
 			"generate": "Generate",
-			"holdout": "{{percent}}% hold-out"
+			"holdout": "{{percent}}% hold-out",
+			"new": "New definition",
+			"edit": "Edit",
+			"delete": "Delete",
+			"editor": {
+				"createTitle": "New dataset definition",
+				"editTitle": "Edit dataset definition",
+				"name": "Name",
+				"teacher": "Teacher model",
+				"teacherHint": "Node-local models only. Cloud teachers are refused.",
+				"outputMode": "Teacher output mode",
+				"mode": {
+					"Constrained": "Constrained decoding",
+					"ValidateAfter": "Validate after generation"
+				},
+				"systemInstructions": "System instructions",
+				"tools": "Tools",
+				"toolsHint": "The tools the teacher is offered. The node snapshots their schemas on save.",
+				"sampleKinds": "Sample kinds",
+				"addKind": "Add kind",
+				"removeKind": "Remove kind",
+				"kind": "Kind",
+				"kindPlaceholder": "e.g. single-tool-call",
+				"count": "Count",
+				"label": "Label",
+				"holdout": "Hold-out (%)",
+				"temperature": "Teacher temperature",
+				"baseSeed": "Base seed",
+				"baseSeedHint": "Optional. A 64-bit integer; leave empty for no seed policy.",
+				"critic": "Score every sample with a critic model",
+				"criticModel": "Critic model",
+				"cancel": "Cancel",
+				"save": "Save definition",
+				"saveFailed": "Could not save the dataset definition.",
+				"errors": {
+					"name": "A definition needs a name.",
+					"teacher": "Pick a node-local teacher model.",
+					"holdout": "The hold-out share must be between 5 and 30 percent.",
+					"temperature": "The teacher temperature must be between 0 and 2.",
+					"sampleKinds": "A definition needs at least one sample kind.",
+					"sampleKind": "A sample kind needs a name of at most 64 characters.",
+					"sampleCount": "A sample kind needs a whole target count of at least 1.",
+					"totalSamples": "A definition may target at most 2000 samples in total.",
+					"duplicateKind": "Sample kinds must be unique per label.",
+					"baseSeed": "The base seed must be a whole number.",
+					"criticModel": "Pick a critic model, or turn the critic off."
+				}
+			}
 		},
 		"datasets": {
 			"title": "Datasets",
 			"empty": "No datasets yet. Generate one from a definition.",
 			"revision": "Revision {{revision}}",
 			"counts": "{{total}} samples · {{good}} good · {{bad}} bad · {{rejected}} rejected · {{duplicate}} duplicate",
-			"delete": "Delete"
+			"delete": "Delete",
+			"cancel": "Cancel"
 		},
 		"samples": {
 			"title": "Samples — {{name}}",
@@ -4704,6 +4752,11 @@
 				"resumeFailed": "Could not resume the evaluation.",
 				"progress": "{{scored}} of {{total}} scored, {{passed}} passed"
 			}
+		},
+		"drift": {
+			"run": "The dataset was edited after this run froze its hold-out set; scores may not be comparable.",
+			"evaluation": "The dataset was edited after this evaluation froze its hold-out set; scores may not be comparable.",
+			"deleted": "The dataset this used has been deleted; its frozen hold-out set can no longer be compared."
 		}
 	}
 }
