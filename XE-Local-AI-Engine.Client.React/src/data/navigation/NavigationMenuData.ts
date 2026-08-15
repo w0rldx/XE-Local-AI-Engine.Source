@@ -153,12 +153,16 @@ const allNavigationLinks: INavigationLink[] = [
 		to: nodeRoutePaths.benchmarks,
 		capability: "benchmarks",
 	},
+	// Training group. Each child carries its own capability (like Models / Automation / Preview), so the generic
+	// empty-group filter drops the whole group while `training` is off — which it is until the module can finish a run.
 	{
 		id: "training",
 		icon: IconSchool,
-		translationKey: "navigation.training",
-		capability: "training",
-		links: [{ translationKey: "navigation.trainingDatasets", to: nodeRoutePaths.trainingDatasets, capability: "training" }],
+		translationKey: "navigation.trainingGroup",
+		links: [
+			{ translationKey: "navigation.trainingDatasets", to: nodeRoutePaths.trainingDatasets, capability: "training" },
+			{ translationKey: "navigation.training", to: nodeRoutePaths.training, capability: "training" },
+		],
 	},
 	{
 		id: "invocations",
