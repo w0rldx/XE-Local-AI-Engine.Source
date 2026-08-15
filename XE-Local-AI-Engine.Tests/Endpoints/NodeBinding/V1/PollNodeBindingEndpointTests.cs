@@ -19,7 +19,8 @@ public sealed class PollNodeBindingEndpointTests
     [Test]
     public async Task Poll_WhenAnonymous_Returns401()
     {
-        await using var factory = NodeBindingEndpointHost.Create(NodeBindingEndpointHost.CreateService());
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route)
@@ -34,7 +35,8 @@ public sealed class PollNodeBindingEndpointTests
     [Test]
     public async Task Poll_WhenAuthenticatedButNotOperator_Returns403()
     {
-        await using var factory = NodeBindingEndpointHost.Create(NodeBindingEndpointHost.CreateService());
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route)
@@ -50,7 +52,7 @@ public sealed class PollNodeBindingEndpointTests
     [Test]
     public async Task Poll_WhenApproved_Returns200WithTerminalStatus()
     {
-        var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
         bindingService.PollUntilTerminalAsync(Arg.Any<NodeBindingSession>(), Arg.Any<CancellationToken>())
                       .Returns(new PollNodeBindingResponse
                       {
@@ -78,7 +80,7 @@ public sealed class PollNodeBindingEndpointTests
     [Test]
     public async Task Poll_WhenCancelledByOperator_Returns200WithCancelledStatus()
     {
-        var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
         bindingService.PollUntilTerminalAsync(Arg.Any<NodeBindingSession>(), Arg.Any<CancellationToken>())
                       .Returns<Task<PollNodeBindingResponse>>(_ => throw new OperationCanceledException());
 
@@ -103,7 +105,7 @@ public sealed class PollNodeBindingEndpointTests
     [Test]
     public async Task Poll_WhenPlatformRefuses_Returns400NotServerError()
     {
-        var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
         bindingService.PollUntilTerminalAsync(Arg.Any<NodeBindingSession>(), Arg.Any<CancellationToken>())
                       .Returns<Task<PollNodeBindingResponse>>(_ => throw new NodeBindingException("Central Platform returned an unknown binding status."));
 
