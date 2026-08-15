@@ -728,9 +728,10 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
     private static TrainingSampleRecord ToRecord(TrainingDatasetSample entity) =>
         new(entity.Id, entity.DatasetId, entity.Sequence, entity.Kind, entity.Label, entity.ReviewState, entity.ContentJson.ToArray(),
-            entity.ValidationJson?.ToArray(), entity.Provenance, entity.SourceHash, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+            // `?.ToArray()` would read back as an EMPTY memory rather than as null — see OptionalBlob.
+            OptionalBlob.AsOptionalMemory(entity.ValidationJson), entity.Provenance, entity.SourceHash, entity.CreatedAtUtc, entity.UpdatedAtUtc);
 
     private static ToolMockRecord ToRecord(ToolMockDefinition entity) =>
-        new(entity.Id, entity.ToolName, entity.MockJson.ToArray(), entity.VerificationJson?.ToArray(), entity.VerificationState,
+        new(entity.Id, entity.ToolName, entity.MockJson.ToArray(), OptionalBlob.AsOptionalMemory(entity.VerificationJson), entity.VerificationState,
             entity.Enabled, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
 }

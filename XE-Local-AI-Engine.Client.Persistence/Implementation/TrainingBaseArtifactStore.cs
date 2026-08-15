@@ -204,7 +204,9 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
             entity.Status,
             entity.FilesJson,
             entity.TotalBytes,
-            entity.LicenseJson,
+            // Not `entity.LicenseJson` directly: the implicit byte[] conversion turns a NULL column into an EMPTY
+            // memory with HasValue == true, and the license gate reads absence as "no license metadata found".
+            OptionalBlob.AsOptionalMemory(entity.LicenseJson),
             entity.ErrorMessage,
             entity.Version,
             entity.CreatedAtUtc,
