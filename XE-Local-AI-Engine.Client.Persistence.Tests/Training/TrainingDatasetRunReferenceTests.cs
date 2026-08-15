@@ -74,23 +74,24 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
         AssertEx.Null(await datasets.GetDatasetAsync(fixture.DatasetId));
     }
 
+    /// <summary>
+    ///     A cancel that arrives before the queue claims terminalizes the work item where it stands, so the completion
+    ///     path has to accept a QUEUED item and not only a running one.
+    /// </summary>
     [Test]
-    public async Task HasActiveGeneration_TracksTheQueueRatherThanTheDatasetStatus()
+    public async Task CompleteGeneration_TerminalizesAWorkItemThatWasStillQueued()
     {
-        await using var context = await CreateDatabaseAsync("active-generation.sqlite");
+        await using var context = await CreateDatabaseAsync("cancel-queued-generation.sqlite");
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
         var definition = await datasets.CreateDefinitionAsync(
             new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
-        AssertEx.False(await datasets.HasActiveGenerationAsync(), "A store with no work items is idle.");
-
         var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
-        AssertEx.True(await datasets.HasActiveGenerationAsync(), "A queued work item is in flight as far as the GPU is concerned.");
+        AssertEx.Equal(DatasetGenerationWorkStatus.Queued, dataset.WorkStatus);
 
-        _ = await datasets.ClaimNextAsync();
-        AssertEx.True(await datasets.HasActiveGenerationAsync(), "So is a running one.");
+        var cancelled = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.");
 
-        _ = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null);
-        AssertEx.False(await datasets.HasActiveGenerationAsync(), "A terminalized work item releases the GPU.");
+        AssertEx.Equal(DatasetGenerationWorkStatus.Cancelled, cancelled.WorkStatus);
+        AssertEx.Null(await datasets.ClaimNextAsync(), "A cancelled work item must not be claimable afterwards.");
     }
 
     private static TrainingRunEnqueueCommand Command(RunFixture fixture) =>
