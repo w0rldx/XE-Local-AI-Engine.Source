@@ -14,6 +14,23 @@ Read `docs/agent-knowledge.md` before your first non-trivial change. It records 
 
 ## Validation
 
+### What CI runs on a PR to `develop`
+
+`.github/workflows/build-and-test.yml`, three parallel jobs (the tag-triggered `release.yml` re-runs
+this whole file as its `validate` job before packaging):
+
+- **release-contracts** — `scripts/run-release-contract-tests.sh` (auto-enrolled `scripts/tests`,
+  `scripts/compliance/tests`, `scripts/performance/tests`), then `scripts/lint-release-scripts.sh
+  --no-behavior --bootstrap` (shellcheck, PSScriptAnalyzer, Pester, the `P0_SPIKE` compile gate).
+- **build-and-test** — Release build, `scripts/openapi-live-check.sh`, then one `dotnet test` per
+  test project in the solution with Cobertura coverage; `scripts/merge-cobertura.py` enforces
+  `scripts/backend-coverage-baseline.txt`. Coverage XML + TRX are uploaded as `backend-test-results`.
+- **client-react** — `openapi:check`, `licenses:check`, `validate` (= `lint` + `knip` +
+  `signalr:check` + `depcruise`), `test:coverage:check`, `test:tooling`, `build`, `pnpm audit`.
+
+Not gates: `e2e.yml` (manual dispatch, or a PR labelled `run-e2e`) and `pnpm run spellCheck`
+(~1.7k unknown words on the current tree — a dictionary task, not a gate).
+
 Backend:
 
 - `dotnet restore XE-Local-AI-Engine.slnx`
