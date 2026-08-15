@@ -729,6 +729,15 @@ public static class LocalApiRoutes
 
         /// <summary>SignalR push hub for per-run status, phase and training progress.</summary>
         public const string RunHub = "/api/local/v1/training/runs/hub";
+
+        // Exports. Starting one and listing what a run produced are run-scoped; every action ON an artifact addresses
+        // it by its own id, because an artifact outlives the export that produced it and is acted on without the run
+        // in hand.
+        public const string RunExports = "training/runs/{runId}/exports";
+        public const string RunArtifacts = "training/runs/{runId}/artifacts";
+        public const string ArtifactById = "training/artifacts/{artifactId}";
+        public const string ArtifactSmoke = "training/artifacts/{artifactId}/smoke";
+        public const string ArtifactPromote = "training/artifacts/{artifactId}/promote";
     }
 
     public static class Automation

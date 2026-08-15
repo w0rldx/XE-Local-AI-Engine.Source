@@ -86,6 +86,152 @@ export const zXeLocalAiEngineClientEndpointsTrainingRuntimeV1StartTrainingRuntim
 	status: zXeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse,
 });
 
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunProgressResponse = z.object({
+	phase: z.string(),
+	step: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	epoch: z.number().nullish(),
+	loss: z.number().nullish(),
+	learningRate: z.number().nullish(),
+	vramBytes: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload = z.object({
+	maxSeqLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	loraR: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	loraAlpha: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	loraDropout: z.number(),
+	perDeviceTrainBatchSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	gradientAccumulationSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	learningRate: z.number(),
+	warmupRatio: z.number(),
+	epochs: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	seed: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	optimizer: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse = z.object({
+	id: z.guid(),
+	datasetId: z.guid(),
+	baseArtifactId: z.guid(),
+	status: z.string(),
+	datasetRevision: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	datasetContentFingerprint: z.string(),
+	workStatus: z.string().nullish(),
+	errorMessage: z.string().nullish(),
+	logTail: z.string().nullish(),
+	progress: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunProgressResponse.nullish(),
+	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload.nullish(),
+	version: z.int(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest = z.object({
+	datasetId: z.guid(),
+	expectedDatasetVersion: z.int(),
+	baseArtifactId: z.guid(),
+	licenseConfirmed: z.boolean(),
+	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload.nullish(),
+});
+
+/**
+ * the dto used to send an error response to the client
+ */
+export const zFastEndpointsErrorResponse = z.object({
+	statusCode: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	message: z.string().optional().default("One or more errors occurred!"),
+	errors: z.record(z.string(), z.array(z.string())).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	pageSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunByIdRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse = z.object({
+	gpuBytes: z.int(),
+	ramBytes: z.int(),
+	parameterCount: z.int(),
+	trainableParameterCount: z.int(),
+	experimental: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse = z.object({
+	repoId: z.string(),
+	license: z.string().nullish(),
+	isGated: z.boolean(),
+	metadataPresent: z.boolean(),
+	confirmationText: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse = z.object({
+	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload,
+	estimate: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse,
+	availableVramBytes: z.int(),
+	vramKnown: z.boolean(),
+	fits: z.boolean(),
+	rejectionReason: z.string().nullish(),
+	license: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientServicesTrainingDatasetsToolMockMatchKind = z.enum(["Equality", "Presence", "Enum"]);
 
 export const zXeLocalAiEngineClientServicesTrainingDatasetsToolMockRuleV1 = z.object({
@@ -155,6 +301,68 @@ export const zXeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest = z.
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1VerifyToolMockRequest = z.object({
 	expectedVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingExportAcceptedResponse = z.object({
+	runId: z.guid(),
+	kind: z.string(),
+	quantType: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingExportBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientPersistenceEntitiesTrainingArtifactKind = z.enum([
+	"AdapterGguf",
+	"MergedGguf",
+	"HfAdapterDir",
+]);
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1StartTrainingExportRequest = z.object({
+	kind: zXeLocalAiEngineClientPersistenceEntitiesTrainingArtifactKind,
+	quantType: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactResponse = z.object({
+	id: z.guid(),
+	runId: z.guid(),
+	kind: z.string(),
+	fileName: z.string(),
+	sha256: z.string().nullish(),
+	sizeBytes: z.int(),
+	smokeState: z.string(),
+	smokeReason: z.string().nullish(),
+	committedModelName: z.string().nullish(),
+	version: z.int(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1ListTrainingArtifactsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingRunArtifactsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactByIdRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest = z.object({
+	expectedVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactSmokeResponse = z.object({
+	smokeState: z.string(),
+	smokeReason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse = z.object({
+	modelName: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest = z.object({
+	modelName: z.string().min(1),
 });
 
 export const zXeLocalAiEngineClientPersistenceEntitiesTrainingDatasetKind = z.enum(["ToolCalling"]);
@@ -454,20 +662,6 @@ export const zXeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactB
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactByIdRequest = z.record(z.string(), z.never());
-
-/**
- * the dto used to send an error response to the client
- */
-export const zFastEndpointsErrorResponse = z.object({
-	statusCode: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	message: z.string().optional().default("One or more errors occurred!"),
-	errors: z.record(z.string(), z.array(z.string())).optional(),
-});
 
 export const zXeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1CreateBaseArtifactRequest = z.object({
 	repoId: z.string().min(1),
@@ -2022,6 +2216,11 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRespons
 	deleted: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.object({
@@ -2041,7 +2240,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsRes
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin = z.enum(["huggingface", "imported"]);
+export const zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin = z.enum(["huggingface", "imported", "trained"]);
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = z.object({
 	modelName: z.string(),
@@ -4398,169 +4597,6 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunProgressResponse = z.object({
-	phase: z.string(),
-	step: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalSteps: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	epoch: z.number().nullish(),
-	loss: z.number().nullish(),
-	learningRate: z.number().nullish(),
-	vramBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload = z.object({
-	maxSeqLength: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	loraR: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	loraAlpha: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	loraDropout: z.number(),
-	perDeviceTrainBatchSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	gradientAccumulationSteps: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	learningRate: z.number(),
-	warmupRatio: z.number(),
-	epochs: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	seed: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	optimizer: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse = z.object({
-	id: z.guid(),
-	datasetId: z.guid(),
-	baseArtifactId: z.guid(),
-	status: z.string(),
-	datasetRevision: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	datasetContentFingerprint: z.string(),
-	workStatus: z.string().nullish(),
-	errorMessage: z.string().nullish(),
-	logTail: z.string().nullish(),
-	progress: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunProgressResponse.nullish(),
-	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload.nullish(),
-	version: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse = z.object({
-	reason: z.string(),
-	message: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest = z.object({
-	datasetId: z.guid(),
-	expectedDatasetVersion: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	baseArtifactId: z.guid(),
-	licenseConfirmed: z.boolean(),
-	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse),
-	totalCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	pageSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunByIdRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse = z.object({
-	gpuBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	ramBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	parameterCount: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	trainableParameterCount: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	experimental: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse = z.object({
-	repoId: z.string(),
-	license: z.string().nullish(),
-	isGated: z.boolean(),
-	metadataPresent: z.boolean(),
-	confirmationText: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse = z.object({
-	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload,
-	estimate: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse,
-	availableVramBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	vramKnown: z.boolean(),
-	fits: z.boolean(),
-	rejectionReason: z.string().nullish(),
-	license: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRequest = z.record(z.string(), z.never());
-
 /**
  * Success
  */
@@ -4616,6 +4652,58 @@ export const zRemoveTrainingRuntimeResponse = zXeLocalAiEngineClientEndpointsTra
 export const zStartTrainingRuntimeInstallResponse =
 	zXeLocalAiEngineClientEndpointsTrainingRuntimeV1StartTrainingRuntimeInstallResponse;
 
+export const zListTrainingRunsQuery = z.object({
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	pageSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	datasetId: z.guid().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListTrainingRunsResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse;
+
+export const zCreateTrainingRunBody = zXeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest;
+
+/**
+ * Success
+ */
+export const zCreateTrainingRunResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse;
+
+export const zGetTrainingRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetTrainingRunResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse;
+
+export const zCancelTrainingRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zCancelTrainingRunResponse = z.void();
+
+export const zGetTrainingRunDefaultsQuery = z.object({
+	baseArtifactId: z.guid(),
+	datasetId: z.guid().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetTrainingRunDefaultsResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse;
+
 /**
  * Success
  */
@@ -4669,6 +4757,66 @@ export const zVerifyToolMockPath = z.object({
  * Success
  */
 export const zVerifyToolMockResponse = zXeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
+
+export const zStartTrainingExportBody = zXeLocalAiEngineClientEndpointsTrainingExportsV1StartTrainingExportRequest;
+
+export const zStartTrainingExportPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStartTrainingExportResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingExportAcceptedResponse;
+
+export const zListTrainingArtifactsPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListTrainingArtifactsResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1ListTrainingArtifactsResponse;
+
+export const zDeleteTrainingArtifactBody = zXeLocalAiEngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest;
+
+export const zDeleteTrainingArtifactPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteTrainingArtifactResponse = z.void();
+
+export const zGetTrainingArtifactPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetTrainingArtifactResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactResponse;
+
+export const zRunTrainingArtifactSmokePath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zRunTrainingArtifactSmokeResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactSmokeResponse;
+
+export const zPromoteTrainingArtifactBody = zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest;
+
+export const zPromoteTrainingArtifactPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zPromoteTrainingArtifactResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse;
 
 /**
  * Success
@@ -6899,55 +7047,3 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
-
-export const zListTrainingRunsQuery = z.object({
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	pageSize: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	datasetId: z.guid().nullish(),
-});
-
-/**
- * Success
- */
-export const zListTrainingRunsResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse;
-
-export const zCreateTrainingRunBody = zXeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest;
-
-/**
- * Success
- */
-export const zCreateTrainingRunResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse;
-
-export const zGetTrainingRunPath = z.object({
-	runId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetTrainingRunResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse;
-
-export const zCancelTrainingRunPath = z.object({
-	runId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zCancelTrainingRunResponse = z.void();
-
-export const zGetTrainingRunDefaultsQuery = z.object({
-	baseArtifactId: z.guid(),
-	datasetId: z.guid().nullish(),
-});
-
-/**
- * Success
- */
-export const zGetTrainingRunDefaultsResponse = zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse;
