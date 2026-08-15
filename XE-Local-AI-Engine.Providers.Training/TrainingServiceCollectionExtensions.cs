@@ -31,6 +31,11 @@ public static class TrainingServiceCollectionExtensions
                 TrainingRuntimeLayout.DefaultCacheRoot(),
                 TrainingRuntimeLayout.ResolveScriptsDirectory()));
 
+        // Spawn-and-return launcher plus the /proc reader its receipts are validated against. Both are stateless
+        // singletons; the run executor and the startup reaper are the only consumers.
+        services.TryAddSingleton<ITrainingProcessSpawner>(static _ => new LinuxTrainingProcessSpawner());
+        services.TryAddSingleton<ITrainingProcessInspector>(static sp => new LinuxTrainingProcessInspector(sp.GetService<TimeProvider>()));
+
         services.TryAddSingleton<ITrainingRuntimeService>(static sp =>
             new TrainingRuntimeService(sp.GetRequiredService<ITrainingRuntimePrerequisiteProbe>(),
                 sp.GetRequiredService<ITrainingRuntimeEventPublisher>(),
