@@ -100,7 +100,8 @@ class RemoteVelopackAssetTests(unittest.TestCase):
             MODULE.verify(self.VERSION, local_roots, remote)
 
     def test_only_the_win_legacy_feed_is_published_remotely(self) -> None:
-        # Baseline passes with the linux legacy feed retained locally but absent from the release (vpk never uploads it).
+        # Baseline passes with the linux legacy feed retained locally but absent from the release
+        # (vpk never uploads it).
         _, local_roots, remote = self.make_fixture()
         MODULE.verify(self.VERSION, local_roots, remote)
         # A linux legacy feed appearing in the release would be an unexpected remote asset.

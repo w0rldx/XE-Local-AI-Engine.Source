@@ -4,12 +4,13 @@ import importlib.util
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).parents[1] / "run_scheduling_grid.py"
 SPEC = importlib.util.spec_from_file_location("run_scheduling_grid", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 grid = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 SPEC.loader.exec_module(grid)
 
 
@@ -26,9 +27,9 @@ def result(
     gate: bool = True,
     deterministic: bool = True,
     readback: bool = True,
-):
+) -> dict[str, Any]:
     canonical = output if output is not None else {"data": [{"index": 0, "value": [0.1, 0.2]}]}
-    residency = {"status": gpu_status}
+    residency: dict[str, Any] = {"status": gpu_status}
     if gpu_status == "measured":
         residency["peak_used_mib"] = gpu
     return {

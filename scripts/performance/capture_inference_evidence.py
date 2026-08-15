@@ -10,6 +10,7 @@ JSON artifact that can later be compared without reconstructing operator state.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import math
@@ -30,7 +31,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 SCHEMA_VERSION = "1.0"
 MAX_CAPTURE_STREAM_BYTES = 256 * 1024
@@ -165,10 +166,8 @@ def write_json_atomic(path: Path, value: Any) -> None:
         raise CaptureError("Could not write gate verdict to the requested destination") from exc
     finally:
         if temporary_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def sha256_file(path: Path) -> str:
@@ -203,7 +202,7 @@ def require_string(obj: dict[str, Any], key: str, context: str) -> str:
     return value
 
 
-def is_finite_number(value: Any) -> bool:
+def is_finite_number(value: Any) -> TypeGuard[int | float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
     try:
@@ -216,7 +215,7 @@ def is_sha256(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
-def is_safe_policy_token(value: Any) -> bool:
+def is_safe_policy_token(value: Any) -> TypeGuard[str]:
     return (
         isinstance(value, str)
         and len(value) <= POLICY_SAFE_TOKEN_MAX_LENGTH
@@ -677,10 +676,8 @@ def run_once(
         timed_out = process.poll() is None
         if timed_out:
             signal_process_group(process, signal.SIGTERM)
-            try:
+            with contextlib.suppress(subprocess.TimeoutExpired):
                 process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
-            except subprocess.TimeoutExpired:
-                pass
         cleanup_process_group(process, (stdout_reader, stderr_reader), argv[0])
         cleanup_finished = True
         if reader_errors:
@@ -933,11 +930,8 @@ def validate_kv_flash_equivalence(explore_flags: dict[str, list[str]], replay_fl
     kv_k = explore_flags.get("-ctk", [])
     kv_v = explore_flags.get("-ctv", [])
     flash = explore_flags.get("-fa", [])
-    if kv_k or kv_v or flash:
-        if len(kv_k) != 1 or kv_k != kv_v or flash != ["on"]:
-            raise CaptureError(
-                "Optimized Explore/replay must use matching -ctk/-ctv values with flash attention set to on"
-            )
+    if (kv_k or kv_v or flash) and (len(kv_k) != 1 or kv_k != kv_v or flash != ["on"]):
+        raise CaptureError("Optimized Explore/replay must use matching -ctk/-ctv values with flash attention set to on")
 
 
 def validate_concrete_fit_flags(fitted_flags: dict[str, list[str]]) -> None:
@@ -1177,7 +1171,10 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
                     if process_free is None or replay_global_free is None
                     else process_free - replay_global_free,
                 },
-                "interpretation": "Global free VRAM governs contention/invalidation; process-budget VRAM describes this process's WDDM/CUDA fit budget. Divergence is reported, never averaged.",
+                "interpretation": (
+                    "Global free VRAM governs contention/invalidation; process-budget VRAM describes "
+                    "this process's WDDM/CUDA fit budget. Divergence is reported, never averaged."
+                ),
             },
             "verbosity_evidence": {
                 "default_fit_detail_lines": default_text.count("common_params_fit_impl"),
@@ -1702,7 +1699,8 @@ def gate_artifacts(
                 }
                 rule_results = [unevaluable_rule(rule, artifact_error["reason"]) for rule in rules]
             else:
-                assert baseline_command_list is not None and candidate_command_list is not None
+                if baseline_command_list is None or candidate_command_list is None:
+                    raise CaptureError("Gate command lists went missing without an artifact error")
                 baseline_commands = {item["name"]: item for item in baseline_command_list}
                 candidate_commands = {item["name"]: item for item in candidate_command_list}
                 baseline_names = set(baseline_commands)

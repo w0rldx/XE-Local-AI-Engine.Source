@@ -30,6 +30,7 @@ a SignalR StreamInvocation (message type 4) and the events arrive as StreamItems
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import ssl
 import sys
@@ -106,14 +107,19 @@ class NodeClient:
         allowed_status: tuple[int, ...] = (),
     ) -> tuple[int, object]:
         url = path if path.startswith("http") else self.base_url + path
+        if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+            raise DriverError(f"{method} {path} -> refusing a URL that is not http(s)")
         data = body.encode("utf-8") if isinstance(body, str) else body
-        request = urllib.request.Request(url, data=data, method=method)
+        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310  # scheme pinned above
         if self.token:
             request.add_header("Authorization", "Bearer " + self.token)
         if data is not None:
             request.add_header("Content-Type", content_type)
         try:
-            with urllib.request.urlopen(request, context=self.ssl_context, timeout=self.timeout) as response:
+            # Scheme pinned to http(s) above; file:/custom schemes are unreachable here.
+            with urllib.request.urlopen(  # noqa: S310  # nosec B310
+                request, context=self.ssl_context, timeout=self.timeout
+            ) as response:
                 raw = response.read()
                 status = response.status
         except urllib.error.HTTPError as error:
@@ -346,13 +352,11 @@ class HubStream:
 
     def __exit__(self, *_exc: object) -> None:
         if self.connection_url:
-            try:
+            # A best-effort close. The server reaps abandoned long-polling connections on
+            # its own, and failing the smoke over the teardown of an already-finished
+            # stream would be a false red.
+            with contextlib.suppress(DriverError):
                 self.client.request("DELETE", self.connection_url)
-            except DriverError:
-                # A best-effort close. The server reaps abandoned long-polling connections on
-                # its own, and failing the smoke over the teardown of an already-finished
-                # stream would be a false red.
-                pass
 
     def invoke_stream(self, target: str, arguments: list[object], timeout_seconds: float):
         """Send a StreamInvocation and yield each ChatStreamEvent until completion.
@@ -365,7 +369,8 @@ class HubStream:
         """
         import time
 
-        assert self.connection_url is not None
+        if self.connection_url is None:
+            raise DriverError("stream invoked before the SignalR connection was negotiated")
         frame = (
             json.dumps(
                 {
@@ -382,7 +387,7 @@ class HubStream:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             _, raw = self.client.request("GET", self.connection_url, expect_binary=True)
-            if not raw:
+            if not isinstance(raw, bytes) or not raw:
                 continue
             for record in raw.decode("utf-8", "replace").split(RECORD_SEPARATOR):
                 if not record.strip():
@@ -488,8 +493,9 @@ def command_image(args: argparse.Namespace) -> int:
             "seed": str(args.seed),
         }
     )
-    _, payload = client.request("POST", f"{API}/images/jobs", body)
-    job = require_mapping(payload, "images/jobs")
+    _, submitted = client.request("POST", f"{API}/images/jobs", body)
+    job = require_mapping(submitted, "images/jobs")
+    payload = job
     job_id = job.get("id")
     if not job_id:
         raise DriverError("images/jobs returned no job id")

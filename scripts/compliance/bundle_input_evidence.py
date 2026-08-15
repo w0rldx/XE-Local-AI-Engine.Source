@@ -52,7 +52,14 @@ def load_bundle_packages(path: Path, runtime_identifier: str) -> dict[tuple[str,
             raise ValueError(f"bundle-input evidence entry {index} has an invalid source type")
         if isinstance(source_type, str) and source_type.casefold() == "projectreference":
             continue
-        if not all(isinstance(value, str) and value.strip() for value in (package_id, package_version, relative_path)):
+        if not (
+            isinstance(package_id, str)
+            and package_id.strip()
+            and isinstance(package_version, str)
+            and package_version.strip()
+            and isinstance(relative_path, str)
+            and relative_path.strip()
+        ):
             raise ValueError(f"bundle-input evidence entry {index} has an incomplete package identity")
         if (
             not isinstance(digest, str)

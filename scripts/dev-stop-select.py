@@ -26,14 +26,16 @@ def parse_snapshot(lines: list[str]) -> dict[int, ProcessRecord]:
 
 def read_proc_record(proc_root: str, pid: int) -> ProcessRecord | None:
     try:
-        stat = open(os.path.join(proc_root, str(pid), "stat"), encoding="utf-8").read()
+        with open(os.path.join(proc_root, str(pid), "stat"), encoding="utf-8") as stat_file:
+            stat = stat_file.read()
         end = stat.rfind(")")
         if end < 0:
             return None
         comm = stat[stat.find("(") + 1 : end]
         fields = stat[end + 2 :].split()
         ppid, sid, starttime = int(fields[1]), int(fields[3]), int(fields[19])
-        raw_args = open(os.path.join(proc_root, str(pid), "cmdline"), "rb").read()
+        with open(os.path.join(proc_root, str(pid), "cmdline"), "rb") as cmdline_file:
+            raw_args = cmdline_file.read()
         command = raw_args.replace(b"\0", b" ").decode("utf-8", errors="replace").strip()
         return ppid, sid, starttime, comm, command
     except (FileNotFoundError, PermissionError, ProcessLookupError, ValueError, IndexError):

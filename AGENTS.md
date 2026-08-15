@@ -16,9 +16,14 @@ Read `docs/agent-knowledge.md` before your first non-trivial change. It records 
 
 ### What CI runs on a PR to `develop`
 
-`.github/workflows/build-and-test.yml`, three parallel jobs (the tag-triggered `release.yml` re-runs
+`.github/workflows/build-and-test.yml`, four parallel jobs (the tag-triggered `release.yml` re-runs
 this whole file as its `validate` job before packaging):
 
+- **python-quality** — `scripts/python-validation.sh --scope full --serial`: ruff (format + lint),
+  pyrefly, pytest (+coverage) and bandit over `tools/training` and `scripts/**`, from the root
+  `pyproject.toml` + `uv.lock` (dev tooling only). Runs the `tools/training/test_*.py` self-checks
+  and the `scripts/**` unittest suites under pytest. Not the training runtime: `tools/training/
+  pyproject.toml` + `uv.lock` are the shipped runtime manifest (ADR 0005) and stay untouched.
 - **release-contracts** — `scripts/run-release-contract-tests.sh` (auto-enrolled `scripts/tests`,
   `scripts/compliance/tests`, `scripts/performance/tests`), then `scripts/lint-release-scripts.sh
   --no-behavior --bootstrap` (shellcheck, PSScriptAnalyzer, Pester, the `P0_SPIKE` compile gate).
@@ -73,6 +78,17 @@ E2E is ask-gated unless the task specifically targets E2E behavior; it runs in i
 - `scripts/run-tool-grammar-smoke-local.sh` — opt-in **live tool-schema grammar smoke** against a real `llama-server`. Nothing invokes it automatically; run it after changing any tool's `ParameterSchema`, after adding a tool, or when bumping the llama.cpp pin. It exists because llama-server compiles the whole `tools` array into one GBNF grammar before sampling and rejects over-large repetition bounds with HTTP 400 `Failed to initialize samplers: failed to parse grammar` — a P1 that shipped once, and that **no other suite can catch**: `ChatLocalToolsE2ETests` runs against FakeOllama (no chat template, no grammar), and the `LlamaGrammarToolSchemaCompatibilityTests` unit tests measure against a hand-measured constant rather than the real converter.
   - **The negative control is the load-bearing assertion.** The script POSTs the real production offer twice: sanitised (must be 200) and unsanitised (must still be the grammar 400). A 200 on the unsanitised body means the run proved nothing — either the model is a *reasoning* model, whose template never enters the constrained branch, or llama.cpp raised its limits and `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` must be re-measured. A "pass" without that failing control is not evidence.
   - It therefore needs a **non-reasoning, tool-capable** GGUF; a reasoning model makes the smoke inert rather than red, which is exactly why the control is checked explicitly.
+
+Python (`tools/training`, `scripts/**`):
+
+- `scripts/python-validation.sh --scope <deps|style|types|tests|security|changed|full>` — the same
+  gate CI runs, from the root `pyproject.toml` (ruff `E,F,I,B,UP,SIM,N,S` @120 cols, pyrefly,
+  pytest with `filterwarnings=error`, bandit). Needs `uv` on PATH; `--scope deps` (or `full`) syncs
+  the dev venv into `./.venv`. `--scope changed` diffs against `develop` and runs only what the
+  changed files need. `uv run ruff format .` fixes formatting; `uv run ruff check --fix .` the
+  autofixable rules. Do NOT run `uv sync` inside `tools/training/` — that resolves the multi-GB
+  training runtime, not the tooling. The heavy runtime imports (`torch`, `unsloth`, ...) are typed
+  as `Any` in pyrefly (`replace-imports-with-any`) because they only exist in the provisioned venv.
 
 Release-critical scripts:
 

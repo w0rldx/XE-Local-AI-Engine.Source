@@ -313,7 +313,8 @@ def main():
                 report_to="none",
                 # Live-found: `datasets` defaults num_proc from the CPU count and forks a multiprocessing Manager for
                 # tokenization; inside this sandboxed, CUDA-initialized process the forked child dies (EOFError on the
-                # manager pipe). One process is correct here - the datasets are small and the model is already on the GPU.
+                # manager pipe). One process is correct here - the datasets are small and the model is
+                # already on the GPU.
                 dataset_num_proc=1,
             ),
             callbacks=[ProgressCallback()],

@@ -128,8 +128,11 @@
     <!-- The pinned Python training runtime (pyproject.toml + uv.lock + the trainer scripts). The repo root is outside
          this project's implicit Content glob, so without this explicit include they do not ship at all and the runtime
          install fails on a packaged build with a missing-lockfile prerequisite. Output stays clean for dev/test runs —
-         TrainingRuntimeLayout.ResolveScriptsDirectory walks up to tools/training/ when the published copy is absent. -->
+         TrainingRuntimeLayout.ResolveScriptsDirectory walks up to tools/training/ when the published copy is absent.
+         Local tooling residue (a dev `uv sync`/pytest/ruff run inside tools/training) is excluded so a multi-GB .venv or
+         bytecode cache never rides along into the publish output. -->
     <Content Include="$(MSBuildProjectDirectory)/../tools/training/**"
+             Exclude="$(MSBuildProjectDirectory)/../tools/training/.venv/**;$(MSBuildProjectDirectory)/../tools/training/**/__pycache__/**;$(MSBuildProjectDirectory)/../tools/training/.*_cache/**"
              Link="training-scripts/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>

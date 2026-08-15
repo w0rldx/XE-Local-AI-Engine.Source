@@ -7,13 +7,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 
 def load(name: str):
     path = Path(__file__).parents[1] / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
 
@@ -124,7 +125,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             evidence = root / "evidence.json"
-            baseline = {
+            baseline: dict[str, Any] = {
                 "schemaVersion": 2,
                 "runtimeIdentifier": "linux-x64",
                 "publishSingleFile": True,
@@ -157,7 +158,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
     def test_rejects_publish_mode_that_does_not_match_the_rid_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             evidence = Path(temporary_directory) / "evidence.json"
-            baseline = {
+            baseline: dict[str, Any] = {
                 "schemaVersion": 2,
                 "runtimeIdentifier": "win-x64",
                 "publishSingleFile": True,

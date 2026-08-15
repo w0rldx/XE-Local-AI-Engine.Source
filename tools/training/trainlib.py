@@ -9,6 +9,7 @@ Run the checks with ``python3 tools/training/test_trainlib.py``.
 """
 
 import json
+from typing import Any
 
 CONTRACT_VERSION = 1
 CANCELLED_EXIT_CODE = 3
@@ -35,9 +36,9 @@ def filter_samples(records, holdout_sequences):
     return kept
 
 
-def to_messages(record):
+def to_messages(record) -> list[dict[str, Any]]:
     """Maps one canonical sample's parts[] onto the chat-template message shape."""
-    messages = []
+    messages: list[dict[str, Any]] = []
     system = record.get("systemInstructions") or ""
     if system:
         messages.append({"role": "system", "content": system})
