@@ -26,6 +26,8 @@ env:
   VPK_VERSION: "1.2.0"
 
 jobs:
+  # A reusable-workflow call cannot carry `timeout-minutes` — the timeouts (and the
+  # release-script lint) live on the jobs inside build-and-test.yml, and apply here too.
   validate:
     uses: ./.github/workflows/build-and-test.yml
     permissions:
@@ -34,6 +36,7 @@ jobs:
   version:
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       pack-version: ${{ steps.compose.outputs.pack-version }}
       is-prerelease: ${{ steps.compose.outputs.is-prerelease }}
@@ -124,6 +127,7 @@ jobs:
             pack-args: ""
             icon-args: "--icon XE-Local-AI-Engine.Client.React/public/logo.png"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - name: Checkout immutable release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,6 +152,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'global.json', '**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: Restore pinned repository tools
         run: dotnet tool restore --tool-manifest dotnet-tools.json
@@ -397,6 +408,7 @@ jobs:
   prepare-release-draft:
     needs: [version, build-pack]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: open-source-release
     permissions:
       contents: write
@@ -604,6 +616,7 @@ jobs:
   publish-release:
     needs: [version, prepare-release-draft]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: open-source-release
     permissions:
       contents: write
