@@ -171,10 +171,11 @@ describe("useEjectModel", () => {
 		expect(sdkMock.unloadLocalModel).toHaveBeenCalledWith(
 			expect.objectContaining({ path: { modelName: "llama3.1:8b" }, throwOnError: true }),
 		);
-		// The unload endpoint is a body-bound POST — FastEndpoints 415s a route-only POST with no body — so the
-		// mutation MUST send an empty JSON object. Assert the body explicitly: a missing/omitted body is the runtime
-		// 415 this guards against, and the SDK-level mock would not otherwise catch it.
-		expect(sdkMock.unloadLocalModel.mock.calls[0]?.[0]?.body).toEqual({});
+		// The unload endpoint is route-only and the generated requestValidator types its body as `z.never().optional()`,
+		// so ANY body (even `{}`) fails zod parsing before the request is built and the eject never reaches the wire.
+		// Assert no body is passed — the shipped defect this replaced was exactly that, and it is invisible to the
+		// resolution assertions above.
+		expect(sdkMock.unloadLocalModel.mock.calls[0]?.[0]).not.toHaveProperty("body");
 		expect(result.current.data).toEqual({ modelName: "llama3.1:8b", unloaded: true });
 	});
 

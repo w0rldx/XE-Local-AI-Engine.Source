@@ -10,9 +10,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     <list type="bullet">
 ///         <item>
 ///             Ollama in-memory list, driven from FakeOllama's <c>/api/ps</c>: the empty state with nothing loaded,
-///             then a real row when the fake reports a loaded model, then the confirmation gate in front of eject.
-///             The eject REQUEST itself is not asserted — it cannot currently reach the wire at all; see the defect
-///             note on <see cref="LoadedModels_Lists_A_Reported_Model_And_Eject_Is_Confirmation_Gated" />.
+///             then a real row when the fake reports a loaded model, then the confirmation gate in front of eject and
+///             the eject request itself (issued on the wire, 2xx, row gone).
 ///         </item>
 ///         <item>
 ///             The llama.cpp running-models panel, which derives from the process supervisor. No llama-server runs in
@@ -89,21 +88,21 @@ public sealed class LoadedModelsPageE2ETests : XESerialE2ETestBase
     }
 
     /// <summary>
-    ///     Covers the reported-model row and the confirmation gate in front of eject.
+    ///     Covers the reported-model row, the confirmation gate in front of eject, and the eject request itself.
     ///     <para>
-    ///         It deliberately stops at the confirmation and does NOT assert the unload request, because on this build
-    ///         that request is never sent. LIVE DEFECT (found by this suite, not a test limitation):
-    ///         <c>useEjectModel</c> posts <c>body: {} as never</c> to dodge the FastEndpoints 415 on a route-only POST,
-    ///         but the generated SDK's <c>requestValidator</c> for <c>unloadLocalModel</c> is
-    ///         <c>z.object({ body: z.never().optional(), … })</c>, which rejects <c>{}</c> — so the client throws
-    ///         before <c>buildUrl</c> and the operator always gets the "Could not eject the model." toast. Verified by
-    ///         parsing that exact schema with that exact payload. The llama.cpp eject beside it is unaffected (it posts
-    ///         a real body).
+    ///         The request assertion is the load-bearing one. The eject shipped broken: <c>useEjectModel</c> posted
+    ///         <c>body: {} as never</c> to dodge the FastEndpoints 415 on a route-only POST, but the generated SDK's
+    ///         <c>requestValidator</c> for <c>unloadLocalModel</c> is <c>z.object({ body: z.never().optional(), … })</c>,
+    ///         which rejects <c>{}</c> — so the client threw before <c>buildUrl</c> and the operator only ever got the
+    ///         "Could not eject the model." toast. Both halves are now fixed (no body client-side, an
+    ///         <c>Accepts&lt;UnloadLocalModelRequest&gt;()</c> override server-side), and waiting for the POST here is
+    ///         what keeps either half from silently regressing: every assertion below still passes with no request sent.
     ///     </para>
     ///     <para>
-    ///         follow-up: once the body/validator mismatch is fixed, extend this test to wait for the
-    ///         <c>models/{modelName}/unload</c> POST and assert a 2xx — the flow up to the confirmation is already
-    ///         driven here, so only the response wait needs adding.
+    ///         The row must STAY gone, not merely blink out: the mutation removes it optimistically and then invalidates,
+    ///         so a request that never landed would restore it on the next 4s poll. FakeOllama drops a model from
+    ///         <c>/api/ps</c> on the <c>keep_alive=0</c> generate call, exactly as Ollama does, so the post-invalidation
+    ///         list is the real evidence the unload reached the runtime.
     ///     </para>
     /// </summary>
     [Test]
@@ -148,11 +147,41 @@ public sealed class LoadedModelsPageE2ETests : XESerialE2ETestBase
         // The dismissive option is present too, so the dialog is a real choice rather than an acknowledgement.
         await Expect(Page.GetByTestId("confirm-cancel")).ToBeVisibleAsync();
 
-        // Dismiss rather than accept — see the defect note on this method for why accepting cannot currently be
-        // asserted end to end. Cancelling must leave the row exactly where it was.
+        // Cancelling is the no-op half of the gate: nothing is unloaded and the row stays exactly where it was.
         await Page.GetByTestId("confirm-cancel").ClickAsync();
         await Expect(confirmAccept).ToHaveCountAsync(0);
         await Expect(Page.GetByTestId($"loaded-models-row-{LoadedModelName}")).ToBeVisibleAsync();
+
+        // Accepting issues the unload POST. The model name rides the path url-encoded (it contains a colon), so match on
+        // the route shape rather than the literal name.
+        await ejectButton.ClickAsync();
+        await Expect(confirmAccept).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 10_000
+        });
+
+        var unloadResponse = await Page.RunAndWaitForResponseAsync(async () => await confirmAccept.ClickAsync(),
+            response => response.Url.Contains("/models/", StringComparison.OrdinalIgnoreCase)
+                        && response.Url.EndsWith("/unload", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 15_000
+            });
+
+        await Assert.That(unloadResponse.Status >= 200 && unloadResponse.Status < 300).IsTrue();
+
+        // The row is gone and STAYS gone across the post-mutation invalidation and the following polls, because the fake
+        // runtime really evicted it. A 415/validator regression would restore it here even though the click "worked".
+        await Expect(Page.GetByTestId($"loaded-models-row-{LoadedModelName}")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        {
+            Timeout = 15_000
+        });
+        await Expect(Page.GetByTestId("loaded-models-empty")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 15_000
+        });
+        await Expect(Page.GetByTestId("loaded-models-error")).ToHaveCountAsync(0);
 
         await Assert.That(pageErrors.Count == 0).IsTrue();
     }
