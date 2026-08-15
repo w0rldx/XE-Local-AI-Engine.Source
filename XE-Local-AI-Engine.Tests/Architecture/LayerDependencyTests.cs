@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.WindowsLauncher;
 using Extensions = Microsoft.Extensions.Hosting.Extensions;
@@ -51,6 +52,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly CodexOAuthAssembly = typeof(ICodexOAuthChatClientFactory).Assembly;
     private static readonly Assembly CapabilitiesAssembly = typeof(CapabilitiesServiceCollectionExtensions).Assembly;
     private static readonly Assembly StableDiffusionCppAssembly = typeof(IStableDiffusionBinaryManager).Assembly;
+    private static readonly Assembly TrainingAssembly = typeof(ITrainingRuntimeService).Assembly;
     private static readonly Assembly AbstractionsAssembly = typeof(ILocalModelProvider).Assembly;
     private static readonly Assembly ContractsAssembly = typeof(MessageRole).Assembly;
     private static readonly Assembly AiAgentAssembly = typeof(IInvocationAgentFactory).Assembly;
@@ -91,6 +93,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             ["XE-Local-AI-Engine.Client.Persistence"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
@@ -108,7 +111,8 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.Providers.HuggingFace"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.LlamaServer"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.Ollama"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
+            ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            ["XE-Local-AI-Engine.Providers.Training"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
         };
 
     private static readonly IReadOnlyDictionary<Assembly, string[]> ApprovedInternalAssemblyReferences =
@@ -130,6 +134,7 @@ public sealed class LayerDependencyTests
             [LlamaServerAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [OllamaAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [StableDiffusionCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [TrainingAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [ApplicationAssembly] =
             [
                 "XE-Local-AI-Engine.AI.Agent",
@@ -142,6 +147,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             [HostAssembly] =
@@ -158,6 +164,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ]
         };

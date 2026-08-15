@@ -99,6 +99,11 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
         services.TryAddSingleton<ILlamaCppSourceBuildActivity, LlamaCppSourceBuildActivity>();
 
+        // Conversion tooling for training exports. Provisioned lazily on the first export, never at startup — a node
+        // that never trains never fetches it.
+        services.TryAddSingleton<IConvertScriptSourceFetcher, GitConvertScriptSourceFetcher>();
+        services.TryAddSingleton<IConvertScriptProvisioner, ConvertScriptProvisioner>();
+
         // Real llama.cpp process-VRAM-budget probe: parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
         // it WINS over the Application-layer TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>() floor
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
@@ -150,6 +155,15 @@ public static class LlamaServerServiceCollectionExtensions
             {
                 Timeout = TimeSpan.FromSeconds(30)
             }));
+
+        // Path-addressed throwaway spawn for the training export smoke gate. Explicit factory for the same reason the
+        // supervisor needs one: it takes the internal launcher/health-probe seams.
+        services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
+            new TransientLlamaServerLauncher(sp.GetRequiredService<ILlamaCppBinaryManager>(),
+                sp.GetRequiredService<IGpuVariantSelector>(),
+                sp.GetRequiredService<ILlamaServerProcessLauncher>(),
+                sp.GetRequiredService<ILlamaServerHealthProbe>(),
+                sp.GetRequiredService<ILogger<TransientLlamaServerLauncher>>()));
 
         // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
         // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →

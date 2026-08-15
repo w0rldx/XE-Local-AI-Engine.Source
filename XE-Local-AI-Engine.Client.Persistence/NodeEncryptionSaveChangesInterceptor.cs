@@ -329,6 +329,158 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Training dataset definitions are node-scoped, so the AAD binds the empty conversation id to the definition's
+        // own id plus the column name — same layout as benchmark projects.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetDefinition>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.DefinitionJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_definition_json",
+                trackedProperties);
+        }
+
+        // The dataset's pinned copy of that body. A distinct AAD column name from the definition's own, so a writer
+        // cannot present a definition row's ciphertext as a dataset's pinned snapshot (or the reverse).
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDataset>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.DefinitionJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_dataset_definition_json",
+                trackedProperties);
+        }
+
+        // Dataset samples take the skill-resource treatment rather than the flat one: the owning dataset id goes in the
+        // conversation slot so a database WRITER cannot re-parent a sample row onto another dataset and have its content
+        // and verdicts fed into a different training run. Moving a row now fails the tag check.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetSample>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.ContentJson),
+                entry.Entity.DatasetId,
+                entry.Entity.Id,
+                "training_sample_content_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ValidationJson),
+                entry.Entity.DatasetId,
+                entry.Entity.Id,
+                "training_sample_validation_json",
+                trackedProperties);
+        }
+
+        // Tool mocks are node-scoped. The mock body and the verifier's verdict carry distinct AAD column names so a mock
+        // blob can never be substituted for a verdict blob — the same separation custom tools draw between their
+        // description and their config.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ToolMockDefinition>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.MockJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "tool_mock_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.VerificationJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "tool_mock_verification_json",
+                trackedProperties);
+        }
+
+        // Base artifacts are node-scoped. The file manifest carries host paths and per-file digests; the license blob is
+        // what the mandatory gate presents, so a writer must not be able to swap one for the other.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingBaseArtifact>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.FilesJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_base_files_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LicenseJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_base_license_json",
+                trackedProperties);
+        }
+
+        // Runs are node-scoped, so the AAD binds the empty conversation id to the run's own id plus the column name.
+        // Every column gets a distinct name: the freeze, the options and the license confirmation are the three
+        // documents an audit reads back, and a writer must not be able to swap one for another.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingRun>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.FreezeJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_freeze_json",
+                trackedProperties);
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.OptionsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_options_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LicenseConfirmationJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_license_confirmation_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ProgressJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_progress_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LogTail),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_log_tail",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_launch_receipt_json",
+                trackedProperties);
+        }
+
+        // Evaluations and comparison reports are node-scoped, same flat layout as runs. The membership and the verdicts
+        // carry distinct AAD column names so a writer cannot present one as the other: the membership is what makes a
+        // comparison's two sides comparable, and the verdicts are what the deltas are computed from.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingEvaluationRun>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.MembershipJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_evaluation_membership_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ResultsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_evaluation_results_json",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingComparisonReport>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.DeltasJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_comparison_deltas_json",
+                trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

@@ -90,6 +90,10 @@
   "[\"no-cross-feature\",\"src/features/skills/components/SkillForm.tsx\",\"src/features/assist/models/AssistModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/skills/models/SkillModels.ts\",\"src/features/assist/models/AssistModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/tools/pages/ToolsPage.tsx\",\"src/features/chat/components/LocalToolsOverview.tsx\"]",
+  "[\"no-cross-feature\",\"src/features/training/components/ComparisonCreateDialog.tsx\",\"src/features/benchmarks/queries/useBenchmarks.ts\"]",
+  "[\"no-cross-feature\",\"src/features/training/components/DatasetSampleReview.tsx\",\"src/features/chat/components/MessageParts.tsx\"]",
+  "[\"no-cross-feature\",\"src/features/training/components/DefinitionEditorDialog.tsx\",\"src/features/tools/queries/useToolCatalog.ts\"]",
+  "[\"no-cross-feature\",\"src/features/training/models/TrainingModels.ts\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/voice/components/VoiceMessagePlayButton.tsx\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/voice/useVoicePlayback.ts\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-orphans\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\"]"

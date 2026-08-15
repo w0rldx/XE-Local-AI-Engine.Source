@@ -49,9 +49,24 @@ public sealed class LlamaLaunchArgumentParserTests
     [Arguments("--parallel 4", "--parallel")]
     [Arguments("-ctk q8_0", "-ctk")]
     [Arguments("--top-k 40 -ub 2048", "-ub")]
+    // Adapter family — newly reserved. The registry decides which adapter (if any) a model launches with, and the
+    // launch-policy fingerprint commits to that choice, so an operator override here is now rejected.
+    [Arguments("--lora /tmp/tuned.gguf", "--lora")]
+    [Arguments("--lora-scaled /tmp/tuned.gguf", "--lora-scaled")]
+    [Arguments("--top-k 40 --lora=/tmp/tuned.gguf", "--lora")]
     public void FindReservedFlag_DetectsManagedFlags(string raw, string expected)
     {
         AssertEx.Equal(expected, LlamaLaunchArgumentParser.FindReservedFlag(raw));
+    }
+
+    [Test]
+    public void ParseSanitized_StripsLora_WithItsValue()
+    {
+        var result = LlamaLaunchArgumentParser.ParseSanitized("--temp 0.7 --lora /tmp/tuned.gguf --top-k 40");
+
+        AssertEx.Equal(expected: 4, result.Count);
+        AssertEx.False(result.Contains("--lora"), "The adapter flag must be stripped on the read path.");
+        AssertEx.False(result.Contains("/tmp/tuned.gguf"), "Its value must be stripped with it.");
     }
 
     [Test]

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
+using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -39,6 +40,23 @@ public sealed class ImageJobCoordinatorTests
         AssertEx.Equal(jobId, first.JobId);
 
         harness.Runtime.Release();
+    }
+
+    /// <summary>
+    ///     A training run owns the whole GPU. The job takes its shared gate admission after the generation slot and
+    ///     HOLDS it through generation, so a refusal fails the job before the runtime is ever called.
+    /// </summary>
+    [Test]
+    public async Task RunJob_WhileAnExclusiveGpuHolderOwnsTheNode_FailsWithoutCallingTheRuntime()
+    {
+        var gate = new GpuWorkGate();
+        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A training run holds the node.");
+        using var harness = Harness.Create(blockRuntime: false, gpuWorkGate: gate);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while training"), CancellationToken.None).ConfigureAwait(false);
+
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a run holds the GPU.");
     }
 
     [Test]
@@ -190,7 +208,8 @@ public sealed class ImageJobCoordinatorTests
             new NullImageJobEventPublisher(),
             timeProvider,
             NullLogger<ImageJobCoordinator>.Instance,
-            new FakeImageRuntimeActivityGate());
+            new FakeImageRuntimeActivityGate(),
+            new GpuWorkGate());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None).ConfigureAwait(false);
@@ -335,7 +354,10 @@ public sealed class ImageJobCoordinatorTests
             Coordinator.Dispose();
         }
 
-        public static Harness Create(bool blockRuntime, bool admitJobs = true, (int Width, int Height)? producedSize = null)
+        public static Harness Create(bool blockRuntime,
+            bool admitJobs = true,
+            (int Width, int Height)? producedSize = null,
+            IGpuWorkGate? gpuWorkGate = null)
         {
             var runtime = new FakeImageRuntime(blockRuntime, producedSize);
             var store = new FakeImageJobStore();
@@ -354,7 +376,8 @@ public sealed class ImageJobCoordinatorTests
                 new NullImageJobEventPublisher(),
                 TimeProvider.System,
                 NullLogger<ImageJobCoordinator>.Instance,
-                activityGate);
+                activityGate,
+                gpuWorkGate ?? new GpuWorkGate());
 #pragma warning restore CA2000
 
             return new Harness(coordinator, runtime, store, images, activityGate);

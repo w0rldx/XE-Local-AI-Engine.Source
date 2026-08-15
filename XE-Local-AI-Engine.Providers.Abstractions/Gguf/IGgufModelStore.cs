@@ -14,8 +14,32 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     returned as complete. Progress is reported as the same <see cref="PullProgress" /> DTO the Ollama provider uses,
 ///     so the provider layer maps it 1:1.
 /// </remarks>
+/// <summary>
+///     The two files a LoRA-adapter model launches with: the installed BASE model llama-server loads as <c>-m</c>, and
+///     the adapter it applies as <c>--lora</c>. <see cref="AdapterSizeBytes" /> is the adapter's on-disk size, which the
+///     launch path adds to the base weight size wherever the main model file size is accounted for.
+/// </summary>
+public sealed record GgufAdapterLaunch(string BaseModelFilePath, string AdapterFilePath, long AdapterSizeBytes);
+
+/// <summary>
+///     A registered adapter whose base model is missing, renamed, or itself unreadable. Non-retryable: the launch cannot
+///     proceed and no other base can be substituted.
+/// </summary>
+public sealed class GgufAdapterBaseModelMissingException(string message) : Exception(message);
+
 public interface IGgufModelStore
 {
+    /// <summary>
+    ///     Resolves the base-model + adapter file pair for <paramref name="modelName" /> when it is a LoRA adapter entry,
+    ///     or <see langword="null" /> when it is an ordinary standalone model (including a merged fine-tune). Consumed by
+    ///     the llama-server supervisor to launch the base model with <c>--lora &lt;adapter&gt;</c>.
+    /// </summary>
+    /// <exception cref="GgufAdapterBaseModelMissingException">
+    ///     The entry is an adapter but the base model it names is not installed or its file is gone.
+    /// </exception>
+    Task<GgufAdapterLaunch?> ResolveAdapterLaunchAsync(string modelName, CancellationToken ct) =>
+        Task.FromResult<GgufAdapterLaunch?>(null);
+
     /// <summary>
     ///     Resolves the absolute path to the local GGUF file backing <paramref name="modelName" />, or
     ///     <see langword="null" /> when the model is not installed. Consumed by the llama-server supervisor to launch

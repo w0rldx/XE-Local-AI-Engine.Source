@@ -127,7 +127,11 @@
 		"customTools": "Eigene Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Bildgenerierung"
+		"images": "Bildgenerierung",
+		"trainingGroup": "Training",
+		"training": "Training",
+		"trainingDatasets": "Datensätze",
+		"trainingComparisons": "Vergleiche"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -4019,6 +4023,62 @@
 		"customTools": {
 			"title": "Eigene Tools",
 			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus."
+		},
+		"training": {
+			"title": "Training",
+			"subtitle": "Passe ein lokales Modell mit eigenen Daten an. Ein Training belegt die gesamte GPU, daher laufen währenddessen keine Chat-, Bild- oder Benchmark-Aufgaben.",
+			"runtime": {
+				"title": "Python-Trainingsumgebung",
+				"description": "Das Feintuning läuft in einer festgelegten, uv-verwalteten Python-Umgebung. Sie wird einmal installiert und von jedem Trainingslauf genutzt.",
+				"prerequisites": "Voraussetzungen",
+				"install": "Umgebung installieren",
+				"reinstall": "Umgebung neu installieren",
+				"remove": "Umgebung entfernen",
+				"cancel": "Installation abbrechen",
+				"failed": "Installation fehlgeschlagen",
+				"installedPython": "Python {{version}}",
+				"installedTorch": "torch {{version}}",
+				"phase": {
+					"Idle": "Nicht installiert",
+					"AcquiringUv": "uv wird geladen",
+					"ProvisioningPython": "Python wird bereitgestellt",
+					"InstallingPackages": "Pakete werden installiert",
+					"Verifying": "Überprüfung",
+					"Ready": "Bereit",
+					"Failed": "Fehlgeschlagen",
+					"Removing": "Wird entfernt"
+				}
+			},
+			"baseArtifacts": {
+				"title": "Basis-Checkpoints",
+				"description": "Für das Feintuning wird der originale safetensors-Checkpoint benötigt, keine quantisierte Kopie. Gib das Hugging-Face-Repository zum Herunterladen an.",
+				"repoId": "Repository",
+				"revision": "Revision (optional)",
+				"download": "Herunterladen",
+				"status": "Status",
+				"license": "Lizenz",
+				"noLicense": "Nicht angegeben",
+				"gated": "Zugang beschränkt",
+				"size": "Größe",
+				"empty": "Noch keine Basis-Checkpoints. Lade einen herunter, um ihn für Trainingsläufe verfügbar zu machen.",
+				"error": "Der Download konnte nicht gestartet werden.",
+				"progress": "Datei {{index}} von {{count}} — {{done}}",
+				"cancel": "Download abbrechen",
+				"delete": "Checkpoint löschen",
+				"statusValue": {
+					"Downloading": "Wird geladen",
+					"Ready": "Bereit",
+					"Failed": "Fehlgeschlagen"
+				}
+			},
+			"datasets": {
+				"title": "Trainings-Datensätze",
+				"subtitle": "Erzeuge Tool-Calling-Datensätze aus einer Definition, prüfe jedes Beispiel und exportiere sie für einen Trainingslauf."
+			},
+			"comparisons": {
+				"title": "Vergleiche",
+				"subtitle": "Bewerte ein Basismodell und sein feinabgestimmtes Gegenstück anhand derselben eingefrorenen Hold-out-Beispiele und lies die Differenz ab."
+			}
 		}
 	},
 	"components": {
@@ -4509,5 +4569,253 @@
 	},
 	"notifications": {
 		"emptyMessage": "Fertig."
+	},
+	"training": {
+		"tabs": {
+			"definitions": "Definitionen",
+			"datasets": "Datensätze",
+			"mocks": "Tool-Mocks"
+		},
+		"generation": {
+			"title": "Generierung läuft",
+			"counts": "{{completed}} von {{total}} Beispielen · {{rejected}} abgelehnt"
+		},
+		"definitions": {
+			"title": "Datensatz-Definitionen",
+			"empty": "Noch keine Datensatz-Definitionen.",
+			"generate": "Generieren",
+			"holdout": "{{percent}}% Holdout",
+			"new": "Neue Definition",
+			"edit": "Bearbeiten",
+			"delete": "Löschen",
+			"editor": {
+				"createTitle": "Neue Datensatz-Definition",
+				"editTitle": "Datensatz-Definition bearbeiten",
+				"name": "Name",
+				"teacher": "Lehrermodell",
+				"teacherHint": "Nur node-lokale Modelle. Cloud-Lehrer werden abgelehnt.",
+				"outputMode": "Ausgabemodus des Lehrers",
+				"mode": {
+					"Constrained": "Eingeschränktes Decoding",
+					"ValidateAfter": "Nach der Generierung prüfen"
+				},
+				"systemInstructions": "Systemanweisungen",
+				"tools": "Werkzeuge",
+				"toolsHint": "Die Werkzeuge, die dem Lehrer angeboten werden. Der Node friert ihre Schemata beim Speichern ein.",
+				"sampleKinds": "Beispielarten",
+				"addKind": "Art hinzufügen",
+				"removeKind": "Art entfernen",
+				"kind": "Art",
+				"kindPlaceholder": "z. B. single-tool-call",
+				"count": "Anzahl",
+				"label": "Label",
+				"holdout": "Holdout (%)",
+				"temperature": "Lehrer-Temperatur",
+				"baseSeed": "Basis-Seed",
+				"baseSeedHint": "Optional. Eine 64-Bit-Ganzzahl; leer lassen für keine Seed-Vorgabe.",
+				"critic": "Jedes Beispiel mit einem Kritikermodell bewerten",
+				"criticModel": "Kritikermodell",
+				"cancel": "Abbrechen",
+				"save": "Definition speichern",
+				"saveFailed": "Die Datensatz-Definition konnte nicht gespeichert werden.",
+				"errors": {
+					"name": "Eine Definition braucht einen Namen.",
+					"teacher": "Wähle ein node-lokales Lehrermodell.",
+					"holdout": "Der Holdout-Anteil muss zwischen 5 und 30 Prozent liegen.",
+					"temperature": "Die Lehrer-Temperatur muss zwischen 0 und 2 liegen.",
+					"sampleKinds": "Eine Definition braucht mindestens eine Beispielart.",
+					"sampleKind": "Eine Beispielart braucht einen Namen mit höchstens 64 Zeichen.",
+					"sampleCount": "Eine Beispielart braucht eine ganze Zielanzahl von mindestens 1.",
+					"totalSamples": "Eine Definition darf insgesamt höchstens 2000 Beispiele anstreben.",
+					"duplicateKind": "Beispielarten müssen je Label eindeutig sein.",
+					"baseSeed": "Der Basis-Seed muss eine ganze Zahl sein.",
+					"criticModel": "Wähle ein Kritikermodell oder schalte den Kritiker aus."
+				}
+			}
+		},
+		"datasets": {
+			"title": "Datensätze",
+			"empty": "Noch keine Datensätze. Generiere einen aus einer Definition.",
+			"revision": "Revision {{revision}}",
+			"counts": "{{total}} Beispiele · {{good}} gut · {{bad}} schlecht · {{rejected}} abgelehnt · {{duplicate}} doppelt",
+			"delete": "Löschen",
+			"cancel": "Abbrechen"
+		},
+		"samples": {
+			"title": "Beispiele — {{name}}",
+			"empty": "Keine Beispiele passen zu diesem Filter.",
+			"approve": "Freigeben",
+			"reject": "Ablehnen",
+			"relabel": "Als {{label}} markieren",
+			"layerFailed": "fehlgeschlagen",
+			"filter": {
+				"label": "Prüfstatus",
+				"all": "Alle",
+				"pending": "Offen",
+				"approved": "Freigegeben",
+				"rejected": "Abgelehnt"
+			}
+		},
+		"mocks": {
+			"title": "Tool-Mocks",
+			"empty": "Noch keine Tool-Mocks. Jeder generierte Aufruf außer einem freigabefreien Nur-Lese-Tool braucht einen.",
+			"rules": "{{count}} Regeln",
+			"verify": "Prüfen",
+			"enabled": "Aktiv"
+		},
+		"export": {
+			"title": "Export ({{format}})"
+		},
+		"artifacts": {
+			"export": "Exportieren",
+			"exportTitle": "Diesen Lauf exportieren",
+			"kindLabel": "Was exportiert wird",
+			"quantLabel": "Quantisierung",
+			"startExport": "Export starten",
+			"adapterNote": "Ein Adapter wird immer als F16 exportiert und auf dem Basismodell ausgeführt, gegen das er trainiert wurde.",
+			"retestSmoke": "Rauchtest wiederholen",
+			"promote": "Als Modell registrieren",
+			"promoteTitle": "Als lokales Modell registrieren",
+			"promoteNote": "Die Quantisierung wird automatisch an den Namen angehängt, und das Modell hält fest, aus welchem Checkpoint und Datensatz es stammt.",
+			"modelNameLabel": "Modellname",
+			"modelNamePlaceholder": "mein-feinabgestimmtes-modell",
+			"delete": "Löschen",
+			"kind": {
+				"MergedGguf": "Zusammengeführtes Modell",
+				"AdapterGguf": "Nur Adapter"
+			},
+			"smoke": {
+				"Pending": "Nicht geprüft",
+				"Passed": "Rauchtest bestanden",
+				"Failed": "Rauchtest fehlgeschlagen",
+				"Skipped": "Rauchtest übersprungen"
+			},
+			"phase": {
+				"preparing": "Export wird vorbereitet",
+				"merging": "Adapter wird ins Basismodell eingerechnet",
+				"converting": "Wird nach GGUF konvertiert",
+				"quantizing": "Wird quantisiert",
+				"inspecting": "Exportiertes Modell wird geprüft",
+				"smoke": "Rauchtest läuft",
+				"ready": "Bereit",
+				"smokeFailed": "Rauchtest fehlgeschlagen",
+				"skipped": "Übersprungen",
+				"failed": "Export fehlgeschlagen"
+			}
+		},
+		"errors": {
+			"request": "Die Trainings-Anfrage ist fehlgeschlagen."
+		},
+		"runs": {
+			"wizard": {
+				"title": "Trainingslauf starten",
+				"description": "Ein Lauf trainiert einen LoRA-Adapter aus einem Datensatz und einem Basis-Checkpoint. Er belegt währenddessen die gesamte GPU.",
+				"dataset": "Datensatz",
+				"datasetPlaceholder": "Fertigen Datensatz auswählen",
+				"baseCheckpoint": "Basis-Checkpoint",
+				"baseCheckpointPlaceholder": "Heruntergeladenen Checkpoint auswählen",
+				"checkpointUnreadable": "Für diesen Checkpoint lässt sich der Trainingsbedarf nicht bestimmen.",
+				"doesNotFit": "Dieser Lauf passt nicht",
+				"estimate": "Etwa {{estimate}} VRAM von {{available}} frei",
+				"vramUnknown": "unbekannt",
+				"experimental": "Experimentelle Größe",
+				"noLicenseMetadata": "Für dieses Repository wurden keine Lizenzangaben gefunden. Die Bestätigung hält genau das fest.",
+				"confirmLicense": "Ich bestätige, dass ich diese Gewichte feinabstimmen darf",
+				"maxSeqLength": "Sequenzlänge",
+				"batchSize": "Batch-Größe",
+				"loraR": "LoRA-Rang",
+				"epochs": "Epochen",
+				"startFailed": "Der Lauf konnte nicht gestartet werden. Prüfe die Optionen und versuche es erneut.",
+				"start": "Lauf starten"
+			},
+			"list": {
+				"title": "Trainingsläufe",
+				"empty": "Noch keine Trainingsläufe. Starte oben einen.",
+				"cancel": "Abbrechen",
+				"loss": "Loss {{loss}}",
+				"steps": "Schritt {{step}} von {{total}}"
+			},
+			"status": {
+				"Queued": "In Warteschlange",
+				"Preparing": "Wird vorbereitet",
+				"Training": "Training läuft",
+				"Exporting": "Wird exportiert",
+				"Smoke": "Rauchtest",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"phase": {
+				"loading": "Modell wird geladen",
+				"tokenizing": "Datensatz wird vorbereitet",
+				"training": "Training",
+				"saving": "Adapter wird gespeichert"
+			}
+		},
+		"comparisons": {
+			"list": {
+				"title": "Vergleichsberichte",
+				"empty": "Noch keine Vergleichsberichte. Erstelle einen aus einem abgeschlossenen Trainingslauf.",
+				"create": "Neuer Vergleich",
+				"delete": "Löschen",
+				"deleteFailed": "Der Vergleichsbericht konnte nicht gelöscht werden."
+			},
+			"create": {
+				"title": "Neuer Vergleich",
+				"run": "Trainingslauf",
+				"runPlaceholder": "Abgeschlossenen Trainingslauf wählen",
+				"name": "Berichtsname",
+				"baseModel": "Basismodell",
+				"tunedModel": "Feinabgestimmtes Modell",
+				"baseEvaluation": "Basis-Auswertung",
+				"tunedEvaluation": "Auswertung des feinabgestimmten Modells",
+				"missing": "Noch nicht ausgewertet",
+				"evaluate": "Auswerten",
+				"evaluating": "Bewertet {{scored}} von {{total}}",
+				"benchmarkPairing": "Optionale Benchmark-Zuordnung",
+				"benchmarkProject": "Benchmark-Projekt",
+				"baseBenchmark": "Benchmark-Lauf (Basis)",
+				"tunedBenchmark": "Benchmark-Lauf (feinabgestimmt)",
+				"benchmarkNone": "Keiner",
+				"submit": "Bericht erstellen",
+				"cancel": "Abbrechen",
+				"failed": "Der Vergleichsbericht konnte nicht erstellt werden.",
+				"evaluateFailed": "Die Auswertung konnte nicht gestartet werden.",
+				"needsBothEvaluations": "Beide Seiten brauchen eine abgeschlossene Auswertung, bevor ein Bericht erstellt werden kann."
+			},
+			"report": {
+				"accuracy": "Hold-out-Genauigkeit",
+				"kind": "Beispielart",
+				"base": "Basis",
+				"tuned": "Feinabgestimmt",
+				"delta": "Differenz",
+				"overall": "Gesamt",
+				"unavailable": "Der Genauigkeitsvergleich ist nicht verfügbar.",
+				"samples": "{{passed}} von {{scored}} Beispielen",
+				"benchmark": "Benchmark-Differenzen",
+				"tokensPerSecond": "Token pro Sekunde",
+				"duration": "Dauer (ms)",
+				"userScore": "Deine Bewertung",
+				"judgeScore": "Judge-Bewertung",
+				"compareLive": "Ausgaben live auf der Benchmark-Seite vergleichen"
+			},
+			"evaluation": {
+				"status": {
+					"Queued": "In Warteschlange",
+					"Running": "Wird bewertet",
+					"Succeeded": "Bewertet",
+					"Failed": "Fehlgeschlagen",
+					"Cancelled": "Abgebrochen"
+				},
+				"resume": "Fortsetzen",
+				"resumeFailed": "Die Auswertung konnte nicht fortgesetzt werden.",
+				"progress": "{{scored}} von {{total}} bewertet, {{passed}} bestanden"
+			}
+		},
+		"drift": {
+			"run": "Der Datensatz wurde bearbeitet, nachdem dieser Lauf sein Holdout-Set eingefroren hat; die Werte sind möglicherweise nicht vergleichbar.",
+			"evaluation": "Der Datensatz wurde bearbeitet, nachdem diese Auswertung ihr Holdout-Set eingefroren hat; die Werte sind möglicherweise nicht vergleichbar.",
+			"deleted": "Der zugrunde liegende Datensatz wurde gelöscht; sein eingefrorenes Holdout-Set kann nicht mehr verglichen werden."
+		}
 	}
 }

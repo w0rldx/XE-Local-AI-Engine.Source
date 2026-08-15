@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Providers.Training</RootNamespace>
+    <!-- LibraryImport source generation for the libc kill(2) tree-kill; same reason as the LlamaServer and
+         StableDiffusionCpp providers, which carry their own process-group handles. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Same package the HuggingFace provider takes for its named HttpClient; nothing new enters
+         Directory.Packages.props for this project. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Tests drive the internal phase machine and the uv acquisition against a fake process runner and a stubbed
+         HttpMessageHandler rather than provisioning a real venv. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+</Project>

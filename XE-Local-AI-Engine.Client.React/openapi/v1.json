@@ -240,6 +240,2644 @@
         ]
       }
     },
+    "/api/local/v1/training/runtime/prerequisites": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingRuntimePrerequisites",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runtime/status": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingRuntimeStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runtime/remove": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "removeTrainingRuntime",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runtime/install": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "startTrainingRuntimeInstall",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1StartTrainingRuntimeInstallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createTrainingRun",
+        "requestBody": {
+          "x-name": "CreateTrainingRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listTrainingRuns",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "datasetId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs/{runId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "cancelTrainingRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs/defaults": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingRunDefaults",
+        "parameters": [
+          {
+            "name": "baseArtifactId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "datasetId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/mocks": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listToolMocks",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ListToolMocksResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createToolMock",
+        "requestBody": {
+          "x-name": "CreateToolMockRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1CreateToolMockRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/mocks/{mockId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getToolMock",
+        "parameters": [
+          {
+            "name": "mockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "updateToolMock",
+        "parameters": [
+          {
+            "name": "mockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateToolMockRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1UpdateToolMockRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteToolMock",
+        "parameters": [
+          {
+            "name": "mockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteToolMockRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteToolMockRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteToolMockRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/mocks/{mockId}/verify": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "verifyToolMock",
+        "parameters": [
+          {
+            "name": "mockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "VerifyToolMockRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1VerifyToolMockRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs/{runId}/exports": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "startTrainingExport",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "StartTrainingExportRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1StartTrainingExportRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs/{runId}/artifacts": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listTrainingArtifacts",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1ListTrainingArtifactsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteTrainingArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteTrainingArtifactRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/smoke": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "runTrainingArtifactSmoke",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactSmokeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/promote": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "promoteTrainingArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "PromoteTrainingArtifactRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/evaluations": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createEvaluation",
+        "requestBody": {
+          "x-name": "CreateEvaluationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1CreateEvaluationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listEvaluations",
+        "parameters": [
+          {
+            "name": "trainingRunId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1ListEvaluationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/evaluations/{evaluationId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getEvaluation",
+        "parameters": [
+          {
+            "name": "evaluationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteEvaluation",
+        "parameters": [
+          {
+            "name": "evaluationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteEvaluationRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/evaluations/{evaluationId}/resume": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "resumeEvaluation",
+        "parameters": [
+          {
+            "name": "evaluationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/evaluations/{evaluationId}/cancel": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "cancelEvaluation",
+        "parameters": [
+          {
+            "name": "evaluationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/definitions": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listTrainingDefinitions",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingDefinitionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createTrainingDefinition",
+        "requestBody": {
+          "x-name": "CreateTrainingDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1CreateTrainingDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/definitions/{definitionId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "updateTrainingDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateTrainingDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1UpdateTrainingDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteTrainingDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteTrainingDefinitionRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteTrainingDefinitionRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteTrainingDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/definitions/{definitionId}/generate": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "generateTrainingDataset",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "GenerateTrainingDatasetRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1GenerateTrainingDatasetRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDatasetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/datasets": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listTrainingDatasets",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingDatasetsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/datasets/{datasetId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingDataset",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDatasetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteTrainingDataset",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteTrainingDatasetRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/datasets/{datasetId}/cancel": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "cancelTrainingDataset",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/datasets/{datasetId}/samples": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listTrainingSamples",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleLabel"
+                }
+              ]
+            }
+          },
+          {
+            "name": "reviewState",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleReviewState"
+                }
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingSamplesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/datasets/{datasetId}/samples/{sampleId}": {
+      "patch": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "reviewTrainingSample",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "sampleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ReviewTrainingSampleRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ReviewTrainingSampleRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingSampleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/datasets/{datasetId}/export": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "exportTrainingDataset",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetExportFormat"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ExportTrainingDatasetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/comparisons": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createComparison",
+        "requestBody": {
+          "x-name": "CreateComparisonRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1CreateComparisonRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listComparisons",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ListComparisonsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/comparisons/{comparisonId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getComparison",
+        "parameters": [
+          {
+            "name": "comparisonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteComparison",
+        "parameters": [
+          {
+            "name": "comparisonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteComparisonRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/comparisons/suggest": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "suggestComparison",
+        "parameters": [
+          {
+            "name": "trainingRunId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonSuggestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/base-artifacts/{artifactId}/cancel": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "cancelBaseArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/base-artifacts": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createBaseArtifact",
+        "requestBody": {
+          "x-name": "CreateBaseArtifactRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1CreateBaseArtifactRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listBaseArtifacts",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/base-artifacts/{artifactId}": {
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteBaseArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getBaseArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/base-artifacts/{artifactId}/license": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getBaseArtifactLicense",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactLicenseResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/skills/import": {
       "post": {
         "tags": [
@@ -4439,6 +7077,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -12962,6 +15610,2470 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "canInstall",
+          "items"
+        ],
+        "properties": {
+          "canInstall": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisiteItemResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisiteItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "satisfied",
+          "detail"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "isRunning",
+          "terminal",
+          "logStartSequence",
+          "logLines"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "isRunning": {
+            "type": "boolean"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "logStartSequence": {
+            "type": "integer"
+          },
+          "logLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          },
+          "installed": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1InstalledTrainingRuntimeResponse"
+              }
+            ]
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1InstalledTrainingRuntimeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uvVersion",
+          "pythonVersion",
+          "contractVersion",
+          "installedAtUtc"
+        ],
+        "properties": {
+          "uvVersion": {
+            "type": "string"
+          },
+          "pythonVersion": {
+            "type": "string"
+          },
+          "contractVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "installedAtUtc": {
+            "type": "integer"
+          },
+          "torchVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "unslothVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1StartTrainingRuntimeInstallResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "started",
+          "status"
+        ],
+        "properties": {
+          "started": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "datasetId",
+          "baseArtifactId",
+          "status",
+          "datasetRevision",
+          "datasetContentFingerprint",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "datasetId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "linkedInstalledModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "datasetRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "datasetContentFingerprint": {
+            "type": "string"
+          },
+          "workStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "logTail": {
+            "type": "string",
+            "nullable": true
+          },
+          "progress": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunProgressResponse"
+              }
+            ]
+          },
+          "options": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunProgressResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "step",
+          "totalSteps"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalSteps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "epoch": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "loss": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "learningRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vramBytes": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "maxSeqLength",
+          "loraR",
+          "loraAlpha",
+          "loraDropout",
+          "perDeviceTrainBatchSize",
+          "gradientAccumulationSteps",
+          "learningRate",
+          "warmupRatio",
+          "epochs",
+          "seed",
+          "optimizer"
+        ],
+        "properties": {
+          "maxSeqLength": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "loraR": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "loraAlpha": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "loraDropout": {
+            "type": "number",
+            "format": "double"
+          },
+          "perDeviceTrainBatchSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "gradientAccumulationSteps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "learningRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "warmupRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "epochs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "optimizer": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "datasetId",
+          "expectedDatasetVersion",
+          "baseArtifactId",
+          "licenseConfirmed"
+        ],
+        "properties": {
+          "datasetId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "expectedDatasetVersion": {
+            "type": "integer"
+          },
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "licenseConfirmed": {
+            "type": "boolean"
+          },
+          "options": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload"
+              }
+            ]
+          },
+          "linkedModelName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "FastEndpointsErrorResponse": {
+        "type": "object",
+        "description": "the dto used to send an error response to the client",
+        "additionalProperties": false,
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "the http status code sent to the client. default is 400.",
+            "format": "int32",
+            "default": 400
+          },
+          "message": {
+            "type": "string",
+            "description": "the message for the error response",
+            "default": "One or more errors occurred!"
+          },
+          "errors": {
+            "type": "object",
+            "description": "the collection of errors for the current context",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunResponse"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1ListTrainingRunsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunByIdRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "options",
+          "estimate",
+          "availableVramBytes",
+          "vramKnown",
+          "fits",
+          "linkedModelSuggestions"
+        ],
+        "properties": {
+          "options": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload"
+          },
+          "estimate": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse"
+          },
+          "availableVramBytes": {
+            "type": "integer"
+          },
+          "vramKnown": {
+            "type": "boolean"
+          },
+          "fits": {
+            "type": "boolean"
+          },
+          "rejectionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "license": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse"
+              }
+            ]
+          },
+          "linkedModelSuggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gpuBytes",
+          "ramBytes",
+          "parameterCount",
+          "trainableParameterCount",
+          "experimental"
+        ],
+        "properties": {
+          "gpuBytes": {
+            "type": "integer"
+          },
+          "ramBytes": {
+            "type": "integer"
+          },
+          "parameterCount": {
+            "type": "integer"
+          },
+          "trainableParameterCount": {
+            "type": "integer"
+          },
+          "experimental": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId",
+          "isGated",
+          "metadataPresent",
+          "confirmationText"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "isGated": {
+            "type": "boolean"
+          },
+          "metadataPresent": {
+            "type": "boolean"
+          },
+          "confirmationText": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "contentFingerprint": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ListToolMocksResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "toolName",
+          "body",
+          "verificationState",
+          "enabled",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "body": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockBodyV1"
+          },
+          "verification": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockVerificationV1"
+              }
+            ]
+          },
+          "verificationState": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesToolMockVerificationState"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockBodyV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockRuleV1"
+            }
+          },
+          "defaultResponse": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockRuleV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "match": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockMatchKind"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "anyOf": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "response": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockMatchKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Equality",
+          "Presence",
+          "Enum"
+        ],
+        "enum": [
+          "Equality",
+          "Presence",
+          "Enum"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockVerificationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesToolMockVerificationState": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Unverified",
+          "Verified",
+          "Rejected"
+        ],
+        "enum": [
+          "Unverified",
+          "Verified",
+          "Rejected"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1GetToolMockRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1CreateToolMockRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "toolName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "body": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockBodyV1"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1UpdateToolMockRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "body": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockBodyV1"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1DeleteToolMockRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1VerifyToolMockRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportAcceptedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "kind",
+          "quantType"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "quantType": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1StartTrainingExportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "nullable": false,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingArtifactKind"
+              }
+            ]
+          },
+          "quantType": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingArtifactKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "AdapterGguf",
+          "MergedGguf",
+          "HfAdapterDir"
+        ],
+        "enum": [
+          "AdapterGguf",
+          "MergedGguf",
+          "HfAdapterDir"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1ListTrainingArtifactsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "runId",
+          "kind",
+          "fileName",
+          "sizeBytes",
+          "smokeState",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "smokeState": {
+            "type": "string"
+          },
+          "smokeReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "committedModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingRunArtifactsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactByIdRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactSmokeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "smokeState"
+        ],
+        "properties": {
+          "smokeState": {
+            "type": "string"
+          },
+          "smokeReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "modelName",
+          "datasetId",
+          "datasetContentFingerprint",
+          "status",
+          "totalCount",
+          "scoredCount",
+          "passedCount",
+          "perKind",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "trainingRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "comparisonId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "modelContentFingerprint": {
+            "type": "string",
+            "nullable": true
+          },
+          "datasetId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "datasetContentFingerprint": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "workStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scoredCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "passedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "perKind": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationKindTallyResponse"
+            }
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationKindTallyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "total",
+          "passed"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "passed": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1CreateEvaluationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trainingRunId",
+          "target"
+        ],
+        "properties": {
+          "trainingRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "target": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingEvaluationEvaluationTarget"
+          },
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingEvaluationEvaluationTarget": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Base",
+          "Tuned"
+        ],
+        "enum": [
+          "Base",
+          "Tuned"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationByIdRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1ListEvaluationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1ListEvaluationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorCode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "NotFound",
+          "InvalidRequest",
+          "VersionConflict",
+          "GenerationActive",
+          "DefinitionReferenced",
+          "DatasetReferenced",
+          "TrainingBusy",
+          "InvalidLifecycleTransition"
+        ],
+        "enum": [
+          "NotFound",
+          "InvalidRequest",
+          "VersionConflict",
+          "GenerationActive",
+          "DefinitionReferenced",
+          "DatasetReferenced",
+          "TrainingBusy",
+          "InvalidLifecycleTransition"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingDefinitionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDefinitionResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDefinitionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "body",
+          "definitionVersion",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingDatasetKind"
+          },
+          "body": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1"
+          },
+          "definitionVersion": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingDatasetKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "ToolCalling"
+        ],
+        "enum": [
+          "ToolCalling"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "teacherModelName": {
+            "type": "string"
+          },
+          "teacherOutputMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsTeacherOutputMode"
+          },
+          "systemInstructions": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetToolSnapshotV1"
+            }
+          },
+          "sampleKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetSampleKindTargetV1"
+            }
+          },
+          "holdoutFraction": {
+            "type": "number",
+            "format": "double"
+          },
+          "temperature": {
+            "type": "number",
+            "format": "float"
+          },
+          "baseSeed": {
+            "type": "string",
+            "nullable": true
+          },
+          "criticEnabled": {
+            "type": "boolean"
+          },
+          "criticModelName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsTeacherOutputMode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Constrained",
+          "ValidateAfter"
+        ],
+        "enum": [
+          "Constrained",
+          "ValidateAfter"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetToolSnapshotV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "parameterSchema": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiresApproval": {
+            "type": "boolean"
+          },
+          "category": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineAIAgentToolsToolCategory"
+          }
+        }
+      },
+      "XE_Local_AI_EngineAIAgentToolsToolCategory": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "ReadLocal",
+          "WriteExecute",
+          "Orchestration",
+          "Network",
+          "Unknown"
+        ],
+        "enum": [
+          "ReadLocal",
+          "WriteExecute",
+          "Orchestration",
+          "Network",
+          "Unknown"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetSampleKindTargetV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "label": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleLabel"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleLabel": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Good",
+          "Bad"
+        ],
+        "enum": [
+          "Good",
+          "Bad"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1GetTrainingDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1CreateTrainingDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "body": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1UpdateTrainingDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "body": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1DeleteTrainingDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDatasetResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "definitionId",
+          "definitionVersion",
+          "name",
+          "status",
+          "revision",
+          "totalSampleCount",
+          "goodSampleCount",
+          "badSampleCount",
+          "rejectedSampleCount",
+          "duplicateSampleCount",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionVersion": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingDatasetStatus"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contentFingerprint": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalSampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "goodSampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "badSampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rejectedSampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "duplicateSampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "workStatus": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesDatasetGenerationWorkStatus"
+              }
+            ]
+          },
+          "workErrorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingDatasetStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Generating",
+          "Ready",
+          "Failed"
+        ],
+        "enum": [
+          "Generating",
+          "Ready",
+          "Failed"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesDatasetGenerationWorkStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1GenerateTrainingDatasetRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingDatasetsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingDatasetResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1GetTrainingDatasetRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1CancelTrainingDatasetRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingSamplesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingSampleResponse"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingSampleResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "datasetId",
+          "sequence",
+          "kind",
+          "label",
+          "reviewState",
+          "provenance",
+          "sourceHash",
+          "content",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "datasetId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleLabel"
+          },
+          "reviewState": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleReviewState"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleProvenance"
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsTrainingSampleContentV1"
+          },
+          "validation": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsTrainingSampleValidationV1"
+              }
+            ]
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleReviewState": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ],
+        "enum": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleProvenance": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Generated",
+          "Manual"
+        ],
+        "enum": [
+          "Generated",
+          "Manual"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsTrainingSampleContentV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "systemInstructions": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsTrainingSamplePartV1"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsTrainingSamplePartV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "content": {
+            "type": "string",
+            "nullable": true
+          },
+          "toolCallId": {
+            "type": "string",
+            "nullable": true
+          },
+          "toolName": {
+            "type": "string",
+            "nullable": true
+          },
+          "arguments": {
+            "type": "string",
+            "nullable": true
+          },
+          "result": {
+            "type": "string",
+            "nullable": true
+          },
+          "isError": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsTrainingSampleValidationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsSampleValidationLayerResultV1"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsSampleValidationLayerResultV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "layer": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "scoredBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingSamplesRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ReviewTrainingSampleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "verb": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceStoresTrainingSampleReviewVerb"
+          },
+          "label": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingSampleLabel"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceStoresTrainingSampleReviewVerb": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Approve",
+          "Reject",
+          "Relabel"
+        ],
+        "enum": [
+          "Approve",
+          "Reject",
+          "Relabel"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ExportTrainingDatasetResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "datasetId",
+          "format",
+          "content",
+          "lineCount"
+        ],
+        "properties": {
+          "datasetId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "format": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetExportFormat"
+          },
+          "content": {
+            "type": "string"
+          },
+          "lineCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetExportFormat": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Jsonl",
+          "Hermes"
+        ],
+        "enum": [
+          "Jsonl",
+          "Hermes"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1ExportTrainingDatasetRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "baseEvaluationRunId",
+          "tunedEvaluationRunId",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "baseEvaluationRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "tunedEvaluationRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "baseBenchmarkRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "tunedBenchmarkRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "trainingRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "deltas": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonDeltasResponse"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonDeltasResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseModelName",
+          "tunedModelName",
+          "baseScoredCount",
+          "basePassedCount",
+          "tunedScoredCount",
+          "tunedPassedCount",
+          "baseAccuracy",
+          "tunedAccuracy",
+          "accuracyDelta",
+          "perKind",
+          "accuracyAvailable"
+        ],
+        "properties": {
+          "baseModelName": {
+            "type": "string"
+          },
+          "tunedModelName": {
+            "type": "string"
+          },
+          "baseScoredCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "basePassedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tunedScoredCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tunedPassedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "baseAccuracy": {
+            "type": "number",
+            "format": "double"
+          },
+          "tunedAccuracy": {
+            "type": "number",
+            "format": "double"
+          },
+          "accuracyDelta": {
+            "type": "number",
+            "format": "double"
+          },
+          "perKind": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonKindDeltaResponse"
+            }
+          },
+          "accuracyAvailable": {
+            "type": "boolean"
+          },
+          "unavailableReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "benchmark": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonBenchmarkDeltaResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonKindDeltaResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "baseTotal",
+          "basePassed",
+          "tunedTotal",
+          "tunedPassed",
+          "baseAccuracy",
+          "tunedAccuracy",
+          "accuracyDelta"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "baseTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "basePassed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tunedTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tunedPassed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "baseAccuracy": {
+            "type": "number",
+            "format": "double"
+          },
+          "tunedAccuracy": {
+            "type": "number",
+            "format": "double"
+          },
+          "accuracyDelta": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonBenchmarkDeltaResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "baseTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "tunedTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "tokensPerSecondDelta": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "baseDurationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "tunedDurationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "baseUserScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "tunedUserScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "userScoreDelta": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "baseJudgeScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "tunedJudgeScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "judgeScoreDelta": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1CreateComparisonRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "baseEvaluationRunId",
+          "tunedEvaluationRunId"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "baseEvaluationRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "tunedEvaluationRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "baseBenchmarkRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "tunedBenchmarkRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "trainingRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ListComparisonsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonByIdRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1ComparisonSuggestionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trainingRunId"
+        ],
+        "properties": {
+          "trainingRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "baseModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "tunedModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "baseEvaluationRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "tunedEvaluationRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "unavailableReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1SuggestComparisonRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "repoId",
+          "revision",
+          "status",
+          "totalBytes",
+          "files",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totalBytes": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactFileResponse"
+            }
+          },
+          "license": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactLicenseResponse"
+              }
+            ]
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "progress": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactProgressResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactFileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "fileName",
+          "sizeBytes"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactLicenseResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId",
+          "isGated",
+          "fetchedAtUtc"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "isGated": {
+            "type": "boolean"
+          },
+          "fetchedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactProgressResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "completedBytes",
+          "fileIndex",
+          "fileCount"
+        ],
+        "properties": {
+          "completedBytes": {
+            "type": "integer"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "fileIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fileCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactByIdRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1CreateBaseArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse"
+            }
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsSkillsV1SkillImportCommitResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -15892,34 +21004,6 @@
           }
         }
       },
-      "FastEndpointsErrorResponse": {
-        "type": "object",
-        "description": "the dto used to send an error response to the client",
-        "additionalProperties": false,
-        "properties": {
-          "statusCode": {
-            "type": "integer",
-            "description": "the http status code sent to the client. default is 400.",
-            "format": "int32",
-            "default": 400
-          },
-          "message": {
-            "type": "string",
-            "description": "the message for the error response",
-            "default": "One or more errors occurred!"
-          },
-          "errors": {
-            "type": "object",
-            "description": "the collection of errors for the current context",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
       "XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileActionResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -17454,6 +22538,22 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelRequest": {
         "type": "object",
         "additionalProperties": false
@@ -17564,11 +22664,13 @@
         "description": "",
         "x-enumNames": [
           "HuggingFace",
-          "Imported"
+          "Imported",
+          "Trained"
         ],
         "enum": [
           "huggingface",
-          "imported"
+          "imported",
+          "trained"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest": {

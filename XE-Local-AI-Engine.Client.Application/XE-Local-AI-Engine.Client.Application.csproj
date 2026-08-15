@@ -70,8 +70,15 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Training\XE-Local-AI-Engine.Providers.Training.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The training export runs its pipeline on a detached background task; tests await the same handle the service
+         holds rather than racing a store substitute for a side effect that may not have landed yet. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
   </ItemGroup>
 
   <ItemGroup>

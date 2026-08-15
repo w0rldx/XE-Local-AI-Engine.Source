@@ -62,6 +62,22 @@ describe("navigationLinks", () => {
 		]);
 	});
 
+	it("dark-ships the Training group: hidden by default, a Datasets-only group when the capability is on", async () => {
+		// plan section 14: the training endpoints ship registered and Operator-gated, but the nav group is compiled off
+		// until the epic is verified, so the default id list above must not contain it.
+		expect(navigationLinks.some((link) => link.id === "training")).toBe(false);
+
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ training: true });
+		const training = gatedLinks.find((link) => link.id === "training");
+
+		expect(training?.to).toBeUndefined();
+		expect(training?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.trainingDatasets,
+			nodeRoutePaths.training,
+			nodeRoutePaths.trainingComparisons,
+		]);
+	});
+
 	it("hides Dashboard and Node Binding in the local-only profile (capabilities off)", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ dashboard: false, binding: false });
 

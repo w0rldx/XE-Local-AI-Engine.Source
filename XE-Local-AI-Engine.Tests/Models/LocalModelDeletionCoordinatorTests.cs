@@ -74,6 +74,73 @@ public sealed class LocalModelDeletionCoordinatorTests
         AssertEx.False(Directory.Exists(deleteRoot) && Directory.EnumerateFiles(deleteRoot, "journal.json", SearchOption.AllDirectories).Any());
     }
 
+    [Test]
+    public async Task CommitDelete_WhenAnAdapterAppliesToTheModel_IsRefusedWithoutMutation()
+    {
+        await using var context = await CreateContextAsync().ConfigureAwait(false);
+
+        // An adapter carries no weights of its own, so deleting its base would strand it permanently.
+        var adapterPath = Path.Combine(context.Directory.Path, "tuned-adapter-Q4_K_M.gguf");
+        await File.WriteAllBytesAsync(adapterPath, [9, 9, 9, 9]).ConfigureAwait(false);
+        await context.Registry.UpsertAsync(new GgufModelRegistryEntry
+        {
+            ModelName = "local/tuned:Q4_K_M",
+            RepoId = "local/tuned",
+            FileName = Path.GetFileName(adapterPath),
+            Quant = "Q4_K_M",
+            LocalPath = adapterPath,
+            SizeBytes = 4,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData([9, 9, 9, 9])),
+            SourceRevision = "revision",
+            DownloadedAtUtc = DateTimeOffset.UnixEpoch,
+            Role = GgufRole.Chat,
+            AdapterFileName = Path.GetFileName(adapterPath),
+            BaseModelName = context.ModelName
+        }, CancellationToken.None).ConfigureAwait(false);
+
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+                                          context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
+                                      .ConfigureAwait(false);
+
+        AssertEx.Equal("InstalledModelHasDependentAdapters", exception.Message);
+        AssertEx.True(File.Exists(context.WeightPath), "A refused delete must not touch the base weights.");
+        AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(context.MapStore.HasMapping(context.ModelName));
+        var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
+        AssertEx.False(Directory.Exists(deleteRoot) && Directory.EnumerateFiles(deleteRoot, "journal.json", SearchOption.AllDirectories).Any(),
+            "The refusal must happen before any journal is written.");
+    }
+
+    [Test]
+    public async Task CommitDelete_WhenTheAdapterItselfIsDeleted_Succeeds()
+    {
+        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        var adapterPath = Path.Combine(context.Directory.Path, "tuned-adapter-Q4_K_M.gguf");
+        await File.WriteAllBytesAsync(adapterPath, [9, 9, 9, 9]).ConfigureAwait(false);
+        const string adapterName = "local/tuned:Q4_K_M";
+        await context.Registry.UpsertAsync(new GgufModelRegistryEntry
+        {
+            ModelName = adapterName,
+            RepoId = "local/tuned",
+            FileName = Path.GetFileName(adapterPath),
+            Quant = "Q4_K_M",
+            LocalPath = adapterPath,
+            SizeBytes = 4,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData([9, 9, 9, 9])),
+            SourceRevision = "revision",
+            DownloadedAtUtc = DateTimeOffset.UnixEpoch,
+            Role = GgufRole.Chat,
+            AdapterFileName = Path.GetFileName(adapterPath),
+            BaseModelName = context.ModelName
+        }, CancellationToken.None).ConfigureAwait(false);
+        context.MapStore.Seed(adapterName);
+
+        _ = await context.Coordinator.CommitDeleteAsync(adapterName, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(File.Exists(adapterPath));
+        AssertEx.True(File.Exists(context.WeightPath), "Deleting an adapter must leave its base installed.");
+    }
+
     private static async Task<TestContext> CreateContextAsync()
     {
 #pragma warning disable CA2000 // Ownership of both fixtures is transferred to the returned async-disposable TestContext.
@@ -118,6 +185,7 @@ public sealed class LocalModelDeletionCoordinatorTests
                 new InstalledGgufDeletionStore(registry, options),
                 mapStore,
                 providerResolver,
+                registry,
                 options,
                 NullLogger<LocalModelDeletionCoordinator>.Instance);
             return new TestContext(directory, registry, mapStore, providerResolver, coordinator, modelName, weightPath);

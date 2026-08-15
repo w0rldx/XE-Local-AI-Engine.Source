@@ -127,7 +127,11 @@
 		"customTools": "Custom Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Image Generation"
+		"images": "Image Generation",
+		"trainingGroup": "Training",
+		"training": "Training",
+		"trainingDatasets": "Datasets",
+		"trainingComparisons": "Comparisons"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -4019,6 +4023,62 @@
 		"customTools": {
 			"title": "Custom tools",
 			"subtitle": "Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default."
+		},
+		"training": {
+			"title": "Training",
+			"subtitle": "Fine-tune a local model on your own data. Training holds the whole GPU while it runs, so no chat, image or benchmark work happens at the same time.",
+			"runtime": {
+				"title": "Python training runtime",
+				"description": "Fine-tuning runs in a pinned, uv-managed Python environment. It is installed once and used by every training run.",
+				"prerequisites": "Prerequisites",
+				"install": "Install runtime",
+				"reinstall": "Reinstall runtime",
+				"remove": "Remove runtime",
+				"cancel": "Cancel install",
+				"failed": "Install failed",
+				"installedPython": "Python {{version}}",
+				"installedTorch": "torch {{version}}",
+				"phase": {
+					"Idle": "Not installed",
+					"AcquiringUv": "Downloading uv",
+					"ProvisioningPython": "Provisioning Python",
+					"InstallingPackages": "Installing packages",
+					"Verifying": "Verifying",
+					"Ready": "Ready",
+					"Failed": "Failed",
+					"Removing": "Removing"
+				}
+			},
+			"baseArtifacts": {
+				"title": "Base checkpoints",
+				"description": "Fine-tuning needs the original safetensors checkpoint, not a quantized copy. Enter the Hugging Face repository to download.",
+				"repoId": "Repository",
+				"revision": "Revision (optional)",
+				"download": "Download",
+				"status": "Status",
+				"license": "License",
+				"noLicense": "Not declared",
+				"gated": "Gated",
+				"size": "Size",
+				"empty": "No base checkpoints yet. Download one to make it available to training runs.",
+				"error": "Could not start the download.",
+				"progress": "File {{index}} of {{count}} — {{done}}",
+				"cancel": "Cancel download",
+				"delete": "Delete checkpoint",
+				"statusValue": {
+					"Downloading": "Downloading",
+					"Ready": "Ready",
+					"Failed": "Failed"
+				}
+			},
+			"datasets": {
+				"title": "Training datasets",
+				"subtitle": "Generate tool-calling datasets from a definition, review every sample, and export them for a training run."
+			},
+			"comparisons": {
+				"title": "Comparisons",
+				"subtitle": "Score a base model and its tuned counterpart on the same frozen hold-out samples, then read the difference."
+			}
 		}
 	},
 	"components": {
@@ -4509,5 +4569,253 @@
 	},
 	"notifications": {
 		"emptyMessage": "Done."
+	},
+	"training": {
+		"tabs": {
+			"definitions": "Definitions",
+			"datasets": "Datasets",
+			"mocks": "Tool mocks"
+		},
+		"generation": {
+			"title": "Generation in progress",
+			"counts": "{{completed}} of {{total}} samples · {{rejected}} rejected"
+		},
+		"definitions": {
+			"title": "Dataset definitions",
+			"empty": "No dataset definitions yet.",
+			"generate": "Generate",
+			"holdout": "{{percent}}% hold-out",
+			"new": "New definition",
+			"edit": "Edit",
+			"delete": "Delete",
+			"editor": {
+				"createTitle": "New dataset definition",
+				"editTitle": "Edit dataset definition",
+				"name": "Name",
+				"teacher": "Teacher model",
+				"teacherHint": "Node-local models only. Cloud teachers are refused.",
+				"outputMode": "Teacher output mode",
+				"mode": {
+					"Constrained": "Constrained decoding",
+					"ValidateAfter": "Validate after generation"
+				},
+				"systemInstructions": "System instructions",
+				"tools": "Tools",
+				"toolsHint": "The tools the teacher is offered. The node snapshots their schemas on save.",
+				"sampleKinds": "Sample kinds",
+				"addKind": "Add kind",
+				"removeKind": "Remove kind",
+				"kind": "Kind",
+				"kindPlaceholder": "e.g. single-tool-call",
+				"count": "Count",
+				"label": "Label",
+				"holdout": "Hold-out (%)",
+				"temperature": "Teacher temperature",
+				"baseSeed": "Base seed",
+				"baseSeedHint": "Optional. A 64-bit integer; leave empty for no seed policy.",
+				"critic": "Score every sample with a critic model",
+				"criticModel": "Critic model",
+				"cancel": "Cancel",
+				"save": "Save definition",
+				"saveFailed": "Could not save the dataset definition.",
+				"errors": {
+					"name": "A definition needs a name.",
+					"teacher": "Pick a node-local teacher model.",
+					"holdout": "The hold-out share must be between 5 and 30 percent.",
+					"temperature": "The teacher temperature must be between 0 and 2.",
+					"sampleKinds": "A definition needs at least one sample kind.",
+					"sampleKind": "A sample kind needs a name of at most 64 characters.",
+					"sampleCount": "A sample kind needs a whole target count of at least 1.",
+					"totalSamples": "A definition may target at most 2000 samples in total.",
+					"duplicateKind": "Sample kinds must be unique per label.",
+					"baseSeed": "The base seed must be a whole number.",
+					"criticModel": "Pick a critic model, or turn the critic off."
+				}
+			}
+		},
+		"datasets": {
+			"title": "Datasets",
+			"empty": "No datasets yet. Generate one from a definition.",
+			"revision": "Revision {{revision}}",
+			"counts": "{{total}} samples · {{good}} good · {{bad}} bad · {{rejected}} rejected · {{duplicate}} duplicate",
+			"delete": "Delete",
+			"cancel": "Cancel"
+		},
+		"samples": {
+			"title": "Samples — {{name}}",
+			"empty": "No samples match this filter.",
+			"approve": "Approve",
+			"reject": "Reject",
+			"relabel": "Mark as {{label}}",
+			"layerFailed": "failed",
+			"filter": {
+				"label": "Review state",
+				"all": "All",
+				"pending": "Pending",
+				"approved": "Approved",
+				"rejected": "Rejected"
+			}
+		},
+		"mocks": {
+			"title": "Tool mocks",
+			"empty": "No tool mocks yet. A generated call to anything but an approval-free read-only tool needs one.",
+			"rules": "{{count}} rules",
+			"verify": "Verify",
+			"enabled": "Enabled"
+		},
+		"export": {
+			"title": "Export ({{format}})"
+		},
+		"artifacts": {
+			"export": "Export",
+			"exportTitle": "Export this run",
+			"kindLabel": "What to export",
+			"quantLabel": "Quantization",
+			"startExport": "Start export",
+			"adapterNote": "An adapter is always exported at F16 and is served on top of the base model it was trained against.",
+			"retestSmoke": "Re-run smoke test",
+			"promote": "Register as model",
+			"promoteTitle": "Register as a local model",
+			"promoteNote": "The quantization is appended to the name automatically, and the model records the checkpoint and dataset it came from.",
+			"modelNameLabel": "Model name",
+			"modelNamePlaceholder": "my-tuned-model",
+			"delete": "Delete",
+			"kind": {
+				"MergedGguf": "Merged model",
+				"AdapterGguf": "Adapter only"
+			},
+			"smoke": {
+				"Pending": "Not tested",
+				"Passed": "Smoke passed",
+				"Failed": "Smoke failed",
+				"Skipped": "Smoke skipped"
+			},
+			"phase": {
+				"preparing": "Preparing the export",
+				"merging": "Merging the adapter into the base model",
+				"converting": "Converting to GGUF",
+				"quantizing": "Quantizing",
+				"inspecting": "Checking the exported model",
+				"smoke": "Running the smoke test",
+				"ready": "Ready",
+				"smokeFailed": "Smoke test failed",
+				"skipped": "Skipped",
+				"failed": "Export failed"
+			}
+		},
+		"errors": {
+			"request": "The training request failed."
+		},
+		"runs": {
+			"wizard": {
+				"title": "Start a training run",
+				"description": "A run trains a LoRA adapter from one dataset and one base checkpoint. It holds the whole GPU while it runs.",
+				"dataset": "Dataset",
+				"datasetPlaceholder": "Pick a ready dataset",
+				"baseCheckpoint": "Base checkpoint",
+				"baseCheckpointPlaceholder": "Pick a downloaded checkpoint",
+				"checkpointUnreadable": "This checkpoint cannot be sized for training.",
+				"doesNotFit": "This run does not fit",
+				"estimate": "About {{estimate}} VRAM of {{available}} free",
+				"vramUnknown": "unknown",
+				"experimental": "Experimental size",
+				"noLicenseMetadata": "No license metadata was found for this repository. Confirming records that fact.",
+				"confirmLicense": "I confirm I may fine-tune these weights",
+				"maxSeqLength": "Sequence length",
+				"batchSize": "Batch size",
+				"loraR": "LoRA rank",
+				"epochs": "Epochs",
+				"startFailed": "The run could not be started. Check the options and try again.",
+				"start": "Start run"
+			},
+			"list": {
+				"title": "Training runs",
+				"empty": "No training runs yet. Start one above.",
+				"cancel": "Cancel",
+				"loss": "loss {{loss}}",
+				"steps": "step {{step}} of {{total}}"
+			},
+			"status": {
+				"Queued": "Queued",
+				"Preparing": "Preparing",
+				"Training": "Training",
+				"Exporting": "Exporting",
+				"Smoke": "Smoke test",
+				"Succeeded": "Succeeded",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled"
+			},
+			"phase": {
+				"loading": "Loading the model",
+				"tokenizing": "Preparing the dataset",
+				"training": "Training",
+				"saving": "Saving the adapter"
+			}
+		},
+		"comparisons": {
+			"list": {
+				"title": "Comparison reports",
+				"empty": "No comparison reports yet. Create one from a finished training run.",
+				"create": "New comparison",
+				"delete": "Delete",
+				"deleteFailed": "Could not delete the comparison report."
+			},
+			"create": {
+				"title": "New comparison",
+				"run": "Training run",
+				"runPlaceholder": "Pick a finished training run",
+				"name": "Report name",
+				"baseModel": "Base model",
+				"tunedModel": "Tuned model",
+				"baseEvaluation": "Base evaluation",
+				"tunedEvaluation": "Tuned evaluation",
+				"missing": "Not evaluated yet",
+				"evaluate": "Evaluate",
+				"evaluating": "Scoring {{scored}} of {{total}}",
+				"benchmarkPairing": "Optional benchmark pairing",
+				"benchmarkProject": "Benchmark project",
+				"baseBenchmark": "Base benchmark run",
+				"tunedBenchmark": "Tuned benchmark run",
+				"benchmarkNone": "None",
+				"submit": "Create report",
+				"cancel": "Cancel",
+				"failed": "Could not create the comparison report.",
+				"evaluateFailed": "Could not start the evaluation.",
+				"needsBothEvaluations": "Both sides need a finished evaluation before a report can be created."
+			},
+			"report": {
+				"accuracy": "Hold-out accuracy",
+				"kind": "Sample kind",
+				"base": "Base",
+				"tuned": "Tuned",
+				"delta": "Delta",
+				"overall": "Overall",
+				"unavailable": "The accuracy comparison is unavailable.",
+				"samples": "{{passed}} of {{scored}} samples",
+				"benchmark": "Benchmark deltas",
+				"tokensPerSecond": "Tokens per second",
+				"duration": "Duration (ms)",
+				"userScore": "Your score",
+				"judgeScore": "Judge score",
+				"compareLive": "Compare outputs live on the benchmarks page"
+			},
+			"evaluation": {
+				"status": {
+					"Queued": "Queued",
+					"Running": "Scoring",
+					"Succeeded": "Scored",
+					"Failed": "Failed",
+					"Cancelled": "Cancelled"
+				},
+				"resume": "Resume",
+				"resumeFailed": "Could not resume the evaluation.",
+				"progress": "{{scored}} of {{total}} scored, {{passed}} passed"
+			}
+		},
+		"drift": {
+			"run": "The dataset was edited after this run froze its hold-out set; scores may not be comparable.",
+			"evaluation": "The dataset was edited after this evaluation froze its hold-out set; scores may not be comparable.",
+			"deleted": "The dataset this used has been deleted; its frozen hold-out set can no longer be compared."
+		}
 	}
 }
