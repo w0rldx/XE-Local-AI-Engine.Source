@@ -45,9 +45,9 @@ public sealed class GetToolCapableModelsEndpointTests
         AssertEx.Contains(models.Models, "llama3:8b");
     }
 
-    private static TestingWebAppFactory CreateFactory(params string[] toolCapableModels)
+    private static TestServerWebAppFactory CreateFactory(params string[] toolCapableModels)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -56,7 +56,7 @@ public sealed class GetToolCapableModelsEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);
