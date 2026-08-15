@@ -227,6 +227,7 @@ describe("ModelManagement", () => {
 
 	afterEach(() => {
 		cleanup();
+		vi.useRealTimers();
 	});
 
 	it("renders local models in the table and shows details in the dialog", async () => {
@@ -574,6 +575,9 @@ describe("ModelManagement", () => {
 	});
 
 	it("announces import progress, exposes cancellation, and renders failure text only from the safe error code", async () => {
+		// The Failed row below carries a fixed updatedAtUtc; terminal statuses are pruned 24h later against the real
+		// clock, so pin only Date (timers stay real for findBy*/waitFor).
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-08-14T12:00:00Z") });
 		queryFns.getGgufImports.mockResolvedValue({
 			items: [
 				{
