@@ -49,8 +49,10 @@ export default function MonacoCodeEditor({
 		const subscription = editor.onDidChangeModelContent(() => onChangeRef.current?.(editor.getValue()));
 		return () => {
 			subscription.dispose();
-			editor.getModel()?.dispose();
+			const model = editor.getModel();
 			editor.dispose();
+			// `create` allocated the model implicitly; the editor does not own it, so it is released here explicitly.
+			model?.dispose();
 			editorRef.current = null;
 		};
 	}, []);

@@ -35,7 +35,7 @@ monaco.languages.setMonarchTokensProvider("diff", {
 	tokenizer: {
 		root: [
 			[/^(?:\+\+\+|---) .*$/, "diff.header"],
-			[/^(?:diff|index|new file|deleted file|old mode|new mode|rename|similarity|Binary|From|Subject|Date) .*$/, "diff.header"],
+			[/^(?:diff|index|new file|deleted file|old mode|new mode|rename|similarity|Binary) .*$/, "diff.header"],
 			[/^@@.*$/, "diff.hunk"],
 			[/^\+.*$/, "diff.added"],
 			[/^-.*$/, "diff.removed"],
