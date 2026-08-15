@@ -242,7 +242,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
                 MaxRepositoryImportFileBytes = 32
             });
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        // A configured bound is the caller's problem, so it carries the rejected type the endpoint maps to 400 —
+        // not the bare InvalidOperationException that used to make every I/O failure in here a 400 too.
+        var exception = await AssertEx.ThrowsAsync<KnowledgeRepositoryImportRejectedException>(() =>
             service.ImportAsync(selectedFolderId, "repo", CancellationToken.None)).ConfigureAwait(false);
 
         AssertEx.Contains(exception.Message, "per-file");

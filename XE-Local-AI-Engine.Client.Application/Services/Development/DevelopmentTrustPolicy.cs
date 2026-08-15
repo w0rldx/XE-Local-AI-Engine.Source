@@ -17,7 +17,7 @@ internal static class DevelopmentTrustPolicy
             || acknowledgedAt <= 0
             || acknowledgedAt > timeProvider.GetUtcNow().ToUnixTimeMilliseconds())
         {
-            throw new DevelopmentWorkspaceSecurityException("Process execution requires a current persisted trusted-repository acknowledgement.");
+            throw new DevelopmentRepositoryStateConflictException("Process execution requires a current persisted trusted-repository acknowledgement.");
         }
     }
 
@@ -32,7 +32,7 @@ internal static class DevelopmentTrustPolicy
             || acknowledgedAt <= 0
             || acknowledgedAt > timeProvider.GetUtcNow().ToUnixTimeMilliseconds())
         {
-            throw new DevelopmentWorkspaceSecurityException("Process execution requires a current persisted trusted-repository acknowledgement.");
+            throw new DevelopmentRepositoryStateConflictException("Process execution requires a current persisted trusted-repository acknowledgement.");
         }
     }
 }

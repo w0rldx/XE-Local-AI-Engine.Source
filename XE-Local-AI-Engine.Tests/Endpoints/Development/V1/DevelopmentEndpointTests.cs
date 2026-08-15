@@ -145,6 +145,52 @@ public sealed class DevelopmentEndpointTests
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // The workspace-security family is split the same way, but the axis is the ENDPOINT rather than the type: a
+    // request that carries the rejected folder gets 400, an operation that only reads the project's persisted binding
+    // gets 409. Reconnect is the one operation that does both, so it needs the explicit state-conflict type to tell
+    // "the folder you just picked is not a Git root" (400) from "the project's stored binding blocks this" (409).
+    // Before this split reconnect answered 409 to both, while create answered 400 to the identical rejection.
+    [Test]
+    [Arguments("create")]
+    [Arguments("reconnect")]
+    public async Task Operation_WhenWorkspaceSecurityRejectsTheSuppliedFolder_ReturnsBadRequest(string operation)
+    {
+        using var response = await SendWithFailingServiceAsync(operation,
+                                       new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    [Arguments("start")]
+    [Arguments("preview")]
+    [Arguments("apply")]
+    public async Task Operation_OnPersistedStateOnly_WhenWorkspaceSecurityRejects_ReturnsConflict(string operation)
+    {
+        // These three carry no folder at all — projectId/taskId/operationId only — so every workspace-security
+        // rejection they can produce is the stored workspace state blocking a well-formed request.
+        using var response = await SendWithFailingServiceAsync(operation,
+                                       new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Test]
+    [Arguments("start")]
+    [Arguments("preview")]
+    [Arguments("apply")]
+    [Arguments("reconnect")]
+    public async Task Operation_WhenPersistedRepositoryStateBlocksIt_ReturnsConflict(string operation)
+    {
+        using var response = await SendWithFailingServiceAsync(operation,
+                                       new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
     [Test]
     public async Task CreateProject_WhenSelectedFolderAliasIsAlreadyRegistered_ReturnsConflict()
     {
