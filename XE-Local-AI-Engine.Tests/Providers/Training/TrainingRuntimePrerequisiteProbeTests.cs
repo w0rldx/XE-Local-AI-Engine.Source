@@ -99,6 +99,21 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
             "Probing is read-only: the UI calls it before the operator commits to a multi-gigabyte install.");
     }
 
+    [Test]
+    public void ResolveScriptsDirectory_FindsTheCommittedLockfileFromATestRun()
+    {
+        // The shipped app reads the scripts from training-scripts/ beside the executable (an explicit Content Include
+        // in the Client csproj, because the repo root is outside the publish glob); a dev or test run walks up to
+        // tools/training/ instead. If this resolution breaks, the runtime install fails its own lockfile prerequisite
+        // with nothing in the diff to explain why.
+        var resolved = TrainingRuntimeLayout.ResolveScriptsDirectory();
+
+        AssertEx.True(File.Exists(Path.Combine(resolved, TrainingRuntimeLayout.LockfileName)),
+            $"The pinned lockfile must be resolvable from a test run; resolved to '{resolved}'.");
+        AssertEx.True(File.Exists(Path.Combine(resolved, TrainingRuntimeLayout.ProbeScriptName)),
+            "The probe script ships beside the lockfile.");
+    }
+
     private Task<TrainingRuntimePrerequisiteReport> ProbeAsync(string scriptsDirectory, ITrainingProcessRunner runner)
     {
         return new TrainingRuntimePrerequisiteProbe(runner, Path.Combine(_root, "cache"), scriptsDirectory)

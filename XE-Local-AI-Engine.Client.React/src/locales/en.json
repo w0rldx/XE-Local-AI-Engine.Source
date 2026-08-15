@@ -76,7 +76,9 @@
 		"customTools": "Custom Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Image Generation"
+		"images": "Image Generation",
+		"trainingGroup": "Training",
+		"training": "Training"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -3960,6 +3962,54 @@
 		"customTools": {
 			"title": "Custom tools",
 			"subtitle": "Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default."
+		},
+		"training": {
+			"title": "Training",
+			"subtitle": "Fine-tune a local model on your own data. Training holds the whole GPU while it runs, so no chat, image or benchmark work happens at the same time.",
+			"runtime": {
+				"title": "Python training runtime",
+				"description": "Fine-tuning runs in a pinned, uv-managed Python environment. It is installed once and used by every training run.",
+				"prerequisites": "Prerequisites",
+				"install": "Install runtime",
+				"reinstall": "Reinstall runtime",
+				"remove": "Remove runtime",
+				"cancel": "Cancel install",
+				"failed": "Install failed",
+				"installedPython": "Python {{version}}",
+				"installedTorch": "torch {{version}}",
+				"phase": {
+					"Idle": "Not installed",
+					"AcquiringUv": "Downloading uv",
+					"ProvisioningPython": "Provisioning Python",
+					"InstallingPackages": "Installing packages",
+					"Verifying": "Verifying",
+					"Ready": "Ready",
+					"Failed": "Failed",
+					"Removing": "Removing"
+				}
+			},
+			"baseArtifacts": {
+				"title": "Base checkpoints",
+				"description": "Fine-tuning needs the original safetensors checkpoint, not a quantized copy. Enter the Hugging Face repository to download.",
+				"repoId": "Repository",
+				"revision": "Revision (optional)",
+				"download": "Download",
+				"status": "Status",
+				"license": "License",
+				"noLicense": "Not declared",
+				"gated": "Gated",
+				"size": "Size",
+				"empty": "No base checkpoints yet. Download one to make it available to training runs.",
+				"error": "Could not start the download.",
+				"progress": "File {{index}} of {{count}} — {{done}}",
+				"cancel": "Cancel download",
+				"delete": "Delete checkpoint",
+				"statusValue": {
+					"Downloading": "Downloading",
+					"Ready": "Ready",
+					"Failed": "Failed"
+				}
+			}
 		}
 	},
 	"components": {

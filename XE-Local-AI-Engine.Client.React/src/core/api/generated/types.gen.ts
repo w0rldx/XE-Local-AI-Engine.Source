@@ -43,6 +43,124 @@ export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateReques
 	status?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse = {
+	canInstall: boolean;
+	items: Array<XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisiteItemResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisiteItemResponse = {
+	key: string;
+	satisfied: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse = {
+	phase: string;
+	isRunning: boolean;
+	terminal: boolean;
+	logStartSequence: number;
+	logLines: Array<string>;
+	sanitizedError?: string | null;
+	installed?: XeLocalAiEngineClientEndpointsTrainingRuntimeV1InstalledTrainingRuntimeResponse | null;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1InstalledTrainingRuntimeResponse = {
+	uvVersion: string;
+	pythonVersion: string;
+	contractVersion: number;
+	installedAtUtc: number;
+	torchVersion?: string | null;
+	unslothVersion?: string | null;
+	deviceName?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeBlockedResponse = {
+	reason: string;
+	message: string;
+	prerequisites?: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1StartTrainingRuntimeInstallResponse = {
+	started: boolean;
+	status: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse = {
+	id: string;
+	repoId: string;
+	revision: string;
+	status: string;
+	totalBytes: number;
+	files: Array<XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactFileResponse>;
+	license?: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactLicenseResponse | null;
+	errorMessage?: string | null;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	progress?: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactProgressResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactFileResponse = {
+	role: string;
+	fileName: string;
+	sizeBytes: number;
+	sha256?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactLicenseResponse = {
+	repoId: string;
+	license?: string | null;
+	isGated: boolean;
+	fetchedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactProgressResponse = {
+	completedBytes: number;
+	totalBytes?: number | null;
+	fileIndex: number;
+	fileCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse = {
+	reason: string;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactByIdRequest = {
+	[key: string]: never;
+};
+
+/**
+ * the dto used to send an error response to the client
+ */
+export type FastEndpointsErrorResponse = {
+	/**
+	 * the http status code sent to the client. default is 400.
+	 */
+	statusCode?: number;
+	/**
+	 * the message for the error response
+	 */
+	message?: string;
+	/**
+	 * the collection of errors for the current context
+	 */
+	errors?: {
+		[key: string]: Array<string>;
+	};
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1CreateBaseArtifactRequest = {
+	repoId: string;
+	revision?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactListResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitResponse = {
 	outcomes: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillImportOutcomeResponse>;
 };
@@ -837,26 +955,6 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedRespons
 
 export type XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = {
 	variant: string;
-};
-
-/**
- * the dto used to send an error response to the client
- */
-export type FastEndpointsErrorResponse = {
-	/**
-	 * the http status code sent to the client. default is 400.
-	 */
-	statusCode?: number;
-	/**
-	 * the message for the error response
-	 */
-	message?: string;
-	/**
-	 * the collection of errors for the current context
-	 */
-	errors?: {
-		[key: string]: Array<string>;
-	};
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = {
@@ -3450,6 +3548,325 @@ export type SaveTutorialStateResponses = {
 };
 
 export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
+
+export type GetTrainingRuntimePrerequisitesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/runtime/prerequisites";
+};
+
+export type GetTrainingRuntimePrerequisitesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetTrainingRuntimePrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse;
+};
+
+export type GetTrainingRuntimePrerequisitesResponse =
+	GetTrainingRuntimePrerequisitesResponses[keyof GetTrainingRuntimePrerequisitesResponses];
+
+export type GetTrainingRuntimeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/runtime/status";
+};
+
+export type GetTrainingRuntimeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetTrainingRuntimeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse;
+};
+
+export type GetTrainingRuntimeStatusResponse = GetTrainingRuntimeStatusResponses[keyof GetTrainingRuntimeStatusResponses];
+
+export type RemoveTrainingRuntimeData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/runtime/remove";
+};
+
+export type RemoveTrainingRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeBlockedResponse;
+};
+
+export type RemoveTrainingRuntimeError = RemoveTrainingRuntimeErrors[keyof RemoveTrainingRuntimeErrors];
+
+export type RemoveTrainingRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeStatusResponse;
+};
+
+export type RemoveTrainingRuntimeResponse = RemoveTrainingRuntimeResponses[keyof RemoveTrainingRuntimeResponses];
+
+export type StartTrainingRuntimeInstallData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/runtime/install";
+};
+
+export type StartTrainingRuntimeInstallErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimeBlockedResponse;
+};
+
+export type StartTrainingRuntimeInstallError = StartTrainingRuntimeInstallErrors[keyof StartTrainingRuntimeInstallErrors];
+
+export type StartTrainingRuntimeInstallResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingRuntimeV1StartTrainingRuntimeInstallResponse;
+};
+
+export type StartTrainingRuntimeInstallResponse =
+	StartTrainingRuntimeInstallResponses[keyof StartTrainingRuntimeInstallResponses];
+
+export type CancelBaseArtifactData = {
+	body?: never;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/base-artifacts/{artifactId}/cancel";
+};
+
+export type CancelBaseArtifactErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
+};
+
+export type CancelBaseArtifactError = CancelBaseArtifactErrors[keyof CancelBaseArtifactErrors];
+
+export type CancelBaseArtifactResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse;
+};
+
+export type CancelBaseArtifactResponse = CancelBaseArtifactResponses[keyof CancelBaseArtifactResponses];
+
+export type ListBaseArtifactsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/base-artifacts";
+};
+
+export type ListBaseArtifactsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListBaseArtifactsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactListResponse;
+};
+
+export type ListBaseArtifactsResponse = ListBaseArtifactsResponses[keyof ListBaseArtifactsResponses];
+
+export type CreateBaseArtifactData = {
+	body: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1CreateBaseArtifactRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/base-artifacts";
+};
+
+export type CreateBaseArtifactErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
+};
+
+export type CreateBaseArtifactError = CreateBaseArtifactErrors[keyof CreateBaseArtifactErrors];
+
+export type CreateBaseArtifactResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse;
+};
+
+export type CreateBaseArtifactResponse = CreateBaseArtifactResponses[keyof CreateBaseArtifactResponses];
+
+export type DeleteBaseArtifactData = {
+	body?: never;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/base-artifacts/{artifactId}";
+};
+
+export type DeleteBaseArtifactErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
+};
+
+export type DeleteBaseArtifactError = DeleteBaseArtifactErrors[keyof DeleteBaseArtifactErrors];
+
+export type DeleteBaseArtifactResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteBaseArtifactResponse = DeleteBaseArtifactResponses[keyof DeleteBaseArtifactResponses];
+
+export type GetBaseArtifactData = {
+	body?: never;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/base-artifacts/{artifactId}";
+};
+
+export type GetBaseArtifactErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+};
+
+export type GetBaseArtifactError = GetBaseArtifactErrors[keyof GetBaseArtifactErrors];
+
+export type GetBaseArtifactResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactResponse;
+};
+
+export type GetBaseArtifactResponse = GetBaseArtifactResponses[keyof GetBaseArtifactResponses];
+
+export type GetBaseArtifactLicenseData = {
+	body?: never;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/base-artifacts/{artifactId}/license";
+};
+
+export type GetBaseArtifactLicenseErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+};
+
+export type GetBaseArtifactLicenseError = GetBaseArtifactLicenseErrors[keyof GetBaseArtifactLicenseErrors];
+
+export type GetBaseArtifactLicenseResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactLicenseResponse;
+};
+
+export type GetBaseArtifactLicenseResponse = GetBaseArtifactLicenseResponses[keyof GetBaseArtifactLicenseResponses];
 
 export type CommitSkillImportData = {
 	body: XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest;

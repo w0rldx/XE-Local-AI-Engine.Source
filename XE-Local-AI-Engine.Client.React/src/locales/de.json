@@ -76,7 +76,9 @@
 		"customTools": "Eigene Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Bildgenerierung"
+		"images": "Bildgenerierung",
+		"trainingGroup": "Training",
+		"training": "Training"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -3960,6 +3962,54 @@
 		"customTools": {
 			"title": "Eigene Tools",
 			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus."
+		},
+		"training": {
+			"title": "Training",
+			"subtitle": "Passe ein lokales Modell mit eigenen Daten an. Ein Training belegt die gesamte GPU, daher laufen währenddessen keine Chat-, Bild- oder Benchmark-Aufgaben.",
+			"runtime": {
+				"title": "Python-Trainingsumgebung",
+				"description": "Das Feintuning läuft in einer festgelegten, uv-verwalteten Python-Umgebung. Sie wird einmal installiert und von jedem Trainingslauf genutzt.",
+				"prerequisites": "Voraussetzungen",
+				"install": "Umgebung installieren",
+				"reinstall": "Umgebung neu installieren",
+				"remove": "Umgebung entfernen",
+				"cancel": "Installation abbrechen",
+				"failed": "Installation fehlgeschlagen",
+				"installedPython": "Python {{version}}",
+				"installedTorch": "torch {{version}}",
+				"phase": {
+					"Idle": "Nicht installiert",
+					"AcquiringUv": "uv wird geladen",
+					"ProvisioningPython": "Python wird bereitgestellt",
+					"InstallingPackages": "Pakete werden installiert",
+					"Verifying": "Überprüfung",
+					"Ready": "Bereit",
+					"Failed": "Fehlgeschlagen",
+					"Removing": "Wird entfernt"
+				}
+			},
+			"baseArtifacts": {
+				"title": "Basis-Checkpoints",
+				"description": "Für das Feintuning wird der originale safetensors-Checkpoint benötigt, keine quantisierte Kopie. Gib das Hugging-Face-Repository zum Herunterladen an.",
+				"repoId": "Repository",
+				"revision": "Revision (optional)",
+				"download": "Herunterladen",
+				"status": "Status",
+				"license": "Lizenz",
+				"noLicense": "Nicht angegeben",
+				"gated": "Zugang beschränkt",
+				"size": "Größe",
+				"empty": "Noch keine Basis-Checkpoints. Lade einen herunter, um ihn für Trainingsläufe verfügbar zu machen.",
+				"error": "Der Download konnte nicht gestartet werden.",
+				"progress": "Datei {{index}} von {{count}} — {{done}}",
+				"cancel": "Download abbrechen",
+				"delete": "Checkpoint löschen",
+				"statusValue": {
+					"Downloading": "Wird geladen",
+					"Ready": "Bereit",
+					"Failed": "Fehlgeschlagen"
+				}
+			}
 		}
 	},
 	"components": {
