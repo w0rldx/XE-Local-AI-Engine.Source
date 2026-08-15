@@ -141,6 +141,18 @@ public interface ITrainingExportService
     /// <summary>Re-runs the smoke gate against an already-staged artifact and records the new verdict.</summary>
     /// <exception cref="TrainingExportRejectedException">The artifact cannot be smoke-tested.</exception>
     Task<TrainedModelSmokeResult> RunSmokeAsync(Guid artifactId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Deletes a staged artifact — the row AND the bytes it staged. The ONLY supported way to delete one: the
+    ///     store owns rows and never touches the filesystem, so calling it directly leaks a multi-gigabyte GGUF or a
+    ///     whole adapter directory that nothing will ever collect.
+    /// </summary>
+    /// <remarks>
+    ///     The row goes first, so a store refusal — a stale <paramref name="expectedVersion" />, an unknown id, or an
+    ///     artifact the registry now owns — has left the disk untouched. The bytes then go best-effort and ONLY from
+    ///     inside the run's own staged directory; anything else is logged and left alone.
+    /// </remarks>
+    Task DeleteArtifactAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A refusal the export surface reports as a 4xx rather than as a fault. Message is operator-facing.</summary>

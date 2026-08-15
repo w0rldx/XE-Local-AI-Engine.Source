@@ -178,6 +178,20 @@ public sealed class TrainingExportService(
         }
     }
 
+    public async Task DeleteArtifactAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
+        // Read before the delete purely to learn the staged path; the STORE still decides the outcome, and an unknown
+        // id, a stale version or a promoted artifact all raise from the call below — before anything on disk moves.
+        var artifact = await store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        await store.DeleteArtifactAsync(artifactId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        if (artifact is not null)
+        {
+            DeleteStagedBytes(artifact);
+        }
+    }
+
     /// <summary>
     ///     Validates the run and decides every path the pipeline will use, before any exclusivity is taken. A refusal
     ///     here has nothing to clean up.
@@ -308,12 +322,49 @@ public sealed class TrainingExportService(
         }
     }
 
-    private static async Task DeleteStaleArtifactsAsync(ITrainingRunStore store, ExportPlan plan)
+    private async Task DeleteStaleArtifactsAsync(ITrainingRunStore store, ExportPlan plan)
     {
         var artifacts = await store.ListArtifactsAsync(plan.RunId, CancellationToken.None).ConfigureAwait(false);
         foreach (var stale in artifacts.Where(item => item.Kind == plan.Kind && item.CommittedModelName is null))
         {
             await store.DeleteArtifactAsync(stale.Id, stale.Version, CancellationToken.None).ConfigureAwait(false);
+            DeleteStagedBytes(stale);
+        }
+    }
+
+    /// <summary>
+    ///     Removes the bytes an artifact row pointed at, once that row is already gone. Contained by construction: only
+    ///     a path inside the run's OWN staged directory is touched, and never the directory itself — an artifact row is
+    ///     operator-facing state, and a path that somehow escaped must cost a log line rather than a recursive delete
+    ///     somewhere else on the box. A failure is logged for the same reason: the row is gone either way, so leaked
+    ///     bytes must at least be visible.
+    /// </summary>
+    private void DeleteStagedBytes(TrainingArtifactRecord artifact)
+    {
+        var staged = Path.GetFullPath(_workspace.StagedDirectory(artifact.RunId));
+        var path = Path.GetFullPath(artifact.Path);
+        if (!path.StartsWith(staged.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            _logger.LogWarning("Artifact {ArtifactId} of run {RunId} was deleted, but its path is not inside the run's staged directory, so the bytes were left in place.",
+                artifact.Id, artifact.RunId);
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            else
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "The staged bytes of artifact {ArtifactId} could not be deleted; the row is gone and the files are leaked.",
+                artifact.Id);
         }
     }
 
