@@ -147,10 +147,8 @@ app = FastAPI(docs_url=None, redoc_url=None)  # Disable docs in production
 security = HTTPBearer()
 limiter = Limiter(key_func=get_remote_address)
 
-
 class UserInput(BaseModel):
     """Strict input validation — reject anything unexpected."""
-
     username: str = Field(..., min_length=3, max_length=30)
     email: str = Field(..., max_length=254)
 
@@ -160,7 +158,6 @@ class UserInput(BaseModel):
         if not re.match(r"^[a-zA-Z0-9_-]+$", v):
             raise ValueError("Username contains invalid characters")
         return v
-
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Validate JWT — signature, expiry, issuer, audience. Never allow alg=none."""
@@ -175,7 +172,6 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         return payload
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
 
 @app.post("/api/users", status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")

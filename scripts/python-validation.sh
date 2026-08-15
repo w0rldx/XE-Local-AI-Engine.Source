@@ -164,14 +164,33 @@ scope_changed() {
   local base="${1:-develop}"
   log "=== Changed-scope validation (base: ${base}) ==="
 
-  local changed_files
-  if git -C "${PROJECT_ROOT}" show-ref --verify --quiet "refs/heads/${base}" 2>/dev/null \
-    || git -C "${PROJECT_ROOT}" show-ref --verify --quiet "refs/remotes/origin/${base}" 2>/dev/null; then
-    changed_files="$(git -C "${PROJECT_ROOT}" diff --name-only "${base}...HEAD" 2>/dev/null \
-      || git -C "${PROJECT_ROOT}" diff --name-only HEAD~1 2>/dev/null || true)"
-  else
-    changed_files="$(git -C "${PROJECT_ROOT}" diff --name-only HEAD~1 2>/dev/null || true)"
+  # Resolve the base as a local ref, then origin/<base>, then any rev (tag/SHA); refuse to guess.
+  local base_ref="" candidate
+  for candidate in "refs/heads/${base}" "refs/remotes/origin/${base}" "${base}"; do
+    if git -C "${PROJECT_ROOT}" rev-parse --verify --quiet "${candidate}^{commit}" >/dev/null 2>&1; then
+      base_ref="${candidate}"
+      break
+    fi
+  done
+  if [[ -z "${base_ref}" ]]; then
+    echo "[python-validate] FAIL: cannot resolve --base '${base}' (tried the local branch, origin/${base}, and a rev)" >&2
+    return 1
   fi
+  local merge_base
+  merge_base="$(git -C "${PROJECT_ROOT}" merge-base "${base_ref}" HEAD)" || {
+    echo "[python-validate] FAIL: no merge base between ${base_ref} and HEAD" >&2
+    return 1
+  }
+
+  # Committed + staged + unstaged changes since the merge base, plus untracked files, so a pre-commit
+  # run sees the same set a post-commit run would.
+  local changed_files
+  changed_files="$(
+    {
+      git -C "${PROJECT_ROOT}" diff --name-only "${merge_base}"
+      git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard
+    } | LC_ALL=C sort -u
+  )"
 
   if [[ -z "${changed_files}" ]]; then
     log "No changed files detected."
@@ -184,7 +203,7 @@ scope_changed() {
   local run_full=false run_py=false
   while IFS= read -r file; do
     case "${file}" in
-      pyproject.toml|uv.lock|scripts/python-validation.sh) run_full=true ;;
+      pyproject.toml|uv.lock|scripts/python-validation.sh|.gitignore) run_full=true ;;
       tools/training/*.py|scripts/*.py) run_py=true ;;  # bash case globs cross "/" — this covers nested dirs
     esac
   done <<< "${changed_files}"
@@ -235,8 +254,15 @@ BASE_BRANCH="develop"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --scope) SCOPE="${2:-}"; shift 2 ;;
-    --base) BASE_BRANCH="${2:-develop}"; shift 2 ;;
+    --scope|--base)
+      if [[ $# -lt 2 || "${2}" == --* ]]; then
+        echo "Error: $1 requires a value" >&2
+        usage >&2
+        exit 1
+      fi
+      if [[ "$1" == "--scope" ]]; then SCOPE="$2"; else BASE_BRANCH="$2"; fi
+      shift 2
+      ;;
     --serial) PARALLEL="false"; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;

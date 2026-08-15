@@ -29,6 +29,9 @@ dev = [
 ]
 
 [tool.ruff]
+# Python files only: ruff >= 0.16 also formats Python fences inside *.md by default, which would
+# rewrite agent-template markdown under Client.Application.
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
 line-length = 120
 target-version = "py313"
 src = ["tools/training", "scripts"]
