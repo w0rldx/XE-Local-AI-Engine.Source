@@ -138,28 +138,41 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             _disposed = true;
         }
 
-        if (_app is { } app)
+        // A throwing host stop must still propagate (the test should fail loudly), but every cleanup stage below runs
+        // regardless: _disposed is already latched, so a skipped stage would never get a second chance and the temp
+        // artifacts would accumulate across the run (docs/agent-knowledge.md §1 — this once filled the 16 GB tmpfs).
+        try
         {
-            await app.StopAsync().ConfigureAwait(false);
-            await app.DisposeAsync().ConfigureAwait(false);
+            if (_app is { } app)
+            {
+                await app.StopAsync().ConfigureAwait(false);
+                await app.DisposeAsync().ConfigureAwait(false);
+            }
         }
-
-        if (_fakeOllamaServer is not null)
+        finally
         {
-            await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                if (_fakeOllamaServer is not null)
+                {
+                    await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _offlineRuntimeHttpClient.Dispose();
+
+                // Microsoft.Data.Sqlite keeps a STATIC pool group per connection string; this host's unique temp DB
+                // path would otherwise leave an immortal pool (open connection + prune timer) behind. Clearing all
+                // pools (public API) is safe here: batch runs are single-threaded, and a concurrent host merely
+                // reopens its pooled connection.
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+                TryDeleteDirectory(_fixtureWebRoot);
+                TryDeleteDirectory(_nodeDataDirectory);
+                TryDeleteSqliteFamily(_nodeSqlitePath);
+            }
         }
-
-        _offlineRuntimeHttpClient.Dispose();
-
-        // Microsoft.Data.Sqlite keeps a STATIC pool group per connection string; this host's unique temp DB path
-        // would otherwise leave an immortal pool (open connection + prune timer) behind. Clearing all pools (public
-        // API) is safe here: batch runs are single-threaded, and a concurrent host merely reopens its pooled
-        // connection.
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
-        TryDeleteDirectory(_fixtureWebRoot);
-        TryDeleteDirectory(_nodeDataDirectory);
-        TryDeleteSqliteFamily(_nodeSqlitePath);
     }
 
     // Lazy sync-over-async build on first use, matching WebApplicationFactory's lazy host start. TUnit has no
