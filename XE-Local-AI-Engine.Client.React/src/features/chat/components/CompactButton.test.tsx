@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CompactButton } from "@/features/chat/components/CompactButton";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // vi.mock factories are hoisted above the module, so the spies/state they close over must be created with vi.hoisted.
 const { compactSpy, confirmSpy, toastSpies, storeState } = vi.hoisted(() => ({
@@ -30,15 +28,6 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastSpies }));
 vi.mock("@/features/chat/stores/NodeChatPreferencesStore", () => ({
 	useNodeChatPreferencesStore: (selector: (state: { selectedConversationId: string; selectedModel: string }) => unknown) => selector(storeState),
 }));
-
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
-	return render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider>{ui}</MantineProvider>
-		</QueryClientProvider>,
-	);
-}
 
 describe("CompactButton", () => {
 	beforeEach(() => {
