@@ -17,7 +17,8 @@ public sealed class CancelNodeBindingEndpointTests
     [Test]
     public async Task Cancel_WhenAnonymous_Returns401()
     {
-        await using var factory = NodeBindingEndpointHost.Create(NodeBindingEndpointHost.CreateService());
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
@@ -29,7 +30,8 @@ public sealed class CancelNodeBindingEndpointTests
     [Test]
     public async Task Cancel_WhenAuthenticatedButNotOperator_Returns403()
     {
-        await using var factory = NodeBindingEndpointHost.Create(NodeBindingEndpointHost.CreateService());
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
@@ -42,7 +44,7 @@ public sealed class CancelNodeBindingEndpointTests
     [Test]
     public async Task Cancel_WhenOperator_Returns200AndReachesTheService()
     {
-        var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
 
         await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();

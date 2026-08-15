@@ -19,7 +19,8 @@ public sealed class StartNodeBindingEndpointTests
     [Test]
     public async Task Start_WhenAnonymous_Returns401()
     {
-        await using var factory = NodeBindingEndpointHost.Create(NodeBindingEndpointHost.CreateService());
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
@@ -31,7 +32,8 @@ public sealed class StartNodeBindingEndpointTests
     [Test]
     public async Task Start_WhenAuthenticatedButNotOperator_Returns403()
     {
-        await using var factory = NodeBindingEndpointHost.Create(NodeBindingEndpointHost.CreateService());
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var factory = NodeBindingEndpointHost.Create(bindingService);
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
@@ -45,7 +47,7 @@ public sealed class StartNodeBindingEndpointTests
     public async Task Start_WhenSessionOpened_Returns200WithWireStatus()
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
-        var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
         bindingService.StartBindingAsync(Arg.Any<CancellationToken>()).Returns(new NodeBindingSession
         {
             DeviceCode = "device-code-1",
@@ -79,7 +81,7 @@ public sealed class StartNodeBindingEndpointTests
     [Test]
     public async Task Start_WhenPlatformRefuses_Returns400NotServerError()
     {
-        var bindingService = NodeBindingEndpointHost.CreateService();
+        await using var bindingService = NodeBindingEndpointHost.CreateService();
         bindingService.StartBindingAsync(Arg.Any<CancellationToken>())
                       .Returns<Task<NodeBindingSession>>(_ => throw new NodeBindingException("Central Platform rejected the binding request."));
 
