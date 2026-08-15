@@ -100,6 +100,36 @@ public sealed class WorkerNodeOptionsValidatorTests
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }
 
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    public void Validate_WhenDeadLetterQueuePathIsMissing_ReturnsFailure(string value)
+    {
+        var options = CreateValidOptions();
+        options.DeadLetterQueuePath = value;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "DeadLetterQueuePath is required.");
+    }
+
+    [Test]
+    public void Validate_WhenMaxResponseSizeAboveMaximum_ReturnsFailure()
+    {
+        var options = CreateValidOptions();
+        options.MaxResponseSizeMb = 101;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "MaxResponseSizeMb must be between 1 and 100.");
+    }
+
+    [Test]
+    public void Validate_WhenDetachedGraceAboveMaximum_ReturnsFailure()
+    {
+        // 86400s is a day; anything past it is a config typo, not a policy.
+        var options = CreateValidOptions();
+        options.DetachedGraceSeconds = 86401;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "DetachedGraceSeconds must be between 0 and 86400.");
+    }
+
     private static WorkerNodeOptions CreateValidOptions()
     {
         return new WorkerNodeOptions
