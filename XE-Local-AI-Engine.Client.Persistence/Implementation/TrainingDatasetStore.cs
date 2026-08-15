@@ -120,8 +120,11 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         {
             Id = Guid.NewGuid(),
             DefinitionId = definition.Id,
-            // The dataset pins the artifact version, not the concurrency token.
+            // The dataset pins the artifact version, not the concurrency token — and, read in this same transaction,
+            // the BODY that version names. Generation and evaluation read the copy, so an edit that lands between
+            // creation and either of them cannot re-shape a dataset that still claims the old version.
             DefinitionVersion = definition.DefinitionVersion,
+            DefinitionJson = definition.DefinitionJson.ToArray(),
             Name = command.Name.Trim(),
             Status = TrainingDatasetStatus.Generating,
             Revision = 1,
@@ -735,7 +738,10 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             entity.CreatedAtUtc, entity.UpdatedAtUtc);
 
     private static TrainingDatasetRecord ToRecord(TrainingDataset entity, DatasetGenerationWorkStatus? workStatus, string? workErrorMessage) =>
-        new(entity.Id, entity.DefinitionId, entity.DefinitionVersion, entity.Name, entity.Status, entity.Revision, entity.ContentFingerprint,
+        new(entity.Id, entity.DefinitionId, entity.DefinitionVersion,
+            // `?.ToArray()` would read back as an EMPTY memory rather than as null — see OptionalBlob.
+            OptionalBlob.AsOptionalMemory(entity.DefinitionJson),
+            entity.Name, entity.Status, entity.Revision, entity.ContentFingerprint,
             entity.TotalSampleCount, entity.GoodSampleCount, entity.BadSampleCount, entity.RejectedSampleCount, entity.DuplicateSampleCount,
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus, workErrorMessage);
 

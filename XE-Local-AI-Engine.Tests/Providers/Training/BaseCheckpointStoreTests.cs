@@ -167,6 +167,54 @@ public sealed class BaseCheckpointStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Resolve_ReadsTheMetadataAtTheRequestedRevision_NotTheDefaultBranch()
+    {
+        const string Revision = "refs/pr/7";
+
+        // The default branch and the pinned revision hold DIFFERENT files. Labelling the default branch's list with the
+        // requested revision would describe a checkpoint that does not exist at that pin.
+        var defaultBranch = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = Encoding.UTF8.GetBytes("{}"),
+            ["model.safetensors"] = Encoding.UTF8.GetBytes("default branch weights")
+        };
+        var pinned = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = Encoding.UTF8.GetBytes("{}"),
+            ["model-00001-of-00002.safetensors"] = Encoding.UTF8.GetBytes("pinned shard one"),
+            ["model-00002-of-00002.safetensors"] = Encoding.UTF8.GetBytes("pinned shard two")
+        };
+
+        var requestedUrls = new List<string>();
+        using var fileHandler = FileHandler(pinned);
+        var store = Store(fileHandler,
+            url =>
+            {
+                requestedUrls.Add(url);
+                var body = url.Contains("/revision/", StringComparison.Ordinal)
+                    ? HubDetail(BaseRepo, pinned, license: "llama3.2", revision: "pinned-sha")
+                    : HubDetail(BaseRepo, defaultBranch, license: "llama3.2", revision: "default-sha");
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body)
+                };
+            });
+
+        var manifest = await store.ResolveAsync(BaseRepo, Revision, CancellationToken.None);
+
+        AssertEx.Equal(Revision, manifest.Revision, "A requested revision stays the manifest's revision.");
+        AssertEx.Equal(expected: 3, manifest.Files.Count, "The manifest must describe the pinned revision's files.");
+        AssertEx.True(manifest.Files.Any(file => file.FileName == "model-00001-of-00002.safetensors"),
+            "The pinned revision's sharded weights must be what is resolved.");
+        AssertEx.False(manifest.Files.Any(file => file.FileName == "model.safetensors"),
+            "The default branch's single-file weights must never appear under a pinned revision.");
+
+        // The escaped segment is the point: a branch name with slashes is ONE path segment to the Hub.
+        AssertEx.True(requestedUrls.TrueForAll(url => url.Contains("/revision/refs%2Fpr%2F7", StringComparison.Ordinal)),
+            $"Every Hub read must target the requested revision; saw {string.Join(", ", requestedUrls)}.");
+    }
+
+    [Test]
     public void ClassifyFile_SelectsOnlyWhatFineTuningNeeds()
     {
         AssertEx.Equal(BaseCheckpointFileRole.Weights, HuggingFaceBaseCheckpointStore.ClassifyFile("model.safetensors"));
@@ -180,7 +228,21 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         AssertEx.Null(HuggingFaceBaseCheckpointStore.ClassifyFile("onnx/model.safetensors"));
     }
 
-    private HuggingFaceBaseCheckpointStore Store(GgufStoreTestInfrastructure.ScriptedHandler fileHandler, params string[] repoDetails)
+    private HuggingFaceBaseCheckpointStore Store(GgufStoreTestInfrastructure.ScriptedHandler fileHandler, params string[] repoDetails) =>
+        Store(fileHandler,
+            url =>
+            {
+                var match = Array.Find(repoDetails, detail => url.Contains(RepoIdOf(detail), StringComparison.Ordinal));
+                return match is null
+                    ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(match)
+                    };
+            });
+
+    /// <summary>The same store with a caller-chosen Hub responder, so a test can serve a different body per URL.</summary>
+    private HuggingFaceBaseCheckpointStore Store(GgufStoreTestInfrastructure.ScriptedHandler fileHandler, Func<string, HttpResponseMessage> hubResponder)
     {
         var options = new HuggingFaceOptions
         {
@@ -189,17 +251,7 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         };
 
 #pragma warning disable CA2000 // In-memory fakes with no unmanaged resource; they live for the test's duration.
-        var hubHandler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
-        {
-            var url = request.RequestUri!.ToString();
-            var match = Array.Find(repoDetails, detail => url.Contains(RepoIdOf(detail), StringComparison.Ordinal));
-            return match is null
-                ? new HttpResponseMessage(HttpStatusCode.NotFound)
-                : new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(match)
-                };
-        });
+        var hubHandler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) => hubResponder(request.RequestUri!.ToString()));
         var hubHttp = new HttpClient(hubHandler);
         var fileHttp = new HttpClient(fileHandler, disposeHandler: false);
 #pragma warning restore CA2000

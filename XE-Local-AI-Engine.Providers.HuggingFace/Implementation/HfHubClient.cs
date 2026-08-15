@@ -123,12 +123,24 @@ internal sealed class HfHubClient
     ///     license, and each sibling's filename/size/LFS sha256. Returns <see langword="null" /> on a non-success status.
     ///     Cached for <see cref="HuggingFaceOptions.HubMetadataCacheTtl" />, keyed by repo id.
     /// </summary>
-    public Task<HubModelDetail?> GetRepoAsync(string repoId, CancellationToken ct)
+    public Task<HubModelDetail?> GetRepoAsync(string repoId, CancellationToken ct) =>
+        GetRepoAsync(repoId, revision: null, ct);
+
+    /// <summary>
+    ///     The same detail read at a specific commit, branch or tag — <c>GET /api/models/{repo}/revision/{rev}?blobs=true</c>.
+    ///     A blank revision reads the default branch, which is what the two-argument overload asks for. The revision is
+    ///     part of the cache key AND escaped into its own path segment: it is untrusted repo input, and a branch name
+    ///     like <c>refs/pr/1</c> is one segment to the Hub, not three.
+    /// </summary>
+    public Task<HubModelDetail?> GetRepoAsync(string repoId, string? revision, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
 
-        var url = $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoId}?blobs=true";
-        return _repoDetailCache.GetOrAddAsync(repoId, _options.HubMetadataCacheTtl, token => FetchRepoAsync(url, repoId, token), ct);
+        var url = string.IsNullOrWhiteSpace(revision)
+            ? $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoId}?blobs=true"
+            : $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoId}/revision/{Uri.EscapeDataString(revision)}?blobs=true";
+        var cacheKey = string.IsNullOrWhiteSpace(revision) ? repoId : $"{repoId}@{revision}";
+        return _repoDetailCache.GetOrAddAsync(cacheKey, _options.HubMetadataCacheTtl, token => FetchRepoAsync(url, repoId, token), ct);
     }
 
     private async Task<HubModelDetail?> FetchRepoAsync(string url, string repoId, CancellationToken ct)

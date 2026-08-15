@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training;
 
+using System.Text;
 using System.Text.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -10,6 +11,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DatasetExportServiceTests
 {
     private static readonly Guid DatasetId = Guid.NewGuid();
+
+    private static readonly byte[] DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}""");
 
     [Test]
     public async Task DatasetExport_HermesConverter_RoundTripsToolCalls()
@@ -65,7 +68,7 @@ public sealed class DatasetExportServiceTests
     {
         var store = Substitute.For<ITrainingDatasetStore>();
         _ = store.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>())
-                 .Returns(new TrainingDatasetRecord(DatasetId, Guid.NewGuid(), 1, "dataset", TrainingDatasetStatus.Ready, 2, "v1:abc",
+                 .Returns(new TrainingDatasetRecord(DatasetId, Guid.NewGuid(), 1, DefinitionJson, "dataset", TrainingDatasetStatus.Ready, 2, "v1:abc",
                      samples.Length, samples.Length, 0, 0, 0, 1, 0, 0, DatasetGenerationWorkStatus.Succeeded, null));
         _ = store.ListAllSamplesAsync(DatasetId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingSampleRecord>>(samples);
         return new DatasetExportService(store);

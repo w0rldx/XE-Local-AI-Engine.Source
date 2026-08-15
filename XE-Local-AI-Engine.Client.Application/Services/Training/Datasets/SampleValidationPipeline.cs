@@ -89,6 +89,21 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
             parts.Add(new TrainingSamplePartV1("text", parts.Count, record.AssistantText));
         }
 
+        // The single-call boundary. Today's record shape can only ever produce one tool part, so this is the pin that
+        // turns a later multi-call record into a visible rejection instead of a sample the scorer would grade by its
+        // FIRST call and quietly ignore the rest of.
+        if (TrainingSampleParts.IsMultiCall(parts))
+        {
+            layers.Add(new SampleValidationLayerResultV1("tool-name", Passed: false, "tool-name", TrainingSampleParts.MultiCallUnsupportedReason));
+            return new SampleValidationOutcome(Accepted: false, TrainingSampleParts.MultiCallUnsupportedReason, context.RequestedLabel,
+                Content: null,
+                new TrainingSampleValidationV1
+                {
+                    Passed = false,
+                    Layers = layers
+                });
+        }
+
         healthy &= await RunCriticAsync(record, context, layers, cancellationToken).ConfigureAwait(false);
 
         // Decision #9: a schema-valid turn that failed a later layer is retained as negative training data, not dropped.

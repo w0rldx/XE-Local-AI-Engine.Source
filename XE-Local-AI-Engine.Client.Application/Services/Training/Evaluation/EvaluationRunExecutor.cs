@@ -150,6 +150,11 @@ public sealed class EvaluationRunExecutor(
                 "The hold-out sample's frozen trajectory could not be read.");
         }
 
+        if (EvaluationScorer.RejectMultiCall(sampleId, sample.Kind, content) is { } unsupported)
+        {
+            return unsupported;
+        }
+
         var prompt = EvaluationScorer.ReadUserPrompt(content);
         if (string.IsNullOrWhiteSpace(prompt))
         {
@@ -212,9 +217,10 @@ public sealed class EvaluationRunExecutor(
     {
         var dataset = await _datasets.GetDatasetAsync(evaluation.DatasetId, cancellationToken).ConfigureAwait(false)
                       ?? throw new EvaluationRejectedException("The evaluated dataset no longer exists.");
-        var definitionRecord = await _datasets.GetDefinitionAsync(dataset.DefinitionId, cancellationToken).ConfigureAwait(false)
-                               ?? throw new EvaluationRejectedException("The dataset definition no longer exists.");
-        var definition = DatasetDefinitionService.ReadBody(definitionRecord.DefinitionJson);
+        // The body the dataset PINNED at creation, which is also what generation ran against. Reading the live
+        // definition would score the model against tools and instructions this dataset never demonstrated.
+        var definition = DatasetDefinitionService.ReadPinnedBody(dataset)
+                         ?? throw new EvaluationRejectedException(DatasetDefinitionService.UnpinnedDatasetReason);
 
         var wanted = membership.HoldoutSampleIds.ToHashSet();
         var samples = await _datasets.ListAllSamplesAsync(evaluation.DatasetId, cancellationToken).ConfigureAwait(false);

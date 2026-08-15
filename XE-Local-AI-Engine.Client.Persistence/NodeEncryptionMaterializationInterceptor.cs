@@ -166,6 +166,13 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     datasetDefinition.Id,
                     "training_definition_json");
                 break;
+            case TrainingDataset dataset:
+                dataset.DefinitionJson = DecryptIfPresent(dataset.DefinitionJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    dataset.Id,
+                    "training_dataset_definition_json");
+                break;
             case TrainingDatasetSample sample:
                 // Dataset id in the conversation slot — see the matching block in NodeEncryptionSaveChangesInterceptor.
                 // A sample re-parented onto another dataset fails the tag check here rather than reaching a training run.

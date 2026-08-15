@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Training;
 
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -67,6 +68,25 @@ public sealed class TrainingStoreNullBlobTests : IDisposable
         AssertEx.False(sample.ValidationJson.HasValue, "An unvalidated sample must read back as absent, not as an empty verdict.");
         var listed = await store.ListAllSamplesAsync(dataset.Id);
         AssertEx.False(listed.Single().ValidationJson.HasValue, "The absence must survive the list projection too.");
+    }
+
+    [Test]
+    public async Task Dataset_WithNoPinnedDefinitionColumn_ReadsBackAsAnAbsentDocument()
+    {
+        await using var context = await CreateDatabaseAsync("dataset-null-definition.sqlite");
+        var store = new TrainingDatasetStore(context, TimeProvider.System);
+
+        var definition = await store.CreateDefinitionAsync(
+            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
+
+        // The shape of a row written before pinning existed: the additive migration leaves the column NULL. Reading it
+        // as an empty-but-present body would let both executors believe an unreadable definition was pinned.
+        _ = await context.Database.ExecuteSqlRawAsync("UPDATE training_datasets SET definition_json = NULL;");
+        context.ChangeTracker.Clear();
+
+        var reread = AssertEx.NotNull(await store.GetDatasetAsync(dataset.Id), "The dataset must still exist.");
+        AssertEx.False(reread.DefinitionJson.HasValue, "A dataset that predates pinning must read back as absent, not as an empty body.");
     }
 
     [Test]

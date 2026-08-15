@@ -339,6 +339,18 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // The dataset's pinned copy of that body. A distinct AAD column name from the definition's own, so a writer
+        // cannot present a definition row's ciphertext as a dataset's pinned snapshot (or the reverse).
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDataset>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.DefinitionJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_dataset_definition_json",
+                trackedProperties);
+        }
+
         // Dataset samples take the skill-resource treatment rather than the flat one: the owning dataset id goes in the
         // conversation slot so a database WRITER cannot re-parent a sample row onto another dataset and have its content
         // and verdicts fed into a different training run. Moving a row now fails the tag check.
