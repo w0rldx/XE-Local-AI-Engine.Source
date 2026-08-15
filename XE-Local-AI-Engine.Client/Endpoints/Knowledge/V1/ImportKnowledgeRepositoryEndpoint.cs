@@ -53,6 +53,15 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
                 },
                 ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is ArgumentException
                                               or InvalidOperationException
                                               or DevelopmentWorkspaceSecurityException

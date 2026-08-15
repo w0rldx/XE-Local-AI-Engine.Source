@@ -30,6 +30,15 @@ public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFold
 
             await Send.OkAsync(ToResponse(reference), ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
         catch (SelectedFolderValidationException exception)
         {
             AddError(exception.Message);
