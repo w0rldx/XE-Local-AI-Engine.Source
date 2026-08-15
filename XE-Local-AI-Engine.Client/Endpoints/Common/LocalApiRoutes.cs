@@ -685,6 +685,26 @@ public static class LocalApiRoutes
         public const string Models = "proxy/v1/models";
     }
 
+    /// <summary>
+    ///     Training group routes. Slice 1 owns the dataset half (definitions, datasets, samples, mocks); the runtime and
+    ///     base-artifact halves append their own constants here.
+    /// </summary>
+    public static class Training
+    {
+        public const string Definitions = "training/definitions";
+        public const string DefinitionById = "training/definitions/{definitionId}";
+        public const string DefinitionGenerate = "training/definitions/{definitionId}/generate";
+        public const string Datasets = "training/datasets";
+        public const string DatasetById = "training/datasets/{datasetId}";
+        public const string DatasetSamples = "training/datasets/{datasetId}/samples";
+        public const string DatasetSampleById = "training/datasets/{datasetId}/samples/{sampleId}";
+        public const string DatasetExport = "training/datasets/{datasetId}/export";
+        public const string Mocks = "training/mocks";
+        public const string MockById = "training/mocks/{mockId}";
+        public const string MockVerify = "training/mocks/{mockId}/verify";
+        public const string DatasetGenerationHub = "/api/local/v1/training/datasets/hub";
+    }
+
     public static class Automation
     {
         public const string Commands = "automation/commands";

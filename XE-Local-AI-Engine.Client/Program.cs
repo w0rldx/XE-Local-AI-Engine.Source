@@ -366,6 +366,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<BenchmarkRunHub>(LocalApiRoutes.Benchmarks.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<DatasetGenerationHub>(LocalApiRoutes.Training.DatasetGenerationHub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<CudaBuildHub>(LocalApiRoutes.ModelFit.CudaBuildHub)

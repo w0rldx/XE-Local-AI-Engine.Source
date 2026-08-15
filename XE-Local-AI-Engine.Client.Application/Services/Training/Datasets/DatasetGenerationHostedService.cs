@@ -71,7 +71,7 @@ public sealed class DatasetGenerationHostedService(
     {
         try
         {
-            await _signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+            _ = await _signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
