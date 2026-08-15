@@ -40,6 +40,62 @@ public sealed class SecurityOptionsValidatorTests
         AssertFailureContains(result, "MaxMessageSizeKb");
     }
 
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    [Arguments(1025)]
+    public void Validate_WhenMaxSystemPromptSizeIsOutOfRange_ReturnsFailure(int value)
+    {
+        var options = CreateValidOptions();
+        options.MaxSystemPromptSizeKb = value;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "MaxSystemPromptSizeKb must be between 1 and 1024.");
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(1025)]
+    public void Validate_WhenMaxMessageSizeIsOutOfRange_ReturnsFailure(int value)
+    {
+        var options = CreateValidOptions();
+        options.MaxMessageSizeKb = value;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "MaxMessageSizeKb must be between 1 and 1024.");
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    [Arguments(513)]
+    public void Validate_WhenMaxUploadFileSizeIsOutOfRange_ReturnsFailure(int value)
+    {
+        var options = CreateValidOptions();
+        options.MaxUploadFileSizeMb = value;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "MaxUploadFileSizeMb must be between 1 and 512.");
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    public void Validate_WhenTheAllowedModelNamePatternIsMissing_ReturnsFailure(string value)
+    {
+        // A blank pattern is not "allow everything" — it is a gate with nothing behind it, so startup must refuse.
+        var options = CreateValidOptions();
+        options.AllowedModelNamePattern = value;
+
+        AssertFailureContains(_validator.Validate(name: null, options), "AllowedModelNamePattern is required.");
+    }
+
+    [Test]
+    public void Validate_WhenTheAllowedModelNamePatternIsNotAValidRegex_ReturnsFailure()
+    {
+        var options = CreateValidOptions();
+        options.AllowedModelNamePattern = "^[a-z";
+
+        AssertFailureContains(_validator.Validate(name: null, options), "AllowedModelNamePattern must be a valid regular expression.");
+    }
+
     private static SecurityOptions CreateValidOptions()
     {
         return new SecurityOptions();

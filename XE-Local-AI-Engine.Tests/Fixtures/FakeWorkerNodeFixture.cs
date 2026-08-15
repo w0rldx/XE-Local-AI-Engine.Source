@@ -21,20 +21,44 @@ using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
+/// <summary>
+///     A real, self-hosted stand-in for the <em>platform</em> side of the WorkerHub connection: a loopback Kestrel host
+///     with a self-signed certificate serving a SignalR hub at <see cref="HubPath" />, so the node's real
+///     <c>IWorkerHubConnection</c> negotiates, connects, and speaks the live protocol against it.
+/// </summary>
+/// <remarks>
+///     <para>
+///         Use this fixture when the behaviour under test <em>is</em> the connection — negotiation, reconnect after a
+///         transport drop, heartbeat cadence, capability reporting, or an envelope's trip across a real SignalR wire.
+///         Every <c>WaitFor…</c> method reads from an unbounded channel the hub writes to, so a test asserts on what the
+///         node actually sent rather than on a mock's recorded call.
+///     </para>
+///     <para>
+///         Prefer <c>RecordingHubMessageSender</c> (in <c>XE-Local-AI-Engine.Client.Testing</c>) when the behaviour under
+///         test is the <em>outbound contract</em> — which calls the node makes, in what order, with what payload. That
+///         decorator records against the in-process <c>IHubMessageSender</c> with no host, no TLS, and no network, so it
+///         is far cheaper and cannot flake on a timeout. Reach for this fixture only when a real transport is the point.
+///     </para>
+/// </remarks>
 public sealed class FakeWorkerNodeFixture : IAsyncDisposable
 {
     private readonly FixtureHubState _hubState = new();
 
     private IHost? _app;
 
+    /// <summary>The loopback base address the hub listens on. Only meaningful after <see cref="StartAsync" /> — before that it is a placeholder.</summary>
     public Uri HubBaseUri { get; private set; } = new("https://127.0.0.1");
 
+    /// <summary>The path the fake WorkerHub is mapped at; combine with <see cref="HubBaseUri" /> to point a client at it.</summary>
     public string HubPath { get; } = "/hub/worker";
 
+    /// <summary>The self-signed certificate this host serves TLS with, so a test can pin or trust it. Null until <see cref="StartAsync" />.</summary>
     public X509Certificate2? ServerCert { get; private set; }
 
+    /// <summary>How many capability reports the hub has received so far — for asserting the reporter fired once, not twice.</summary>
     public int CapabilitiesReportCount => _hubState.CapabilitiesReportCount;
 
+    /// <summary>Stops the host and disposes the server certificate. Safe to call when <see cref="StartAsync" /> was never called.</summary>
     public async ValueTask DisposeAsync()
     {
         if (_app is not null)
@@ -48,6 +72,11 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         ServerCert = null;
     }
 
+    /// <summary>
+    ///     Starts the loopback HTTPS host and publishes its address on <see cref="HubBaseUri" />. Idempotent: a second
+    ///     call on a started fixture returns immediately.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The host started but exposed no HTTPS address.</exception>
     public async Task StartAsync(CancellationToken ct = default)
     {
         if (_app is not null)
@@ -119,42 +148,53 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         _app = app;
     }
 
+    /// <summary>Pushes an <c>InvocationAssigned</c> message to every connected client — the platform-initiated half of the protocol.</summary>
     public Task SendInvocationAssignedAsync(EncryptedRuntimePackageDto dto, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(dto);
         return _hubState.HubContext.Clients.All.SendAsync("InvocationAssigned", dto, ct);
     }
 
+    /// <summary>Reads the next streamed chunk envelope the node sent, or throws <see cref="TimeoutException" /> when none arrives in time.</summary>
     public Task<EncryptedChunkEnvelopeV1> WaitForFirstChunkAsync(TimeSpan timeout)
     {
         return FixtureHubState.ReadAsync(_hubState.ChunkReader, timeout);
     }
 
+    /// <summary>Reads the next completion envelope the node sent, or throws <see cref="TimeoutException" /> when none arrives in time.</summary>
     public Task<EncryptedCompletedEnvelopeV1> WaitForCompletedAsync(TimeSpan timeout)
     {
         return FixtureHubState.ReadAsync(_hubState.CompletedReader, timeout);
     }
 
+    /// <summary>Reads the next key-mismatch report (reason plus the node key id that was used), or throws <see cref="TimeoutException" />.</summary>
     public Task<(string reason, string nodeKeyIdUsed)> WaitForKeyMismatchAsync(TimeSpan timeout)
     {
         return FixtureHubState.ReadAsync(_hubState.KeyMismatchReader, timeout);
     }
 
+    /// <summary>Reads the next capability report the node pushed, or throws <see cref="TimeoutException" /> when none arrives in time.</summary>
     public Task<ClientCapabilitiesPayload> WaitForCapabilitiesAsync(TimeSpan timeout)
     {
         return FixtureHubState.ReadAsync(_hubState.CapabilitiesReader, timeout);
     }
 
+    /// <summary>Reads the next heartbeat the node sent, or throws <see cref="TimeoutException" /> when none arrives in time.</summary>
     public Task<HeartbeatPayload> WaitForHeartbeatAsync(TimeSpan timeout)
     {
         return FixtureHubState.ReadAsync(_hubState.HeartbeatReader, timeout);
     }
 
+    /// <summary>Reads the client node id from the next <c>WorkerHello</c> handshake, or throws <see cref="TimeoutException" />.</summary>
     public Task<Guid> WaitForWorkerHelloAsync(TimeSpan timeout)
     {
         return FixtureHubState.ReadAsync(_hubState.WorkerHelloReader, timeout);
     }
 
+    /// <summary>
+    ///     Aborts every hub connection <em>gracefully</em> (SignalR close frame, <c>allowReconnect:false</c>), so the client
+    ///     tears down and does NOT auto-reconnect. Use <see cref="FireTransportLevelConnectionDropAsync" /> to test reconnect.
+    /// </summary>
     [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Test fixture trigger method; an event would not fit the deterministic drive-the-hub contract callers rely on.")]
     public Task FireConnectionDropAsync()
     {
@@ -167,6 +207,10 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     // reconnect path we must drop the underlying transport abruptly (no close frame) so the client's
     // receive loop observes a transport error and WithAutomaticReconnect engages. This aborts the
     // connection at the transport layer via IConnectionLifetimeFeature, mimicking a real network loss.
+    /// <summary>
+    ///     Kills every connection at the transport layer with no close frame, mimicking real network loss so the client's
+    ///     <c>WithAutomaticReconnect</c> engages. This is the drop to use for reconnect tests.
+    /// </summary>
     [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Matches the existing FireConnectionDropAsync fixture contract.")]
     public Task FireTransportLevelConnectionDropAsync()
     {
@@ -379,59 +423,85 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         }
     }
 
+    /// <summary>Wire shape of the <c>WorkerCapabilitiesReported</c> payload as this fixture deserializes it.</summary>
     public sealed record ClientCapabilitiesPayload
     {
+        /// <summary>The reported hardware block (RAM, VRAM, CUDA, GPU/CPU identity).</summary>
         public required HardwareCapabilitiesPayload HardwareInfo { get; init; }
 
+        /// <summary>The reported software/runtime block (score class, provider reachability, installed models).</summary>
         public required SystemCapabilitiesPayload Capabilities { get; init; }
     }
 
+    /// <summary>Hardware half of a capability report.</summary>
     public sealed record HardwareCapabilitiesPayload
     {
+        /// <summary>Total system RAM in megabytes, as the node measured it.</summary>
         public int RamMb { get; init; }
 
+        /// <summary>Total GPU VRAM in megabytes; zero when no GPU was detected.</summary>
         public int VramMb { get; init; }
 
+        /// <summary>Whether the node found a usable CUDA runtime.</summary>
         public bool CudaAvailable { get; init; }
 
+        /// <summary>Reported GPU model name; null when none was detected.</summary>
         public string? GpuName { get; init; }
 
+        /// <summary>Coarse CPU capability class the node assigned itself; null when unclassified.</summary>
         public string? CpuClass { get; init; }
     }
 
+    /// <summary>Software/runtime half of a capability report. Defaults here mirror a plausible report so a test need only set the fields it asserts on.</summary>
     public sealed record SystemCapabilitiesPayload
     {
+        /// <summary>Capability-payload schema version the node emitted.</summary>
         public int SchemaVersion { get; init; } = 2;
 
+        /// <summary>Overall box class (Low/Medium/High) derived from the hardware block.</summary>
         public string SystemScoreClass { get; init; } = "Medium";
 
+        /// <summary>Whether the gated Ollama secondary provider answered; null when it was not probed.</summary>
         public bool? OllamaReachable { get; init; }
 
+        /// <summary>Version string Ollama reported, when reachable.</summary>
         public string? OllamaVersion { get; init; }
 
+        /// <summary>How the runtime is managed on this node (app-managed vs external).</summary>
         public string ManagementMode { get; init; } = "unknown";
 
+        /// <summary>When the node last produced a capability report; null on the first one.</summary>
         public DateTimeOffset? LastCapabilityReportAt { get; init; }
 
+        /// <summary>Human-readable diagnostic notes the probe collected; empty on a clean box.</summary>
         public IReadOnlyList<string> Diagnostics { get; init; } = [];
 
+        /// <summary>Names of the models installed locally.</summary>
         public IReadOnlyList<string> InstalledModels { get; init; } = [];
 
+        /// <summary>Per-model metadata for <see cref="InstalledModels" /> (digest, context window).</summary>
         public IReadOnlyList<ModelMetadataPayload> InstalledModelMetadata { get; init; } = [];
 
+        /// <summary>Capability tokens the node advertises (tools, vision, thinking, …).</summary>
         public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
 
+        /// <summary>Model currently loaded in the runtime; null when nothing is warm.</summary>
         public string? ActiveModel { get; init; }
 
+        /// <summary>When the warm model is due to be evicted; null when nothing is warm or it never expires.</summary>
         public DateTimeOffset? ActiveModelExpiresAt { get; init; }
     }
 
+    /// <summary>Per-model metadata carried alongside the installed-model list.</summary>
     public sealed record ModelMetadataPayload
     {
+        /// <summary>Model name as the runtime knows it.</summary>
         public required string Name { get; init; }
 
+        /// <summary>Content digest of the model weights, when the runtime exposes one.</summary>
         public string? Digest { get; init; }
 
+        /// <summary>Maximum context window in tokens, when known.</summary>
         public int? MaxContextTokens { get; init; }
     }
 }

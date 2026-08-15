@@ -685,8 +685,8 @@ try {
         Tee-Object -FilePath $testOutputPath
     Assert-LastExitCode "Backend tests"
 
-    # Hollow-gate guard, ported from .github/workflows/build-and-test.yml (which is disabled, making this
-    # script the only gate). MTP always emits a "Passed!" or "Failed!" summary per suite that ran. If zero
+    # Hollow-gate guard, ported from .github/workflows/build-and-test.yml (this script is the
+    # manual packager; CI runs the same guard). MTP always emits a "Passed!" or "Failed!" summary per suite that ran. If zero
     # suites enrol, the output carries no summary line and `dotnet test` still exits 0 — this catches that
     # silent green before it becomes a released package.
     if (-not (Test-Path $testOutputPath -PathType Leaf) -or

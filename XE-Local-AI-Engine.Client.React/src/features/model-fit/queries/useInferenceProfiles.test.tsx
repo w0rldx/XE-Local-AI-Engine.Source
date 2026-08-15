@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The inference-profile mutation hooks dispatch their domain variables to the generated mutationFn's `{ body }`
@@ -36,6 +34,7 @@ import {
 	useInvalidateInferenceProfile,
 } from "@/features/model-fit/queries/useInferenceProfiles";
 import { modelFitInvalidationKey } from "@/features/model-fit/queries/useModelFit";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const LIST_KEY = modelFitInvalidationKey(inferenceProfileQueryIds.list);
 
@@ -43,17 +42,12 @@ const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {
 	invalidatedKeys.length = 0;
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
+	const { wrapper, queryClient } = createProvidersWrapper();
 	vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters) => {
 		invalidatedKeys.push((filters as { queryKey?: unknown } | undefined)?.queryKey);
 		return Promise.resolve();
 	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	return { wrapper };
 }
 
 describe("useInferenceProfiles mutations", () => {
@@ -80,8 +74,8 @@ describe("useInferenceProfiles mutations", () => {
 	});
 
 	it("explore dispatches { modelName, role } to the generated body and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useExploreInferenceProfile(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useExploreInferenceProfile(), { wrapper });
 
 		result.current.mutate({ modelName: "unsloth/Qwen3-4B-GGUF", role: "coding" });
 
@@ -92,8 +86,8 @@ describe("useInferenceProfiles mutations", () => {
 	});
 
 	it("benchmark dispatches the profile id and explicit ambient-pressure decision, maps metrics, and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useBenchmarkInferenceProfile(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useBenchmarkInferenceProfile(), { wrapper });
 
 		result.current.mutate({ profileId: "p1", allowPreSpawnVramPressure: true });
 
@@ -139,8 +133,8 @@ describe("useInferenceProfiles mutations", () => {
 	});
 
 	it("freeze dispatches { profileId } and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useFreezeInferenceProfile(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useFreezeInferenceProfile(), { wrapper });
 
 		result.current.mutate({ profileId: "p1" });
 
@@ -151,8 +145,8 @@ describe("useInferenceProfiles mutations", () => {
 	});
 
 	it("invalidate dispatches { profileId } and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useInvalidateInferenceProfile(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useInvalidateInferenceProfile(), { wrapper });
 
 		result.current.mutate({ profileId: "p1" });
 
@@ -164,8 +158,8 @@ describe("useInferenceProfiles mutations", () => {
 
 	it("does not invalidate the list when a mutation fails", async () => {
 		freezeMock.mutationFn.mockRejectedValue(new Error("Request failed with status code 400"));
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useFreezeInferenceProfile(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useFreezeInferenceProfile(), { wrapper });
 
 		result.current.mutate({ profileId: "bad" });
 
