@@ -23,6 +23,9 @@ export default function MonacoCodeEditor({
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 	const onChangeRef = useRef(onChange);
 	onChangeRef.current = onChange;
+	// True while a prop-driven `setValue` runs: Monaco emits `onDidChangeModelContent` for that write too, and echoing
+	// it back through `onChange` would report the parent's own value as a user edit (duplicate persistence / loops).
+	const applyingPropValueRef = useRef(false);
 	const colorScheme = useComputedColorScheme("light");
 
 	// The instance is created once; later prop changes are applied in place by the effects below.
@@ -46,7 +49,11 @@ export default function MonacoCodeEditor({
 			domReadOnly: readOnly,
 		});
 		editorRef.current = editor;
-		const subscription = editor.onDidChangeModelContent(() => onChangeRef.current?.(editor.getValue()));
+		const subscription = editor.onDidChangeModelContent(() => {
+			if (!applyingPropValueRef.current) {
+				onChangeRef.current?.(editor.getValue());
+			}
+		});
 		return () => {
 			subscription.dispose();
 			const model = editor.getModel();
@@ -60,7 +67,12 @@ export default function MonacoCodeEditor({
 	useEffect(() => {
 		const editor = editorRef.current;
 		if (editor && editor.getValue() !== value) {
-			editor.setValue(value);
+			applyingPropValueRef.current = true;
+			try {
+				editor.setValue(value);
+			} finally {
+				applyingPropValueRef.current = false;
+			}
 		}
 	}, [value]);
 

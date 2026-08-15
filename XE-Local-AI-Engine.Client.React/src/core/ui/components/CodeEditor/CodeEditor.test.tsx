@@ -14,6 +14,8 @@ const editorMock = vi.hoisted(() => {
 		getValue: vi.fn(() => value),
 		setValue: vi.fn((next: string) => {
 			value = next;
+			// Monaco emits onDidChangeModelContent for programmatic writes too.
+			contentListener?.();
 		}),
 		getModel: vi.fn(() => ({ dispose: vi.fn() })),
 		updateOptions: vi.fn(),
@@ -101,6 +103,25 @@ describe("CodeEditor", () => {
 			</MantineProvider>,
 		);
 		expect(editorMock.instance.setValue).not.toHaveBeenCalled();
+	});
+
+	it("does not report a prop-driven value replacement as a user edit", async () => {
+		const onChange = vi.fn();
+		const { rerender } = renderWithMantine(<CodeEditor value="a" onChange={onChange} data-testid="editor" />);
+		await screen.findByTestId("editor");
+
+		rerender(
+			<MantineProvider>
+				<CodeEditor value="replaced by parent" onChange={onChange} data-testid="editor" />
+			</MantineProvider>,
+		);
+
+		expect(editorMock.instance.setValue).toHaveBeenCalledWith("replaced by parent");
+		expect(onChange).not.toHaveBeenCalled();
+
+		// A real edit afterwards still reaches the parent.
+		act(() => editorMock.type("replaced by parent!"));
+		expect(onChange).toHaveBeenCalledWith("replaced by parent!");
 	});
 
 	it("disposes the editor on unmount", async () => {
