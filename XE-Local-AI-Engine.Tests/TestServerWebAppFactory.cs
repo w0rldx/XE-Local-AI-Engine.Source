@@ -87,6 +87,18 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         }
     }
 
+    /// <summary>
+    ///     The ASP.NET Core environment name this host runs under. Defaults to <c>Testing</c>, which is what every suite
+    ///     wants: <c>Program.CreateAppAsync</c> skips <c>UseRateLimiter()</c> there (its <c>PartitionedRateLimiter</c>
+    ///     replenishment timer is never disposed and GC-roots the whole host — docs/agent-knowledge.md §1) and
+    ///     <c>ConfigureServices</c> relaxes the three permit limits to non-limits.
+    ///     <para>
+    ///         Override it ONLY to exercise the rate limiter itself. Such a host keeps that immortal timer for the
+    ///         process lifetime, so share ONE host across every rate-limit assertion instead of building one per test.
+    ///     </para>
+    /// </summary>
+    public string EnvironmentName { get; init; } = "Testing";
+
     public bool SkipDefaultBaseUrlOverride { get; init; }
 
     public bool? EnableDevelopmentMode { get; init; }
@@ -124,10 +136,37 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
     }
 
+    /// <summary>
+    ///     A valid, correctly signed access token carrying NO role claim. It authenticates, so an endpoint gated by the
+    ///     <c>NodeOperator</c> policy (authenticated AND in the Admin role) must answer 403 rather than 401 — the
+    ///     distinction that separates "you are not signed in" from "your principal is not the operator".
+    /// </summary>
+    public string CreateNonOperatorAccessToken()
+    {
+        var tokenService = Services.GetRequiredService<INodeTokenService>();
+        var user = new NodeUser
+        {
+            Id = "node-viewer-test",
+            UserName = "viewer@example.test",
+            Email = "viewer@example.test",
+            SetupCompleted = true,
+            SecurityStamp = NodeAdminTestSecurityStamp
+        };
+
+        return tokenService.CreateAccessToken(user, []).AccessToken;
+    }
+
     public void AddNodeBearerToken(HttpRequestMessage request)
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNodeAccessToken());
+    }
+
+    /// <summary>Bearer-authenticates <paramref name="request" /> as a non-operator principal (see <see cref="CreateNonOperatorAccessToken" />).</summary>
+    public void AddNonOperatorBearerToken(HttpRequestMessage request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNonOperatorAccessToken());
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -227,7 +266,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             {
                 var start = Program.CreateAppAsync([], new ProgramAppCustomization
                 {
-                    EnvironmentName = "Testing",
+                    EnvironmentName = EnvironmentName,
                     ContentRootPath = ResolveClientContentRoot(),
                     WebRootPath = _fixtureWebRoot,
                     Configuration = configuration,
