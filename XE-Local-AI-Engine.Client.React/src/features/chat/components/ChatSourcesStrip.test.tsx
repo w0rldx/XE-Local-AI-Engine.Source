@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatMessageSource } from "@/features/chat/models/ChatModels";
@@ -18,15 +15,7 @@ vi.mock("@/features/knowledge/queries/useKnowledgeDocuments", () => ({
 }));
 
 import { ChatSourcesStrip } from "@/features/chat/components/ChatSourcesStrip";
-
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	return render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider>{ui}</MantineProvider>
-		</QueryClientProvider>,
-	);
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function source(overrides: Partial<ChatMessageSource> = {}): ChatMessageSource {
 	return {
