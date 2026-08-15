@@ -382,9 +382,9 @@ public sealed class McpServerEndpointTests
         await service.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
-    private static TestingWebAppFactory CreateFactory(IMcpServerService service, ILocalToolOfferProvider? offerProvider = null)
+    private static TestServerWebAppFactory CreateFactory(IMcpServerService service, ILocalToolOfferProvider? offerProvider = null)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -400,7 +400,7 @@ public sealed class McpServerEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

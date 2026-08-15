@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // the "-01" suffix, a not-recorded one yields "-00".
 //
 // Which byte the live pipeline emits depends on the listeners attached, and that differs by host:
-//   * The bare TestingWebAppFactory strips every IHostedService, so the OpenTelemetry TracerProvider never starts and
+//   * The bare TestServerWebAppFactory strips every IHostedService, so the OpenTelemetry TracerProvider never starts and
 //     the ONLY listener on this source is Program.cs's scoped listener, which samples AllData (not AllDataAndRecorded).
 //     Request activities are therefore never marked Recorded and the header is "-00" regardless of the inbound sampled
 //     flag — the *_WhenInboundTraceparentAndAspireOff_* / bare-factory success tests below assert that fixture behavior.
@@ -49,7 +49,7 @@ public sealed class BackendTraceCorrelationTests
         AssertEx.NotEqual("true", Environment.GetEnvironmentVariable("ASPIRE_ENABLED"),
             "This test asserts the Aspire-OFF path; ASPIRE_ENABLED must not be enabled.");
 
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/exception-probe");
@@ -79,7 +79,7 @@ public sealed class BackendTraceCorrelationTests
         AssertEx.NotEqual("true", Environment.GetEnvironmentVariable("ASPIRE_ENABLED"),
             "This test asserts the Aspire-OFF path; ASPIRE_ENABLED must not be enabled.");
 
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
@@ -125,12 +125,12 @@ public sealed class BackendTraceCorrelationTests
         AssertEx.NotEqual("true", Environment.GetEnvironmentVariable("ASPIRE_ENABLED"),
             "This test asserts the production tracer-provider path; ASPIRE_ENABLED must not be enabled.");
 
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // Build the production TracerProvider so its ParentBased(AlwaysOn) ActivityListener is attached before the
         // request creates the ASP.NET Core activity. The base fixture strips the OTel hosted service that would
-        // otherwise start it (see TestingWebAppFactory.RemoveAll<IHostedService>).
+        // otherwise start it (see TestServerWebAppFactory.RemoveAll<IHostedService>).
         _ = factory.Services.GetRequiredService<TracerProvider>();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
@@ -167,7 +167,7 @@ public sealed class BackendTraceCorrelationTests
         AssertEx.NotEqual("true", Environment.GetEnvironmentVariable("ASPIRE_ENABLED"),
             "This test asserts the production tracer-provider path; ASPIRE_ENABLED must not be enabled.");
 
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         _ = factory.Services.GetRequiredService<TracerProvider>();

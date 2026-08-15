@@ -65,7 +65,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GetLatestRecommendations_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(RecommendationsLatestRoute()).ConfigureAwait(false);
@@ -76,7 +76,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task RefreshRecommendations_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
@@ -95,7 +95,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task HardwareProfile_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(HardwareProfileRoute()).ConfigureAwait(false);
@@ -106,7 +106,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task HfTokenStatus_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(HfTokenRoute()).ConfigureAwait(false);
@@ -121,7 +121,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GetLatestRecommendations_WhenNoCache_ReturnsOkWithHasCacheFalse()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{RecommendationsLatestRoute()}?useCase=coding");
@@ -141,7 +141,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GetLatestRecommendations_ResponseDoesNotContainRawSnapshotFields()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RecommendationsLatestRoute());
@@ -168,7 +168,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task RefreshRecommendations_WhenJobNotFound_ReturnsBadRequestWithErrorBody()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
@@ -190,7 +190,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task RefreshRecommendations_WhenCtxTargetBelowFloor_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
@@ -215,7 +215,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task HardwareProfile_WhenAuthorized_ReturnsSanitizedAggregates()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HardwareProfileRoute());
@@ -237,7 +237,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GgufBrowse_WhenAuthorized_ReturnsItemsArray()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // No network in the test host → discovery fails → the endpoint degrades to an OK-empty list (never a 500).
@@ -255,7 +255,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GgufInspect_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync($"{GgufInspectRoute()}?repoId=org/some-GGUF").ConfigureAwait(false);
@@ -266,7 +266,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GgufInspect_WhenAuthorized_ReturnsFilesArray()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // No network in the test host → inspection fails → the endpoint degrades to an OK-empty file list (never a 500).
@@ -285,7 +285,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task GgufInspect_WhenRepoIdMissing_ReturnsValidationError()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, GgufInspectRoute());
@@ -298,7 +298,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task ListRunningModels_WhenAuthorized_ReturnsItemsArray()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunningRoute());
@@ -315,7 +315,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task EnsureLlamaCppBinary_WhenVariantUnknown_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, LlamaCppVersionRoute())
@@ -338,7 +338,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task HfTokenStatus_WhenAuthorized_ReturnsOnlyPresenceFlag_NeverTheToken()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HfTokenRoute());
@@ -355,7 +355,7 @@ public sealed class ModelFitEndpointTests
     [Test]
     public async Task SetHfToken_WhenAuthorized_StoresThenReportsPresence_NeverEchoesTheToken()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         const string secret = "hf_super_secret_value_123";

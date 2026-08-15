@@ -90,7 +90,7 @@ public sealed class LlamaCppSourceBuildTransportTests
                .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
         var prerequisiteProbe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
@@ -143,7 +143,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithKeepModelWarm(enabled: true, modelName: "model-a")
                                                      .Build();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
@@ -204,7 +204,7 @@ public sealed class LlamaCppSourceBuildTransportTests
             CurrentBuild: null,
             StartedAtUtc: null,
             CompletedAtUtc: null));
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
@@ -255,7 +255,7 @@ public sealed class LlamaCppSourceBuildTransportTests
                .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
         var prerequisiteProbe = Substitute.For<ICudaBuildPrerequisiteProbe>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
