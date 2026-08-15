@@ -38,14 +38,13 @@ public sealed class NodeChatMutationGuard(INodeChatPersistenceService persistenc
 }
 
 /// <summary>
-///     Thrown when a mutation targets a read-only (<c>Origin=Remote</c>) conversation. Mutation endpoints map this
-///     to HTTP 409 Conflict; the local send/stream path lets it propagate to the caller.
+///     Thrown when a mutation targets a read-only (<c>Origin=Remote</c>) conversation. On the REST path the global
+///     <c>ConflictExceptionHandler</c> turns it into a 409 <c>ConflictProblemDetails</c> with
+///     <c>conflictType = ReadOnlyConversation</c> — endpoints must let it propagate, never catch it. The local
+///     send/stream path lets it propagate to the caller.
 /// </summary>
 public sealed class NodeChatReadOnlyConversationException(Guid conversationId)
     : InvalidOperationException($"Conversation {conversationId} is read-only because it has remote origin.")
 {
-    public const string Code = "conversation-read-only";
-    public const string Reason = "remote-origin";
-
     public Guid ConversationId { get; } = conversationId;
 }

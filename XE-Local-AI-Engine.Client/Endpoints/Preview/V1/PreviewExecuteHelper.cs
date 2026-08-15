@@ -1,11 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Preview.V1;
 
-using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
-
 /// <summary>
-///     Shared helpers for the execute endpoints: resolving the originating hub connection id (so a disconnect cancels
-///     the run) and the 409 CapReached result. The connection id is supplied by the React client via a header — it is
-///     the SignalR connection that subscribed for this run's events.
+///     Shared helper for the execute endpoints: resolves the originating hub connection id (so a disconnect cancels
+///     the run). The connection id is supplied by the React client via a header — it is the SignalR connection that
+///     subscribed for this run's events. The cap 409s are NOT built here: the execution service's cap exceptions
+///     reach the global ConflictExceptionHandler.
 /// </summary>
 internal static class PreviewExecuteHelper
 {
@@ -26,28 +25,5 @@ internal static class PreviewExecuteHelper
         }
 
         return null;
-    }
-
-    public static IResult CapReached(PreviewWorkflowCapReachedException exception)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        return Results.Conflict(new
-        {
-            conflictType = "CapReached",
-            message = exception.Message,
-            maxConcurrentRuns = exception.MaxConcurrentRuns
-        });
-    }
-
-    public static IResult ModelCapExceeded(PreviewWorkflowModelCapExceededException exception)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        return Results.Conflict(new
-        {
-            conflictType = "ModelCapExceeded",
-            message = exception.Message,
-            distinctModelCount = exception.DistinctModelCount,
-            maxLoadedProcesses = exception.MaxLoadedProcesses
-        });
     }
 }
