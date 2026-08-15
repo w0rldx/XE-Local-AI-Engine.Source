@@ -34,6 +34,9 @@ public sealed class RemoveCudaBuildEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.CudaBuildRemove);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+                               .Produces<LlamaCppRuntimeStatusResponse>(StatusCodes.Status200OK)
+                               .Produces<CudaBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
