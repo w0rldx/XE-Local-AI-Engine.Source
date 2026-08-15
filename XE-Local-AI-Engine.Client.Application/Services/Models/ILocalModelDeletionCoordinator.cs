@@ -30,6 +30,7 @@ public sealed class LocalModelDeletionCoordinator(
     IInstalledGgufDeletionStore deletionStore,
     ICoordinatedModelProviderMapStore providerMapStore,
     ILocalModelProviderResolver providerResolver,
+    IGgufModelRegistry modelRegistry,
     HuggingFaceOptions options,
     ILogger<LocalModelDeletionCoordinator> logger) : ILocalModelDeletionCoordinator, ILocalModelDeletionJournalReconciler
 {
@@ -42,6 +43,7 @@ public sealed class LocalModelDeletionCoordinator(
         await using var lease = await snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(modelName, InstalledModelMutationKind.Delete), cancellationToken)
                                                          .ConfigureAwait(false);
         var snapshot = lease.Snapshot ?? throw new KeyNotFoundException("The installed model was not found.");
+        await EnsureNoDependentAdaptersAsync(snapshot, cancellationToken).ConfigureAwait(false);
         var stagePlan = GgufDeletionStageReceipt.Create(ToProviderSnapshot(snapshot), Guid.NewGuid());
         var mappings = await ReadAliasMappingsAsync(lease, stagePlan.RemovalAliases, cancellationToken).ConfigureAwait(false);
         var journal = DeletionJournal.Create(snapshot, stagePlan, mappings);
@@ -160,6 +162,33 @@ public sealed class LocalModelDeletionCoordinator(
                 journal.ProviderMapReceipts,
                 cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     Refuses to delete a base model that installed LoRA adapters launch against. An adapter entry carries no
+    ///     weights of its own — it is loaded on top of the base named by its <c>BaseModelName</c> — so removing the base
+    ///     would leave every dependent adapter permanently unlaunchable. Checked under the mutation lease and before
+    ///     anything is staged, so the refusal has nothing to roll back.
+    /// </summary>
+    private async Task EnsureNoDependentAdaptersAsync(InstalledModelSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        var removedNames = snapshot.RegistryAliases.Select(static alias => alias.ModelName).ToArray();
+        var entries = await modelRegistry.ListAsync(cancellationToken).ConfigureAwait(false);
+        var dependents = entries
+                         .Where(entry => entry.BaseModelName is { Length: > 0 } baseName
+                                         && removedNames.Contains(baseName, StringComparer.OrdinalIgnoreCase)
+                                         && !removedNames.Contains(entry.ModelName, StringComparer.OrdinalIgnoreCase))
+                         .Select(static entry => entry.ModelName)
+                         .ToArray();
+        if (dependents.Length == 0)
+        {
+            return;
+        }
+
+        logger.LogWarning("Refused to delete {ModelName}: {DependentCount} installed adapter(s) apply to it.",
+            snapshot.ModelName,
+            dependents.Length);
+        throw new InvalidOperationException("InstalledModelHasDependentAdapters");
     }
 
     private async Task<IReadOnlyList<DeletionAliasMapping>> ReadAliasMappingsAsync(InstalledModelMutationLease lease,
