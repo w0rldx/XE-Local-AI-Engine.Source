@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training.Export;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -13,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Training.Runs;
 
@@ -164,11 +164,77 @@ public sealed class TrainingExportServiceTests : IDisposable
         AssertEx.Equal(TrainingExportStartOutcome.RunNotExportable, start.Outcome);
     }
 
+    /// <summary>
+    ///     Deleting an artifact has to take its bytes with it. The store only ever removes the row, so a delete that
+    ///     went straight there left a multi-gigabyte GGUF (or a whole adapter directory) that nothing would collect.
+    /// </summary>
+    [Test]
+    public async Task DeleteArtifact_RemovesTheRowAndTheStagedBytes()
+    {
+        using var harness = Harness.Create(this);
+        var artifact = harness.StageArtifact("merged-Q4_K_M.gguf");
+
+        await harness.DeleteArtifactAsync(artifact.Id, artifact.Version);
+
+        await harness.Store.Received(1).DeleteArtifactAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>());
+        AssertEx.False(File.Exists(artifact.Path), "The staged bytes must go with the row.");
+    }
+
+    [Test]
+    public async Task DeleteArtifact_WhenTheStoreRefuses_LeavesTheStagedBytesOnDisk()
+    {
+        using var harness = Harness.Create(this);
+        var artifact = harness.StageArtifact("merged-Q4_K_M.gguf");
+        // A promoted artifact is the refusal that matters: the registry now owns those bytes, and deleting them
+        // because the row delete was ATTEMPTED would break every model served from them.
+        _ = harness.Store.DeleteArtifactAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>())
+                   .Returns<Task>(_ => throw new TrainingConflictException("ArtifactPromoted"));
+
+        _ = await AssertEx.ThrowsAsync<TrainingConflictException>(() => harness.DeleteArtifactAsync(artifact.Id, artifact.Version));
+
+        AssertEx.True(File.Exists(artifact.Path), "A refused delete must not have touched the disk.");
+    }
+
+    [Test]
+    public async Task DeleteArtifact_WithAPathOutsideTheStagedDirectory_RemovesTheRowAndLogsTheLeak()
+    {
+        using var harness = Harness.Create(this);
+        var outside = Path.Combine(_root, "not-staged.gguf");
+        await File.WriteAllTextAsync(outside, "bytes");
+        var artifact = harness.StageArtifact(outside, absolute: true);
+
+        await harness.DeleteArtifactAsync(artifact.Id, artifact.Version);
+
+        await harness.Store.Received(1).DeleteArtifactAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>());
+        AssertEx.True(File.Exists(outside), "A path outside the run's staged directory is never deleted.");
+        AssertEx.Contains(harness.LogText, "not inside the run's staged directory", StringComparison.Ordinal);
+    }
+
+    /// <summary>A re-export replaces the previous unpromoted attempt — and must not leave its bytes behind either.</summary>
+    [Test]
+    public async Task Export_WhenItReplacesAnUnpromotedAttempt_DeletesThatAttemptsStagedBytes()
+    {
+        using var harness = Harness.Create(this);
+        var stale = harness.StageStaleArtifact("merged-Q4_K_M.gguf");
+        harness.ScriptMergedPipeline();
+
+        _ = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
+        await harness.DrainAsync();
+
+        await harness.Store.Received(1).DeleteArtifactAsync(stale.Id, stale.Version, Arg.Any<CancellationToken>());
+        AssertEx.Equal(TrainingArtifactSmokeState.Passed, harness.RecordedSmokeState);
+        // The staged file name is deterministic, so the sweep targets the path this very export is about to write.
+        // Sweeping AFTER the pipeline would delete the export's own output.
+        AssertEx.True(File.Exists(stale.Path), "The re-export's own output must survive the stale sweep.");
+    }
+
     /// <summary>Wires one export service over scripted collaborators and a temp-directory workspace.</summary>
     private sealed class Harness : IDisposable
     {
         public const string GgufPyDirectory = "/opt/llama.cpp/gguf-py";
 
+        private readonly string _adapterDirectory;
+        private readonly CapturingLogger<TrainingExportService> _logger;
         private readonly ServiceProvider _provider;
         private readonly TrainingExportService _service;
         private readonly string _stagedDirectory;
@@ -179,7 +245,9 @@ public sealed class TrainingExportServiceTests : IDisposable
             ScriptedExportSpawner spawner,
             IGpuWorkGate gate,
             Guid runId,
-            string stagedDirectory)
+            string stagedDirectory,
+            string adapterDirectory,
+            CapturingLogger<TrainingExportService> logger)
         {
             _provider = provider;
             _service = service;
@@ -188,6 +256,8 @@ public sealed class TrainingExportServiceTests : IDisposable
             Gate = gate;
             RunId = runId;
             _stagedDirectory = stagedDirectory;
+            _adapterDirectory = adapterDirectory;
+            _logger = logger;
         }
 
         public ITrainingRunStore Store { get; }
@@ -197,6 +267,9 @@ public sealed class TrainingExportServiceTests : IDisposable
         public TrainingArtifactSmokeState? RecordedSmokeState { get; private set; }
         public string? RecordedSmokeReason { get; private set; }
         public bool SmokeRan { get; private set; }
+
+        public string LogText =>
+            _logger.AllText;
 
         public static Harness Create(TrainingExportServiceTests owner,
             bool quantizerPresent = true,
@@ -275,6 +348,7 @@ public sealed class TrainingExportServiceTests : IDisposable
 
             var gate = new GpuWorkGate();
             var spawner = new ScriptedExportSpawner();
+            var logger = new CapturingLogger<TrainingExportService>();
             var service = new TrainingExportService(provider.GetRequiredService<IServiceScopeFactory>(),
                 new TrainingRunEventBuffer(Options.Create(new TrainingRunEventBufferOptions())),
                 gate,
@@ -288,15 +362,50 @@ public sealed class TrainingExportServiceTests : IDisposable
                 smokeGate,
                 workspace,
                 dataDirectory,
-                NullLogger<TrainingExportService>.Instance);
+                logger);
 
-            var harness = new Harness(provider, service, store, spawner, gate, runId, staged);
+            var harness = new Harness(provider, service, store, spawner, gate, runId, staged, adapterDirectory, logger);
             harnessBox[0] = harness;
             return harness;
         }
 
         public Task<TrainingExportStart> StartAsync(TrainingArtifactKind kind, string? quantType = null) =>
             _service.StartExportAsync(RunId, new TrainingExportRequest(kind, quantType));
+
+        public Task DeleteArtifactAsync(Guid artifactId, long expectedVersion) =>
+            _service.DeleteArtifactAsync(artifactId, expectedVersion);
+
+        /// <summary>Writes a staged file and makes the store answer for the artifact row that points at it.</summary>
+        public TrainingArtifactRecord StageArtifact(string path, bool absolute = false)
+        {
+            var full = absolute ? path : Path.Combine(_stagedDirectory, path);
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            if (!File.Exists(full))
+            {
+                File.WriteAllText(full, "bytes");
+            }
+
+            var artifact = Artifact(RunId, TrainingArtifactKind.MergedGguf, full, TrainingArtifactSmokeState.Passed);
+            // Registered after the blanket Arg.Any setup, so this id resolves to THIS record.
+            _ = Store.GetArtifactAsync(artifact.Id, Arg.Any<CancellationToken>()).Returns(artifact);
+            return artifact;
+        }
+
+        /// <summary>
+        ///     Adds a previous unpromoted attempt at the SAME staged path the next export will write, so the sweep
+        ///     that replaces it is observable.
+        /// </summary>
+        public TrainingArtifactRecord StageStaleArtifact(string fileName)
+        {
+            var stale = StageArtifact(fileName);
+            _ = Store.ListArtifactsAsync(RunId, Arg.Any<CancellationToken>())
+                     .Returns<IReadOnlyList<TrainingArtifactRecord>>(
+                     [
+                         Artifact(RunId, TrainingArtifactKind.HfAdapterDir, _adapterDirectory, TrainingArtifactSmokeState.Pending),
+                         stale
+                     ]);
+            return stale;
+        }
 
         /// <summary>Awaits the detached pipeline the start returned from, so assertions never race it.</summary>
         public async Task DrainAsync()
