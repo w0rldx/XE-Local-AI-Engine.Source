@@ -17,7 +17,7 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
         Policies(NodeAuthorizationPolicies.Operator);
         Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                                    .Produces(StatusCodes.Status404NotFound)
-                                                   .ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                                   .ProducesConflictProblemDetails()
                                                    .AutoTagOverride("Workspaces"));
     }
 

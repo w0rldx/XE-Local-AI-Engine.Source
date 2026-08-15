@@ -21,7 +21,7 @@ public sealed class ExecuteUnsavedPreviewWorkflowEndpoint(IPreviewWorkflowExecut
         Policies(NodeAuthorizationPolicies.Operator);
         // 409 = a run-cap rejection written by the global ConflictExceptionHandler (conflictType =
         // PreviewWorkflowCapReached / PreviewWorkflowModelCapExceeded).
-        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(ExecuteUnsavedPreviewWorkflowRequest req, CancellationToken ct)

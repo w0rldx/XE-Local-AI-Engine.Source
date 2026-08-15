@@ -52,7 +52,7 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder.Produces<SlashCommandResponse>(StatusCodes.Status201Created)
                                       .ProducesProblemDetails(StatusCodes.Status400BadRequest)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateSlashCommandRequest req, CancellationToken ct)
@@ -81,7 +81,7 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
         Description(builder => builder.Produces<SlashCommandResponse>(StatusCodes.Status200OK)
                                       .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                       .Produces(StatusCodes.Status404NotFound)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdateSlashCommandRequest req, CancellationToken ct)

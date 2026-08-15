@@ -14,8 +14,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// <summary>
 ///     The ONE place a typed domain exception becomes a 409. Endpoints must not hand-build conflict bodies: every
 ///     mapped exception answers with the same <see cref="ConflictProblemDetails" /> envelope, and the SPA
-///     discriminates on <c>conflictType</c> (see <c>NodeChatConflict.ts</c>). Conflict payload beyond the message
-///     travels as problem-details extensions alongside <c>traceId</c>, so the envelope itself stays one shape.
+///     discriminates on <c>conflictType</c> (see <c>NodeChatConflict.ts</c>). Conflict payload beyond the message is a
+///     typed, null-omitted member of that same envelope (declared on endpoints via <c>ProducesConflictProblemDetails()</c>),
+///     so the envelope itself stays one shape and the OpenAPI schema names every member.
 /// </summary>
 public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) : IExceptionHandler
 {
@@ -64,7 +65,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             Detail = exception.Message ?? "Conflict"
         }.WithTraceId(httpContext);
 
-        AddConflictExtensions(problemDetails, exception);
+        SetCapMembers(problemDetails, exception);
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
         // application/json when it is not, which silently demoted this problem+json body.
@@ -74,19 +75,20 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
     }
 
     /// <summary>
-    ///     Carries the numbers an operator needs to act on a cap rejection. They ride as problem-details extensions
-    ///     (like <c>traceId</c>) rather than as typed properties, so one conflict envelope serves every mapping.
+    ///     Carries the numbers an operator needs to act on a cap rejection. They are typed members of the one conflict
+    ///     envelope (omitted when null) so the OpenAPI schema names them; the wire body is the same as when they were
+    ///     problem-details extensions.
     /// </summary>
-    private static void AddConflictExtensions(ConflictProblemDetails problemDetails, Exception exception)
+    private static void SetCapMembers(ConflictProblemDetails problemDetails, Exception exception)
     {
         switch (exception)
         {
             case PreviewWorkflowCapReachedException capReached:
-                problemDetails.Extensions["maxConcurrentRuns"] = capReached.MaxConcurrentRuns;
+                problemDetails.MaxConcurrentRuns = capReached.MaxConcurrentRuns;
                 break;
             case PreviewWorkflowModelCapExceededException modelCap:
-                problemDetails.Extensions["distinctModelCount"] = modelCap.DistinctModelCount;
-                problemDetails.Extensions["maxLoadedProcesses"] = modelCap.MaxLoadedProcesses;
+                problemDetails.DistinctModelCount = modelCap.DistinctModelCount;
+                problemDetails.MaxLoadedProcesses = modelCap.MaxLoadedProcesses;
                 break;
             default:
                 break;

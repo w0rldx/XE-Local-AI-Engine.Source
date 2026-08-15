@@ -29,7 +29,7 @@ public sealed class CompactNodeChatConversationEndpoint(
         // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
         // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
         Description(x => x.Accepts<CompactNodeChatConversationRequest>()
-                          .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                          .ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(CompactNodeChatConversationRequest req, CancellationToken ct)

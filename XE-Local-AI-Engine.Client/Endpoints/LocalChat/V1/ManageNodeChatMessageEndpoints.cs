@@ -26,7 +26,7 @@ public sealed class BranchNodeChatConversationEndpoint(
         Policies(NodeAuthorizationPolicies.Operator);
         // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
         // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
-        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(BranchNodeChatConversationRequest req, CancellationToken ct)
@@ -76,7 +76,7 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
     {
         Post(LocalApiRoutes.LocalChat.MessageRevisions);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(ListNodeChatMessageRevisionsRequest req, CancellationToken ct)
@@ -153,7 +153,7 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
     {
         Put(LocalApiRoutes.LocalChat.MessageFeedback);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(SetNodeChatMessageFeedbackRequest req, CancellationToken ct)
@@ -191,7 +191,7 @@ public sealed class SetNodeChatSelectedPathEndpoint(
     {
         Put(LocalApiRoutes.LocalChat.SelectedPath);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(SetNodeChatSelectedPathRequest req, CancellationToken ct)

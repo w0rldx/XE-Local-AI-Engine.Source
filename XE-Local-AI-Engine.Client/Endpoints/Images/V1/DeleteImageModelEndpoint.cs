@@ -23,6 +23,8 @@ public sealed class DeleteImageModelEndpoint(IImageModelStore modelStore)
     {
         Delete(LocalApiRoutes.Images.ModelByName);
         Policies(NodeAuthorizationPolicies.Operator);
+        // 409 = ImageModelInUse written by the global ConflictExceptionHandler (see HandleAsync).
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(DeleteImageModelRequest req, CancellationToken ct)

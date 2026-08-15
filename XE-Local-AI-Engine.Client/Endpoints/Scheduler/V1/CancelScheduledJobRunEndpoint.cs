@@ -23,7 +23,7 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
         // Route-only POST (run id from the route, no body): override the default application/json-only Accepts so a
         // body-less request is not rejected with 415 (see TriggerScheduledJobEndpoint for the full rationale).
         Description(x => x.Accepts<ScheduledJobRunRouteRequest>()
-                          .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ScheduledJobRunRouteRequest req, CancellationToken ct)

@@ -44,8 +44,8 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     {
         Post(LocalApiRoutes.Benchmarks.Projects);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
-                                      .ProducesProblemDetails(StatusCodes.Status422UnprocessableEntity));
+        Description(builder => builder.ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status422UnprocessableEntity));
     }
 
     public override async Task HandleAsync(BenchmarkProjectMutationRequest req, CancellationToken ct)
@@ -75,7 +75,7 @@ public sealed class GetBenchmarkProjectEndpoint(IBenchmarkStore store)
     {
         Get(LocalApiRoutes.Benchmarks.ProjectById);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status404NotFound));
+        Description(builder => builder.ProducesProblem(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
@@ -101,10 +101,10 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     {
         Put(LocalApiRoutes.Benchmarks.ProjectById);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
-                                      .ProducesProblemDetails(StatusCodes.Status404NotFound)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict)
-                                      .ProducesProblemDetails(StatusCodes.Status422UnprocessableEntity));
+        Description(builder => builder.ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict)
+                                      .ProducesProblem(StatusCodes.Status422UnprocessableEntity));
     }
 
     public override async Task HandleAsync(UpdateBenchmarkProjectRequest req, CancellationToken ct)
@@ -130,8 +130,8 @@ public sealed class DeleteBenchmarkProjectEndpoint(IBenchmarkStore store)
     {
         Delete(LocalApiRoutes.Benchmarks.ProjectById);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status404NotFound)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(builder => builder.ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DeleteBenchmarkProjectRequest req, CancellationToken ct)

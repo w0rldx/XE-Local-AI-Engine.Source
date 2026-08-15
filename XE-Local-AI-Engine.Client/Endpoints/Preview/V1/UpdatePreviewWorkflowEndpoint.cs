@@ -20,7 +20,7 @@ public sealed class UpdatePreviewWorkflowEndpoint(IPreviewWorkflowService previe
     {
         Put(LocalApiRoutes.Preview.WorkflowById);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(builder => builder.ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdatePreviewWorkflowRequest req, CancellationToken ct)

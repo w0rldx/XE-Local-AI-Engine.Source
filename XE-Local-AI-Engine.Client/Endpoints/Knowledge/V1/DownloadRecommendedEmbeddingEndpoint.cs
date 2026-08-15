@@ -47,11 +47,11 @@ public sealed class DownloadRecommendedEmbeddingEndpoint(
         Post(LocalApiRoutes.KnowledgeBase.EmbeddingDownloadRecommended);
         Policies(NodeAuthorizationPolicies.Operator);
         // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status403Forbidden)
-                                      .ProducesProblemDetails(StatusCodes.Status404NotFound)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict)
-                                      .ProducesProblemDetails(StatusCodes.Status503ServiceUnavailable)
-                                      .ProducesProblemDetails(StatusCodes.Status507InsufficientStorage));
+        Description(builder => builder.ProducesProblem(StatusCodes.Status403Forbidden)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict)
+                                      .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+                                      .ProducesProblem(StatusCodes.Status507InsufficientStorage));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
