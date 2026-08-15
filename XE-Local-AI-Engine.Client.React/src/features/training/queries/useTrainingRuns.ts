@@ -24,11 +24,6 @@ function runInvalidationKey(operationId: string): readonly [{ _id: string }] {
 	return [{ _id: operationId }];
 }
 
-export const trainingRunQueryKeys = {
-	ids: runQueryIds,
-	invalidationKey: runInvalidationKey,
-};
-
 function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
 	return queryClient.invalidateQueries({ queryKey: runInvalidationKey(operationId) });
 }
