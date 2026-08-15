@@ -13,31 +13,39 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class ApplicationStartupTests
 {
+    /// <summary>
+    ///     One host for the whole class. Every test below only resolves services from the built host — nothing mutates
+    ///     host state — so a single bootstrap answers all of them. The missing-base-url test deliberately keeps its own
+    ///     host: it asserts that startup FAILS, which a shared host cannot express.
+    /// </summary>
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task Application_StartsWithoutException()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         AssertEx.NotNull(factory.Services);
     }
 
     [Test]
     public async Task IWorkerHubConnection_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<IWorkerHubConnection>());
     }
 
     [Test]
     public async Task IPairingService_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<IPairingService>());
     }
 
     [Test]
     public async Task ITokenStore_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         var tokenStore = factory.Services.GetRequiredService<ITokenStore>();
 
         AssertEx.NotNull(tokenStore);
@@ -47,28 +55,28 @@ public sealed class ApplicationStartupTests
     [Test]
     public async Task IInvocationRunner_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<IInvocationRunner>());
     }
 
     [Test]
     public async Task IDeadLetterStore_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<IDeadLetterStore>());
     }
 
     [Test]
     public async Task ICapabilityReporter_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<ICapabilityReporter>());
     }
 
     [Test]
     public async Task IWorkerShutdownDrainService_IsRegistered()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
 
         AssertEx.NotNull(factory.Services.GetRequiredService<IWorkerShutdownDrainService>());
         AssertEx.Equal(WorkerShutdownDrainOptions.DefaultDrainTimeout,

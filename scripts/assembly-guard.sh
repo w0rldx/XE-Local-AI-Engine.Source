@@ -10,8 +10,8 @@
 #
 #   The damage is not the lost run, it is the lost trust: a contaminated run is indistinguishable
 #   from a real regression, so either someone chases a phantom for a day, or — far worse — someone
-#   waves a REAL failure away as "probably contamination". With GitHub Actions disabled this suite
-#   is the only gate this project has.
+#   waves a REAL failure away as "probably contamination". CI runs the same suite, but a local run
+#   is what every change is judged on first.
 #
 #   scripts/with-build-lock.sh prevents the collision between processes that opt in. This script is
 #   the safety net for everything that does not: a bare `dotnet build` in another terminal cannot be

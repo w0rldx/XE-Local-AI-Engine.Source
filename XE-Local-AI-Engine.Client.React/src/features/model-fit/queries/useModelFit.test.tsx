@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The refresh hook dispatches the domain `scheduledJobId` to the generated `refreshRecommendationsMutation()`'s
@@ -24,6 +22,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import { modelFitInvalidationKey, modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // The generated query key the refresh mutation invalidates (partial `_id` match), built via the production helper.
 const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
@@ -33,17 +32,12 @@ const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {
 	invalidatedKeys.length = 0;
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
+	const { wrapper, queryClient } = createProvidersWrapper();
 	vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters) => {
 		invalidatedKeys.push((filters as { queryKey?: unknown } | undefined)?.queryKey);
 		return Promise.resolve();
 	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	return { wrapper };
 }
 
 describe("useRefreshRecommendations", () => {
@@ -56,8 +50,8 @@ describe("useRefreshRecommendations", () => {
 	});
 
 	it("dispatches the domain job id to the generated mutation body and invalidates the latest cache", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper });
 
 		result.current.mutate({ scheduledJobId: "job-1" });
 
@@ -71,8 +65,8 @@ describe("useRefreshRecommendations", () => {
 	});
 
 	it("forwards a use-case override into the generated mutation body", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper });
 
 		result.current.mutate({ scheduledJobId: "job-1", useCase: "general" });
 
@@ -82,8 +76,8 @@ describe("useRefreshRecommendations", () => {
 	});
 
 	it("forwards a breadth limit override into the generated mutation body", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper });
 
 		result.current.mutate({ scheduledJobId: "job-1", useCase: "general", limit: 20 });
 
@@ -96,8 +90,8 @@ describe("useRefreshRecommendations", () => {
 
 	it("surfaces a refresh error and does not invalidate", async () => {
 		mutationMock.mutationFn.mockRejectedValue(new Error("Request failed with status code 400"));
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper });
 
 		result.current.mutate({ scheduledJobId: "bad-job" });
 

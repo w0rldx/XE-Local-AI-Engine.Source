@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
@@ -24,6 +22,7 @@ import {
 	getAppUpdateStatusQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
+import { createProvidersWrapper, createTestQueryClient } from "@/test/RenderWithProviders";
 import {
 	useApplyAppUpdate,
 	useAppUpdateStatus,
@@ -33,12 +32,16 @@ import {
 
 const statusMock = vi.mocked(getAppUpdateStatusOptions);
 
+// Several cases below assert what a mutation SEEDED into the cache (setQueryData) while nothing is observing that
+// key. The harness default of `gcTime: 0` collects such an entry the moment it lands, so this file overrides the
+// retention — the one place the shared default is the wrong fit, and the reason `queryClient` is an option.
 function makeWrapper() {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper, queryClient };
+	const queryClient = createTestQueryClient();
+	queryClient.setDefaultOptions({
+		queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+		mutations: { retry: false },
+	});
+	return createProvidersWrapper({ queryClient });
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -50,9 +53,9 @@ describe("useAppUpdateStatus", () => {
 			queryKey: [{ _id: "getAppUpdateStatus" }],
 			queryFn: async () => ({ isDesktop: true, isConfigured: true, updateAvailable: true, currentVersion: "1.0.0" }),
 		} as never);
-		const { Wrapper, queryClient } = makeWrapper();
+		const { wrapper, queryClient } = makeWrapper();
 
-		const { result } = renderHook(() => useAppUpdateStatus(), { wrapper: Wrapper });
+		const { result } = renderHook(() => useAppUpdateStatus(), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(result.current.data?.isConfigured).toBe(true);
@@ -78,8 +81,8 @@ describe("useRefreshAppUpdateStatus", () => {
 			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 			{ _id: "getAppUpdateStatus", query: opts?.query },
 		] as never);
-		const { Wrapper, queryClient } = makeWrapper();
-		const { result } = renderHook(() => useRefreshAppUpdateStatus(), { wrapper: Wrapper });
+		const { wrapper, queryClient } = makeWrapper();
+		const { result } = renderHook(() => useRefreshAppUpdateStatus(), { wrapper });
 
 		result.current.mutate();
 
@@ -102,7 +105,7 @@ describe("useProbeAppUpdateStatus", () => {
 				lastCheckedUtc: 1_700_000_000_000,
 			},
 		} as never);
-		const { Wrapper, queryClient } = makeWrapper();
+		const { wrapper, queryClient } = makeWrapper();
 		const key = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 		queryClient.setQueryData(key, {
 			currentVersion: "1.0.0",
@@ -113,7 +116,7 @@ describe("useProbeAppUpdateStatus", () => {
 			checkStatus: "ready",
 			lastCheckedUtc: 1_700_000_000_000,
 		});
-		const { result } = renderHook(() => useProbeAppUpdateStatus(), { wrapper: Wrapper });
+		const { result } = renderHook(() => useProbeAppUpdateStatus(), { wrapper });
 
 		result.current.mutate();
 
@@ -131,7 +134,7 @@ describe("useApplyAppUpdate", () => {
 		vi.mocked(applyAppUpdateMutation).mockReturnValue({
 			mutationFn: async () => ({ applying: false }),
 		} as never);
-		const { Wrapper, queryClient } = makeWrapper();
+		const { wrapper, queryClient } = makeWrapper();
 		const key = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 		queryClient.setQueryData(key, {
 			currentVersion: "1.0.0",
@@ -142,7 +145,7 @@ describe("useApplyAppUpdate", () => {
 			checkStatus: "ready",
 			lastCheckedUtc: 1_700_000_000_000,
 		});
-		const { result } = renderHook(() => useApplyAppUpdate(), { wrapper: Wrapper });
+		const { result } = renderHook(() => useApplyAppUpdate(), { wrapper });
 
 		result.current.mutate({} as never);
 

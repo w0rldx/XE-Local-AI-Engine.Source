@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated hey-api TanStack mutation factories. Each returns an object carrying a `mutationFn` the hook
@@ -56,6 +54,7 @@ import {
 	useTriggerScheduledJob,
 	useUpdateScheduledJob,
 } from "@/features/scheduler/queries/useScheduler";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const sampleBody = {
 	templateId: "cleanup",
@@ -86,17 +85,12 @@ const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {
 	invalidatedKeys.length = 0;
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
+	const { wrapper, queryClient } = createProvidersWrapper();
 	vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters) => {
 		invalidatedKeys.push((filters as { queryKey?: unknown } | undefined)?.queryKey);
 		return Promise.resolve();
 	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	return { wrapper };
 }
 
 describe("useScheduler mutations", () => {
@@ -115,8 +109,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("create forwards the body and invalidates the jobs list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useCreateScheduledJob(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useCreateScheduledJob(), { wrapper });
 
 		result.current.mutate({ body: sampleBody });
 
@@ -128,8 +122,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("update forwards path + body and invalidates the jobs list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useUpdateScheduledJob(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useUpdateScheduledJob(), { wrapper });
 
 		result.current.mutate({ path: { scheduledJobId: "job-1" }, body: sampleBody });
 
@@ -143,8 +137,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("delete forwards the path and invalidates the jobs list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useDeleteScheduledJob(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useDeleteScheduledJob(), { wrapper });
 
 		result.current.mutate({ path: { scheduledJobId: "job-1" } });
 
@@ -155,8 +149,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("enable calls the enable endpoint and invalidates the jobs list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useSetScheduledJobEnabled(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useSetScheduledJobEnabled(), { wrapper });
 
 		result.current.mutate({ id: "job-1", enabled: true });
 
@@ -168,8 +162,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("disable calls the disable endpoint", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useSetScheduledJobEnabled(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useSetScheduledJobEnabled(), { wrapper });
 
 		result.current.mutate({ id: "job-1", enabled: false });
 
@@ -180,8 +174,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("trigger forwards the path and invalidates the run history", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useTriggerScheduledJob(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useTriggerScheduledJob(), { wrapper });
 
 		result.current.mutate({ path: { scheduledJobId: "job-1" } });
 
@@ -193,8 +187,8 @@ describe("useScheduler mutations", () => {
 	});
 
 	it("cancel forwards the run path and invalidates the run history and per-run detail", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useCancelScheduledJobRun(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useCancelScheduledJobRun(), { wrapper });
 
 		result.current.mutate({ path: { runId: "run-1" } });
 
@@ -209,8 +203,8 @@ describe("useScheduler mutations", () => {
 		// The run finished between render and click → backend 409 → axios rejects. onSettled must still invalidate so
 		// the stale "active" row is replaced with the terminal state.
 		mutationFns.cancelScheduledJobRun.mockRejectedValue(new Error("Request failed with status code 409"));
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useCancelScheduledJobRun(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useCancelScheduledJobRun(), { wrapper });
 
 		result.current.mutate({ path: { runId: "run-1" } });
 
