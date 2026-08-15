@@ -400,6 +400,13 @@
 					"subject": "Subjekt",
 					"events": "Dauerhafte Ereignisse"
 				}
+			},
+			"artifacts": {
+				"loading": "Artefakt wird geladen",
+				"loadError": "Das Artefakt konnte nicht geladen werden.",
+				"viewerLabel": "Artefakt {{kind}}",
+				"view": "Anzeigen",
+				"hide": "Ausblenden"
 			}
 		},
 		"knowledgeBase": {

@@ -1,16 +1,33 @@
-import { Alert, Badge, Code, Divider, Group, Loader, Paper, ScrollArea, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Button,
+	Code,
+	Divider,
+	Group,
+	Loader,
+	Paper,
+	ScrollArea,
+	SimpleGrid,
+	Stack,
+	Tabs,
+	Text,
+} from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconCode,
+	IconEye,
+	IconEyeOff,
 	IconFile,
 	IconInfoCircle,
 	IconListCheck,
 	IconTerminal2,
 	IconTool,
 } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { StatTile } from "@/core/ui/components/StatTile/StatTile";
 import type { DevelopmentArtifact, DevelopmentAttempt, DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
 import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
@@ -364,8 +381,72 @@ function ValidationReportView({ artifact }: { readonly artifact: DevelopmentArti
 	);
 }
 
+/** Every artifact kind other than the git patch is a JSON document (manifest, validation/review reports). */
+function artifactLanguage(kind: string | undefined): string {
+	return kind === "Patch" ? "diff" : "json";
+}
+
+/**
+ * The raw body of one stored artifact in the shared code viewer — the patch as a unified diff, everything else as
+ * JSON. This is the inspection path for what the engine produced: the same decrypted, blob-verified read the
+ * validation view uses, shown verbatim instead of interpreted.
+ */
+function ArtifactContentView({ artifact }: { readonly artifact: DevelopmentArtifact }) {
+	const { t } = useTranslation();
+	const contentQuery = useDevelopmentArtifactContent(artifact.projectId, artifact.taskId, artifact.id);
+
+	if (contentQuery.isPending) {
+		return <Loader size="sm" aria-label={t("pages.development.artifacts.loading", "Loading the artifact")} />;
+	}
+	if (contentQuery.error) {
+		return (
+			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="development-artifact-load-error">
+				{t("pages.development.artifacts.loadError", "Could not load the artifact.")}
+			</Alert>
+		);
+	}
+	return (
+		<CodeEditor
+			value={contentQuery.data?.content ?? ""}
+			language={artifactLanguage(artifact.kind)}
+			readOnly={true}
+			height={360}
+			aria-label={t("pages.development.artifacts.viewerLabel", "{{kind}} artifact", { kind: artifact.kind })}
+			data-testid={`development-artifact-content-${artifact.id}`}
+		/>
+	);
+}
+
+/** "View" toggle for one artifact row; the selection lives in the panel so only one viewer is open at a time. */
+function ArtifactViewButton({
+	artifact,
+	open,
+	onToggle,
+}: {
+	readonly artifact: DevelopmentArtifact;
+	readonly open: boolean;
+	readonly onToggle: (artifact: DevelopmentArtifact) => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<Button
+			size="compact-xs"
+			variant="subtle"
+			leftSection={open ? <IconEyeOff size={14} /> : <IconEye size={14} />}
+			onClick={() => onToggle(artifact)}
+			data-testid={`development-artifact-view-${artifact.id}`}
+		>
+			{open ? t("pages.development.artifacts.hide", "Hide") : t("pages.development.artifacts.view", "View")}
+		</Button>
+	);
+}
+
 export function DevelopmentLivePanel({ attempt, live, artifacts, events }: DevelopmentLivePanelProps) {
 	const { t } = useTranslation();
+	const [openArtifactId, setOpenArtifactId] = useState<string | null>(null);
+	const openArtifact = artifacts.find((artifact) => artifact.id === openArtifactId) ?? null;
+	const toggleArtifact = (artifact: DevelopmentArtifact): void =>
+		setOpenArtifactId((current) => (current === artifact.id ? null : (artifact.id ?? null)));
 	const latest = live.latest;
 	const warnings = live.updates.filter((update) => update.kind === "Warning");
 	const tools = live.updates.filter((update) => update.kind === "Tool");
@@ -520,10 +601,16 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 						{artifacts
 							.filter((artifact) => artifact.kind === "ChangedFilesManifest" || artifact.kind === "Patch")
 							.map((artifact) => (
-								<Code key={artifact.id}>
-									{artifact.kind} · {artifact.contentHash?.slice(0, 12)} · {artifact.byteCount ?? 0} bytes
-								</Code>
+								<Group key={artifact.id} justify="space-between" wrap="nowrap">
+									<Code>
+										{artifact.kind} · {artifact.contentHash?.slice(0, 12)} · {artifact.byteCount ?? 0} bytes
+									</Code>
+									<ArtifactViewButton artifact={artifact} open={openArtifactId === artifact.id} onToggle={toggleArtifact} />
+								</Group>
 							))}
+						{openArtifact && (openArtifact.kind === "ChangedFilesManifest" || openArtifact.kind === "Patch") ? (
+							<ArtifactContentView artifact={openArtifact} />
+						) : null}
 					</Stack>
 				</Tabs.Panel>
 				<Tabs.Panel value="validation" pt="md">
@@ -542,13 +629,19 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 							{validationArtifacts.map((artifact) => (
 								<Group key={artifact.id} justify="space-between">
 									<Text>{artifact.kind}</Text>
-									<Badge color={artifact.isValid ? "green" : "red"}>
-										{artifact.isValid
-											? t("pages.development.validation.current", "Current")
-											: t("pages.development.validation.invalidated", "Invalidated")}
-									</Badge>
+									<Group gap="xs">
+										<Badge color={artifact.isValid ? "green" : "red"}>
+											{artifact.isValid
+												? t("pages.development.validation.current", "Current")
+												: t("pages.development.validation.invalidated", "Invalidated")}
+										</Badge>
+										<ArtifactViewButton artifact={artifact} open={openArtifactId === artifact.id} onToggle={toggleArtifact} />
+									</Group>
 								</Group>
 							))}
+							{openArtifact && validationArtifacts.includes(openArtifact) ? (
+								<ArtifactContentView artifact={openArtifact} />
+							) : null}
 						</Stack>
 					</Stack>
 				</Tabs.Panel>
