@@ -72,10 +72,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 					<div className="flex mb-2">
 						<div className="flex-grow" />
 						<div className="flex flex-row ml-auto gap-4">
-							<Button color="red" variant="subtle" onClick={handleCancel}>
+							<Button color="red" variant="subtle" onClick={handleCancel} data-testid="confirm-cancel">
 								{options.cancellationText || t("common.cancel", "Cancel")}
 							</Button>
-							<Button color="primary" variant="filled" onClick={handleConfirm}>
+							<Button color="primary" variant="filled" onClick={handleConfirm} data-testid="confirm-accept">
 								{options.confirmationText || t("common.confirm", "Confirm")}
 							</Button>
 						</div>

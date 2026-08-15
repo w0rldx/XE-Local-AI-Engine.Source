@@ -154,10 +154,10 @@ export function CommandsPage() {
 				closeOnEscape={!isDirty}
 				footer={
 					<>
-						<Button variant="subtle" onClick={requestCloseEditor} disabled={isSaving}>
+						<Button variant="subtle" onClick={requestCloseEditor} disabled={isSaving} data-testid="command-form-cancel">
 							{t("common.cancel")}
 						</Button>
-						<Button onClick={() => formRef.current?.submit()} loading={isSaving}>
+						<Button onClick={() => formRef.current?.submit()} loading={isSaving} data-testid="command-form-submit">
 							{t("common.save")}
 						</Button>
 					</>
