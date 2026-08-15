@@ -35,6 +35,9 @@ import type {
 	CancelAllPreviewRunsData,
 	CancelAllPreviewRunsErrors,
 	CancelAllPreviewRunsResponses,
+	CancelBaseArtifactData,
+	CancelBaseArtifactErrors,
+	CancelBaseArtifactResponses,
 	CancelBenchmarkRunData,
 	CancelBenchmarkRunErrors,
 	CancelBenchmarkRunResponses,
@@ -104,6 +107,9 @@ import type {
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
+	CreateBaseArtifactData,
+	CreateBaseArtifactErrors,
+	CreateBaseArtifactResponses,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectErrors,
 	CreateBenchmarkProjectResponses,
@@ -146,12 +152,21 @@ import type {
 	CreateSlashCommandData,
 	CreateSlashCommandErrors,
 	CreateSlashCommandResponses,
+	CreateToolMockData,
+	CreateToolMockErrors,
+	CreateToolMockResponses,
+	CreateTrainingDefinitionData,
+	CreateTrainingDefinitionErrors,
+	CreateTrainingDefinitionResponses,
 	CreateWorkspaceData,
 	CreateWorkspaceErrors,
 	CreateWorkspaceResponses,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
+	DeleteBaseArtifactData,
+	DeleteBaseArtifactErrors,
+	DeleteBaseArtifactResponses,
 	DeleteBenchmarkProjectData,
 	DeleteBenchmarkProjectErrors,
 	DeleteBenchmarkProjectResponses,
@@ -203,6 +218,15 @@ import type {
 	DeleteSlashCommandData,
 	DeleteSlashCommandErrors,
 	DeleteSlashCommandResponses,
+	DeleteToolMockData,
+	DeleteToolMockErrors,
+	DeleteToolMockResponses,
+	DeleteTrainingDatasetData,
+	DeleteTrainingDatasetErrors,
+	DeleteTrainingDatasetResponses,
+	DeleteTrainingDefinitionData,
+	DeleteTrainingDefinitionErrors,
+	DeleteTrainingDefinitionResponses,
 	DeleteWorkspaceData,
 	DeleteWorkspaceErrors,
 	DeleteWorkspaceResponses,
@@ -260,6 +284,9 @@ import type {
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileErrors,
 	ExploreInferenceProfileResponses,
+	ExportTrainingDatasetData,
+	ExportTrainingDatasetErrors,
+	ExportTrainingDatasetResponses,
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileErrors,
 	FreezeInferenceProfileResponses,
@@ -269,6 +296,9 @@ import type {
 	GenerateMcpServerApiKeyData,
 	GenerateMcpServerApiKeyErrors,
 	GenerateMcpServerApiKeyResponses,
+	GenerateTrainingDatasetData,
+	GenerateTrainingDatasetErrors,
+	GenerateTrainingDatasetResponses,
 	GetAgentDefinitionData,
 	GetAgentDefinitionErrors,
 	GetAgentDefinitionResponses,
@@ -284,6 +314,12 @@ import type {
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusErrors,
 	GetAppUpdateStatusResponses,
+	GetBaseArtifactData,
+	GetBaseArtifactErrors,
+	GetBaseArtifactLicenseData,
+	GetBaseArtifactLicenseErrors,
+	GetBaseArtifactLicenseResponses,
+	GetBaseArtifactResponses,
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectErrors,
 	GetBenchmarkProjectResponses,
@@ -437,6 +473,21 @@ import type {
 	GetToolCatalogData,
 	GetToolCatalogErrors,
 	GetToolCatalogResponses,
+	GetToolMockData,
+	GetToolMockErrors,
+	GetToolMockResponses,
+	GetTrainingDatasetData,
+	GetTrainingDatasetErrors,
+	GetTrainingDatasetResponses,
+	GetTrainingDefinitionData,
+	GetTrainingDefinitionErrors,
+	GetTrainingDefinitionResponses,
+	GetTrainingRuntimePrerequisitesData,
+	GetTrainingRuntimePrerequisitesErrors,
+	GetTrainingRuntimePrerequisitesResponses,
+	GetTrainingRuntimeStatusData,
+	GetTrainingRuntimeStatusErrors,
+	GetTrainingRuntimeStatusResponses,
 	GetTutorialStateData,
 	GetTutorialStateErrors,
 	GetTutorialStateResponses,
@@ -470,6 +521,9 @@ import type {
 	ListAgentTemplatesData,
 	ListAgentTemplatesErrors,
 	ListAgentTemplatesResponses,
+	ListBaseArtifactsData,
+	ListBaseArtifactsErrors,
+	ListBaseArtifactsResponses,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsErrors,
 	ListBenchmarkProjectsResponses,
@@ -563,6 +617,18 @@ import type {
 	ListSlashCommandsData,
 	ListSlashCommandsErrors,
 	ListSlashCommandsResponses,
+	ListToolMocksData,
+	ListToolMocksErrors,
+	ListToolMocksResponses,
+	ListTrainingDatasetsData,
+	ListTrainingDatasetsErrors,
+	ListTrainingDatasetsResponses,
+	ListTrainingDefinitionsData,
+	ListTrainingDefinitionsErrors,
+	ListTrainingDefinitionsResponses,
+	ListTrainingSamplesData,
+	ListTrainingSamplesErrors,
+	ListTrainingSamplesResponses,
 	ListWorkspacesData,
 	ListWorkspacesErrors,
 	ListWorkspacesResponses,
@@ -645,6 +711,9 @@ import type {
 	RemoveStableDiffusionCppSourceBuildData,
 	RemoveStableDiffusionCppSourceBuildErrors,
 	RemoveStableDiffusionCppSourceBuildResponses,
+	RemoveTrainingRuntimeData,
+	RemoveTrainingRuntimeErrors,
+	RemoveTrainingRuntimeResponses,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
@@ -657,6 +726,9 @@ import type {
 	RetrieveImageData,
 	RetrieveImageErrors,
 	RetrieveImageResponses,
+	ReviewTrainingSampleData,
+	ReviewTrainingSampleErrors,
+	ReviewTrainingSampleResponses,
 	RevokeLocalModelProxyApiKeyData,
 	RevokeLocalModelProxyApiKeyErrors,
 	RevokeLocalModelProxyApiKeyResponses,
@@ -726,6 +798,9 @@ import type {
 	StartStableDiffusionCppSourceBuildData,
 	StartStableDiffusionCppSourceBuildErrors,
 	StartStableDiffusionCppSourceBuildResponses,
+	StartTrainingRuntimeInstallData,
+	StartTrainingRuntimeInstallErrors,
+	StartTrainingRuntimeInstallResponses,
 	TriggerScheduledJobData,
 	TriggerScheduledJobErrors,
 	TriggerScheduledJobResponses,
@@ -768,6 +843,12 @@ import type {
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionErrors,
 	UpdateSuggestedPlaybookActionResponses,
+	UpdateToolMockData,
+	UpdateToolMockErrors,
+	UpdateToolMockResponses,
+	UpdateTrainingDefinitionData,
+	UpdateTrainingDefinitionErrors,
+	UpdateTrainingDefinitionResponses,
 	UploadConversationFileData,
 	UploadConversationFileErrors,
 	UploadConversationFileResponses,
@@ -780,6 +861,9 @@ import type {
 	ValidationProblemProbeData,
 	ValidationProblemProbeErrors,
 	ValidationProblemProbeResponses,
+	VerifyToolMockData,
+	VerifyToolMockErrors,
+	VerifyToolMockResponses,
 } from "./types.gen";
 import {
 	zAnalyzePlaybookPath,
@@ -803,6 +887,8 @@ import {
 	zBrowseImageRepositoriesQuery,
 	zBrowseImageRepositoriesResponse,
 	zCancelAllPreviewRunsResponse,
+	zCancelBaseArtifactPath,
+	zCancelBaseArtifactResponse,
 	zCancelBenchmarkRunBody,
 	zCancelBenchmarkRunPath,
 	zCancelBenchmarkRunResponse,
@@ -843,6 +929,8 @@ import {
 	zContinuePreviewRunResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
+	zCreateBaseArtifactBody,
+	zCreateBaseArtifactResponse,
 	zCreateBenchmarkProjectBody,
 	zCreateBenchmarkProjectResponse,
 	zCreateCustomToolBody,
@@ -873,10 +961,16 @@ import {
 	zCreateSkillResponse,
 	zCreateSlashCommandBody,
 	zCreateSlashCommandResponse,
+	zCreateToolMockBody,
+	zCreateToolMockResponse,
+	zCreateTrainingDefinitionBody,
+	zCreateTrainingDefinitionResponse,
 	zCreateWorkspaceBody,
 	zCreateWorkspaceResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
+	zDeleteBaseArtifactPath,
+	zDeleteBaseArtifactResponse,
 	zDeleteBenchmarkProjectBody,
 	zDeleteBenchmarkProjectPath,
 	zDeleteBenchmarkProjectResponse,
@@ -914,6 +1008,15 @@ import {
 	zDeleteSkillResponse,
 	zDeleteSlashCommandPath,
 	zDeleteSlashCommandResponse,
+	zDeleteToolMockBody,
+	zDeleteToolMockPath,
+	zDeleteToolMockResponse,
+	zDeleteTrainingDatasetBody,
+	zDeleteTrainingDatasetPath,
+	zDeleteTrainingDatasetResponse,
+	zDeleteTrainingDefinitionBody,
+	zDeleteTrainingDefinitionPath,
+	zDeleteTrainingDefinitionResponse,
 	zDeleteWorkspacePath,
 	zDeleteWorkspaceResponse,
 	zDetectDevelopmentRepositoryProfilePath,
@@ -943,10 +1046,16 @@ import {
 	zExecuteUnsavedPreviewWorkflowResponse,
 	zExploreInferenceProfileBody,
 	zExploreInferenceProfileResponse,
+	zExportTrainingDatasetPath,
+	zExportTrainingDatasetQuery,
+	zExportTrainingDatasetResponse,
 	zFreezeInferenceProfileBody,
 	zFreezeInferenceProfileResponse,
 	zGenerateLocalModelProxyApiKeyResponse,
 	zGenerateMcpServerApiKeyResponse,
+	zGenerateTrainingDatasetBody,
+	zGenerateTrainingDatasetPath,
+	zGenerateTrainingDatasetResponse,
 	zGetAgentDefinitionPath,
 	zGetAgentDefinitionResponse,
 	zGetAgentFeedbackInsightsPath,
@@ -957,6 +1066,10 @@ import {
 	zGetAgentUsageSummaryResponse,
 	zGetAppUpdateStatusQuery,
 	zGetAppUpdateStatusResponse,
+	zGetBaseArtifactLicensePath,
+	zGetBaseArtifactLicenseResponse,
+	zGetBaseArtifactPath,
+	zGetBaseArtifactResponse,
 	zGetBenchmarkProjectPath,
 	zGetBenchmarkProjectResponse,
 	zGetBenchmarkRunPath,
@@ -1037,6 +1150,14 @@ import {
 	zGetStableDiffusionCppSourceBuildStatusResponse,
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
+	zGetToolMockPath,
+	zGetToolMockResponse,
+	zGetTrainingDatasetPath,
+	zGetTrainingDatasetResponse,
+	zGetTrainingDefinitionPath,
+	zGetTrainingDefinitionResponse,
+	zGetTrainingRuntimePrerequisitesResponse,
+	zGetTrainingRuntimeStatusResponse,
 	zGetTutorialStateResponse,
 	zHarvestGoldenConversationsPath,
 	zHarvestGoldenConversationsResponse,
@@ -1058,6 +1179,7 @@ import {
 	zListAgentPlaybookActionsQuery,
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
+	zListBaseArtifactsResponse,
 	zListBenchmarkProjectsResponse,
 	zListBenchmarkRunsPath,
 	zListBenchmarkRunsQuery,
@@ -1104,6 +1226,12 @@ import {
 	zListSkillResourcesResponse,
 	zListSkillsResponse,
 	zListSlashCommandsResponse,
+	zListToolMocksResponse,
+	zListTrainingDatasetsResponse,
+	zListTrainingDefinitionsResponse,
+	zListTrainingSamplesPath,
+	zListTrainingSamplesQuery,
+	zListTrainingSamplesResponse,
 	zListWorkspacesResponse,
 	zNodeAuthStatusResponse,
 	zNodeChangePasswordBody,
@@ -1156,6 +1284,7 @@ import {
 	zRemoveLlamaCppSourceBuildResponse,
 	zRemoveStableDiffusionCppSourceBuildBody,
 	zRemoveStableDiffusionCppSourceBuildResponse,
+	zRemoveTrainingRuntimeResponse,
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
@@ -1165,6 +1294,9 @@ import {
 	zResolveUserQuestionResponse,
 	zRetrieveImagePath,
 	zRetrieveImageResponse,
+	zReviewTrainingSampleBody,
+	zReviewTrainingSamplePath,
+	zReviewTrainingSampleResponse,
 	zRevokeLocalModelProxyApiKeyResponse,
 	zRevokeMcpServerApiKeyResponse,
 	zRunPlaybookActionEvalPath,
@@ -1214,6 +1346,7 @@ import {
 	zStartNodeBindingResponse,
 	zStartStableDiffusionCppSourceBuildBody,
 	zStartStableDiffusionCppSourceBuildResponse,
+	zStartTrainingRuntimeInstallResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
 	zUnhandledExceptionProbeResponse,
@@ -1251,6 +1384,12 @@ import {
 	zUpdateSuggestedPlaybookActionBody,
 	zUpdateSuggestedPlaybookActionPath,
 	zUpdateSuggestedPlaybookActionResponse,
+	zUpdateToolMockBody,
+	zUpdateToolMockPath,
+	zUpdateToolMockResponse,
+	zUpdateTrainingDefinitionBody,
+	zUpdateTrainingDefinitionPath,
+	zUpdateTrainingDefinitionResponse,
 	zUploadConversationFileBody,
 	zUploadConversationFilePath,
 	zUploadConversationFileResponse,
@@ -1260,6 +1399,9 @@ import {
 	zValidateExecutableResponse,
 	zValidationProblemProbeBody,
 	zValidationProblemProbeResponse,
+	zVerifyToolMockBody,
+	zVerifyToolMockPath,
+	zVerifyToolMockResponse,
 } from "./zod.gen";
 
 export type Options<
@@ -1384,6 +1526,646 @@ export const saveTutorialState = <ThrowOnError extends boolean = false>(options:
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = false>(
+	options?: Options<GetTrainingRuntimePrerequisitesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetTrainingRuntimePrerequisitesResponses, GetTrainingRuntimePrerequisitesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTrainingRuntimePrerequisitesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/runtime/prerequisites",
+		...options,
+	});
+
+export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetTrainingRuntimeStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetTrainingRuntimeStatusResponses, GetTrainingRuntimeStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTrainingRuntimeStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/runtime/status",
+		...options,
+	});
+
+export const removeTrainingRuntime = <ThrowOnError extends boolean = false>(
+	options?: Options<RemoveTrainingRuntimeData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<RemoveTrainingRuntimeResponses, RemoveTrainingRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRemoveTrainingRuntimeResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/runtime/remove",
+		...options,
+	});
+
+export const startTrainingRuntimeInstall = <ThrowOnError extends boolean = false>(
+	options?: Options<StartTrainingRuntimeInstallData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<StartTrainingRuntimeInstallResponses, StartTrainingRuntimeInstallErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartTrainingRuntimeInstallResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/runtime/install",
+		...options,
+	});
+
+export const listToolMocks = <ThrowOnError extends boolean = false>(options?: Options<ListToolMocksData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListToolMocksResponses, ListToolMocksErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListToolMocksResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/mocks",
+		...options,
+	});
+
+export const createToolMock = <ThrowOnError extends boolean = false>(options: Options<CreateToolMockData, ThrowOnError>) =>
+	(options.client ?? client).post<CreateToolMockResponses, CreateToolMockErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateToolMockBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateToolMockResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/mocks",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteToolMock = <ThrowOnError extends boolean = false>(options: Options<DeleteToolMockData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteToolMockResponses, DeleteToolMockErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteToolMockBody,
+					path: zDeleteToolMockPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteToolMockResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/mocks/{mockId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getToolMock = <ThrowOnError extends boolean = false>(options: Options<GetToolMockData, ThrowOnError>) =>
+	(options.client ?? client).get<GetToolMockResponses, GetToolMockErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetToolMockPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetToolMockResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/mocks/{mockId}",
+		...options,
+	});
+
+export const updateToolMock = <ThrowOnError extends boolean = false>(options: Options<UpdateToolMockData, ThrowOnError>) =>
+	(options.client ?? client).put<UpdateToolMockResponses, UpdateToolMockErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateToolMockBody,
+					path: zUpdateToolMockPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateToolMockResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/mocks/{mockId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const verifyToolMock = <ThrowOnError extends boolean = false>(options: Options<VerifyToolMockData, ThrowOnError>) =>
+	(options.client ?? client).post<VerifyToolMockResponses, VerifyToolMockErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zVerifyToolMockBody,
+					path: zVerifyToolMockPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zVerifyToolMockResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/mocks/{mockId}/verify",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listTrainingDefinitions = <ThrowOnError extends boolean = false>(
+	options?: Options<ListTrainingDefinitionsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListTrainingDefinitionsResponses, ListTrainingDefinitionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListTrainingDefinitionsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/definitions",
+		...options,
+	});
+
+export const createTrainingDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<CreateTrainingDefinitionData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CreateTrainingDefinitionResponses, CreateTrainingDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateTrainingDefinitionBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateTrainingDefinitionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/definitions",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteTrainingDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteTrainingDefinitionData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteTrainingDefinitionResponses, DeleteTrainingDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteTrainingDefinitionBody,
+					path: zDeleteTrainingDefinitionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteTrainingDefinitionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/definitions/{definitionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getTrainingDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<GetTrainingDefinitionData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetTrainingDefinitionResponses, GetTrainingDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetTrainingDefinitionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTrainingDefinitionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/definitions/{definitionId}",
+		...options,
+	});
+
+export const updateTrainingDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateTrainingDefinitionData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<UpdateTrainingDefinitionResponses, UpdateTrainingDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateTrainingDefinitionBody,
+					path: zUpdateTrainingDefinitionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateTrainingDefinitionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/definitions/{definitionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const generateTrainingDataset = <ThrowOnError extends boolean = false>(
+	options: Options<GenerateTrainingDatasetData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<GenerateTrainingDatasetResponses, GenerateTrainingDatasetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zGenerateTrainingDatasetBody,
+					path: zGenerateTrainingDatasetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGenerateTrainingDatasetResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/definitions/{definitionId}/generate",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
+	options?: Options<ListTrainingDatasetsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListTrainingDatasetsResponses, ListTrainingDatasetsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListTrainingDatasetsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets",
+		...options,
+	});
+
+export const deleteTrainingDataset = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteTrainingDatasetData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteTrainingDatasetResponses, DeleteTrainingDatasetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteTrainingDatasetBody,
+					path: zDeleteTrainingDatasetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteTrainingDatasetResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets/{datasetId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getTrainingDataset = <ThrowOnError extends boolean = false>(
+	options: Options<GetTrainingDatasetData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetTrainingDatasetResponses, GetTrainingDatasetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetTrainingDatasetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTrainingDatasetResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets/{datasetId}",
+		...options,
+	});
+
+export const listTrainingSamples = <ThrowOnError extends boolean = false>(
+	options: Options<ListTrainingSamplesData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListTrainingSamplesResponses, ListTrainingSamplesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListTrainingSamplesPath,
+					query: zListTrainingSamplesQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListTrainingSamplesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets/{datasetId}/samples",
+		...options,
+	});
+
+export const reviewTrainingSample = <ThrowOnError extends boolean = false>(
+	options: Options<ReviewTrainingSampleData, ThrowOnError>,
+) =>
+	(options.client ?? client).patch<ReviewTrainingSampleResponses, ReviewTrainingSampleErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zReviewTrainingSampleBody,
+					path: zReviewTrainingSamplePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zReviewTrainingSampleResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets/{datasetId}/samples/{sampleId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const exportTrainingDataset = <ThrowOnError extends boolean = false>(
+	options: Options<ExportTrainingDatasetData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ExportTrainingDatasetResponses, ExportTrainingDatasetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zExportTrainingDatasetPath,
+					query: zExportTrainingDatasetQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zExportTrainingDatasetResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets/{datasetId}/export",
+		...options,
+	});
+
+export const cancelBaseArtifact = <ThrowOnError extends boolean = false>(
+	options: Options<CancelBaseArtifactData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelBaseArtifactResponses, CancelBaseArtifactErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelBaseArtifactPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelBaseArtifactResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/base-artifacts/{artifactId}/cancel",
+		...options,
+	});
+
+export const listBaseArtifacts = <ThrowOnError extends boolean = false>(options?: Options<ListBaseArtifactsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListBaseArtifactsResponses, ListBaseArtifactsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBaseArtifactsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/base-artifacts",
+		...options,
+	});
+
+export const createBaseArtifact = <ThrowOnError extends boolean = false>(
+	options: Options<CreateBaseArtifactData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CreateBaseArtifactResponses, CreateBaseArtifactErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateBaseArtifactBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateBaseArtifactResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/base-artifacts",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteBaseArtifact = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteBaseArtifactData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteBaseArtifactResponses, DeleteBaseArtifactErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteBaseArtifactPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteBaseArtifactResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/base-artifacts/{artifactId}",
+		...options,
+	});
+
+export const getBaseArtifact = <ThrowOnError extends boolean = false>(options: Options<GetBaseArtifactData, ThrowOnError>) =>
+	(options.client ?? client).get<GetBaseArtifactResponses, GetBaseArtifactErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBaseArtifactPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBaseArtifactResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/base-artifacts/{artifactId}",
+		...options,
+	});
+
+export const getBaseArtifactLicense = <ThrowOnError extends boolean = false>(
+	options: Options<GetBaseArtifactLicenseData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetBaseArtifactLicenseResponses, GetBaseArtifactLicenseErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBaseArtifactLicensePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBaseArtifactLicenseResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/base-artifacts/{artifactId}/license",
+		...options,
 	});
 
 export const commitSkillImport = <ThrowOnError extends boolean = false>(options: Options<CommitSkillImportData, ThrowOnError>) =>

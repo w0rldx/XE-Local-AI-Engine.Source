@@ -25,6 +25,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeSchedulingStores(configuration);
         builder.AddNodeModelFit(configuration);
         builder.AddNodeBenchmarks();
+        builder.AddNodeTrainingDatasets();
         builder.AddNodeCapacity(configuration);
         builder.AddNodeMcpAgentRuns(configuration);
         builder.AddNodePlaybookRetrievalAndMonitoring(configuration);
@@ -46,6 +47,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // Runs after AddNodeModelRuntime: the image model store reuses the Hugging Face download client that
         // AddHuggingFaceGgufStore (invoked there) registers.
         builder.AddNodeImages(configuration);
+
+        // Same ordering reason as AddNodeImages above: the base-checkpoint store reuses the Hugging Face download
+        // client AddNodeModelRuntime registers.
+        builder.AddNodeTrainingRuntime();
 
         return builder;
     }

@@ -125,6 +125,14 @@
              Link="licenses/nuget/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
+    <!-- The pinned Python training runtime (pyproject.toml + uv.lock + the trainer scripts). The repo root is outside
+         this project's implicit Content glob, so without this explicit include they do not ship at all and the runtime
+         install fails on a packaged build with a missing-lockfile prerequisite. Output stays clean for dev/test runs —
+         TrainingRuntimeLayout.ResolveScriptsDirectory walks up to tools/training/ when the published copy is absent. -->
+    <Content Include="$(MSBuildProjectDirectory)/../tools/training/**"
+             Link="training-scripts/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
   </ItemGroup>
 
   <Target Name="ValidateDotNetRuntimeLicenseAssets"

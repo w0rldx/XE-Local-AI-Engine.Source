@@ -64,6 +64,8 @@ describe("nodeCapabilities", () => {
 			models: "/models",
 			invocations: "/invocations",
 			benchmarks: "/benchmarks",
+			training: "/training",
+			trainingDatasets: "/training/datasets",
 			usage: "/usage",
 			tools: "/tools",
 			agents: "/agents",

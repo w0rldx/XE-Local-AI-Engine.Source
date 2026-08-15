@@ -28,6 +28,7 @@
         <Project Path="XE-Local-AI-Engine.Providers.LlamaServer/XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.StableDiffusionCpp/XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Providers.Training/XE-Local-AI-Engine.Providers.Training.csproj"/>
     </Folder>
     <Folder Name="/Tests/">
         <Project Path="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"/>

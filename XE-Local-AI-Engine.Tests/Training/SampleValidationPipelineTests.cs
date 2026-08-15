@@ -1,0 +1,125 @@
+namespace XE_Local_AI_Engine.Tests.Training;
+
+using System.Text.Json;
+using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Tests.Testing;
+
+public sealed class SampleValidationPipelineTests
+{
+    private const string ToolSchema = """{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}""";
+
+    private static readonly JsonElement RecordSchema = JsonDocument.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "userMessage": { "type": "string" },
+            "assistantText": { "type": "string" },
+            "toolName": { "type": "string" },
+            "toolArgumentsJson": { "type": "string" }
+          },
+          "required": ["userMessage", "assistantText"]
+        }
+        """).RootElement.Clone();
+
+    [Test]
+    public async Task ValidateAfter_SchemaInvalidTurn_RecordedAsSampleFailure()
+    {
+        var pipeline = Create(out _);
+
+        // "userMessage" is missing — the ORIGINAL schema requires it, so the turn cannot become a sample.
+        var outcome = await pipeline.ValidateAsync("""prose then {"assistantText":"there"} trailing""", Context());
+
+        AssertEx.False(outcome.Accepted, "A record that fails the original schema is a rejection, not a sample.");
+        AssertEx.NotNullOrEmpty(outcome.RejectionReason);
+        var layer = outcome.Validation.Layers.Single();
+        AssertEx.Equal("record-schema", layer.Layer);
+        AssertEx.False(layer.Passed, "The failing layer's outcome is persisted, not swallowed.");
+    }
+
+    [Test]
+    public async Task ValidateAfter_UnparseableCompletion_IsRecordedNeverThrown()
+    {
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync("the model refused to answer", Context());
+
+        AssertEx.False(outcome.Accepted);
+        AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "record-schema" && !layer.Passed);
+    }
+
+    [Test]
+    public async Task ValidTurn_PersistsEveryLayerOutcomeAndKeepsTheRequestedLabel()
+    {
+        var pipeline = Create(out var executor);
+        _ = executor.ExecuteAsync("read_file", Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                    .Returns(new HeadlessToolOutcome(HeadlessToolOutcomeKind.Executed, "# Title", "read-local"));
+
+        var outcome = await pipeline.ValidateAsync(
+            """{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
+            Context());
+
+        AssertEx.True(outcome.Accepted);
+        AssertEx.True(outcome.Validation.Passed);
+        AssertEx.Equal(TrainingSampleLabel.Good, outcome.Label);
+        var layers = outcome.Validation.Layers.Select(layer => layer.Layer).ToArray();
+        AssertEx.Contains(layers, "record-schema");
+        AssertEx.Contains(layers, "tool-name");
+        AssertEx.Contains(layers, "arguments");
+        AssertEx.Contains(layers, "execution");
+        AssertEx.Contains(layers, "critic");
+        var parts = AssertEx.NotNull(outcome.Content).Parts;
+        AssertEx.Contains(parts, part => part.Kind == "tool" && part.Result == "# Title");
+    }
+
+    [Test]
+    public async Task SchemaValidTurnThatFailsALaterLayer_IsRetainedAsBadTrainingData()
+    {
+        var pipeline = Create(out var executor);
+        _ = executor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                    .Returns(new HeadlessToolOutcome(HeadlessToolOutcomeKind.ValidationOnly, null, "not-read-local; no mock matched"));
+
+        var outcome = await pipeline.ValidateAsync(
+            """{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
+            Context());
+
+        AssertEx.True(outcome.Accepted, "Decision #9: a failed layer keeps the sample as negative data.");
+        AssertEx.Equal(TrainingSampleLabel.Bad, outcome.Label);
+        AssertEx.False(outcome.Validation.Passed);
+        AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "execution" && !layer.Passed);
+    }
+
+    [Test]
+    public async Task UnknownToolName_FailsTheResolutionLayer()
+    {
+        var pipeline = Create(out _);
+
+        var outcome = await pipeline.ValidateAsync(
+            """{"userMessage":"hi","assistantText":"done","toolName":"delete_everything","toolArgumentsJson":"{}"}""",
+            Context());
+
+        AssertEx.True(outcome.Accepted);
+        AssertEx.Equal(TrainingSampleLabel.Bad, outcome.Label);
+        AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "tool-name" && !layer.Passed);
+    }
+
+    private static ISampleValidationPipeline Create(out IHeadlessToolExecutor executor)
+    {
+        executor = Substitute.For<IHeadlessToolExecutor>();
+        _ = executor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                    .Returns(new HeadlessToolOutcome(HeadlessToolOutcomeKind.Executed, "ok", "read-local"));
+        return new SampleValidationPipeline(executor, Substitute.For<IStructuredAgentRunner>());
+    }
+
+    private static SampleValidationContext Context() =>
+        new(new DatasetDefinitionBodyV1
+        {
+            TeacherModelName = "teacher.gguf",
+            TeacherOutputMode = TeacherOutputMode.ValidateAfter,
+            SystemInstructions = "produce examples",
+            Tools = [new DatasetToolSnapshotV1("read_file", "Reads a file.", ToolSchema, RequiresApproval: false, ToolCategory.ReadLocal)]
+        }, "tool-call", TrainingSampleLabel.Good, RecordSchema, CriticChatClient: null);
+}

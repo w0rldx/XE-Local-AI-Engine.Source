@@ -685,6 +685,41 @@ public static class LocalApiRoutes
         public const string Models = "proxy/v1/models";
     }
 
+    /// <summary>
+    ///     Training group routes. Slice 1 owns the dataset half (definitions, datasets, samples, mocks); the runtime and
+    ///     base-artifact halves append their own constants here.
+    /// </summary>
+    public static class Training
+    {
+        public const string Definitions = "training/definitions";
+        public const string DefinitionById = "training/definitions/{definitionId}";
+        public const string DefinitionGenerate = "training/definitions/{definitionId}/generate";
+        public const string Datasets = "training/datasets";
+        public const string DatasetById = "training/datasets/{datasetId}";
+        public const string DatasetSamples = "training/datasets/{datasetId}/samples";
+        public const string DatasetSampleById = "training/datasets/{datasetId}/samples/{sampleId}";
+        public const string DatasetExport = "training/datasets/{datasetId}/export";
+        public const string Mocks = "training/mocks";
+        public const string MockById = "training/mocks/{mockId}";
+        public const string MockVerify = "training/mocks/{mockId}/verify";
+        public const string DatasetGenerationHub = "/api/local/v1/training/datasets/hub";
+
+        // Python training runtime (uv-managed venv). One machine-global runtime, so none of these are id-scoped.
+        public const string RuntimeStatus = "training/runtime/status";
+        public const string RuntimePrerequisites = "training/runtime/prerequisites";
+        public const string RuntimeInstall = "training/runtime/install";
+        public const string RuntimeRemove = "training/runtime/remove";
+
+        /// <summary>SignalR push hub for training-runtime install phase and log changes.</summary>
+        public const string RuntimeHub = "/api/local/v1/training/runtime/hub";
+
+        // Base checkpoints downloaded from Hugging Face.
+        public const string BaseArtifacts = "training/base-artifacts";
+        public const string BaseArtifactById = "training/base-artifacts/{artifactId}";
+        public const string BaseArtifactCancel = "training/base-artifacts/{artifactId}/cancel";
+        public const string BaseArtifactLicense = "training/base-artifacts/{artifactId}/license";
+    }
+
     public static class Automation
     {
         public const string Commands = "automation/commands";
@@ -697,4 +732,5 @@ public static class LocalApiRoutes
         public const string Collection = "workspaces";
         public const string ById = "workspaces/{workspaceId}";
     }
+
 }

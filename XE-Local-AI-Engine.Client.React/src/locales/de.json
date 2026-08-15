@@ -76,7 +76,10 @@
 		"customTools": "Eigene Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Bildgenerierung"
+		"images": "Bildgenerierung",
+		"trainingGroup": "Training",
+		"training": "Training",
+		"trainingDatasets": "Datensätze"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -3960,6 +3963,58 @@
 		"customTools": {
 			"title": "Eigene Tools",
 			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus."
+		},
+		"training": {
+			"title": "Training",
+			"subtitle": "Passe ein lokales Modell mit eigenen Daten an. Ein Training belegt die gesamte GPU, daher laufen währenddessen keine Chat-, Bild- oder Benchmark-Aufgaben.",
+			"runtime": {
+				"title": "Python-Trainingsumgebung",
+				"description": "Das Feintuning läuft in einer festgelegten, uv-verwalteten Python-Umgebung. Sie wird einmal installiert und von jedem Trainingslauf genutzt.",
+				"prerequisites": "Voraussetzungen",
+				"install": "Umgebung installieren",
+				"reinstall": "Umgebung neu installieren",
+				"remove": "Umgebung entfernen",
+				"cancel": "Installation abbrechen",
+				"failed": "Installation fehlgeschlagen",
+				"installedPython": "Python {{version}}",
+				"installedTorch": "torch {{version}}",
+				"phase": {
+					"Idle": "Nicht installiert",
+					"AcquiringUv": "uv wird geladen",
+					"ProvisioningPython": "Python wird bereitgestellt",
+					"InstallingPackages": "Pakete werden installiert",
+					"Verifying": "Überprüfung",
+					"Ready": "Bereit",
+					"Failed": "Fehlgeschlagen",
+					"Removing": "Wird entfernt"
+				}
+			},
+			"baseArtifacts": {
+				"title": "Basis-Checkpoints",
+				"description": "Für das Feintuning wird der originale safetensors-Checkpoint benötigt, keine quantisierte Kopie. Gib das Hugging-Face-Repository zum Herunterladen an.",
+				"repoId": "Repository",
+				"revision": "Revision (optional)",
+				"download": "Herunterladen",
+				"status": "Status",
+				"license": "Lizenz",
+				"noLicense": "Nicht angegeben",
+				"gated": "Zugang beschränkt",
+				"size": "Größe",
+				"empty": "Noch keine Basis-Checkpoints. Lade einen herunter, um ihn für Trainingsläufe verfügbar zu machen.",
+				"error": "Der Download konnte nicht gestartet werden.",
+				"progress": "Datei {{index}} von {{count}} — {{done}}",
+				"cancel": "Download abbrechen",
+				"delete": "Checkpoint löschen",
+				"statusValue": {
+					"Downloading": "Wird geladen",
+					"Ready": "Bereit",
+					"Failed": "Fehlgeschlagen"
+				}
+			},
+			"datasets": {
+				"title": "Trainings-Datensätze",
+				"subtitle": "Erzeuge Tool-Calling-Datensätze aus einer Definition, prüfe jedes Beispiel und exportiere sie für einen Trainingslauf."
+			}
 		}
 	},
 	"components": {
@@ -4450,5 +4505,57 @@
 	},
 	"notifications": {
 		"emptyMessage": "Fertig."
+	},
+	"training": {
+		"tabs": {
+			"definitions": "Definitionen",
+			"datasets": "Datensätze",
+			"mocks": "Tool-Mocks"
+		},
+		"generation": {
+			"title": "Generierung läuft",
+			"counts": "{{completed}} von {{total}} Beispielen · {{rejected}} abgelehnt"
+		},
+		"definitions": {
+			"title": "Datensatz-Definitionen",
+			"empty": "Noch keine Datensatz-Definitionen.",
+			"generate": "Generieren",
+			"holdout": "{{percent}}% Holdout"
+		},
+		"datasets": {
+			"title": "Datensätze",
+			"empty": "Noch keine Datensätze. Generiere einen aus einer Definition.",
+			"revision": "Revision {{revision}}",
+			"counts": "{{total}} Beispiele · {{good}} gut · {{bad}} schlecht · {{rejected}} abgelehnt · {{duplicate}} doppelt",
+			"delete": "Löschen"
+		},
+		"samples": {
+			"title": "Beispiele — {{name}}",
+			"empty": "Keine Beispiele passen zu diesem Filter.",
+			"approve": "Freigeben",
+			"reject": "Ablehnen",
+			"relabel": "Als {{label}} markieren",
+			"layerFailed": "fehlgeschlagen",
+			"filter": {
+				"label": "Prüfstatus",
+				"all": "Alle",
+				"pending": "Offen",
+				"approved": "Freigegeben",
+				"rejected": "Abgelehnt"
+			}
+		},
+		"mocks": {
+			"title": "Tool-Mocks",
+			"empty": "Noch keine Tool-Mocks. Jeder generierte Aufruf außer einem freigabefreien Nur-Lese-Tool braucht einen.",
+			"rules": "{{count}} Regeln",
+			"verify": "Prüfen",
+			"enabled": "Aktiv"
+		},
+		"export": {
+			"title": "Export ({{format}})"
+		},
+		"errors": {
+			"request": "Die Trainings-Anfrage ist fehlgeschlagen."
+		}
 	}
 }
