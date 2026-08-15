@@ -8,6 +8,9 @@ overrides:
 
 allowBuilds:
   msgpackr-extract: true
+  # msw's postinstall only copies its browser service worker (mockServiceWorker.js) into public/. The suite
+  # uses msw/node (setupServer) exclusively, so the script has nothing to contribute here.
+  msw: false
 
 trustPolicyExclude:
   - 'semver@6.3.1'

@@ -151,7 +151,9 @@ export default defineConfig(({ command, mode }) => {
 			testTimeout: 20_000,
 			// Pins the ICU default locale. Without it the suite passes only on an en-US machine — see
 			// src/test/PinLocale.ts for the failure this prevents on a non-en-US packaging box.
-			setupFiles: ["src/test/PinLocale.ts"],
+			// MswSetup.ts starts the shared MSW interception server (src/test/msw/Server.ts) with
+			// `onUnhandledRequest: "error"`, so a request no test stubbed fails loudly instead of hitting the network.
+			setupFiles: ["src/test/PinLocale.ts", "src/test/MswSetup.ts"],
 			coverage: {
 				provider: "v8",
 				reportsDirectory: "coverage/vitest",

@@ -30,6 +30,8 @@
 #   --spike-only   Run only the P0_SPIKE compile check.
 #   --pester       Explicitly request the Pester suite (it is already part of the default run).
 #   --pester-only  Run only the Pester suite.
+#   --no-behavior  Skip the auto-enrolled release contract tests (for callers that just ran them,
+#                  e.g. the release-contracts CI job).
 #   --bootstrap    Install PSScriptAnalyzer (CurrentUser scope) if absent, then lint.
 #                  Network access required. Without this flag, an absent module fails the run.
 #   --help         Show this message.
@@ -98,7 +100,7 @@ RUN_PS="true"
 RUN_SPIKE="true"
 RUN_PESTER="true"
 RUN_BEHAVIOR="true"
-PESTER_DIR="publish/tests"
+PESTER_DIRS=("publish/tests" "scripts/performance/tests")
 BOOTSTRAP="false"
 PSSA_SETTINGS="${PROJECT_ROOT}/scripts/PSScriptAnalyzerSettings.psd1"
 SPIKE_PROJECT="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"
@@ -127,6 +129,7 @@ while [[ $# -gt 0 ]]; do
     --no-spike)   RUN_SPIKE="false"; shift ;;
     --spike-only) RUN_SHELL="false"; RUN_PS="false"; RUN_PESTER="false"; RUN_BEHAVIOR="false"; shift ;;
     --pester)     RUN_PESTER="true"; shift ;;
+    --no-behavior) RUN_BEHAVIOR="false"; shift ;;
     --pester-only) RUN_SHELL="false"; RUN_PS="false"; RUN_SPIKE="false"; RUN_PESTER="true"; RUN_BEHAVIOR="false"; shift ;;
     --bootstrap)  BOOTSTRAP="true"; shift ;;
     --help|-h)    usage; exit 0 ;;
@@ -338,14 +341,18 @@ if [[ "${RUN_BEHAVIOR}" == "true" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Pester — unit tests over package-tester-win.ps1's pure logic.
+# Pester — unit tests over package-tester-win.ps1's pure logic and the Windows VRAM capture
+# script's privacy contract. Both extract their subjects from the real .ps1 via the AST, so they
+# run anywhere pwsh does; neither needs Windows or a GPU.
 # ---------------------------------------------------------------------------
 if [[ "${RUN_PESTER}" == "true" ]]; then
   command -v pwsh >/dev/null 2>&1 || prereq_fail \
     "pwsh not on PATH — the Pester suite could not run. dotnet tool install --global PowerShell"
 
-  [[ -d "${PROJECT_ROOT}/${PESTER_DIR}" ]] || prereq_fail \
-    "Pester suite not found at ${PESTER_DIR}."
+  for pester_dir in "${PESTER_DIRS[@]}"; do
+    [[ -d "${PROJECT_ROOT}/${pester_dir}" ]] || prereq_fail \
+      "Pester suite not found at ${pester_dir}."
+  done
 
   if ! pwsh -NoProfile -Command 'if (-not (Get-Module -ListAvailable Pester)) { exit 1 }'; then
     prereq_fail \
@@ -356,13 +363,16 @@ if [[ "${RUN_PESTER}" == "true" ]]; then
   fi
 
   cd "${PROJECT_ROOT}" || prereq_fail "could not cd to ${PROJECT_ROOT}"
-  log "=== Pester: ${PESTER_DIR} ==="
+  log "=== Pester: ${PESTER_DIRS[*]} ==="
+  # Render the suite list as a PowerShell array literal: @('a','b').
+  pester_paths_ps="$(printf "'%s'," "${PESTER_DIRS[@]}")"
+  pester_paths_ps="@(${pester_paths_ps%,})"
   # An explicit configuration rather than -CI: that switch also writes a testResults.xml into the
   # repo root, which is not ours to litter. PassThru lets us apply the same vacuous-run guard used
   # everywhere else here — zero discovered tests is a FAILURE, not a pass.
   if ! pwsh -NoProfile -Command "
       \$config = New-PesterConfiguration
-      \$config.Run.Path = '${PESTER_DIR}'
+      \$config.Run.Path = ${pester_paths_ps}
       \$config.Run.PassThru = \$true
       \$config.TestResult.Enabled = \$false
       \$config.Output.Verbosity = 'Detailed'

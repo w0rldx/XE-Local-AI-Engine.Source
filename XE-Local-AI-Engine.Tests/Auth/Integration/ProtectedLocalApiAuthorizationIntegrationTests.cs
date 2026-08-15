@@ -5,13 +5,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ProtectedLocalApiAuthorizationIntegrationTests
 {
+    // Both tests are read-only GETs against the same default host, so one bootstrap serves the class.
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     // A non-auth local API endpoint guarded by the NodeOperator policy.
     private const string ProtectedConnectionStatusRoute = "/api/local/v1/connection";
 
     [Test]
     public async Task ProtectedEndpoint_WhenNoBearerTokenProvided_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
@@ -23,7 +27,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
     [Test]
     public async Task ProtectedEndpoint_WhenValidBearerTokenProvided_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
