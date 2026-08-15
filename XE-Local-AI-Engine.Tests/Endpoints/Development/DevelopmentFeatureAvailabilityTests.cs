@@ -10,7 +10,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Test]
     public async Task ListProjects_WhenConfigurationIsAbsentAndTokenIsMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/api/local/v1/development/projects").ConfigureAwait(false);
@@ -21,7 +21,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Test]
     public async Task ListProjects_WhenConfigurationIsAbsent_IsEnabledByDefault()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
         factory.AddNodeBearerToken(request);
@@ -34,7 +34,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Test]
     public async Task Negotiate_WhenDevelopmentModeIsDisabled_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = false
         };
@@ -56,7 +56,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Arguments(false)]
     public async Task Capability_ReturnsEffectiveRuntimeState(bool enabled)
     {
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = enabled
         };
@@ -75,7 +75,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Test]
     public async Task ListProjects_WhenExplicitlyDisabled_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = false
         };

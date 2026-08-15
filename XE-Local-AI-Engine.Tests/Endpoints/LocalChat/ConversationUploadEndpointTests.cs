@@ -22,7 +22,7 @@ public sealed class ConversationUploadEndpointTests
     public async Task Upload_WhenOversize_Rejects()
     {
         // Drop the cap to 1 MB for this host so the test ships a small (2 MB) payload rather than a 25 MB one.
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options => options.MaxUploadFileSizeMb = 1)
         };
@@ -37,7 +37,7 @@ public sealed class ConversationUploadEndpointTests
     [Test]
     public async Task Upload_WhenUnsupportedExtension_Rejects()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // A genuinely unsupported type: not a text/pdf/docx the extractor handles, and not an accepted image. It is
@@ -57,7 +57,7 @@ public sealed class ConversationUploadEndpointTests
     [Test]
     public async Task Upload_WhenImage_AcceptsWithImageStatus()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
@@ -89,7 +89,7 @@ public sealed class ConversationUploadEndpointTests
     [Test]
     public async Task Upload_WhenTraversalFilename_SanitizesToLeaf()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
@@ -107,7 +107,7 @@ public sealed class ConversationUploadEndpointTests
         AssertEx.Equal("Extracted", uploaded.ExtractionStatus);
     }
 
-    private static async Task<Guid> CreateConversationAsync(TestingWebAppFactory factory, HttpClient client)
+    private static async Task<Guid> CreateConversationAsync(TestServerWebAppFactory factory, HttpClient client)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/chat/conversations")
         {
@@ -127,7 +127,7 @@ public sealed class ConversationUploadEndpointTests
         return document.RootElement.GetProperty("conversationId").GetGuid();
     }
 
-    private static async Task<HttpResponseMessage> UploadAsync(TestingWebAppFactory factory,
+    private static async Task<HttpResponseMessage> UploadAsync(TestServerWebAppFactory factory,
         HttpClient client,
         Guid conversationId,
         string fileName,

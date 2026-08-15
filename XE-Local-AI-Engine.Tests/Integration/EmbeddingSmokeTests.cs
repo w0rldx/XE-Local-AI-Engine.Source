@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Integration;
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -34,22 +33,18 @@ public sealed class EmbeddingSmokeTests
                 embeddingsConnectionString,
                 async () =>
                 {
-                    await using var rootFactory = new TestingWebAppFactory();
-                    await using var factory = rootFactory.WithWebHostBuilder(builder =>
+                    await using var factory = new TestServerWebAppFactory
                     {
-                        builder.ConfigureAppConfiguration((_, configurationBuilder) =>
+                        AdditionalConfiguration = new Dictionary<string, string?>
                         {
-                            configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
-                            {
-                                ["ConnectionStrings:chat"] = chatConnectionString,
-                                ["ConnectionStrings:embeddings"] = embeddingsConnectionString,
-                                ["Aspire:OllamaSharp:chat:Endpoint"] = chatEndpoint,
-                                ["Aspire:OllamaSharp:chat:SelectedModel"] = ChatModel,
-                                ["Aspire:OllamaSharp:embeddings:Endpoint"] = embeddingsEndpoint,
-                                ["Aspire:OllamaSharp:embeddings:SelectedModel"] = EmbeddingModel
-                            });
-                        });
-                    });
+                            ["ConnectionStrings:chat"] = chatConnectionString,
+                            ["ConnectionStrings:embeddings"] = embeddingsConnectionString,
+                            ["Aspire:OllamaSharp:chat:Endpoint"] = chatEndpoint,
+                            ["Aspire:OllamaSharp:chat:SelectedModel"] = ChatModel,
+                            ["Aspire:OllamaSharp:embeddings:Endpoint"] = embeddingsEndpoint,
+                            ["Aspire:OllamaSharp:embeddings:SelectedModel"] = EmbeddingModel
+                        }
+                    };
 
                     // Embeddings are provider-routed now — there is no standalone DI IEmbeddingGenerator.
                     // Resolve the embedding generator through ILocalModelProviderResolver exactly as the production

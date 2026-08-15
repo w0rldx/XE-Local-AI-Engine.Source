@@ -37,7 +37,7 @@ public sealed class DevelopmentEndpointTests
     [Arguments("POST", "/api/local/v1/development/projects/11111111-1111-1111-1111-111111111111/repository-connection")]
     public async Task ManagementRoute_WhenOperatorTokenIsMissing_ReturnsUnauthorized(string method, string route)
     {
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true
         };
@@ -152,7 +152,7 @@ public sealed class DevelopmentEndpointTests
         AssertEx.False(propertyNames.Contains("RepositoryRoot", StringComparer.Ordinal));
     }
 
-    private static TestingWebAppFactory EnabledFactory(IDevelopmentManagementService service) =>
+    private static TestServerWebAppFactory EnabledFactory(IDevelopmentManagementService service) =>
         new()
         {
             EnableDevelopmentMode = true,

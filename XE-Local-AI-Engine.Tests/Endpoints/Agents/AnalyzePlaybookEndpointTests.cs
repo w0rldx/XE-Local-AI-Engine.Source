@@ -18,7 +18,7 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()));
@@ -30,7 +30,7 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()))
@@ -53,7 +53,7 @@ public sealed class AnalyzePlaybookEndpointTests
         // id from the route, so the hey-api client sends no body — and therefore no Content-Type. The endpoint must
         // accept that instead of answering 415 Unsupported Media Type. A seeded agent with no feedback yields 200 with
         // empty items, which proves the request was bound and dispatched rather than rejected at the media-type gate.
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Body-less Analysis Agent").ConfigureAwait(false);
@@ -74,7 +74,7 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_WhenAgentExistsWithoutFeedback_ReturnsOkWithEmptyItems()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Analysis Agent").ConfigureAwait(false);
@@ -98,7 +98,7 @@ public sealed class AnalyzePlaybookEndpointTests
         AssertEx.Equal(expected: 0, root.GetProperty("items").GetArrayLength());
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();

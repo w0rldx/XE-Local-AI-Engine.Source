@@ -57,7 +57,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task List_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute(Guid.NewGuid()));
@@ -69,7 +69,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Create_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute(Guid.NewGuid()))
@@ -84,7 +84,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Delete_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid(), Guid.NewGuid()));
@@ -96,7 +96,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Create_WhenValid_ReturnsOkAndRoundTripsInputTurnsAndAssertion()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -130,7 +130,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Create_WhenTitleBlank_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -171,7 +171,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task List_WhenCasesExist_ReturnsItemsWrapper()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -194,7 +194,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Delete_WhenOwnedCase_ReturnsNoContent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -210,7 +210,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Delete_WhenCrossAgent_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -225,7 +225,7 @@ public sealed class GoldenConversationEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task<Guid> CreateGoldenAsync(TestingWebAppFactory factory, HttpClient client, Guid agentId)
+    private static async Task<Guid> CreateGoldenAsync(TestServerWebAppFactory factory, HttpClient client, Guid agentId)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute(agentId))
         {
@@ -240,7 +240,7 @@ public sealed class GoldenConversationEndpointTests
         return document.RootElement.GetProperty("id").GetGuid();
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();

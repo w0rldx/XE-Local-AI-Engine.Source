@@ -21,7 +21,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task RenameConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -40,7 +40,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task PinConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -59,7 +59,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task ArchiveConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -78,7 +78,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task BranchConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -100,7 +100,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task CreateMessageRevision_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -121,7 +121,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task SetMessageFeedback_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -140,7 +140,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task SetSelectedPath_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -161,7 +161,7 @@ public sealed class NodeChatReadOnlyEndpointTests
         await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
     }
 
-    private static async Task<Guid> SeedRemoteConversationAsync(TestingWebAppFactory factory)
+    private static async Task<Guid> SeedRemoteConversationAsync(TestServerWebAppFactory factory)
     {
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
         var conversationId = Guid.NewGuid();
@@ -182,14 +182,14 @@ public sealed class NodeChatReadOnlyEndpointTests
         AssertEx.Equal("remote-origin", body.Reason);
     }
 
-    private static HttpRequestMessage CreateJsonRequest<T>(TestingWebAppFactory factory, HttpMethod method, string uri, T content)
+    private static HttpRequestMessage CreateJsonRequest<T>(TestServerWebAppFactory factory, HttpMethod method, string uri, T content)
     {
         var request = CreateRequest(factory, method, uri);
         request.Content = JsonContent.Create(content);
         return request;
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

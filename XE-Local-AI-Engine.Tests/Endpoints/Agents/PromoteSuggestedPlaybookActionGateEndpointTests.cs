@@ -27,7 +27,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     [Test]
     public async Task Promote_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(Guid.NewGuid(), Guid.NewGuid()))
@@ -49,7 +49,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         // endpoint must accept that instead of answering 415 Unsupported Media Type. A seeded suggestion with no eval
         // yields 409 EvalRequired, which proves the request was bound and dispatched rather than rejected at the
         // media-type gate.
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -71,7 +71,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     [Test]
     public async Task Promote_WhenSuggestionHasNoEvalResult_ReturnsConflictEvalRequired()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -108,7 +108,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     {
         // Cap of 1 (the floor the PostConfigure clamps to) with one already-Enabled action puts the agent at the cap, so a
         // promote whose eval passed and is current is blocked by the enabled-action hard cap rather than the eval gate.
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = static services =>
                 services.Configure<PlaybookActionOptions>(static options => options.MaxEnabledActions = 1)
@@ -145,7 +145,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         AssertEx.Equal(PlaybookActionState.Suggested, stored.State);
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
@@ -161,7 +161,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         return agent.Id;
     }
 
-    private static async Task<Guid> SeedSuggestionAsync(TestingWebAppFactory factory, Guid agentDefinitionId)
+    private static async Task<Guid> SeedSuggestionAsync(TestServerWebAppFactory factory, Guid agentDefinitionId)
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
@@ -175,7 +175,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         return created.Id;
     }
 
-    private static async Task SeedEnabledActionAsync(TestingWebAppFactory factory, Guid agentDefinitionId)
+    private static async Task SeedEnabledActionAsync(TestServerWebAppFactory factory, Guid agentDefinitionId)
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
@@ -188,7 +188,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             Priority: 50)).ConfigureAwait(false);
     }
 
-    private static async Task RecordPassingEvalAsync(TestingWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
+    private static async Task RecordPassingEvalAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
     {
         using var scope = factory.Services.CreateScope();
         var serviceProvider = scope.ServiceProvider;

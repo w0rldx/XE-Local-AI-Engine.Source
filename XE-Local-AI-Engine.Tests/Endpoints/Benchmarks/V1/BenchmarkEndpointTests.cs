@@ -266,7 +266,7 @@ public sealed class BenchmarkEndpointTests
             null,
             20);
 
-    private static HttpRequestMessage Authorized(TestingWebAppFactory factory, HttpMethod method, string path, object? content = null)
+    private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)
     {
         var request = new HttpRequestMessage(method, path);
         factory.AddNodeBearerToken(request);
@@ -290,11 +290,11 @@ public sealed class BenchmarkEndpointTests
         public IBenchmarkCatalogService Catalog { get; } = Substitute.For<IBenchmarkCatalogService>();
         public IBenchmarkCancellationService Cancellation { get; } = Substitute.For<IBenchmarkCancellationService>();
 
-        public TestingWebAppFactory Factory { get; }
+        public TestServerWebAppFactory Factory { get; }
 
         public Context()
         {
-            Factory = new TestingWebAppFactory
+            Factory = new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {

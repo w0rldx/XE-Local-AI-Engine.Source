@@ -17,7 +17,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubNegotiate_WhenNoCredentials_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HubNegotiateRoute);
@@ -29,7 +29,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubNegotiate_WhenBearerHeaderProvided_ReturnsOk()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HubNegotiateRoute);
@@ -42,7 +42,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubConnect_WhenNoAccessTokenQuery_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HubRoute);
@@ -54,7 +54,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubConnect_WhenAccessTokenSuppliedViaQueryString_PassesAuthorization()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var accessToken = factory.CreateNodeAccessToken();
