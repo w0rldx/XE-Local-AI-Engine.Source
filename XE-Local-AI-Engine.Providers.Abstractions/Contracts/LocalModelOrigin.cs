@@ -13,7 +13,11 @@ public enum LocalModelOrigin
 
     /// <summary>Copied from an operator-selected local GGUF file.</summary>
     [JsonStringEnumMemberName("imported")]
-    Imported = 1
+    Imported = 1,
+
+    /// <summary>Produced in-process by a local training run's export (merged fine-tune or LoRA adapter).</summary>
+    [JsonStringEnumMemberName("trained")]
+    Trained = 2
 }
 
 /// <summary>Strict lowercase JSON representation for <see cref="LocalModelOrigin" />.</summary>
@@ -31,6 +35,7 @@ public sealed class LocalModelOriginJsonConverter : JsonConverter<LocalModelOrig
         {
             "huggingface" => LocalModelOrigin.HuggingFace,
             "imported" => LocalModelOrigin.Imported,
+            "trained" => LocalModelOrigin.Trained,
             _ => throw new JsonException("The local model origin is not supported.")
         };
     }
@@ -42,6 +47,7 @@ public sealed class LocalModelOriginJsonConverter : JsonConverter<LocalModelOrig
         {
             LocalModelOrigin.HuggingFace => "huggingface",
             LocalModelOrigin.Imported => "imported",
+            LocalModelOrigin.Trained => "trained",
             _ => throw new JsonException("The local model origin is not supported.")
         });
     }

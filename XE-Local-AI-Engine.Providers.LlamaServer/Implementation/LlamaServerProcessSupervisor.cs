@@ -1042,6 +1042,25 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             throw NonRetryable("The requested model is not installed.");
         }
 
+        // A LoRA-adapter model has no weights of its own: llama-server loads the installed BASE model and applies this
+        // entry's file as --lora. Resolving it here (rather than inside the spec builder) keeps every size-derived
+        // decision below — the readiness deadline in particular — accounting for the bytes actually loaded.
+        string? adapterFilePath = null;
+        var adapterSizeBytes = 0L;
+        try
+        {
+            if (await _modelStore.ResolveAdapterLaunchAsync(key.ModelName, ct).ConfigureAwait(false) is { } adapterLaunch)
+            {
+                modelFilePath = adapterLaunch.BaseModelFilePath;
+                adapterFilePath = adapterLaunch.AdapterFilePath;
+                adapterSizeBytes = adapterLaunch.AdapterSizeBytes;
+            }
+        }
+        catch (GgufAdapterBaseModelMissingException exception)
+        {
+            throw NonRetryable(exception.Message);
+        }
+
         // A vision model's mmproj projector companion — passed to llama-server as --mmproj so it accepts image input.
         // Chat role only (embedding/reranker never take images); null for a text-only model, which gets no --mmproj.
         var projectorFilePath = key.Role == ModelRole.Chat
@@ -1051,7 +1070,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // AUD4-09: the cold-start readiness deadline scales with the on-disk model size — a large model loads
         // proportionally slower, so a fixed constant would kill and retry it before it can finish (the audited hang). A
         // missing/unreadable size (0) falls back to the base timeout.
-        var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath));
+        var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath) + adapterSizeBytes);
 
         // A chat-role EXTERNAL-DRAFT speculative mode needs its draft GGUF present before launch — a missing file would
         // otherwise start a server that dies cryptically. Deterministic misconfiguration → non-retryable (mirrors the
@@ -1193,7 +1212,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     speculative,
                     candidate.Plan,
                     launchTuning.ChatCacheRamMiB,
-                    projectorFilePath);
+                    projectorFilePath,
+                    adapterFilePath);
 
                 // Append the operator's per-model extra flags LAST so they win over the bundled tuning defaults
                 // (llama.cpp is last-wins for scalar flags). Placed BEFORE the diagnostic --metrics / -lv fill-ins below
@@ -2096,7 +2116,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         SpeculativeDecodingSettings speculative = default,
         LlamaServerLaunchPlan? plan = null,
         int chatCacheRamMiB = 0,
-        string? projectorFilePath = null)
+        string? projectorFilePath = null,
+        string? adapterFilePath = null)
     {
         var args = new List<string>
         {
@@ -2129,6 +2150,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         //    KV stays f16 and flash-attention stays auto.
         // A null plan (replay profiling) reproduces the supplied replay vector byte-for-byte.
         AppendContextPlacementAndThreadArgs(args, variant, resolved, plan);
+
+        // LoRA adapter. `-m` above is the BASE model this adapter was trained against (resolved by the caller); the
+        // adapter is applied on top at load. Role-agnostic on purpose: an adapter changes the weights, not the serving
+        // mode, so it belongs on whatever role the merged model would have served.
+        if (!string.IsNullOrWhiteSpace(adapterFilePath))
+        {
+            args.Add("--lora");
+            args.Add(adapterFilePath);
+        }
 
         if (key.Role == ModelRole.Chat)
         {

@@ -99,6 +99,11 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
         services.TryAddSingleton<ILlamaCppSourceBuildActivity, LlamaCppSourceBuildActivity>();
 
+        // Conversion tooling for training exports. Provisioned lazily on the first export, never at startup — a node
+        // that never trains never fetches it.
+        services.TryAddSingleton<IConvertScriptSourceFetcher, GitConvertScriptSourceFetcher>();
+        services.TryAddSingleton<IConvertScriptProvisioner, ConvertScriptProvisioner>();
+
         // Real llama.cpp process-VRAM-budget probe: parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
         // it WINS over the Application-layer TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>() floor
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.

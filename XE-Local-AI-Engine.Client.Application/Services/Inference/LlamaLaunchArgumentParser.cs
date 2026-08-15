@@ -51,7 +51,12 @@ public static class LlamaLaunchArgumentParser
         "-fa", "--flash-attn",
         "-np", "--parallel",
         "-b", "--batch-size",
-        "-ub", "--ubatch-size"
+        "-ub", "--ubatch-size",
+
+        // Adapter identity — the registry decides whether a model launches with an adapter and which one, and the
+        // launch-policy fingerprint commits to that choice. An operator-supplied --lora would load weights the
+        // fingerprint, the memory ledger, and the model's registered identity all know nothing about.
+        "--lora", "--lora-scaled"
     ];
 
     /// <summary>Splits <paramref name="raw" /> into tokens, honoring single/double quotes. Null/blank yields an empty list.</summary>

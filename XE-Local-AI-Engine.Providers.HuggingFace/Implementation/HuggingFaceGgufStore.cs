@@ -99,6 +99,31 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     }
 
     /// <inheritdoc />
+    public async Task<GgufAdapterLaunch?> ResolveAdapterLaunchAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        var entry = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
+        if (entry?.AdapterFileName is null || !File.Exists(entry.LocalPath))
+        {
+            return null;
+        }
+
+        if (entry.BaseModelName is not { Length: > 0 } baseModelName)
+        {
+            throw new GgufAdapterBaseModelMissingException("The installed adapter does not record the base model it applies to.");
+        }
+
+        var baseEntry = await _registry.FindAsync(baseModelName, ct).ConfigureAwait(false);
+        if (baseEntry is null || !File.Exists(baseEntry.LocalPath))
+        {
+            throw new GgufAdapterBaseModelMissingException("The base model this adapter applies to is not installed. Reinstall the base model or delete the adapter.");
+        }
+
+        return new GgufAdapterLaunch(baseEntry.LocalPath, entry.LocalPath, entry.AdapterSizeBytes ?? entry.SizeBytes);
+    }
+
+    /// <inheritdoc />
     public async Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
