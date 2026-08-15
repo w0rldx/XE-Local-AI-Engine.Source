@@ -17,7 +17,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
     [Test]
     public async Task GetFeedbackInsights_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -29,7 +29,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
     [Test]
     public async Task GetFeedbackInsights_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -42,7 +42,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
     [Test]
     public async Task GetFeedbackInsights_WhenAgentExistsWithoutFeedback_ReturnsOkEmptyState()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Insights Agent").ConfigureAwait(false);
@@ -65,7 +65,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
         AssertEx.Equal(expected: 0, root.GetProperty("exemplars").GetArrayLength());
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
