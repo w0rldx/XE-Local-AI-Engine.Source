@@ -116,9 +116,10 @@ public sealed record AgentSkillRecord(
 ///         ordering the spec does not have.
 ///     </para>
 ///     <para>
-///         <see cref="SourceUri" /> is shape-checked at the store boundary: either the literal <c>upload</c> or
-///         <c>github:owner/repo</c>. An uploaded archive contributes its <em>kind</em> only — the operator's filename
-///         must not become the one unencrypted free-text string in this table.
+///         <see cref="SourceUri" /> is shape-checked at the store boundary: the literal <c>upload</c>, the literal
+///         <c>generated</c> (AI-drafted content) or <c>github:owner/repo</c>. An uploaded or drafted skill contributes
+///         its <em>kind</em> only — the operator's filename, or the model that drafted it, must not become the one
+///         unencrypted free-text string in this table.
 ///     </para>
 /// </summary>
 public sealed record AgentSkillInput(

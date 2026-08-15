@@ -389,7 +389,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
 
         if (!SourceUriPattern().IsMatch(sourceUri))
         {
-            throw new ArgumentException($"Source URI '{sourceUri}' is not a supported provenance value; expected 'upload' or 'github:owner/repo'.", nameof(sourceUri));
+            throw new ArgumentException($"Source URI '{sourceUri}' is not a supported provenance value; expected 'upload', 'generated' or 'github:owner/repo'.", nameof(sourceUri));
         }
     }
 
@@ -408,7 +408,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         return value is null ? null : Encoding.UTF8.GetString(value);
     }
 
-    [GeneratedRegex("^(?:upload|github:[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
+    [GeneratedRegex("^(?:upload|generated|github:[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex SourceUriPattern();
 
     /// <summary>Wire shape of the <c>frontmatter_json</c> column — the spec's optional frontmatter fields, all nullable.</summary>
