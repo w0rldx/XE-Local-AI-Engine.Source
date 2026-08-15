@@ -86,7 +86,26 @@ public sealed class TrainingRunExecutor(
         TrainingCapacityReservation? reservation = null;
         try
         {
-            reservation = await PrepareAndRunAsync(run, cancellation, stoppingToken).ConfigureAwait(false);
+            var runOptions = Read<TrainingRunOptionsV1>(run.OptionsJson) ?? new TrainingRunOptionsV1();
+            var freeze = Read<TrainingRunFreezeV1>(run.FreezeJson);
+            if (freeze is null)
+            {
+                await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The run's frozen dataset record could not be read.").ConfigureAwait(false);
+                return;
+            }
+
+            // Reserved HERE rather than inside the preparation below: assigning the handle from a returned value
+            // would lose it if anything after the reservation threw, and the ledger would hold those bytes for the
+            // lifetime of the process — starving every later spawn decision on the node.
+            var estimate = await _defaults.EstimateAsync(run.BaseArtifactId, runOptions, stoppingToken).ConfigureAwait(false);
+            reservation = await _capacity.ReserveAsync(estimate, stoppingToken).ConfigureAwait(false);
+            if (!reservation.Granted)
+            {
+                await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, reservation.Reason).ConfigureAwait(false);
+                return;
+            }
+
+            await PrepareAndRunAsync(run, runOptions, freeze, cancellation, stoppingToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -103,33 +122,19 @@ public sealed class TrainingRunExecutor(
         }
     }
 
-    private async Task<TrainingCapacityReservation?> PrepareAndRunAsync(TrainingRunRecord run,
+    private async Task PrepareAndRunAsync(TrainingRunRecord run,
+        TrainingRunOptionsV1 runOptions,
+        TrainingRunFreezeV1 freeze,
         CancellationTokenSource cancellation,
         CancellationToken stoppingToken)
     {
-        var runOptions = Read<TrainingRunOptionsV1>(run.OptionsJson) ?? new TrainingRunOptionsV1();
-        var freeze = Read<TrainingRunFreezeV1>(run.FreezeJson);
-        if (freeze is null)
-        {
-            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The run's frozen dataset record could not be read.").ConfigureAwait(false);
-            return null;
-        }
-
-        var estimate = await _defaults.EstimateAsync(run.BaseArtifactId, runOptions, stoppingToken).ConfigureAwait(false);
-        var reservation = await _capacity.ReserveAsync(estimate, stoppingToken).ConfigureAwait(false);
-        if (!reservation.Granted)
-        {
-            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, reservation.Reason).ConfigureAwait(false);
-            return reservation;
-        }
-
         var version = await TransitionAsync(run.Id, run.Version, TrainingRunStatus.Preparing, stoppingToken).ConfigureAwait(false);
 
         var interpreter = _runtime.ResolveInterpreterPath();
         if (interpreter is null || _runtime.GetStatus().Phase != TrainingRuntimePhase.Ready)
         {
             await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The Python training runtime is not installed.").ConfigureAwait(false);
-            return reservation;
+            return;
         }
 
         var datasetPath = await _workspace.MaterializeWorkCopyAsync(run.DatasetId, freeze.FreezeId, run.Id, stoppingToken).ConfigureAwait(false);
@@ -137,7 +142,6 @@ public sealed class TrainingRunExecutor(
 
         _ = await TransitionAsync(run.Id, version, TrainingRunStatus.Training, stoppingToken).ConfigureAwait(false);
         await RunTrainerAsync(run, interpreter, jobPath, cancellation, stoppingToken).ConfigureAwait(false);
-        return reservation;
     }
 
     private async Task RunTrainerAsync(TrainingRunRecord run,
