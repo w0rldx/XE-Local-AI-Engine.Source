@@ -74,6 +74,10 @@ export function toCreateSkillRequest(form: SkillFormValues): XeLocalAiEngineClie
 		compatibility: toOptionalText(form.compatibility),
 		allowedTools: toOptionalText(form.allowedTools),
 		metadata: form.metadata,
+		// Provenance of an applied AI draft. `generated` is the demotion switch (Imported + disabled server-side);
+		// the metadata block is echoed back exactly as the draft endpoint returned it.
+		generated: form.generated,
+		generationMetadata: form.generationMetadata,
 	};
 }
 
@@ -91,5 +95,10 @@ export function toUpdateSkillRequest(form: SkillFormValues): XeLocalAiEngineClie
 		compatibility: toOptionalText(form.compatibility),
 		allowedTools: toOptionalText(form.allowedTools),
 		metadata: form.metadata,
+		// See toCreateSkillRequest. On an ordinary edit both are false/null: `generated` false leaves the posture
+		// alone (it can only tighten), and a null metadata block PRESERVES the stored provenance rather than
+		// clearing it — the one documented deviation from this endpoint's full-replacement contract.
+		generated: form.generated,
+		generationMetadata: form.generationMetadata,
 	};
 }

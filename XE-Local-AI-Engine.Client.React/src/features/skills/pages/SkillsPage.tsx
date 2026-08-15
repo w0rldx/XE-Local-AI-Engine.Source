@@ -27,6 +27,8 @@ const emptyFormValues: SkillFormValues = {
 	compatibility: "",
 	description: "",
 	enabled: true,
+	generated: false,
+	generationMetadata: null,
 	license: "",
 	metadata: null,
 	name: "",
@@ -41,6 +43,10 @@ function toFormValues(skill: Skill): SkillFormValues {
 		compatibility: skill.compatibility ?? "",
 		description: skill.description,
 		enabled: skill.enabled,
+		// An edit starts with no applied draft: `generated` false leaves the stored posture alone, and a null
+		// metadata block tells the server to preserve whatever provenance the row already carries.
+		generated: false,
+		generationMetadata: null,
 		license: skill.license ?? "",
 		metadata: skill.metadata,
 		name: skill.name,
@@ -98,18 +104,52 @@ export function SkillsPage() {
 		closeEditor();
 	}, [closeEditor]);
 
+	// Saving AI-drafted content demotes the skill server-side (Imported, disabled) whether it was drafted from
+	// scratch or improved in place, so the same explanation is owed either way — otherwise a skill the operator just
+	// improved silently stops loading. The badge and the disabled toggle arrive with the refetched row; this is the
+	// one part of the demotion the UI has to say out loud.
+	const notifyIfDemoted = useCallback(
+		(values: SkillFormValues) => {
+			if (values.generated) {
+				toast.warning(
+					t(
+						"assist.demotionToast",
+						"Saved as an imported skill and left disabled. Review the generated instructions, then enable it.",
+					),
+				);
+			}
+		},
+		[t],
+	);
+
 	const handleSubmit = useCallback(
 		(values: SkillFormValues) => {
 			if (editorTarget?.mode === "edit") {
 				const body = toUpdateSkillRequest(values);
-				updateMutation.mutate({ path: { skillId: editorTarget.id }, body }, { onSuccess: () => closeAndResetEditor() });
+				updateMutation.mutate(
+					{ path: { skillId: editorTarget.id }, body },
+					{
+						onSuccess: () => {
+							notifyIfDemoted(values);
+							closeAndResetEditor();
+						},
+					},
+				);
 				return;
 			}
 
 			const body = toCreateSkillRequest(values);
-			createMutation.mutate({ body }, { onSuccess: () => closeAndResetEditor() });
+			createMutation.mutate(
+				{ body },
+				{
+					onSuccess: () => {
+						notifyIfDemoted(values);
+						closeAndResetEditor();
+					},
+				},
+			);
 		},
-		[closeAndResetEditor, createMutation, editorTarget, updateMutation],
+		[closeAndResetEditor, createMutation, editorTarget, notifyIfDemoted, updateMutation],
 	);
 
 	// Single close path for every dismiss vector (title-bar X, footer Cancel). Confirms a discard first when the

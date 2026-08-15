@@ -17,6 +17,8 @@ const valid = {
 	compatibility: "",
 	allowedTools: "",
 	metadata: null,
+	generated: false,
+	generationMetadata: null,
 };
 
 describe("SKILL_NAME_PATTERN", () => {

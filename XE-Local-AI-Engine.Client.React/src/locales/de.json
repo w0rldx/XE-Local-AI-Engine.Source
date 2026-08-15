@@ -1,5 +1,56 @@
 {
 	"basicFormatOption": "de-DE",
+	"assist": {
+		"draftButton": "Mit KI entwerfen",
+		"improveButton": "Mit KI verbessern",
+		"noModelHint": "Auf diesem Knoten ist kein lokales Chat-Modell installiert – es kann noch nichts entworfen werden.",
+		"intro": "Ein Modell auf diesem Knoten schreibt aus Ihrer Beschreibung einen Entwurf. Gespeichert wird erst, wenn Sie ihn übernehmen und das Formular selbst speichern.",
+		"demotionToast": "Als importierter Skill gespeichert und deaktiviert gelassen. Prüfen Sie die erzeugten Anweisungen und aktivieren Sie ihn danach.",
+		"dialog": {
+			"draftTitle": "Mit KI entwerfen",
+			"improveTitle": "Mit KI verbessern"
+		},
+		"model": {
+			"label": "Modell",
+			"description": "Nur auf diesem Knoten installierte Chat-Modelle können entwerfen.",
+			"notLoaded": "Dieses Modell ist nicht geladen – der erste Entwurf lädt es und dauert dadurch länger."
+		},
+		"brief": {
+			"createLabel": "Was soll das können?",
+			"improveLabel": "Was soll sich ändern?",
+			"createDescription": "Beschreiben Sie die Aufgabe in eigenen Worten – das Modell macht daraus einen Entwurf.",
+			"improveDescription": "Beschreiben Sie die Änderung. Der aktuelle Inhalt wird als Ausgangspunkt mitgeschickt.",
+			"placeholder": "Lieferantenrechnungen gegen die vereinbarte Preisliste prüfen und Auffälligkeiten melden."
+		},
+		"actions": {
+			"generate": "Entwerfen",
+			"regenerate": "Neu entwerfen",
+			"cancel": "Entwurf abbrechen",
+			"discard": "Verwerfen",
+			"apply": "Ins Formular übernehmen"
+		},
+		"pending": {
+			"elapsed": "Entwurf läuft … {{seconds}} s vergangen.",
+			"hint": "Lokale Modelle können mehrere Minuten brauchen. Sie können jederzeit abbrechen."
+		},
+		"errors": {
+			"busy": "Der Knoten führt gerade eine andere Aufgabe aus. Versuchen Sie es erneut, sobald sie fertig ist.",
+			"unparseable": "Das Modell hat keinen brauchbaren Entwurf geliefert. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
+			"generic": "Der Entwurf konnte nicht erzeugt werden."
+		},
+		"result": {
+			"nameLabel": "Name",
+			"descriptionLabel": "Beschreibung",
+			"instructionsLabel": "Anweisungen",
+			"bodyLabel": "Inhalt"
+		},
+		"rationale": {
+			"toggle": "Warum dieser Entwurf",
+			"none": "Das Modell hat diesen Entwurf nicht begründet.",
+			"assumptions": "Getroffene Annahmen",
+			"confidence": "Selbsteingeschätzte Sicherheit des Modells: {{percent}} % – eine Behauptung, keine Messung."
+		}
+	},
 	"common": {
 		"loading": "Lädt...",
 		"refresh": "Aktualisieren",
@@ -3762,6 +3813,7 @@
 					"description": "Deaktivierte Skills werden nie von einem Agenten geladen, auch wenn sie weiterhin zugewiesen sind."
 				},
 				"importedNote": "Dieser Skill wurde aus {{source}} importiert. Seine Anweisungen sind fremde Inhalte, die dieser Knoten nie geprüft hat, und laufen nach dem Aktivieren mit den Tool-Rechten Ihres Agenten.",
+				"generatedNote": "Dieser Skill wurde von einem Modell auf diesem Knoten geschrieben und wurde nicht geprüft. Seine Anweisungen laufen nach dem Aktivieren mit den Tool-Rechten Ihres Agenten.",
 				"frontmatterSection": "Frontmatter",
 				"license": {
 					"label": "Lizenz"
