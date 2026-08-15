@@ -359,7 +359,7 @@ public sealed class TrainingRunExecutor(
             { WatchdogReason: { } reason } => (TrainingWorkStatus.Failed, reason),
             _ when cancelled => (TrainingWorkStatus.Cancelled, "The training run was cancelled."),
             { Done: true, ErrorMessage: null } when exitCode == 0 => (TrainingWorkStatus.Succeeded, (string?)null),
-            { ErrorMessage: { } error } => (TrainingWorkStatus.Failed, error),
+            { ErrorMessage: { } error } when !string.IsNullOrWhiteSpace(error) => (TrainingWorkStatus.Failed, error),
             _ => (TrainingWorkStatus.Failed, $"The trainer exited with status {exitCode}.")
         };
 

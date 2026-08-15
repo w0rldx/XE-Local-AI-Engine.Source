@@ -308,6 +308,10 @@ def main():
                 packing=False,
                 dataset_text_field="text",
                 report_to="none",
+                # Live-found: `datasets` defaults num_proc from the CPU count and forks a multiprocessing Manager for
+                # tokenization; inside this sandboxed, CUDA-initialized process the forked child dies (EOFError on the
+                # manager pipe). One process is correct here - the datasets are small and the model is already on the GPU.
+                dataset_num_proc=1,
             ),
             callbacks=[ProgressCallback()],
         )
@@ -331,7 +335,10 @@ def main():
     except SystemExit:
         raise
     except Exception as error:  # noqa: BLE001 - every failure has to reach the host as one protocol line
-        emit("error", category=type(error).__name__, message=str(error)[:1000])
+        # str(EOFError()) is "" - an empty message would leave the host with a failed run and no visible reason,
+        # so the exception type is the floor.
+        message = str(error).strip() or type(error).__name__
+        emit("error", category=type(error).__name__, message=message[:1000])
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
     finally:
