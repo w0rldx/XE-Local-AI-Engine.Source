@@ -19,7 +19,7 @@ public sealed class AgentTemplateEndpointsTests
     [Test]
     public async Task ListTemplates_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
@@ -31,7 +31,7 @@ public sealed class AgentTemplateEndpointsTests
     [Test]
     public async Task ImportTemplates_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ImportRoute)
@@ -49,7 +49,7 @@ public sealed class AgentTemplateEndpointsTests
     [Test]
     public async Task ListTemplates_WhenOperator_ReturnsCatalogWithProvenanceFlags()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var firstSlug = factory.Services.GetRequiredService<IAgentTemplateCatalog>().List()[0].Slug;
@@ -78,7 +78,7 @@ public sealed class AgentTemplateEndpointsTests
     [Test]
     public async Task ImportTemplates_WhenOperator_ImportsCatalogSlugsAndReportsBuckets()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var knownSlug = factory.Services.GetRequiredService<IAgentTemplateCatalog>().List()[0].Slug;

@@ -92,6 +92,12 @@ internal static class AddNodeModelRuntimeExtensions
 
             options.UseSqlite(connectionString)
                    .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                   // EF's STATIC ServiceProviderCache keys on the options (incl. this connection string) and each entry
+                   // strongly roots the whole application ServiceProvider. The product builds one host with one
+                   // connection string, so the default caching is a single entry and stays on. Test hosts use a fresh
+                   // per-host SQLite path, so every host would add a new immortal entry — the fixtures set this flag
+                   // to false, which bypasses the static cache entirely (docs/agent-knowledge.md §1).
+                   .EnableServiceProviderCaching(configuration.GetValue("EntityFramework:ServiceProviderCaching", defaultValue: true))
                    .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>(),
                        serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
@@ -105,6 +111,8 @@ internal static class AddNodeModelRuntimeExtensions
 
             options.UseSqlite(connectionString,
                        sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
+                   // Same static-cache rooting consideration as the NodeChatDbContext registration above.
+                   .EnableServiceProviderCaching(configuration.GetValue("EntityFramework:ServiceProviderCaching", defaultValue: true))
                    .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>());
         });

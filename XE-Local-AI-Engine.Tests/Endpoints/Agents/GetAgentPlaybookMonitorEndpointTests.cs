@@ -23,7 +23,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -35,7 +35,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -48,7 +48,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenAgentExistsWithoutEnabledActions_ReturnsOkEmptyItemsWithRetrieval()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Monitor Agent").ConfigureAwait(false);
@@ -77,7 +77,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenEmbeddingModelConfigured_ReturnsEmbeddingRankerWithModel()
     {
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
                 services.Configure<PlaybookRetrievalOptions>(static options => options.EmbeddingModelName = "nomic-embed-text")
@@ -101,7 +101,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         AssertEx.Equal("nomic-embed-text", retrieval.GetProperty("embeddingModel").GetString());
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();

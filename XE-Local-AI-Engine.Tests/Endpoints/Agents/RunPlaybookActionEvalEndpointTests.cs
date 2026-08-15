@@ -25,7 +25,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     [Test]
     public async Task RunEval_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(Guid.NewGuid(), Guid.NewGuid()))
@@ -47,7 +47,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         // endpoint must accept that instead of answering 415 Unsupported Media Type. A seeded suggestion with no golden
         // cases yields 200 with a failing eval result, which proves the request was bound and dispatched rather than
         // rejected at the media-type gate.
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -65,7 +65,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     [Test]
     public async Task RunEval_WhenActionMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -85,7 +85,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     [Test]
     public async Task RunEval_WhenActionBelongsToDifferentAgent_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -108,7 +108,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     [Test]
     public async Task RunEval_WhenActionEnabledNotPending_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -143,7 +143,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     [Test]
     public async Task RunEval_WhenNoGoldenCases_ReturnsOkWithFailingEvalResult()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -174,7 +174,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         AssertEx.Equal(expected: 0, evalResult.GetProperty("cases").GetArrayLength());
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
@@ -190,7 +190,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         return agent.Id;
     }
 
-    private static async Task<Guid> SeedSuggestionAsync(TestingWebAppFactory factory, Guid agentDefinitionId)
+    private static async Task<Guid> SeedSuggestionAsync(TestServerWebAppFactory factory, Guid agentDefinitionId)
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
