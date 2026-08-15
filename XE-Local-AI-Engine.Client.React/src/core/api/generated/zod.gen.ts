@@ -62,6 +62,21 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointReq
 
 export const zXeLocalAiEngineClientPersistenceAgentSkillOrigin = z.enum(["Local", "Imported"]);
 
+export const zXeLocalAiEngineClientServicesDraftingDraftMode = z.enum(["Create", "Improve"]);
+
+export const zXeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse = z.object({
+	model: z.string().nullish(),
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	userBrief: z.string().nullish(),
+	rationale: z.string().nullish(),
+	assumptions: z.array(z.string()).nullish(),
+	confidence: z.number().optional(),
+	generatedAtUtc: z.int().optional(),
+	draftContentHash: z.string().nullish(),
+	acceptedAtUtc: z.int().optional(),
+	wasEdited: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 	id: z.guid(),
 	name: z.string(),
@@ -81,10 +96,22 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 	origin: zXeLocalAiEngineClientPersistenceAgentSkillOrigin,
 	sourceUri: z.string().nullish(),
 	importedAtUtc: z.int().nullish(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse.nullish(),
 	resourceCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsCommonGenerationMetadata = z.object({
+	model: z.string().nullish(),
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	userBrief: z.string().nullish(),
+	rationale: z.string().nullish(),
+	assumptions: z.array(z.string()).nullish(),
+	confidence: z.number().optional(),
+	generatedAtUtc: z.int().optional(),
+	draftContentHash: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
@@ -95,9 +122,34 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.objec
 	compatibility: z.string().nullish(),
 	allowedTools: z.string().nullish(),
 	metadata: z.record(z.string(), z.string()).nullish(),
+	generated: z.boolean().optional(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	body: z.string(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata,
+});
+
+export const zXeLocalAiEngineClientEndpointsCommonDraftErrorCode = z.enum(["NodeBusy", "Unparseable"]);
+
+export const zXeLocalAiEngineClientEndpointsCommonDraftErrorResponse = z.object({
+	code: zXeLocalAiEngineClientEndpointsCommonDraftErrorCode,
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest = z.object({
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	modelName: z.string().nullish(),
+	brief: z.string().nullish(),
+	existingName: z.string().nullish(),
+	existingDescription: z.string().nullish(),
+	existingContent: z.string().nullish(),
+});
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
 
@@ -203,6 +255,8 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.objec
 	compatibility: z.string().nullish(),
 	allowedTools: z.string().nullish(),
 	metadata: z.record(z.string(), z.string()).nullish(),
+	generated: z.boolean().optional(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = z.object({
@@ -3572,6 +3626,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = z.object({
@@ -3589,6 +3644,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 	memoryExtractionEnabled: z.boolean().optional(),
 	disableBaseScaffold: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = z.object({
@@ -3616,6 +3672,22 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest
 export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	instructions: z.string(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata,
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest = z.object({
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	modelName: z.string().nullish(),
+	brief: z.string().nullish(),
+	existingName: z.string().nullish(),
+	existingDescription: z.string().nullish(),
+	existingContent: z.string().nullish(),
+});
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = z.record(z.string(), z.never());
 
@@ -3948,6 +4020,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest
 	memoryExtractionEnabled: z.boolean().optional(),
 	disableBaseScaffold: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = z.object({
@@ -4053,6 +4126,13 @@ export const zUpdateSkillPath = z.object({
  * Success
  */
 export const zUpdateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+
+export const zDraftSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest;
+
+/**
+ * Success
+ */
+export const zDraftSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse;
 
 export const zGetSkillResourcePath = z.object({
 	skillId: z.guid(),
@@ -5923,6 +6003,13 @@ export const zUpdatePlaybookActionPath = z.object({
  * Success
  */
 export const zUpdatePlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zDraftAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest;
+
+/**
+ * Success
+ */
+export const zDraftAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse;
 
 export const zGetAgentFeedbackInsightsPath = z.object({
 	agentDefinitionId: z.guid(),
