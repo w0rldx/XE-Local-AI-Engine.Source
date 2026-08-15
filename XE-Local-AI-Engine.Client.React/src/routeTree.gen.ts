@@ -37,6 +37,7 @@ import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
 import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 import { Route as LayoutTrainingIndexRouteImport } from './routes/_layout/training.index'
+import { Route as LayoutTrainingComparisonsRouteImport } from './routes/_layout/training.comparisons'
 import { Route as LayoutTrainingDatasetsRouteImport } from './routes/_layout/training.datasets'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -179,6 +180,12 @@ const LayoutTrainingIndexRoute = LayoutTrainingIndexRouteImport.update({
   path: '/training/',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutTrainingComparisonsRoute =
+  LayoutTrainingComparisonsRouteImport.update({
+    id: '/training/comparisons',
+    path: '/training/comparisons',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 const LayoutTrainingDatasetsRoute = LayoutTrainingDatasetsRouteImport.update({
   id: '/training/datasets',
   path: '/training/datasets',
@@ -212,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
+  '/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/training/': typeof LayoutTrainingIndexRoute
 }
@@ -242,6 +250,7 @@ export interface FileRoutesByTo {
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
   '/': typeof LayoutIndexRoute
+  '/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/training': typeof LayoutTrainingIndexRoute
 }
@@ -274,6 +283,7 @@ export interface FileRoutesById {
   '/_layout/tools': typeof LayoutToolsRoute
   '/_layout/usage': typeof LayoutUsageRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/_layout/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/_layout/training/': typeof LayoutTrainingIndexRoute
 }
@@ -306,6 +316,7 @@ export interface FileRouteTypes {
     | '/skills'
     | '/tools'
     | '/usage'
+    | '/training/comparisons'
     | '/training/datasets'
     | '/training/'
   fileRoutesByTo: FileRoutesByTo
@@ -336,6 +347,7 @@ export interface FileRouteTypes {
     | '/tools'
     | '/usage'
     | '/'
+    | '/training/comparisons'
     | '/training/datasets'
     | '/training'
   id:
@@ -367,6 +379,7 @@ export interface FileRouteTypes {
     | '/_layout/tools'
     | '/_layout/usage'
     | '/_layout/'
+    | '/_layout/training/comparisons'
     | '/_layout/training/datasets'
     | '/_layout/training/'
   fileRoutesById: FileRoutesById
@@ -575,6 +588,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutTrainingIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/training/comparisons': {
+      id: '/_layout/training/comparisons'
+      path: '/training/comparisons'
+      fullPath: '/training/comparisons'
+      preLoaderRoute: typeof LayoutTrainingComparisonsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/training/datasets': {
       id: '/_layout/training/datasets'
       path: '/training/datasets'
@@ -610,6 +630,7 @@ interface LayoutRouteChildren {
   LayoutToolsRoute: typeof LayoutToolsRoute
   LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutTrainingComparisonsRoute: typeof LayoutTrainingComparisonsRoute
   LayoutTrainingDatasetsRoute: typeof LayoutTrainingDatasetsRoute
   LayoutTrainingIndexRoute: typeof LayoutTrainingIndexRoute
 }
@@ -639,6 +660,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutToolsRoute: LayoutToolsRoute,
   LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutTrainingComparisonsRoute: LayoutTrainingComparisonsRoute,
   LayoutTrainingDatasetsRoute: LayoutTrainingDatasetsRoute,
   LayoutTrainingIndexRoute: LayoutTrainingIndexRoute,
 }

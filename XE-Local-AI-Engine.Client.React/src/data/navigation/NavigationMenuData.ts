@@ -162,6 +162,7 @@ const allNavigationLinks: INavigationLink[] = [
 		links: [
 			{ translationKey: "navigation.trainingDatasets", to: nodeRoutePaths.trainingDatasets, capability: "training" },
 			{ translationKey: "navigation.training", to: nodeRoutePaths.training, capability: "training" },
+			{ translationKey: "navigation.trainingComparisons", to: nodeRoutePaths.trainingComparisons, capability: "training" },
 		],
 	},
 	{

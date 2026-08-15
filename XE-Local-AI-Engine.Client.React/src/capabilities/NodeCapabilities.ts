@@ -150,6 +150,7 @@ export const nodeRoutePaths = {
 	benchmarks: "/benchmarks",
 	training: "/training",
 	trainingDatasets: "/training/datasets",
+	trainingComparisons: "/training/comparisons",
 	// agent token-usage dashboard (per-provider/model/day rollups) — operator observability, always available like
 	// invocations (both are backed by operator-gated endpoints; the authenticated _layout is the operator gate).
 	usage: "/usage",
