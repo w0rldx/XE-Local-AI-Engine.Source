@@ -15,6 +15,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class GoldenConversationEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string ListRoute(Guid agentDefinitionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/golden-conversations";
@@ -57,7 +60,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task List_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute(Guid.NewGuid()));
@@ -69,7 +72,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Create_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute(Guid.NewGuid()))
@@ -84,7 +87,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Delete_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid(), Guid.NewGuid()));
@@ -96,7 +99,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Create_WhenValid_ReturnsOkAndRoundTripsInputTurnsAndAssertion()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -130,7 +133,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Create_WhenTitleBlank_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -171,7 +174,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task List_WhenCasesExist_ReturnsItemsWrapper()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -194,7 +197,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Delete_WhenOwnedCase_ReturnsNoContent()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -210,7 +213,7 @@ public sealed class GoldenConversationEndpointTests
     [Test]
     public async Task Delete_WhenCrossAgent_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);

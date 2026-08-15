@@ -6,16 +6,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 public sealed class SelectLocalModelEndpoint(
     INodeSettingsStore nodeSettingsStore,
-    ICloudCredentialStore cloudCredentialStore,
+    ICloudModelResolver cloudModelResolver,
     IActiveCloudChatClientFactory activeCloudChatClientFactory,
     ModelNameValidator modelNameValidator) : Endpoint<SelectLocalModelRequest, SelectLocalModelResponse>
 {
     private readonly IActiveCloudChatClientFactory _activeCloudChatClientFactory = activeCloudChatClientFactory ?? throw new ArgumentNullException(nameof(activeCloudChatClientFactory));
-    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
+    private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
 
@@ -45,8 +44,8 @@ public sealed class SelectLocalModelEndpoint(
         // deployment), invalidate that snapshot so an Azure↔local / Azure-A↔Azure-B / Codex switch takes effect on the
         // next send instead of after the TTL. A local→local switch leaves the cloud snapshot untouched (no cloud client
         // is involved either way).
-        if (await IsCloudModelAsync(previousModelName, ct).ConfigureAwait(false)
-            || await IsCloudModelAsync(selectedModelName, ct).ConfigureAwait(false))
+        if (await _cloudModelResolver.IsCloudModelAsync(previousModelName, ct).ConfigureAwait(false)
+            || await _cloudModelResolver.IsCloudModelAsync(selectedModelName, ct).ConfigureAwait(false))
         {
             _activeCloudChatClientFactory.InvalidateSelectionCache();
         }
@@ -55,39 +54,6 @@ public sealed class SelectLocalModelEndpoint(
         {
             SelectedModelName = selectedModelName
         }, ct).ConfigureAwait(false);
-    }
-
-    // True when the model id is a cloud model — a Codex catalog id or a stored Azure Foundry deployment name. Best-effort
-    // on the Azure read: a config-resolution failure treats the id as non-cloud (the worst case is the selection snapshot
-    // simply expires on its own short TTL rather than invalidating immediately).
-    private async Task<bool> IsCloudModelAsync(string? modelName, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(modelName))
-        {
-            return false;
-        }
-
-        if (CodexModelCatalog.IsCodexModel(modelName))
-        {
-            return true;
-        }
-
-        try
-        {
-            var config = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
-            var connection = config?.AzureFoundry;
-            return connection is { Models.Count: > 0 }
-                   && connection.Models.Any(model => string.Equals(model.DeploymentName, modelName, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            Logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{ModelName}'.", modelName);
-            return false;
-        }
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)

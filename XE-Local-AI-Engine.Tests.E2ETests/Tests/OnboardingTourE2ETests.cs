@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     Browser coverage for optional progressive tutorials. The normal fixture seeds all tutorial keys completed;
 ///     these tests temporarily clear them to exercise the first-use invitations.
 /// </summary>
-public sealed class OnboardingTourE2ETests : XEE2ETestBase
+public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
 {
     private const string DefaultChatModel = "qwen3.5:0.8b";
     private const string DefaultEmbeddingModel = "qwen3-embedding:0.6b";

@@ -75,10 +75,11 @@ export function useEjectModel() {
 	return useMutation<UnloadResult, Error, string, { previous: LoadedModelsSnapshot | undefined }>({
 		mutationFn: async (modelName: string) => {
 			const { data } = await callWithResponseValidation(
-				// The unload endpoint is a body-bound POST: FastEndpoints 415s a truly empty route-only POST, so an
-				// empty JSON object `{}` must ride the request. The generated `body` type is `never` (the request DTO is
-				// `{ [key: string]: never }`), so the empty object is cast through `never` to satisfy the SDK signature.
-				unloadLocalModel({ path: { modelName }, body: {} as never, throwOnError: true }),
+				// Route-only POST: the model name rides the path and NO body is sent. The generated requestValidator
+				// types `body` as `z.never().optional()`, so passing even `{}` fails zod parsing client-side and the
+				// request never reaches the wire; the endpoint's `Accepts<UnloadLocalModelRequest>()` override is what
+				// keeps a body-less POST (no Content-Type) out of FastEndpoints' 415.
+				unloadLocalModel({ path: { modelName }, throwOnError: true }),
 			);
 			return toUnloadResult(data);
 		},

@@ -19,6 +19,14 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
 {
+    /// <summary>
+    ///     One host for the default-configuration tests: each seeds its own agent and suggestion and asserts on those
+    ///     ids only (agent names are indexed but NOT unique, so the repeated "Owner" seed name is safe). The cap test
+    ///     keeps its own host because it clamps <c>PlaybookAction:MaxEnabledActions</c> to 1.
+    /// </summary>
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string PromoteRoute(Guid agentDefinitionId, Guid actionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote";
@@ -27,7 +35,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     [Test]
     public async Task Promote_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(Guid.NewGuid(), Guid.NewGuid()))
@@ -49,7 +57,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         // endpoint must accept that instead of answering 415 Unsupported Media Type. A seeded suggestion with no eval
         // yields 409 EvalRequired, which proves the request was bound and dispatched rather than rejected at the
         // media-type gate.
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -71,7 +79,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     [Test]
     public async Task Promote_WhenSuggestionHasNoEvalResult_ReturnsConflictEvalRequired()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);

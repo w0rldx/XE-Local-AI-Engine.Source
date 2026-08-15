@@ -8,6 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -202,6 +203,41 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
         AssertEx.Empty(coordinator.StartCalls);
     }
 
+    [Test]
+    public async Task DownloadRecommended_WhenTheModelNameIsAlreadyClaimed_IsConflict()
+    {
+        // The coordinator's synchronous conflict must reach the operator as a 409 through the shared download mapper —
+        // before this endpoint had any catch it fell through to a bare 500.
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false, new GgufAcquisitionConflictException());
+
+        await using var factory = CreateFactory(coordinator, installed: []);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal(1, coordinator.StartCalls.Count);
+    }
+
+    [Test]
+    public async Task DownloadRecommended_WhenTheRecommendedRepositoryIsMissing_IsNotFound()
+    {
+        var failure = new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
+            "The recommended embedding model is no longer published under that repository.");
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false, failure);
+
+        await using var factory = CreateFactory(coordinator, installed: []);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static TestServerWebAppFactory CreateFactory(IGgufDownloadCoordinator coordinator, IReadOnlyList<LocalModelDescriptor> installed)
     {
         var modelStore = Substitute.For<IGgufModelStore>();
@@ -237,13 +273,18 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
 
     // Hand-written recording fake: records every StartAsync request and returns a ticket with the configured
     // AlreadyInFlight, so a test can assert the exact repo/quant/role the endpoint requested.
-    private sealed class RecordingDownloadCoordinator(bool alreadyInFlight) : IGgufDownloadCoordinator
+    private sealed class RecordingDownloadCoordinator(bool alreadyInFlight, Exception? failure = null) : IGgufDownloadCoordinator
     {
         public List<GgufModelRequest> StartCalls { get; } = [];
 
         public Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
         {
             StartCalls.Add(request);
+            if (failure is not null)
+            {
+                return Task.FromException<GgufDownloadTicket>(failure);
+            }
+
             var modelName = string.IsNullOrWhiteSpace(request.Quant) ? request.RepoId : GgufModelName.Format(request.RepoId, request.Quant);
             return Task.FromResult(new GgufDownloadTicket(modelName, alreadyInFlight));
         }

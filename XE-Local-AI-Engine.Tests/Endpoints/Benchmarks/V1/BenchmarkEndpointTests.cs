@@ -134,9 +134,7 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        using var document = JsonDocument.Parse(body);
-        AssertEx.Equal(nameof(BenchmarkErrorCode.IneligibleAgent), document.RootElement.GetProperty("code").GetString());
+        AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.IneligibleAgent, "The selected agent is not eligible.");
     }
 
     [Test]
@@ -150,9 +148,7 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var document = JsonDocument.Parse(body);
-        AssertEx.Equal(nameof(BenchmarkErrorCode.ProjectFrozen), document.RootElement.GetProperty("code").GetString());
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.ProjectFrozen, "The benchmark project has runs and is frozen.");
     }
 
     [Test]
@@ -168,8 +164,22 @@ public sealed class BenchmarkEndpointTests
             expectedVersion = 3
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "Score must be between 1 and 5.");
+    }
+
+    [Test]
+    public async Task GetProject_WhenMissing_ReturnsProblemDetailsNotFound()
+    {
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.NotFound, BenchmarkErrorCode.NotFound, "The requested benchmark resource was not found.");
     }
 
     [Test]
@@ -265,6 +275,18 @@ public sealed class BenchmarkEndpointTests
             null,
             null,
             20);
+
+    // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
+    // BenchmarkErrorCode name rides along as the `code` extension member.
+    private static void AssertProblem(HttpResponseMessage response, string body, HttpStatusCode status, BenchmarkErrorCode code, string detail)
+    {
+        AssertEx.Equal(status, response.StatusCode);
+        AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal((int)status, document.RootElement.GetProperty("status").GetInt32());
+        AssertEx.Equal(code.ToString(), document.RootElement.GetProperty("code").GetString());
+        AssertEx.Equal(detail, document.RootElement.GetProperty("detail").GetString());
+    }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)
     {

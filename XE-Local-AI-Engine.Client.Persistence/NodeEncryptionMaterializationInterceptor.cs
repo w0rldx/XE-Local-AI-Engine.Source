@@ -46,6 +46,8 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case AgentDefinition definition:
                 definition.Instructions = NodePayloadProtector.Decrypt(definition.Instructions, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "instructions");
                 definition.Description = DecryptIfPresent(definition.Description, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "description");
+                definition.GenerationMetadataJson =
+                    DecryptIfPresent(definition.GenerationMetadataJson, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "generation_metadata_json");
                 break;
             case CanvasWorkflow canvas:
                 canvas.GraphJson = NodePayloadProtector.Decrypt(canvas.GraphJson, context.NodeEncryptionKey.Span, Guid.Empty, canvas.Id, "graph_json");
@@ -54,6 +56,7 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 skill.Description = NodePayloadProtector.Decrypt(skill.Description, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "description");
                 skill.Body = NodePayloadProtector.Decrypt(skill.Body, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "body");
                 skill.FrontmatterJson = DecryptIfPresent(skill.FrontmatterJson, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "frontmatter_json");
+                skill.GenerationMetadataJson = DecryptIfPresent(skill.GenerationMetadataJson, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "generation_metadata_json");
                 break;
             case AgentSkillResource resource:
                 // Skill id in the conversation slot and the resource name in the column name — see the matching block in

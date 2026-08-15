@@ -35,13 +35,16 @@ process.env.VITE_APP_VERSION ??= resolveAppVersion();
 // The same default is enforced by Environment.ts; setting it here also lets Vite resolve the index.html placeholder.
 process.env.VITE_APP_TITLE ??= "XE Local AI Engine";
 
+// Coverage floor — a RATCHET: raise it as coverage grows, never lower it to make a red run green. Kept ~10 points
+// under the current actuals (70.5 / 65.3 / 62.3 / 71.2 at the last raise) so ordinary refactors do not trip it.
+// Last raised 2026-08-15.
 const coverageThresholds =
 	process.env.VITEST_COVERAGE_CHECK === "true"
 		? {
-				branches: 35,
-				functions: 34,
-				lines: 39,
-				statements: 38,
+				branches: 55,
+				functions: 52,
+				lines: 60,
+				statements: 60,
 			}
 		: undefined;
 
@@ -94,7 +97,21 @@ export default defineConfig(({ command, mode }) => {
 		],
 		// Emit hidden source maps so production stacks captured by the diagnostics snapshot subsystem
 		// symbolicate, without exposing a `//# sourceMappingURL` to end users.
-		build: { sourcemap: "hidden" },
+		build: {
+			sourcemap: "hidden",
+			rolldownOptions: {
+				output: {
+					codeSplitting: {
+						groups: [
+							// Everything from monaco-editor (core + the lazily-loaded Monarch grammars) lands in ONE chunk named
+							// `monaco-editor-*`, which is only fetched when CodeEditor first mounts. `scripts/CheckBundleBudget.mjs`
+							// measures that name (plus the editor worker) under `lazyEditorJavaScriptBytes` instead of the app budget.
+							{ name: "monaco-editor", test: /node_modules[\\/]monaco-editor[\\/]/ },
+						],
+					},
+				},
+			},
+		},
 		optimizeDeps: {
 			include: ["@tanstack/react-form-devtools"],
 		},
@@ -137,7 +154,9 @@ export default defineConfig(({ command, mode }) => {
 			testTimeout: 20_000,
 			// Pins the ICU default locale. Without it the suite passes only on an en-US machine — see
 			// src/test/PinLocale.ts for the failure this prevents on a non-en-US packaging box.
-			setupFiles: ["src/test/PinLocale.ts"],
+			// MswSetup.ts starts the shared MSW interception server (src/test/msw/Server.ts) with
+			// `onUnhandledRequest: "error"`, so a request no test stubbed fails loudly instead of hitting the network.
+			setupFiles: ["src/test/PinLocale.ts", "src/test/MswSetup.ts"],
 			coverage: {
 				provider: "v8",
 				reportsDirectory: "coverage/vitest",

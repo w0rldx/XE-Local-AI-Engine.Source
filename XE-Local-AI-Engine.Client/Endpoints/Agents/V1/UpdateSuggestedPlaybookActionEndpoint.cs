@@ -25,28 +25,20 @@ public sealed class UpdateSuggestedPlaybookActionEndpoint(IPlaybookActionService
 
     public override async Task HandleAsync(UpdateSuggestedPlaybookActionRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput(req.AgentDefinitionId,
-                    req.ActionId,
-                    req.Behavior ?? string.Empty,
-                    req.TriggerCondition,
-                    req.Scope,
-                    req.Priority),
-                ct).ConfigureAwait(false);
+        var record = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput(req.AgentDefinitionId,
+                req.ActionId,
+                req.Behavior ?? string.Empty,
+                req.TriggerCondition,
+                req.Scope,
+                req.Priority),
+            ct).ConfigureAwait(false);
 
-            if (record is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
-
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (PlaybookActionValidationException exception)
+        if (record is null)
         {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
         }
+
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

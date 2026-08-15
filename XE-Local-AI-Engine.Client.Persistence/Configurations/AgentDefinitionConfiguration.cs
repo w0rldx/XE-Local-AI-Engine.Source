@@ -23,6 +23,10 @@ internal sealed class AgentDefinitionConfiguration : IEntityTypeConfiguration<Ag
         builder.Property(entity => entity.Instructions)
                .HasColumnName("instructions");
 
+        // AI-generation provenance — additive encrypted column, null for every row that was not AI-drafted.
+        builder.Property(entity => entity.GenerationMetadataJson)
+               .HasColumnName("generation_metadata_json");
+
         builder.Property(entity => entity.ModelProfile)
                .HasColumnName("model_profile");
 

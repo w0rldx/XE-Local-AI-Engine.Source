@@ -11,6 +11,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class SuggestedPlaybookActionEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string PromoteRoute(Guid agentDefinitionId, Guid actionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote";
@@ -24,7 +27,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Promote_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(Guid.NewGuid(), Guid.NewGuid()));
@@ -36,7 +39,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Reject_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(Guid.NewGuid(), Guid.NewGuid()));
@@ -48,7 +51,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Promote_WhenActionMissing_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -69,7 +72,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Reject_WhenActionMissing_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -89,7 +92,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Promote_WhenActionBelongsToDifferentAgent_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -112,7 +115,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Reject_WhenActionBelongsToDifferentAgent_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -134,7 +137,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Promote_WhenOwnedPendingSuggestionWithoutEval_ReturnsConflictEvalRequired()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -168,7 +171,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         // and action ids from the route, so the hey-api client sends no body — and therefore no Content-Type. The
         // endpoint must accept that instead of answering 415 Unsupported Media Type. A seeded pending suggestion is
         // archived (200), which proves the request was bound and dispatched rather than rejected at the media-type gate.
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -190,7 +193,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     [Test]
     public async Task Reject_WhenOwnedPendingSuggestion_ReturnsOkWithArchivedState()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);

@@ -52,7 +52,7 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder.Produces<SlashCommandResponse>(StatusCodes.Status201Created)
                                       .ProducesProblemDetails(StatusCodes.Status400BadRequest)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateSlashCommandRequest req, CancellationToken ct)
@@ -64,11 +64,6 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
             {
                 commandId = item.Id
             }, item.ToResponse(), cancellation: ct).ConfigureAwait(false);
-        }
-        catch (SlashCommandValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (SlashCommandConflictException exception)
         {
@@ -86,7 +81,7 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
         Description(builder => builder.Produces<SlashCommandResponse>(StatusCodes.Status200OK)
                                       .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                       .Produces(StatusCodes.Status404NotFound)
-                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdateSlashCommandRequest req, CancellationToken ct)
@@ -101,11 +96,6 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
             }
 
             await Send.OkAsync(item.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (SlashCommandValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (SlashCommandConflictException exception)
         {

@@ -11,8 +11,8 @@
       test host reports PHANTOM failures — observed on this repo as `failed: 97` and `failed: 1` on
       runs that were clean on re-run, and as `FileNotFoundException:
       Microsoft.AspNetCore.SignalR.Client.Core` in E2E, each with DLL mtimes falling inside the run
-      window. A contaminated run is indistinguishable from a real regression, and with GitHub
-      Actions disabled this suite is the only gate the project has.
+      window. A contaminated run is indistinguishable from a real regression, and this suite is
+      the last gate before a release is cut.
 
       This is PREVENTION and it is only half the story: it can only serialize commands that opt in.
       A bare `dotnet build` in another terminal bypasses it entirely. That is what

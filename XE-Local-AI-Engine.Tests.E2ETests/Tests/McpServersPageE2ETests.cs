@@ -33,7 +33,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class McpServersPageE2ETests : XEE2ETestBase
+public sealed class McpServersPageE2ETests : XEPooledE2ETestBase
 {
     private const string NamePlaceholder = "Filesystem tools";
     private const string CommandPlaceholder = "/usr/bin/my-mcp-server";

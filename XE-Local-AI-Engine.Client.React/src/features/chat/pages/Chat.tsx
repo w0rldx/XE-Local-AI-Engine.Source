@@ -16,7 +16,7 @@ import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPa
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
+import { isNodeChatReadOnlyConflict, stripSignalRHubErrorPrefix } from "@/features/chat/api/NodeChatConflict";
 import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
 import {
 	accumulateToolTimelineEntry,
@@ -134,15 +134,12 @@ function inFlightAssistantMessageId(conversation: ChatConversationModel): string
 		?.id;
 }
 
-// SignalR wraps a server HubException as "An unexpected error occurred invoking '<method>' on the server.
-// HubException: <the actual message>" — the prefix is generic noise and the tail is the user-facing sentence the
-// hub deliberately wrote (e.g. the message-size rejection). Strip the wrapper so the bubble/toast lead with the
-// sentence that helps; anything not matching the wrapper passes through untouched.
-const signalRHubErrorPrefix = /^An unexpected error occurred invoking '[^']*' on the server\.\s*HubException:\s*/;
-
+// Strip SignalR's generic HubException wrapper so the bubble/toast lead with the sentence the hub deliberately
+// wrote (e.g. the message-size rejection); anything not matching the wrapper passes through untouched. The regex
+// lives next to isNodeChatReadOnlyConflict, which discriminates on the same stripped text.
 function errorMessage(error: unknown): string {
 	const message = apiErrorMessage(error, "Unknown error");
-	const stripped = message.replace(signalRHubErrorPrefix, "");
+	const stripped = stripSignalRHubErrorPrefix(message);
 	return stripped.length > 0 ? stripped : message;
 }
 
@@ -915,7 +912,11 @@ export function Chat() {
 				// The turn errored: drop any batched delta and write the failed state synchronously below.
 				streamScheduler.cancel();
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
-					const message = errorMessage(error);
+					// A send against a remote-origin conversation is rejected by the server-side mutation guard; over
+					// SignalR that arrives as a HubException leading with the ReadOnlyConversation token, not a 409.
+					const message = isNodeChatReadOnlyConflict(error)
+						? t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")
+						: errorMessage(error);
 					const failureCategory = error instanceof StreamWatchdogError ? error.category : undefined;
 					// Prefer the running reduced state (which includes any delta whose frame we just cancelled) over the
 					// query cache so a failed turn keeps every received partial token, not the last flushed frame.
@@ -959,6 +960,7 @@ export function Chat() {
 			samplingOptions,
 			selectedAgentId,
 			streamScheduler,
+			t,
 			toolsEnabled,
 			knowledgeBaseEnabled,
 			onVoiceTurnStart,

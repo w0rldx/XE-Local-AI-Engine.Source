@@ -116,6 +116,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Instructions), Guid.Empty, entry.Entity.Id, "instructions", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.GenerationMetadataJson), Guid.Empty, entry.Entity.Id, "generation_metadata_json", trackedProperties);
         }
 
         // Canvas workflows are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
@@ -134,6 +135,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Body), Guid.Empty, entry.Entity.Id, "body", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.FrontmatterJson), Guid.Empty, entry.Entity.Id, "frontmatter_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.GenerationMetadataJson), Guid.Empty, entry.Entity.Id, "generation_metadata_json", trackedProperties);
         }
 
         // Skill resources are the one place in this schema where the row id alone is the wrong AAD binding. The threat

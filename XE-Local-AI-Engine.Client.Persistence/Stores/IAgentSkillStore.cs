@@ -25,7 +25,10 @@ public interface IAgentSkillStore
     ///         Provenance is promote-only: an <see cref="AgentSkillOrigin.Imported" /> row stays imported even when the
     ///         caller passes the <see cref="AgentSkillOrigin.Local" /> default. An operator edit that simply forgot to
     ///         echo the provenance back would otherwise launder third-party content into trusted content — stripping
-    ///         the untrusted-content fence and re-enabling session-scoped approval for it.
+    ///         the untrusted-content fence and re-enabling session-scoped approval for it. An input that DOES carry
+    ///         <see cref="AgentSkillOrigin.Imported" /> applies its SourceUri/ImportedAtUtc/ContentSha256 verbatim as
+    ///         one unit — including a null ContentSha256, which is what an AI-drafted ("generated") conversion sends,
+    ///         because the old archive payload hash must not survive onto rewritten content.
     ///     </para>
     /// </summary>
     Task<AgentSkillRecord?> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default);
@@ -104,7 +107,8 @@ public sealed record AgentSkillRecord(
     string? SourceUri = null,
     long? ImportedAtUtc = null,
     string? ContentSha256 = null,
-    IReadOnlyList<AgentSkillResourceRecord>? Resources = null);
+    IReadOnlyList<AgentSkillResourceRecord>? Resources = null,
+    string? GenerationMetadataJson = null);
 
 /// <summary>
 ///     Mutable fields of an agent skill supplied on create/update. Free text is passed as plaintext strings; the store
@@ -116,9 +120,15 @@ public sealed record AgentSkillRecord(
 ///         ordering the spec does not have.
 ///     </para>
 ///     <para>
-///         <see cref="SourceUri" /> is shape-checked at the store boundary: either the literal <c>upload</c> or
-///         <c>github:owner/repo</c>. An uploaded archive contributes its <em>kind</em> only — the operator's filename
-///         must not become the one unencrypted free-text string in this table.
+///         <see cref="SourceUri" /> is shape-checked at the store boundary: the literal <c>upload</c>, the literal
+///         <c>generated</c> (AI-drafted content) or <c>github:owner/repo</c>. An uploaded or drafted skill contributes
+///         its <em>kind</em> only — the operator's filename, or the model that drafted it, must not become the one
+///         unencrypted free-text string in this table.
+///     </para>
+///     <para>
+///         <see cref="GenerationMetadataJson" /> is set-if-present on update: <c>null</c> leaves the stored provenance
+///         alone rather than clearing it, so an ordinary operator edit that did not echo the block back cannot erase
+///         the record of how the skill was drafted (same reasoning as the promote-only provenance above).
 ///     </para>
 /// </summary>
 public sealed record AgentSkillInput(
@@ -133,7 +143,8 @@ public sealed record AgentSkillInput(
     AgentSkillOrigin Origin = AgentSkillOrigin.Local,
     string? SourceUri = null,
     long? ImportedAtUtc = null,
-    string? ContentSha256 = null);
+    string? ContentSha256 = null,
+    string? GenerationMetadataJson = null);
 
 /// <summary>
 ///     Decrypted projection of one bundled skill file. <see cref="Name" /> is the skill-root-relative path the model

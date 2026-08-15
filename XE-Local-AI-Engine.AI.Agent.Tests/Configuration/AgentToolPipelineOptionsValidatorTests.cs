@@ -48,4 +48,20 @@ public sealed class AgentToolPipelineOptionsValidatorTests
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxToolResultCharacters", StringComparison.Ordinal));
     }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public void Validate_WhenConsecutiveInvalidToolCallCapNotPositive_ReturnsFailure(int value)
+    {
+        // Zero would trip the circuit breaker before a model had made a single mistake.
+        var result = _validator.Validate(name: null, new AgentToolPipelineOptions
+        {
+            MaxConsecutiveInvalidToolCallsPerTool = value
+        });
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Contains(result.Failures, failure => failure.Contains("MaxConsecutiveInvalidToolCallsPerTool", StringComparison.Ordinal));
+    }
+
 }

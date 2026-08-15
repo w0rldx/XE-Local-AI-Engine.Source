@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -45,6 +46,12 @@ public sealed class DownloadRecommendedEmbeddingEndpoint(
     {
         Post(LocalApiRoutes.KnowledgeBase.EmbeddingDownloadRecommended);
         Policies(NodeAuthorizationPolicies.Operator);
+        // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
+        Description(builder => builder.ProducesProblem(StatusCodes.Status403Forbidden)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict)
+                                      .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+                                      .ProducesProblem(StatusCodes.Status507InsufficientStorage));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -76,7 +83,17 @@ public sealed class DownloadRecommendedEmbeddingEndpoint(
 
         // Start (or rejoin) the download through the coordinator's detached path — the SAME path an operator-initiated
         // GGUF download uses, so progress/cancel and the model_provider_map write happen through one code path.
-        var ticket = await _downloadCoordinator.StartAsync(RecommendedEmbeddingModel.ToDownloadRequest(), ct).ConfigureAwait(false);
+        GgufDownloadTicket ticket;
+        try
+        {
+            ticket = await _downloadCoordinator.StartAsync(RecommendedEmbeddingModel.ToDownloadRequest(), ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (GgufDownloadEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(GgufDownloadEndpointSupport.Error(exception)).ConfigureAwait(false);
+            return;
+        }
+
         await Send.OkAsync(new DownloadRecommendedEmbeddingResponse
             {
                 ModelName = ticket.ModelName,

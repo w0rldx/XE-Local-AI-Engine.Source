@@ -3,24 +3,36 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+/// <summary>
+///     Central benchmark exception → HTTP mapper. Every benchmark endpoint routes its handled exceptions through
+///     <see cref="Error" /> so the status code, the machine-readable <c>code</c> and the operator-safe message stay in
+///     one place. Bodies are RFC 7807 <c>application/problem+json</c>: the message is the ProblemDetails
+///     <c>detail</c> and the <see cref="BenchmarkErrorCode" /> name is carried in the <c>code</c> extension member.
+/// </summary>
 internal static class BenchmarkEndpointSupport
 {
     public static IResult Error(Exception exception) =>
         exception switch
         {
-            BenchmarkNotFoundException or KeyNotFoundException => TypedResults.NotFound(Response(BenchmarkErrorCode.NotFound, "The requested benchmark resource was not found.")),
-            BenchmarkValidationException => TypedResults.BadRequest(Response(BenchmarkErrorCode.InvalidRequest, exception.Message)),
-            BenchmarkEligibilityException => TypedResults.UnprocessableEntity(Response(ClassifyEligibility(exception.Message), exception.Message)),
-            BenchmarkConflictException conflict => TypedResults.Conflict(Response(ClassifyConflict(conflict.Code), SafeConflictMessage(conflict.Code))),
+            BenchmarkNotFoundException or KeyNotFoundException => Problem(StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound, "The requested benchmark resource was not found."),
+            BenchmarkValidationException => Problem(StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
+            BenchmarkEligibilityException => Problem(StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
+            BenchmarkConflictException conflict => Problem(StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code), SafeConflictMessage(conflict.Code)),
             _ => throw exception
         };
 
-    private static BenchmarkErrorResponse Response(BenchmarkErrorCode code, string message) =>
-        new()
-        {
-            Code = code,
-            Message = message
-        };
+    /// <summary>
+    ///     Builds the problem body. <paramref name="code" /> is emitted as its enum name (matching the string the
+    ///     global <c>JsonStringEnumConverter</c> produced when this was a bespoke error DTO) so clients keep switching
+    ///     on the same values.
+    /// </summary>
+    public static IResult Problem(int statusCode, BenchmarkErrorCode code, string message) =>
+        Results.Problem(statusCode: statusCode,
+            detail: message,
+            extensions: new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["code"] = code.ToString()
+            });
 
     private static BenchmarkErrorCode ClassifyEligibility(string message) =>
         message.Contains("model", StringComparison.OrdinalIgnoreCase)

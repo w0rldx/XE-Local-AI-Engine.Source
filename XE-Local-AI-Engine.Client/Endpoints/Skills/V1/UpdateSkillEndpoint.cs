@@ -6,10 +6,11 @@ using XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class UpdateSkillEndpoint(IAgentSkillService agentSkillService)
+public sealed class UpdateSkillEndpoint(IAgentSkillService agentSkillService, TimeProvider timeProvider)
     : Endpoint<UpdateSkillRequest, SkillResponse>
 {
     private readonly IAgentSkillService _agentSkillService = agentSkillService ?? throw new ArgumentNullException(nameof(agentSkillService));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public override void Configure()
     {
@@ -19,21 +20,23 @@ public sealed class UpdateSkillEndpoint(IAgentSkillService agentSkillService)
 
     public override async Task HandleAsync(UpdateSkillRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _agentSkillService.UpdateAsync(req.SkillId, req.ToInput(), ct).ConfigureAwait(false);
-            if (record is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+        ArgumentNullException.ThrowIfNull(req);
 
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (AgentSkillValidationException exception)
+        // The echoed provenance block is operator input like any other field, so it is bounded here, not trusted.
+        if (GenerationProvenance.Validate(req.GenerationMetadata) is { } metadataError)
         {
-            AddError(exception.Message);
+            AddError(metadataError);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
         }
+
+        var record = await _agentSkillService.UpdateAsync(req.SkillId, req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
+        if (record is null)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

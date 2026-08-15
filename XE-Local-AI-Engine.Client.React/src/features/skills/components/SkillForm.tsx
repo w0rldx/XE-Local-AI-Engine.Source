@@ -4,6 +4,8 @@ import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useStat
 import { useTranslation } from "react-i18next";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
+import { AssistActions } from "@/features/assist/components/AssistActions";
+import type { AssistDraft } from "@/features/assist/models/AssistModels";
 import { SkillResourcesPanel } from "@/features/skills/components/SkillResourcesPanel";
 import {
 	SKILL_BODY_GUIDANCE_LINES,
@@ -84,6 +86,29 @@ export function SkillForm({
 		[updateValues],
 	);
 
+	// An applied draft overwrites the three drafted fields and marks the form as AI-authored. The flag and the
+	// provenance block deliberately SURVIVE later hand edits — the server recomputes the content hash at save time
+	// and records `wasEdited` itself, so clearing them here would hide that the content started as a generation.
+	const handleApplyDraft = useCallback(
+		(draft: AssistDraft) => {
+			updateValues((current) => ({
+				...current,
+				name: draft.name,
+				description: draft.description,
+				body: draft.content,
+				generated: true,
+				generationMetadata: draft.generationMetadata,
+			}));
+		},
+		[updateValues],
+	);
+
+	// Explicitly throwing the draft away is the only thing that drops the provenance: the fields keep whatever the
+	// operator has since typed, but the save no longer claims (or demotes for) a generation.
+	const handleDiscardDraft = useCallback(() => {
+		updateValues((current) => ({ ...current, generated: false, generationMetadata: null }));
+	}, [updateValues]);
+
 	const handleSubmit = useCallback(() => {
 		const result = skillFormSchema.safeParse(values);
 		if (!result.success) {
@@ -138,13 +163,26 @@ export function SkillForm({
 			</Alert>
 			{provenance?.origin === "Imported" ? (
 				<Alert color="red" variant="light" icon={<IconInfoCircle size={16} />} data-testid="skill-form-imported-note">
-					{t(
-						"pages.skills.form.importedNote",
-						"This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
-						{ source: provenance.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source") },
-					)}
+					{/* An AI-drafted skill lands in the same Imported bucket, but "imported from generated" reads as
+					    nonsense — it was written here, by a model, and never reviewed. Say that instead. */}
+					{provenance.sourceUri === "generated"
+						? t(
+								"pages.skills.form.generatedNote",
+								"This skill was written by a model on this node and has not been reviewed. Its instructions run with your agent's tool access once enabled.",
+							)
+						: t(
+								"pages.skills.form.importedNote",
+								"This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
+								{ source: provenance.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source") },
+							)}
 				</Alert>
 			) : null}
+			<AssistActions
+				surface="skill"
+				existing={{ name: values.name, description: values.description, content: values.body }}
+				onApply={handleApplyDraft}
+				onDiscard={handleDiscardDraft}
+			/>
 			<TextInput
 				label={t("pages.skills.form.name.label", "Name")}
 				description={t("pages.skills.form.name.description", "Lowercase identifier (e.g. invoice-review).")}

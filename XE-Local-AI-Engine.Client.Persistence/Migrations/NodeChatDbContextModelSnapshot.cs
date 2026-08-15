@@ -56,6 +56,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDefaultValue(false)
                         .HasColumnName("disable_base_scaffold");
 
+                    b.Property<byte[]>("GenerationMetadataJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("generation_metadata_json");
+
                     b.Property<byte[]>("Instructions")
                         .IsRequired()
                         .HasColumnType("BLOB")
@@ -284,6 +288,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<byte[]>("FrontmatterJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("frontmatter_json");
+
+                    b.Property<byte[]>("GenerationMetadataJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("generation_metadata_json");
 
                     b.Property<long?>("ImportedAtUtc")
                         .HasColumnType("INTEGER")

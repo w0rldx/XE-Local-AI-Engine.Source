@@ -32,9 +32,9 @@ public sealed class LocalModelEndpointSecurityTests
         }).ConfigureAwait(false);
         using var resetKindResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b/kind").ConfigureAwait(false);
         using var runningResponse = await client.GetAsync("/api/local/v1/models/running").ConfigureAwait(false);
-        using var unloadResponse = await client.PostAsJsonAsync("/api/local/v1/models/llama3:8b/unload", new
-        {
-        }).ConfigureAwait(false);
+        // Body-less, like the real client: the route-only unload POST sends no body and no Content-Type, so this also
+        // proves auth runs ahead of content negotiation (401, never a 415 that would mask the missing token).
+        using var unloadResponse = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, detailsResponse.StatusCode);

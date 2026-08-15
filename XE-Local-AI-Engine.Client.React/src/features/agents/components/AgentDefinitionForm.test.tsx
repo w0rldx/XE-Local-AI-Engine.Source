@@ -20,6 +20,10 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
+// The basic-fields section now embeds the AI-draft affordance, which is server-state backed (installed models +
+// running set). Stub it out: this file covers the form's own fields, and the affordance has its own test.
+vi.mock("@/features/assist/components/AssistActions", () => ({ AssistActions: () => null }));
+
 // The tool selector now fetches the catalog via useToolCatalog (dynamic tool-catalog dynamic catalog). Mock it so the form
 // renders the built-in tool rows deterministically without a QueryClient or a real request.
 const { useToolCatalogMock, useSkillsMock } = vi.hoisted(() => ({
@@ -131,6 +135,7 @@ const baseValues: AgentDefinitionFormValues = {
 	defaultTemporaryChat: false,
 	memoryExtractionEnabled: true,
 	disableBaseScaffold: false,
+	generationMetadata: null,
 };
 
 function renderForm(overrides: {

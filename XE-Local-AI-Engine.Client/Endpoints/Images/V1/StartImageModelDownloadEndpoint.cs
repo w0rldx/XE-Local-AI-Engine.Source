@@ -91,21 +91,12 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinat
             });
         }
 
-        if (parts.TrueForAll(static p => p.Role != ImageModelPartRole.Diffusion))
+        // File-set shape (diffusion part present, one file per role) is owned by ImageModelFileSetRules next to the
+        // download coordinator, because the rules come from what the launch-argument builder can emit.
+        var fileSetError = ImageModelFileSetRules.Validate(parts);
+        if (fileSetError is not null)
         {
-            AddError("The file-set must include a diffusion part.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
-
-        // One file per role. The launch argument builder emits one flag per role and iterates the whole set, so a
-        // second VAE would pass --vae twice and a second diffusion file would be downloaded and then never referenced.
-        // Cheap to type by hand and easy to click twice in the repo file picker, so it is rejected at the boundary
-        // rather than surfacing as a multi-gigabyte download that produces a model the runtime cannot start.
-        var duplicateRole = parts.GroupBy(static p => p.Role).FirstOrDefault(static group => group.Count() > 1);
-        if (duplicateRole is not null)
-        {
-            AddError($"The file-set declares the '{duplicateRole.Key}' part more than once.");
+            AddError(fileSetError);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }

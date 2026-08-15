@@ -1,10 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
 internal static class SkillMapper
 {
+    /// <summary>Provenance value the store's SourceUri shape check allows for AI-drafted content.</summary>
+    private const string GeneratedSourceUri = "generated";
+
     public static SkillResponse ToResponse(this AgentSkillRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -26,6 +31,7 @@ internal static class SkillMapper
             Origin = record.Origin,
             SourceUri = record.SourceUri,
             ImportedAtUtc = record.ImportedAtUtc,
+            GenerationMetadata = GenerationProvenance.FromPersistedJson(record.GenerationMetadataJson),
             ResourceCount = record.Resources?.Count ?? 0
         };
     }
@@ -144,33 +150,48 @@ internal static class SkillMapper
         };
     }
 
-    public static AgentSkillInput ToInput(this CreateSkillRequest request)
+    public static AgentSkillInput ToInput(this CreateSkillRequest request, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         return new AgentSkillInput(request.Name ?? string.Empty,
             request.Description ?? string.Empty,
             request.Body ?? string.Empty,
-            Enabled: true,
+            // AI-drafted content is disabled on arrival; anything else keeps the create default (a new skill is enabled).
+            Enabled: !request.Generated,
             request.License,
             request.Compatibility,
             request.AllowedTools,
-            request.Metadata);
+            request.Metadata,
+            request.Generated ? AgentSkillOrigin.Imported : AgentSkillOrigin.Local,
+            request.Generated ? GeneratedSourceUri : null,
+            request.Generated ? now.ToUnixTimeMilliseconds() : null,
+            ContentSha256: null,
+            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Body, now));
     }
 
-    public static AgentSkillInput ToInput(this UpdateSkillRequest request)
+    public static AgentSkillInput ToInput(this UpdateSkillRequest request, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Origin/SourceUri/ImportedAtUtc are deliberately absent: the store treats provenance as promote-only and
-        // leaves absent values alone, so an operator edit can never launder an imported skill into a local one.
+        // Origin/SourceUri/ImportedAtUtc are deliberately absent on an ORDINARY edit: the store treats provenance as
+        // promote-only and leaves absent values alone, so an operator edit can never launder an imported skill into a
+        // local one. When Generated is set they are passed explicitly, which is the same promote-only mechanism used in
+        // the tightening direction: model-revised content lands Imported+disabled from ANY prior state (a Local, enabled
+        // skill included), overriding whatever Enabled the client sent, because an AI improve is exactly the case where
+        // the operator has not reviewed the new body yet.
         return new AgentSkillInput(request.Name ?? string.Empty,
             request.Description ?? string.Empty,
             request.Body ?? string.Empty,
-            request.Enabled,
+            !request.Generated && request.Enabled,
             request.License,
             request.Compatibility,
             request.AllowedTools,
-            request.Metadata);
+            request.Metadata,
+            request.Generated ? AgentSkillOrigin.Imported : AgentSkillOrigin.Local,
+            request.Generated ? GeneratedSourceUri : null,
+            request.Generated ? now.ToUnixTimeMilliseconds() : null,
+            ContentSha256: null,
+            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Body, now));
     }
 }

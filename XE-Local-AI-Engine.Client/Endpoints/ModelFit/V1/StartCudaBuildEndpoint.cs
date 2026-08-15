@@ -28,6 +28,9 @@ public sealed class StartCudaBuildEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.CudaBuild);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+                               .Produces<StartCudaBuildResponse>(StatusCodes.Status200OK)
+                               .Produces<CudaBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -51,36 +54,22 @@ public sealed class StartCudaBuildEndpoint(
         {
             var result = await _sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
                 LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
-            switch (result.Outcome)
+            var blocked = LlamaCppSourceBuildStartEndpointSupport.MapBlocked(result.Outcome,
+                LlamaCppSourceBuildStartEndpointSupport.CudaBuildKind);
+            if (blocked is not null)
             {
-                case LlamaCppSourceBuildStartOutcome.AlreadyRunning:
-                    await BlockAsync("already-building", "A CUDA build is already in progress.").ConfigureAwait(false);
-                    return;
-                case LlamaCppSourceBuildStartOutcome.InsufficientDisk:
-                    await BlockAsync("disk", "There is not enough free disk space to build the CUDA runtime.").ConfigureAwait(false);
-                    return;
-                case LlamaCppSourceBuildStartOutcome.MissingPrerequisites:
-                    await BlockAsync("prerequisites",
-                            "One or more build prerequisites are missing; resolve the checklist before building.")
-                        .ConfigureAwait(false);
-                    return;
-                case LlamaCppSourceBuildStartOutcome.ProcessesRunning:
-                    await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
-                    {
-                        Reason = "processes-running",
-                        Message = "Stop or eject all running llama.cpp models before building the runtime.",
-                        RunningProcessCount = result.RunningProcessCount
-                    })).ConfigureAwait(false);
-                    return;
-                case LlamaCppSourceBuildStartOutcome.RuntimeBusy:
-                    await BlockAsync("runtime-busy",
-                            "Wait for the active llama.cpp source build or runtime change to finish before starting another build.")
-                        .ConfigureAwait(false);
-                    return;
-                case LlamaCppSourceBuildStartOutcome.Started:
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unknown source-build start outcome: {result.Outcome}.");
+                var (reason, message) = blocked.Value;
+
+                // Only the process gate reports a count; every other rejection leaves it null as before.
+                await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
+                {
+                    Reason = reason,
+                    Message = message,
+                    RunningProcessCount = result.Outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning
+                        ? result.RunningProcessCount
+                        : null
+                })).ConfigureAwait(false);
+                return;
             }
 
             await Send.OkAsync(new StartCudaBuildResponse

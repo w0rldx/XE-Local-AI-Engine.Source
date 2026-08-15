@@ -3,6 +3,10 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Scheduler.V1;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -13,6 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class SchedulerEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     // ──────────────────────────────────────────────────────────────────────
     // Route helpers
     // ──────────────────────────────────────────────────────────────────────
@@ -71,7 +78,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListTemplates_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(TemplatesRoute()).ConfigureAwait(false);
@@ -82,7 +89,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(JobsRoute()).ConfigureAwait(false);
@@ -93,7 +100,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobsRoute())
@@ -110,7 +117,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(JobByIdRoute(Guid.NewGuid())).ConfigureAwait(false);
@@ -121,7 +128,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task UpdateJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Put, JobByIdRoute(Guid.NewGuid()))
@@ -138,7 +145,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task DeleteJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, JobByIdRoute(Guid.NewGuid()));
@@ -150,7 +157,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task EnableJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobEnableRoute(Guid.NewGuid()))
@@ -167,7 +174,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task DisableJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobDisableRoute(Guid.NewGuid()))
@@ -184,7 +191,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task TriggerJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobTriggerRoute(Guid.NewGuid()))
@@ -201,7 +208,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListRuns_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(RunsRoute()).ConfigureAwait(false);
@@ -212,7 +219,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetRun_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(RunByIdRoute(Guid.NewGuid())).ConfigureAwait(false);
@@ -223,7 +230,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CancelRun_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(Guid.NewGuid()))
@@ -244,7 +251,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListTemplates_WithOperatorToken_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, TemplatesRoute());
@@ -257,7 +264,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_WithOperatorToken_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
@@ -270,7 +277,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetJob_WhenJobMissing_WithOperatorToken_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobByIdRoute(Guid.NewGuid()));
@@ -283,7 +290,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListRuns_WithOperatorToken_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunsRoute());
@@ -296,7 +303,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetRun_WhenRunMissing_WithOperatorToken_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunByIdRoute(Guid.NewGuid()));
@@ -309,7 +316,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CancelRun_WhenRunMissing_WithOperatorToken_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(Guid.NewGuid()))
@@ -324,6 +331,42 @@ public sealed class SchedulerEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Test]
+    public async Task CancelRun_WhenRunAlreadyTerminal_ReturnsProblemDetailsConflictWithOutcome()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        // Seed a run that already reached a terminal state — the only way CancelRunAsync reports AlreadyTerminal.
+        Guid runId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
+            var stored = await runStore.AddAsync(new ScheduledJobRunInput(Guid.NewGuid(),
+                                                     "terminal-run-template",
+                                                     QuartzFireInstanceId: null,
+                                                     ScheduledRunTrigger.Manual,
+                                                     ScheduledRunStatus.Succeeded,
+                                                     ScheduledFireTimeUtc: null,
+                                                     ActualFireTimeUtc: null))
+                                        .ConfigureAwait(false);
+            runId = stored.Id;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(runId));
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 409, document.RootElement.GetProperty("status").GetInt32());
+        AssertEx.Equal(nameof(RunCancellationOutcome.AlreadyTerminal), document.RootElement.GetProperty("outcome").GetString());
+        AssertEx.Equal("The run already reached a terminal state and cannot be cancelled.",
+            document.RootElement.GetProperty("detail").GetString());
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Validation → 400 with error body (not 500)
     // ──────────────────────────────────────────────────────────────────────
@@ -331,7 +374,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WithInvalidCronExpression_ReturnsBadRequestWithErrorBody()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         // POST with a templateId that the app doesn't have registered → validation error.
@@ -354,7 +397,7 @@ public sealed class SchedulerEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        // ScheduledJobValidationException → AddError + Send.ErrorsAsync → 400.
+        // ScheduledJobValidationException → global DomainValidationExceptionHandler → 400.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         // Response must be a structured error body, not an empty 400.
@@ -365,7 +408,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WithBlankDisplayName_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var body = new
@@ -389,12 +432,60 @@ public sealed class SchedulerEndpointTests
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Test]
+    public async Task EnableJob_WhenTemplateNotRegistered_ReturnsBadRequestWithErrorBody()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        // Seed a definition whose template the host does not have registered. CreateJob would reject it up front, so
+        // it goes straight to the store — this is exactly the state SetEnabledAsync must refuse without writing.
+        Guid jobId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IScheduledJobDefinitionStore>();
+            var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
+                                                  "Orphaned template job",
+                                                  Description: null,
+                                                  Enabled: false,
+                                                  ScheduleKind.Cron,
+                                                  "0 0 * * * ?",
+                                                  IntervalSeconds: null,
+                                                  RepeatCount: null,
+                                                  StartAtUtc: null,
+                                                  EndAtUtc: null,
+                                                  "UTC",
+                                                  SchedulerMisfirePolicy.Smart,
+                                                  PreventOverlap: false,
+                                                  MaxRuntimeSeconds: null,
+                                                  ParameterJson: null,
+                                                  ScheduledJobCreator.User))
+                                     .ConfigureAwait(false);
+            jobId = stored.Id;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, JobEnableRoute(jobId))
+        {
+            Content = JsonContent.Create(new
+            {
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        // ScheduledJobValidationException → global DomainValidationExceptionHandler → 400 (not an unhandled 500).
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        AssertEx.True(payload.Length > 0, "Error response must have a non-empty body.");
+    }
+
     // Redaction: job response must not echo raw parameters; run response must not echo raw details.
 
     [Test]
     public async Task ListJobs_ResponseDoesNotContainRawParameters()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
@@ -418,7 +509,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_ResponseContainsHasParametersField()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         // Seed a job via the service, then verify the response shape carries hasParameters.
@@ -440,7 +531,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListRuns_ResponseDoesNotContainRawDetailsOrErrorDetails()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunsRoute());

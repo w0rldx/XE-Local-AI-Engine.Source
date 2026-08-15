@@ -15,9 +15,60 @@ export type XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = {
 	hostPath?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = {
-	code?: string;
-	message: string;
+/**
+ * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
+ * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
+ */
+export type FastEndpointsProblemDetails = {
+	type?: string;
+	title?: string;
+	status?: number;
+	instance?: string;
+	traceId?: string;
+	/**
+	 * the details of the error
+	 */
+	detail?: string | null;
+	errors?: Array<FastEndpointsProblemDetailsError>;
+};
+
+/**
+ * the error details object
+ */
+export type FastEndpointsProblemDetailsError = {
+	/**
+	 * the name of the error or property of the dto that caused the error
+	 */
+	name?: string;
+	/**
+	 * the reason for the error
+	 */
+	reason?: string;
+	/**
+	 * the code of the error
+	 */
+	code?: string | null;
+	/**
+	 * the severity of the error
+	 */
+	severity?: string | null;
+};
+
+export type XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails = MicrosoftAspNetCoreMvcProblemDetails & {
+	conflictType?: string | null;
+	maxConcurrentRuns?: number | null;
+	distinctModelCount?: number | null;
+	maxLoadedProcesses?: number | null;
+	[key: string]: unknown;
+};
+
+export type MicrosoftAspNetCoreMvcProblemDetails = {
+	type?: string | null;
+	title?: string | null;
+	status?: number | null;
+	detail?: string | null;
+	instance?: string | null;
+	[key: string]: unknown;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = {
@@ -790,10 +841,26 @@ export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
 	origin: XeLocalAiEngineClientPersistenceAgentSkillOrigin;
 	sourceUri?: string | null;
 	importedAtUtc?: number | null;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse | null;
 	resourceCount: number;
 };
 
 export type XeLocalAiEngineClientPersistenceAgentSkillOrigin = "Local" | "Imported";
+
+export type XeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse = {
+	model?: string | null;
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	userBrief?: string | null;
+	rationale?: string | null;
+	assumptions?: Array<string> | null;
+	confidence?: number;
+	generatedAtUtc?: number;
+	draftContentHash?: string | null;
+	acceptedAtUtc?: number;
+	wasEdited?: boolean;
+};
+
+export type XeLocalAiEngineClientServicesDraftingDraftMode = "Create" | "Improve";
 
 export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
 	name?: string | null;
@@ -805,10 +872,46 @@ export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
 	metadata?: {
 		[key: string]: string;
 	} | null;
+	generated?: boolean;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCommonGenerationMetadata = {
+	model?: string | null;
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	userBrief?: string | null;
+	rationale?: string | null;
+	assumptions?: Array<string> | null;
+	confidence?: number;
+	generatedAtUtc?: number;
+	draftContentHash?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse = {
+	name: string;
+	description: string;
+	body: string;
+	generationMetadata: XeLocalAiEngineClientEndpointsCommonGenerationMetadata;
+};
+
+export type XeLocalAiEngineClientEndpointsCommonDraftErrorResponse = {
+	code: XeLocalAiEngineClientEndpointsCommonDraftErrorCode;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCommonDraftErrorCode = "NodeBusy" | "Unparseable";
+
+export type XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest = {
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	modelName?: string | null;
+	brief?: string | null;
+	existingName?: string | null;
+	existingDescription?: string | null;
+	existingContent?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
@@ -912,6 +1015,8 @@ export type XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = {
 	metadata?: {
 		[key: string]: string;
 	} | null;
+	generated?: boolean;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = {
@@ -1291,45 +1396,6 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	usageRates?: {
 		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
 	} | null;
-};
-
-/**
- * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
- * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
- */
-export type FastEndpointsProblemDetails = {
-	type?: string;
-	title?: string;
-	status?: number;
-	instance?: string;
-	traceId?: string;
-	/**
-	 * the details of the error
-	 */
-	detail?: string | null;
-	errors?: Array<FastEndpointsProblemDetailsError>;
-};
-
-/**
- * the error details object
- */
-export type FastEndpointsProblemDetailsError = {
-	/**
-	 * the name of the error or property of the dto that caused the error
-	 */
-	name?: string;
-	/**
-	 * the reason for the error
-	 */
-	reason?: string;
-	/**
-	 * the code of the error
-	 */
-	code?: string | null;
-	/**
-	 * the severity of the error
-	 */
-	severity?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = {
@@ -1812,6 +1878,12 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsReques
 	limit?: number | null;
 	quantOverride?: string | null;
 	ctxTarget?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = {
+	reason: string;
+	message: string;
+	runningProcessCount?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = {
@@ -3687,6 +3759,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse | null;
 };
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
@@ -3708,6 +3781,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
 	allowedSkillIds?: Array<string> | null;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = {
@@ -3736,6 +3810,22 @@ export type XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationReques
 
 export type XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse = {
+	name: string;
+	description: string;
+	instructions: string;
+	generationMetadata: XeLocalAiEngineClientEndpointsCommonGenerationMetadata;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest = {
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	modelName?: string | null;
+	brief?: string | null;
+	existingName?: string | null;
+	existingDescription?: string | null;
+	existingContent?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = {
@@ -3987,6 +4077,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
 	allowedSkillIds?: Array<string> | null;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = {
@@ -4040,6 +4131,10 @@ export type CreateWorkspaceData = {
 
 export type CreateWorkspaceErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -4047,7 +4142,14 @@ export type CreateWorkspaceErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateWorkspaceError = CreateWorkspaceErrors[keyof CreateWorkspaceErrors];
 
 export type CreateWorkspaceResponses = {
 	/**
@@ -4069,6 +4171,10 @@ export type DeleteWorkspaceData = {
 
 export type DeleteWorkspaceErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -4076,7 +4182,11 @@ export type DeleteWorkspaceErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
-	409: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
 export type DeleteWorkspaceError = DeleteWorkspaceErrors[keyof DeleteWorkspaceErrors];
@@ -5872,6 +5982,37 @@ export type UpdateSkillResponses = {
 
 export type UpdateSkillResponse = UpdateSkillResponses[keyof UpdateSkillResponses];
 
+export type DraftSkillData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills/draft";
+};
+
+export type DraftSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+	422: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+};
+
+export type DraftSkillError = DraftSkillErrors[keyof DraftSkillErrors];
+
+export type DraftSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse;
+};
+
+export type DraftSkillResponse = DraftSkillResponses[keyof DraftSkillResponses];
+
 export type GetSkillResourceData = {
 	body?: never;
 	path: {
@@ -5976,7 +6117,10 @@ export type CancelScheduledJobRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type CancelScheduledJobRunError = CancelScheduledJobRunErrors[keyof CancelScheduledJobRunErrors];
 
 export type CancelScheduledJobRunResponses = {
 	/**
@@ -6462,7 +6606,10 @@ export type ContinuePreviewRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type ContinuePreviewRunError = ContinuePreviewRunErrors[keyof ContinuePreviewRunErrors];
 
 export type ContinuePreviewRunResponses = {
 	/**
@@ -6603,7 +6750,10 @@ export type UpdatePreviewWorkflowErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type UpdatePreviewWorkflowError = UpdatePreviewWorkflowErrors[keyof UpdatePreviewWorkflowErrors];
 
 export type UpdatePreviewWorkflowResponses = {
 	/**
@@ -6632,7 +6782,10 @@ export type ExecuteSavedPreviewWorkflowErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type ExecuteSavedPreviewWorkflowError = ExecuteSavedPreviewWorkflowErrors[keyof ExecuteSavedPreviewWorkflowErrors];
 
 export type ExecuteSavedPreviewWorkflowResponses = {
 	/**
@@ -6660,7 +6813,10 @@ export type ExecuteUnsavedPreviewWorkflowErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type ExecuteUnsavedPreviewWorkflowError = ExecuteUnsavedPreviewWorkflowErrors[keyof ExecuteUnsavedPreviewWorkflowErrors];
 
 export type ExecuteUnsavedPreviewWorkflowResponses = {
 	/**
@@ -7843,7 +7999,10 @@ export type RemoveCudaBuildErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse;
 };
+
+export type RemoveCudaBuildError = RemoveCudaBuildErrors[keyof RemoveCudaBuildErrors];
 
 export type RemoveCudaBuildResponses = {
 	/**
@@ -7900,7 +8059,10 @@ export type StartCudaBuildErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse;
 };
+
+export type StartCudaBuildError = StartCudaBuildErrors[keyof StartCudaBuildErrors];
 
 export type StartCudaBuildResponses = {
 	/**
@@ -7926,8 +8088,17 @@ export type StartGgufDownloadErrors = {
 	/**
 	 * Forbidden
 	 */
-	403: unknown;
+	403: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	503: MicrosoftAspNetCoreMvcProblemDetails;
+	507: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type StartGgufDownloadError = StartGgufDownloadErrors[keyof StartGgufDownloadErrors];
 
 export type StartGgufDownloadResponses = {
 	/**
@@ -8698,6 +8869,7 @@ export type CancelNodeChatMessageErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
 export type CancelNodeChatMessageError = CancelNodeChatMessageErrors[keyof CancelNodeChatMessageErrors];
@@ -8729,7 +8901,10 @@ export type CompactNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type CompactNodeChatConversationError = CompactNodeChatConversationErrors[keyof CompactNodeChatConversationErrors];
 
 export type CompactNodeChatConversationResponses = {
 	/**
@@ -8986,7 +9161,10 @@ export type RenameNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type RenameNodeChatConversationError = RenameNodeChatConversationErrors[keyof RenameNodeChatConversationErrors];
 
 export type RenameNodeChatConversationResponses = {
 	/**
@@ -9015,7 +9193,10 @@ export type PinNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type PinNodeChatConversationError = PinNodeChatConversationErrors[keyof PinNodeChatConversationErrors];
 
 export type PinNodeChatConversationResponses = {
 	/**
@@ -9044,7 +9225,10 @@ export type ArchiveNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type ArchiveNodeChatConversationError = ArchiveNodeChatConversationErrors[keyof ArchiveNodeChatConversationErrors];
 
 export type ArchiveNodeChatConversationResponses = {
 	/**
@@ -9074,7 +9258,11 @@ export type SetNodeChatConversationMemoryExcludedErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type SetNodeChatConversationMemoryExcludedError =
+	SetNodeChatConversationMemoryExcludedErrors[keyof SetNodeChatConversationMemoryExcludedErrors];
 
 export type SetNodeChatConversationMemoryExcludedResponses = {
 	/**
@@ -9105,7 +9293,10 @@ export type BranchNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type BranchNodeChatConversationError = BranchNodeChatConversationErrors[keyof BranchNodeChatConversationErrors];
 
 export type BranchNodeChatConversationResponses = {
 	/**
@@ -9166,7 +9357,10 @@ export type CreateNodeChatMessageRevisionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type CreateNodeChatMessageRevisionError = CreateNodeChatMessageRevisionErrors[keyof CreateNodeChatMessageRevisionErrors];
 
 export type CreateNodeChatMessageRevisionResponses = {
 	/**
@@ -9227,7 +9421,10 @@ export type SetNodeChatMessageFeedbackErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type SetNodeChatMessageFeedbackError = SetNodeChatMessageFeedbackErrors[keyof SetNodeChatMessageFeedbackErrors];
 
 export type SetNodeChatMessageFeedbackResponses = {
 	/**
@@ -9260,6 +9457,7 @@ export type SetNodeChatSelectedPathErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
 export type SetNodeChatSelectedPathError = SetNodeChatSelectedPathErrors[keyof SetNodeChatSelectedPathErrors];
@@ -9412,8 +9610,17 @@ export type DownloadRecommendedEmbeddingErrors = {
 	/**
 	 * Forbidden
 	 */
-	403: unknown;
+	403: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	503: MicrosoftAspNetCoreMvcProblemDetails;
+	507: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type DownloadRecommendedEmbeddingError = DownloadRecommendedEmbeddingErrors[keyof DownloadRecommendedEmbeddingErrors];
 
 export type DownloadRecommendedEmbeddingResponses = {
 	/**
@@ -9440,8 +9647,17 @@ export type DownloadRecommendedRerankerErrors = {
 	/**
 	 * Forbidden
 	 */
-	403: unknown;
+	403: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	503: MicrosoftAspNetCoreMvcProblemDetails;
+	507: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type DownloadRecommendedRerankerError = DownloadRecommendedRerankerErrors[keyof DownloadRecommendedRerankerErrors];
 
 export type DownloadRecommendedRerankerResponses = {
 	/**
@@ -9462,6 +9678,10 @@ export type ImportKnowledgeRepositoryData = {
 
 export type ImportKnowledgeRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9469,7 +9689,14 @@ export type ImportKnowledgeRepositoryErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ImportKnowledgeRepositoryError = ImportKnowledgeRepositoryErrors[keyof ImportKnowledgeRepositoryErrors];
 
 export type ImportKnowledgeRepositoryResponses = {
 	/**
@@ -9834,6 +10061,10 @@ export type DeleteImageModelData = {
 
 export type DeleteImageModelErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9841,7 +10072,10 @@ export type DeleteImageModelErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type DeleteImageModelError = DeleteImageModelErrors[keyof DeleteImageModelErrors];
 
 export type DeleteImageModelResponses = {
 	/**
@@ -10329,6 +10563,10 @@ export type RegisterDevelopmentRepositoryData = {
 
 export type RegisterDevelopmentRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10336,7 +10574,14 @@ export type RegisterDevelopmentRepositoryErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type RegisterDevelopmentRepositoryError = RegisterDevelopmentRepositoryErrors[keyof RegisterDevelopmentRepositoryErrors];
 
 export type RegisterDevelopmentRepositoryResponses = {
 	/**
@@ -10441,6 +10686,10 @@ export type CreateDevelopmentRepositoryFromTemplateData = {
 
 export type CreateDevelopmentRepositoryFromTemplateErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10448,7 +10697,15 @@ export type CreateDevelopmentRepositoryFromTemplateErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateDevelopmentRepositoryFromTemplateError =
+	CreateDevelopmentRepositoryFromTemplateErrors[keyof CreateDevelopmentRepositoryFromTemplateErrors];
 
 export type CreateDevelopmentRepositoryFromTemplateResponses = {
 	/**
@@ -10471,6 +10728,10 @@ export type DetectDevelopmentRepositoryProfileData = {
 
 export type DetectDevelopmentRepositoryProfileErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10478,7 +10739,15 @@ export type DetectDevelopmentRepositoryProfileErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type DetectDevelopmentRepositoryProfileError =
+	DetectDevelopmentRepositoryProfileErrors[keyof DetectDevelopmentRepositoryProfileErrors];
 
 export type DetectDevelopmentRepositoryProfileResponses = {
 	/**
@@ -10526,6 +10795,10 @@ export type CreateDevelopmentProjectData = {
 
 export type CreateDevelopmentProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10533,7 +10806,14 @@ export type CreateDevelopmentProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateDevelopmentProjectError = CreateDevelopmentProjectErrors[keyof CreateDevelopmentProjectErrors];
 
 export type CreateDevelopmentProjectResponses = {
 	/**
@@ -10615,6 +10895,10 @@ export type StartDevelopmentNextActionData = {
 
 export type StartDevelopmentNextActionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10622,7 +10906,14 @@ export type StartDevelopmentNextActionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type StartDevelopmentNextActionError = StartDevelopmentNextActionErrors[keyof StartDevelopmentNextActionErrors];
 
 export type StartDevelopmentNextActionResponses = {
 	/**
@@ -10766,6 +11057,10 @@ export type PreviewDevelopmentPatchData = {
 
 export type PreviewDevelopmentPatchErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10773,7 +11068,14 @@ export type PreviewDevelopmentPatchErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type PreviewDevelopmentPatchError = PreviewDevelopmentPatchErrors[keyof PreviewDevelopmentPatchErrors];
 
 export type PreviewDevelopmentPatchResponses = {
 	/**
@@ -10796,6 +11098,10 @@ export type ApplyDevelopmentPatchData = {
 
 export type ApplyDevelopmentPatchErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10803,7 +11109,14 @@ export type ApplyDevelopmentPatchErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ApplyDevelopmentPatchError = ApplyDevelopmentPatchErrors[keyof ApplyDevelopmentPatchErrors];
 
 export type ApplyDevelopmentPatchResponses = {
 	/**
@@ -10825,6 +11138,10 @@ export type ReconnectDevelopmentRepositoryData = {
 
 export type ReconnectDevelopmentRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -10832,7 +11149,15 @@ export type ReconnectDevelopmentRepositoryErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ReconnectDevelopmentRepositoryError =
+	ReconnectDevelopmentRepositoryErrors[keyof ReconnectDevelopmentRepositoryErrors];
 
 export type ReconnectDevelopmentRepositoryResponses = {
 	/**
@@ -11028,7 +11353,10 @@ export type ConnectConnectionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
+
+export type ConnectConnectionError = ConnectConnectionErrors[keyof ConnectConnectionErrors];
 
 export type ConnectConnectionResponses = {
 	/**
@@ -11434,6 +11762,10 @@ export type ListEligibleBenchmarkAgentsData = {
 
 export type ListEligibleBenchmarkAgentsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11441,7 +11773,13 @@ export type ListEligibleBenchmarkAgentsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type ListEligibleBenchmarkAgentsError = ListEligibleBenchmarkAgentsErrors[keyof ListEligibleBenchmarkAgentsErrors];
 
 export type ListEligibleBenchmarkAgentsResponses = {
 	/**
@@ -11464,6 +11802,10 @@ export type ListEligibleBenchmarkModelsData = {
 
 export type ListEligibleBenchmarkModelsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11471,7 +11813,13 @@ export type ListEligibleBenchmarkModelsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type ListEligibleBenchmarkModelsError = ListEligibleBenchmarkModelsErrors[keyof ListEligibleBenchmarkModelsErrors];
 
 export type ListEligibleBenchmarkModelsResponses = {
 	/**
@@ -11519,6 +11867,10 @@ export type CreateBenchmarkProjectData = {
 
 export type CreateBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11526,7 +11878,10 @@ export type CreateBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	422: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type CreateBenchmarkProjectError = CreateBenchmarkProjectErrors[keyof CreateBenchmarkProjectErrors];
 
 export type CreateBenchmarkProjectResponses = {
 	/**
@@ -11555,7 +11910,14 @@ export type DeleteBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type DeleteBenchmarkProjectError = DeleteBenchmarkProjectErrors[keyof DeleteBenchmarkProjectErrors];
 
 export type DeleteBenchmarkProjectResponses = {
 	/**
@@ -11584,7 +11946,13 @@ export type GetBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type GetBenchmarkProjectError = GetBenchmarkProjectErrors[keyof GetBenchmarkProjectErrors];
 
 export type GetBenchmarkProjectResponses = {
 	/**
@@ -11606,6 +11974,10 @@ export type UpdateBenchmarkProjectData = {
 
 export type UpdateBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11613,7 +11985,15 @@ export type UpdateBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	422: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type UpdateBenchmarkProjectError = UpdateBenchmarkProjectErrors[keyof UpdateBenchmarkProjectErrors];
 
 export type UpdateBenchmarkProjectResponses = {
 	/**
@@ -11638,6 +12018,10 @@ export type ListBenchmarkRunsData = {
 
 export type ListBenchmarkRunsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11645,7 +12029,13 @@ export type ListBenchmarkRunsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type ListBenchmarkRunsError = ListBenchmarkRunsErrors[keyof ListBenchmarkRunsErrors];
 
 export type ListBenchmarkRunsResponses = {
 	/**
@@ -11667,6 +12057,10 @@ export type StartBenchmarkRunData = {
 
 export type StartBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11674,7 +12068,15 @@ export type StartBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	422: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type StartBenchmarkRunError = StartBenchmarkRunErrors[keyof StartBenchmarkRunErrors];
 
 export type StartBenchmarkRunResponses = {
 	/**
@@ -11703,7 +12105,14 @@ export type DeleteBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type DeleteBenchmarkRunError = DeleteBenchmarkRunErrors[keyof DeleteBenchmarkRunErrors];
 
 export type DeleteBenchmarkRunResponses = {
 	/**
@@ -11732,7 +12141,13 @@ export type GetBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type GetBenchmarkRunError = GetBenchmarkRunErrors[keyof GetBenchmarkRunErrors];
 
 export type GetBenchmarkRunResponses = {
 	/**
@@ -11761,7 +12176,14 @@ export type CancelBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type CancelBenchmarkRunError = CancelBenchmarkRunErrors[keyof CancelBenchmarkRunErrors];
 
 export type CancelBenchmarkRunResponses = {
 	/**
@@ -11783,6 +12205,10 @@ export type ScoreBenchmarkRunData = {
 
 export type ScoreBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11790,7 +12216,14 @@ export type ScoreBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type ScoreBenchmarkRunError = ScoreBenchmarkRunErrors[keyof ScoreBenchmarkRunErrors];
 
 export type ScoreBenchmarkRunResponses = {
 	/**
@@ -11848,7 +12281,7 @@ export type CreateSlashCommandErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
-	409: FastEndpointsProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type CreateSlashCommandError = CreateSlashCommandErrors[keyof CreateSlashCommandErrors];
@@ -11954,7 +12387,7 @@ export type UpdateSlashCommandErrors = {
 	 * Not Found
 	 */
 	404: unknown;
-	409: FastEndpointsProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type UpdateSlashCommandError = UpdateSlashCommandErrors[keyof UpdateSlashCommandErrors];
@@ -12660,6 +13093,37 @@ export type UpdatePlaybookActionResponses = {
 };
 
 export type UpdatePlaybookActionResponse = UpdatePlaybookActionResponses[keyof UpdatePlaybookActionResponses];
+
+export type DraftAgentDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/agents/draft";
+};
+
+export type DraftAgentDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+	422: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+};
+
+export type DraftAgentDefinitionError = DraftAgentDefinitionErrors[keyof DraftAgentDefinitionErrors];
+
+export type DraftAgentDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse;
+};
+
+export type DraftAgentDefinitionResponse = DraftAgentDefinitionResponses[keyof DraftAgentDefinitionResponses];
 
 export type GetAgentFeedbackInsightsData = {
 	body?: never;

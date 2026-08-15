@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     isolation and provenance, reconcile an update plus deletion, then ground a plain-chat turn with persisted sources.
 /// </summary>
 [Category("Page")]
-public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
+public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
 {
     private const string DefaultCollection = "DEFAULT";
     private const string SecondaryCollection = "RAG-E2E-SECONDARY";
@@ -199,6 +199,16 @@ public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
 
             await Task.Delay(100, timeout.Token).ConfigureAwait(false);
         }
+
+        // The "Repository import queued …" toast (top-right, autoClose 5 s) sits over the Refresh button, and Mantine
+        // PAUSES auto-close while the pointer hovers a notification — which is exactly where Playwright parks the mouse
+        // while retrying the intercepted click, so the toast never expires and the click times out. Park the pointer
+        // elsewhere and let the toasts drain before clicking.
+        await Page.Mouse.MoveAsync(x: 0, y: 0).ConfigureAwait(false);
+        await Expect(Page.Locator(".mantine-Notification-root")).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        {
+            Timeout = 15_000
+        }).ConfigureAwait(false);
 
         var refreshResponse = Page.WaitForResponseAsync(response =>
             response.Request.Method == "GET"

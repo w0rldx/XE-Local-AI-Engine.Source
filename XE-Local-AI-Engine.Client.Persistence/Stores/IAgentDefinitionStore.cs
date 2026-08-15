@@ -59,6 +59,11 @@ public interface IAgentDefinitionStore
 ///     Mutable fields of an agent definition supplied on create/update. Free text is passed as plaintext strings; the
 ///     store encodes <see cref="Instructions" /> and <see cref="Description" /> to UTF-8 bytes before the interceptors
 ///     encrypt them.
+///     <para>
+///         <see cref="GenerationMetadataJson" /> is set-if-present on update: <c>null</c> leaves the stored AI
+///         provenance alone rather than clearing it, so an ordinary operator edit that did not echo the block back
+///         cannot erase the record of how the definition was drafted.
+///     </para>
 /// </summary>
 public sealed record AgentDefinitionInput(
     string Name,
@@ -74,4 +79,5 @@ public sealed record AgentDefinitionInput(
     IReadOnlyList<Guid>? AllowedSkillIds = null,
     bool DefaultTemporaryChat = false,
     bool MemoryExtractionEnabled = true,
-    bool DisableBaseScaffold = false);
+    bool DisableBaseScaffold = false,
+    string? GenerationMetadataJson = null);

@@ -449,20 +449,3 @@ public sealed class NodeChatSelectedPathResponse
 
     public required IReadOnlyDictionary<Guid, Guid> SelectedPath { get; init; }
 }
-
-/// <summary>
-///     409 Conflict body returned when a mutation targets a read-only (Origin=Remote) conversation.
-/// </summary>
-public sealed class NodeChatConflictResponse
-{
-    public required string Code { get; init; }
-
-    public required string Reason { get; init; }
-
-    /// <summary>Shared 409 body for read-only (Origin=Remote) conversation rejections.</summary>
-    public static NodeChatConflictResponse ReadOnly { get; } = new()
-    {
-        Code = NodeChatReadOnlyConversationException.Code,
-        Reason = NodeChatReadOnlyConversationException.Reason
-    };
-}

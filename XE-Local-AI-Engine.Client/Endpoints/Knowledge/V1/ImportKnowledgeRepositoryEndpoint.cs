@@ -19,6 +19,9 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
     {
         Post(LocalApiRoutes.KnowledgeBase.RepositoryImport);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ImportKnowledgeRepositoryRequest req, CancellationToken ct)
@@ -53,8 +56,21 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
                 },
                 ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        // Only the rejections the CALLER can act on are echoed as 400. A bare InvalidOperationException used to be in
+        // this set, which quietly turned every environment failure inside the importer — an unreadable Git index, a
+        // file that could not be opened, a file that changed under the reader — into a client error carrying an I/O
+        // message. Those now travel as KnowledgeRepositoryReadException and fall through to the global 500 handler.
         catch (Exception exception) when (exception is ArgumentException
-                                              or InvalidOperationException
+                                              or KnowledgeRepositoryImportRejectedException
                                               or DevelopmentWorkspaceSecurityException
                                               or SelectedFolderValidationException)
         {

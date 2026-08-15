@@ -19,20 +19,12 @@ public sealed class CreateMcpServerEndpoint(IMcpServerService mcpServerService)
 
     public override async Task HandleAsync(CreateMcpServerRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _mcpServerService.CreateAsync(req.ToInput(), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetMcpServerEndpoint>(new
-                {
-                    mcpServerId = record.Id
-                },
-                record.ToResponse(),
-                cancellation: ct).ConfigureAwait(false);
-        }
-        catch (McpServerValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var record = await _mcpServerService.CreateAsync(req.ToInput(), ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetMcpServerEndpoint>(new
+            {
+                mcpServerId = record.Id
+            },
+            record.ToResponse(),
+            cancellation: ct).ConfigureAwait(false);
     }
 }
