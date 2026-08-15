@@ -14,10 +14,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class PlaybookActionStorePromotionConcurrencyTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task PromoteSuggestedIfCurrentAsync_WhenConcurrentEditBumpsVersion_RejectsAndLeavesSuggested()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
 
@@ -51,7 +54,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     [Test]
     public async Task PromoteSuggestedIfCurrentAsync_WhenCurrentAndUnderCap_Enables()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
         var snapshot = await GetAsync(factory, actionId).ConfigureAwait(false);
@@ -74,7 +77,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     [Test]
     public async Task PromoteSuggestedIfCurrentAsync_TwoPromotesAtCapOne_ExactlyOneEnabled()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         var firstId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
         var secondId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
