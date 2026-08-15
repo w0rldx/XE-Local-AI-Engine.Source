@@ -19,7 +19,7 @@ public sealed class PreviewWorkflowHubTests
     [Test]
     public async Task Negotiate_WhenTokenMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/preview/hub/negotiate?negotiateVersion=1")
@@ -38,7 +38,7 @@ public sealed class PreviewWorkflowHubTests
     {
         var runId = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         await using var connection = new HubConnectionBuilder()
                                      .WithUrl("http://localhost" + LocalApiRoutes.Preview.Hub, options =>
                                      {
@@ -86,7 +86,7 @@ public sealed class PreviewWorkflowHubTests
                             new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, runEvent)
                         ]);
 
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -147,7 +147,7 @@ public sealed class PreviewWorkflowHubTests
         executionService.SnapshotBufferedEvents(runId, 0L)
                         .Returns([new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, unseen)]);
 
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -198,7 +198,7 @@ public sealed class PreviewWorkflowHubTests
         // paused run holds its concurrency slot until the node restarts.
         var executionService = Substitute.For<IPreviewWorkflowExecutionService>();
 
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -230,7 +230,7 @@ public sealed class PreviewWorkflowHubTests
     {
         var executionService = Substitute.For<IPreviewWorkflowExecutionService>();
 
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

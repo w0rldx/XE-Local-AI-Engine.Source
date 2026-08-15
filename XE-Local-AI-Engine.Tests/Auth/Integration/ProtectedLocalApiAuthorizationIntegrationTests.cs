@@ -11,7 +11,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
     [Test]
     public async Task ProtectedEndpoint_WhenNoBearerTokenProvided_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
@@ -23,7 +23,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
     [Test]
     public async Task ProtectedEndpoint_WhenValidBearerTokenProvided_ReturnsOk()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);

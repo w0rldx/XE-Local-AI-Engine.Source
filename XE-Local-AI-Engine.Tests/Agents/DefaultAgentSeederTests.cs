@@ -20,7 +20,7 @@ public sealed class DefaultAgentSeederTests
     [Test]
     public async Task DefaultAgentSeeder_IsIdempotent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new DefaultAgentSeeder(scopeFactory, Options.Create(new LocalChatAgentOptions()), NullLogger<DefaultAgentSeeder>.Instance);
 

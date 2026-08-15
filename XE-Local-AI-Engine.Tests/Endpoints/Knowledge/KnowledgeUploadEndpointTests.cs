@@ -65,12 +65,12 @@ public sealed class KnowledgeUploadEndpointTests
         AssertEx.NotNull(response.Headers.RetryAfter, "A queue-full upload must advertise Retry-After so the client retries.");
     }
 
-    private static TestingWebAppFactory CreateFactory(IKnowledgeIngestionDispatcher dispatcher,
+    private static TestServerWebAppFactory CreateFactory(IKnowledgeIngestionDispatcher dispatcher,
         bool wasInserted,
         KnowledgeDocumentStatus status,
         Guid documentId)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -94,7 +94,7 @@ public sealed class KnowledgeUploadEndpointTests
         };
     }
 
-    private static async Task<HttpResponseMessage> PostFileAsync(TestingWebAppFactory factory, HttpClient client)
+    private static async Task<HttpResponseMessage> PostFileAsync(TestServerWebAppFactory factory, HttpClient client)
     {
 #pragma warning disable CA2000 // MultipartFormDataContent owns the part content and disposes it when the `using content` scope ends.
         using var content = new MultipartFormDataContent

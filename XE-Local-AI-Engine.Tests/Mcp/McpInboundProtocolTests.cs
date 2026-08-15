@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     End-to-end protocol coverage for the inbound server using the real MCP SDK Streamable HTTP transport against
-///     <see cref="TestingWebAppFactory" />. The lifecycle and workspace seams are explicit deterministic fakes, so no
+///     <see cref="TestServerWebAppFactory" />. The lifecycle and workspace seams are explicit deterministic fakes, so no
 ///     model process, dispatcher timing, or filesystem is involved.
 /// </summary>
 [NotInParallel]
@@ -129,10 +129,10 @@ public sealed class McpInboundProtocolTests
         AssertEx.Equal(0, coordinator.CancelCallCount);
     }
 
-    private static TestingWebAppFactory CreateFactory(FakeMcpAgentRunCoordinator coordinator,
+    private static TestServerWebAppFactory CreateFactory(FakeMcpAgentRunCoordinator coordinator,
         FakeSelectedFolderResolver workspaces)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -148,7 +148,7 @@ public sealed class McpInboundProtocolTests
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "McpClient takes ownership of the transport on success; the exceptional path disposes it explicitly.")]
-    private static async Task<McpClient> CreateClientAsync(TestingWebAppFactory factory)
+    private static async Task<McpClient> CreateClientAsync(TestServerWebAppFactory factory)
     {
         var httpClient = factory.CreateClient();
         var endpoint = new Uri(httpClient.BaseAddress!, EndpointRoute);

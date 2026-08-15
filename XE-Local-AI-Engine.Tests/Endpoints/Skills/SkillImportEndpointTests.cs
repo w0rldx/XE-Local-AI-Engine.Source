@@ -22,7 +22,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var source = new StringContent("Paste");
@@ -48,7 +48,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ImportRoute)
@@ -71,7 +71,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task ListResources_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{Guid.NewGuid()}/resources");
@@ -83,7 +83,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_ReportsTheSkillAndWritesNothing()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
@@ -100,7 +100,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_ReportsResourceNamesWithoutContent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
@@ -113,7 +113,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WithoutAcknowledgement_ReturnsBadRequestAndWritesNothing()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
@@ -131,7 +131,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WhenAcknowledged_LandsSkillDisabledWithImportedProvenance()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
@@ -176,7 +176,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WhenTokenUnknown_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await CommitAsync(factory, client, Guid.NewGuid(), acknowledged: true).ConfigureAwait(false);
@@ -188,7 +188,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WhenTokenReplayed_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
@@ -209,7 +209,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Update_WhenFrontmatterIsEchoedBack_PreservesItAndKeepsImportedProvenance()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
@@ -241,7 +241,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task ListResources_OmitsContent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
@@ -264,7 +264,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task ListResources_WhenSkillMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{Guid.NewGuid()}/resources");
@@ -277,7 +277,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task GetResource_WhenNameCarriesASlash_ReturnsContent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
@@ -299,7 +299,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task GetResource_WhenNameIsInvalid_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
@@ -316,7 +316,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task GetResource_WhenNameIsUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
@@ -331,7 +331,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_WhenSourceIsPasteWithoutMarkdown_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var source = new StringContent("Paste");
@@ -354,7 +354,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_WhenPasted_ReportsAnInstructionsOnlySkill()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var source = new StringContent("Paste");
@@ -396,7 +396,7 @@ public sealed class SkillImportEndpointTests
     }
 
     /// <summary>Previews <see cref="BuildArchive" /> and returns the parsed report. The caller owns nothing to dispose.</summary>
-    private static async Task<JsonElement> PreviewArchiveAsync(TestingWebAppFactory factory, HttpClient client)
+    private static async Task<JsonElement> PreviewArchiveAsync(TestServerWebAppFactory factory, HttpClient client)
     {
         using var file = new ByteArrayContent(BuildArchive());
         file.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
@@ -424,7 +424,7 @@ public sealed class SkillImportEndpointTests
         return JsonSerializer.Deserialize<JsonElement>(payload);
     }
 
-    private static async Task<HttpResponseMessage> CommitAsync(TestingWebAppFactory factory,
+    private static async Task<HttpResponseMessage> CommitAsync(TestServerWebAppFactory factory,
         HttpClient client,
         Guid token,
         bool acknowledged)
@@ -446,7 +446,7 @@ public sealed class SkillImportEndpointTests
     }
 
     /// <summary>Runs both phases and returns the id of the skill that landed.</summary>
-    private static async Task<Guid> ImportSkillAsync(TestingWebAppFactory factory, HttpClient client)
+    private static async Task<Guid> ImportSkillAsync(TestServerWebAppFactory factory, HttpClient client)
     {
         var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
         using var response = await CommitAsync(factory, client, preview.GetProperty("token").GetGuid(), acknowledged: true)
@@ -458,7 +458,7 @@ public sealed class SkillImportEndpointTests
         return items[0].GetProperty("id").GetGuid();
     }
 
-    private static async Task<JsonElement> ListSkillsAsync(TestingWebAppFactory factory, HttpClient client)
+    private static async Task<JsonElement> ListSkillsAsync(TestServerWebAppFactory factory, HttpClient client)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
         factory.AddNodeBearerToken(request);

@@ -674,11 +674,11 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.True(valid.IsValid);
     }
 
-    private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,
+    private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,
         ICapabilityReporter? capabilityReporter = null,
         INodeRuntimeSettings? runtimeSettings = null)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -695,7 +695,7 @@ public sealed class NodeSettingsEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);
