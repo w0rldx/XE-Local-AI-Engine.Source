@@ -12,6 +12,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AppUpdateEndpointDesktopGateTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static readonly (HttpMethod Method, string Route)[] PostRoutes =
     [
         (HttpMethod.Post, "/api/local/v1/app-update/apply")
@@ -25,7 +28,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
     [Test]
     public async Task PostUpdateEndpoints_WhenNotDesktop_AreUnmapped()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         foreach (var (method, route) in PostRoutes)
@@ -46,7 +49,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
     [Test]
     public async Task GetUpdateEndpoints_WhenNotDesktop_FallThroughToSpa_NotJsonEndpoint()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         foreach (var route in GetRoutes)

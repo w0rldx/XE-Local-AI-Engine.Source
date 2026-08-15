@@ -10,6 +10,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class AnalyzePlaybookEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string Route(Guid agentDefinitionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/playbook/analyze";
@@ -18,7 +21,7 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()));
@@ -30,7 +33,7 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()))
@@ -53,7 +56,7 @@ public sealed class AnalyzePlaybookEndpointTests
         // id from the route, so the hey-api client sends no body — and therefore no Content-Type. The endpoint must
         // accept that instead of answering 415 Unsupported Media Type. A seeded agent with no feedback yields 200 with
         // empty items, which proves the request was bound and dispatched rather than rejected at the media-type gate.
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Body-less Analysis Agent").ConfigureAwait(false);
@@ -74,7 +77,7 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_WhenAgentExistsWithoutFeedback_ReturnsOkWithEmptyItems()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Analysis Agent").ConfigureAwait(false);
