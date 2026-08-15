@@ -366,19 +366,26 @@ describe("useActiveGgufDownloads", () => {
 	});
 
 	it("does not regress a terminal live status when a delayed Running push arrives", () => {
-		const { result } = renderActiveAcquisitions();
-		const base = {
-			operationId: "live-monotonic-import",
-			operationKind: "Import",
-			modelName: "private:Q4_K_M",
-		};
+		// Terminal statuses are pruned 24h after updatedAtUtc against the real clock, so pin only Date (timers stay
+		// real) — otherwise this test rots one day after its fixed timestamps.
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-08-14T12:00:00Z") });
+		try {
+			const { result } = renderActiveAcquisitions();
+			const base = {
+				operationId: "live-monotonic-import",
+				operationKind: "Import",
+				modelName: "private:Q4_K_M",
+			};
 
-		act(() => {
-			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Completed", updatedAtUtc: "2026-08-14T10:00:02Z" });
-			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Running", updatedAtUtc: "2026-08-14T10:00:01Z" });
-		});
+			act(() => {
+				handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Completed", updatedAtUtc: "2026-08-14T10:00:02Z" });
+				handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Running", updatedAtUtc: "2026-08-14T10:00:01Z" });
+			});
 
-		expect(result.current.get(base.operationId)?.phase).toBe("Completed");
+			expect(result.current.get(base.operationId)?.phase).toBe("Completed");
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("bounds terminal acquisition and completed-handled retention without evicting active operations", () => {
