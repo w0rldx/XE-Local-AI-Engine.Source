@@ -94,7 +94,21 @@ export default defineConfig(({ command, mode }) => {
 		],
 		// Emit hidden source maps so production stacks captured by the diagnostics snapshot subsystem
 		// symbolicate, without exposing a `//# sourceMappingURL` to end users.
-		build: { sourcemap: "hidden" },
+		build: {
+			sourcemap: "hidden",
+			rolldownOptions: {
+				output: {
+					codeSplitting: {
+						groups: [
+							// Everything from monaco-editor (core + the lazily-loaded Monarch grammars) lands in ONE chunk named
+							// `monaco-editor-*`, which is only fetched when CodeEditor first mounts. `scripts/CheckBundleBudget.mjs`
+							// measures that name (plus the editor worker) under `lazyEditorJavaScriptBytes` instead of the app budget.
+							{ name: "monaco-editor", test: /node_modules[\\/]monaco-editor[\\/]/ },
+						],
+					},
+				},
+			},
+		},
 		optimizeDeps: {
 			include: ["@tanstack/react-form-devtools"],
 		},

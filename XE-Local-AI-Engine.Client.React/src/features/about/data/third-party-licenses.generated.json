@@ -458,6 +458,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:@types/trusted-types@2.0.7",
+			"name": "@types/trusted-types",
+			"version": "2.0.7",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/trusted-types",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:@types/unist@2.0.11",
 			"name": "@types/unist",
 			"version": "2.0.11",
@@ -978,6 +986,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:dompurify@3.4.8",
+			"name": "dompurify",
+			"version": "3.4.8",
+			"license": "(MPL-2.0 OR Apache-2.0)",
+			"homepageUrl": "https://github.com/cure53/DOMPurify",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:dunder-proto@1.0.1",
 			"name": "dunder-proto",
 			"version": "1.0.1",
@@ -1495,6 +1511,14 @@
 			"version": "3.0.4",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/wooorm/markdown-table#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:marked@14.0.0",
+			"name": "marked",
+			"version": "14.0.0",
+			"license": "MIT",
+			"homepageUrl": "https://marked.js.org",
 			"source": "frontend"
 		},
 		{
@@ -2696,6 +2720,14 @@
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
+		},
+		{
+			"id": "frontend:monaco-editor@0.56.0",
+			"name": "monaco-editor",
+			"version": "0.56.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/microsoft/monaco-editor",
+			"source": "frontend"
 		},
 		{
 			"id": "backend:Mono.TextTemplating@3.0.0",

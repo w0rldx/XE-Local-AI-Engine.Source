@@ -15,10 +15,18 @@ function collectJavaScriptAssets(root, directory = root) {
 	});
 }
 
+// The Monaco editor core and its worker are only fetched when a CodeEditor first mounts (src/core/ui/components/
+// CodeEditor), never on app boot. They are measured under their own budget so the app budget keeps its sensitivity to
+// growth in code that every user downloads — one 3 MB vendor chunk would otherwise mask ~80% of it.
+const lazyEditorAssetPattern = /(^|\/)(monaco-editor|editor\.worker|MonacoCodeEditor)-[^/]*\.(?:js|mjs)$/;
+
 export function measureJavaScriptAssets(distDirectory) {
 	const assets = collectJavaScriptAssets(distDirectory);
+	const sum = (subset) => subset.reduce((total, asset) => total + asset.bytes, 0);
+	const lazyEditorAssets = assets.filter((asset) => lazyEditorAssetPattern.test(asset.name));
 	return {
-		applicationJavaScriptBytes: assets.reduce((sum, asset) => sum + asset.bytes, 0),
+		applicationJavaScriptBytes: sum(assets) - sum(lazyEditorAssets),
+		lazyEditorJavaScriptBytes: sum(lazyEditorAssets),
 		largestAssets: assets.toSorted((left, right) => right.bytes - left.bytes).slice(0, 5),
 	};
 }
@@ -43,7 +51,7 @@ if (isMain) {
 	try {
 		const { measurements, violations } = checkBundleBudget();
 		process.stdout.write(
-			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
+			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy editor ${(measurements.lazyEditorJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
 				`${measurements.largestAssets.map((asset) => `  ${asset.name} ${(asset.bytes / 1_000).toFixed(1)} kB`).join("\n")}\n`,
 		);
 		if (violations.length > 0) {

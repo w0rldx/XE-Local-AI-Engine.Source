@@ -400,6 +400,13 @@
 					"subject": "Subject",
 					"events": "Durable events"
 				}
+			},
+			"artifacts": {
+				"loading": "Loading the artifact",
+				"loadError": "Could not load the artifact.",
+				"viewerLabel": "{{kind}} artifact",
+				"view": "View",
+				"hide": "Hide"
 			}
 		},
 		"knowledgeBase": {
