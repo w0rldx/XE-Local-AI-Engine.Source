@@ -93,6 +93,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             ["XE-Local-AI-Engine.Client.Persistence"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
@@ -146,6 +147,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             [HostAssembly] =
@@ -162,6 +164,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ]
         };

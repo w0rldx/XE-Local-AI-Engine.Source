@@ -697,4 +697,23 @@ public static class LocalApiRoutes
         public const string Collection = "workspaces";
         public const string ById = "workspaces/{workspaceId}";
     }
+
+    /// <summary>Fine-tuning: the Python runtime, base checkpoints, datasets, runs and exports.</summary>
+    public static class Training
+    {
+        // Python training runtime (uv-managed venv). One machine-global runtime, so none of these are id-scoped.
+        public const string RuntimeStatus = "training/runtime/status";
+        public const string RuntimePrerequisites = "training/runtime/prerequisites";
+        public const string RuntimeInstall = "training/runtime/install";
+        public const string RuntimeRemove = "training/runtime/remove";
+
+        /// <summary>SignalR push hub for training-runtime install phase and log changes.</summary>
+        public const string RuntimeHub = "/api/local/v1/training/runtime/hub";
+
+        // Base checkpoints downloaded from Hugging Face.
+        public const string BaseArtifacts = "training/base-artifacts";
+        public const string BaseArtifactById = "training/base-artifacts/{artifactId}";
+        public const string BaseArtifactCancel = "training/base-artifacts/{artifactId}/cancel";
+        public const string BaseArtifactLicense = "training/base-artifacts/{artifactId}/license";
+    }
 }
