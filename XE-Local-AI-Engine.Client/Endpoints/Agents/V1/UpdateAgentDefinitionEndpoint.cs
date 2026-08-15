@@ -30,21 +30,13 @@ public sealed class UpdateAgentDefinitionEndpoint(IAgentDefinitionService agentD
             return;
         }
 
-        try
+        var record = await _agentDefinitionService.UpdateAsync(req.AgentDefinitionId, req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
+        if (record is null)
         {
-            var record = await _agentDefinitionService.UpdateAsync(req.AgentDefinitionId, req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
-            if (record is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (AgentDefinitionValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

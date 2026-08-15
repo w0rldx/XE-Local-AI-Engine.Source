@@ -19,21 +19,13 @@ public sealed class UpdateScheduledJobEndpoint(IScheduledJobManagementService sc
 
     public override async Task HandleAsync(UpdateScheduledJobRequest req, CancellationToken ct)
     {
-        try
+        var record = await _scheduledJobManagementService.UpdateJobAsync(req.ScheduledJobId, req.ToInput(), ct).ConfigureAwait(false);
+        if (record is null)
         {
-            var record = await _scheduledJobManagementService.UpdateJobAsync(req.ScheduledJobId, req.ToInput(), ct).ConfigureAwait(false);
-            if (record is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (ScheduledJobValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

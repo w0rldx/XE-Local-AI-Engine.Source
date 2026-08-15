@@ -18,20 +18,12 @@ public sealed class CreateCustomToolEndpoint(ICustomToolService customToolServic
 
     public override async Task HandleAsync(CustomToolDefinition req, CancellationToken ct)
     {
-        try
-        {
-            var view = await _customToolService.CreateAsync(req, ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetCustomToolEndpoint>(new
-                {
-                    customToolId = view.Id
-                },
-                view,
-                cancellation: ct).ConfigureAwait(false);
-        }
-        catch (CustomToolValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var view = await _customToolService.CreateAsync(req, ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetCustomToolEndpoint>(new
+            {
+                customToolId = view.Id
+            },
+            view,
+            cancellation: ct).ConfigureAwait(false);
     }
 }
