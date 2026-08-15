@@ -153,12 +153,9 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Cache NuGet packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'global.json', '**/*.csproj') }}
-          restore-keys: ${{ runner.os }}-nuget-
+      # No NuGet cache here on purpose: the release path is built on immutability (source-SHA
+      # binding, SBOM, retained hashes) and a restored cache is mutable state entering a packaging
+      # job. build-and-test.yml keeps the cache; the release leg pays a full restore.
 
       - name: Restore pinned repository tools
         run: dotnet tool restore --tool-manifest dotnet-tools.json
