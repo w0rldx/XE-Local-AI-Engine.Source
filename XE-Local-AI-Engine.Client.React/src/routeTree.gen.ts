@@ -180,9 +180,9 @@ const LayoutUsageRoute = LayoutUsageRouteImport.update({
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutTrainingDatasetsRoute = LayoutTrainingDatasetsRouteImport.update({
-  id: '/training/datasets',
-  path: '/training/datasets',
-  getParentRoute: () => LayoutRoute,
+  id: '/datasets',
+  path: '/datasets',
+  getParentRoute: () => LayoutTrainingRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -211,7 +211,7 @@ export interface FileRoutesByFullPath {
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
-  '/training': typeof LayoutTrainingRoute
+  '/training': typeof LayoutTrainingRouteWithChildren
   '/usage': typeof LayoutUsageRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
 }
@@ -240,7 +240,7 @@ export interface FileRoutesByTo {
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
-  '/training': typeof LayoutTrainingRoute
+  '/training': typeof LayoutTrainingRouteWithChildren
   '/usage': typeof LayoutUsageRoute
   '/': typeof LayoutIndexRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
@@ -272,7 +272,7 @@ export interface FileRoutesById {
   '/_layout/scheduler': typeof LayoutSchedulerRoute
   '/_layout/skills': typeof LayoutSkillsRoute
   '/_layout/tools': typeof LayoutToolsRoute
-  '/_layout/training': typeof LayoutTrainingRoute
+  '/_layout/training': typeof LayoutTrainingRouteWithChildren
   '/_layout/usage': typeof LayoutUsageRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/training/datasets': typeof LayoutTrainingDatasetsRoute
@@ -577,13 +577,25 @@ declare module '@tanstack/react-router' {
     }
     '/_layout/training/datasets': {
       id: '/_layout/training/datasets'
-      path: '/training/datasets'
+      path: '/datasets'
       fullPath: '/training/datasets'
       preLoaderRoute: typeof LayoutTrainingDatasetsRouteImport
-      parentRoute: typeof LayoutRoute
+      parentRoute: typeof LayoutTrainingRoute
     }
   }
 }
+
+interface LayoutTrainingRouteChildren {
+  LayoutTrainingDatasetsRoute: typeof LayoutTrainingDatasetsRoute
+}
+
+const LayoutTrainingRouteChildren: LayoutTrainingRouteChildren = {
+  LayoutTrainingDatasetsRoute: LayoutTrainingDatasetsRoute,
+}
+
+const LayoutTrainingRouteWithChildren = LayoutTrainingRoute._addFileChildren(
+  LayoutTrainingRouteChildren,
+)
 
 interface LayoutRouteChildren {
   LayoutAgentsRoute: typeof LayoutAgentsRoute
@@ -608,10 +620,9 @@ interface LayoutRouteChildren {
   LayoutSchedulerRoute: typeof LayoutSchedulerRoute
   LayoutSkillsRoute: typeof LayoutSkillsRoute
   LayoutToolsRoute: typeof LayoutToolsRoute
-  LayoutTrainingRoute: typeof LayoutTrainingRoute
+  LayoutTrainingRoute: typeof LayoutTrainingRouteWithChildren
   LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
-  LayoutTrainingDatasetsRoute: typeof LayoutTrainingDatasetsRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -637,10 +648,9 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutSchedulerRoute: LayoutSchedulerRoute,
   LayoutSkillsRoute: LayoutSkillsRoute,
   LayoutToolsRoute: LayoutToolsRoute,
-  LayoutTrainingRoute: LayoutTrainingRoute,
+  LayoutTrainingRoute: LayoutTrainingRouteWithChildren,
   LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
-  LayoutTrainingDatasetsRoute: LayoutTrainingDatasetsRoute,
 }
 
 const LayoutRouteWithChildren =

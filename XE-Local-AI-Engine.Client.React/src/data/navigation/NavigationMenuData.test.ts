@@ -71,7 +71,7 @@ describe("navigationLinks", () => {
 		const training = gatedLinks.find((link) => link.id === "training");
 
 		expect(training?.to).toBeUndefined();
-		expect(training?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.trainingDatasets]);
+		expect(training?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.trainingDatasets, nodeRoutePaths.training]);
 	});
 
 	it("hides Dashboard and Node Binding in the local-only profile (capabilities off)", async () => {

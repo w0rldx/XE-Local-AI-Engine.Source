@@ -703,24 +703,7 @@ public static class LocalApiRoutes
         public const string MockById = "training/mocks/{mockId}";
         public const string MockVerify = "training/mocks/{mockId}/verify";
         public const string DatasetGenerationHub = "/api/local/v1/training/datasets/hub";
-    }
 
-    public static class Automation
-    {
-        public const string Commands = "automation/commands";
-        public const string CommandById = "automation/commands/{commandId}";
-    }
-
-    /// <summary>Operator-managed opaque workspace allowlist for inbound MCP delegation.</summary>
-    public static class Workspaces
-    {
-        public const string Collection = "workspaces";
-        public const string ById = "workspaces/{workspaceId}";
-    }
-
-    /// <summary>Fine-tuning: the Python runtime, base checkpoints, datasets, runs and exports.</summary>
-    public static class Training
-    {
         // Python training runtime (uv-managed venv). One machine-global runtime, so none of these are id-scoped.
         public const string RuntimeStatus = "training/runtime/status";
         public const string RuntimePrerequisites = "training/runtime/prerequisites";
@@ -736,4 +719,18 @@ public static class LocalApiRoutes
         public const string BaseArtifactCancel = "training/base-artifacts/{artifactId}/cancel";
         public const string BaseArtifactLicense = "training/base-artifacts/{artifactId}/license";
     }
+
+    public static class Automation
+    {
+        public const string Commands = "automation/commands";
+        public const string CommandById = "automation/commands/{commandId}";
+    }
+
+    /// <summary>Operator-managed opaque workspace allowlist for inbound MCP delegation.</summary>
+    public static class Workspaces
+    {
+        public const string Collection = "workspaces";
+        public const string ById = "workspaces/{workspaceId}";
+    }
+
 }
