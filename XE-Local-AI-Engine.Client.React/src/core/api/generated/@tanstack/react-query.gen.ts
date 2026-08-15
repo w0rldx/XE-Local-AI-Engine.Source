@@ -90,6 +90,7 @@ import {
 	deleteSkill,
 	deleteSlashCommand,
 	deleteToolMock,
+	deleteTrainingArtifact,
 	deleteTrainingDataset,
 	deleteTrainingDefinition,
 	deleteWorkspace,
@@ -177,6 +178,7 @@ import {
 	getToolCapableModels,
 	getToolCatalog,
 	getToolMock,
+	getTrainingArtifact,
 	getTrainingDataset,
 	getTrainingDefinition,
 	getTrainingRun,
@@ -229,6 +231,7 @@ import {
 	listSkills,
 	listSlashCommands,
 	listToolMocks,
+	listTrainingArtifacts,
 	listTrainingDatasets,
 	listTrainingDefinitions,
 	listTrainingRuns,
@@ -248,6 +251,7 @@ import {
 	previewGgufImport,
 	previewSkillImport,
 	promoteSuggestedPlaybookAction,
+	promoteTrainingArtifact,
 	putModelKind,
 	putModelLaunchArguments,
 	reconnectDevelopmentRepository,
@@ -272,6 +276,7 @@ import {
 	revokeLocalModelProxyApiKey,
 	revokeMcpServerApiKey,
 	runPlaybookActionEval,
+	runTrainingArtifactSmoke,
 	saveCloudSettings,
 	saveNodeSettings,
 	saveTutorialState,
@@ -292,6 +297,7 @@ import {
 	startLlamaCppSourceBuild,
 	startNodeBinding,
 	startStableDiffusionCppSourceBuild,
+	startTrainingExport,
 	startTrainingRuntimeInstall,
 	suggestComparison,
 	triggerScheduledJob,
@@ -489,6 +495,8 @@ import type {
 	DeleteSlashCommandResponse,
 	DeleteToolMockData,
 	DeleteToolMockResponse,
+	DeleteTrainingArtifactData,
+	DeleteTrainingArtifactResponse,
 	DeleteTrainingDatasetData,
 	DeleteTrainingDatasetResponse,
 	DeleteTrainingDefinitionData,
@@ -672,6 +680,8 @@ import type {
 	GetToolCatalogResponse,
 	GetToolMockData,
 	GetToolMockResponse,
+	GetTrainingArtifactData,
+	GetTrainingArtifactResponse,
 	GetTrainingDatasetData,
 	GetTrainingDatasetResponse,
 	GetTrainingDefinitionData,
@@ -778,6 +788,8 @@ import type {
 	ListSlashCommandsResponse,
 	ListToolMocksData,
 	ListToolMocksResponse,
+	ListTrainingArtifactsData,
+	ListTrainingArtifactsResponse,
 	ListTrainingDatasetsData,
 	ListTrainingDatasetsResponse,
 	ListTrainingDefinitionsData,
@@ -817,6 +829,9 @@ import type {
 	PreviewSkillImportResponse,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionResponse,
+	PromoteTrainingArtifactData,
+	PromoteTrainingArtifactError,
+	PromoteTrainingArtifactResponse,
 	PutModelKindData,
 	PutModelKindResponse,
 	PutModelLaunchArgumentsData,
@@ -870,6 +885,9 @@ import type {
 	RevokeMcpServerApiKeyResponse,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalResponse,
+	RunTrainingArtifactSmokeData,
+	RunTrainingArtifactSmokeError,
+	RunTrainingArtifactSmokeResponse,
 	SaveCloudSettingsData,
 	SaveCloudSettingsError,
 	SaveCloudSettingsResponse,
@@ -916,6 +934,9 @@ import type {
 	StartStableDiffusionCppSourceBuildData,
 	StartStableDiffusionCppSourceBuildError,
 	StartStableDiffusionCppSourceBuildResponse,
+	StartTrainingExportData,
+	StartTrainingExportError,
+	StartTrainingExportResponse,
 	StartTrainingRuntimeInstallData,
 	StartTrainingRuntimeInstallError,
 	StartTrainingRuntimeInstallResponse,
@@ -1458,6 +1479,138 @@ export const verifyToolMockMutation = (
 	const mutationOptions: UseMutationOptions<VerifyToolMockResponse, AxiosError<DefaultError>, Options<VerifyToolMockData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await verifyToolMock({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startTrainingExportMutation = (
+	options?: Partial<Options<StartTrainingExportData>>,
+): UseMutationOptions<StartTrainingExportResponse, AxiosError<StartTrainingExportError>, Options<StartTrainingExportData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartTrainingExportResponse,
+		AxiosError<StartTrainingExportError>,
+		Options<StartTrainingExportData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startTrainingExport({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listTrainingArtifactsQueryKey = (options: Options<ListTrainingArtifactsData>) =>
+	createQueryKey("listTrainingArtifacts", options);
+
+export const listTrainingArtifactsOptions = (options: Options<ListTrainingArtifactsData>) =>
+	queryOptions<
+		ListTrainingArtifactsResponse,
+		AxiosError<DefaultError>,
+		ListTrainingArtifactsResponse,
+		ReturnType<typeof listTrainingArtifactsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listTrainingArtifacts({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listTrainingArtifactsQueryKey(options),
+	});
+
+export const deleteTrainingArtifactMutation = (
+	options?: Partial<Options<DeleteTrainingArtifactData>>,
+): UseMutationOptions<DeleteTrainingArtifactResponse, AxiosError<DefaultError>, Options<DeleteTrainingArtifactData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteTrainingArtifactResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteTrainingArtifactData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteTrainingArtifact({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getTrainingArtifactQueryKey = (options: Options<GetTrainingArtifactData>) =>
+	createQueryKey("getTrainingArtifact", options);
+
+export const getTrainingArtifactOptions = (options: Options<GetTrainingArtifactData>) =>
+	queryOptions<
+		GetTrainingArtifactResponse,
+		AxiosError<DefaultError>,
+		GetTrainingArtifactResponse,
+		ReturnType<typeof getTrainingArtifactQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTrainingArtifact({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTrainingArtifactQueryKey(options),
+	});
+
+export const runTrainingArtifactSmokeMutation = (
+	options?: Partial<Options<RunTrainingArtifactSmokeData>>,
+): UseMutationOptions<
+	RunTrainingArtifactSmokeResponse,
+	AxiosError<RunTrainingArtifactSmokeError>,
+	Options<RunTrainingArtifactSmokeData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RunTrainingArtifactSmokeResponse,
+		AxiosError<RunTrainingArtifactSmokeError>,
+		Options<RunTrainingArtifactSmokeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await runTrainingArtifactSmoke({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const promoteTrainingArtifactMutation = (
+	options?: Partial<Options<PromoteTrainingArtifactData>>,
+): UseMutationOptions<
+	PromoteTrainingArtifactResponse,
+	AxiosError<PromoteTrainingArtifactError>,
+	Options<PromoteTrainingArtifactData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		PromoteTrainingArtifactResponse,
+		AxiosError<PromoteTrainingArtifactError>,
+		Options<PromoteTrainingArtifactData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await promoteTrainingArtifact({
 				...options,
 				...fnOptions,
 				throwOnError: true,
