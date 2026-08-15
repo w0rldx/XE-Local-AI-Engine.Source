@@ -14664,6 +14664,10 @@
             "type": "string",
             "format": "guid"
           },
+          "linkedInstalledModelName": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string"
           },
@@ -14863,6 +14867,10 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload"
               }
             ]
+          },
+          "linkedModelName": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -14940,7 +14948,8 @@
           "estimate",
           "availableVramBytes",
           "vramKnown",
-          "fits"
+          "fits",
+          "linkedModelSuggestions"
         ],
         "properties": {
           "options": {
@@ -14969,6 +14978,12 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse"
               }
             ]
+          },
+          "linkedModelSuggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse"
+            }
           }
         }
       },
@@ -15025,6 +15040,26 @@
           },
           "confirmationText": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "contentFingerprint": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

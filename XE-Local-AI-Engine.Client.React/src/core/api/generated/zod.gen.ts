@@ -141,6 +141,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse = 
 	id: z.guid(),
 	datasetId: z.guid(),
 	baseArtifactId: z.guid(),
+	linkedInstalledModelName: z.string().nullish(),
 	status: z.string(),
 	datasetRevision: z
 		.int()
@@ -168,6 +169,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunReque
 	baseArtifactId: z.guid(),
 	licenseConfirmed: z.boolean(),
 	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload.nullish(),
+	linkedModelName: z.string().nullish(),
 });
 
 /**
@@ -220,6 +222,12 @@ export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResp
 	confirmationText: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	contentFingerprint: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse = z.object({
 	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload,
 	estimate: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse,
@@ -228,6 +236,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRes
 	fits: z.boolean(),
 	rejectionReason: z.string().nullish(),
 	license: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse.nullish(),
+	linkedModelSuggestions: z.array(zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRequest = z.record(z.string(), z.never());
