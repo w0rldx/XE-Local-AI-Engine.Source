@@ -158,6 +158,10 @@ public sealed class DatasetGenerationExecutor(
     {
         await _store.RecordRejectedSampleAsync(datasetId, cancellationToken).ConfigureAwait(false);
         _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload(Reason: reason));
+        // The hub buffer is transient and evicted when the run terminalizes; the count survives but the reason would
+        // not. Log it so a rejection stays diagnosable after the fact (invariant: fail-visible, never fail-silent).
+        // Reasons are validator/transport messages, never sample content.
+        _logger.LogInformation("Dataset {DatasetId} rejected a generated sample: {Reason}", datasetId, reason ?? "(no reason recorded)");
     }
 
     private async Task<IChatClient?> CreateCriticClientAsync(DatasetDefinitionBodyV1 definition, CancellationToken cancellationToken)
