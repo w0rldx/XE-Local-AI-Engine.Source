@@ -15,6 +15,13 @@ public enum TrainingRunEventKind
     /// <summary>An artifact was registered against the run.</summary>
     Artifact,
 
+    /// <summary>
+    ///     An export step moved. Carries the pipeline phase (merging, converting, quantizing, inspecting, smoke) and,
+    ///     on a terminal phase, the reason. The run's own status never moves for an export — the artifact row is the
+    ///     durable record — so this stream is how the operator watches one happen.
+    /// </summary>
+    Export,
+
     Error
 }
 
