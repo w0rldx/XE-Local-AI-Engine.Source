@@ -253,7 +253,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     // The same content root WebApplicationFactory resolves: the Client project's source directory, taken from the
     // MvcTestingAppManifest.json that Microsoft.AspNetCore.Mvc.Testing writes into the test output. Fail loud if the
     // manifest or entry is missing — a silently wrong content root would load no appsettings.json.
-    internal static string ResolveClientContentRoot()
+    private static string ResolveClientContentRoot()
     {
         var manifestPath = Path.Combine(AppContext.BaseDirectory, "MvcTestingAppManifest.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));

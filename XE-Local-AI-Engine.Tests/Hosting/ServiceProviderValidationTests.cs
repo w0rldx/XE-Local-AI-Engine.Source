@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -82,7 +83,7 @@ public sealed class ServiceProviderValidationTests
             var start = await Program.CreateAppAsync([], new ProgramAppCustomization
             {
                 EnvironmentName = "Testing",
-                ContentRootPath = TestServerWebAppFactory.ResolveClientContentRoot(),
+                ContentRootPath = ResolveClientContentRoot(),
                 WebRootPath = webRoot,
                 Configuration = new Dictionary<string, string?>
                 {
@@ -108,6 +109,16 @@ public sealed class ServiceProviderValidationTests
 
             var app = start.App ?? throw new InvalidOperationException($"CreateAppAsync early-exited with code {start.ExitCode}.");
             return new ValidatedHost(app, webRoot, nodeDataDirectory, sqlitePath);
+        }
+
+        // follow-up: fold back into TestServerWebAppFactory (which resolves the same manifest privately) once the
+        // concurrent test lanes merge — duplicated here only to keep that shared file conflict-free.
+        private static string ResolveClientContentRoot()
+        {
+            var manifestPath = Path.Combine(AppContext.BaseDirectory, "MvcTestingAppManifest.json");
+            using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            return manifest.RootElement.GetProperty(typeof(Program).Assembly.FullName!).GetString()
+                   ?? throw new InvalidOperationException("MvcTestingAppManifest.json has a null Client content root.");
         }
 
         public async ValueTask DisposeAsync()
