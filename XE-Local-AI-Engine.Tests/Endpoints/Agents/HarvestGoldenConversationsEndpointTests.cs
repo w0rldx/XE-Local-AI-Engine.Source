@@ -17,6 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class HarvestGoldenConversationsEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string HarvestRoute(Guid agentDefinitionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest";
@@ -30,7 +33,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Harvest_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(Guid.NewGuid()))
@@ -47,7 +50,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Harvest_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(Guid.NewGuid()))
@@ -65,7 +68,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Harvest_WhenAgentExists_ReturnsOkWithCountsBody()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -96,7 +99,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(Guid.NewGuid(), Guid.NewGuid()))
@@ -113,7 +116,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenGoldenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -133,7 +136,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenManualCase_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -155,7 +158,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenCrossAgent_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -178,7 +181,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenHarvestedDisabledAndOwned_ReturnsOkWithEnabledTrue()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);

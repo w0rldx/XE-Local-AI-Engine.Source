@@ -9,6 +9,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class GetAgentFeedbackInsightsEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string Route(Guid agentDefinitionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/feedback-insights";
@@ -17,7 +20,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
     [Test]
     public async Task GetFeedbackInsights_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -29,7 +32,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
     [Test]
     public async Task GetFeedbackInsights_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -42,7 +45,7 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
     [Test]
     public async Task GetFeedbackInsights_WhenAgentExistsWithoutFeedback_ReturnsOkEmptyState()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Insights Agent").ConfigureAwait(false);

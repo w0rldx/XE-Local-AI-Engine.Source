@@ -16,12 +16,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class NodeChatReadOnlyEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
     public async Task RenameConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -40,7 +43,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task PinConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -59,7 +62,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task ArchiveConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -78,7 +81,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task BranchConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -100,7 +103,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task CreateMessageRevision_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -121,7 +124,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task SetMessageFeedback_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -140,7 +143,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task SetSelectedPath_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 

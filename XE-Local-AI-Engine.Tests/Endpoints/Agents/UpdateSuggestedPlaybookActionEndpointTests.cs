@@ -11,6 +11,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class UpdateSuggestedPlaybookActionEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string SuggestedRoute(Guid agentDefinitionId, Guid actionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/suggested";
@@ -19,7 +22,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
     [Test]
     public async Task UpdateSuggested_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(Guid.NewGuid(), Guid.NewGuid()))
@@ -38,7 +41,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
     [Test]
     public async Task UpdateSuggested_WhenActionMissing_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -60,7 +63,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
     [Test]
     public async Task UpdateSuggested_WhenActionBelongsToDifferentAgent_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -85,7 +88,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
     [Test]
     public async Task UpdateSuggested_WhenBlankBehavior_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -109,7 +112,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
     [Test]
     public async Task UpdateSuggested_WhenOwnedPendingSuggestion_ReturnsOkWithEditedFieldsAndPreservedEvidence()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);

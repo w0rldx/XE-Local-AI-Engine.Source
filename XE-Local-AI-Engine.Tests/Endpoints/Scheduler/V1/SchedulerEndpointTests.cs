@@ -13,6 +13,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class SchedulerEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     // ──────────────────────────────────────────────────────────────────────
     // Route helpers
     // ──────────────────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListTemplates_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(TemplatesRoute()).ConfigureAwait(false);
@@ -82,7 +85,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(JobsRoute()).ConfigureAwait(false);
@@ -93,7 +96,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobsRoute())
@@ -110,7 +113,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(JobByIdRoute(Guid.NewGuid())).ConfigureAwait(false);
@@ -121,7 +124,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task UpdateJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Put, JobByIdRoute(Guid.NewGuid()))
@@ -138,7 +141,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task DeleteJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, JobByIdRoute(Guid.NewGuid()));
@@ -150,7 +153,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task EnableJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobEnableRoute(Guid.NewGuid()))
@@ -167,7 +170,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task DisableJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobDisableRoute(Guid.NewGuid()))
@@ -184,7 +187,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task TriggerJob_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobTriggerRoute(Guid.NewGuid()))
@@ -201,7 +204,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListRuns_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(RunsRoute()).ConfigureAwait(false);
@@ -212,7 +215,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetRun_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(RunByIdRoute(Guid.NewGuid())).ConfigureAwait(false);
@@ -223,7 +226,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CancelRun_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(Guid.NewGuid()))
@@ -244,7 +247,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListTemplates_WithOperatorToken_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, TemplatesRoute());
@@ -257,7 +260,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_WithOperatorToken_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
@@ -270,7 +273,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetJob_WhenJobMissing_WithOperatorToken_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobByIdRoute(Guid.NewGuid()));
@@ -283,7 +286,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListRuns_WithOperatorToken_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunsRoute());
@@ -296,7 +299,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task GetRun_WhenRunMissing_WithOperatorToken_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunByIdRoute(Guid.NewGuid()));
@@ -309,7 +312,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CancelRun_WhenRunMissing_WithOperatorToken_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(Guid.NewGuid()))
@@ -331,7 +334,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WithInvalidCronExpression_ReturnsBadRequestWithErrorBody()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         // POST with a templateId that the app doesn't have registered → validation error.
@@ -365,7 +368,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WithBlankDisplayName_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var body = new
@@ -394,7 +397,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_ResponseDoesNotContainRawParameters()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
@@ -418,7 +421,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListJobs_ResponseContainsHasParametersField()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         // Seed a job via the service, then verify the response shape carries hasParameters.
@@ -440,7 +443,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task ListRuns_ResponseDoesNotContainRawDetailsOrErrorDetails()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunsRoute());

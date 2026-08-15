@@ -10,12 +10,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AgentTemplateCatalogTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private const int ExpectedTemplateCount = 14;
 
     [Test]
-    public async Task Catalog_LoadsEmbeddedSeed_HasAllCuratedTemplatesWithRequiredFields()
+    public void Catalog_LoadsEmbeddedSeed_HasAllCuratedTemplatesWithRequiredFields()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         var catalog = factory.Services.GetRequiredService<IAgentTemplateCatalog>();
 
         var templates = catalog.List();
@@ -34,9 +37,9 @@ public sealed class AgentTemplateCatalogTests
     }
 
     [Test]
-    public async Task Catalog_TryGet_ReturnsTemplateForKnownSlug_AndNullForUnknown()
+    public void Catalog_TryGet_ReturnsTemplateForKnownSlug_AndNullForUnknown()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         var catalog = factory.Services.GetRequiredService<IAgentTemplateCatalog>();
 
         var knownSlug = catalog.List()[0].Slug;
