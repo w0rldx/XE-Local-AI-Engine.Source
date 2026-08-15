@@ -1,16 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1;
 
-using System.ComponentModel.DataAnnotations;
-
 public sealed class CreateBaseArtifactRequest
 {
     /// <summary>The Hugging Face base checkpoint repository, e.g. <c>unsloth/Llama-3.2-1B-Instruct</c>.</summary>
-    [Required]
-    [StringLength(200, MinimumLength = 3)]
     public required string RepoId { get; init; }
 
     /// <summary>Optional commit or branch to pin. Omitted means the repository's current default revision.</summary>
-    [StringLength(100)]
     public string? Revision { get; init; }
 }
 
