@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
+using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -190,7 +191,8 @@ public sealed class ImageJobCoordinatorTests
             new NullImageJobEventPublisher(),
             timeProvider,
             NullLogger<ImageJobCoordinator>.Instance,
-            new FakeImageRuntimeActivityGate());
+            new FakeImageRuntimeActivityGate(),
+            new TrainingActivity());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None).ConfigureAwait(false);
@@ -354,7 +356,8 @@ public sealed class ImageJobCoordinatorTests
                 new NullImageJobEventPublisher(),
                 TimeProvider.System,
                 NullLogger<ImageJobCoordinator>.Instance,
-                activityGate);
+                activityGate,
+                new TrainingActivity());
 #pragma warning restore CA2000
 
             return new Harness(coordinator, runtime, store, images, activityGate);
