@@ -129,6 +129,38 @@ public sealed class SampleValidationPipelineTests
         await executor.DidNotReceive().ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task SingleCallIsTheSampleBoundary_AndAMultiCallTrajectoryIsRejected()
+    {
+        var pipeline = Create(out _);
+
+        // What today's teacher record can express: exactly one call. The accepted sample must carry exactly one tool
+        // part, which is what makes the boundary rule below hold for everything generation persists.
+        var outcome = await pipeline.ValidateAsync(
+            """{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
+            Context());
+
+        AssertEx.True(outcome.Accepted);
+        AssertEx.Equal(expected: 1, TrainingSampleParts.ToolCalls(AssertEx.NotNull(outcome.Content).Parts).Count);
+
+        // The rule the pipeline enforces over what it built. TeacherSampleRecordV1 carries ONE toolName, so a second
+        // call can only appear if that record shape is later widened — and this is what makes that a visible rejection
+        // rather than a sample the scorer grades by its first call.
+        AssertEx.True(TrainingSampleParts.IsMultiCall(
+            [
+                new TrainingSamplePartV1("user", 0, "do both"),
+                new TrainingSamplePartV1("tool", 1, ToolName: "read_file", Arguments: "{}"),
+                new TrainingSamplePartV1("tool", 2, ToolName: "read_file", Arguments: "{}")
+            ]),
+            "Two named tool parts are a multi-call trajectory.");
+        AssertEx.False(TrainingSampleParts.IsMultiCall(
+            [
+                new TrainingSamplePartV1("tool", 0, ToolName: "read_file", Arguments: "{}"),
+                new TrainingSamplePartV1("tool", 1, Result: "ok")
+            ]),
+            "An unnamed tool part is a result echo, not a second call.");
+    }
+
     private static ISampleValidationPipeline Create(out IHeadlessToolExecutor executor)
     {
         executor = Substitute.For<IHeadlessToolExecutor>();
