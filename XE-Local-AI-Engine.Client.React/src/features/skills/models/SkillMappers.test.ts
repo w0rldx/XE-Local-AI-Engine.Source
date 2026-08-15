@@ -111,6 +111,8 @@ const form: SkillFormValues = {
 	compatibility: "   ",
 	allowedTools: "  read_file  ",
 	metadata: { author: "acme" },
+	generated: false,
+	generationMetadata: null,
 };
 
 describe("toCreateSkillRequest", () => {
@@ -124,6 +126,8 @@ describe("toCreateSkillRequest", () => {
 			compatibility: null,
 			allowedTools: "read_file",
 			metadata: { author: "acme" },
+			generated: false,
+			generationMetadata: null,
 		});
 	});
 });
@@ -139,6 +143,8 @@ describe("toUpdateSkillRequest", () => {
 			compatibility: null,
 			allowedTools: "read_file",
 			metadata: { author: "acme" },
+			generated: false,
+			generationMetadata: null,
 		});
 	});
 

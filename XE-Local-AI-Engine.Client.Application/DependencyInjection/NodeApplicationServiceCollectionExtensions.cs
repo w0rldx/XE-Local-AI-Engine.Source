@@ -20,6 +20,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeWorkspaceAndAgents(configuration);
         builder.AddNodeAnalysis(configuration);
         builder.AddNodeAdaptiveMemory(configuration);
+        builder.AddNodeDrafting(configuration);
         builder.AddNodeEval(configuration);
         builder.AddNodeGoldenHarvest(configuration);
         builder.AddNodeSchedulingStores(configuration);

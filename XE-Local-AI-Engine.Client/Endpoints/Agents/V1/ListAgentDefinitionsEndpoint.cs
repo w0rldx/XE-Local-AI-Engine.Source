@@ -22,7 +22,9 @@ public sealed class ListAgentDefinitionsEndpoint(IAgentDefinitionService agentDe
         var records = await _agentDefinitionService.ListAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListAgentDefinitionsResponse
             {
-                Items = [.. records.Select(static record => record.ToResponse())]
+                // Lists stay lean: the AI-drafting provenance (brief, rationale, assumptions) is projected by the
+                // single-item reads only.
+                Items = [.. records.Select(static record => record.ToResponse(includeGenerationMetadata: false))]
             },
             ct).ConfigureAwait(false);
     }

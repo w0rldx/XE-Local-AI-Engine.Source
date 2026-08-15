@@ -38,6 +38,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
             SourceUri = input.SourceUri,
             ImportedAtUtc = input.ImportedAtUtc,
             ContentSha256 = input.ContentSha256,
+            GenerationMetadataJson = Encode(input.GenerationMetadataJson),
             Enabled = input.Enabled,
             Version = 1,
             CreatedAtUtc = now,
@@ -84,15 +85,21 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
 
         // Provenance is promote-only, and absent values leave the stored provenance alone: an operator edit that did
         // not echo the import fields back must not launder an imported skill into a local one, because Origin is what
-        // decides whether the body gets fenced as untrusted content downstream.
+        // decides whether the body gets fenced as untrusted content downstream. When the input DOES carry Imported
+        // provenance (a re-import, or the AI-drafted "generated" demotion), the whole unit is applied VERBATIM —
+        // including a null ContentSha256, which is the correct value for a generated row: keeping the old
+        // archive/GitHub payload hash on content the model just rewrote would poison re-import change detection.
         if (input.Origin == AgentSkillOrigin.Imported)
         {
             entity.Origin = (int)AgentSkillOrigin.Imported;
+            entity.SourceUri = input.SourceUri;
+            entity.ImportedAtUtc = input.ImportedAtUtc;
+            entity.ContentSha256 = input.ContentSha256;
         }
-
-        entity.SourceUri = input.SourceUri ?? entity.SourceUri;
-        entity.ImportedAtUtc = input.ImportedAtUtc ?? entity.ImportedAtUtc;
-        entity.ContentSha256 = input.ContentSha256 ?? entity.ContentSha256;
+        // Same set-if-present rule, and for the same reason: the AI provenance block only travels with a save that came
+        // out of the assist dialog, so an ordinary edit omitting it must leave the stored record intact. Not content —
+        // it is deliberately absent from configChanged above and never bumps Version.
+        entity.GenerationMetadataJson = Encode(input.GenerationMetadataJson) ?? entity.GenerationMetadataJson;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (configChanged)
@@ -340,7 +347,8 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
             entity.SourceUri,
             entity.ImportedAtUtc,
             entity.ContentSha256,
-            resources);
+            resources,
+            DecodeIfPresent(entity.GenerationMetadataJson));
     }
 
     private static AgentSkillResourceRecord ToRecord(AgentSkillResource entity)
@@ -389,7 +397,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
 
         if (!SourceUriPattern().IsMatch(sourceUri))
         {
-            throw new ArgumentException($"Source URI '{sourceUri}' is not a supported provenance value; expected 'upload' or 'github:owner/repo'.", nameof(sourceUri));
+            throw new ArgumentException($"Source URI '{sourceUri}' is not a supported provenance value; expected 'upload', 'generated' or 'github:owner/repo'.", nameof(sourceUri));
         }
     }
 
@@ -408,7 +416,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         return value is null ? null : Encoding.UTF8.GetString(value);
     }
 
-    [GeneratedRegex("^(?:upload|github:[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
+    [GeneratedRegex("^(?:upload|generated|github:[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex SourceUriPattern();
 
     /// <summary>Wire shape of the <c>frontmatter_json</c> column — the spec's optional frontmatter fields, all nullable.</summary>

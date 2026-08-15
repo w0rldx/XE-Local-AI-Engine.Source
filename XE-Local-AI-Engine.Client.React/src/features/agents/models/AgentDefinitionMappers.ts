@@ -91,5 +91,8 @@ export function toSaveAgentDefinitionRequest(
 		defaultTemporaryChat: form.defaultTemporaryChat,
 		memoryExtractionEnabled: form.memoryExtractionEnabled,
 		disableBaseScaffold: form.disableBaseScaffold,
+		// Provenance of an applied AI draft, echoed back exactly as the draft endpoint returned it. Null on an
+		// ordinary edit, which the server reads as "leave the stored provenance alone" rather than "clear it".
+		generationMetadata: form.generationMetadata,
 	};
 }

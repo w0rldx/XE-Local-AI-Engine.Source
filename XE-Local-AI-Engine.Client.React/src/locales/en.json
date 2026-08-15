@@ -1,5 +1,56 @@
 {
 	"basicFormatOption": "en-US",
+	"assist": {
+		"draftButton": "Draft with AI",
+		"improveButton": "Improve with AI",
+		"noModelHint": "No local chat model is installed on this node, so nothing can draft yet.",
+		"intro": "A model on this node writes a draft from your description. Nothing is saved until you apply it and save the form yourself.",
+		"demotionToast": "Saved as an imported skill and left disabled. Review the generated instructions, then enable it.",
+		"dialog": {
+			"draftTitle": "Draft with AI",
+			"improveTitle": "Improve with AI"
+		},
+		"model": {
+			"label": "Model",
+			"description": "Only chat models installed on this node can draft.",
+			"notLoaded": "This model is not loaded — the first generation will load it, which takes longer."
+		},
+		"brief": {
+			"createLabel": "What should this do?",
+			"improveLabel": "What should change?",
+			"createDescription": "Describe the job in your own words — the model turns it into a draft.",
+			"improveDescription": "Describe the revision. The current content is sent as the starting point.",
+			"placeholder": "Review supplier invoices against the agreed rate card and flag anything unusual."
+		},
+		"actions": {
+			"generate": "Generate",
+			"regenerate": "Generate again",
+			"cancel": "Cancel generation",
+			"discard": "Discard",
+			"apply": "Apply to form"
+		},
+		"pending": {
+			"elapsed": "Generating… {{seconds}}s elapsed.",
+			"hint": "Local models can take several minutes. You can cancel at any time."
+		},
+		"errors": {
+			"busy": "The node is running another task right now. Try again once it finishes.",
+			"unparseable": "The model did not return a usable draft. Try again, or pick a different model.",
+			"generic": "Could not generate a draft."
+		},
+		"result": {
+			"nameLabel": "Name",
+			"descriptionLabel": "Description",
+			"instructionsLabel": "Instructions",
+			"bodyLabel": "Body"
+		},
+		"rationale": {
+			"toggle": "Why this draft",
+			"none": "The model gave no explanation for this draft.",
+			"assumptions": "Assumptions it made",
+			"confidence": "The model's own confidence: {{percent}}% — its claim, not a measurement."
+		}
+	},
 	"common": {
 		"loading": "Loading...",
 		"refresh": "Refresh",
@@ -3762,6 +3813,7 @@
 					"description": "Disabled skills are never loaded by an agent, even if still assigned."
 				},
 				"importedNote": "This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
+				"generatedNote": "This skill was written by a model on this node and has not been reviewed. Its instructions run with your agent's tool access once enabled.",
 				"frontmatterSection": "Frontmatter",
 				"license": {
 					"label": "License"

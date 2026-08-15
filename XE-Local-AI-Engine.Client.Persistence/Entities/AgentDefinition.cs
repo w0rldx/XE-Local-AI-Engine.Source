@@ -21,6 +21,16 @@ internal sealed record class AgentDefinition
     /// </summary>
     public byte[] Instructions { get; set; } = [];
 
+    /// <summary>
+    ///     AI-generation provenance for a drafted definition as a UTF-8 JSON object, or <c>null</c> for a row with no
+    ///     AI provenance. Plaintext while tracked in memory; encrypted at rest by
+    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
+    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     <c>generation_metadata_json</c>. Informational only: on a single-operator node the operator supplies most of
+    ///     it, so it records what a draft claimed, not a tamper-proof attestation.
+    /// </summary>
+    public byte[]? GenerationMetadataJson { get; set; }
+
     /// <summary>Pinned model profile, or <c>null</c> to use the node default. Plaintext (structural).</summary>
     public string? ModelProfile { get; set; }
 

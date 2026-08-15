@@ -82,10 +82,26 @@ export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
 	origin: XeLocalAiEngineClientPersistenceAgentSkillOrigin;
 	sourceUri?: string | null;
 	importedAtUtc?: number | null;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse | null;
 	resourceCount: number;
 };
 
 export type XeLocalAiEngineClientPersistenceAgentSkillOrigin = "Local" | "Imported";
+
+export type XeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse = {
+	model?: string | null;
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	userBrief?: string | null;
+	rationale?: string | null;
+	assumptions?: Array<string> | null;
+	confidence?: number;
+	generatedAtUtc?: number;
+	draftContentHash?: string | null;
+	acceptedAtUtc?: number;
+	wasEdited?: boolean;
+};
+
+export type XeLocalAiEngineClientServicesDraftingDraftMode = "Create" | "Improve";
 
 export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
 	name?: string | null;
@@ -97,10 +113,46 @@ export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
 	metadata?: {
 		[key: string]: string;
 	} | null;
+	generated?: boolean;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCommonGenerationMetadata = {
+	model?: string | null;
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	userBrief?: string | null;
+	rationale?: string | null;
+	assumptions?: Array<string> | null;
+	confidence?: number;
+	generatedAtUtc?: number;
+	draftContentHash?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse = {
+	name: string;
+	description: string;
+	body: string;
+	generationMetadata: XeLocalAiEngineClientEndpointsCommonGenerationMetadata;
+};
+
+export type XeLocalAiEngineClientEndpointsCommonDraftErrorResponse = {
+	code: XeLocalAiEngineClientEndpointsCommonDraftErrorCode;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCommonDraftErrorCode = "NodeBusy" | "Unparseable";
+
+export type XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest = {
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	modelName?: string | null;
+	brief?: string | null;
+	existingName?: string | null;
+	existingDescription?: string | null;
+	existingContent?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
@@ -204,6 +256,8 @@ export type XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = {
 	metadata?: {
 		[key: string]: string;
 	} | null;
+	generated?: boolean;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = {
@@ -2994,6 +3048,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse | null;
 };
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
@@ -3015,6 +3070,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
 	allowedSkillIds?: Array<string> | null;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = {
@@ -3043,6 +3099,22 @@ export type XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationReques
 
 export type XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse = {
+	name: string;
+	description: string;
+	instructions: string;
+	generationMetadata: XeLocalAiEngineClientEndpointsCommonGenerationMetadata;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest = {
+	mode?: XeLocalAiEngineClientServicesDraftingDraftMode;
+	modelName?: string | null;
+	brief?: string | null;
+	existingName?: string | null;
+	existingDescription?: string | null;
+	existingContent?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = {
@@ -3294,6 +3366,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
 	allowedSkillIds?: Array<string> | null;
+	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = {
@@ -3618,6 +3691,37 @@ export type UpdateSkillResponses = {
 };
 
 export type UpdateSkillResponse = UpdateSkillResponses[keyof UpdateSkillResponses];
+
+export type DraftSkillData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills/draft";
+};
+
+export type DraftSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+	422: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+};
+
+export type DraftSkillError = DraftSkillErrors[keyof DraftSkillErrors];
+
+export type DraftSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse;
+};
+
+export type DraftSkillResponse = DraftSkillResponses[keyof DraftSkillResponses];
 
 export type GetSkillResourceData = {
 	body?: never;
@@ -10406,6 +10510,37 @@ export type UpdatePlaybookActionResponses = {
 };
 
 export type UpdatePlaybookActionResponse = UpdatePlaybookActionResponses[keyof UpdatePlaybookActionResponses];
+
+export type DraftAgentDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/agents/draft";
+};
+
+export type DraftAgentDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+	422: XeLocalAiEngineClientEndpointsCommonDraftErrorResponse;
+};
+
+export type DraftAgentDefinitionError = DraftAgentDefinitionErrors[keyof DraftAgentDefinitionErrors];
+
+export type DraftAgentDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse;
+};
+
+export type DraftAgentDefinitionResponse = DraftAgentDefinitionResponses[keyof DraftAgentDefinitionResponses];
 
 export type GetAgentFeedbackInsightsData = {
 	body?: never;

@@ -84,6 +84,8 @@ import {
 	disconnectConnection,
 	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
+	draftAgentDefinition,
+	draftSkill,
 	ejectImageRuntime,
 	ejectRunningModel,
 	enableAutoConnect,
@@ -426,6 +428,12 @@ import type {
 	DownloadRecommendedEmbeddingResponse,
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerResponse,
+	DraftAgentDefinitionData,
+	DraftAgentDefinitionError,
+	DraftAgentDefinitionResponse,
+	DraftSkillData,
+	DraftSkillError,
+	DraftSkillResponse,
 	EjectImageRuntimeData,
 	EjectImageRuntimeError,
 	EjectImageRuntimeResponse,
@@ -1051,6 +1059,22 @@ export const updateSkillMutation = (
 	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSkill({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const draftSkillMutation = (
+	options?: Partial<Options<DraftSkillData>>,
+): UseMutationOptions<DraftSkillResponse, AxiosError<DraftSkillError>, Options<DraftSkillData>> => {
+	const mutationOptions: UseMutationOptions<DraftSkillResponse, AxiosError<DraftSkillError>, Options<DraftSkillData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await draftSkill({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -5933,6 +5957,26 @@ export const updatePlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updatePlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const draftAgentDefinitionMutation = (
+	options?: Partial<Options<DraftAgentDefinitionData>>,
+): UseMutationOptions<DraftAgentDefinitionResponse, AxiosError<DraftAgentDefinitionError>, Options<DraftAgentDefinitionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DraftAgentDefinitionResponse,
+		AxiosError<DraftAgentDefinitionError>,
+		Options<DraftAgentDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await draftAgentDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,
