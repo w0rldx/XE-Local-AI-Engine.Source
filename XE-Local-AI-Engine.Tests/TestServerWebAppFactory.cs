@@ -49,6 +49,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private readonly string _nodeDataDirectory;
     private readonly HttpClient _offlineRuntimeHttpClient = new(new OfflineRuntimeHandler(), disposeHandler: true);
 
+    // Process-wide: see the comment in EnsureApp. Same role as TestingWebAppFactory.HostStartupLock.
+    private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
+
     private readonly Lock _appGate = new();
     private WebApplication? _app;
 
@@ -135,9 +138,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     }
 
     // Lazy sync-over-async build on first use, matching WebApplicationFactory's lazy host start. TUnit has no
-    // synchronization context, so blocking here cannot deadlock. No process-wide startup lock: CreateAppAsync touches
-    // the global Serilog Log.Logger, but batch runs are single-threaded per process and last-writer-wins is the same
-    // behavior the WebApplicationFactory path had.
+    // synchronization context, so blocking here cannot deadlock.
     private WebApplication EnsureApp()
     {
         lock (_appGate)
@@ -164,23 +165,35 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 configuration["Development:Enabled"] = developmentEnabled.ToString();
             }
 
-            var start = Program.CreateAppAsync([], new ProgramAppCustomization
+            // Same process-wide serialization as TestingWebAppFactory's HostStartupLock: host bootstrap is not
+            // re-entrant (docs/wiki/13-testing-and-validation.md — TUnit runs classes in parallel), and CreateAppAsync
+            // additionally mutates the global Serilog Log.Logger. Serialize app creation AND startup so a normal
+            // parallel TUnit run cannot race two bootstraps; steady-state requests are unaffected.
+            HostStartupLock.Wait();
+            try
             {
-                EnvironmentName = "Testing",
-                ContentRootPath = ResolveClientContentRoot(),
-                WebRootPath = _fixtureWebRoot,
-                Configuration = configuration,
-                ConfigureBuilder = builder =>
+                var start = Program.CreateAppAsync([], new ProgramAppCustomization
                 {
-                    builder.WebHost.UseTestServer();
-                    ConfigureTestServices(builder.Services);
-                }
-            }).GetAwaiter().GetResult();
+                    EnvironmentName = "Testing",
+                    ContentRootPath = ResolveClientContentRoot(),
+                    WebRootPath = _fixtureWebRoot,
+                    Configuration = configuration,
+                    ConfigureBuilder = builder =>
+                    {
+                        builder.WebHost.UseTestServer();
+                        ConfigureTestServices(builder.Services);
+                    }
+                }).GetAwaiter().GetResult();
 
-            var app = start.App ?? throw new InvalidOperationException($"CreateAppAsync early-exited with code {start.ExitCode}.");
-            app.StartAsync().GetAwaiter().GetResult();
-            _app = app;
-            return app;
+                var app = start.App ?? throw new InvalidOperationException($"CreateAppAsync early-exited with code {start.ExitCode}.");
+                app.StartAsync().GetAwaiter().GetResult();
+                _app = app;
+                return app;
+            }
+            finally
+            {
+                HostStartupLock.Release();
+            }
         }
     }
 
