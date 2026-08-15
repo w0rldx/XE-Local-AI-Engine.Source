@@ -152,7 +152,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -754,7 +754,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -1471,7 +1471,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -1697,7 +1697,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -1752,7 +1752,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -1809,7 +1809,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -3568,6 +3568,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3646,6 +3656,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3696,7 +3716,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -3706,7 +3726,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -3716,7 +3736,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -3726,7 +3746,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -3736,7 +3756,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -4955,7 +4975,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5023,7 +5043,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5483,7 +5503,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5551,7 +5571,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5619,7 +5639,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5687,7 +5707,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5764,7 +5784,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5828,7 +5848,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -5957,7 +5977,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -6087,7 +6107,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -6323,7 +6343,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6333,7 +6353,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6343,7 +6363,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6353,7 +6373,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6363,7 +6383,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6404,7 +6424,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6414,7 +6434,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6424,7 +6444,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6434,7 +6454,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -6444,7 +6464,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -7097,6 +7117,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -9180,6 +9210,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -9719,7 +9759,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -9735,7 +9775,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -9784,7 +9824,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -9800,7 +9840,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -9883,7 +9923,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -9899,7 +9939,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -9954,7 +9994,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10014,7 +10054,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10030,7 +10070,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10040,7 +10080,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10050,7 +10090,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10114,7 +10154,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10124,7 +10164,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10207,7 +10247,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10267,7 +10307,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10283,7 +10323,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10293,7 +10333,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10303,7 +10343,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10358,7 +10398,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10422,7 +10462,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10432,7 +10472,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10500,7 +10540,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10510,7 +10550,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10572,7 +10612,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10588,7 +10628,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10598,7 +10638,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10697,7 +10737,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -10824,7 +10864,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
@@ -12781,6 +12821,69 @@
           "severity": {
             "type": "string",
             "description": "the severity of the error",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "properties": {
+              "conflictType": {
+                "type": "string",
+                "nullable": true
+              },
+              "maxConcurrentRuns": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "distinctModelCount": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "maxLoadedProcesses": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "MicrosoftAspNetCoreMvcProblemDetails": {
+        "type": "object",
+        "additionalProperties": {
+          "nullable": true
+        },
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -16731,6 +16834,27 @@
             "nullable": true
           },
           "ctxTarget": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "runningProcessCount": {
             "type": "integer",
             "format": "int32",
             "nullable": true

@@ -397,7 +397,7 @@ public sealed class SchedulerEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        // ScheduledJobValidationException → AddError + Send.ErrorsAsync → 400.
+        // ScheduledJobValidationException → global DomainValidationExceptionHandler → 400.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         // Response must be a structured error body, not an empty 400.
@@ -473,7 +473,7 @@ public sealed class SchedulerEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        // ScheduledJobValidationException → AddError + Send.ErrorsAsync → 400 (not an unhandled 500).
+        // ScheduledJobValidationException → global DomainValidationExceptionHandler → 400 (not an unhandled 500).
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
