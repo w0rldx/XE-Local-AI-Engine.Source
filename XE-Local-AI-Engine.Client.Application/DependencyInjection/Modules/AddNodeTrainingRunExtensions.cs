@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Training;
+using XE_Local_AI_Engine.Client.Services.Training.Comparison;
+using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 /// <summary>
@@ -38,6 +40,11 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddScoped<ITrainingCapacityGate, TrainingCapacityGate>();
         builder.Services.AddScoped<ITrainingRunService, TrainingRunService>();
         builder.Services.AddScoped<ITrainingRunExecutor, TrainingRunExecutor>();
+
+        // The evaluation half rides the same queue and the same cancellation registry; only the executor differs.
+        builder.Services.AddScoped<IEvaluationRunService, EvaluationRunService>();
+        builder.Services.AddScoped<IEvaluationRunExecutor, EvaluationRunExecutor>();
+        builder.Services.AddScoped<IComparisonReportService, ComparisonReportService>();
 
         builder.Services.AddHostedService<TrainingRunStartupReaper>();
         builder.Services.AddHostedService<TrainingRunQueueHostedService>();
