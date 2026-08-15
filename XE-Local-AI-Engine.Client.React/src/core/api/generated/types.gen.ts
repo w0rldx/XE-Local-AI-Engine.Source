@@ -3846,7 +3846,10 @@ export type CancelScheduledJobRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CancelScheduledJobRunError = CancelScheduledJobRunErrors[keyof CancelScheduledJobRunErrors];
 
 export type CancelScheduledJobRunResponses = {
 	/**
@@ -4332,7 +4335,10 @@ export type ContinuePreviewRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ContinuePreviewRunError = ContinuePreviewRunErrors[keyof ContinuePreviewRunErrors];
 
 export type ContinuePreviewRunResponses = {
 	/**
@@ -4473,7 +4479,10 @@ export type UpdatePreviewWorkflowErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type UpdatePreviewWorkflowError = UpdatePreviewWorkflowErrors[keyof UpdatePreviewWorkflowErrors];
 
 export type UpdatePreviewWorkflowResponses = {
 	/**
@@ -9432,6 +9441,10 @@ export type ListEligibleBenchmarkAgentsData = {
 
 export type ListEligibleBenchmarkAgentsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9439,7 +9452,13 @@ export type ListEligibleBenchmarkAgentsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
 };
+
+export type ListEligibleBenchmarkAgentsError = ListEligibleBenchmarkAgentsErrors[keyof ListEligibleBenchmarkAgentsErrors];
 
 export type ListEligibleBenchmarkAgentsResponses = {
 	/**
@@ -9462,6 +9481,10 @@ export type ListEligibleBenchmarkModelsData = {
 
 export type ListEligibleBenchmarkModelsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9469,7 +9492,13 @@ export type ListEligibleBenchmarkModelsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
 };
+
+export type ListEligibleBenchmarkModelsError = ListEligibleBenchmarkModelsErrors[keyof ListEligibleBenchmarkModelsErrors];
 
 export type ListEligibleBenchmarkModelsResponses = {
 	/**
@@ -9517,6 +9546,10 @@ export type CreateBenchmarkProjectData = {
 
 export type CreateBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9524,7 +9557,10 @@ export type CreateBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	422: FastEndpointsProblemDetails;
 };
+
+export type CreateBenchmarkProjectError = CreateBenchmarkProjectErrors[keyof CreateBenchmarkProjectErrors];
 
 export type CreateBenchmarkProjectResponses = {
 	/**
@@ -9553,7 +9589,14 @@ export type DeleteBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
 };
+
+export type DeleteBenchmarkProjectError = DeleteBenchmarkProjectErrors[keyof DeleteBenchmarkProjectErrors];
 
 export type DeleteBenchmarkProjectResponses = {
 	/**
@@ -9582,7 +9625,13 @@ export type GetBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
 };
+
+export type GetBenchmarkProjectError = GetBenchmarkProjectErrors[keyof GetBenchmarkProjectErrors];
 
 export type GetBenchmarkProjectResponses = {
 	/**
@@ -9604,6 +9653,10 @@ export type UpdateBenchmarkProjectData = {
 
 export type UpdateBenchmarkProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9611,7 +9664,15 @@ export type UpdateBenchmarkProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
+	422: FastEndpointsProblemDetails;
 };
+
+export type UpdateBenchmarkProjectError = UpdateBenchmarkProjectErrors[keyof UpdateBenchmarkProjectErrors];
 
 export type UpdateBenchmarkProjectResponses = {
 	/**
@@ -9636,6 +9697,10 @@ export type ListBenchmarkRunsData = {
 
 export type ListBenchmarkRunsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9643,7 +9708,13 @@ export type ListBenchmarkRunsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
 };
+
+export type ListBenchmarkRunsError = ListBenchmarkRunsErrors[keyof ListBenchmarkRunsErrors];
 
 export type ListBenchmarkRunsResponses = {
 	/**
@@ -9665,6 +9736,10 @@ export type StartBenchmarkRunData = {
 
 export type StartBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9672,7 +9747,15 @@ export type StartBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
+	422: FastEndpointsProblemDetails;
 };
+
+export type StartBenchmarkRunError = StartBenchmarkRunErrors[keyof StartBenchmarkRunErrors];
 
 export type StartBenchmarkRunResponses = {
 	/**
@@ -9701,7 +9784,14 @@ export type DeleteBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
 };
+
+export type DeleteBenchmarkRunError = DeleteBenchmarkRunErrors[keyof DeleteBenchmarkRunErrors];
 
 export type DeleteBenchmarkRunResponses = {
 	/**
@@ -9730,7 +9820,13 @@ export type GetBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
 };
+
+export type GetBenchmarkRunError = GetBenchmarkRunErrors[keyof GetBenchmarkRunErrors];
 
 export type GetBenchmarkRunResponses = {
 	/**
@@ -9759,7 +9855,14 @@ export type CancelBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CancelBenchmarkRunError = CancelBenchmarkRunErrors[keyof CancelBenchmarkRunErrors];
 
 export type CancelBenchmarkRunResponses = {
 	/**
@@ -9781,6 +9884,10 @@ export type ScoreBenchmarkRunData = {
 
 export type ScoreBenchmarkRunErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9788,7 +9895,14 @@ export type ScoreBenchmarkRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ScoreBenchmarkRunError = ScoreBenchmarkRunErrors[keyof ScoreBenchmarkRunErrors];
 
 export type ScoreBenchmarkRunResponses = {
 	/**
