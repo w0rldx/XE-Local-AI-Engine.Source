@@ -148,38 +148,42 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         using var generationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         generationCancellation.CancelAfter(_options.GenerationTimeout);
 
-        var provider = await _providerResolver.ResolveProviderForModelAsync(request.ModelName, generationCancellation.Token).ConfigureAwait(false);
-
-        // The resolver routes an unmapped model to the configured DEFAULT provider, so it is not a guard on its own: if
-        // the runtime it picked is not the one eligibility cleared, refuse rather than generate on an unvetted route.
-        if (!string.Equals(provider.ProviderName, eligibleProviderName, StringComparison.OrdinalIgnoreCase))
-        {
-            return DraftResult.Failed(DraftFailureKind.ModelNotEligible,
-                "The selected model is not an installed chat model served by a node-local runtime.");
-        }
-
-        using var chatClient = provider.CreateChatClient(new LocalModelSelection
-        {
-            ModelName = request.ModelName,
-            ProviderName = provider.ProviderName
-        });
-
-        List<ChatMessage> messages =
-        [
-            new(ChatRole.System, systemPrompt),
-            new(ChatRole.User, BuildUserMessage(request))
-        ];
-
-        var chatOptions = new ChatOptions
-        {
-            // Low but non-zero: drafting benefits from a little variation across regenerations, unlike extraction.
-            Temperature = 0.3f,
-            MaxOutputTokens = _options.MaxOutputTokens
-        };
-
         ChatResponse<TEnvelope> response;
         try
         {
+            // Provider resolution runs INSIDE the timeout mapping: it takes the linked token, so a stalled
+            // provider-map read elapsing the budget must surface as the same typed failure as a stalled generation —
+            // not as an unhandled OperationCanceledException the endpoint turns into a 500.
+            var provider = await _providerResolver.ResolveProviderForModelAsync(request.ModelName, generationCancellation.Token).ConfigureAwait(false);
+
+            // The resolver routes an unmapped model to the configured DEFAULT provider, so it is not a guard on its
+            // own: if the runtime it picked is not the one eligibility cleared, refuse rather than generate on an
+            // unvetted route.
+            if (!string.Equals(provider.ProviderName, eligibleProviderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return DraftResult.Failed(DraftFailureKind.ModelNotEligible,
+                    "The selected model is not an installed chat model served by a node-local runtime.");
+            }
+
+            using var chatClient = provider.CreateChatClient(new LocalModelSelection
+            {
+                ModelName = request.ModelName,
+                ProviderName = provider.ProviderName
+            });
+
+            List<ChatMessage> messages =
+            [
+                new(ChatRole.System, systemPrompt),
+                new(ChatRole.User, BuildUserMessage(request))
+            ];
+
+            var chatOptions = new ChatOptions
+            {
+                // Low but non-zero: drafting benefits from a little variation across regenerations, unlike extraction.
+                Temperature = 0.3f,
+                MaxOutputTokens = _options.MaxOutputTokens
+            };
+
             response = await chatClient.GetResponseAsync<TEnvelope>(messages, chatOptions, cancellationToken: generationCancellation.Token)
                                        .ConfigureAwait(false);
         }

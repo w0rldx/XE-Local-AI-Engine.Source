@@ -25,7 +25,10 @@ public interface IAgentSkillStore
     ///         Provenance is promote-only: an <see cref="AgentSkillOrigin.Imported" /> row stays imported even when the
     ///         caller passes the <see cref="AgentSkillOrigin.Local" /> default. An operator edit that simply forgot to
     ///         echo the provenance back would otherwise launder third-party content into trusted content — stripping
-    ///         the untrusted-content fence and re-enabling session-scoped approval for it.
+    ///         the untrusted-content fence and re-enabling session-scoped approval for it. An input that DOES carry
+    ///         <see cref="AgentSkillOrigin.Imported" /> applies its SourceUri/ImportedAtUtc/ContentSha256 verbatim as
+    ///         one unit — including a null ContentSha256, which is what an AI-drafted ("generated") conversion sends,
+    ///         because the old archive payload hash must not survive onto rewritten content.
     ///     </para>
     /// </summary>
     Task<AgentSkillRecord?> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default);

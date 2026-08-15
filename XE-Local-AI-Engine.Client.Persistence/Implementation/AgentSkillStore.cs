@@ -85,15 +85,17 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
 
         // Provenance is promote-only, and absent values leave the stored provenance alone: an operator edit that did
         // not echo the import fields back must not launder an imported skill into a local one, because Origin is what
-        // decides whether the body gets fenced as untrusted content downstream.
+        // decides whether the body gets fenced as untrusted content downstream. When the input DOES carry Imported
+        // provenance (a re-import, or the AI-drafted "generated" demotion), the whole unit is applied VERBATIM —
+        // including a null ContentSha256, which is the correct value for a generated row: keeping the old
+        // archive/GitHub payload hash on content the model just rewrote would poison re-import change detection.
         if (input.Origin == AgentSkillOrigin.Imported)
         {
             entity.Origin = (int)AgentSkillOrigin.Imported;
+            entity.SourceUri = input.SourceUri;
+            entity.ImportedAtUtc = input.ImportedAtUtc;
+            entity.ContentSha256 = input.ContentSha256;
         }
-
-        entity.SourceUri = input.SourceUri ?? entity.SourceUri;
-        entity.ImportedAtUtc = input.ImportedAtUtc ?? entity.ImportedAtUtc;
-        entity.ContentSha256 = input.ContentSha256 ?? entity.ContentSha256;
         // Same set-if-present rule, and for the same reason: the AI provenance block only travels with a save that came
         // out of the assist dialog, so an ordinary edit omitting it must leave the stored record intact. Not content —
         // it is deliberately absent from configChanged above and never bumps Version.

@@ -112,6 +112,27 @@ public sealed class DefaultConfigDraftServiceTests
     }
 
     [Test]
+    public async Task DraftAgent_ResolverStallElapsesBudget_ReturnsTypedFailure_GateReleased()
+    {
+        // The provider-map lookup takes the linked timeout token too; a stall there must surface as the same typed
+        // failure as a stalled generation, not escape as an unhandled OperationCanceledException.
+        var harness = new Harness
+        {
+            ResolverHangsUntilCancelled = true,
+            Options = new DraftingOptions
+            {
+                GenerationTimeout = TimeSpan.FromMilliseconds(50)
+            }
+        };
+
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
+        AssertEx.True(harness.Gate.TryAcquire(out var lease), "The admission gate must be released after a resolver stall.");
+        lease?.Dispose();
+    }
+
+    [Test]
     public async Task DraftSkill_InvalidMafName_SlugFallbackValidates()
     {
         var harness = new Harness
@@ -439,6 +460,8 @@ public sealed class DefaultConfigDraftServiceTests
 
         public bool HangUntilCancelled { get; init; }
 
+        public bool ResolverHangsUntilCancelled { get; init; }
+
         public Func<Task>? BeforeResponse { get; init; }
 
         public DraftingOptions Options { get; init; } = new();
@@ -466,7 +489,20 @@ public sealed class DefaultConfigDraftServiceTests
             Provider.ProviderName.Returns(ProviderName);
             ChatClient = new EnvelopeChatClient(EnvelopeJson, HangUntilCancelled, BeforeResponse);
             Provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(ChatClient);
-            Resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(Provider));
+            if (ResolverHangsUntilCancelled)
+            {
+                // A provider-map read that never returns: the linked generation timeout is the only thing that ends it.
+                Resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(async callInfo =>
+                        {
+                            await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>()).ConfigureAwait(false);
+                            return Provider;
+                        });
+            }
+            else
+            {
+                Resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(Provider));
+            }
 
             Gate = new DraftAdmissionGate(WorkerEventDispatcher, InvocationRunner);
 
