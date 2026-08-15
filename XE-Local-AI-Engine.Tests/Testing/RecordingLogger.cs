@@ -9,7 +9,23 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal sealed class RecordingLogger<T> : ILogger<T>
 {
-    public List<Entry> Entries { get; } = [];
+    private readonly List<Entry> _entries = [];
+    private readonly Lock _gate = new();
+
+    /// <summary>
+    ///     Snapshot of every entry logged so far. Hosted-service tests read this from the test thread while the service
+    ///     logs from a background task, so the backing list is guarded and each read returns a stable copy.
+    /// </summary>
+    public IReadOnlyList<Entry> Entries
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _entries.ToArray();
+            }
+        }
+    }
 
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull =>
@@ -25,11 +41,15 @@ internal sealed class RecordingLogger<T> : ILogger<T>
         Func<TState, Exception?, string> formatter)
     {
         ArgumentNullException.ThrowIfNull(formatter);
-        Entries.Add(new Entry(logLevel, formatter(state, exception), exception));
+        var entry = new Entry(logLevel, formatter(state, exception), exception);
+        lock (_gate)
+        {
+            _entries.Add(entry);
+        }
     }
 
     public bool HasEntry(LogLevel level, string messageFragment) =>
-        Entries.Exists(entry => entry.Level == level && entry.Message.Contains(messageFragment, StringComparison.Ordinal));
+        Entries.Any(entry => entry.Level == level && entry.Message.Contains(messageFragment, StringComparison.Ordinal));
 
     public sealed record Entry(LogLevel Level, string Message, Exception? Exception);
 }

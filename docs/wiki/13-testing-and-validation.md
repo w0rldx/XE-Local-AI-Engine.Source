@@ -18,7 +18,7 @@ Test stack at a glance: **TUnit 1.65.0** on **Microsoft.Testing.Platform (MTP)**
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `TestServerWebAppFactory`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, and development mode | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, `PreviewWorkflows/`, plus project smoke tests | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, migration tests — **59 migration implementations, each with a `*MigrationTests.cs` (1:1 as of 2026-08-15)** — and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, migration tests — **59 migration implementations, every one named by a test; 46 have their own `*MigrationTests.cs`, the other 13 are asserted inside a neighbouring migration's test (as of 2026-08-15)** — and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (21 `*E2ETests.cs`: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, smoke, viewport, …) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -53,8 +53,10 @@ This is the heaviest suite and the heart of validation. `TestServerWebAppFactory
 ### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
 
 EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a fresh SQLite DB and
-assert the resulting shape. Coverage is **1:1 as of 2026-08-15** — 59 migration implementations, 59 test
-files. The file follows the migration
+assert the resulting shape. As of 2026-08-15 all 59 migration implementations are named by a test: 46 have a
+dedicated file, and 13 older ones (e.g. `AddNodeSelectedFolders`, `EncryptConversationTitle`, `HashMcpServerApiKey`,
+`RepairAndUniqueMessageSequence`) are asserted only inside a neighbouring migration's test or serve as its
+starting point — giving those a dedicated file is open follow-up work. The file follows the migration
 name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMigrationTests.cs` and
 `NodeMessageLifecycleMigrationTests.cs`), and the table/column/index queries come from the shared
 `Testing/MigrationSchemaProbe.cs` rather than hand-rolled `PRAGMA` SQL per file. The AEAD cipher (`INodeAeadCipher` → `AesGcmNodeAeadCipher`)
@@ -223,7 +225,7 @@ retained transcript their operating status is unknown. See [Hosting & Deployment
 ## Maintainer checklist
 
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
-- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`, built on the shared `Testing/MigrationSchemaProbe.cs`. Coverage is **1:1 as of 2026-08-15** (59 migrations, 59 test files) — keep it that way.
+- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`, built on the shared `Testing/MigrationSchemaProbe.cs`. Every migration must be named by a test; prefer a dedicated file (46 of 59 have one as of 2026-08-15) so a schema regression fails in a file named after its migration.
 - New or changed tool schema → run the schema/compiler unit tests and the live `run-tool-grammar-smoke-local.sh`; the negative control is required evidence, not optional diagnostics.
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
