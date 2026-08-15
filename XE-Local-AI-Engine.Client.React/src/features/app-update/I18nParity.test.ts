@@ -47,6 +47,7 @@ function sectionKeys(resource: LocaleShape, rootSection: string, subPrefix = "")
 const sections = [
 	{ name: "appUpdate", enKeys: sectionKeys(en as LocaleShape, "pages", "about.appUpdate.") },
 	{ name: "voice", enKeys: sectionKeys(en as LocaleShape, "voice") },
+	{ name: "training", enKeys: sectionKeys(en as LocaleShape, "pages", "training.") },
 ] as const;
 
 describe.each(sections)("$name i18n key parity (en ↔ every locale)", ({ name, enKeys }) => {

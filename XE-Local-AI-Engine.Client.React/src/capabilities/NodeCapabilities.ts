@@ -52,6 +52,10 @@ export interface NodeCapabilityConfig {
 	// its nav entry is a child of the Preview group (next to Open Canvas and Image Generation) rather than a
 	// top-level link. This flag alone gates both the nav child and the /development route.
 	readonly development: boolean;
+	// Fine-tuning (Training). Ships OFF: only the Python runtime and base-checkpoint acquisition exist so far, so the
+	// nav group would promise a run wizard that is not there yet. The endpoints ship registered and Operator-gated
+	// regardless — this is a nav-level static flag, not a server-side kill switch.
+	readonly training: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -130,6 +134,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// DevelopmentPage resolves the authenticated server capability before exposing projects or actions, so an
 	// operator kill switch still fails closed without requiring a separate frontend build.
 	development: true,
+	// OFF until the training module is complete. The Python runtime and base-checkpoint acquisition exist; the run
+	// wizard, run list and export do not, so a visible nav entry would promise a feature that cannot finish a run.
+	training: false,
 };
 
 export const nodeRoutePaths = {
@@ -172,6 +179,8 @@ export const nodeRoutePaths = {
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.
 	development: "/development",
+	// Fine-tuning page (Python runtime + base checkpoints) — gated on nodeCapabilities.training.
+	training: "/training",
 	// Local-only diagnostics panel (frontend error snapshots) — always available.
 	diagnostics: "/diagnostics",
 } as const;

@@ -11,6 +11,7 @@ import {
 	IconMessageCircle,
 	IconPlugConnected,
 	IconRobot,
+	IconSchool,
 	IconSettings,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
@@ -32,7 +33,8 @@ type NavigationCapabilityKey =
 	| "cloudSettings"
 	| "dashboard"
 	| "binding"
-	| "benchmarks";
+	| "benchmarks"
+	| "training";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -150,6 +152,14 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.benchmarks",
 		to: nodeRoutePaths.benchmarks,
 		capability: "benchmarks",
+	},
+	// Training group. Each child carries its own capability (like Models / Automation / Preview), so the generic
+	// empty-group filter drops the whole group while `training` is off — which it is until the module can finish a run.
+	{
+		id: "training",
+		icon: IconSchool,
+		translationKey: "navigation.trainingGroup",
+		links: [{ translationKey: "navigation.training", to: nodeRoutePaths.training, capability: "training" }],
 	},
 	{
 		id: "invocations",
