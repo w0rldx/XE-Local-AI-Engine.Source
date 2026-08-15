@@ -162,6 +162,109 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     benchmarkRun.Id,
                     "benchmark_judge_result_json");
                 break;
+            case TrainingDatasetDefinition datasetDefinition:
+                datasetDefinition.DefinitionJson = NodePayloadProtector.Decrypt(datasetDefinition.DefinitionJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    datasetDefinition.Id,
+                    "training_definition_json");
+                break;
+            case TrainingDataset dataset:
+                dataset.DefinitionJson = DecryptIfPresent(dataset.DefinitionJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    dataset.Id,
+                    "training_dataset_definition_json");
+                break;
+            case TrainingDatasetSample sample:
+                // Dataset id in the conversation slot — see the matching block in NodeEncryptionSaveChangesInterceptor.
+                // A sample re-parented onto another dataset fails the tag check here rather than reaching a training run.
+                sample.ContentJson = NodePayloadProtector.Decrypt(sample.ContentJson,
+                    context.NodeEncryptionKey.Span,
+                    sample.DatasetId,
+                    sample.Id,
+                    "training_sample_content_json");
+                sample.ValidationJson = DecryptIfPresent(sample.ValidationJson,
+                    context.NodeEncryptionKey.Span,
+                    sample.DatasetId,
+                    sample.Id,
+                    "training_sample_validation_json");
+                break;
+            case ToolMockDefinition toolMock:
+                toolMock.MockJson = NodePayloadProtector.Decrypt(toolMock.MockJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    toolMock.Id,
+                    "tool_mock_json");
+                toolMock.VerificationJson = DecryptIfPresent(toolMock.VerificationJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    toolMock.Id,
+                    "tool_mock_verification_json");
+                break;
+            case TrainingBaseArtifact baseArtifact:
+                baseArtifact.FilesJson = NodePayloadProtector.Decrypt(baseArtifact.FilesJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    baseArtifact.Id,
+                    "training_base_files_json");
+                baseArtifact.LicenseJson = DecryptIfPresent(baseArtifact.LicenseJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    baseArtifact.Id,
+                    "training_base_license_json");
+                break;
+            case TrainingRun run:
+                run.FreezeJson = NodePayloadProtector.Decrypt(run.FreezeJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_freeze_json");
+                run.OptionsJson = NodePayloadProtector.Decrypt(run.OptionsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_options_json");
+                run.LicenseConfirmationJson = DecryptIfPresent(run.LicenseConfirmationJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_license_confirmation_json");
+                run.ProgressJson = DecryptIfPresent(run.ProgressJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_progress_json");
+                run.LogTail = DecryptIfPresent(run.LogTail,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_log_tail");
+                run.LaunchReceiptJson = DecryptIfPresent(run.LaunchReceiptJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_launch_receipt_json");
+                break;
+            case TrainingEvaluationRun evaluation:
+                evaluation.MembershipJson = NodePayloadProtector.Decrypt(evaluation.MembershipJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    evaluation.Id,
+                    "training_evaluation_membership_json");
+                evaluation.ResultsJson = DecryptIfPresent(evaluation.ResultsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    evaluation.Id,
+                    "training_evaluation_results_json");
+                break;
+            case TrainingComparisonReport comparison:
+                comparison.DeltasJson = NodePayloadProtector.Decrypt(comparison.DeltasJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    comparison.Id,
+                    "training_comparison_deltas_json");
+                break;
         }
 
         return entity;

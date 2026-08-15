@@ -71,6 +71,11 @@ candidate for the canonical public repository's portable Windows and Linux relea
   re-verifies and publishes the unchanged draft after a separate approval.
 - Release artifacts remain unsigned because no signing certificate exists. Signing is planned; the publication gate
   requires an approved, current unsigned-risk decision in the interim.
+- Per-model llama.cpp launch arguments now reserve `--lora` and `--lora-scaled`: a model whose extra arguments carry
+  either flag is refused with an explicit message. Adapters are attached by the training module, which owns their
+  lifecycle, and a hand-written launch flag would silently bypass it.
+- The launch-policy fingerprint moved from 4 to 5, so every already-fitted model is re-fitted once on the first start
+  after the update. No action is required; the re-fit is automatic and happens only once.
 
 ## [0.1.0-rc.5.1] — 2026-08-05
 

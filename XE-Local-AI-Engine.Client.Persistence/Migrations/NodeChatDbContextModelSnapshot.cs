@@ -584,7 +584,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.ToTable("benchmark_runs", null, t =>
                         {
-                            t.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported')");
+                            t.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported', 'trained')");
 
                             t.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
 
@@ -831,6 +831,64 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique();
 
                     b.ToTable("custom_tools", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DatasetGenerationWorkItem", b =>
+                {
+                    b.Property<long>("QueueSequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("queue_sequence");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt");
+
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<long>("EnqueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<long?>("FinishedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("QueueSequence");
+
+                    b.HasIndex("DatasetId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dataset_generation_work_items_dataset");
+
+                    b.HasIndex("Status", "QueueSequence")
+                        .HasDatabaseName("ix_dataset_generation_work_items_status_sequence");
+
+                    b.ToTable("dataset_generation_work_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_dataset_generation_work_items_attempt", "attempt = 1");
+                        });
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifact", b =>
@@ -3386,6 +3444,745 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("slash_commands", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ToolMockDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled");
+
+                    b.Property<byte[]>("MockJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("mock_json");
+
+                    b.Property<string>("ToolName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tool_name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<byte[]>("VerificationJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("verification_json");
+
+                    b.Property<string>("VerificationState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verification_state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ToolName")
+                        .HasDatabaseName("ix_tool_mock_definitions_tool_name");
+
+                    b.ToTable("tool_mock_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CommittedModelName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("committed_model_name");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("path");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("SmokeReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("smoke_reason");
+
+                    b.Property<string>("SmokeState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("smoke_state");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId")
+                        .HasDatabaseName("ix_training_artifacts_run");
+
+                    b.ToTable("training_artifacts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_artifacts_size_bytes", "size_bytes >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingBaseArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<byte[]>("FilesJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("files_json");
+
+                    b.Property<byte[]>("LicenseJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("license_json");
+
+                    b.Property<string>("RepoId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("repo_id")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Revision")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<long>("TotalBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_bytes");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepoId", "Revision")
+                        .IsUnique()
+                        .HasDatabaseName("ux_training_base_artifacts_repo_revision");
+
+                    b.ToTable("training_base_artifacts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_base_artifacts_total_bytes", "total_bytes >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingComparisonReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("BaseBenchmarkRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_benchmark_run_id");
+
+                    b.Property<Guid>("BaseEvaluationRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_evaluation_run_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("DeltasJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("deltas_json");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("TrainingRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("training_run_id");
+
+                    b.Property<Guid?>("TunedBenchmarkRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tuned_benchmark_run_id");
+
+                    b.Property<Guid>("TunedEvaluationRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tuned_evaluation_run_id");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaseEvaluationRunId");
+
+                    b.HasIndex("TrainingRunId")
+                        .HasDatabaseName("ix_training_comparison_reports_training_run");
+
+                    b.HasIndex("TunedEvaluationRunId");
+
+                    b.ToTable("training_comparison_reports", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDataset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("BadSampleCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("bad_sample_count");
+
+                    b.Property<string>("ContentFingerprint")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_fingerprint");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("DefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("definition_id");
+
+                    b.Property<byte[]>("DefinitionJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("definition_json");
+
+                    b.Property<long>("DefinitionVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("definition_version");
+
+                    b.Property<int>("DuplicateSampleCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duplicate_sample_count");
+
+                    b.Property<int>("GoodSampleCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("good_sample_count");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<int>("RejectedSampleCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("rejected_sample_count");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalSampleCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_sample_count");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefinitionId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_training_datasets_definition_created_at");
+
+                    b.ToTable("training_datasets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_datasets_counts", "total_sample_count >= 0 AND good_sample_count >= 0 AND bad_sample_count >= 0 AND rejected_sample_count >= 0 AND duplicate_sample_count >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDatasetDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("definition_json");
+
+                    b.Property<long>("DefinitionVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("definition_version");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("training_dataset_definitions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_dataset_definitions_version", "definition_version > 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDatasetSample", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("content_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("label");
+
+                    b.Property<string>("Provenance")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provenance");
+
+                    b.Property<string>("ReviewState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("review_state");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_hash");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<byte[]>("ValidationJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("validation_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DatasetId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_training_dataset_samples_dataset_sequence");
+
+                    b.HasIndex("DatasetId", "SourceHash")
+                        .HasDatabaseName("ix_training_dataset_samples_dataset_source_hash");
+
+                    b.ToTable("training_dataset_samples", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_dataset_samples_sequence", "sequence >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingEvaluationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ComparisonId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("comparison_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DatasetContentFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dataset_content_fingerprint");
+
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<byte[]>("MembershipJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("membership_json");
+
+                    b.Property<string>("ModelContentFingerprint")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_content_fingerprint");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<int>("PassedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("passed_count");
+
+                    b.Property<string>("PerKindJson")
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("per_kind_json");
+
+                    b.Property<byte[]>("ResultsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("results_json");
+
+                    b.Property<int>("ScoredCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("scored_count");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_count");
+
+                    b.Property<Guid?>("TrainingRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("training_run_id");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ComparisonId")
+                        .HasDatabaseName("ix_training_evaluation_runs_comparison");
+
+                    b.HasIndex("DatasetId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_training_evaluation_runs_status");
+
+                    b.HasIndex("TrainingRunId")
+                        .HasDatabaseName("ix_training_evaluation_runs_training_run");
+
+                    b.ToTable("training_evaluation_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_evaluation_runs_counts", "total_count >= 0 AND scored_count >= 0 AND passed_count >= 0 AND scored_count <= total_count AND passed_count <= scored_count");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BaseArtifactId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_artifact_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DatasetContentFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dataset_content_fingerprint");
+
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<int>("DatasetRevision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("dataset_revision");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<byte[]>("FreezeJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("freeze_json");
+
+                    b.Property<byte[]>("LaunchReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("launch_receipt_json");
+
+                    b.Property<byte[]>("LicenseConfirmationJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("license_confirmation_json");
+
+                    b.Property<string>("LinkedInstalledModelName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("linked_installed_model_name");
+
+                    b.Property<string>("LinkedModelContentFingerprint")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("linked_model_content_fingerprint");
+
+                    b.Property<byte[]>("LogTail")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("log_tail");
+
+                    b.Property<byte[]>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("options_json");
+
+                    b.Property<byte[]>("ProgressJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("progress_json");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaseArtifactId")
+                        .HasDatabaseName("ix_training_runs_base_artifact");
+
+                    b.HasIndex("DatasetId")
+                        .HasDatabaseName("ix_training_runs_dataset");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_training_runs_status");
+
+                    b.ToTable("training_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_runs_dataset_revision", "dataset_revision >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingWorkItem", b =>
+                {
+                    b.Property<long>("QueueSequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("queue_sequence");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt");
+
+                    b.Property<long>("EnqueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<long?>("FinishedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("target_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("QueueSequence");
+
+                    b.HasIndex("Status", "QueueSequence")
+                        .HasDatabaseName("ix_training_work_items_status_sequence");
+
+                    b.HasIndex("TargetId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_training_work_items_target_kind");
+
+                    b.ToTable("training_work_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_training_work_items_attempt", "attempt = 1");
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkillResource", b =>
                 {
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkill", null)
@@ -3419,6 +4216,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .WithMany()
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DatasetGenerationWorkItem", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDataset", null)
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -3624,6 +4430,77 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .WithMany()
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingArtifact", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingComparisonReport", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingEvaluationRun", null)
+                        .WithMany()
+                        .HasForeignKey("BaseEvaluationRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingEvaluationRun", null)
+                        .WithMany()
+                        .HasForeignKey("TunedEvaluationRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDataset", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDatasetDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("DefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDatasetSample", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDataset", null)
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingEvaluationRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDataset", null)
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingRun", null)
+                        .WithMany()
+                        .HasForeignKey("TrainingRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingBaseArtifact", null)
+                        .WithMany()
+                        .HasForeignKey("BaseArtifactId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TrainingDataset", null)
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

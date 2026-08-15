@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
 {
     private const string ManagedFitParamsFileName = "llama-fit-params";
+    private const string ManagedQuantizeFileName = LlamaCppToolBinaries.QuantizerName;
     private const string ManagedServerFileName = "llama-server";
     private const string ManifestFileName = ".source-build-manifest.json";
 
@@ -430,7 +431,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             SetPhase(LlamaCppSourceBuildPhase.Building);
             var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
             var buildExit = await RunStreamingStepAsync("cmake",
-                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, "-j", jobs.ToString()],
+                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedQuantizeFileName, "-j", jobs.ToString()],
                 environment,
                 cloneDir,
                 BuildTimeout,
@@ -452,6 +453,15 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             if (!File.Exists(Path.Combine(builtBin, ManagedFitParamsFileName)))
             {
                 throw new LlamaRuntimeException("The build did not produce the expected fit-params helper.");
+            }
+
+            // Recorded, never enforced: the quantizer is off the inference path (only a training export needs it), so a
+            // build that somehow produced everything else stays a perfectly good serving runtime. Failing adoption here
+            // would trade a working runtime for a capability the operator may never use.
+            if (LlamaCppToolBinaries.TryResolveQuantizer(builtBin) is null)
+            {
+                AppendLog("The build produced no llama-quantize helper; training exports will not be able to quantize with this runtime.");
+                _logger.LogWarning("The source build produced no {Quantizer} helper.", ManagedQuantizeFileName);
             }
 
             // Stage the placed tree at a sibling dir (same filesystem → atomic moves) and harden it there.

@@ -26,6 +26,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeSchedulingStores(configuration);
         builder.AddNodeModelFit(configuration);
         builder.AddNodeBenchmarks();
+        builder.AddNodeTrainingDatasets();
         builder.AddNodeCapacity(configuration);
         builder.AddNodeMcpAgentRuns(configuration);
         builder.AddNodePlaybookRetrievalAndMonitoring(configuration);
@@ -47,6 +48,14 @@ public static class NodeApplicationServiceCollectionExtensions
         // Runs after AddNodeModelRuntime: the image model store reuses the Hugging Face download client that
         // AddHuggingFaceGgufStore (invoked there) registers.
         builder.AddNodeImages(configuration);
+
+        // Same ordering reason as AddNodeImages above: the base-checkpoint store reuses the Hugging Face download
+        // client AddNodeModelRuntime registers.
+        builder.AddNodeTrainingRuntime();
+
+        // After the runtime module (run store + process spawner) and after the llama.cpp module, whose supervisor
+        // provides the runtime-mutation lease the run queue acquires before every claim.
+        builder.AddNodeTrainingRuns();
 
         return builder;
     }

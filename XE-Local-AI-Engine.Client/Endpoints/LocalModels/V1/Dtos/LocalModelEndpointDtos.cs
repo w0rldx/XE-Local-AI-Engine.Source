@@ -219,6 +219,14 @@ public sealed class DeleteLocalModelResponse
     public required bool Deleted { get; init; }
 }
 
+/// <summary>Why a delete was refused. Today the only reason is a base model that installed adapters still apply to.</summary>
+public sealed class DeleteLocalModelBlockedResponse
+{
+    public required string Reason { get; init; }
+
+    public required string Message { get; init; }
+}
+
 /// <summary>
 ///     Response for <c>GET models/running</c>: the models the runtime currently holds in memory. Mirrors the
 ///     availability/error shape of <see cref="ListLocalModelsResponse" /> so the page degrades gracefully when the

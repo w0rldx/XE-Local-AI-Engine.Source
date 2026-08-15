@@ -14,7 +14,7 @@ import {
 	UnstyledButton,
 } from "@mantine/core";
 import { IconAlertTriangle, IconFlask, IconLock, IconPlus, IconRefresh, IconRocket, IconSettings } from "@tabler/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -51,7 +51,13 @@ const emptyProject: BenchmarkProjectDraft = {
 
 type EditorMode = "create" | "edit" | null;
 
-export function BenchmarksPage() {
+interface BenchmarksPageProps {
+	/** Model names deep-linked from a training comparison report; the matching runs open selected. */
+	baseModelName?: string;
+	tunedModelName?: string;
+}
+
+export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPageProps = {}) {
 	const { t } = useTranslation();
 	const projectsQuery = useBenchmarkProjects();
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -75,7 +81,25 @@ export function BenchmarksPage() {
 			setSelectedProjectId(projectsQuery.data[0]?.id ?? null);
 		}
 	}, [projectsQuery.data, selectedProjectId]);
+	const linkedRunsApplied = useRef(false);
+	// Runs the deep link asks for, newest first per model name. Empty unless the search carries names that match.
+	const linkedRunIds = useMemo(() => {
+		const runs = runsQuery.data ?? [];
+		return [baseModelName, tunedModelName]
+			.map((name) => (name == null ? undefined : runs.find((run) => run.primaryModelName === name)?.id))
+			.filter((id): id is string => id != null);
+	}, [runsQuery.data, baseModelName, tunedModelName]);
+
 	useEffect(() => {
+		// A deep link is an explicit request for two specific runs, applied once. It also suspends the "always keep the
+		// newest run selected" rule below: otherwise the next poll would push one of the two requested runs back out.
+		if (linkedRunIds.length > 0) {
+			if (!linkedRunsApplied.current) {
+				linkedRunsApplied.current = true;
+				setSelectedRunIds(linkedRunIds);
+			}
+			return;
+		}
 		const latest = runsQuery.data?.slice(0, 2).map((run) => run.id) ?? [];
 		setSelectedRunIds((current) => {
 			const valid = current.filter((id) => runsQuery.data?.some((run) => run.id === id));
@@ -84,7 +108,7 @@ export function BenchmarksPage() {
 			}
 			return valid.length > 0 ? valid.slice(0, 2) : latest;
 		});
-	}, [runsQuery.data]);
+	}, [runsQuery.data, linkedRunIds]);
 
 	const detail = projectQuery.data;
 	const editDraft = useMemo<BenchmarkProjectDraft>(

@@ -331,7 +331,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         {
             await using var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             var manifest = await JsonSerializer
-                                 .DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct)
+                                 .DeserializeAsync<RawManifestDocument>(stream, SerializerOptions, ct)
                                  .ConfigureAwait(false);
 
             if (manifest?.Models is null)
@@ -340,9 +340,24 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             }
 
             var entries = new List<GgufModelRegistryEntry>(manifest.Models.Count);
-            foreach (var entry in manifest.Models.Where(static entry => entry.LocalPath is not null))
+            foreach (var element in manifest.Models)
             {
-                if (!File.Exists(entry.LocalPath))
+                // Per-ENTRY deserialization. A row this build cannot understand — most concretely an origin string a
+                // newer build writes and this one has no member for, which the strict origin converter rejects — is
+                // skipped with a warning instead of failing the whole document and triggering a full directory rescan
+                // that would demote every other model to a legacy entry.
+                GgufModelRegistryEntry? entry;
+                try
+                {
+                    entry = element.Deserialize<GgufModelRegistryEntry>(SerializerOptions);
+                }
+                catch (JsonException exception)
+                {
+                    _logger.LogWarning(exception, "Skipping an unreadable GGUF registry entry.");
+                    continue;
+                }
+
+                if (entry?.LocalPath is null || !File.Exists(entry.LocalPath))
                 {
                     continue;
                 }
@@ -805,5 +820,13 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     private sealed class ManifestDocument
     {
         public List<GgufModelRegistryEntry> Models { get; set; } = [];
+    }
+
+    // Read-side shape for the tolerant load path: rows stay unparsed until each is converted individually, so one
+    // unreadable row cannot fail the document. The mutation path deliberately keeps the strict ManifestDocument —
+    // silently dropping a row there would delete it from the manifest on the write that follows.
+    private sealed class RawManifestDocument
+    {
+        public List<JsonElement> Models { get; set; } = [];
     }
 }

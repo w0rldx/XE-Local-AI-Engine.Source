@@ -15,7 +15,12 @@ public sealed record InstalledModelPhysicalMember(
     bool Required,
     int? MetadataSchemaVersion);
 
-/// <summary>Immutable registry material with provider-root-relative paths.</summary>
+/// <summary>
+///     Immutable registry material with provider-root-relative paths. This must carry EVERY field the entry's
+///     <c>RegistryRevision</c> commits to: the deletion store reconstructs an entry from this value and the registry
+///     re-derives the revision from it, so a field missing here recomputes to a different token and fails the
+///     compare-and-swap it exists to satisfy.
+/// </summary>
 public sealed record InstalledGgufRegistryValue(
     string RepoId,
     string FileName,
@@ -33,7 +38,15 @@ public sealed record InstalledGgufRegistryValue(
     LocalModelOrigin? Origin,
     string? SourceDisplayName,
     int? MetadataSchemaVersion,
-    string? ModelContentFingerprint);
+    string? ModelContentFingerprint,
+    string? DerivedFromRepoId = null,
+    string? DerivedFromRevision = null,
+    string? DerivedFromContentFingerprint = null,
+    string? AdapterFileName = null,
+    string? AdapterSha256 = null,
+    long? AdapterSizeBytes = null,
+    string? AdapterMemberFingerprint = null,
+    string? BaseModelName = null);
 
 /// <summary>Exact registry alias value and paths captured for a verified snapshot.</summary>
 public sealed record InstalledModelRegistryAliasSnapshot(

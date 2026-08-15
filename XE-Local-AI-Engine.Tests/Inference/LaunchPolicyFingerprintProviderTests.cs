@@ -27,11 +27,73 @@ public sealed class LaunchPolicyFingerprintProviderTests
             var second = await provider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.Equal(LaunchPolicyFingerprintProvider.CurrentVersion, first.Version);
-            AssertEx.Equal(expected: 4, first.Version);
+            AssertEx.Equal(expected: 5, first.Version);
             AssertEx.Equal(first, second);
             AssertEx.Equal(129, first.Value.Length);
             AssertEx.Equal(expected: 2L, fullHashCountAfterFirstCapture);
             AssertEx.Equal(fullHashCountAfterFirstCapture, provider.FullFileHashComputationCount);
+        }
+        finally
+        {
+            File.Delete(path);
+            DeleteBinaryDirectory(binaryPath);
+        }
+    }
+
+    [Test]
+    public async Task Fingerprint_VersionBump_InvalidatesAndRefits()
+    {
+        var path = await CreateModelFileAsync();
+        var binaryPath = await CreateBinaryFileAsync();
+        try
+        {
+            using var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var captured = await provider.CaptureAsync(Input(path), CancellationToken.None);
+
+            // A profile frozen under the PREVIOUS version is hard-rejected on version alone, whatever its value says —
+            // it cannot prove whether an adapter was applied, because adapters did not exist when it was written.
+            var stale = new LaunchPolicyFingerprint(LaunchPolicyFingerprintProvider.CurrentVersion - 1, captured.Value);
+            var staleMatches = await provider.MatchesAsync(Profile(Input(path), stale), path, CancellationToken.None);
+            AssertEx.False(staleMatches, "A fingerprint from before the adapter input joined must not match.");
+
+            // Re-capturing (the one-time re-fit) produces a current-version fingerprint that does match.
+            var refit = await provider.CaptureAsync(Input(path), CancellationToken.None);
+            AssertEx.Equal(LaunchPolicyFingerprintProvider.CurrentVersion, refit.Version);
+            AssertEx.True(await provider.MatchesAsync(Profile(Input(path), refit), path, CancellationToken.None));
+        }
+        finally
+        {
+            File.Delete(path);
+            DeleteBinaryDirectory(binaryPath);
+        }
+    }
+
+    [Test]
+    public async Task CaptureAsync_AdapterMember_ChangesTheFingerprint()
+    {
+        var path = await CreateModelFileAsync();
+        var binaryPath = await CreateBinaryFileAsync();
+        try
+        {
+            // The sha only selects the identity branch; both providers use the same one so the adapter member is the
+            // single difference between the two captures.
+            var plain = RegistryEntry(path, new string('a', 64));
+            var adapter = plain with
+            {
+                AdapterFileName = "tuned-adapter.gguf",
+                AdapterSha256 = new string('c', 64),
+                AdapterSizeBytes = 4096,
+                AdapterMemberFingerprint = $"sha256:{new string('c', 64)}:4096",
+                BaseModelName = "bartowski/Base-GGUF:Q4_K_M"
+            };
+
+            using var plainProvider = BuildProvider(Runtime("runtime-sha"), binaryPath, registryEntry: plain);
+            using var adapterProvider = BuildProvider(Runtime("runtime-sha"), binaryPath, registryEntry: adapter);
+
+            var withoutAdapter = await plainProvider.CaptureAsync(Input(path), CancellationToken.None);
+            var withAdapter = await adapterProvider.CaptureAsync(Input(path), CancellationToken.None);
+
+            AssertEx.NotEqual(withoutAdapter.Value, withAdapter.Value);
         }
         finally
         {

@@ -188,7 +188,7 @@ public sealed class OpenApiDocumentTests
         AssertResponses(paths, "/api/local/v1/benchmarks/projects/{projectId}/runs", "post", ["202"]);
 
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
-        AssertSchemaEnum(schemas, "LocalModelOrigin", ["huggingface", "imported"]);
+        AssertSchemaEnum(schemas, "LocalModelOrigin", ["huggingface", "imported", "trained"]);
         AssertSchemaProperties(schemas, "GgufAcquisitionStatusResponse",
         [
             "operationId", "operationKind", "modelName", "phase", "completedBytes", "totalBytes", "startedAtUtc",

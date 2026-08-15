@@ -107,6 +107,42 @@ public sealed record GgufModelRegistryEntry
 
     /// <summary>Aggregate V1 content identity across weight and optional projector.</summary>
     public string? ModelContentFingerprint { get; init; }
+
+    /// <summary>
+    ///     Source Hugging Face repository the base checkpoint of a locally trained model came from, or
+    ///     <see langword="null" /> for any entry that was not produced by a training run.
+    /// </summary>
+    public string? DerivedFromRepoId { get; init; }
+
+    /// <summary>Resolved revision of <see cref="DerivedFromRepoId" />; <see langword="null" /> when that is.</summary>
+    public string? DerivedFromRevision { get; init; }
+
+    /// <summary>Frozen training-dataset content fingerprint the run consumed; <see langword="null" /> for non-trained entries.</summary>
+    public string? DerivedFromContentFingerprint { get; init; }
+
+    /// <summary>
+    ///     The LoRA adapter file name when this entry IS an adapter rather than a standalone model. Its bytes are the
+    ///     entry's own <see cref="LocalPath" /> (<see cref="FileName" /> equals this) — an adapter entry carries no
+    ///     separate weight file, because its base weights live in the entry named by <see cref="BaseModelName" />.
+    ///     <see langword="null" /> for a standalone model, including a merged fine-tune.
+    /// </summary>
+    public string? AdapterFileName { get; init; }
+
+    /// <summary>Lowercase SHA-256 of the adapter bytes, present together with <see cref="AdapterFileName" />.</summary>
+    public string? AdapterSha256 { get; init; }
+
+    /// <summary>Adapter size in bytes, present together with <see cref="AdapterFileName" />.</summary>
+    public long? AdapterSizeBytes { get; init; }
+
+    /// <summary>Canonical member fingerprint over the adapter bytes, present together with <see cref="AdapterFileName" />.</summary>
+    public string? AdapterMemberFingerprint { get; init; }
+
+    /// <summary>
+    ///     Registry name of the installed base model an adapter entry launches against — llama-server is given the base
+    ///     model as <c>-m</c> and this entry's file as <c>--lora</c>. Required whenever <see cref="AdapterFileName" /> is
+    ///     set; <see langword="null" /> otherwise.
+    /// </summary>
+    public string? BaseModelName { get; init; }
 }
 
 /// <summary>
