@@ -727,8 +727,21 @@ public static class LocalApiRoutes
         /// <summary>Computed hyper-parameters plus the VRAM estimate and the licensing text the run wizard renders.</summary>
         public const string RunDefaults = "training/runs/defaults";
 
-        /// <summary>SignalR push hub for per-run status, phase and training progress.</summary>
+        /// <summary>SignalR push hub for per-run status, phase and training progress — evaluation progress rides it too.</summary>
         public const string RunHub = "/api/local/v1/training/runs/hub";
+
+        // Evaluation runs. They ride the same single-consumer queue as training runs, so create only enqueues.
+        public const string Evaluations = "training/evaluations";
+        public const string EvaluationById = "training/evaluations/{evaluationId}";
+        public const string EvaluationResume = "training/evaluations/{evaluationId}/resume";
+        public const string EvaluationCancel = "training/evaluations/{evaluationId}/cancel";
+
+        // Comparison reports over two evaluation runs.
+        public const string Comparisons = "training/comparisons";
+        public const string ComparisonById = "training/comparisons/{comparisonId}";
+
+        /// <summary>Lineage auto-suggest: the two model names and evaluations one training run implies.</summary>
+        public const string ComparisonSuggest = "training/comparisons/suggest";
     }
 
     public static class Automation
