@@ -156,6 +156,15 @@ public static class LlamaServerServiceCollectionExtensions
                 Timeout = TimeSpan.FromSeconds(30)
             }));
 
+        // Path-addressed throwaway spawn for the training export smoke gate. Explicit factory for the same reason the
+        // supervisor needs one: it takes the internal launcher/health-probe seams.
+        services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
+            new TransientLlamaServerLauncher(sp.GetRequiredService<ILlamaCppBinaryManager>(),
+                sp.GetRequiredService<IGpuVariantSelector>(),
+                sp.GetRequiredService<ILlamaServerProcessLauncher>(),
+                sp.GetRequiredService<ILlamaServerHealthProbe>(),
+                sp.GetRequiredService<ILogger<TransientLlamaServerLauncher>>()));
+
         // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
         // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →
         // Providers (the interface is DEFINED here, implemented in Application).

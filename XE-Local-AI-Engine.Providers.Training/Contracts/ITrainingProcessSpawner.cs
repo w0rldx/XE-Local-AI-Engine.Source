@@ -16,11 +16,16 @@ public sealed record TrainingLaunchReceipt(int Pid, int Pgid, string? Executable
 ///     What a spawn needs. The child's environment is NOT passed in: the provider owns the allowlist and the cache
 ///     containment (offline flags, HF/torch/triton cache roots), so no caller can widen it by accident.
 /// </summary>
+/// <param name="GgufPyDirectory">
+///     Set only for an EXPORT subprocess: the vendored <c>gguf-py</c> package directory the llama.cpp conversion
+///     scripts import, placed on the child's <c>PYTHONPATH</c>. Null spawns the plain training environment.
+/// </param>
 public sealed record TrainingSpawnRequest(
     string ExecutablePath,
     IReadOnlyList<string> Arguments,
     string WorkingDirectory,
-    string RunToken);
+    string RunToken,
+    string? GgufPyDirectory = null);
 
 /// <summary>
 ///     A spawned, still-running trainer. Distinct from <c>ITrainingProcessRunner</c>, which is run-to-completion and

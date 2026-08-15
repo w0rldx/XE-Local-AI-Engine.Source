@@ -65,7 +65,10 @@ internal sealed class LinuxTrainingProcessSpawner(string? cacheRoot = null) : IT
         // Scrubbed env: the inherited environment is dropped entirely and replaced by the provider-owned allowlist, so
         // a training run never inherits LD_PRELOAD, proxy or credential variables, or any node secret.
         startInfo.Environment.Clear();
-        foreach (var entry in TrainingRuntimeEnvironment.BuildTrainEnvironment(cacheRoot, request.WorkingDirectory))
+        var environment = request.GgufPyDirectory is { Length: > 0 } ggufPy
+            ? TrainingRuntimeEnvironment.BuildExportEnvironment(cacheRoot, request.WorkingDirectory, ggufPy)
+            : TrainingRuntimeEnvironment.BuildTrainEnvironment(cacheRoot, request.WorkingDirectory);
+        foreach (var entry in environment)
         {
             startInfo.Environment[entry.Key] = entry.Value;
         }
