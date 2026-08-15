@@ -14,13 +14,13 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     FastEndpoints handler for uploading one document into the knowledge base (POST multipart). Enforces the size cap +
 ///     extension allowlist, sanitizes the client file name to a leaf (so no client string forms a path), computes the
 ///     content hash for dedupe, and persists the encrypted bytes via the blob store. Text extraction, chunking, and
-///     embedding all run later in the background ingestion worker — this handler only stores + enqueues. Enqueue happens
-///     only for a freshly inserted document, so a dedupe hit never re-runs the pipeline.
+///     embedding all run later in the background ingestion worker — this handler only stores, then hands the admission
+///     decision (whether a fresh insert or a retryable dedupe hit has to be queued) to
+///     <see cref="IKnowledgeIngestionAdmissionService" />.
 /// </summary>
 public sealed class UploadKnowledgeDocumentEndpoint(
     IKnowledgeDocumentBlobStore blobStore,
-    IKnowledgeIngestionDispatcher ingestionDispatcher,
-    IKnowledgeDocumentCatalogService catalogService,
+    IKnowledgeIngestionAdmissionService ingestionAdmission,
     IDocumentTextExtractor extractor,
     IOptions<KnowledgeBaseOptions> knowledgeBaseOptions,
     IOptions<SecurityOptions> securityOptions)
@@ -29,8 +29,10 @@ public sealed class UploadKnowledgeDocumentEndpoint(
     private const string DefaultMimeType = "application/octet-stream";
 
     private readonly IKnowledgeDocumentBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher = ingestionDispatcher ?? throw new ArgumentNullException(nameof(ingestionDispatcher));
-    private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
+
+    private readonly IKnowledgeIngestionAdmissionService _ingestionAdmission =
+        ingestionAdmission ?? throw new ArgumentNullException(nameof(ingestionAdmission));
+
     private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
     private readonly string _embeddingModel = (knowledgeBaseOptions ?? throw new ArgumentNullException(nameof(knowledgeBaseOptions))).Value.EmbeddingModelName;
     private readonly long _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
@@ -106,65 +108,28 @@ public sealed class UploadKnowledgeDocumentEndpoint(
 
         var result = await _blobStore.AddAsync(input, ct).ConfigureAwait(false);
 
-        // Resolve the current status once. Ingestion flips a document out of Pending the instant it starts, so a Pending
-        // row is one that has NOT been ingested — either freshly inserted or a prior upload whose admission a full queue
-        // rejected (503), leaving the persisted blob stranded. Enqueue when the document was freshly inserted OR is a
-        // dedupe hit in a RETRYABLE state, so retrying a stranded or failed upload actually recovers instead of returning
-        // success for work that was never queued. A dedupe hit already Indexed (or mid-ingestion) is left alone.
-        // Admission is idempotent, so retrying a document already queued is a harmless no-op rather than a duplicate
-        // ingestion.
-        var status = await _catalogService.GetStatusAsync(result.DocumentId, ct).ConfigureAwait(false)
-                     ?? KnowledgeDocumentStatus.Pending;
-
-        if (result.WasInserted || IsRetryableOnReUpload(status))
+        var admission = await _ingestionAdmission.AdmitUploadedDocumentAsync(result.DocumentId, result.WasInserted, ct)
+                                                 .ConfigureAwait(false);
+        if (admission.QueueFull)
         {
-            var admission = await _ingestionDispatcher.EnqueueAsync(result.DocumentId, ct).ConfigureAwait(false);
-            if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
-            {
-                // The bounded ingestion queue is full: the blob is persisted (so a retry dedupes to it) but background
-                // indexing was not admitted. Fail with the same busy status + Retry-After the conversation upload uses so
-                // the client retries shortly rather than the server growing an unbounded backlog. The worker's drain-sweep
-                // (or a retry once the queue drains) picks the stranded document up.
-                HttpContext.Response.Headers.RetryAfter = "5";
-                await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
-                    StatusCodes.Status503ServiceUnavailable,
-                    cancellation: ct).ConfigureAwait(false);
-                return;
-            }
+            // The bounded ingestion queue is full: the blob is persisted (so a retry dedupes to it) but background
+            // indexing was not admitted. Fail with the same busy status + Retry-After the conversation upload uses so
+            // the client retries shortly rather than the server growing an unbounded backlog. The worker's drain-sweep
+            // (or a retry once the queue drains) picks the stranded document up.
+            HttpContext.Response.Headers.RetryAfter = "5";
+            await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
+                StatusCodes.Status503ServiceUnavailable,
+                cancellation: ct).ConfigureAwait(false);
+            return;
         }
 
         await Send.OkAsync(new UploadKnowledgeDocumentResponse
             {
                 DocumentId = result.DocumentId,
-                Status = status,
+                Status = admission.Status,
                 Deduplicated = !result.WasInserted
             },
             ct).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    ///     Whether re-uploading identical content whose document is already in <paramref name="status" /> should
-    ///     re-enqueue ingestion.
-    /// </summary>
-    /// <remarks>
-    ///     <para>
-    ///         Content-hash dedupe means a re-upload never inserts a second row, so re-enqueueing is the ONLY way a
-    ///         re-upload can retry. <see cref="KnowledgeDocumentStatus.Failed" /> belongs here because the app's own
-    ///         failure messages instruct the user to "retry" — and before this it did nothing at all: a failed document
-    ///         was neither freshly inserted nor Pending, so the identical file came back deduped, unqueued, and reported
-    ///         as success, leaving the original Failed row untouched with its original timestamp. The per-row reindex
-    ///         action was the only working retry path, and no message ever mentioned it.
-    ///     </para>
-    ///     <para>
-    ///         <see cref="KnowledgeDocumentStatus.Indexed" /> is excluded so a re-upload of already-indexed content is a
-    ///         cheap no-op rather than a redundant re-index. The in-flight states (Extracting/Chunking/Embedding) are
-    ///         excluded because that work is already running; admission is idempotent, but re-enqueueing them would
-    ///         misreport an in-progress document as newly queued.
-    ///     </para>
-    /// </remarks>
-    private static bool IsRetryableOnReUpload(KnowledgeDocumentStatus status)
-    {
-        return status is KnowledgeDocumentStatus.Pending or KnowledgeDocumentStatus.Failed;
     }
 
     private static async Task<byte[]> ReadAllBytesAsync(IFormFile file, CancellationToken ct)

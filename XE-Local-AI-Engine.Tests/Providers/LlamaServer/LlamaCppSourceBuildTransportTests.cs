@@ -358,7 +358,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     public async Task Remove_AcquiresLeaseChecksProcessesRemovesAndDisposesInOrder()
     {
         var order = new List<string>();
-#pragma warning disable CA2000 // Ownership transfers through the supervisor to TryRemoveAsync, which disposes the lease.
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to the guard's TryRemoveAsync, which disposes the lease.
         var lease = new RecordingMutationLease(order);
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
@@ -381,7 +381,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         });
 
         var (removed, _, _) =
-            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+                activity,
+                binaryManager.RemoveSourceBuildAsync,
+                CancellationToken.None);
 
         AssertEx.True(removed);
         AssertEx.Equal("acquire|count|remove|dispose", string.Join('|', order));
@@ -398,7 +401,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
 
         var (removed, runningProcessCount, _) =
-            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+                activity,
+                binaryManager.RemoveSourceBuildAsync,
+                CancellationToken.None);
 
         AssertEx.False(removed);
         AssertEx.Equal(expected: 1, runningProcessCount);
@@ -414,7 +420,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         activity.ActiveBuildId.Returns(Guid.NewGuid());
 
         var (removed, _, buildActive) =
-            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+                activity,
+                binaryManager.RemoveSourceBuildAsync,
+                CancellationToken.None);
 
         AssertEx.False(removed);
         AssertEx.True(buildActive);
@@ -425,7 +434,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Test]
     public async Task Remove_WhenBuildStartsWhileLeaseIsAcquired_RechecksAndDoesNotDelete()
     {
-#pragma warning disable CA2000 // Ownership transfers through the supervisor to TryRemoveAsync, which disposes the lease.
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to the guard's TryRemoveAsync, which disposes the lease.
         var lease = new RecordingMutationLease([]);
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
@@ -436,7 +445,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
 
         var (removed, _, buildActive) =
-            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+                activity,
+                binaryManager.RemoveSourceBuildAsync,
+                CancellationToken.None);
 
         AssertEx.False(removed);
         AssertEx.True(buildActive);
@@ -444,10 +456,10 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
-    public async Task LegacyRemove_AcquiresLeaseChecksProcessesRemovesAndDisposesInOrder()
+    public async Task Remove_WhenRemovingTheCudaBuild_InvokesTheCudaRemovalUnderTheSameGate()
     {
         var order = new List<string>();
-#pragma warning disable CA2000 // Ownership transfers through the supervisor to TryRemoveAsync, which disposes the lease.
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to the guard's TryRemoveAsync, which disposes the lease.
         var lease = new RecordingMutationLease(order);
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
@@ -470,65 +482,13 @@ public sealed class LlamaCppSourceBuildTransportTests
         });
 
         var (removed, _, _) =
-            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+                activity,
+                binaryManager.RemoveCudaSourceBuildAsync,
+                CancellationToken.None);
 
         AssertEx.True(removed);
         AssertEx.Equal("acquire|count|remove|dispose", string.Join('|', order));
-    }
-
-    [Test]
-    public async Task LegacyRemove_WhenLeaseCannotBeAcquired_DoesNotDelete()
-    {
-        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
-        supervisor.CountRunningProcesses().Returns(0);
-        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
-
-        var (removed, _, _) =
-            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
-
-        AssertEx.False(removed);
-        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
-    }
-
-    [Test]
-    public async Task LegacyRemove_WhenBuildIsActive_FailsBeforeLeaseWithoutDeleting()
-    {
-        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
-        activity.ActiveBuildId.Returns(Guid.NewGuid());
-
-        var (removed, _, buildActive) =
-            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
-
-        AssertEx.False(removed);
-        AssertEx.True(buildActive);
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
-        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
-    }
-
-    [Test]
-    public async Task LegacyRemove_WhenBuildStartsWhileLeaseIsAcquired_RechecksAndDoesNotDelete()
-    {
-#pragma warning disable CA2000 // Ownership transfers through the supervisor to TryRemoveAsync, which disposes the lease.
-        var lease = new RecordingMutationLease([]);
-#pragma warning restore CA2000
-        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
-        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
-        activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
-
-        var (removed, _, buildActive) =
-            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
-
-        AssertEx.False(removed);
-        AssertEx.True(buildActive);
-        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
     }
 
     [Test]
