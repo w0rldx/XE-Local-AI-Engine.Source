@@ -15,6 +15,7 @@ internal static class TrainingEvaluationEndpointMapper
             ModelName = record.ModelName,
             ModelContentFingerprint = record.ModelContentFingerprint,
             DatasetId = record.DatasetId,
+            DatasetContentFingerprint = record.DatasetContentFingerprint,
             Status = record.Status.ToString(),
             WorkStatus = record.WorkStatus?.ToString(),
             TotalCount = record.TotalCount,
