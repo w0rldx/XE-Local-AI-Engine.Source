@@ -41,4 +41,47 @@ public sealed class McpOptionsValidatorTests
 
         AssertEx.True(result.Failed, "A negative ToolCallTimeoutSeconds must fail validation.");
     }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public void Validate_WhenConnectTimeoutIsNotPositive_Fails(int value)
+    {
+        var result = new McpOptionsValidator().Validate(name: null, new McpOptions
+        {
+            ConnectTimeoutSeconds = value
+        });
+
+        AssertEx.True(result.Failed, "A non-positive ConnectTimeoutSeconds must fail validation.");
+        AssertEx.Contains(result.Failures, failure => failure.Contains("ConnectTimeoutSeconds", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void Validate_WhenTheLoopbackHostAllowListIsEmpty_Fails()
+    {
+        // An empty allow-list is not "allow everything" — every HTTP MCP server would be refused, so it is a
+        // misconfiguration that must stop startup rather than silently disable the transport.
+        var result = new McpOptionsValidator().Validate(name: null, new McpOptions
+        {
+            HttpLoopbackHosts = []
+        });
+
+        AssertEx.True(result.Failed);
+        AssertEx.Contains(result.Failures, failure => failure.Contains("HttpLoopbackHosts", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void Validate_ReportsEveryViolatedBoundAtOnce()
+    {
+        var result = new McpOptionsValidator().Validate(name: null, new McpOptions
+        {
+            ConnectTimeoutSeconds = 0,
+            ToolCallTimeoutSeconds = 0,
+            HttpLoopbackHosts = []
+        });
+
+        AssertEx.True(result.Failed);
+        AssertEx.Equal(expected: 3, result.Failures!.Count());
+    }
+
 }

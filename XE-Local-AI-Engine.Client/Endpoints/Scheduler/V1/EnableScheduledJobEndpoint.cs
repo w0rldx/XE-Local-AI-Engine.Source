@@ -22,6 +22,8 @@ public sealed class EnableScheduledJobEndpoint(IScheduledJobManagementService sc
 
     public override async Task HandleAsync(ScheduledJobActionRequest req, CancellationToken ct)
     {
+        // A ScheduledJobValidationException (template no longer registered) is mapped to 400 by the global
+        // DomainValidationExceptionHandler, like the other scheduler mutations.
         var record = await _scheduledJobManagementService.SetEnabledAsync(req.ScheduledJobId, enabled: true, ct).ConfigureAwait(false);
         if (record is null)
         {

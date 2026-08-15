@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
+public sealed class CloudSettingsPageE2ETests : XEPooledE2ETestBase
 {
     // CSS selectors for the TextInput/PasswordInput elements — placeholders and type are unique in
     // CloudSettings.tsx. Attribute selectors bypass Playwright's label-resolution path which is

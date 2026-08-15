@@ -21,6 +21,12 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
     {
         Post(LocalApiRoutes.ModelFit.Download);
         Policies(NodeAuthorizationPolicies.Operator);
+        // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
+        Description(builder => builder.ProducesProblem(StatusCodes.Status403Forbidden)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict)
+                                      .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+                                      .ProducesProblem(StatusCodes.Status507InsufficientStorage));
     }
 
     public override async Task HandleAsync(StartGgufDownloadRequest req, CancellationToken ct)
@@ -45,17 +51,9 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
         {
             ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
         }
-        catch (InvalidOperationException exception) when (string.Equals(exception.Message, "ModelConflict", StringComparison.Ordinal))
+        catch (Exception exception) when (GgufDownloadEndpointSupport.IsHandled(exception))
         {
-            await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
-                title: "The model name or destination is already in use.")).ConfigureAwait(false);
-            return;
-        }
-        catch (HuggingFaceDownloadException exception) when (exception.Reason is HuggingFaceDownloadFailure.DestinationConflict
-                                                                 or HuggingFaceDownloadFailure.HashMismatch)
-        {
-            await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
-                title: "The repository did not provide exact metadata compatible with this acquisition.")).ConfigureAwait(false);
+            await Send.ResultAsync(GgufDownloadEndpointSupport.Error(exception)).ConfigureAwait(false);
             return;
         }
 

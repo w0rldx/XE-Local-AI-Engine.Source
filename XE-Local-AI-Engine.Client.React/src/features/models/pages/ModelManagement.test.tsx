@@ -227,6 +227,7 @@ describe("ModelManagement", () => {
 
 	afterEach(() => {
 		cleanup();
+		vi.useRealTimers();
 	});
 
 	it("renders local models in the table and shows details in the dialog", async () => {
@@ -574,6 +575,9 @@ describe("ModelManagement", () => {
 	});
 
 	it("announces import progress, exposes cancellation, and renders failure text only from the safe error code", async () => {
+		// The Failed row below carries a fixed updatedAtUtc; terminal statuses are pruned 24h later against the real
+		// clock, so pin only Date (timers stay real for findBy*/waitFor).
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-08-14T12:00:00Z") });
 		queryFns.getGgufImports.mockResolvedValue({
 			items: [
 				{
@@ -593,11 +597,8 @@ describe("ModelManagement", () => {
 					phase: "Failed",
 					errorCode: "SourceNotFound",
 					sanitizedMessage: "/private/models/secret.gguf was not found",
-					// Relative to now on purpose: a TERMINAL status is swept once it falls out of the retention window,
-					// which is measured against the real clock — a fixed date makes this row vanish a day after it was
-					// written. The Copying row above is never swept, so its fixed dates are harmless.
-					startedAtUtc: new Date(Date.now() - 2_000).toISOString(),
-					updatedAtUtc: new Date(Date.now() - 1_000).toISOString(),
+					startedAtUtc: "2026-08-14T10:00:00Z",
+					updatedAtUtc: "2026-08-14T10:00:01Z",
 				},
 			],
 		});

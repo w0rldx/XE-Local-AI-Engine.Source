@@ -190,6 +190,10 @@ public static class LocalApiRoutes
         // Distinct literal segment under the agents surface so it cannot collide with DefinitionById.
         public const string ToolCapableModels = "agents/tool-capable-models";
 
+        // AI-assisted drafting. A literal segment under the collection, like the template actions below, so it can
+        // never be parsed as an {agentDefinitionId}. Writes nothing — the draft only populates the operator's form.
+        public const string Draft = "agents/draft";
+
         // Curated starter-pack catalog (GET list) and the operator-triggered import action. Literal segments after
         // "agents" keep these distinct from the {agentDefinitionId} route param.
         public const string Templates = "agents/templates";
@@ -267,6 +271,10 @@ public static class LocalApiRoutes
         // param, so it can never be parsed as an id. Preview writes nothing; the commit replays the previewed payload.
         public const string ImportPreview = "skills/import/preview";
         public const string Import = "skills/import";
+
+        // AI-assisted drafting, same literal-segment-under-the-collection rule as "import". Writes nothing — the draft
+        // only populates the operator's form; the existing create/update routes stay the sole persistence path.
+        public const string Draft = "skills/draft";
 
         // Bundled skill files. {resourceName} is a skill-root-relative path, so it can carry slashes: the client
         // percent-escapes it and the endpoint decodes + validates before the lookup (see SkillResourceRouteName).

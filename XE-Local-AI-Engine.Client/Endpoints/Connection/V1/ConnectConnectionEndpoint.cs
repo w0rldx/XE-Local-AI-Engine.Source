@@ -14,6 +14,8 @@ public sealed class ConnectConnectionEndpoint(IConnectionControlService connecti
     {
         Post(LocalApiRoutes.Connection.Connect);
         Policies(NodeAuthorizationPolicies.Operator);
+        // 409 = WorkerNotPaired / WorkerTokenExpired written by the global ConflictExceptionHandler.
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(CancellationToken ct)

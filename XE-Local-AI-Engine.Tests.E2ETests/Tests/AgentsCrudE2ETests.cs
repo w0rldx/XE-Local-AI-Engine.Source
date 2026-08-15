@@ -34,7 +34,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class AgentsCrudE2ETests : XEE2ETestBase
+public sealed class AgentsCrudE2ETests : XEPooledE2ETestBase
 {
     private const string NamePlaceholder = "Research assistant";
     private const string InstructionsPlaceholder = "You are a helpful assistant that…";

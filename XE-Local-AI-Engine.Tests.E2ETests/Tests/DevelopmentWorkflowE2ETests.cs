@@ -6,7 +6,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 [Category("Development")]
-public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
+public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
 {
     /// <summary>
     ///     Passes the one-time Development Mode disclosure that gates this route, the way an operator does:

@@ -32,8 +32,11 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "relative/path")),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "relative/path")),
             "A relative host path should be rejected.");
+
+        // A bad host path is an input problem, not a not-found or a conflict: the base type is what endpoints map to 400.
+        AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
     }
 
     [Test]
@@ -42,8 +45,10 @@ public sealed class SelectedFolderResolverTests
         var resolver = CreateResolver();
 
         // Still fully qualified on both platforms, so the '..' segment — not the qualification check — is what rejects it.
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
             "A traversal host path should be rejected.");
+
+        AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
     }
 
     [Test]
@@ -51,36 +56,38 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("!!!", TrustedHostPath)),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("!!!", TrustedHostPath)),
             "An alias that normalizes to empty should be rejected.");
+
+        AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
     }
 
     [Test]
-    public async Task RegisterAsync_WithDuplicateAlias_Throws()
+    public async Task RegisterAsync_WithDuplicateAlias_ThrowsConflict()
     {
         var resolver = CreateResolver();
         _ = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", HostPath("trusted", "host", "other"))),
-            "A colliding alias should be rejected after normalization.");
+        _ = await AssertEx.ThrowsAsync<SelectedFolderConflictException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", HostPath("trusted", "host", "other"))),
+            "A colliding alias should be rejected after normalization, as a conflict rather than a plain input rejection.");
     }
 
     [Test]
-    public async Task RegisterAsync_WhenStoreReportsUniqueViolation_ThrowsValidationException()
+    public async Task RegisterAsync_WhenStoreReportsUniqueViolation_ThrowsConflict()
     {
         var resolver = new SelectedFolderResolver(new ThrowingSelectedFolderStore(), NullLogger<SelectedFolderResolver>.Instance);
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath)),
-            "A unique-index violation surfacing from the store should be mapped to a validation exception.");
+        _ = await AssertEx.ThrowsAsync<SelectedFolderConflictException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath)),
+            "A unique-index violation surfacing from the store should be mapped to the same conflict as the pre-check.");
     }
 
     [Test]
-    public async Task ResolveAsync_WithUnknownId_Throws()
+    public async Task ResolveAsync_WithUnknownId_ThrowsNotFound()
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync(Guid.NewGuid().ToString()),
-            "An unknown id should be rejected.");
+        _ = await AssertEx.ThrowsAsync<SelectedFolderNotFoundException>(() => resolver.ResolveAsync(Guid.NewGuid().ToString()),
+            "A well-formed but unregistered id should be rejected as not-found, not as an input problem.");
     }
 
     [Test]
@@ -88,8 +95,11 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("not-a-guid"),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("not-a-guid"),
             "A non-GUID id should be rejected.");
+
+        // An unparsable id is malformed input (400), not a missing resource (404).
+        AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
     }
 
     [Test]

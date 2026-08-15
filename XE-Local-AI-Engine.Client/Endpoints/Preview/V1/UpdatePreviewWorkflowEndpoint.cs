@@ -20,6 +20,7 @@ public sealed class UpdatePreviewWorkflowEndpoint(IPreviewWorkflowService previe
     {
         Put(LocalApiRoutes.Preview.WorkflowById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdatePreviewWorkflowRequest req, CancellationToken ct)
@@ -39,10 +40,8 @@ public sealed class UpdatePreviewWorkflowEndpoint(IPreviewWorkflowService previe
                 return;
 
             case PreviewWorkflowMutationOutcome.Conflict:
-                await Send.ResultAsync(Results.Conflict(new
-                          {
-                              message = "The workflow was modified by another writer; reload and retry."
-                          }))
+                await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                              detail: "The workflow was modified by another writer; reload and retry."))
                           .ConfigureAwait(false);
                 return;
 

@@ -13,10 +13,67 @@ export const zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest =
 	hostPath: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = z.object({
-	code: z.string().optional(),
-	message: z.string(),
+/**
+ * the error details object
+ */
+export const zFastEndpointsProblemDetailsError = z.object({
+	name: z.string().optional().default("Error or field name"),
+	reason: z.string().optional().default("Error reason"),
+	code: z.string().nullish(),
+	severity: z.string().nullish(),
 });
+
+/**
+ * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
+ * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
+ */
+export const zFastEndpointsProblemDetails = z.object({
+	type: z.string().optional().default("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
+	title: z.string().optional().default("One or more validation errors occurred."),
+	status: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	instance: z.string().optional().default("/api/route"),
+	traceId: z.string().optional().default("0HMPNHL0JHL76:00000001"),
+	detail: z.string().nullish(),
+	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
+});
+
+export const zMicrosoftAspNetCoreMvcProblemDetails = z.object({
+	type: z.string().nullish(),
+	title: z.string().nullish(),
+	status: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	detail: z.string().nullish(),
+	instance: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails = zMicrosoftAspNetCoreMvcProblemDetails.and(
+	z.object({
+		conflictType: z.string().nullish(),
+		maxConcurrentRuns: z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+			.nullish(),
+		distinctModelCount: z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+			.nullish(),
+		maxLoadedProcesses: z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+			.nullish(),
+	}),
+);
 
 export const zXeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = z.record(z.string(), z.never());
 
@@ -916,6 +973,21 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointReq
 
 export const zXeLocalAiEngineClientPersistenceAgentSkillOrigin = z.enum(["Local", "Imported"]);
 
+export const zXeLocalAiEngineClientServicesDraftingDraftMode = z.enum(["Create", "Improve"]);
+
+export const zXeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse = z.object({
+	model: z.string().nullish(),
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	userBrief: z.string().nullish(),
+	rationale: z.string().nullish(),
+	assumptions: z.array(z.string()).nullish(),
+	confidence: z.number().optional(),
+	generatedAtUtc: z.int().optional(),
+	draftContentHash: z.string().nullish(),
+	acceptedAtUtc: z.int().optional(),
+	wasEdited: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 	id: z.guid(),
 	name: z.string(),
@@ -935,10 +1007,22 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 	origin: zXeLocalAiEngineClientPersistenceAgentSkillOrigin,
 	sourceUri: z.string().nullish(),
 	importedAtUtc: z.int().nullish(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse.nullish(),
 	resourceCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsCommonGenerationMetadata = z.object({
+	model: z.string().nullish(),
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	userBrief: z.string().nullish(),
+	rationale: z.string().nullish(),
+	assumptions: z.array(z.string()).nullish(),
+	confidence: z.number().optional(),
+	generatedAtUtc: z.int().optional(),
+	draftContentHash: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
@@ -949,9 +1033,34 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.objec
 	compatibility: z.string().nullish(),
 	allowedTools: z.string().nullish(),
 	metadata: z.record(z.string(), z.string()).nullish(),
+	generated: z.boolean().optional(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	body: z.string(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata,
+});
+
+export const zXeLocalAiEngineClientEndpointsCommonDraftErrorCode = z.enum(["NodeBusy", "Unparseable"]);
+
+export const zXeLocalAiEngineClientEndpointsCommonDraftErrorResponse = z.object({
+	code: zXeLocalAiEngineClientEndpointsCommonDraftErrorCode,
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest = z.object({
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	modelName: z.string().nullish(),
+	brief: z.string().nullish(),
+	existingName: z.string().nullish(),
+	existingDescription: z.string().nullish(),
+	existingContent: z.string().nullish(),
+});
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
 
@@ -1057,6 +1166,8 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.objec
 	compatibility: z.string().nullish(),
 	allowedTools: z.string().nullish(),
 	metadata: z.record(z.string(), z.string()).nullish(),
+	generated: z.boolean().optional(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = z.object({
@@ -1688,35 +1799,6 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
 });
 
-/**
- * the error details object
- */
-export const zFastEndpointsProblemDetailsError = z.object({
-	name: z.string().optional().default("Error or field name"),
-	reason: z.string().optional().default("Error reason"),
-	code: z.string().nullish(),
-	severity: z.string().nullish(),
-});
-
-/**
- * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
- * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
- */
-export const zFastEndpointsProblemDetails = z.object({
-	type: z.string().optional().default("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
-	title: z.string().optional().default("One or more validation errors occurred."),
-	status: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	instance: z.string().optional().default("/api/route"),
-	traceId: z.string().optional().default("0HMPNHL0JHL76:00000001"),
-	detail: z.string().nullish(),
-	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
-});
-
 export const zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = z.object({
 	cancelled: z.boolean().optional(),
 });
@@ -2261,6 +2343,16 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequ
 		.nullish(),
 	quantOverride: z.string().nullish(),
 	ctxTarget: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	runningProcessCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -4417,6 +4509,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadataResponse.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = z.object({
@@ -4434,6 +4527,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 	memoryExtractionEnabled: z.boolean().optional(),
 	disableBaseScaffold: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = z.object({
@@ -4461,6 +4555,22 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest
 export const zXeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse = z.object({
+	name: z.string(),
+	description: z.string(),
+	instructions: z.string(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata,
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest = z.object({
+	mode: zXeLocalAiEngineClientServicesDraftingDraftMode.optional(),
+	modelName: z.string().nullish(),
+	brief: z.string().nullish(),
+	existingName: z.string().nullish(),
+	existingDescription: z.string().nullish(),
+	existingContent: z.string().nullish(),
+});
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionRequest = z.record(z.string(), z.never());
 
@@ -4793,6 +4903,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest
 	memoryExtractionEnabled: z.boolean().optional(),
 	disableBaseScaffold: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
+	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = z.object({
@@ -5365,6 +5476,13 @@ export const zUpdateSkillPath = z.object({
  * Success
  */
 export const zUpdateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+
+export const zDraftSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest;
+
+/**
+ * Success
+ */
+export const zDraftSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillDraftResponse;
 
 export const zGetSkillResourcePath = z.object({
 	skillId: z.guid(),
@@ -7235,6 +7353,13 @@ export const zUpdatePlaybookActionPath = z.object({
  * Success
  */
 export const zUpdatePlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zDraftAgentDefinitionBody = zXeLocalAiEngineClientEndpointsAgentsV1DraftAgentDefinitionRequest;
+
+/**
+ * Success
+ */
+export const zDraftAgentDefinitionResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentDraftResponse;
 
 export const zGetAgentFeedbackInsightsPath = z.object({
 	agentDefinitionId: z.guid(),

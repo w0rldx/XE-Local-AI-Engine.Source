@@ -13,7 +13,6 @@ import {
 	Stack,
 	Table,
 	Text,
-	Textarea,
 	Title,
 } from "@mantine/core";
 import {
@@ -30,6 +29,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -665,13 +665,13 @@ export function DevelopmentPage() {
 													{t("pages.development.apply.patch", "patch")} <Code>{previewMutation.data.patchHash}</Code> ·{" "}
 													{t("pages.development.apply.manifest", "manifest")} <Code>{previewMutation.data.manifestHash}</Code>
 												</Text>
-												<Textarea
+												<CodeEditor
 													value={previewMutation.data.patch ?? ""}
+													language="diff"
 													readOnly={true}
-													autosize={true}
-													minRows={8}
-													maxRows={24}
+													height={360}
 													aria-label={t("pages.development.apply.previewLabel", "Verified patch preview")}
+													data-testid="development-patch-preview"
 												/>
 											</Stack>
 										) : null}

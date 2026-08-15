@@ -16,6 +16,14 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 /// </summary>
 public sealed class ConversationUploadEndpointTests
 {
+    /// <summary>
+    ///     One host for the default-configuration tests: each seeds its own conversation (or uses a throwaway Guid) and
+    ///     asserts on its own upload response, so nothing leaks across them. The oversize test keeps its own host — it
+    ///     lowers <c>Security:MaxUploadFileSizeMb</c> to 1.
+    /// </summary>
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
@@ -37,7 +45,7 @@ public sealed class ConversationUploadEndpointTests
     [Test]
     public async Task Upload_WhenUnsupportedExtension_Rejects()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         // A genuinely unsupported type: not a text/pdf/docx the extractor handles, and not an accepted image. It is
@@ -57,7 +65,7 @@ public sealed class ConversationUploadEndpointTests
     [Test]
     public async Task Upload_WhenImage_AcceptsWithImageStatus()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
@@ -89,7 +97,7 @@ public sealed class ConversationUploadEndpointTests
     [Test]
     public async Task Upload_WhenTraversalFilename_SanitizesToLeaf()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);

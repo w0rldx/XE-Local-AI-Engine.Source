@@ -21,11 +21,23 @@ internal static class GenerateEndpoint
         var response = $"[fake-ollama] {prompt}";
         var tokens = SplitTokens(response);
 
-        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, prompt, FakeOllamaEndpointMapper.GetKeepAlive(root));
+        var keepAlive = FakeOllamaEndpointMapper.GetKeepAlive(root);
+        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, prompt, keepAlive);
 
         if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
         {
             return Results.Empty;
+        }
+
+        // keep_alive=0 is Ollama's eviction request — it is how the eject action unloads a model — and real Ollama drops
+        // the model from /api/ps immediately. Mirror that here so an eject is observable in the running-models list —
+        // but only after the injected-failure gate above, so a simulated timeout/404/500 leaves the model loaded, as it
+        // would be on real Ollama.
+        if (keepAlive is "0")
+        {
+            state.RunningModels = state.RunningModels
+                                       .Where(running => !string.Equals(running.Name, model, StringComparison.OrdinalIgnoreCase))
+                                       .ToArray();
         }
 
         if (!FakeOllamaEndpointMapper.StreamEnabled(root))

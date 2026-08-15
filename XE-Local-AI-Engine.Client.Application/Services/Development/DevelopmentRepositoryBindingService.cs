@@ -100,7 +100,7 @@ internal sealed class DevelopmentRepositoryBindingService(
         ArgumentNullException.ThrowIfNull(snapshot);
         if (snapshot.SelectedFolderId is not { } selectedFolderId)
         {
-            throw new DevelopmentWorkspaceSecurityException("The Development project repository must be reconnected before execution.");
+            throw new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution.");
         }
 
         var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
@@ -127,7 +127,7 @@ internal sealed class DevelopmentRepositoryBindingService(
     {
         if (project.SelectedFolderId is not { } selectedFolderId)
         {
-            throw new DevelopmentWorkspaceSecurityException("The Development project repository must be reconnected before this action.");
+            throw new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before this action.");
         }
 
         var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
@@ -166,7 +166,7 @@ internal sealed class DevelopmentRepositoryBindingService(
     {
         if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
         {
-            throw new DevelopmentWorkspaceSecurityException("The selected repository no longer matches the Development project identity.");
+            throw new DevelopmentRepositoryStateConflictException("The selected repository no longer matches the Development project identity.");
         }
     }
 

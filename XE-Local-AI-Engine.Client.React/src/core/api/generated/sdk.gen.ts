@@ -275,6 +275,12 @@ import type {
 	DownloadRecommendedRerankerData,
 	DownloadRecommendedRerankerErrors,
 	DownloadRecommendedRerankerResponses,
+	DraftAgentDefinitionData,
+	DraftAgentDefinitionErrors,
+	DraftAgentDefinitionResponses,
+	DraftSkillData,
+	DraftSkillErrors,
+	DraftSkillResponses,
 	EjectImageRuntimeData,
 	EjectImageRuntimeErrors,
 	EjectImageRuntimeResponses,
@@ -1117,6 +1123,10 @@ import {
 	zDisconnectConnectionResponse,
 	zDownloadRecommendedEmbeddingResponse,
 	zDownloadRecommendedRerankerResponse,
+	zDraftAgentDefinitionBody,
+	zDraftAgentDefinitionResponse,
+	zDraftSkillBody,
+	zDraftSkillResponse,
 	zEjectImageRuntimeBody,
 	zEjectImageRuntimeResponse,
 	zEjectRunningModelBody,
@@ -2913,6 +2923,30 @@ export const updateSkill = <ThrowOnError extends boolean = false>(options: Optio
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/skills/{skillId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const draftSkill = <ThrowOnError extends boolean = false>(options: Options<DraftSkillData, ThrowOnError>) =>
+	(options.client ?? client).post<DraftSkillResponses, DraftSkillErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDraftSkillBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDraftSkillResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/draft",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
@@ -8269,6 +8303,32 @@ export const updatePlaybookAction = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<DraftAgentDefinitionData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<DraftAgentDefinitionResponses, DraftAgentDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDraftAgentDefinitionBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDraftAgentDefinitionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/draft",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

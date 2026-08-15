@@ -29,6 +29,10 @@ internal sealed class AgentSkillConfiguration : IEntityTypeConfiguration<AgentSk
         builder.Property(entity => entity.FrontmatterJson)
                .HasColumnName("frontmatter_json");
 
+        // AI-generation provenance — additive encrypted column, null for every row that was not AI-drafted.
+        builder.Property(entity => entity.GenerationMetadataJson)
+               .HasColumnName("generation_metadata_json");
+
         // Provenance columns — additive and structural (plaintext). origin defaults and backfills to 0 (Local) so every
         // pre-import row reads as operator-authored; the rest stay null for a local skill.
         builder.Property(entity => entity.Origin)

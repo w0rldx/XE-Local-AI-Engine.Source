@@ -110,6 +110,9 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
     {
         Post(LocalApiRoutes.Development.Repositories);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(RegisterDevelopmentRepositoryRequest req, CancellationToken ct)
@@ -119,6 +122,15 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
             var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
             var repository = await service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
             await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
@@ -205,6 +217,9 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
     {
         Post(LocalApiRoutes.Development.RepositoriesFromTemplate);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateDevelopmentRepositoryFromTemplateRequest req, CancellationToken ct)
@@ -222,6 +237,15 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
         catch (KeyNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
@@ -244,6 +268,9 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint
     {
         Get(LocalApiRoutes.Development.RepositoryProfileDetection);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentProfileDetectionRequest req, CancellationToken ct)
@@ -258,6 +285,15 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint
         catch (KeyNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
                                               or SelectedFolderValidationException
@@ -293,6 +329,9 @@ public sealed class CreateDevelopmentProjectEndpoint
     {
         Post(LocalApiRoutes.Development.Projects);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateDevelopmentProjectRequest req, CancellationToken ct)
@@ -325,6 +364,15 @@ public sealed class CreateDevelopmentProjectEndpoint
                                           ct)
                                       .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
@@ -389,6 +437,9 @@ public sealed class StartDevelopmentNextActionEndpoint
     {
         Post(LocalApiRoutes.Development.NextAction);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
@@ -409,9 +460,19 @@ public sealed class StartDevelopmentNextActionEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderValidationException)
+        catch (SelectedFolderNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
                                               or DevelopmentConcurrencyException
@@ -537,6 +598,9 @@ public sealed class PreviewDevelopmentPatchEndpoint
     {
         Post(LocalApiRoutes.Development.PatchPreview);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
@@ -557,9 +621,19 @@ public sealed class PreviewDevelopmentPatchEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderValidationException)
+        catch (SelectedFolderNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {
@@ -576,6 +650,9 @@ public sealed class ApplyDevelopmentPatchEndpoint
     {
         Post(LocalApiRoutes.Development.Apply);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
@@ -596,9 +673,19 @@ public sealed class ApplyDevelopmentPatchEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderValidationException)
+        catch (SelectedFolderNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
                                               or DevelopmentConcurrencyException
@@ -617,6 +704,9 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
     {
         Post(LocalApiRoutes.Development.RepositoryConnection);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ReconnectDevelopmentRepositoryRequest req, CancellationToken ct)
@@ -632,15 +722,34 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
         catch (SelectedFolderValidationException exception)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentWorkspaceSecurityException)
+        // Reconnect is the one Development endpoint whose request BOTH carries a folder to validate and acts on the
+        // project's persisted binding, so it is the only one that has to split the workspace-security family by type:
+        // the persisted binding blocking the reconnect is a 409, while the folder the caller just picked being
+        // unusable (not a Git root, read-only, network path) is the same 400 it is on register/create.
+        catch (Exception exception) when (exception is DevelopmentConcurrencyException
+                                              or DevelopmentRepositoryStateConflictException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (DevelopmentWorkspaceSecurityException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
     }
 }

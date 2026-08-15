@@ -16,6 +16,9 @@
 # in docs/agent-knowledge.md §1. Those races are per-process, so JOBS batch processes run concurrently (see below).
 #
 # It is the low-risk MITIGATION, not a root-cause fix. CI (7-16 GB runners) can still run the module in one process.
+# 2026-08-15 update: the leak IS fixed (TestServerWebAppFactory + shared per-class hosts, docs/agent-knowledge.md §1) and a
+# one-process 8-wide run is green (5582/0) — but it measured 305 s wall / 3.9 GB peak RSS against 165 s / ~0.6 GB per
+# batch here, so this runner stays the local full-run tool of record on wall time and memory, not on correctness.
 #
 # Build contamination
 #   The batches run the test host against bin/ WITHOUT rebuilding, so a concurrent `dotnet build`

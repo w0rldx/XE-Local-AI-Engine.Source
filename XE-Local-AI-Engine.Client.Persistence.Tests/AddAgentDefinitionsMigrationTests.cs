@@ -74,7 +74,9 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             "default_temporary_chat",
             "memory_extraction_enabled",
             // Added by the later AddAgentDefinitionBaseScaffoldOptOut migration.
-            "disable_base_scaffold"
+            "disable_base_scaffold",
+            // Added by the later AddGenerationMetadata migration (AI-drafting provenance).
+            "generation_metadata_json"
         }), "agent_definitions should expose the mapped columns.");
 
         var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);

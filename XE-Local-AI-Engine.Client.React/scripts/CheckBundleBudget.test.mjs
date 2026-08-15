@@ -17,11 +17,19 @@ test("recursively measures all deployed js/mjs", (context) => {
 	writeFileSync(join(root, "runtime", "helper.mjs"), "d".repeat(40));
 	writeFileSync(join(root, "runtime", "background-worker.mjs"), "e".repeat(50));
 	writeFileSync(join(root, "runtime", "ignored.wasm"), "f".repeat(100));
+	writeFileSync(join(root, "assets", "monaco-editor-Ab12Cd34.js"), "g".repeat(1000));
+	writeFileSync(join(root, "assets", "editor.worker-Ef56Gh78.js"), "h".repeat(200));
+	writeFileSync(join(root, "assets", "MonacoCodeEditor-Ij90Kl12.js"), "i".repeat(7));
 
 	const measurements = measureJavaScriptAssets(root);
 
 	assert.equal(measurements.applicationJavaScriptBytes, 150);
-	assert.deepEqual(evaluateBundleBudget(measurements, { applicationJavaScriptBytes: 149 }), [
-		{ name: "applicationJavaScriptBytes", limit: 149, actual: 150 },
+	assert.equal(measurements.lazyEditorJavaScriptBytes, 1207);
+	assert.deepEqual(
+		evaluateBundleBudget(measurements, { applicationJavaScriptBytes: 149, lazyEditorJavaScriptBytes: 1207 }),
+		[{ name: "applicationJavaScriptBytes", limit: 149, actual: 150 }],
+	);
+	assert.deepEqual(evaluateBundleBudget(measurements, { lazyEditorJavaScriptBytes: 1206 }), [
+		{ name: "lazyEditorJavaScriptBytes", limit: 1206, actual: 1207 },
 	]);
 });

@@ -73,7 +73,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 return new GgufDownloadTicket(active.ModelName, AlreadyInFlight: true, active.OperationId);
             }
 
-            throw new InvalidOperationException("ModelConflict");
+            throw new GgufAcquisitionConflictException();
         }
 
         PreparedGgufAcquisition reservation;
@@ -187,7 +187,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
             if (claim is ProviderMapClaimResult.Conflict)
             {
-                throw new InvalidOperationException("ModelConflict");
+                throw new GgufAcquisitionConflictException();
             }
 
             mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
@@ -196,7 +196,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             var resolvedProvider = await providerResolver.ResolveProviderNameForModelAsync(modelName, lease, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(resolvedProvider, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("ModelConflict");
+                throw new GgufAcquisitionConflictException();
             }
 
             return _operations.RecordTerminal(AcquisitionKind.Download,
@@ -368,7 +368,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, CancellationToken.None).ConfigureAwait(false);
                 if (claim is ProviderMapClaimResult.Conflict)
                 {
-                    throw new InvalidOperationException("ModelConflict");
+                    throw new GgufAcquisitionConflictException();
                 }
 
                 mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
@@ -432,7 +432,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 SetStatus(operationId, GgufAcquisitionPhase.Failed, errorCode: "InsufficientStorage", sanitizedError: exception.Message, isInitialOrTerminal: true);
                 _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
             }
-            catch (InvalidOperationException exception) when (string.Equals(exception.Message, "ModelConflict", StringComparison.Ordinal))
+            catch (GgufAcquisitionConflictException exception)
             {
                 if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
                 {

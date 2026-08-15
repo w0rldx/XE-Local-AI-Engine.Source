@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
+import type { GenerationMetadata } from "@/features/assist/models/AssistModels";
 import {
 	type OrchestrationTopology,
 	orchestrationTopologySchema,
@@ -78,6 +79,10 @@ export interface AgentDefinitionFormValues {
 	memoryExtractionEnabled: boolean;
 	// Opts this agent out of the layered base instruction scaffold normally prepended at resolve time.
 	disableBaseScaffold: boolean;
+	// Opaque provenance from an applied AI draft, echoed back verbatim on save. Unlike a skill there is no posture to
+	// demote — an agent definition carries no Imported/Enabled fence — so this is the only thing a draft leaves
+	// behind. `null` (an ordinary edit) tells the server to preserve whatever provenance the row already has.
+	generationMetadata: GenerationMetadata | null;
 }
 
 const reasoningEffortSchema = z.enum(["none", "low", "medium", "high"]);
@@ -103,6 +108,9 @@ export const agentDefinitionFormSchema = z
 		defaultTemporaryChat: z.boolean(),
 		memoryExtractionEnabled: z.boolean(),
 		disableBaseScaffold: z.boolean(),
+		// Deliberately unvalidated: the provenance block is opaque client-side and must survive submit byte-for-byte,
+		// so a z.object() (which strips unknown keys) would drop any field the server adds later.
+		generationMetadata: z.custom<GenerationMetadata>().nullable(),
 	})
 	.refine((value) => Object.keys(value.toolApprovals).every((toolName) => value.allowedToolNames.includes(toolName)), {
 		message: "toolApprovals keys must be a subset of allowedToolNames",

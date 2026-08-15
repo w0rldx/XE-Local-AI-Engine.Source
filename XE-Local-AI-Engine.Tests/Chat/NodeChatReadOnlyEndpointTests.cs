@@ -4,24 +4,27 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     HTTP-layer enforcement of the read-only (Origin=Remote) boundary. The guard + persistence layers are
 ///     unit-tested elsewhere; these drive the actual FastEndpoints pipeline and assert the authoritative wire
-///     contract: 409 Conflict with body {code:"conversation-read-only", reason:"remote-origin"}. This is the
+///     contract: 409 Conflict with the global ConflictExceptionHandler's ConflictProblemDetails envelope, discriminated
+///     by conflictType = "ReadOnlyConversation" (the string the SPA's isNodeChatReadOnlyConflict matches). This is the
 ///     security-relevant boundary that stops a node-local operator from mutating a platform-owned conversation.
 /// </summary>
 public sealed class NodeChatReadOnlyEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
     public async Task RenameConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -40,7 +43,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task PinConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -59,7 +62,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task ArchiveConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -78,7 +81,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task BranchConversation_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -100,7 +103,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task CreateMessageRevision_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -121,7 +124,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task SetMessageFeedback_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -140,7 +143,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     [Test]
     public async Task SetSelectedPath_WhenOriginRemote_Returns409ReadOnly()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
 
@@ -177,9 +180,11 @@ public sealed class NodeChatReadOnlyEndpointTests
     private static async Task AssertReadOnlyConflictAsync(HttpResponseMessage response)
     {
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await ReadJsonAsync<NodeChatConflictResponse>(response).ConfigureAwait(false);
-        AssertEx.Equal("conversation-read-only", body.Code);
-        AssertEx.Equal("remote-origin", body.Reason);
+        AssertEx.Contains(response.Content.Headers.ContentType?.ToString(), "problem+json", StringComparison.OrdinalIgnoreCase);
+        var body = await ReadJsonAsync<ConflictProblemBody>(response).ConfigureAwait(false);
+        AssertEx.Equal("ReadOnlyConversation", body.ConflictType);
+        AssertEx.NotEmpty(body.Detail);
+        AssertEx.NotEmpty(body.TraceId);
     }
 
     private static HttpRequestMessage CreateJsonRequest<T>(TestServerWebAppFactory factory, HttpMethod method, string uri, T content)
@@ -196,6 +201,8 @@ public sealed class NodeChatReadOnlyEndpointTests
         request.Headers.Add("Origin", "http://localhost");
         return request;
     }
+
+    private sealed record ConflictProblemBody(string ConflictType, string Detail, string TraceId);
 
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class

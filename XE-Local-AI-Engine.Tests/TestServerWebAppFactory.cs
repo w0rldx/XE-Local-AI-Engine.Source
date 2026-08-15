@@ -63,7 +63,14 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private WebApplication? _app;
     private bool _disposed;
 
-    public TestServerWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
+    // TUnit's ClassDataSource<T> resolves the fixture through a new() constraint, which an all-optional-parameter
+    // constructor does not satisfy (TUnit0061), so the parameterless form is declared explicitly.
+    public TestServerWebAppFactory()
+        : this(fakeOllamaOptions: null)
+    {
+    }
+
+    public TestServerWebAppFactory(FakeOllamaOptions? fakeOllamaOptions)
     {
         _fixtureWebRoot = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-wwwroot-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_fixtureWebRoot);
@@ -79,6 +86,18 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             }).GetAwaiter().GetResult();
         }
     }
+
+    /// <summary>
+    ///     The ASP.NET Core environment name this host runs under. Defaults to <c>Testing</c>, which is what every suite
+    ///     wants: <c>Program.CreateAppAsync</c> skips <c>UseRateLimiter()</c> there (its <c>PartitionedRateLimiter</c>
+    ///     replenishment timer is never disposed and GC-roots the whole host — docs/agent-knowledge.md §1) and
+    ///     <c>ConfigureServices</c> relaxes the three permit limits to non-limits.
+    ///     <para>
+    ///         Override it ONLY to exercise the rate limiter itself. Such a host keeps that immortal timer for the
+    ///         process lifetime, so share ONE host across every rate-limit assertion instead of building one per test.
+    ///     </para>
+    /// </summary>
+    public string EnvironmentName { get; init; } = "Testing";
 
     public bool SkipDefaultBaseUrlOverride { get; init; }
 
@@ -117,10 +136,50 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
     }
 
+    /// <summary>
+    ///     A valid, correctly signed access token that is <b>not</b> the operator's. It authenticates, so an endpoint
+    ///     gated by the <c>NodeOperator</c> policy (authenticated AND in the Admin role) must answer 403 rather than 401
+    ///     — the distinction that separates "you are not signed in" from "your principal is not the operator".
+    ///     <para>
+    ///         With no arguments the principal carries no role claim at all. Pass <paramref name="roles" /> to give it
+    ///         the <i>wrong</i> role rather than none, which reaches the policy's role requirement instead of stopping
+    ///         at the absent claim. The admin role is rejected outright: minting it here would return an operator token
+    ///         from a method whose name promises the opposite, and every assertion built on it would pass vacuously.
+    ///     </para>
+    /// </summary>
+    public string CreateNonOperatorAccessToken(params string[] roles)
+    {
+        ArgumentNullException.ThrowIfNull(roles);
+
+        if (roles.Contains(NodeAuthorizationPolicies.AdminRole, StringComparer.Ordinal))
+        {
+            throw new ArgumentException($"'{NodeAuthorizationPolicies.AdminRole}' is the operator role; use {nameof(CreateNodeAccessToken)}().", nameof(roles));
+        }
+
+        var tokenService = Services.GetRequiredService<INodeTokenService>();
+        var user = new NodeUser
+        {
+            Id = "node-viewer-test",
+            UserName = "viewer@example.test",
+            Email = "viewer@example.test",
+            SetupCompleted = true,
+            SecurityStamp = NodeAdminTestSecurityStamp
+        };
+
+        return tokenService.CreateAccessToken(user, roles).AccessToken;
+    }
+
     public void AddNodeBearerToken(HttpRequestMessage request)
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNodeAccessToken());
+    }
+
+    /// <summary>Bearer-authenticates <paramref name="request" /> as a non-operator principal (see <see cref="CreateNonOperatorAccessToken" />).</summary>
+    public void AddNonOperatorBearerToken(HttpRequestMessage request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNonOperatorAccessToken());
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -220,7 +279,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             {
                 var start = Program.CreateAppAsync([], new ProgramAppCustomization
                 {
-                    EnvironmentName = "Testing",
+                    EnvironmentName = EnvironmentName,
                     ContentRootPath = ResolveClientContentRoot(),
                     WebRootPath = _fixtureWebRoot,
                     Configuration = configuration,
@@ -245,8 +304,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     // The same content root WebApplicationFactory resolves: the Client project's source directory, taken from the
     // MvcTestingAppManifest.json that Microsoft.AspNetCore.Mvc.Testing writes into the test output. Fail loud if the
-    // manifest or entry is missing — a silently wrong content root would load no appsettings.json.
-    private static string ResolveClientContentRoot()
+    // manifest or entry is missing — a silently wrong content root would load no appsettings.json. Internal because
+    // Hosting/ServiceProviderValidationTests builds its own host and needs the identical root.
+    internal static string ResolveClientContentRoot()
     {
         var manifestPath = Path.Combine(AppContext.BaseDirectory, "MvcTestingAppManifest.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));

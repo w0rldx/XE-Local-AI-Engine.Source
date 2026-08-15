@@ -53,7 +53,7 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
         if (repository.ProjectId != subject.ProjectId
             || !string.Equals(repository.RepositoryIdentityHash, subject.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase))
         {
-            throw new DevelopmentWorkspaceSecurityException("The selected repository does not match the approved apply subject.");
+            throw new DevelopmentRepositoryStateConflictException("The selected repository does not match the approved apply subject.");
         }
 
         var repositoryRoot = repository.RepositoryRoot;

@@ -63,7 +63,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var service = new KnowledgeRepositoryImportService(repositories,
             new SensitiveFileExclusionService(),
             blobStore,
-            dispatcher,
+            new KnowledgeIngestionAdmissionService(catalog, dispatcher),
             catalog,
             purge,
             extractor,
@@ -112,7 +112,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var service = new KnowledgeRepositoryImportService(repositories,
             new SensitiveFileExclusionService(),
             blobStore,
-            dispatcher,
+            new KnowledgeIngestionAdmissionService(catalog, dispatcher),
             catalog,
             purge,
             extractor,
@@ -139,7 +139,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
                  .Returns(new KnowledgeDocumentAddResult(existingId, WasInserted: false, WasUpdated: true));
         var dispatcher = new AcceptingDispatcher();
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
-        catalog.GetStatusAsync(existingId, Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Pending);
+        // Indexed, not Pending: a changed repository file is the one case where an already-indexed document MUST be
+        // re-enqueued. It pins that the admission rule keys on "the store wrote it", not only on a retryable status.
+        catalog.GetStatusAsync(existingId, Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Indexed);
         catalog.ListAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns(Array.Empty<KnowledgeDocumentSummary>());
         var service = CreateService(repositories, blobStore, dispatcher, catalog, Substitute.For<IKnowledgeDocumentPurgeService>());
@@ -242,7 +244,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
                 MaxRepositoryImportFileBytes = 32
             });
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        // A configured bound is the caller's problem, so it carries the rejected type the endpoint maps to 400 —
+        // not the bare InvalidOperationException that used to make every I/O failure in here a 400 too.
+        var exception = await AssertEx.ThrowsAsync<KnowledgeRepositoryImportRejectedException>(() =>
             service.ImportAsync(selectedFolderId, "repo", CancellationToken.None)).ConfigureAwait(false);
 
         AssertEx.Contains(exception.Message, "per-file");
@@ -254,6 +258,8 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     {
         await InitializeRepositoryAsync().ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content").ConfigureAwait(false);
+        // A second file the scan would reach next: the first QueueFull has to stop the loop before it is even stored.
+        await File.WriteAllTextAsync(Path.Combine(_root, "SECOND.md"), "never reached").ConfigureAwait(false);
 
         var selectedFolderId = Guid.NewGuid();
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
@@ -270,6 +276,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.True(result.QueueCapacityReached);
+        AssertEx.Equal(expected: 0, result.EnqueuedDocuments);
+        await blobStore.Received(1).AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>());
+        await dispatcher.Received(1).EnqueueAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await catalog.DidNotReceive().ListAsync(Arg.Any<string>(),
             Arg.Any<string>(),
             Arg.Any<string>(),
@@ -333,10 +342,12 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     {
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.IsSupported(Arg.Any<string>()).Returns(call => call.Arg<string>() is ".md" or ".cs");
+        // The importer now goes through the shared admission service, so the tests wire the real rule over their own
+        // dispatcher + catalog fakes: the assertions stay on the dispatcher, and the rule under test is the shipped one.
         return new KnowledgeRepositoryImportService(repositories,
             new SensitiveFileExclusionService(),
             blobStore,
-            dispatcher,
+            new KnowledgeIngestionAdmissionService(catalog, dispatcher),
             catalog,
             purge,
             extractor,

@@ -101,6 +101,8 @@ import {
 	disconnectConnection,
 	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
+	draftAgentDefinition,
+	draftSkill,
 	ejectImageRuntime,
 	ejectRunningModel,
 	enableAutoConnect,
@@ -329,14 +331,17 @@ import type {
 	ApplyAppUpdateData,
 	ApplyAppUpdateResponse,
 	ApplyDevelopmentPatchData,
+	ApplyDevelopmentPatchError,
 	ApplyDevelopmentPatchResponse,
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationResponse,
 	ArchiveNodeChatConversationData,
+	ArchiveNodeChatConversationError,
 	ArchiveNodeChatConversationResponse,
 	BenchmarkInferenceProfileData,
 	BenchmarkInferenceProfileResponse,
 	BranchNodeChatConversationData,
+	BranchNodeChatConversationError,
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesResponse,
@@ -348,6 +353,7 @@ import type {
 	CancelBaseArtifactError,
 	CancelBaseArtifactResponse,
 	CancelBenchmarkRunData,
+	CancelBenchmarkRunError,
 	CancelBenchmarkRunResponse,
 	CancelCudaBuildData,
 	CancelCudaBuildResponse,
@@ -373,6 +379,7 @@ import type {
 	CancelPreviewRunData,
 	CancelPreviewRunResponse,
 	CancelScheduledJobRunData,
+	CancelScheduledJobRunError,
 	CancelScheduledJobRunResponse,
 	CancelStableDiffusionCppSourceBuildData,
 	CancelStableDiffusionCppSourceBuildResponse,
@@ -391,12 +398,15 @@ import type {
 	CommitSkillImportData,
 	CommitSkillImportResponse,
 	CompactNodeChatConversationData,
+	CompactNodeChatConversationError,
 	CompactNodeChatConversationResponse,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
 	ConnectConnectionData,
+	ConnectConnectionError,
 	ConnectConnectionResponse,
 	ContinuePreviewRunData,
+	ContinuePreviewRunError,
 	ContinuePreviewRunResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
@@ -404,6 +414,7 @@ import type {
 	CreateBaseArtifactError,
 	CreateBaseArtifactResponse,
 	CreateBenchmarkProjectData,
+	CreateBenchmarkProjectError,
 	CreateBenchmarkProjectResponse,
 	CreateComparisonData,
 	CreateComparisonError,
@@ -411,8 +422,10 @@ import type {
 	CreateCustomToolData,
 	CreateCustomToolResponse,
 	CreateDevelopmentProjectData,
+	CreateDevelopmentProjectError,
 	CreateDevelopmentProjectResponse,
 	CreateDevelopmentRepositoryFromTemplateData,
+	CreateDevelopmentRepositoryFromTemplateError,
 	CreateDevelopmentRepositoryFromTemplateResponse,
 	CreateEvaluationData,
 	CreateEvaluationError,
@@ -428,6 +441,7 @@ import type {
 	CreateNodeChatConversationError,
 	CreateNodeChatConversationResponse,
 	CreateNodeChatMessageRevisionData,
+	CreateNodeChatMessageRevisionError,
 	CreateNodeChatMessageRevisionResponse,
 	CreatePlaybookActionData,
 	CreatePlaybookActionResponse,
@@ -448,6 +462,7 @@ import type {
 	CreateTrainingRunError,
 	CreateTrainingRunResponse,
 	CreateWorkspaceData,
+	CreateWorkspaceError,
 	CreateWorkspaceResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
@@ -455,8 +470,10 @@ import type {
 	DeleteBaseArtifactError,
 	DeleteBaseArtifactResponse,
 	DeleteBenchmarkProjectData,
+	DeleteBenchmarkProjectError,
 	DeleteBenchmarkProjectResponse,
 	DeleteBenchmarkRunData,
+	DeleteBenchmarkRunError,
 	DeleteBenchmarkRunResponse,
 	DeleteComparisonData,
 	DeleteComparisonError,
@@ -471,6 +488,7 @@ import type {
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
 	DeleteImageModelData,
+	DeleteImageModelError,
 	DeleteImageModelResponse,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentResponse,
@@ -508,6 +526,7 @@ import type {
 	DeleteWorkspaceError,
 	DeleteWorkspaceResponse,
 	DetectDevelopmentRepositoryProfileData,
+	DetectDevelopmentRepositoryProfileError,
 	DetectDevelopmentRepositoryProfileResponse,
 	DisableAutoConnectData,
 	DisableAutoConnectResponse,
@@ -516,9 +535,17 @@ import type {
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
 	DownloadRecommendedEmbeddingData,
+	DownloadRecommendedEmbeddingError,
 	DownloadRecommendedEmbeddingResponse,
 	DownloadRecommendedRerankerData,
+	DownloadRecommendedRerankerError,
 	DownloadRecommendedRerankerResponse,
+	DraftAgentDefinitionData,
+	DraftAgentDefinitionError,
+	DraftAgentDefinitionResponse,
+	DraftSkillData,
+	DraftSkillError,
+	DraftSkillResponse,
 	EjectImageRuntimeData,
 	EjectImageRuntimeError,
 	EjectImageRuntimeResponse,
@@ -540,8 +567,10 @@ import type {
 	EntraDeviceCodeStatusData,
 	EntraDeviceCodeStatusResponse,
 	ExecuteSavedPreviewWorkflowData,
+	ExecuteSavedPreviewWorkflowError,
 	ExecuteSavedPreviewWorkflowResponse,
 	ExecuteUnsavedPreviewWorkflowData,
+	ExecuteUnsavedPreviewWorkflowError,
 	ExecuteUnsavedPreviewWorkflowResponse,
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileResponse,
@@ -572,8 +601,10 @@ import type {
 	GetBaseArtifactLicenseResponse,
 	GetBaseArtifactResponse,
 	GetBenchmarkProjectData,
+	GetBenchmarkProjectError,
 	GetBenchmarkProjectResponse,
 	GetBenchmarkRunData,
+	GetBenchmarkRunError,
 	GetBenchmarkRunResponse,
 	GetCloudSettingsData,
 	GetCloudSettingsResponse,
@@ -705,6 +736,7 @@ import type {
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesResponse,
 	ImportKnowledgeRepositoryData,
+	ImportKnowledgeRepositoryError,
 	ImportKnowledgeRepositoryResponse,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
@@ -725,6 +757,7 @@ import type {
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsResponse,
 	ListBenchmarkRunsData,
+	ListBenchmarkRunsError,
 	ListBenchmarkRunsResponse,
 	ListComparisonsData,
 	ListComparisonsResponse,
@@ -743,8 +776,10 @@ import type {
 	ListDevelopmentTemplatesData,
 	ListDevelopmentTemplatesResponse,
 	ListEligibleBenchmarkAgentsData,
+	ListEligibleBenchmarkAgentsError,
 	ListEligibleBenchmarkAgentsResponse,
 	ListEligibleBenchmarkModelsData,
+	ListEligibleBenchmarkModelsError,
 	ListEligibleBenchmarkModelsResponse,
 	ListEvaluationsData,
 	ListEvaluationsResponse,
@@ -821,10 +856,12 @@ import type {
 	NodeSetupError,
 	NodeSetupResponse,
 	PinNodeChatConversationData,
+	PinNodeChatConversationError,
 	PinNodeChatConversationResponse,
 	PollNodeBindingData,
 	PollNodeBindingResponse,
 	PreviewDevelopmentPatchData,
+	PreviewDevelopmentPatchError,
 	PreviewDevelopmentPatchResponse,
 	PreviewGgufImportData,
 	PreviewGgufImportResponse,
@@ -840,12 +877,14 @@ import type {
 	PutModelLaunchArgumentsData,
 	PutModelLaunchArgumentsResponse,
 	ReconnectDevelopmentRepositoryData,
+	ReconnectDevelopmentRepositoryError,
 	ReconnectDevelopmentRepositoryResponse,
 	RefreshModelCatalogData,
 	RefreshModelCatalogResponse,
 	RefreshRecommendationsData,
 	RefreshRecommendationsResponse,
 	RegisterDevelopmentRepositoryData,
+	RegisterDevelopmentRepositoryError,
 	RegisterDevelopmentRepositoryResponse,
 	RegisterDevelopmentTemplateData,
 	RegisterDevelopmentTemplateResponse,
@@ -856,6 +895,7 @@ import type {
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionResponse,
 	RemoveCudaBuildData,
+	RemoveCudaBuildError,
 	RemoveCudaBuildResponse,
 	RemoveDevelopmentTemplateData,
 	RemoveDevelopmentTemplateResponse,
@@ -869,6 +909,7 @@ import type {
 	RemoveTrainingRuntimeError,
 	RemoveTrainingRuntimeResponse,
 	RenameNodeChatConversationData,
+	RenameNodeChatConversationError,
 	RenameNodeChatConversationResponse,
 	ResolveToolApprovalData,
 	ResolveToolApprovalError,
@@ -900,6 +941,7 @@ import type {
 	SaveTutorialStateData,
 	SaveTutorialStateResponse,
 	ScoreBenchmarkRunData,
+	ScoreBenchmarkRunError,
 	ScoreBenchmarkRunResponse,
 	SearchKnowledgeData,
 	SearchKnowledgeResponse,
@@ -911,19 +953,25 @@ import type {
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledResponse,
 	SetNodeChatConversationMemoryExcludedData,
+	SetNodeChatConversationMemoryExcludedError,
 	SetNodeChatConversationMemoryExcludedResponse,
 	SetNodeChatMessageFeedbackData,
+	SetNodeChatMessageFeedbackError,
 	SetNodeChatMessageFeedbackResponse,
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
 	StartBenchmarkRunData,
+	StartBenchmarkRunError,
 	StartBenchmarkRunResponse,
 	StartCudaBuildData,
+	StartCudaBuildError,
 	StartCudaBuildResponse,
 	StartDevelopmentNextActionData,
+	StartDevelopmentNextActionError,
 	StartDevelopmentNextActionResponse,
 	StartGgufDownloadData,
+	StartGgufDownloadError,
 	StartGgufDownloadResponse,
 	StartGgufImportData,
 	StartGgufImportResponse,
@@ -956,6 +1004,7 @@ import type {
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
 	UpdateBenchmarkProjectData,
+	UpdateBenchmarkProjectError,
 	UpdateBenchmarkProjectResponse,
 	UpdateCustomToolData,
 	UpdateCustomToolResponse,
@@ -967,6 +1016,7 @@ import type {
 	UpdatePlaybookActionData,
 	UpdatePlaybookActionResponse,
 	UpdatePreviewWorkflowData,
+	UpdatePreviewWorkflowError,
 	UpdatePreviewWorkflowResponse,
 	UpdateScheduledJobData,
 	UpdateScheduledJobResponse,
@@ -1056,8 +1106,12 @@ export const listWorkspacesOptions = (options?: Options<ListWorkspacesData>) =>
 
 export const createWorkspaceMutation = (
 	options?: Partial<Options<CreateWorkspaceData>>,
-): UseMutationOptions<CreateWorkspaceResponse, AxiosError<DefaultError>, Options<CreateWorkspaceData>> => {
-	const mutationOptions: UseMutationOptions<CreateWorkspaceResponse, AxiosError<DefaultError>, Options<CreateWorkspaceData>> = {
+): UseMutationOptions<CreateWorkspaceResponse, AxiosError<CreateWorkspaceError>, Options<CreateWorkspaceData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateWorkspaceResponse,
+		AxiosError<CreateWorkspaceError>,
+		Options<CreateWorkspaceData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await createWorkspace({
 				...options,
@@ -2366,6 +2420,22 @@ export const updateSkillMutation = (
 	return mutationOptions;
 };
 
+export const draftSkillMutation = (
+	options?: Partial<Options<DraftSkillData>>,
+): UseMutationOptions<DraftSkillResponse, AxiosError<DraftSkillError>, Options<DraftSkillData>> => {
+	const mutationOptions: UseMutationOptions<DraftSkillResponse, AxiosError<DraftSkillError>, Options<DraftSkillData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await draftSkill({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const getSkillResourceQueryKey = (options: Options<GetSkillResourceData>) => createQueryKey("getSkillResource", options);
 
 export const getSkillResourceOptions = (options: Options<GetSkillResourceData>) =>
@@ -2431,10 +2501,14 @@ export const previewSkillImportMutation = (
 
 export const cancelScheduledJobRunMutation = (
 	options?: Partial<Options<CancelScheduledJobRunData>>,
-): UseMutationOptions<CancelScheduledJobRunResponse, AxiosError<DefaultError>, Options<CancelScheduledJobRunData>> => {
+): UseMutationOptions<
+	CancelScheduledJobRunResponse,
+	AxiosError<CancelScheduledJobRunError>,
+	Options<CancelScheduledJobRunData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CancelScheduledJobRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CancelScheduledJobRunError>,
 		Options<CancelScheduledJobRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2786,10 +2860,10 @@ export const cancelPreviewRunMutation = (
 
 export const continuePreviewRunMutation = (
 	options?: Partial<Options<ContinuePreviewRunData>>,
-): UseMutationOptions<ContinuePreviewRunResponse, AxiosError<DefaultError>, Options<ContinuePreviewRunData>> => {
+): UseMutationOptions<ContinuePreviewRunResponse, AxiosError<ContinuePreviewRunError>, Options<ContinuePreviewRunData>> => {
 	const mutationOptions: UseMutationOptions<
 		ContinuePreviewRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ContinuePreviewRunError>,
 		Options<ContinuePreviewRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2890,10 +2964,14 @@ export const getPreviewWorkflowOptions = (options: Options<GetPreviewWorkflowDat
 
 export const updatePreviewWorkflowMutation = (
 	options?: Partial<Options<UpdatePreviewWorkflowData>>,
-): UseMutationOptions<UpdatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<UpdatePreviewWorkflowData>> => {
+): UseMutationOptions<
+	UpdatePreviewWorkflowResponse,
+	AxiosError<UpdatePreviewWorkflowError>,
+	Options<UpdatePreviewWorkflowData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UpdatePreviewWorkflowResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdatePreviewWorkflowError>,
 		Options<UpdatePreviewWorkflowData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2912,12 +2990,12 @@ export const executeSavedPreviewWorkflowMutation = (
 	options?: Partial<Options<ExecuteSavedPreviewWorkflowData>>,
 ): UseMutationOptions<
 	ExecuteSavedPreviewWorkflowResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ExecuteSavedPreviewWorkflowError>,
 	Options<ExecuteSavedPreviewWorkflowData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ExecuteSavedPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ExecuteSavedPreviewWorkflowError>,
 		Options<ExecuteSavedPreviewWorkflowData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2936,12 +3014,12 @@ export const executeUnsavedPreviewWorkflowMutation = (
 	options?: Partial<Options<ExecuteUnsavedPreviewWorkflowData>>,
 ): UseMutationOptions<
 	ExecuteUnsavedPreviewWorkflowResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ExecuteUnsavedPreviewWorkflowError>,
 	Options<ExecuteUnsavedPreviewWorkflowData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ExecuteUnsavedPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ExecuteUnsavedPreviewWorkflowError>,
 		Options<ExecuteUnsavedPreviewWorkflowData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3793,8 +3871,12 @@ export const refreshRecommendationsMutation = (
 
 export const removeCudaBuildMutation = (
 	options?: Partial<Options<RemoveCudaBuildData>>,
-): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<DefaultError>, Options<RemoveCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<RemoveCudaBuildResponse, AxiosError<DefaultError>, Options<RemoveCudaBuildData>> = {
+): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<RemoveCudaBuildError>, Options<RemoveCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveCudaBuildResponse,
+		AxiosError<RemoveCudaBuildError>,
+		Options<RemoveCudaBuildData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await removeCudaBuild({
 				...options,
@@ -3833,8 +3915,12 @@ export const removeLlamaCppSourceBuildMutation = (
 
 export const startCudaBuildMutation = (
 	options?: Partial<Options<StartCudaBuildData>>,
-): UseMutationOptions<StartCudaBuildResponse, AxiosError<DefaultError>, Options<StartCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<StartCudaBuildResponse, AxiosError<DefaultError>, Options<StartCudaBuildData>> = {
+): UseMutationOptions<StartCudaBuildResponse, AxiosError<StartCudaBuildError>, Options<StartCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartCudaBuildResponse,
+		AxiosError<StartCudaBuildError>,
+		Options<StartCudaBuildData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startCudaBuild({
 				...options,
@@ -3849,10 +3935,10 @@ export const startCudaBuildMutation = (
 
 export const startGgufDownloadMutation = (
 	options?: Partial<Options<StartGgufDownloadData>>,
-): UseMutationOptions<StartGgufDownloadResponse, AxiosError<DefaultError>, Options<StartGgufDownloadData>> => {
+): UseMutationOptions<StartGgufDownloadResponse, AxiosError<StartGgufDownloadError>, Options<StartGgufDownloadData>> => {
 	const mutationOptions: UseMutationOptions<
 		StartGgufDownloadResponse,
-		AxiosError<DefaultError>,
+		AxiosError<StartGgufDownloadError>,
 		Options<StartGgufDownloadData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4388,12 +4474,12 @@ export const compactNodeChatConversationMutation = (
 	options?: Partial<Options<CompactNodeChatConversationData>>,
 ): UseMutationOptions<
 	CompactNodeChatConversationResponse,
-	AxiosError<DefaultError>,
+	AxiosError<CompactNodeChatConversationError>,
 	Options<CompactNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		CompactNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CompactNodeChatConversationError>,
 		Options<CompactNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4564,10 +4650,14 @@ export const uploadConversationFileMutation = (
 
 export const renameNodeChatConversationMutation = (
 	options?: Partial<Options<RenameNodeChatConversationData>>,
-): UseMutationOptions<RenameNodeChatConversationResponse, AxiosError<DefaultError>, Options<RenameNodeChatConversationData>> => {
+): UseMutationOptions<
+	RenameNodeChatConversationResponse,
+	AxiosError<RenameNodeChatConversationError>,
+	Options<RenameNodeChatConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		RenameNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<RenameNodeChatConversationError>,
 		Options<RenameNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4584,10 +4674,14 @@ export const renameNodeChatConversationMutation = (
 
 export const pinNodeChatConversationMutation = (
 	options?: Partial<Options<PinNodeChatConversationData>>,
-): UseMutationOptions<PinNodeChatConversationResponse, AxiosError<DefaultError>, Options<PinNodeChatConversationData>> => {
+): UseMutationOptions<
+	PinNodeChatConversationResponse,
+	AxiosError<PinNodeChatConversationError>,
+	Options<PinNodeChatConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		PinNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<PinNodeChatConversationError>,
 		Options<PinNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4606,12 +4700,12 @@ export const archiveNodeChatConversationMutation = (
 	options?: Partial<Options<ArchiveNodeChatConversationData>>,
 ): UseMutationOptions<
 	ArchiveNodeChatConversationResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ArchiveNodeChatConversationError>,
 	Options<ArchiveNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ArchiveNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ArchiveNodeChatConversationError>,
 		Options<ArchiveNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4630,12 +4724,12 @@ export const setNodeChatConversationMemoryExcludedMutation = (
 	options?: Partial<Options<SetNodeChatConversationMemoryExcludedData>>,
 ): UseMutationOptions<
 	SetNodeChatConversationMemoryExcludedResponse,
-	AxiosError<DefaultError>,
+	AxiosError<SetNodeChatConversationMemoryExcludedError>,
 	Options<SetNodeChatConversationMemoryExcludedData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		SetNodeChatConversationMemoryExcludedResponse,
-		AxiosError<DefaultError>,
+		AxiosError<SetNodeChatConversationMemoryExcludedError>,
 		Options<SetNodeChatConversationMemoryExcludedData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4652,10 +4746,14 @@ export const setNodeChatConversationMemoryExcludedMutation = (
 
 export const branchNodeChatConversationMutation = (
 	options?: Partial<Options<BranchNodeChatConversationData>>,
-): UseMutationOptions<BranchNodeChatConversationResponse, AxiosError<DefaultError>, Options<BranchNodeChatConversationData>> => {
+): UseMutationOptions<
+	BranchNodeChatConversationResponse,
+	AxiosError<BranchNodeChatConversationError>,
+	Options<BranchNodeChatConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		BranchNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<BranchNodeChatConversationError>,
 		Options<BranchNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4696,12 +4794,12 @@ export const createNodeChatMessageRevisionMutation = (
 	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
 ): UseMutationOptions<
 	CreateNodeChatMessageRevisionResponse,
-	AxiosError<DefaultError>,
+	AxiosError<CreateNodeChatMessageRevisionError>,
 	Options<CreateNodeChatMessageRevisionData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		CreateNodeChatMessageRevisionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateNodeChatMessageRevisionError>,
 		Options<CreateNodeChatMessageRevisionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4740,10 +4838,14 @@ export const getNodeChatMessageFeedbackOptions = (options: Options<GetNodeChatMe
 
 export const setNodeChatMessageFeedbackMutation = (
 	options?: Partial<Options<SetNodeChatMessageFeedbackData>>,
-): UseMutationOptions<SetNodeChatMessageFeedbackResponse, AxiosError<DefaultError>, Options<SetNodeChatMessageFeedbackData>> => {
+): UseMutationOptions<
+	SetNodeChatMessageFeedbackResponse,
+	AxiosError<SetNodeChatMessageFeedbackError>,
+	Options<SetNodeChatMessageFeedbackData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		SetNodeChatMessageFeedbackResponse,
-		AxiosError<DefaultError>,
+		AxiosError<SetNodeChatMessageFeedbackError>,
 		Options<SetNodeChatMessageFeedbackData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4868,12 +4970,12 @@ export const downloadRecommendedEmbeddingMutation = (
 	options?: Partial<Options<DownloadRecommendedEmbeddingData>>,
 ): UseMutationOptions<
 	DownloadRecommendedEmbeddingResponse,
-	AxiosError<DefaultError>,
+	AxiosError<DownloadRecommendedEmbeddingError>,
 	Options<DownloadRecommendedEmbeddingData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		DownloadRecommendedEmbeddingResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DownloadRecommendedEmbeddingError>,
 		Options<DownloadRecommendedEmbeddingData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4892,12 +4994,12 @@ export const downloadRecommendedRerankerMutation = (
 	options?: Partial<Options<DownloadRecommendedRerankerData>>,
 ): UseMutationOptions<
 	DownloadRecommendedRerankerResponse,
-	AxiosError<DefaultError>,
+	AxiosError<DownloadRecommendedRerankerError>,
 	Options<DownloadRecommendedRerankerData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		DownloadRecommendedRerankerResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DownloadRecommendedRerankerError>,
 		Options<DownloadRecommendedRerankerData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4914,10 +5016,14 @@ export const downloadRecommendedRerankerMutation = (
 
 export const importKnowledgeRepositoryMutation = (
 	options?: Partial<Options<ImportKnowledgeRepositoryData>>,
-): UseMutationOptions<ImportKnowledgeRepositoryResponse, AxiosError<DefaultError>, Options<ImportKnowledgeRepositoryData>> => {
+): UseMutationOptions<
+	ImportKnowledgeRepositoryResponse,
+	AxiosError<ImportKnowledgeRepositoryError>,
+	Options<ImportKnowledgeRepositoryData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		ImportKnowledgeRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ImportKnowledgeRepositoryError>,
 		Options<ImportKnowledgeRepositoryData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5168,8 +5274,12 @@ export const createImageJobMutation = (
 
 export const deleteImageModelMutation = (
 	options?: Partial<Options<DeleteImageModelData>>,
-): UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> => {
-	const mutationOptions: UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> = {
+): UseMutationOptions<DeleteImageModelResponse, AxiosError<DeleteImageModelError>, Options<DeleteImageModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteImageModelResponse,
+		AxiosError<DeleteImageModelError>,
+		Options<DeleteImageModelData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await deleteImageModel({
 				...options,
@@ -5530,12 +5640,12 @@ export const registerDevelopmentRepositoryMutation = (
 	options?: Partial<Options<RegisterDevelopmentRepositoryData>>,
 ): UseMutationOptions<
 	RegisterDevelopmentRepositoryResponse,
-	AxiosError<DefaultError>,
+	AxiosError<RegisterDevelopmentRepositoryError>,
 	Options<RegisterDevelopmentRepositoryData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		RegisterDevelopmentRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<RegisterDevelopmentRepositoryError>,
 		Options<RegisterDevelopmentRepositoryData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5620,12 +5730,12 @@ export const createDevelopmentRepositoryFromTemplateMutation = (
 	options?: Partial<Options<CreateDevelopmentRepositoryFromTemplateData>>,
 ): UseMutationOptions<
 	CreateDevelopmentRepositoryFromTemplateResponse,
-	AxiosError<DefaultError>,
+	AxiosError<CreateDevelopmentRepositoryFromTemplateError>,
 	Options<CreateDevelopmentRepositoryFromTemplateData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		CreateDevelopmentRepositoryFromTemplateResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateDevelopmentRepositoryFromTemplateError>,
 		Options<CreateDevelopmentRepositoryFromTemplateData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5646,7 +5756,7 @@ export const detectDevelopmentRepositoryProfileQueryKey = (options: Options<Dete
 export const detectDevelopmentRepositoryProfileOptions = (options: Options<DetectDevelopmentRepositoryProfileData>) =>
 	queryOptions<
 		DetectDevelopmentRepositoryProfileResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DetectDevelopmentRepositoryProfileError>,
 		DetectDevelopmentRepositoryProfileResponse,
 		ReturnType<typeof detectDevelopmentRepositoryProfileQueryKey>
 	>({
@@ -5686,10 +5796,14 @@ export const listDevelopmentProjectsOptions = (options?: Options<ListDevelopment
 
 export const createDevelopmentProjectMutation = (
 	options?: Partial<Options<CreateDevelopmentProjectData>>,
-): UseMutationOptions<CreateDevelopmentProjectResponse, AxiosError<DefaultError>, Options<CreateDevelopmentProjectData>> => {
+): UseMutationOptions<
+	CreateDevelopmentProjectResponse,
+	AxiosError<CreateDevelopmentProjectError>,
+	Options<CreateDevelopmentProjectData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CreateDevelopmentProjectResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateDevelopmentProjectError>,
 		Options<CreateDevelopmentProjectData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5750,10 +5864,14 @@ export const getDevelopmentTaskOptions = (options: Options<GetDevelopmentTaskDat
 
 export const startDevelopmentNextActionMutation = (
 	options?: Partial<Options<StartDevelopmentNextActionData>>,
-): UseMutationOptions<StartDevelopmentNextActionResponse, AxiosError<DefaultError>, Options<StartDevelopmentNextActionData>> => {
+): UseMutationOptions<
+	StartDevelopmentNextActionResponse,
+	AxiosError<StartDevelopmentNextActionError>,
+	Options<StartDevelopmentNextActionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		StartDevelopmentNextActionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<StartDevelopmentNextActionError>,
 		Options<StartDevelopmentNextActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5856,10 +5974,14 @@ export const getDevelopmentArtifactOptions = (options: Options<GetDevelopmentArt
 
 export const previewDevelopmentPatchMutation = (
 	options?: Partial<Options<PreviewDevelopmentPatchData>>,
-): UseMutationOptions<PreviewDevelopmentPatchResponse, AxiosError<DefaultError>, Options<PreviewDevelopmentPatchData>> => {
+): UseMutationOptions<
+	PreviewDevelopmentPatchResponse,
+	AxiosError<PreviewDevelopmentPatchError>,
+	Options<PreviewDevelopmentPatchData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		PreviewDevelopmentPatchResponse,
-		AxiosError<DefaultError>,
+		AxiosError<PreviewDevelopmentPatchError>,
 		Options<PreviewDevelopmentPatchData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5876,10 +5998,14 @@ export const previewDevelopmentPatchMutation = (
 
 export const applyDevelopmentPatchMutation = (
 	options?: Partial<Options<ApplyDevelopmentPatchData>>,
-): UseMutationOptions<ApplyDevelopmentPatchResponse, AxiosError<DefaultError>, Options<ApplyDevelopmentPatchData>> => {
+): UseMutationOptions<
+	ApplyDevelopmentPatchResponse,
+	AxiosError<ApplyDevelopmentPatchError>,
+	Options<ApplyDevelopmentPatchData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		ApplyDevelopmentPatchResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ApplyDevelopmentPatchError>,
 		Options<ApplyDevelopmentPatchData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5898,12 +6024,12 @@ export const reconnectDevelopmentRepositoryMutation = (
 	options?: Partial<Options<ReconnectDevelopmentRepositoryData>>,
 ): UseMutationOptions<
 	ReconnectDevelopmentRepositoryResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ReconnectDevelopmentRepositoryError>,
 	Options<ReconnectDevelopmentRepositoryData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ReconnectDevelopmentRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ReconnectDevelopmentRepositoryError>,
 		Options<ReconnectDevelopmentRepositoryData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6025,10 +6151,10 @@ export const validateExecutableMutation = (
 
 export const connectConnectionMutation = (
 	options?: Partial<Options<ConnectConnectionData>>,
-): UseMutationOptions<ConnectConnectionResponse, AxiosError<DefaultError>, Options<ConnectConnectionData>> => {
+): UseMutationOptions<ConnectConnectionResponse, AxiosError<ConnectConnectionError>, Options<ConnectConnectionData>> => {
 	const mutationOptions: UseMutationOptions<
 		ConnectConnectionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ConnectConnectionError>,
 		Options<ConnectConnectionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6324,7 +6450,7 @@ export const listEligibleBenchmarkAgentsQueryKey = (options: Options<ListEligibl
 export const listEligibleBenchmarkAgentsOptions = (options: Options<ListEligibleBenchmarkAgentsData>) =>
 	queryOptions<
 		ListEligibleBenchmarkAgentsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ListEligibleBenchmarkAgentsError>,
 		ListEligibleBenchmarkAgentsResponse,
 		ReturnType<typeof listEligibleBenchmarkAgentsQueryKey>
 	>({
@@ -6346,7 +6472,7 @@ export const listEligibleBenchmarkModelsQueryKey = (options?: Options<ListEligib
 export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibleBenchmarkModelsData>) =>
 	queryOptions<
 		ListEligibleBenchmarkModelsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ListEligibleBenchmarkModelsError>,
 		ListEligibleBenchmarkModelsResponse,
 		ReturnType<typeof listEligibleBenchmarkModelsQueryKey>
 	>({
@@ -6386,10 +6512,14 @@ export const listBenchmarkProjectsOptions = (options?: Options<ListBenchmarkProj
 
 export const createBenchmarkProjectMutation = (
 	options?: Partial<Options<CreateBenchmarkProjectData>>,
-): UseMutationOptions<CreateBenchmarkProjectResponse, AxiosError<DefaultError>, Options<CreateBenchmarkProjectData>> => {
+): UseMutationOptions<
+	CreateBenchmarkProjectResponse,
+	AxiosError<CreateBenchmarkProjectError>,
+	Options<CreateBenchmarkProjectData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CreateBenchmarkProjectResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateBenchmarkProjectError>,
 		Options<CreateBenchmarkProjectData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6406,10 +6536,14 @@ export const createBenchmarkProjectMutation = (
 
 export const deleteBenchmarkProjectMutation = (
 	options?: Partial<Options<DeleteBenchmarkProjectData>>,
-): UseMutationOptions<DeleteBenchmarkProjectResponse, AxiosError<DefaultError>, Options<DeleteBenchmarkProjectData>> => {
+): UseMutationOptions<
+	DeleteBenchmarkProjectResponse,
+	AxiosError<DeleteBenchmarkProjectError>,
+	Options<DeleteBenchmarkProjectData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteBenchmarkProjectResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteBenchmarkProjectError>,
 		Options<DeleteBenchmarkProjectData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6430,7 +6564,7 @@ export const getBenchmarkProjectQueryKey = (options: Options<GetBenchmarkProject
 export const getBenchmarkProjectOptions = (options: Options<GetBenchmarkProjectData>) =>
 	queryOptions<
 		GetBenchmarkProjectResponse,
-		AxiosError<DefaultError>,
+		AxiosError<GetBenchmarkProjectError>,
 		GetBenchmarkProjectResponse,
 		ReturnType<typeof getBenchmarkProjectQueryKey>
 	>({
@@ -6448,10 +6582,14 @@ export const getBenchmarkProjectOptions = (options: Options<GetBenchmarkProjectD
 
 export const updateBenchmarkProjectMutation = (
 	options?: Partial<Options<UpdateBenchmarkProjectData>>,
-): UseMutationOptions<UpdateBenchmarkProjectResponse, AxiosError<DefaultError>, Options<UpdateBenchmarkProjectData>> => {
+): UseMutationOptions<
+	UpdateBenchmarkProjectResponse,
+	AxiosError<UpdateBenchmarkProjectError>,
+	Options<UpdateBenchmarkProjectData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UpdateBenchmarkProjectResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdateBenchmarkProjectError>,
 		Options<UpdateBenchmarkProjectData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6472,7 +6610,7 @@ export const listBenchmarkRunsQueryKey = (options: Options<ListBenchmarkRunsData
 export const listBenchmarkRunsOptions = (options: Options<ListBenchmarkRunsData>) =>
 	queryOptions<
 		ListBenchmarkRunsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ListBenchmarkRunsError>,
 		ListBenchmarkRunsResponse,
 		ReturnType<typeof listBenchmarkRunsQueryKey>
 	>({
@@ -6495,7 +6633,7 @@ export const listBenchmarkRunsInfiniteQueryKey = (
 export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkRunsData>) =>
 	infiniteQueryOptions<
 		ListBenchmarkRunsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ListBenchmarkRunsError>,
 		InfiniteData<ListBenchmarkRunsResponse>,
 		QueryKey<Options<ListBenchmarkRunsData>>,
 		number | Pick<QueryKey<Options<ListBenchmarkRunsData>>[0], "body" | "headers" | "path" | "query">
@@ -6527,10 +6665,10 @@ export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkR
 
 export const startBenchmarkRunMutation = (
 	options?: Partial<Options<StartBenchmarkRunData>>,
-): UseMutationOptions<StartBenchmarkRunResponse, AxiosError<DefaultError>, Options<StartBenchmarkRunData>> => {
+): UseMutationOptions<StartBenchmarkRunResponse, AxiosError<StartBenchmarkRunError>, Options<StartBenchmarkRunData>> => {
 	const mutationOptions: UseMutationOptions<
 		StartBenchmarkRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<StartBenchmarkRunError>,
 		Options<StartBenchmarkRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6547,10 +6685,10 @@ export const startBenchmarkRunMutation = (
 
 export const deleteBenchmarkRunMutation = (
 	options?: Partial<Options<DeleteBenchmarkRunData>>,
-): UseMutationOptions<DeleteBenchmarkRunResponse, AxiosError<DefaultError>, Options<DeleteBenchmarkRunData>> => {
+): UseMutationOptions<DeleteBenchmarkRunResponse, AxiosError<DeleteBenchmarkRunError>, Options<DeleteBenchmarkRunData>> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteBenchmarkRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteBenchmarkRunError>,
 		Options<DeleteBenchmarkRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6570,7 +6708,7 @@ export const getBenchmarkRunQueryKey = (options: Options<GetBenchmarkRunData>) =
 export const getBenchmarkRunOptions = (options: Options<GetBenchmarkRunData>) =>
 	queryOptions<
 		GetBenchmarkRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<GetBenchmarkRunError>,
 		GetBenchmarkRunResponse,
 		ReturnType<typeof getBenchmarkRunQueryKey>
 	>({
@@ -6588,10 +6726,10 @@ export const getBenchmarkRunOptions = (options: Options<GetBenchmarkRunData>) =>
 
 export const cancelBenchmarkRunMutation = (
 	options?: Partial<Options<CancelBenchmarkRunData>>,
-): UseMutationOptions<CancelBenchmarkRunResponse, AxiosError<DefaultError>, Options<CancelBenchmarkRunData>> => {
+): UseMutationOptions<CancelBenchmarkRunResponse, AxiosError<CancelBenchmarkRunError>, Options<CancelBenchmarkRunData>> => {
 	const mutationOptions: UseMutationOptions<
 		CancelBenchmarkRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CancelBenchmarkRunError>,
 		Options<CancelBenchmarkRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -6608,10 +6746,10 @@ export const cancelBenchmarkRunMutation = (
 
 export const scoreBenchmarkRunMutation = (
 	options?: Partial<Options<ScoreBenchmarkRunData>>,
-): UseMutationOptions<ScoreBenchmarkRunResponse, AxiosError<DefaultError>, Options<ScoreBenchmarkRunData>> => {
+): UseMutationOptions<ScoreBenchmarkRunResponse, AxiosError<ScoreBenchmarkRunError>, Options<ScoreBenchmarkRunData>> => {
 	const mutationOptions: UseMutationOptions<
 		ScoreBenchmarkRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ScoreBenchmarkRunError>,
 		Options<ScoreBenchmarkRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -7206,6 +7344,26 @@ export const updatePlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updatePlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const draftAgentDefinitionMutation = (
+	options?: Partial<Options<DraftAgentDefinitionData>>,
+): UseMutationOptions<DraftAgentDefinitionResponse, AxiosError<DraftAgentDefinitionError>, Options<DraftAgentDefinitionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DraftAgentDefinitionResponse,
+		AxiosError<DraftAgentDefinitionError>,
+		Options<DraftAgentDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await draftAgentDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,

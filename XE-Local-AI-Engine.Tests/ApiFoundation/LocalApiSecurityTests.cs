@@ -6,10 +6,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class LocalApiSecurityTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task LocalApi_WhenTokenIsMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsJsonAsync("/api/local/v1/diagnostics/validation-probe",
@@ -24,7 +27,7 @@ public sealed class LocalApiSecurityTests
     [Test]
     public async Task LocalApi_WhenTokenIsInvalid_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         using var request = CreateProbeRequest();
         request.Headers.Add("Authorization", "Bearer invalid-token");
@@ -37,7 +40,7 @@ public sealed class LocalApiSecurityTests
     [Test]
     public async Task LocalApi_WhenHostIsUnsafe_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         using var request = CreateProbeRequest(factory);
         request.Headers.Host = "evil.example";
@@ -50,7 +53,7 @@ public sealed class LocalApiSecurityTests
     [Test]
     public async Task LocalApi_WhenOriginIsUnsafe_ReturnsForbidden()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         using var request = CreateProbeRequest(factory);
         request.Headers.Add("Origin", "https://evil.example");
@@ -63,7 +66,7 @@ public sealed class LocalApiSecurityTests
     [Test]
     public async Task LocalApi_WhenTokenAndSameOriginAreValid_AllowsRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         using var request = CreateProbeRequest(factory);
         request.Headers.Add("Origin", "http://localhost");

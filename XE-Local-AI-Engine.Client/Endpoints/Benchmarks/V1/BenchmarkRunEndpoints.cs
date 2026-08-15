@@ -16,6 +16,8 @@ public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
     {
         Get(LocalApiRoutes.Benchmarks.ProjectRuns);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(ListBenchmarkRunsRequest req, CancellationToken ct)
@@ -55,7 +57,11 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
     {
         Post(LocalApiRoutes.Benchmarks.ProjectRuns);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.Produces<BenchmarkRunDetailResponse>(StatusCodes.Status202Accepted));
+        Description(builder => builder.Produces<BenchmarkRunDetailResponse>(StatusCodes.Status202Accepted)
+                                      .ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict)
+                                      .ProducesProblem(StatusCodes.Status422UnprocessableEntity));
     }
 
     public override async Task HandleAsync(StartBenchmarkRunRequest req, CancellationToken ct)
@@ -78,11 +84,9 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
         }
         catch (NotSupportedException exception)
         {
-            await Send.ResultAsync(Results.UnprocessableEntity(new BenchmarkErrorResponse
-            {
-                Code = BenchmarkErrorCode.UnsupportedSnapshot,
-                Message = exception.Message
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Problem(StatusCodes.Status422UnprocessableEntity,
+                BenchmarkErrorCode.UnsupportedSnapshot,
+                exception.Message)).ConfigureAwait(false);
         }
     }
 }
@@ -96,6 +100,7 @@ public sealed class GetBenchmarkRunEndpoint(IBenchmarkStore store)
     {
         Get(LocalApiRoutes.Benchmarks.RunById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(BenchmarkRunRouteRequest req, CancellationToken ct)
@@ -120,6 +125,8 @@ public sealed class DeleteBenchmarkRunEndpoint(IBenchmarkStore store)
     {
         Delete(LocalApiRoutes.Benchmarks.RunById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DeleteBenchmarkRunRequest req, CancellationToken ct)
@@ -145,6 +152,8 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
     {
         Post(LocalApiRoutes.Benchmarks.RunCancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancelBenchmarkRunRequest req, CancellationToken ct)
@@ -170,6 +179,9 @@ public sealed class ScoreBenchmarkRunEndpoint(IBenchmarkStore store)
     {
         Put(LocalApiRoutes.Benchmarks.RunScore);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ScoreBenchmarkRunRequest req, CancellationToken ct)
