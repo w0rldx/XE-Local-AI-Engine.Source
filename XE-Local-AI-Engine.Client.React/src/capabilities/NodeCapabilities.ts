@@ -35,9 +35,9 @@ export interface NodeCapabilityConfig {
 	readonly modelManagement: boolean;
 	readonly invocationMonitor: boolean;
 	readonly benchmarks: boolean;
-	// Training group (dataset generation, training runs, comparisons). Dark-shipped: the endpoints ship registered and
-	// Operator-gated, but the nav group stays hidden until the epic is verified end to end. Compile-time flag only —
-	// it is not a server-side kill switch.
+	// Training group (dataset generation, training runs, comparisons). Endpoints ship registered and Operator-gated
+	// regardless of this flag; it only shows or hides the nav group and its routes. Compile-time flag only — it is not
+	// a server-side kill switch.
 	readonly training: boolean;
 	readonly agentManagement: boolean;
 	readonly mcpServers: boolean;
@@ -103,8 +103,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	modelManagement: true,
 	invocationMonitor: true,
 	benchmarks: true,
-	// Dark-ship (plan section 14): flip to true once the training epic is verified on this box.
-	training: false,
+	// Training group (datasets, runs, comparisons): live-verified end to end on this box 2026-08-15 (plan section 14).
+	training: true,
 	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,
 	// MCP server registration surface (dynamic tool-catalog). On by default; node-local SQLite-backed CRUD. Registered

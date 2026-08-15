@@ -34,6 +34,7 @@ describe("navigationLinks", () => {
 			"automation",
 			"preview",
 			"benchmarks",
+			"training",
 			"invocations",
 			"usage",
 		]);
@@ -57,18 +58,19 @@ describe("navigationLinks", () => {
 			"automation",
 			"preview",
 			"benchmarks",
+			"training",
 			"invocations",
 			"usage",
 		]);
 	});
 
-	it("dark-ships the Training group: hidden by default, a Datasets-only group when the capability is on", async () => {
-		// plan section 14: the training endpoints ship registered and Operator-gated, but the nav group is compiled off
-		// until the epic is verified, so the default id list above must not contain it.
-		expect(navigationLinks.some((link) => link.id === "training")).toBe(false);
+	it("ships the Training group on by default and hides it whole when the capability is compiled off", async () => {
+		// plan section 14: the group was dark-shipped until the epic was live-verified (2026-08-15); it is on by default
+		// now, and the compile-time capability still removes the whole group rather than leaving an empty one.
+		const { navigationLinks: hiddenLinks } = await mockCapabilities({ training: false });
+		expect(hiddenLinks.some((link) => link.id === "training")).toBe(false);
 
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ training: true });
-		const training = gatedLinks.find((link) => link.id === "training");
+		const training = navigationLinks.find((link) => link.id === "training");
 
 		expect(training?.to).toBeUndefined();
 		expect(training?.links?.map((nestedLink) => nestedLink.to)).toEqual([
