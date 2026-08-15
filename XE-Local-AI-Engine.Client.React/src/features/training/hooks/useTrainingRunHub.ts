@@ -5,7 +5,8 @@ import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import type { TrainingRunLiveProgress } from "@/features/training/models/TrainingModels";
 import { applyRunEvent, emptyTrainingRunProgress, trainingRunEventSchema, trainingRunReplayResetSchema } from "@/features/training/models/TrainingModels";
 
-export const trainingRunHubEvents = {
+// Module-private: nothing outside this hook subscribes to the run stream.
+const trainingRunHubEvents = {
 	event: "trainingRun.event",
 	replayReset: "trainingRun.replayReset",
 } as const;
