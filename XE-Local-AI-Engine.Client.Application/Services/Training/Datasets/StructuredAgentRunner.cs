@@ -45,8 +45,27 @@ public sealed class StructuredAgentRunner(
     ILoggerFactory loggerFactory,
     IServiceProvider serviceProvider) : IStructuredAgentRunner
 {
+    private readonly TimeSpan _turnTimeout = TurnTimeout;
+
+    /// <summary>Test seam: the same runner with a caller-chosen per-turn deadline.</summary>
+    internal StructuredAgentRunner(IModelCapabilityResolver capabilityResolver,
+        ILoggerFactory loggerFactory,
+        IServiceProvider serviceProvider,
+        TimeSpan turnTimeout) : this(capabilityResolver, loggerFactory, serviceProvider)
+    {
+        _turnTimeout = turnTimeout;
+    }
+
     private const string AgentName = "dataset-teacher";
     private const string AgentDescription = "Training dataset generation teacher.";
+
+    /// <summary>
+    ///     Upper bound for one teacher turn. Live-found (2026-08-15): a non-streaming completion to llama-server that
+    ///     never came back parked the whole generation queue with the server reporting every slot idle — nothing
+    ///     upstream carries a deadline, so this seam owns it. A turn that overruns is that sample's failure, never
+    ///     the run's, and never a wedge.
+    /// </summary>
+    internal static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(5);
 
     private readonly IModelCapabilityResolver _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
     private readonly ILoggerFactory _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -107,17 +126,25 @@ public sealed class StructuredAgentRunner(
             chatOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(request.ResponseSchema, "teacher_sample", "one generated training sample");
         }
 
+        using var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        turnCancellation.CancelAfter(_turnTimeout);
         try
         {
             var response = await agent.RunAsync(seed, session: null, new ChatClientAgentRunOptions
                                      {
                                          ChatOptions = chatOptions
-                                     }, cancellationToken)
+                                     }, turnCancellation.Token)
                                      .ConfigureAwait(false);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)
                 ? new StructuredAgentResult(Success: false, string.Empty, "The teacher returned an empty completion.")
                 : new StructuredAgentResult(Success: true, text, null);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The turn deadline fired, not the caller: a per-sample failure with a reason the operator can act on.
+            return new StructuredAgentResult(Success: false, string.Empty,
+                $"The teacher did not answer within {_turnTimeout.TotalSeconds:0} seconds.");
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not TrainingValidationException)
         {
