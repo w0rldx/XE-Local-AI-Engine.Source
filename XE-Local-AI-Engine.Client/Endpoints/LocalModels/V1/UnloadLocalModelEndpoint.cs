@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 /// <summary>
 ///     Gracefully unloads a model from the runtime's memory (keep_alive=0). An in-flight generation completes before the
 ///     model is evicted, so eject never interrupts a running turn. Idempotent: unloading a model that is not loaded still
-///     reports success. The model name is carried in the route, so the body is empty — the client posts <c>{}</c>
-///     (FastEndpoints 415s a truly empty route-only POST body).
+///     reports success. The model name is carried in the route, so the client sends no body at all — see
+///     <see cref="Configure" /> for the Accepts override that keeps a body-less POST out of 415.
 /// </summary>
 public sealed class UnloadLocalModelEndpoint(
     IOllamaModelService modelService,
@@ -23,6 +23,11 @@ public sealed class UnloadLocalModelEndpoint(
     {
         Post(LocalApiRoutes.LocalModels.Unload);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST: the model name binds from the route, so a well-behaved client sends no body — and therefore
+        // no Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
+        // with 415 when the header is absent. Overriding Accepts lets the body-less eject request through. (Sending a
+        // dummy "{}" instead is NOT an option: the generated client's requestValidator types this body as `never`.)
+        Description(x => x.Accepts<UnloadLocalModelRequest>());
     }
 
     public override async Task HandleAsync(UnloadLocalModelRequest req, CancellationToken ct)
