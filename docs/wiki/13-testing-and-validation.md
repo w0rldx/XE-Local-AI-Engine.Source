@@ -42,10 +42,10 @@ These suites landed with the 2026-06-24…27 subsystems and are confirmed presen
 
 ### `XE-Local-AI-Engine.Tests` — backend integration
 
-This is the heaviest suite and the heart of validation. `TestingWebAppFactory.cs` spins up the real node host in-process:
+This is the heaviest suite and the heart of validation. `TestServerWebAppFactory.cs` spins up the real node host in-process:
 
-- It is a `WebApplicationFactory<Program>` that runs under environment `Testing`, serialises host startup behind the static `TestingWebAppFactory.HostStartupLock` (TUnit runs classes in parallel; the host bootstrap is not re-entrant), and exposes `CreateNodeAccessToken()` / `AddNodeBearerToken(request)` helpers to mint an admin JWT for the loopback admin API.
-- Unless `RUN_LOCAL_INTEGRATION=true`, `TestingWebAppFactory` starts a `FakeOllamaServer` seeded with `["qwen3.5:0.8b", "qwen3-embedding:0.6b"]` and wires the host's provider HTTP base to it — so the suite exercises the real provider/abstraction seam with a fake backend instead of a live model. Setting `RUN_LOCAL_INTEGRATION=true` opts into a real local runtime for fidelity runs.
+- It builds the app through `Program.CreateAppAsync` and serves it on `TestServer` — deliberately **not** `WebApplicationFactory<Program>`, whose entry-point resolution leaks every built host for the process lifetime (docs/agent-knowledge.md §1). It runs under environment `Testing`, serialises host startup behind the static `TestServerWebAppFactory.HostStartupLock` (TUnit runs classes in parallel; the host bootstrap is not re-entrant), and exposes `CreateNodeAccessToken()` / `AddNodeBearerToken(request)` helpers to mint an admin JWT for the loopback admin API. Per-test host tweaks go through the `ConfigureAdditionalTestServices` / `AdditionalConfiguration` / `EnableDevelopmentMode` / `SkipDefaultBaseUrlOverride` init-properties (there is no `WithWebHostBuilder`).
+- Unless `RUN_LOCAL_INTEGRATION=true`, `TestServerWebAppFactory` starts a `FakeOllamaServer` seeded with `["qwen3.5:0.8b", "qwen3-embedding:0.6b"]` and wires the host's provider HTTP base to it — so the suite exercises the real provider/abstraction seam with a fake backend instead of a live model. Setting `RUN_LOCAL_INTEGRATION=true` opts into a real local runtime for fidelity runs.
 - `Fixtures/FakeWorkerNodeFixture.cs` plus the recorded-events helpers stand in for the platform side of the WorkerHub connection.
 
 `Integration/ApplicationStartupTests.cs` and `Integration/EmbeddingSmokeTests.cs` are the boot/smoke anchors — if these fail, nothing else is trustworthy.

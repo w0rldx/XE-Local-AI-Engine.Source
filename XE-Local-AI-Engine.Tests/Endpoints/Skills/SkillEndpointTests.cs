@@ -32,7 +32,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task List_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
@@ -44,7 +44,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Create_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute)
@@ -59,7 +59,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Get_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ItemRoute(Guid.NewGuid()));
@@ -71,7 +71,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Update_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Put, ItemRoute(Guid.NewGuid()))
@@ -92,7 +92,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Delete_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid()));
@@ -104,7 +104,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Create_WhenValid_Returns201WithResolvableLocationAndBody()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, ListRoute)
@@ -144,7 +144,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Get_WhenMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ItemRoute(Guid.NewGuid()));
@@ -157,7 +157,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task List_OmitsBodyAndReturnsItemsWrapper()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await CreateSkillAsync(factory, client).ConfigureAwait(false);
@@ -182,7 +182,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Update_WhenValid_RoundTripsAndBumpsVersionOnBodyChange()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await CreateSkillAsync(factory, client).ConfigureAwait(false);
@@ -212,7 +212,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Update_WhenMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Put, ItemRoute(Guid.NewGuid()))
@@ -234,7 +234,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Create_WhenNameInvalid_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // Leading dash is rejected by the MAF-safe skill-name regex ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$.
@@ -256,7 +256,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Create_WhenBodyBlank_ReturnsBadRequest()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute)
@@ -277,7 +277,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Delete_WhenExisting_ReturnsNoContentThenGetIs404()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var skillId = await CreateSkillAsync(factory, client).ConfigureAwait(false);
@@ -298,7 +298,7 @@ public sealed class SkillEndpointTests
     [Test]
     public async Task Delete_WhenMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid()));
@@ -308,7 +308,7 @@ public sealed class SkillEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task<Guid> CreateSkillAsync(TestingWebAppFactory factory, HttpClient client, string name = "code-reviewer")
+    private static async Task<Guid> CreateSkillAsync(TestServerWebAppFactory factory, HttpClient client, string name = "code-reviewer")
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute)
         {

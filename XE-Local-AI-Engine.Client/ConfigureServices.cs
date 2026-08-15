@@ -382,7 +382,16 @@ public static class ConfigureServices
         // Production limit is 10/min per client IP. Test environments drive many auth calls from a
         // single loopback IP (one partition), so relax the cap there to keep E2E/integration runs
         // deterministic without weakening the production control.
-        var authPermitLimit = builder.Environment.IsEnvironment("Testing") ? 10_000 : 10;
+        //
+        // All three permit limits are computed HERE, outside the AddRateLimiter lambda, so its closure captures three
+        // ints and never `builder`. This is load-bearing for test hosts: the rate-limiting middleware's partitioned
+        // limiter runs a replenishment timer that is never disposed with the host, and a closure over `builder` let
+        // that immortal timer root the builder -> ServiceCollection -> the entire disposed host graph (measured
+        // ~20 MB per test host; gcroot evidence in docs/agent-knowledge.md §1).
+        var isTestingEnvironment = builder.Environment.IsEnvironment("Testing");
+        var authPermitLimit = isTestingEnvironment ? 10_000 : 10;
+        var mcpPermitLimit = isTestingEnvironment ? 100_000 : 120;
+        var proxyPermitLimit = isTestingEnvironment ? 100_000 : 6_000;
         builder.Services.AddRateLimiter(options =>
         {
             options.AddPolicy(NodeAuthRateLimits.AuthPolicy, httpContext =>
@@ -400,7 +409,6 @@ public static class ConfigureServices
             // than an unbounded load on the node. Sized for real MCP traffic (a connect does tools/list, then a call per
             // delegated task), which is why it is 120/min rather than the auth endpoints' 10/min. Testing gets the same
             // relaxed treatment as AuthPolicy so integration/E2E runs from one loopback partition stay deterministic.
-            var mcpPermitLimit = builder.Environment.IsEnvironment("Testing") ? 100_000 : 120;
             options.AddPolicy(NodeAuthRateLimits.McpPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions
@@ -417,7 +425,6 @@ public static class ConfigureServices
             // so the cap is sized for that (100/s) and exists only to bound a runaway/misbehaving local client; real
             // per-model compute is already bounded by the loaded-cap and inference leases. Testing gets the same relaxed
             // treatment so integration runs from one loopback partition stay deterministic.
-            var proxyPermitLimit = builder.Environment.IsEnvironment("Testing") ? 100_000 : 6_000;
             options.AddPolicy(NodeAuthRateLimits.LocalModelProxyPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions

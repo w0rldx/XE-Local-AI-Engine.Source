@@ -458,3 +458,4 @@ XE-Local-AI-Engine.Client/training/
 # universal harness at .agent-harness. Kept locally, not shipped/open-sourced.
 /.opencode/
 /opencode.jsonc
+unsloth_compiled_cache/

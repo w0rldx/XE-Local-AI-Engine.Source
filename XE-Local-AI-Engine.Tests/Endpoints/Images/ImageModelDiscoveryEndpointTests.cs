@@ -23,7 +23,7 @@ public sealed class ImageModelDiscoveryEndpointTests
     [Test]
     public async Task CatalogBrowseAndInspect_RequireOperator()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         foreach (var route in new[]
@@ -41,7 +41,7 @@ public sealed class ImageModelDiscoveryEndpointTests
     [Test]
     public async Task Catalog_ReturnsTheBundledEntries_WithAFitVerdictAndAnInstalledFlag()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/catalog");
@@ -199,9 +199,9 @@ public sealed class ImageModelDiscoveryEndpointTests
         AssertEx.Equal(expected: 0, body.GetProperty("files").GetArrayLength());
     }
 
-    private static TestingWebAppFactory FactoryWithDiscovery(IImageModelDiscovery discovery, IImageModelRegistry? registry)
+    private static TestServerWebAppFactory FactoryWithDiscovery(IImageModelDiscovery discovery, IImageModelRegistry? registry)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -216,7 +216,7 @@ public sealed class ImageModelDiscoveryEndpointTests
         };
     }
 
-    private static HttpRequestMessage Authorized(TestingWebAppFactory factory, string route)
+    private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, string route)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/{route}");
         factory.AddNodeBearerToken(request);

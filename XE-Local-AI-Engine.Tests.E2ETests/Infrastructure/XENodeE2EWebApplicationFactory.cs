@@ -31,7 +31,7 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 /// <summary>
 ///     Boots the XE worker-node host for browser-driven E2E tests on a real, pre-chosen
 ///     loopback port, serving the freshly built React dist same-origin from a temp web root.
-///     Config block mirrors <c>XE-Local-AI-Engine.Tests.TestingWebAppFactory</c> (Testing env,
+///     Config block mirrors <c>XE-Local-AI-Engine.Tests.TestServerWebAppFactory</c> (Testing env,
 ///     temp-file SQLite + key, local model provider + FakeOllama, no hosted services, unpaired
 ///     token store). Unlike the unit factory this binds a real socket (so a browser can connect)
 ///     and uses the local <see cref="StubTokenStore" /> instead of the shared unit-test mock.
@@ -307,7 +307,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
-        // Serialize host creation across parallel tests (matches TestingWebAppFactory).
+        // Serialize host creation across parallel tests (matches TestServerWebAppFactory).
         HostStartupLock.Wait();
         try
         {
@@ -435,7 +435,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
                 // HttpClient at resolve time (e.g. the Hugging Face discovery/download clients reached by the model-fit
                 // advisor endpoints, instantiated by FastEndpoints at MapFastEndpoints/startup) can be built. No real
                 // request is made in these E2E flows — the consuming endpoints catch transport failures and degrade —
-                // so this never performs network I/O. Mirrors TestingWebAppFactory's unit-side factory.
+                // so this never performs network I/O. Mirrors TestServerWebAppFactory's unit-side factory.
                 var factory = Substitute.For<IHttpClientFactory>();
                 factory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
                 return factory;

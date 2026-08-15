@@ -16,7 +16,7 @@ public sealed class NodeLoginLockoutIntegrationTests
     [Test]
     public async Task Login_WhenPasswordIsWrong_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SetupAsync(client).ConfigureAwait(false);
@@ -29,7 +29,7 @@ public sealed class NodeLoginLockoutIntegrationTests
     [Test]
     public async Task Login_WhenFailedAttemptsReachThreshold_LocksAccountSoCorrectPasswordIsRejected()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SetupAsync(client).ConfigureAwait(false);
@@ -48,7 +48,7 @@ public sealed class NodeLoginLockoutIntegrationTests
     [Test]
     public async Task Login_WhenCorrectPasswordBeforeThreshold_Succeeds()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SetupAsync(client).ConfigureAwait(false);

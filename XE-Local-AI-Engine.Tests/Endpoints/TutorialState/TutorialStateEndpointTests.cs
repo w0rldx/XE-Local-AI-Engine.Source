@@ -26,7 +26,7 @@ public sealed class TutorialStateEndpointTests
     [Test]
     public async Task PutThenGet_RoundTripsEntry_AndMergePreservesOtherKeys()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SeedAdminUserAsync(factory).ConfigureAwait(false);
@@ -50,7 +50,7 @@ public sealed class TutorialStateEndpointTests
     [Test]
     public async Task Put_ReUpsertingSameKey_ReplacesThatEntryInPlace()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SeedAdminUserAsync(factory).ConfigureAwait(false);
@@ -67,7 +67,7 @@ public sealed class TutorialStateEndpointTests
     [Test]
     public async Task Put_SkippedAfterCompleted_PreservesCompleted()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SeedAdminUserAsync(factory).ConfigureAwait(false);
@@ -84,7 +84,7 @@ public sealed class TutorialStateEndpointTests
     [Test]
     public async Task Put_ConcurrentDistinctKeys_PreservesEveryEntry()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         await SeedAdminUserAsync(factory).ConfigureAwait(false);
@@ -107,7 +107,7 @@ public sealed class TutorialStateEndpointTests
     [Test]
     public async Task Put_WhenUnauthenticated_IsRejected()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // No bearer token added — the Operator policy must reject the request.
@@ -127,9 +127,9 @@ public sealed class TutorialStateEndpointTests
     }
 
     // The node bearer token is minted for the single-admin user id "node-admin-test" (see
-    // TestingWebAppFactory.CreateNodeAccessToken). The tutorial-state service resolves that user via UserManager, so the
+    // TestServerWebAppFactory.CreateNodeAccessToken). The tutorial-state service resolves that user via UserManager, so the
     // Identity row must exist for an authenticated write to persist — seed it to match the token exactly.
-    private static async Task SeedAdminUserAsync(TestingWebAppFactory factory)
+    private static async Task SeedAdminUserAsync(TestServerWebAppFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
@@ -152,13 +152,13 @@ public sealed class TutorialStateEndpointTests
         AssertEx.True(result.Succeeded);
 
         // CreateAsync rotates the security stamp to a random value; pin it to the fixed stamp the synthetic bearer token
-        // carries (TestingWebAppFactory.CreateNodeAccessToken) so the JWT validator's fail-closed stamp check matches.
-        user.SecurityStamp = TestingWebAppFactory.NodeAdminTestSecurityStamp;
+        // carries (TestServerWebAppFactory.CreateNodeAccessToken) so the JWT validator's fail-closed stamp check matches.
+        user.SecurityStamp = TestServerWebAppFactory.NodeAdminTestSecurityStamp;
         var stampResult = await userManager.UpdateAsync(user).ConfigureAwait(false);
         AssertEx.True(stampResult.Succeeded);
     }
 
-    private static async Task SaveAsync(TestingWebAppFactory factory, HttpClient client, string key, string status)
+    private static async Task SaveAsync(TestServerWebAppFactory factory, HttpClient client, string key, string status)
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, Route)
         {
@@ -175,7 +175,7 @@ public sealed class TutorialStateEndpointTests
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    private static async Task<TutorialStateResponseDto> GetAsync(TestingWebAppFactory factory, HttpClient client)
+    private static async Task<TutorialStateResponseDto> GetAsync(TestServerWebAppFactory factory, HttpClient client)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, Route);
         factory.AddNodeBearerToken(request);

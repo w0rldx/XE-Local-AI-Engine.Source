@@ -130,9 +130,9 @@ public sealed class ConnectionEndpointTests
         AssertEx.Equal("WorkerTokenExpired", document.RootElement.GetProperty("conflictType").GetString());
     }
 
-    private static TestingWebAppFactory CreateFactory(MockTokenStore tokenStore, ConnectionState connectionState, IWorkerHubConnection hubConnection)
+    private static TestServerWebAppFactory CreateFactory(MockTokenStore tokenStore, ConnectionState connectionState, IWorkerHubConnection hubConnection)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -146,7 +146,7 @@ public sealed class ConnectionEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

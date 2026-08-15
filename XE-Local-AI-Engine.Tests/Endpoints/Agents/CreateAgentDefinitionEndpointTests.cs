@@ -15,7 +15,7 @@ public sealed class CreateAgentDefinitionEndpointTests
     [Test]
     public async Task Create_WhenValid_Returns201WithResolvableLocation()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/agents")
