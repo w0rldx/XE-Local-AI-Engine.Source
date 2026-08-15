@@ -20,12 +20,6 @@ public enum BenchmarkErrorCode
     UnsupportedSnapshot
 }
 
-public sealed class BenchmarkErrorResponse
-{
-    public required BenchmarkErrorCode Code { get; init; }
-    public required string Message { get; init; }
-}
-
 public class BenchmarkProjectMutationRequest
 {
     public string Name { get; init; } = string.Empty;
