@@ -343,6 +343,7 @@ import type {
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
 	ConnectConnectionData,
+	ConnectConnectionError,
 	ConnectConnectionResponse,
 	ContinuePreviewRunData,
 	ContinuePreviewRunError,
@@ -402,6 +403,7 @@ import type {
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
 	DeleteImageModelData,
+	DeleteImageModelError,
 	DeleteImageModelResponse,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentResponse,
@@ -748,6 +750,7 @@ import type {
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionResponse,
 	RemoveCudaBuildData,
+	RemoveCudaBuildError,
 	RemoveCudaBuildResponse,
 	RemoveDevelopmentTemplateData,
 	RemoveDevelopmentTemplateResponse,
@@ -807,6 +810,7 @@ import type {
 	StartBenchmarkRunError,
 	StartBenchmarkRunResponse,
 	StartCudaBuildData,
+	StartCudaBuildError,
 	StartCudaBuildResponse,
 	StartDevelopmentNextActionData,
 	StartDevelopmentNextActionError,
@@ -2562,8 +2566,12 @@ export const refreshRecommendationsMutation = (
 
 export const removeCudaBuildMutation = (
 	options?: Partial<Options<RemoveCudaBuildData>>,
-): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<DefaultError>, Options<RemoveCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<RemoveCudaBuildResponse, AxiosError<DefaultError>, Options<RemoveCudaBuildData>> = {
+): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<RemoveCudaBuildError>, Options<RemoveCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveCudaBuildResponse,
+		AxiosError<RemoveCudaBuildError>,
+		Options<RemoveCudaBuildData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await removeCudaBuild({
 				...options,
@@ -2602,8 +2610,12 @@ export const removeLlamaCppSourceBuildMutation = (
 
 export const startCudaBuildMutation = (
 	options?: Partial<Options<StartCudaBuildData>>,
-): UseMutationOptions<StartCudaBuildResponse, AxiosError<DefaultError>, Options<StartCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<StartCudaBuildResponse, AxiosError<DefaultError>, Options<StartCudaBuildData>> = {
+): UseMutationOptions<StartCudaBuildResponse, AxiosError<StartCudaBuildError>, Options<StartCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartCudaBuildResponse,
+		AxiosError<StartCudaBuildError>,
+		Options<StartCudaBuildData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startCudaBuild({
 				...options,
@@ -3957,8 +3969,12 @@ export const createImageJobMutation = (
 
 export const deleteImageModelMutation = (
 	options?: Partial<Options<DeleteImageModelData>>,
-): UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> => {
-	const mutationOptions: UseMutationOptions<DeleteImageModelResponse, AxiosError<DefaultError>, Options<DeleteImageModelData>> = {
+): UseMutationOptions<DeleteImageModelResponse, AxiosError<DeleteImageModelError>, Options<DeleteImageModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteImageModelResponse,
+		AxiosError<DeleteImageModelError>,
+		Options<DeleteImageModelData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await deleteImageModel({
 				...options,
@@ -4830,10 +4846,10 @@ export const validateExecutableMutation = (
 
 export const connectConnectionMutation = (
 	options?: Partial<Options<ConnectConnectionData>>,
-): UseMutationOptions<ConnectConnectionResponse, AxiosError<DefaultError>, Options<ConnectConnectionData>> => {
+): UseMutationOptions<ConnectConnectionResponse, AxiosError<ConnectConnectionError>, Options<ConnectConnectionData>> => {
 	const mutationOptions: UseMutationOptions<
 		ConnectConnectionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ConnectConnectionError>,
 		Options<ConnectConnectionData>
 	> = {
 		mutationFn: async (fnOptions) => {

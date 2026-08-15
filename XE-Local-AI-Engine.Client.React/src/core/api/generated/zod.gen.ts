@@ -42,6 +42,39 @@ export const zFastEndpointsProblemDetails = z.object({
 	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
 });
 
+export const zMicrosoftAspNetCoreMvcProblemDetails = z.object({
+	type: z.string().nullish(),
+	title: z.string().nullish(),
+	status: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	detail: z.string().nullish(),
+	instance: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails = zMicrosoftAspNetCoreMvcProblemDetails.and(
+	z.object({
+		conflictType: z.string().nullish(),
+		maxConcurrentRuns: z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+			.nullish(),
+		distinctModelCount: z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+			.nullish(),
+		maxLoadedProcesses: z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+			.nullish(),
+	}),
+);
+
 export const zXeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = z.object({
@@ -1470,6 +1503,16 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequ
 		.nullish(),
 	quantOverride: z.string().nullish(),
 	ctxTarget: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	runningProcessCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
