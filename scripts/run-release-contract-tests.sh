@@ -3,7 +3,14 @@
 set -uo pipefail
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
-test_roots=("$repo_root/scripts/tests" "$repo_root/scripts/compliance/tests")
+# scripts/performance/tests uses the unittest-discovery naming (test_*.py) rather than this
+# runner's *.test.py convention, so both patterns are discovered below. Its third file,
+# capture_windows_vram.Tests.ps1, is Pester and runs from scripts/lint-release-scripts.sh instead.
+test_roots=(
+  "$repo_root/scripts/tests"
+  "$repo_root/scripts/compliance/tests"
+  "$repo_root/scripts/performance/tests"
+)
 
 command -v python3 >/dev/null 2>&1 || {
   echo "ERROR: python3 is required for release contract tests." >&2
@@ -13,7 +20,8 @@ command -v python3 >/dev/null 2>&1 || {
 tests=()
 while IFS= read -r test_file; do
   tests+=("$test_file")
-done < <(find "${test_roots[@]}" -maxdepth 1 -type f \( -name '*.test.sh' -o -name '*.test.py' \) -print | LC_ALL=C sort)
+done < <(find "${test_roots[@]}" -maxdepth 1 -type f \
+  \( -name '*.test.sh' -o -name '*.test.py' -o -name 'test_*.py' \) -print | LC_ALL=C sort)
 
 if [[ "${#tests[@]}" -eq 0 ]]; then
   echo "ERROR: release contract test discovery found zero tests." >&2
