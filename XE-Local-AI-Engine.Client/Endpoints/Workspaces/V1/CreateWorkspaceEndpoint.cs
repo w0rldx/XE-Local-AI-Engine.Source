@@ -16,7 +16,10 @@ public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFold
     {
         Post(LocalApiRoutes.Workspaces.Collection);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static descriptor => descriptor.AutoTagOverride("Workspaces"));
+        Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                                   .Produces(StatusCodes.Status404NotFound)
+                                                   .ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                                   .AutoTagOverride("Workspaces"));
     }
 
     public override async Task HandleAsync(CreateWorkspaceRequest req, CancellationToken ct)

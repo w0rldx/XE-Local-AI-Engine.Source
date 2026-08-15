@@ -13,6 +13,35 @@ export const zXeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest =
 	hostPath: z.string().nullish(),
 });
 
+/**
+ * the error details object
+ */
+export const zFastEndpointsProblemDetailsError = z.object({
+	name: z.string().optional().default("Error or field name"),
+	reason: z.string().optional().default("Error reason"),
+	code: z.string().nullish(),
+	severity: z.string().nullish(),
+});
+
+/**
+ * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
+ * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
+ */
+export const zFastEndpointsProblemDetails = z.object({
+	type: z.string().optional().default("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
+	title: z.string().optional().default("One or more validation errors occurred."),
+	status: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	instance: z.string().optional().default("/api/route"),
+	traceId: z.string().optional().default("0HMPNHL0JHL76:00000001"),
+	detail: z.string().nullish(),
+	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = z.object({
 	code: z.string().optional(),
 	message: z.string(),
@@ -886,35 +915,6 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	allowedVoiceModels: z.array(z.string()).nullish(),
 	defaultVoiceProfile: z.string().nullish(),
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
-});
-
-/**
- * the error details object
- */
-export const zFastEndpointsProblemDetailsError = z.object({
-	name: z.string().optional().default("Error or field name"),
-	reason: z.string().optional().default("Error reason"),
-	code: z.string().nullish(),
-	severity: z.string().nullish(),
-});
-
-/**
- * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
- * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
- */
-export const zFastEndpointsProblemDetails = z.object({
-	type: z.string().optional().default("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
-	title: z.string().optional().default("One or more validation errors occurred."),
-	status: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	instance: z.string().optional().default("/api/route"),
-	traceId: z.string().optional().default("0HMPNHL0JHL76:00000001"),
-	detail: z.string().nullish(),
-	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = z.object({
