@@ -14,6 +14,14 @@ public interface IBenchmarkStore
     Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BenchmarkRunRecord>> ListRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether any benchmark work item is queued or running. The converse of the training-activity check the
+    ///     benchmark queue makes: a training run holds the whole GPU, so it must not start behind benchmark work that is
+    ///     already in flight. It lives here rather than in a separate registry because this store owns the status enum.
+    /// </summary>
+    Task<bool> HasActiveWorkAsync(CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default);
 
