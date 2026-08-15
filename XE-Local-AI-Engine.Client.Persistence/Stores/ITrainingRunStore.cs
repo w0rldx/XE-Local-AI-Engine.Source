@@ -56,7 +56,20 @@ public interface ITrainingRunStore
     ///     them. Attempt is pinned to 1: never retried in place. Idempotent — a second call finds nothing to recover.
     ///     Returns the target ids it moved.
     /// </summary>
+    /// <remarks>
+    ///     Deliberately leaves <see cref="TrainingRunRecord.LaunchReceiptJson" /> alone. A receipt is the ONLY handle
+    ///     the host has on a trainer that outlived it, so clearing one here — before the reaper has proved the process
+    ///     is dead — turns a live orphan into an unidentifiable one holding VRAM forever. The reaper clears each
+    ///     receipt itself (<see cref="SetLaunchReceiptAsync" /> with null) once it has killed or ruled out the process.
+    /// </remarks>
     Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Every run still carrying a launch receipt, unpaged. The startup reaper cannot read receipts off a page of
+    ///     <see cref="ListAsync" />: a live trainer whose run is older than one page of newer runs would fall outside
+    ///     it, and the orphan would never be inspected.
+    /// </summary>
+    Task<IReadOnlyList<TrainingRunLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Moves the run along its non-terminal progression (<c>Preparing</c>, <c>Training</c>, <c>Exporting</c>,
@@ -169,6 +182,9 @@ public sealed record TrainingRunRecord(
     long UpdatedAtUtc,
     TrainingWorkStatus? WorkStatus,
     string? WorkErrorMessage);
+
+/// <summary>One run's recorded launch receipt. Carries the run id because the reaper clears the receipt it acted on.</summary>
+public sealed record TrainingRunLaunchReceipt(Guid RunId, ReadOnlyMemory<byte> LaunchReceiptJson);
 
 public sealed record TrainingRunQuery(int Page, int PageSize, Guid? DatasetId = null, TrainingRunStatus? Status = null);
 
