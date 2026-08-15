@@ -34,6 +34,9 @@ public sealed class RemoveCudaBuildEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.CudaBuildRemove);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+                               .Produces<LlamaCppRuntimeStatusResponse>(StatusCodes.Status200OK)
+                               .Produces<CudaBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -51,8 +54,9 @@ public sealed class RemoveCudaBuildEndpoint(
             return;
         }
 
-        var (removed, runningProcessCount, buildActive) =
-            await TryRemoveAsync(_binaryManager, _processSupervisor, sourceBuildActivity, ct).ConfigureAwait(false);
+        var (removed, runningProcessCount, buildActive) = await LlamaCppPrebuiltRuntimeMutationGuard
+                                                                 .TryRemoveAsync(_processSupervisor, sourceBuildActivity, _binaryManager.RemoveCudaSourceBuildAsync, ct)
+                                                                 .ConfigureAwait(false);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
@@ -72,31 +76,5 @@ public sealed class RemoveCudaBuildEndpoint(
         var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
         var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(_updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
-    }
-
-    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(ILlamaCppBinaryManager binaryManager,
-        ILlamaServerProcessSupervisor processSupervisor,
-        ILlamaCppSourceBuildActivity sourceBuildActivity,
-        CancellationToken ct)
-    {
-        if (LlamaCppPrebuiltRuntimeMutationGuard.IsSourceBuildActive(sourceBuildActivity))
-        {
-            return (false, 0, true);
-        }
-
-        await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
-        if (LlamaCppPrebuiltRuntimeMutationGuard.IsSourceBuildActive(sourceBuildActivity))
-        {
-            return (false, 0, true);
-        }
-
-        var runningProcessCount = processSupervisor.CountRunningProcesses();
-        if (mutationLease is null || runningProcessCount > 0)
-        {
-            return (false, runningProcessCount, false);
-        }
-
-        await binaryManager.RemoveCudaSourceBuildAsync(ct).ConfigureAwait(false);
-        return (true, runningProcessCount, false);
     }
 }

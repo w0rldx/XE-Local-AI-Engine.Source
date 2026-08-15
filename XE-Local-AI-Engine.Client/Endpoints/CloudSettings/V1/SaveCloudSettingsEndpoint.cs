@@ -30,8 +30,18 @@ public sealed class SaveCloudSettingsEndpoint(
         var existing = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
         var existingHeaders = existing?.AzureFoundry?.Headers ?? [];
 
-        if (!ValidateHeadersAndSuffixes(req, existingHeaders))
+        // Reserved / charset / caps / host-suffix validation. Error messages carry the offending header NAME only —
+        // never a value (Locked #6–#9, #14).
+        var headerErrors = CloudSettingsPolicy.ValidateHeadersAndSuffixes(req.Headers.ToPolicyHeaders(),
+            req.AdditionalAllowedHostSuffixes,
+            existingHeaders);
+        if (headerErrors.Count > 0)
         {
+            foreach (var headerError in headerErrors)
+            {
+                AddError(headerError);
+            }
+
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }
@@ -43,7 +53,7 @@ public sealed class SaveCloudSettingsEndpoint(
         // typed on this request or previously stored. Checked here, after the merge resolves whether a secret is
         // actually available, so a fresh/renamed secret-less AuthorizationCode connection gets a clean 400 instead
         // of letting CloudCredentialStore.ValidateConfig throw on save (500) — mirrors the secret-header pattern in
-        // ValidateHeadersAndSuffixes below.
+        // CloudSettingsPolicy.ValidateHeadersAndSuffixes.
         if (RequestsAuthorizationCode(req) && string.IsNullOrWhiteSpace(mergedEntraClientSecret))
         {
             AddError("EntraSignInMethod is 'AuthorizationCode', which requires a client secret (typed on this request or previously stored).");
@@ -55,97 +65,6 @@ public sealed class SaveCloudSettingsEndpoint(
         await _cloudCredentialStore.SaveConfigAsync(config, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
-    }
-
-    // Reserved / charset / caps / host-suffix validation. Error messages carry the offending header NAME only — never a
-    // value (Locked #6–#9, #14). Returns false when any error was added.
-    private bool ValidateHeadersAndSuffixes(SaveCloudSettingsRequest req, IReadOnlyList<StoredAzureFoundryHeader> existingHeaders)
-    {
-        var ok = true;
-
-        void Fail(string message)
-        {
-            AddError(message);
-            ok = false;
-        }
-
-        if (req.Headers.Count > AzureFoundryHeaderRules.MaxHeaderCount)
-        {
-            Fail($"A maximum of {AzureFoundryHeaderRules.MaxHeaderCount} custom headers is allowed.");
-        }
-
-        if (req.AdditionalAllowedHostSuffixes.Count > AzureFoundryHeaderRules.MaxHostSuffixCount)
-        {
-            Fail($"A maximum of {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes is allowed.");
-        }
-
-        // Names of stored headers that are secret, so a fresh/renamed blank secret header (no stored secret to merge
-        // against) is rejected here instead of throwing later in CloudCredentialStore.ValidateConfig (500 -> 400).
-        var storedSecretNames = new HashSet<string>(existingHeaders
-                                                    .Where(static header => header.IsSecret && !string.IsNullOrWhiteSpace(header.Name))
-                                                    .Select(static header => header.Name.Trim()),
-            StringComparer.OrdinalIgnoreCase);
-
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var header in req.Headers)
-        {
-            var name = header.Name?.Trim() ?? string.Empty;
-
-            if (name.Length == 0)
-            {
-                if (!string.IsNullOrWhiteSpace(header.Value) || header.IsSecret)
-                {
-                    Fail("A custom header value was provided without a header name.");
-                }
-
-                continue;
-            }
-
-            if (name.Length > AzureFoundryHeaderRules.MaxHeaderNameLength)
-            {
-                Fail($"Custom header name '{name}' exceeds {AzureFoundryHeaderRules.MaxHeaderNameLength} characters.");
-            }
-            else if (!AzureFoundryHeaderRules.IsValidHeaderName(name))
-            {
-                Fail($"Custom header name '{name}' contains invalid characters.");
-            }
-            else if (AzureFoundryHeaderRules.IsReservedName(name))
-            {
-                Fail($"Custom header name '{name}' is reserved and cannot be set.");
-            }
-            else if (!seenNames.Add(name))
-            {
-                Fail($"Custom header name '{name}' is duplicated.");
-            }
-
-            if ((header.Value?.Length ?? 0) > AzureFoundryHeaderRules.MaxHeaderValueLength)
-            {
-                Fail($"Custom header '{name}' value exceeds {AzureFoundryHeaderRules.MaxHeaderValueLength} characters.");
-            }
-            else if (!AzureFoundryHeaderRules.IsValidHeaderValue(header.Value))
-            {
-                Fail($"Custom header '{name}' value contains invalid control characters.");
-            }
-
-            // A blank secret header only resolves when it merges with a stored secret of the same name (Locked #10/#12,
-            // CloudSettingsHeaderMerge). A fresh or renamed header has nothing to merge against, so reject it here (400)
-            // instead of letting CloudCredentialStore.ValidateConfig throw on save (500).
-            if (header.IsSecret && string.IsNullOrWhiteSpace(header.Value) && !storedSecretNames.Contains(name))
-            {
-                Fail($"Secret custom header '{name}' requires a value.");
-            }
-        }
-
-        foreach (var suffix in req.AdditionalAllowedHostSuffixes)
-        {
-            var trimmed = suffix?.Trim() ?? string.Empty;
-            if (trimmed.Length > 0 && !AzureFoundryEndpoints.ValidateHostSuffix(trimmed))
-            {
-                Fail($"Allowed host suffix '{trimmed}' is not a valid domain suffix.");
-            }
-        }
-
-        return ok;
     }
 
     // Mirrors CloudSettingsEndpointDtoMapper.ParseAuthMode/ParseEntraSignInMethod's own parsing so this pre-check

@@ -15,6 +15,8 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService
     {
         Get(LocalApiRoutes.Benchmarks.EligibleAgents);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(EligibleBenchmarkAgentsRequest req, CancellationToken ct)
@@ -51,6 +53,8 @@ public sealed class ListEligibleBenchmarkModelsEndpoint(IBenchmarkCatalogService
     {
         Get(LocalApiRoutes.Benchmarks.EligibleModels);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(EligibleBenchmarkModelsRequest req, CancellationToken ct)

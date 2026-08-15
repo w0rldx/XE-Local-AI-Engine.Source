@@ -24,19 +24,14 @@ public sealed class BranchNodeChatConversationEndpoint(
     {
         Post(LocalApiRoutes.LocalChat.BranchConversation);
         Policies(NodeAuthorizationPolicies.Operator);
+        // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
+        // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(BranchNodeChatConversationRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
-        }
-        catch (NodeChatReadOnlyConversationException)
-        {
-            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
-            return;
-        }
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         NodeChatBranchResultDto? branched;
@@ -81,19 +76,12 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
     {
         Post(LocalApiRoutes.LocalChat.MessageRevisions);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(ListNodeChatMessageRevisionsRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
-        }
-        catch (NodeChatReadOnlyConversationException)
-        {
-            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
-            return;
-        }
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var variant = await _chatPersistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(req.ConversationId,
@@ -165,19 +153,12 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
     {
         Put(LocalApiRoutes.LocalChat.MessageFeedback);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(SetNodeChatMessageFeedbackRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
-        }
-        catch (NodeChatReadOnlyConversationException)
-        {
-            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
-            return;
-        }
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var feedback = await _chatPersistence.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(req.ConversationId,
@@ -210,19 +191,12 @@ public sealed class SetNodeChatSelectedPathEndpoint(
     {
         Put(LocalApiRoutes.LocalChat.SelectedPath);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(SetNodeChatSelectedPathRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
-        }
-        catch (NodeChatReadOnlyConversationException)
-        {
-            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
-            return;
-        }
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(req.ConversationId,

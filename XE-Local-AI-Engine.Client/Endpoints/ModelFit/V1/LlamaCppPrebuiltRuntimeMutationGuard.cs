@@ -19,6 +19,41 @@ internal static class LlamaCppPrebuiltRuntimeMutationGuard
         return nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(ct);
     }
 
+    /// <summary>
+    ///     Shared remove gate for the managed source-build runtimes (generic + CUDA). Refuses while a source build is
+    ///     active — re-checked AFTER the mutation lease is taken so a build that starts during acquisition still blocks —
+    ///     refuses when the lease cannot be taken or any llama-server process is still running (eject-first), and only
+    ///     then runs <paramref name="removeAsync" /> while holding the lease. The lease is disposed on every path.
+    /// </summary>
+    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(ILlamaServerProcessSupervisor processSupervisor,
+        ILlamaCppSourceBuildActivity sourceBuildActivity,
+        Func<CancellationToken, Task> removeAsync,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(processSupervisor);
+        ArgumentNullException.ThrowIfNull(removeAsync);
+
+        if (IsSourceBuildActive(sourceBuildActivity))
+        {
+            return (false, 0, true);
+        }
+
+        await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+        if (IsSourceBuildActive(sourceBuildActivity))
+        {
+            return (false, 0, true);
+        }
+
+        var runningProcessCount = processSupervisor.CountRunningProcesses();
+        if (mutationLease is null || runningProcessCount > 0)
+        {
+            return (false, runningProcessCount, false);
+        }
+
+        await removeAsync(ct).ConfigureAwait(false);
+        return (true, runningProcessCount, false);
+    }
+
     internal static async Task<(ILlamaServerRuntimeMutationLease? Lease, int RunningProcessCount, string? BlockedMessage)> TryAcquireAsync(IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppSourceBuildActivity sourceBuildActivity,
         ILlamaServerProcessSupervisor processSupervisor,

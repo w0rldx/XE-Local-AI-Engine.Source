@@ -23,7 +23,8 @@ public sealed class ContinuePreviewRunEndpoint(IPreviewWorkflowExecutionService 
         // Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
         // with 415 when the header is absent. Overriding Accepts to accept any content-type lets a body-less request
         // through (the runId still binds from the route).
-        Description(x => x.Accepts<PreviewRunRouteRequest>());
+        Description(x => x.Accepts<PreviewRunRouteRequest>()
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(PreviewRunRouteRequest req, CancellationToken ct)
@@ -40,10 +41,8 @@ public sealed class ContinuePreviewRunEndpoint(IPreviewWorkflowExecutionService 
                 return;
 
             case PreviewRunCommandOutcome.WrongState:
-                await Send.ResultAsync(Results.Conflict(new
-                          {
-                              message = "The run is not paused and cannot be continued."
-                          }))
+                await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                              detail: "The run is not paused and cannot be continued."))
                           .ConfigureAwait(false);
                 return;
 

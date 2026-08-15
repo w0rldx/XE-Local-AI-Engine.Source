@@ -22,7 +22,8 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
         Policies(NodeAuthorizationPolicies.Operator);
         // Route-only POST (run id from the route, no body): override the default application/json-only Accepts so a
         // body-less request is not rejected with 415 (see TriggerScheduledJobEndpoint for the full rationale).
-        Description(x => x.Accepts<ScheduledJobRunRouteRequest>());
+        Description(x => x.Accepts<ScheduledJobRunRouteRequest>()
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ScheduledJobRunRouteRequest req, CancellationToken ct)
@@ -36,10 +37,14 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
                 return;
 
             case RunCancellationOutcome.AlreadyTerminal:
-                await Send.ResultAsync(Results.Conflict(new ScheduledJobRunCancelResponse
-                {
-                    Outcome = outcome.ToString()
-                })).ConfigureAwait(false);
+                // The outcome stays machine-readable as an `outcome` extension member so a client can branch on it
+                // exactly as it did when the 409 carried a ScheduledJobRunCancelResponse body.
+                await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                    detail: "The run already reached a terminal state and cannot be cancelled.",
+                    extensions: new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = outcome.ToString()
+                    })).ConfigureAwait(false);
                 return;
 
             default:

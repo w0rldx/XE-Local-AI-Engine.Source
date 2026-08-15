@@ -41,6 +41,8 @@ public sealed class DefaultExceptionHandlerTests
 
         var handled = await handler.TryHandleAsync(httpContext, new InvalidOperationException("boom"), CancellationToken.None).ConfigureAwait(false);
         AssertEx.True(handled, "The default handler must handle the exception.");
+        // WriteAsJsonAsync overwrites Response.ContentType unless the media type is passed explicitly — pin the RFC 7807 type.
+        AssertEx.Contains(httpContext.Response.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase);
 
         responseBody.Position = 0;
         using var document = await JsonDocument.ParseAsync(responseBody).ConfigureAwait(false);

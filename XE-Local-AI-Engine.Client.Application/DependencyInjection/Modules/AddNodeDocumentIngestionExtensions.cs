@@ -21,6 +21,10 @@ internal static class AddNodeDocumentIngestionExtensions
         // singleton chat persistence service that hooks conversation-delete disk cleanup.
         builder.Services.AddSingleton<IConversationUploadedFileStore, ConversationUploadedFileStore>();
 
+        // Gate → buffer → extract → persist orchestration behind the conversation upload endpoint. Singleton: stateless
+        // apart from the three singletons above.
+        builder.Services.AddSingleton<IConversationUploadIngestor, ConversationUploadIngestor>();
+
         return builder;
     }
 }

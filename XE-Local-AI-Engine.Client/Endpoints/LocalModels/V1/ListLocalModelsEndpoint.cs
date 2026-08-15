@@ -22,12 +22,12 @@ public sealed class ListLocalModelsEndpoint(
     IOptions<LocalChatAgentOptions> localChatOptions,
     ICodexTokenStore codexTokenStore,
     IOptions<CodexOptions> codexOptions,
-    ICloudCredentialStore cloudCredentialStore,
+    ICloudModelResolver cloudModelResolver,
     TimeProvider timeProvider,
     ILogger<ListLocalModelsEndpoint> logger) : EndpointWithoutRequest<ListLocalModelsResponse>
 {
     private readonly IModelClassificationService _classificationService = classificationService ?? throw new ArgumentNullException(nameof(classificationService));
-    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
+    private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
     private readonly CodexOptions _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
     private readonly ICodexTokenStore _codexTokenStore = codexTokenStore ?? throw new ArgumentNullException(nameof(codexTokenStore));
     private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
@@ -158,30 +158,16 @@ public sealed class ListLocalModelsEndpoint(
     /// <summary>
     ///     Returns the Azure Foundry cloud model entries (one per stored deployment) when a connection with ≥1
     ///     deployment is stored, otherwise an empty list. Unlike Codex, Azure entries do not gate on a live session —
-    ///     a saved connection's deployments are always offered in the picker (routing stays selected-model-driven). A
-    ///     best-effort read: any failure resolving the config yields no Azure models rather than failing the whole list.
+    ///     a saved connection's deployments are always offered in the picker (routing stays selected-model-driven). The
+    ///     read is best-effort inside <see cref="ICloudModelResolver" />: a failure resolving the config yields no
+    ///     connection (logged there) and therefore no Azure models, rather than failing the whole list.
     /// </summary>
     private async Task<IReadOnlyList<LocalModelResponse>> ResolveAzureCloudModelsAsync(string? selectedModelName, CancellationToken ct)
     {
-        try
-        {
-            var config = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
-            var connection = config?.AzureFoundry;
-            if (connection is not { Models.Count: > 0 })
-            {
-                return [];
-            }
+        var connection = await _cloudModelResolver.ResolveAzureFoundryConnectionAsync(ct).ConfigureAwait(false);
 
-            return LocalModelsMapper.ToAzureFoundryCloudModelResponses(connection, selectedModelName);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Azure Foundry cloud model list could not be resolved.");
-            return [];
-        }
+        return connection is { Models.Count: > 0 }
+            ? LocalModelsMapper.ToAzureFoundryCloudModelResponses(connection, selectedModelName)
+            : [];
     }
 }
