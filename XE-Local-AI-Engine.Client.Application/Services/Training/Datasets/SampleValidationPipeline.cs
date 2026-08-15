@@ -75,7 +75,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
         };
         var healthy = true;
 
-        if (!string.IsNullOrWhiteSpace(record.ToolName))
+        if (record.DemonstratesToolCall)
         {
             healthy &= await ValidateToolCallAsync(record, context, parts, layers, cancellationToken).ConfigureAwait(false);
         }
@@ -114,11 +114,12 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
     {
         // Layer 2 — tool-name resolution against the definition's own snapshot, not the live catalog: the snapshot is
         // what the teacher was shown.
-        var tool = context.Definition.Tools.FirstOrDefault(item => string.Equals(item.Name, record.ToolName, StringComparison.Ordinal));
+        var toolName = record.EffectiveToolName!;
+        var tool = context.Definition.Tools.FirstOrDefault(item => string.Equals(item.Name, toolName, StringComparison.Ordinal));
         if (tool is null)
         {
             layers.Add(new SampleValidationLayerResultV1("tool-name", Passed: false, "tool-name",
-                $"The definition's tool snapshot does not contain '{record.ToolName}'."));
+                $"The definition's tool snapshot does not contain '{toolName}'."));
             return false;
         }
 
@@ -130,7 +131,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
 
         // Layer 4 — execution through the policy-aware headless seam. It runs even when the arguments failed: the
         // outcome (usually a mock miss) is still recorded, so the sample carries the whole picture.
-        var outcome = await _executor.ExecuteAsync(record.ToolName, record.ToolArgumentsJson, context.Definition.TeacherModelName, cancellationToken)
+        var outcome = await _executor.ExecuteAsync(toolName, record.ToolArgumentsJson, context.Definition.TeacherModelName, cancellationToken)
                                      .ConfigureAwait(false);
         var executed = outcome.Kind is HeadlessToolOutcomeKind.Executed or HeadlessToolOutcomeKind.Mocked;
         layers.Add(new SampleValidationLayerResultV1("execution", executed, ExecutionScoredBy(outcome.Kind), outcome.Reason));
@@ -138,7 +139,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
         parts.Add(new TrainingSamplePartV1("tool",
             parts.Count,
             ToolCallId: $"generated-{parts.Count}",
-            ToolName: record.ToolName,
+            ToolName: toolName,
             Arguments: record.ToolArgumentsJson,
             Result: outcome.Result,
             IsError: !executed));
@@ -161,7 +162,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(record.AssistantText) && string.IsNullOrWhiteSpace(record.ToolName))
+        if (string.IsNullOrWhiteSpace(record.AssistantText) && !record.DemonstratesToolCall)
         {
             layers.Add(new SampleValidationLayerResultV1("critic", Passed: false, "critic:deterministic",
                 "The sample demonstrates neither an answer nor a tool call."));

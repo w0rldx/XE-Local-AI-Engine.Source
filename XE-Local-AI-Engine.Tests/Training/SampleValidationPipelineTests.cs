@@ -106,6 +106,29 @@ public sealed class SampleValidationPipelineTests
         AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "tool-name" && !layer.Passed);
     }
 
+    [Test]
+    [Arguments("")]
+    [Arguments("None")]
+    [Arguments("none")]
+    [Arguments("None required")]
+    [Arguments("no tool")]
+    [Arguments("null")]
+    public async Task NoToolSentinel_IsANoToolAnswer_NotAnUnknownTool(string sentinel)
+    {
+        // Live-found: constrained decoding forces a value for toolName (the adapter makes every property required), so a
+        // small teacher writes "None" for a no-tool answer — that must read as no tool, not as an unresolvable tool name.
+        var pipeline = Create(out var executor);
+
+        var outcome = await pipeline.ValidateAsync(
+            $$"""{"userMessage":"How are you?","assistantText":"Fine, thanks.","toolName":"{{sentinel}}","toolArgumentsJson":""}""",
+            Context());
+
+        AssertEx.True(outcome.Accepted);
+        AssertEx.Equal(TrainingSampleLabel.Good, outcome.Label);
+        AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "tool-name" && layer.Passed);
+        await executor.DidNotReceive().ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
     private static ISampleValidationPipeline Create(out IHeadlessToolExecutor executor)
     {
         executor = Substitute.For<IHeadlessToolExecutor>();

@@ -152,6 +152,32 @@ public sealed record TeacherSampleRecordV1
 
     /// <summary>The tool arguments as a JSON object STRING, not a nested object — nesting would blow the grammar budget.</summary>
     public string ToolArgumentsJson { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Whether this record demonstrates a tool call at all. Live-found (2026-08-15): the MEAI adapter promotes every
+    ///     schema property to <c>required</c>, so under constrained decoding the teacher MUST emit some string for
+    ///     <see cref="ToolName" /> even for a no-tool answer — and small teachers write "None"/"none"/"None required".
+    ///     The no-tool decision therefore lives here, once, instead of every consumer testing for an empty string.
+    /// </summary>
+    public bool DemonstratesToolCall => !IsNoToolSentinel(ToolName);
+
+    /// <summary>The tool name to resolve, or <see langword="null" /> for a no-tool record.</summary>
+    public string? EffectiveToolName => DemonstratesToolCall ? ToolName.Trim() : null;
+
+    private static bool IsNoToolSentinel(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)
+               || trimmed.Equals("null", StringComparison.OrdinalIgnoreCase)
+               || trimmed.Equals("n/a", StringComparison.OrdinalIgnoreCase)
+               || trimmed.StartsWith("none ", StringComparison.OrdinalIgnoreCase)
+               || trimmed.StartsWith("no tool", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>Shared serializer settings for every training JSON payload. Web defaults + string enums, matching the wire DTOs.</summary>

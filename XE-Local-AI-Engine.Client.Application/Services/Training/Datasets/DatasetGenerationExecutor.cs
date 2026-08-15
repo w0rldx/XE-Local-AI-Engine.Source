@@ -187,7 +187,9 @@ public sealed class DatasetGenerationExecutor(
             return builder.ToString();
         }
 
-        _ = builder.AppendLine().AppendLine().AppendLine("Tools available to the assistant in the examples you produce:");
+        _ = builder.AppendLine().AppendLine()
+                   .AppendLine("Record convention: for an example where the assistant answers WITHOUT calling a tool, set toolName to an empty string \"\" and toolArgumentsJson to \"\". Only name a tool when the assistant actually calls it, and then put its JSON arguments in toolArgumentsJson.")
+                   .AppendLine().AppendLine("Tools available to the assistant in the examples you produce:");
         foreach (var tool in definition.Tools)
         {
             _ = builder.Append("- ").Append(tool.Name);
