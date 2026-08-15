@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { DatasetDriftAlert } from "@/features/training/components/DatasetDriftAlert";
 import { TrainingArtifactPanel } from "@/features/training/components/TrainingArtifactPanel";
 import { useTrainingRunHub } from "@/features/training/hooks/useTrainingRunHub";
 import { isExportRunning, isRunActive, runPercent } from "@/features/training/models/TrainingModels";
@@ -112,6 +113,8 @@ export function TrainingRunList() {
 									{t("training.runs.list.steps", "step {{step}} of {{total}}", { step, total: totalSteps })}
 								</Text>
 							) : null}
+
+							<DatasetDriftAlert context="run" datasetId={run.datasetId} frozenFingerprint={run.datasetContentFingerprint} />
 
 							{run.errorMessage == null ? null : (
 								<Text c="red" size="xs">

@@ -12,8 +12,9 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ComparisonCreateDialog } from "@/features/training/components/ComparisonCreateDialog";
+import { DatasetDriftAlert } from "@/features/training/components/DatasetDriftAlert";
 import { type ComparisonReport, formatAccuracy, formatDelta } from "@/features/training/models/ComparisonModels";
-import { useComparisonReports, useDeleteComparison } from "@/features/training/queries/useTrainingComparisons";
+import { useComparisonReports, useDeleteComparison, useTrainingEvaluations } from "@/features/training/queries/useTrainingComparisons";
 
 /**
  * Comparison reports: base versus tuned on the same frozen hold-out samples, per sample kind. Live side-by-side output
@@ -86,6 +87,11 @@ export function ComparisonsPage() {
 function ComparisonReportCard({ report, onDelete }: { report: ComparisonReport; onDelete: () => void }) {
 	const { t } = useTranslation();
 	const deltas = report.deltas;
+	// Both sides of a report score the SAME frozen hold-out set, so either evaluation answers "has the dataset moved
+	// on since?". The lookup rides the run's evaluation list — with no training run recorded there is nothing to check.
+	const evaluationsQuery = useTrainingEvaluations(report.trainingRunId);
+	const evaluation =
+		(evaluationsQuery.data ?? []).find((row) => row.id === report.baseEvaluationRunId || row.id === report.tunedEvaluationRunId) ?? null;
 
 	return (
 		<SectionCard
@@ -97,6 +103,14 @@ function ComparisonReportCard({ report, onDelete }: { report: ComparisonReport; 
 			title={report.name}
 		>
 			<Stack gap="md">
+				{evaluation == null ? null : (
+					<DatasetDriftAlert
+						context="evaluation"
+						datasetId={evaluation.datasetId}
+						frozenFingerprint={evaluation.datasetContentFingerprint}
+					/>
+				)}
+
 				{deltas == null || !deltas.accuracyAvailable ? (
 					<Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
 						{deltas?.unavailableReason ?? t("training.comparisons.report.unavailable", "The accuracy comparison is unavailable.")}
@@ -184,9 +198,16 @@ function ComparisonReportCard({ report, onDelete }: { report: ComparisonReport; 
 								/>
 							</Table.Tbody>
 						</Table>
-						<Anchor component={Link} size="xs" to={nodeRoutePaths.benchmarks}>
-							{t("training.comparisons.report.compareLive", "Compare outputs live on the benchmarks page")}
-						</Anchor>
+						{/*
+						  * Carries both model names so the benchmarks page opens on the two runs this report is about.
+						  * `Link` is used directly rather than through `Anchor component={Link}`: Mantine's polymorphic
+						  * prop erases the router generics, which collapses `search` to an untyped reducer.
+						  */}
+						<Link search={{ base: deltas.baseModelName, tuned: deltas.tunedModelName }} to={nodeRoutePaths.benchmarks}>
+							<Anchor component="span" size="xs">
+								{t("training.comparisons.report.compareLive", "Compare outputs live on the benchmarks page")}
+							</Anchor>
+						</Link>
 					</Stack>
 				)}
 			</Stack>
