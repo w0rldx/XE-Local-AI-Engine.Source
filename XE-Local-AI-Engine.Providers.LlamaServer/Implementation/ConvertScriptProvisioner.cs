@@ -22,6 +22,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDisposable
 {
     private const string GgufPyDirectoryName = "gguf-py";
+
+    /// <summary>
+    ///     The per-architecture converter package both scripts import (<c>from conversion import …</c>) since
+    ///     upstream split it out of the monolithic script. Live-found at b10201: without it the adapter conversion
+    ///     dies with <c>ModuleNotFoundError: No module named 'conversion'</c>. Kept beside the scripts exactly as
+    ///     upstream lays it out, so their own <c>sys.path.insert(…/'gguf-py')</c> and package-relative imports resolve.
+    /// </summary>
+    private const string ConversionPackageDirectoryName = "conversion";
+
     private const string HfToGgufScriptName = "convert_hf_to_gguf.py";
     private const string LoraToGgufScriptName = "convert_lora_to_gguf.py";
 
@@ -94,9 +103,12 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
             Path.Combine(final, LoraToGgufScriptName),
             Path.Combine(final, GgufPyDirectoryName),
             commit);
+        // A tree adopted before the conversion package was part of the required set is INCOMPLETE, not provisioned:
+        // reporting it would let the export reach the script and fail there instead of re-provisioning here.
         return File.Exists(paths.HfToGgufScriptPath)
                && File.Exists(paths.LoraToGgufScriptPath)
                && Directory.Exists(paths.GgufPyDirectory)
+               && Directory.Exists(Path.Combine(final, ConversionPackageDirectoryName))
             ? paths
             : null;
     }
@@ -127,6 +139,8 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
             CopyRequiredFile(fetchDirectory, stagingDirectory, LoraToGgufScriptName);
             CopyRequiredDirectory(Path.Combine(fetchDirectory, GgufPyDirectoryName),
                 Path.Combine(stagingDirectory, GgufPyDirectoryName));
+            CopyRequiredDirectory(Path.Combine(fetchDirectory, ConversionPackageDirectoryName),
+                Path.Combine(stagingDirectory, ConversionPackageDirectoryName));
 
             // Same-parent move → atomic: the commit directory appears complete or not at all, so a crash mid-copy can
             // never leave TryResolve reporting a half-populated tree as provisioned.
