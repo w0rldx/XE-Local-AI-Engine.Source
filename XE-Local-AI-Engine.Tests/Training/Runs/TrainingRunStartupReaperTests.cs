@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
@@ -72,30 +71,82 @@ public sealed class TrainingRunStartupReaperTests
             "A child whose environment carries no token is not one this host launched.");
 
     [Test]
-    public async Task Reap_WhenAnyReceiptFieldMismatches_NeverSignalsButStillRecovers()
+    public async Task Reap_WhenAnyReceiptFieldMismatches_NeverSignalsButClearsTheReceiptAndRecovers()
     {
         foreach (var mismatch in Mismatches())
         {
-            var (reaper, inspector, store) = Build(mismatch);
+            var (reaper, inspector, store, runId) = Build(mismatch);
 
             await reaper.StartAsync(CancellationToken.None);
 
             AssertEx.Equal(expected: 0, inspector.SignalledGroups.Count, "A mismatched receipt must never reach a kill.");
-            // Recovery still has to run: the interrupted run is terminalized and its stale receipt cleared, which is
-            // what stops a later sweep acting on the same recycled pid.
+            // A non-match means the pid is dead or recycled, so nothing is left to identify — clearing is the safe
+            // direction here, and it is the reaper that does it, not recovery.
+            await store.Received(1).SetLaunchReceiptAsync(runId, Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
+                Arg.Any<CancellationToken>());
             _ = await store.Received(1).RecoverOnStartupAsync(Arg.Any<CancellationToken>());
         }
     }
 
     [Test]
-    public async Task Reap_WhenEveryReceiptFieldMatches_SignalsTheRecordedProcessGroup()
+    public async Task Reap_WhenEveryReceiptFieldMatches_SignalsTheRecordedProcessGroupThenClearsTheReceipt()
     {
-        var (reaper, inspector, _) = Build(LiveFacts());
+        var (reaper, inspector, store, runId) = Build(LiveFacts());
 
         await reaper.StartAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 1, inspector.SignalledGroups.Count, "A fully matching receipt is an orphan this host must reap.");
         AssertEx.Equal(Receipt.Pgid, inspector.SignalledGroups[0]);
+        await store.Received(1).SetLaunchReceiptAsync(runId, Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The sweep reads receipts through a dedicated unpaged query, never a page of the run list. A trainer that
+    ///     outlived its host while 200+ newer runs piled up behind it would otherwise fall off the first page — and
+    ///     since only the reaper clears a receipt, that orphan would keep its GPU allocation and its anonymity forever.
+    /// </summary>
+    [Test]
+    public async Task Reap_WhenMoreReceiptsExistThanOnePageHolds_InspectsAndClearsEveryOne()
+    {
+        const int count = 250;
+        var runIds = Enumerable.Range(0, count).Select(static _ => Guid.NewGuid()).ToArray();
+        var store = StoreWith([.. runIds.Select(static id => new TrainingRunLaunchReceipt(id, Serialize(Receipt)))]);
+        var inspector = new FakeTrainingProcessInspector(LiveFacts());
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        AssertEx.Equal(count, inspector.SignalledGroups.Count, "Every recorded receipt must be inspected, whatever its run's age.");
+        await store.Received(count).SetLaunchReceiptAsync(Arg.Any<Guid>(), Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     A receipt is the only handle on a trainer this host has no process handle for. If the inspection or the kill
+    ///     throws, the process may well still be alive — so that receipt has to survive to the next startup, while the
+    ///     rest of the sweep carries on and node startup is unaffected.
+    /// </summary>
+    [Test]
+    public async Task Reap_WhenInspectingOneReceiptThrows_KeepsThatReceiptAndStillProcessesTheOthers()
+    {
+        var (firstId, secondId, thirdId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var store = StoreWith([
+            new TrainingRunLaunchReceipt(firstId, Serialize(Receipt with { Pid = 1 })),
+            new TrainingRunLaunchReceipt(secondId, Serialize(Receipt with { Pid = 2 })),
+            new TrainingRunLaunchReceipt(thirdId, Serialize(Receipt with { Pid = 3 }))
+        ]);
+
+        var inspector = Substitute.For<ITrainingProcessInspector>();
+        _ = inspector.Inspect(2).Returns(static _ => throw new IOException("/proc went away mid-read."));
+
+        await Reaper(store, inspector).StartAsync(CancellationToken.None);
+
+        await store.DidNotReceive().SetLaunchReceiptAsync(secondId, Arg.Any<ReadOnlyMemory<byte>?>(), Arg.Any<CancellationToken>());
+        await store.Received(1).SetLaunchReceiptAsync(firstId, Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
+            Arg.Any<CancellationToken>());
+        await store.Received(1).SetLaunchReceiptAsync(thirdId, Arg.Is<ReadOnlyMemory<byte>?>(static value => !value.HasValue),
+            Arg.Any<CancellationToken>());
+        _ = await store.Received(1).RecoverOnStartupAsync(Arg.Any<CancellationToken>());
     }
 
     private static IEnumerable<TrainingProcessFacts?> Mismatches() =>
@@ -109,48 +160,37 @@ public sealed class TrainingRunStartupReaperTests
         LiveFacts() with { RunToken = null }
     ];
 
-    private static (TrainingRunStartupReaper Reaper, FakeTrainingProcessInspector Inspector, ITrainingRunStore Store) Build(
-        TrainingProcessFacts? facts)
+    private static ReadOnlyMemory<byte> Serialize(TrainingLaunchReceiptV1 receipt) =>
+        JsonSerializer.SerializeToUtf8Bytes(receipt, TrainingJson.Options);
+
+    private static ITrainingRunStore StoreWith(IReadOnlyList<TrainingRunLaunchReceipt> receipts)
     {
         var store = Substitute.For<ITrainingRunStore>();
-        _ = store.ListAsync(Arg.Any<TrainingRunQuery>(), Arg.Any<CancellationToken>())
-                 .Returns(new TrainingRunPage([Run()], TotalCount: 1));
+        _ = store.ListLaunchReceiptsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingRunLaunchReceipt>>(receipts);
         _ = store.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        return store;
+    }
 
+    private static TrainingRunStartupReaper Reaper(ITrainingRunStore store, ITrainingProcessInspector inspector)
+    {
         var services = new ServiceCollection();
         _ = services.AddScoped(_ => store);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        var inspector = new FakeTrainingProcessInspector(facts);
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         using var keyHolder = new FixedNodeSqliteKeyHolder(new byte[32]);
         var workspace = new TrainingRunWorkspace(new FixedNodeDataDirectory(root), keyHolder);
-        return (new TrainingRunStartupReaper(scopeFactory, inspector, workspace, TimeProvider.System, NullLogger<TrainingRunStartupReaper>.Instance),
-            inspector,
-            store);
+        return new TrainingRunStartupReaper(scopeFactory, inspector, workspace, TimeProvider.System, NullLogger<TrainingRunStartupReaper>.Instance);
     }
 
-    private static TrainingRunRecord Run() =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "v1:abc",
-            DatasetRevision: 1,
-            ReadOnlyMemory<byte>.Empty,
-            Guid.NewGuid(),
-            LinkedInstalledModelName: null,
-            LinkedModelContentFingerprint: null,
-            ReadOnlyMemory<byte>.Empty,
-            LicenseConfirmationJson: null,
-            TrainingRunStatus.Training,
-            ProgressJson: null,
-            LogTail: null,
-            JsonSerializer.SerializeToUtf8Bytes(Receipt, TrainingJson.Options),
-            ErrorMessage: null,
-            Version: 2,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            TrainingWorkStatus.Running,
-            WorkErrorMessage: null);
+    private static (TrainingRunStartupReaper Reaper, FakeTrainingProcessInspector Inspector, ITrainingRunStore Store, Guid RunId) Build(
+        TrainingProcessFacts? facts)
+    {
+        var runId = Guid.NewGuid();
+        var store = StoreWith([new TrainingRunLaunchReceipt(runId, Serialize(Receipt))]);
+        var inspector = new FakeTrainingProcessInspector(facts);
+        return (Reaper(store, inspector), inspector, store, runId);
+    }
 
     [Test]
     public void Matches_WhenTheRecordedTokenIsEmpty_IsFalse() =>
