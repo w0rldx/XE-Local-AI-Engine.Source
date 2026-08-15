@@ -17,7 +17,9 @@ public sealed record CreateTrainingRunCommand(
     long ExpectedDatasetVersion,
     Guid BaseArtifactId,
     bool LicenseConfirmed,
-    TrainingRunOptionsV1? Options = null);
+    TrainingRunOptionsV1? Options = null,
+    /// <summary>The installed GGUF to link as the base's counterpart; null lets the linker suggest one by repo convention.</summary>
+    string? LinkedModelName = null);
 
 /// <summary>
 ///     Creation, listing and cancellation of training runs.
@@ -95,8 +97,10 @@ public sealed class TrainingRunService(
     ILicenseGateService licenseGate,
     TrainingRunWorkspace workspace,
     TrainingRunCancellationRegistry cancellations,
-    ITrainingRunQueueSignal signal) : ITrainingRunService
+    ITrainingRunQueueSignal signal,
+    IInstalledBaseModelLinker linker) : ITrainingRunService
 {
+    private readonly IInstalledBaseModelLinker _linker = linker ?? throw new ArgumentNullException(nameof(linker));
     private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
     private readonly ITrainingDatasetStore _datasetStore = datasetStore ?? throw new ArgumentNullException(nameof(datasetStore));
     private readonly ITrainingOptionDefaultsCalculator _defaults = defaults ?? throw new ArgumentNullException(nameof(defaults));
@@ -264,12 +268,18 @@ public sealed class TrainingRunService(
         TrainingRunFreezeV1 freeze,
         CancellationToken cancellationToken)
     {
+        // The installed counterpart is what an adapter is served against and the base side of a comparison; it is
+        // recorded at creation so a later re-install under the same name cannot silently swap the base out from under
+        // the run — the fingerprint travels with the link.
+        var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken).ConfigureAwait(false);
         var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand(command.DatasetId,
                                      command.ExpectedDatasetVersion,
                                      command.BaseArtifactId,
                                      JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
                                      JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
-                                     JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options)),
+                                     JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
+                                     link?.ModelName,
+                                     link?.ContentFingerprint),
                                  cancellationToken)
                              .ConfigureAwait(false);
         _signal.Wake();

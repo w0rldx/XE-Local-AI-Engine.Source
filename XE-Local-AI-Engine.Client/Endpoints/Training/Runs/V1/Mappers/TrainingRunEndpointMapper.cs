@@ -73,9 +73,19 @@ internal static class TrainingRunEndpointMapper
             Optimizer = payload.Optimizer
         };
 
-    public static TrainingRunDefaultsResponse ToResponse(this TrainingRunDefaults defaults, TrainingLicenseGateView? license) =>
+    public static TrainingRunDefaultsResponse ToResponse(this TrainingRunDefaults defaults,
+        TrainingLicenseGateView? license,
+        IReadOnlyList<InstalledBaseModelLink> linkedModelSuggestions) =>
         new()
         {
+            LinkedModelSuggestions = linkedModelSuggestions
+                                     .Select(link => new TrainingRunLinkedModelResponse
+                                     {
+                                         ModelName = link.ModelName,
+                                         RepoId = link.RepoId,
+                                         ContentFingerprint = link.ContentFingerprint
+                                     })
+                                     .ToArray(),
             Options = defaults.Options.ToPayload(),
             Estimate = new TrainingRunFootprintResponse
             {
