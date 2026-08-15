@@ -16,6 +16,14 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class ImageModelDiscoveryEndpointTests
 {
+    /// <summary>
+    ///     One host for the two tests that need no stubbed discovery: the operator gate and the bundled catalog, both
+    ///     read-only. Every other test builds its own host through <c>FactoryWithDiscovery</c> because it swaps a
+    ///     service.
+    /// </summary>
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private const string ApiPrefix = "/api/local/v1";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -23,7 +31,7 @@ public sealed class ImageModelDiscoveryEndpointTests
     [Test]
     public async Task CatalogBrowseAndInspect_RequireOperator()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         foreach (var route in new[]
@@ -41,7 +49,7 @@ public sealed class ImageModelDiscoveryEndpointTests
     [Test]
     public async Task Catalog_ReturnsTheBundledEntries_WithAFitVerdictAndAnInstalledFlag()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/catalog");
