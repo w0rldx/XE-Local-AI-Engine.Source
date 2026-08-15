@@ -135,7 +135,7 @@ public sealed class TrainingExportServiceTests : IDisposable
     public async Task Start_WhileTrainingHoldsTheGpu_IsRefusedBeforeAnythingIsWritten()
     {
         using var harness = Harness.Create(this);
-        using var held = AssertEx.NotNull(harness.Activity.TryBegin(), "The flag must be free to begin with.");
+        using var held = AssertEx.NotNull(harness.Gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "The gate must be free to begin with.");
 
         var start = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
 
@@ -177,7 +177,7 @@ public sealed class TrainingExportServiceTests : IDisposable
             TrainingExportService service,
             ITrainingRunStore store,
             ScriptedExportSpawner spawner,
-            ITrainingActivity activity,
+            IGpuWorkGate gate,
             Guid runId,
             string stagedDirectory)
         {
@@ -185,14 +185,14 @@ public sealed class TrainingExportServiceTests : IDisposable
             _service = service;
             Store = store;
             Spawner = spawner;
-            Activity = activity;
+            Gate = gate;
             RunId = runId;
             _stagedDirectory = stagedDirectory;
         }
 
         public ITrainingRunStore Store { get; }
         public ScriptedExportSpawner Spawner { get; }
-        public ITrainingActivity Activity { get; }
+        public IGpuWorkGate Gate { get; }
         public Guid RunId { get; }
         public TrainingArtifactSmokeState? RecordedSmokeState { get; private set; }
         public string? RecordedSmokeReason { get; private set; }
@@ -273,11 +273,11 @@ public sealed class TrainingExportServiceTests : IDisposable
             _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
                           .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
 
-            var activity = new TrainingActivity();
+            var gate = new GpuWorkGate();
             var spawner = new ScriptedExportSpawner();
             var service = new TrainingExportService(provider.GetRequiredService<IServiceScopeFactory>(),
                 new TrainingRunEventBuffer(Options.Create(new TrainingRunEventBufferOptions())),
-                activity,
+                gate,
                 supervisor,
                 runtime,
                 spawner,
@@ -290,7 +290,7 @@ public sealed class TrainingExportServiceTests : IDisposable
                 dataDirectory,
                 NullLogger<TrainingExportService>.Instance);
 
-            var harness = new Harness(provider, service, store, spawner, activity, runId, staged);
+            var harness = new Harness(provider, service, store, spawner, gate, runId, staged);
             harnessBox[0] = harness;
             return harness;
         }
