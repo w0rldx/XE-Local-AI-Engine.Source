@@ -464,6 +464,46 @@ public sealed class AgentSkillStoreTests : IDisposable
     }
 
     [Test]
+    public async Task UpdateAsync_GeneratedConversionOfImportedSkill_ReplacesWholeProvenanceUnit()
+    {
+        var databasePath = GetDatabasePath("generated-conversion.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(1_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentSkillStore(context, clock);
+
+        var imported = await store.CreateAsync(new AgentSkillInput("github-skill",
+            Description,
+            Body,
+            Origin: AgentSkillOrigin.Imported,
+            SourceUri: "github:microsoft/skills",
+            ImportedAtUtc: 1_700_000_000_000,
+            ContentSha256: new string(c: 'a', count: 64)));
+
+        // An AI-improve save carries the generated provenance unit with NO payload hash. Keeping the old archive/GitHub
+        // hash on content the model just rewrote would poison re-import change detection, so the whole unit is applied
+        // verbatim — hash included.
+        clock.Advance(10);
+        var converted = AssertEx.NotNull(await store.UpdateAsync(imported.Id,
+                new AgentSkillInput("github-skill",
+                    Description,
+                    "Model-revised body.",
+                    Enabled: false,
+                    Origin: AgentSkillOrigin.Imported,
+                    SourceUri: "generated",
+                    ImportedAtUtc: 1_800_000_000_000)),
+            "Update should find the skill.");
+
+        AssertEx.Equal(AgentSkillOrigin.Imported, converted.Origin);
+        AssertEx.Equal("generated", converted.SourceUri);
+        AssertEx.Equal(expected: 1_800_000_000_000L, converted.ImportedAtUtc ?? 0);
+        AssertEx.Null(converted.ContentSha256, "The stale import payload hash must not survive a generated conversion.");
+    }
+
+    [Test]
     public async Task SourceUri_RejectsAnythingBeyondTheImportKind()
     {
         var databasePath = GetDatabasePath("source-uri.sqlite");
