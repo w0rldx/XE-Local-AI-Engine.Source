@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Scheduler.V1;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -390,6 +393,54 @@ public sealed class SchedulerEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task EnableJob_WhenTemplateNotRegistered_ReturnsBadRequestWithErrorBody()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        // Seed a definition whose template the host does not have registered. CreateJob would reject it up front, so
+        // it goes straight to the store — this is exactly the state SetEnabledAsync must refuse without writing.
+        Guid jobId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IScheduledJobDefinitionStore>();
+            var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
+                                                  "Orphaned template job",
+                                                  Description: null,
+                                                  Enabled: false,
+                                                  ScheduleKind.Cron,
+                                                  "0 0 * * * ?",
+                                                  IntervalSeconds: null,
+                                                  RepeatCount: null,
+                                                  StartAtUtc: null,
+                                                  EndAtUtc: null,
+                                                  "UTC",
+                                                  SchedulerMisfirePolicy.Smart,
+                                                  PreventOverlap: false,
+                                                  MaxRuntimeSeconds: null,
+                                                  ParameterJson: null,
+                                                  ScheduledJobCreator.User))
+                                     .ConfigureAwait(false);
+            jobId = stored.Id;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, JobEnableRoute(jobId))
+        {
+            Content = JsonContent.Create(new
+            {
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        // ScheduledJobValidationException → AddError + Send.ErrorsAsync → 400 (not an unhandled 500).
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        AssertEx.True(payload.Length > 0, "Error response must have a non-empty body.");
     }
 
     // Redaction: job response must not echo raw parameters; run response must not echo raw details.
