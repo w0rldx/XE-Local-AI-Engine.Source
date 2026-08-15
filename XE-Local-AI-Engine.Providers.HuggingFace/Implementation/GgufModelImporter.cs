@@ -21,16 +21,12 @@ internal sealed class GgufModelImporter(
         ArgumentNullException.ThrowIfNull(destination);
         ValidateDestination(destination);
 
+        var mode = InspectionModeFor(destination);
         await using var openedSource = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
-        var inspection = await GgufImportInspector
-                               .InspectOpenedAsync(openedSource, GgufImportInspectionMode.PublicImport, cancellationToken)
-                               .ConfigureAwait(false);
-        if (!IsUsableInspection(inspection, destination.CanonicalQuant))
+        var inspection = await GgufImportInspector.InspectOpenedAsync(openedSource, mode, cancellationToken).ConfigureAwait(false);
+        if (!IsUsableInspection(inspection, destination))
         {
-            var reason = inspection.Rejections.Count > 0
-                ? inspection.Rejections[0]
-                : GgufImportRejectionCode.UnsupportedQuantization;
-            throw new GgufImportException(reason, "The selected file is not a supported causal-chat GGUF.");
+            throw new GgufImportException(RejectionFor(inspection, destination), "The selected file is not a supported causal-chat GGUF.");
         }
 
         var finalPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeGgufPath);
@@ -58,8 +54,9 @@ internal sealed class GgufModelImporter(
             cancellationToken.ThrowIfCancellationRequested();
             var copiedInspection = GgufImportInspector.Classify(Path.GetFileName(finalPath),
                 copied,
-                await GgufStrictHeaderParser.ReadAsync(temporaryPath, cancellationToken).ConfigureAwait(false));
-            if (!IsUsableInspection(copiedInspection, destination.CanonicalQuant))
+                await GgufStrictHeaderParser.ReadAsync(temporaryPath, cancellationToken).ConfigureAwait(false),
+                mode);
+            if (!IsUsableInspection(copiedInspection, destination))
             {
                 throw new GgufImportException(GgufImportRejectionCode.InvalidGguf,
                     "The copied file did not pass strict GGUF reinspection.");
@@ -74,10 +71,15 @@ internal sealed class GgufModelImporter(
                     [destination.CanonicalModelName])
             ]);
             var acquiredAt = timeProvider.GetUtcNow();
+            var lineage = destination.Lineage;
+            // An adapter entry carries no weight file of its own — its own bytes ARE the adapter — so the adapter
+            // member fields are the weight fields, exactly as GgufAcquisitionSidecar.IsValidAdapterShape requires.
+            var isAdapter = destination.IsAdapter;
             var entry = new GgufModelRegistryEntry
             {
                 ModelName = destination.CanonicalModelName,
-                RepoId = destination.CanonicalModelName,
+                // A trained model names its base checkpoint's repository; an import has no upstream repo and names itself.
+                RepoId = lineage?.DerivedFromRepoId ?? destination.CanonicalModelName,
                 FileName = Path.GetFileName(finalPath),
                 Quant = destination.CanonicalQuant,
                 LocalPath = finalPath,
@@ -86,10 +88,18 @@ internal sealed class GgufModelImporter(
                 SourceRevision = $"sha256:{hash}",
                 DownloadedAtUtc = acquiredAt,
                 Role = GgufRole.Chat,
-                Origin = LocalModelOrigin.Imported,
+                Origin = destination.Origin,
                 SourceDisplayName = inspection.SourceDisplayName,
                 MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                ModelContentFingerprint = modelFingerprint
+                ModelContentFingerprint = modelFingerprint,
+                DerivedFromRepoId = lineage?.DerivedFromRepoId,
+                DerivedFromRevision = lineage?.DerivedFromRevision,
+                DerivedFromContentFingerprint = lineage?.DerivedFromContentFingerprint,
+                AdapterFileName = isAdapter ? Path.GetFileName(finalPath) : null,
+                AdapterSha256 = isAdapter ? hash : null,
+                AdapterSizeBytes = isAdapter ? copied : null,
+                AdapterMemberFingerprint = isAdapter ? memberFingerprint : null,
+                BaseModelName = isAdapter ? lineage!.BaseModelName : null
             };
             var registryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
             entry = entry with
@@ -101,7 +111,7 @@ internal sealed class GgufModelImporter(
                 SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
                 RegistryRevision = registryRevision,
                 ModelName = entry.ModelName,
-                Origin = LocalModelOrigin.Imported,
+                Origin = destination.Origin,
                 LocalFileName = entry.FileName,
                 Quantization = entry.Quant,
                 WeightContentSha256 = hash,
@@ -112,7 +122,15 @@ internal sealed class GgufModelImporter(
                 RegistryRepoId = entry.RepoId,
                 RegistrySourceRevision = entry.SourceRevision,
                 Role = entry.Role,
-                ModelContentFingerprint = modelFingerprint
+                ModelContentFingerprint = modelFingerprint,
+                DerivedFromRepoId = entry.DerivedFromRepoId,
+                DerivedFromRevision = entry.DerivedFromRevision,
+                DerivedFromContentFingerprint = entry.DerivedFromContentFingerprint,
+                AdapterFileName = entry.AdapterFileName,
+                AdapterSha256 = entry.AdapterSha256,
+                AdapterSizeBytes = entry.AdapterSizeBytes,
+                AdapterMemberFingerprint = entry.AdapterMemberFingerprint,
+                BaseModelName = entry.BaseModelName
             };
             await GgufAcquisitionSidecar.WriteAsync(temporarySidecarPath, sidecar, cancellationToken).ConfigureAwait(false);
             return new PreparedGgufImport(operationId, destination, temporaryPath, temporarySidecarPath, entry, sidecar,
@@ -327,11 +345,36 @@ internal sealed class GgufModelImporter(
         return (Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
     }
 
+    /// <summary>
+    ///     A trained commit is a file this engine just wrote and whose GGUF metadata it read directly, so the
+    ///     public surface's file-name heuristics carry no evidence about it — and a LoRA adapter is only ever
+    ///     acceptable on that in-process path.
+    /// </summary>
+    private static GgufImportInspectionMode InspectionModeFor(GgufImportDestination destination) =>
+        destination.Origin == LocalModelOrigin.Trained
+            ? GgufImportInspectionMode.InProcessTrainedCommit
+            : GgufImportInspectionMode.PublicImport;
+
     private static void ValidateDestination(GgufImportDestination destination)
     {
-        if (destination.Origin != LocalModelOrigin.Imported || destination.ProjectorRelativePath is not null)
+        if (destination.Origin is not (LocalModelOrigin.Imported or LocalModelOrigin.Trained)
+            || destination.ProjectorRelativePath is not null)
         {
-            throw new ArgumentException("Local import accepts only imported, weight-only destinations.", nameof(destination));
+            // Trained joins Imported here because a training export is the only OTHER producer of a local weight-only
+            // destination; a downloaded model never reaches this importer at all.
+            throw new ArgumentException("Local import accepts only imported or trained, weight-only destinations.", nameof(destination));
+        }
+
+        if (destination.Origin == LocalModelOrigin.Imported && destination.Lineage is not null)
+        {
+            throw new ArgumentException("Only a trained destination carries derived-from lineage.", nameof(destination));
+        }
+
+        if (destination.Origin == LocalModelOrigin.Trained && destination.Lineage is null)
+        {
+            // Without lineage a trained entry is indistinguishable from an import, and the model it came from becomes
+            // unanswerable the moment the run row is deleted.
+            throw new ArgumentException("A trained destination requires derived-from lineage.", nameof(destination));
         }
 
         if (string.IsNullOrWhiteSpace(destination.CanonicalModelName))
@@ -350,13 +393,35 @@ internal sealed class GgufModelImporter(
         }
     }
 
-    private static bool IsUsableInspection(GgufImportInspection inspection, string selectedQuantization)
+    /// <summary>
+    ///     The code a refused inspection is reported under. A file whose WORKLOAD is wrong for the destination — an
+    ///     adapter offered as a standalone model, or the reverse — carries no rejection of its own, because it is a
+    ///     perfectly valid GGUF of the other kind; reporting the quantization fallback there would send the caller
+    ///     looking at the wrong field entirely.
+    /// </summary>
+    private static GgufImportRejectionCode RejectionFor(GgufImportInspection inspection, GgufImportDestination destination)
     {
-        if (inspection.Workload != GgufImportWorkload.CausalChat)
+        if (inspection.Rejections.Count > 0)
+        {
+            return inspection.Rejections[0];
+        }
+
+        return inspection.Workload == ExpectedWorkload(destination)
+            ? GgufImportRejectionCode.UnsupportedQuantization
+            : GgufImportRejectionCode.UnsupportedModelType;
+    }
+
+    private static GgufImportWorkload ExpectedWorkload(GgufImportDestination destination) =>
+        destination.IsAdapter ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;
+
+    private static bool IsUsableInspection(GgufImportInspection inspection, GgufImportDestination destination)
+    {
+        if (inspection.Workload != ExpectedWorkload(destination))
         {
             return false;
         }
 
+        var selectedQuantization = destination.CanonicalQuant;
         if (inspection.IsAccepted)
         {
             return string.Equals(inspection.DetectedQuantization, selectedQuantization, StringComparison.Ordinal);

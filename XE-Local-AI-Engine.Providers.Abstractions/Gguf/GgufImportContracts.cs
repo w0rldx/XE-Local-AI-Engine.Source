@@ -5,6 +5,23 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// <summary>Operator-selected local source, scoped to the in-process provider call.</summary>
 public sealed record GgufImportSource(string AbsolutePath);
 
+/// <summary>
+///     What a locally trained artifact was derived from, carried onto its registry entry and sidecar so a promoted
+///     model can always name the checkpoint and dataset behind it.
+/// </summary>
+/// <param name="DerivedFromRepoId">Base checkpoint repository the run trained on.</param>
+/// <param name="DerivedFromRevision">Resolved revision of <paramref name="DerivedFromRepoId" />.</param>
+/// <param name="DerivedFromContentFingerprint">Frozen dataset content fingerprint the run consumed, when recorded.</param>
+/// <param name="BaseModelName">
+///     Set ONLY for a LoRA-adapter promotion: the installed model the adapter is applied on top of. Its presence is
+///     what makes the destination an adapter rather than a standalone (merged) model.
+/// </param>
+public sealed record TrainedModelLineage(
+    string? DerivedFromRepoId,
+    string? DerivedFromRevision,
+    string? DerivedFromContentFingerprint,
+    string? BaseModelName = null);
+
 /// <summary>Application-resolved, provider-revalidated import destination.</summary>
 public sealed record GgufImportDestination(
     string CanonicalModelName,
@@ -12,7 +29,12 @@ public sealed record GgufImportDestination(
     string RelativeGgufPath,
     string RelativeSidecarPath,
     LocalModelOrigin Origin,
-    string? ProjectorRelativePath = null);
+    string? ProjectorRelativePath = null,
+    TrainedModelLineage? Lineage = null)
+{
+    /// <summary>True when this destination commits a LoRA adapter rather than a standalone model.</summary>
+    public bool IsAdapter => Lineage?.BaseModelName is { Length: > 0 };
+}
 
 /// <summary>Supported imported workload.</summary>
 public enum GgufImportWorkload
