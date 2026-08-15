@@ -35,13 +35,16 @@ process.env.VITE_APP_VERSION ??= resolveAppVersion();
 // The same default is enforced by Environment.ts; setting it here also lets Vite resolve the index.html placeholder.
 process.env.VITE_APP_TITLE ??= "XE Local AI Engine";
 
+// Coverage floor — a RATCHET: raise it as coverage grows, never lower it to make a red run green. Kept ~10 points
+// under the current actuals (70.5 / 65.3 / 62.3 / 71.2 at the last raise) so ordinary refactors do not trip it.
+// Last raised 2026-08-15.
 const coverageThresholds =
 	process.env.VITEST_COVERAGE_CHECK === "true"
 		? {
-				branches: 35,
-				functions: 34,
-				lines: 39,
-				statements: 38,
+				branches: 55,
+				functions: 52,
+				lines: 60,
+				statements: 60,
 			}
 		: undefined;
 
