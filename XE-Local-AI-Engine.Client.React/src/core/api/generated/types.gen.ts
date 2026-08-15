@@ -91,6 +91,7 @@ export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse = {
 	id: string;
 	datasetId: string;
 	baseArtifactId: string;
+	linkedInstalledModelName?: string | null;
 	status: string;
 	datasetRevision: number;
 	datasetContentFingerprint: string;
@@ -139,6 +140,7 @@ export type XeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest
 	baseArtifactId: string;
 	licenseConfirmed: boolean;
 	options?: XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload | null;
+	linkedModelName?: string | null;
 };
 
 /**
@@ -184,6 +186,7 @@ export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRespo
 	fits: boolean;
 	rejectionReason?: string | null;
 	license?: XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseResponse | null;
+	linkedModelSuggestions: Array<XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse = {
@@ -200,6 +203,12 @@ export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLicenseRespon
 	isGated: boolean;
 	metadataPresent: boolean;
 	confirmationText: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunLinkedModelResponse = {
+	modelName: string;
+	repoId: string;
+	contentFingerprint?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsRequest = {
