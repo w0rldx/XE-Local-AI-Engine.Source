@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class AgentsPageE2ETests : XEE2ETestBase
+public sealed class AgentsPageE2ETests : XEPooledE2ETestBase
 {
     // Mantine 9 TextInput puts data-testid directly on the <input> element (unlike Textarea which
     // puts it on the wrapper div). Locate Name by its placeholder to match Mantine's actual DOM output.

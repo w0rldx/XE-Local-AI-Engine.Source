@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     transaction suites; these tests prove the authenticated desktop SPA exposes the shipped routes and dialogs.
 /// </summary>
 [Category("Page")]
-public sealed class LocalImportAndBenchmarksE2ETests : XEE2ETestBase
+public sealed class LocalImportAndBenchmarksE2ETests : XEPooledE2ETestBase
 {
     [Test]
     public async Task Models_HeadlessImportCapability_HidesDesktopMutation()

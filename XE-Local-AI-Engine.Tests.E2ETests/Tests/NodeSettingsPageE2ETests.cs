@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     Save writes back to the same SQLite — harmless and verifiable via the success alert.
 /// </summary>
 [Category("Page")]
-public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
+public sealed class NodeSettingsPageE2ETests : XESerialE2ETestBase
 {
     private const string TestWorkspacePrefix = "xe-e2e-mcp-workspace-";
 

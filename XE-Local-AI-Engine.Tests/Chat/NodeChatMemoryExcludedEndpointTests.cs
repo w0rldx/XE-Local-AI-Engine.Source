@@ -14,10 +14,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class NodeChatMemoryExcludedEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task SetMemoryExcluded_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/local/v1/chat/conversations/{Guid.NewGuid()}/memory-excluded")
@@ -35,7 +38,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
     [Test]
     public async Task SetMemoryExcluded_Toggle_RoundTrips()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
 
@@ -68,7 +71,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
     [Test]
     public async Task SetMemoryExcluded_WhenConversationMissing_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/local/v1/chat/conversations/{Guid.NewGuid()}/memory-excluded")

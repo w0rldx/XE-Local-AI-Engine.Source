@@ -63,7 +63,14 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private WebApplication? _app;
     private bool _disposed;
 
-    public TestServerWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
+    // TUnit's ClassDataSource<T> resolves the fixture through a new() constraint, which an all-optional-parameter
+    // constructor does not satisfy (TUnit0061), so the parameterless form is declared explicitly.
+    public TestServerWebAppFactory()
+        : this(fakeOllamaOptions: null)
+    {
+    }
+
+    public TestServerWebAppFactory(FakeOllamaOptions? fakeOllamaOptions)
     {
         _fixtureWebRoot = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-wwwroot-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_fixtureWebRoot);

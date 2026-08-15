@@ -27,7 +27,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class ChatPageE2ETests : XEE2ETestBase
+public sealed class ChatPageE2ETests : XESerialE2ETestBase
 {
     // Mantine Textarea places data-testid="chat-input" on its wrapper div, not the inner
     // <textarea>.  GetByPlaceholder resolves the actual <textarea> directly.

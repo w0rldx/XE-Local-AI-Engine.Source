@@ -49,6 +49,24 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     public const string AdminPassword = "E2eAdminPassw0rd!";
 
     /// <summary>
+    ///     Number of extra admin-role users seeded for the parallel browser group, and therefore the
+    ///     concurrency cap of <c>PooledBrowserParallelLimit</c>: the node revokes all of a user's active
+    ///     refresh tokens on every login/refresh, so two concurrent browser sessions must never share a user.
+    /// </summary>
+    public const int PooledUserCount = 4;
+
+    /// <summary>
+    ///     Password shared by every pooled user. Meets the node policy (>= 12 chars, upper/lower/digit/symbol).
+    /// </summary>
+    public const string PooledUserPassword = "E2ePooledPassw0rd!";
+
+    /// <summary>Email of the pooled user at <paramref name="index" /> (0 .. <see cref="PooledUserCount" /> - 1).</summary>
+    public static string PooledUserEmail(int index)
+    {
+        return $"e2e-pool-{index}@example.test";
+    }
+
+    /// <summary>
     ///     Tutorial persistence keys mirrored from the central React <c>TutorialRegistry</c>. They must stay in step
     ///     or the seeded state below stops suppressing first-use invitations.
     ///     <para>
@@ -191,6 +209,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         // are applied by the host startup pipeline (Program.ApplyNodeIdentityMigrationsAsync) before
         // this runs. Idempotent: the PerTestSession factory initializes once per run.
         await SeedAdminUserAsync().ConfigureAwait(false);
+        await SeedPooledUsersAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -199,8 +218,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     ///     first-run user again (the welcome prompt then fires), or
     ///     <see cref="CompletedMainAppTourState" /> to restore the default returning-user fixture.
     ///     <para>
-    ///         Safe to call mid-suite because browser E2E runs strictly sequentially
-    ///         (<c>BrowserParallelLimit.Limit == 1</c>); no other test can observe the intermediate state.
+    ///         Safe to call mid-suite, but ONLY from the serial phase. Browser E2E runs as two disjoint parallel
+    ///         groups: <c>BrowserSerial</c> (<c>BrowserParallelLimit.Limit == 1</c>) and <c>BrowserPooled</c>
+    ///         (four concurrent tests, one leased user each), which never overlap in time. This method mutates
+    ///         the ONE canonical admin row that every serial test signs in as, so calling it from a pooled test
+    ///         would corrupt a concurrently running sibling. Its only caller is <c>OnboardingTourE2ETests</c>,
+    ///         which is serial.
     ///     </para>
     /// </summary>
     public async Task SetAdminTutorialStateAsync(string? tutorialStateJson)
@@ -271,37 +294,63 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         },
         TutorialStateSerializerOptions);
 
-    private async Task SeedAdminUserAsync()
+    private Task SeedAdminUserAsync()
+    {
+        // SetupCompleted: this is THE canonical user the password-only login form resolves to.
+        return SeedUserAsync(AdminEmail, AdminPassword, setupCompleted: true);
+    }
+
+    /// <summary>
+    ///     Seeds the <see cref="PooledUserCount" /> extra admin-role users that <c>XEPooledE2ETestBase</c>
+    ///     leases so parallel-safe browser tests never share a refresh-token identity.
+    ///     <para>
+    ///         They are seeded with <c>SetupCompleted = false</c> on purpose. The login page has a single
+    ///         password field and posts no email, so <c>NodeAuthService.ResolveLoginUserAsync(null)</c> resolves
+    ///         the account with <c>SingleOrDefaultAsync(u =&gt; u.SetupCompleted)</c> — a second completed user
+    ///         would make that query throw and break the form login for every serial test. Pooled tests therefore
+    ///         authenticate through the API with an explicit email, which takes the <c>FindByEmailAsync</c> branch.
+    ///     </para>
+    /// </summary>
+    private async Task SeedPooledUsersAsync()
+    {
+        for (var index = 0; index < PooledUserCount; index++)
+        {
+            await SeedUserAsync(PooledUserEmail(index), PooledUserPassword, setupCompleted: false).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Idempotently creates one admin-role node user in the returning-user (tour completed) state.</summary>
+    private async Task SeedUserAsync(string email, string password, bool setupCompleted)
     {
         using var scope = Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
 
-        if (await userManager.FindByEmailAsync(AdminEmail).ConfigureAwait(false) is not null)
+        if (await userManager.FindByEmailAsync(email).ConfigureAwait(false) is not null)
         {
             return;
         }
 
-        var admin = new NodeUser
+        var user = new NodeUser
         {
-            Email = AdminEmail,
-            UserName = AdminEmail,
-            SetupCompleted = true,
+            Email = email,
+            UserName = email,
+            SetupCompleted = setupCompleted,
             // Deterministic default: a returning user who has already answered the onboarding tour.
             // See CompletedMainAppTourState for why the first-run prompt must not be the E2E baseline.
             TutorialState = CompletedMainAppTourState,
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        var createResult = await userManager.CreateAsync(admin, AdminPassword).ConfigureAwait(false);
+        var createResult = await userManager.CreateAsync(user, password).ConfigureAwait(false);
         if (!createResult.Succeeded)
         {
-            throw new InvalidOperationException("Failed to seed E2E admin user: " + string.Join(", ", createResult.Errors.Select(error => error.Description)));
+            throw new InvalidOperationException($"Failed to seed E2E user '{email}': " + string.Join(", ", createResult.Errors.Select(error => error.Description)));
         }
 
-        var roleResult = await userManager.AddToRoleAsync(admin, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
+        var roleResult = await userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
         if (!roleResult.Succeeded)
         {
-            throw new InvalidOperationException("Failed to assign Admin role to E2E admin user: " + string.Join(", ", roleResult.Errors.Select(error => error.Description)));
+            throw new InvalidOperationException($"Failed to assign Admin role to E2E user '{email}': " + string.Join(", ", roleResult.Errors.Select(error => error.Description)));
         }
     }
 

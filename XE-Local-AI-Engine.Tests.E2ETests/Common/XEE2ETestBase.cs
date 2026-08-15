@@ -17,11 +17,16 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///         <see cref="FrontendBaseUrl" /> == <see cref="ApiBaseUrl" /> == the factory's ServerAddress.
 ///         Navigate to <see cref="NodeAppUrl" /> so the browser loads the SPA shell from the node host.
 ///     </para>
+///     <para>
+///         Attribute-free core: parallelism and sign-in identity are chosen by the two thin bases that derive
+///         from it — <see cref="XESerialE2ETestBase" /> (one at a time, canonical admin, UI form login) and
+///         <see cref="XEPooledE2ETestBase" /> (N at a time, leased pool user, API cookie login). Do NOT put a
+///         <c>[ParallelLimiter]</c> or <c>[ParallelGroup]</c> here, or every derived test would carry two.
+///     </para>
 /// </summary>
 // S101: "XEE2ETestBase" keeps the "XE" product prefix on "E2ETestBase"; the consecutive
 // capitals are the intentional, plan-mandated harness name, not a casing mistake.
 #pragma warning disable S101 // Types should be named in PascalCase
-[ParallelLimiter<BrowserParallelLimit>]
 public abstract class XEE2ETestBase : PageTest
 {
     private bool _tracingStarted;
@@ -83,31 +88,18 @@ public abstract class XEE2ETestBase : PageTest
         _tracingStarted = true;
     }
 
+    /// <summary>
+    ///     Leaves the browser context authenticated: it must hold the HttpOnly refresh cookie and the page
+    ///     must be off <c>/login</c>. The SPA's session-restore then re-mints the in-memory access token on
+    ///     every full navigation a test performs afterwards. Non-hook (the hook below drives it) so the
+    ///     derived bases can pick their identity and login transport without redeclaring TUnit hooks.
+    /// </summary>
+    protected abstract Task SignInAsync();
+
     [Before(Test)]
-    public async Task AuthenticateAsync()
+    public Task AuthenticateAsync()
     {
-        // The harness seeds a single admin (XENodeE2EWebApplicationFactory.AdminEmail / AdminPassword),
-        // so a fresh browser context lands on /login (not the one-time /setup screen). Drive the real
-        // password login so the context holds the HttpOnly refresh cookie; the SPA's session-restore
-        // then re-mints the in-memory access token on every full navigation a test performs afterwards.
-        await Page.GotoAsync(NodeAppUrl, new PageGotoOptions
-        {
-            WaitUntil = WaitUntilState.NetworkIdle
-        }).ConfigureAwait(false);
-
-        // Target the input directly: the login form has a single password field, and Mantine's
-        // PasswordInput also renders a "Toggle password visibility" button plus a required-asterisk
-        // label, so GetByLabel("Password") is either ambiguous (matches the toggle) or empty (exact
-        // misses the asterisk). The type='password' input is unique on this page.
-        await Page.Locator("input[type='password']")
-                  .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword).ConfigureAwait(false);
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
-        {
-            Name = "Sign in"
-        }).ClickAsync().ConfigureAwait(false);
-
-        // On success the SPA navigates away from /login.
-        await Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);
+        return SignInAsync();
     }
 
     [After(Test)]

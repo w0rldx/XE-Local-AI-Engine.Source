@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class LocalChatHubAuthorizationIntegrationTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     // The hub connection path itself. The JwtBearer OnMessageReceived handler only reads the
     // access_token query parameter for request paths ending in "/hub" (see ConfigureServices).
     private const string HubRoute = "/api/local/v1/chat/hub";
@@ -17,7 +20,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubNegotiate_WhenNoCredentials_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HubNegotiateRoute);
@@ -29,7 +32,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubNegotiate_WhenBearerHeaderProvided_ReturnsOk()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HubNegotiateRoute);
@@ -42,7 +45,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubConnect_WhenNoAccessTokenQuery_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HubRoute);
@@ -54,7 +57,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
     [Test]
     public async Task HubConnect_WhenAccessTokenSuppliedViaQueryString_PassesAuthorization()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var accessToken = factory.CreateNodeAccessToken();

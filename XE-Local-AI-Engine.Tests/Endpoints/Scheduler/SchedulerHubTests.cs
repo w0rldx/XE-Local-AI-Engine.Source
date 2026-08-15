@@ -14,10 +14,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class SchedulerHubTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task Negotiate_WhenTokenMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/scheduler/hub/negotiate?negotiateVersion=1")
@@ -36,7 +39,7 @@ public sealed class SchedulerHubTests
     {
         var scheduledJobId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         await using var connection = new HubConnectionBuilder()
                                      .WithUrl("http://localhost" + LocalApiRoutes.Scheduler.Hub, options =>
                                      {

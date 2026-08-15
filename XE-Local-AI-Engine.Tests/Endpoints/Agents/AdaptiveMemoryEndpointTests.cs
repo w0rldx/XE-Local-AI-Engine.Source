@@ -22,6 +22,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AdaptiveMemoryEndpointTests
 {
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string PlaybookRoute(Guid agentDefinitionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/playbook";
@@ -44,7 +47,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExtractedCandidate_CannotReachEnabled_WithoutEvalGateAndApproval()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -80,7 +83,7 @@ public sealed class AdaptiveMemoryEndpointTests
     {
         // The positive half: once the eval gate passes (and the cap is not reached) the SAME promote route enables the
         // Extracted candidate — proving governance reuse works end-to-end for the new Source, not just that it blocks.
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -112,7 +115,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ListPlaybook_WhenScopeSupplied_FiltersToThatScope()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -139,7 +142,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ListPlaybook_WhenNoScope_ReturnsAllActions()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -164,7 +167,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExecutionLogs_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(Guid.NewGuid()));
@@ -176,7 +179,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExecutionLogs_ReturnsPagedMetadata_NoContent()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -211,7 +214,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExecutionLogs_WhenAgentMissing_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(Guid.NewGuid()));
@@ -228,7 +231,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task CreateAgent_CarriesDefaultTemporaryChat_RoundTrip()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/agents")
@@ -263,7 +266,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task UpdateAgent_CarriesDefaultTemporaryChat_RoundTrip()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);

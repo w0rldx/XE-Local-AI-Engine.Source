@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class CapabilityGatedSurfacesE2ETests : XEE2ETestBase
+public sealed class CapabilityGatedSurfacesE2ETests : XEPooledE2ETestBase
 {
     /// <summary>The heading of the home route every gated surface redirects to.</summary>
     private const string HomeHeading = "Welcome!";

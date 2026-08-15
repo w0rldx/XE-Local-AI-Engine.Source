@@ -25,7 +25,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Layout")]
-public sealed class ViewportLayoutE2ETests : XEE2ETestBase
+public sealed class ViewportLayoutE2ETests : XEPooledE2ETestBase
 {
     // Representative Container-fluid pages. Models replaced the former Dashboard target: the Dashboard is
     // a Central-Platform surface shipped gated OFF (NodeCapabilities.dashboard === false), so /dashboard
