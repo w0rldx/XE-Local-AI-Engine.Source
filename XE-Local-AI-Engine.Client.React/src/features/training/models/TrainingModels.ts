@@ -18,10 +18,7 @@ export type SampleReviewState = "Pending" | "Approved" | "Rejected";
 export type MockVerificationState = "Unverified" | "Verified" | "Rejected";
 export type TeacherOutputMode = "Constrained" | "ValidateAfter";
 
-export const DEFINITION_NAME_MAX = 120;
-export const DATASET_NAME_MAX = 120;
-export const HOLDOUT_FRACTION_MIN = 0.05;
-export const HOLDOUT_FRACTION_MAX = 0.3;
+/** Mirrors the backend's DatasetDefinitionBodyV1 default (plan decision #17). */
 export const HOLDOUT_FRACTION_DEFAULT = 0.1;
 
 export interface TrainingDefinition {

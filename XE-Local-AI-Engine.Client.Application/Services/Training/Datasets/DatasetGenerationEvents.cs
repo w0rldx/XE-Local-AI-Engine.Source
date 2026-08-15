@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-using System.Text.Json;
 using Microsoft.Extensions.Options;
 
 public enum DatasetGenerationEventKind
@@ -55,8 +54,6 @@ public sealed class DatasetGenerationEventBufferOptions
 /// </summary>
 public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     private readonly Dictionary<Guid, DatasetBuffer> _datasets = [];
     private readonly Lock _gate = new();
     private readonly int _maxEventCount;
@@ -123,10 +120,6 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
             state.PlaintextEvicted = true;
         }
     }
-
-    /// <summary>Serialized size of an event — used by the transport relay's bound, kept next to the buffer it mirrors.</summary>
-    internal static int Utf8Size(DatasetGenerationEvent generationEvent) =>
-        JsonSerializer.SerializeToUtf8Bytes(generationEvent, JsonOptions).Length;
 
     private DatasetBuffer GetOrCreate(Guid datasetId)
     {
