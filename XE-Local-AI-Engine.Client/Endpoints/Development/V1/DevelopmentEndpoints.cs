@@ -736,10 +736,20 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentWorkspaceSecurityException)
+        // Reconnect is the one Development endpoint whose request BOTH carries a folder to validate and acts on the
+        // project's persisted binding, so it is the only one that has to split the workspace-security family by type:
+        // the persisted binding blocking the reconnect is a 409, while the folder the caller just picked being
+        // unusable (not a Git root, read-only, network path) is the same 400 it is on register/create.
+        catch (Exception exception) when (exception is DevelopmentConcurrencyException
+                                              or DevelopmentRepositoryStateConflictException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (DevelopmentWorkspaceSecurityException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
     }
 }
