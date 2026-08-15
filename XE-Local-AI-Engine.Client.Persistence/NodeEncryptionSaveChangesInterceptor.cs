@@ -395,6 +395,49 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Runs are node-scoped, so the AAD binds the empty conversation id to the run's own id plus the column name.
+        // Every column gets a distinct name: the freeze, the options and the license confirmation are the three
+        // documents an audit reads back, and a writer must not be able to swap one for another.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingRun>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.FreezeJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_freeze_json",
+                trackedProperties);
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.OptionsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_options_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LicenseConfirmationJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_license_confirmation_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ProgressJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_progress_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LogTail),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_log_tail",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_run_launch_receipt_json",
+                trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;
