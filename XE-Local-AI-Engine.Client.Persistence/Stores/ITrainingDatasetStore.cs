@@ -22,7 +22,11 @@ public interface ITrainingDatasetStore
 
     Task DeleteDefinitionAsync(Guid definitionId, long expectedVersion, CancellationToken cancellationToken = default);
 
-    /// <summary>Creates the dataset row and its single queued work item in one transaction (freeze-before-enqueue).</summary>
+    /// <summary>
+    ///     Creates the dataset row and its single queued work item in one transaction (freeze-before-enqueue). The
+    ///     definition BODY is snapshotted onto the dataset in that same transaction, so a later edit cannot re-shape a
+    ///     dataset that already claims an older <c>DefinitionVersion</c>.
+    /// </summary>
     Task<TrainingDatasetRecord> CreateDatasetAndEnqueueAsync(TrainingDatasetEnqueueCommand command, CancellationToken cancellationToken = default);
 
     Task<TrainingDatasetRecord?> GetDatasetAsync(Guid datasetId, CancellationToken cancellationToken = default);
@@ -99,10 +103,15 @@ public sealed record TrainingDefinitionRecord(
 
 public sealed record TrainingDatasetEnqueueCommand(Guid DefinitionId, long ExpectedDefinitionVersion, string Name);
 
+/// <summary>
+///     <paramref name="DefinitionJson" /> is the definition body PINNED at creation — what generation and evaluation
+///     must read. Null means the dataset predates pinning; it is never a cue to fall back to the live definition.
+/// </summary>
 public sealed record TrainingDatasetRecord(
     Guid Id,
     Guid DefinitionId,
     long DefinitionVersion,
+    ReadOnlyMemory<byte>? DefinitionJson,
     string Name,
     TrainingDatasetStatus Status,
     int Revision,

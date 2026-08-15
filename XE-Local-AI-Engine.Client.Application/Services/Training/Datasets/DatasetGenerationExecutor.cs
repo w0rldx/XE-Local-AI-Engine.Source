@@ -85,9 +85,11 @@ public sealed class DatasetGenerationExecutor(
 
     private async Task GenerateAsync(DatasetGenerationClaimedWork work, CancellationToken cancellationToken)
     {
-        var definitionRecord = await _store.GetDefinitionAsync(work.Dataset.DefinitionId, cancellationToken).ConfigureAwait(false)
-                               ?? throw new TrainingNotFoundException("The dataset definition was deleted before generation started.");
-        var definition = DatasetDefinitionService.ReadBody(definitionRecord.DefinitionJson);
+        // The PINNED body, not the live definition row: an edit between the dataset's creation and this run would
+        // otherwise swap the teacher, the tool snapshot or the instructions while the dataset still claims the
+        // DefinitionVersion it was created at.
+        var definition = DatasetDefinitionService.ReadPinnedBody(work.Dataset)
+                         ?? throw new TrainingValidationException(DatasetDefinitionService.UnpinnedDatasetReason);
         var plan = BuildPlan(definition);
 
         var provider = await _providerResolver.ResolveProviderForModelAsync(definition.TeacherModelName, cancellationToken).ConfigureAwait(false);

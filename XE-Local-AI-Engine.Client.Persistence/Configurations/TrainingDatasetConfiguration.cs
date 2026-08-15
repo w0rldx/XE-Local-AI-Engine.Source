@@ -15,6 +15,10 @@ internal sealed class TrainingDatasetConfiguration : IEntityTypeConfiguration<Tr
         builder.Property(entity => entity.Id).HasColumnName("id");
         builder.Property(entity => entity.DefinitionId).HasColumnName("definition_id");
         builder.Property(entity => entity.DefinitionVersion).HasColumnName("definition_version");
+
+        // Nullable rather than NOT NULL-with-default: an empty blob is not decryptable, so a defaulted row would fail
+        // materialization for every dataset that predates pinning instead of reading back as "not pinned".
+        builder.Property(entity => entity.DefinitionJson).HasColumnName("definition_json");
         builder.Property(entity => entity.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(16);
         builder.Property(entity => entity.Revision).HasColumnName("revision");

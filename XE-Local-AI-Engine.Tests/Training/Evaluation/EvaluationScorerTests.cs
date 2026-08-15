@@ -132,6 +132,47 @@ public sealed class EvaluationScorerTests
     }
 
     [Test]
+    public void MultiCallSample_IsADeterministicFailure_NotScoredByItsFirstCall()
+    {
+        var content = new TrainingSampleContentV1
+        {
+            Parts =
+            [
+                new TrainingSamplePartV1("user", 0, "weather in Berlin and Paris?"),
+                new TrainingSamplePartV1("tool", 1, ToolCallId: "generated-1", ToolName: "get_weather", Arguments: """{"city":"Berlin"}"""),
+                new TrainingSamplePartV1("tool", 2, ToolCallId: "generated-2", ToolName: "get_weather", Arguments: """{"city":"Paris"}""")
+            ]
+        };
+
+        var rejection = AssertEx.NotNull(EvaluationScorer.RejectMultiCall(SampleId, "tool-call", content),
+            "A sample the scorer cannot grade must produce a verdict that says so.");
+
+        AssertEx.False(rejection.Passed);
+        AssertEx.Equal(TrainingSampleParts.MultiCallUnsupportedReason, rejection.Reason!);
+        AssertEx.Equal(EvaluationScorer.Deterministic, rejection.ScoredBy);
+
+        // The silent behaviour it replaces: the expectation would have been the FIRST call, with the second dropped.
+        AssertEx.Equal("get_weather", EvaluationScorer.ReadExpectation(content, [Snapshot()]).ToolName!);
+    }
+
+    [Test]
+    public void SingleCallSample_IsNotRejected()
+    {
+        var content = new TrainingSampleContentV1
+        {
+            Parts =
+            [
+                new TrainingSamplePartV1("user", 0, "weather in Berlin?"),
+                new TrainingSamplePartV1("tool", 1, ToolCallId: "generated-1", ToolName: "get_weather", Arguments: """{"city":"Berlin"}"""),
+                // A tool part with no tool name is a result echo, not a second call.
+                new TrainingSamplePartV1("tool", 2, Result: "sunny")
+            ]
+        };
+
+        AssertEx.Null(EvaluationScorer.RejectMultiCall(SampleId, "tool-call", content), "One call is exactly what v1 samples demonstrate.");
+    }
+
+    [Test]
     public void ReadExpectation_WithNoToolPart_ExpectsNoCall()
     {
         // Decided structurally, not from the kind label: an operator is free to name a no-tool kind anything, but the

@@ -84,6 +84,75 @@ public sealed class ComparisonReportServiceTests
     }
 
     [Test]
+    public async Task Create_WhenTheTwoSidesFrozeDifferentDatasetVersions_IsRejected()
+    {
+        var membership = Membership([SampleId(1), SampleId(2)]);
+        var drifted = membership with
+        {
+            DatasetContentFingerprint = "v1:" + new string('b', count: 64)
+        };
+
+        var rejection = await AssertRejectedAsync(membership, drifted);
+        AssertEx.Contains(rejection.Message, "content fingerprints differ");
+    }
+
+    [Test]
+    public async Task Create_WhenTheTwoSidesScoredDifferentHoldoutSamples_IsRejected()
+    {
+        var membership = Membership([SampleId(1), SampleId(2)]);
+
+        // Same dataset, same fingerprint, different hold-out set — the delta would read as a real improvement.
+        var other = membership with
+        {
+            HoldoutSampleIds = [SampleId(1), SampleId(3)]
+        };
+
+        var rejection = await AssertRejectedAsync(membership, other);
+        AssertEx.Contains(rejection.Message, "different hold-out samples");
+    }
+
+    [Test]
+    public async Task Create_WhenAMembershipCannotBeRead_IsRejected()
+    {
+        var membership = Membership([SampleId(1)]);
+        var baseEvaluation = Evaluation("base-model", membership, [Verdict(1, "tool-call", passed: true)]);
+        var tunedEvaluation = Evaluation("tuned-model", membership, [Verdict(1, "tool-call", passed: true)]) with
+        {
+            MembershipJson = "not json"u8.ToArray()
+        };
+
+        var rejection = await AssertRejectedAsync(baseEvaluation, tunedEvaluation);
+        AssertEx.Contains(rejection.Message, "could not be read");
+    }
+
+    [Test]
+    public async Task Create_WhenTheMembershipsMatchButTheRunsDiffer_IsAccepted()
+    {
+        var membership = Membership([SampleId(1), SampleId(2)]);
+        var baseEvaluation = Evaluation("base-model", membership, [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: false)]);
+
+        // Same freeze reached through a different run, and the ids in the other order. Neither makes the two sides
+        // incomparable — the fingerprint plus the id SET is the invariant, not the run id or the ordering.
+        var reordered = membership with
+        {
+            TrainingRunId = Guid.NewGuid(),
+            HoldoutSampleIds = [SampleId(2), SampleId(1)]
+        };
+        var tunedEvaluation = Evaluation("tuned-model", reordered, [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]);
+
+        var evaluations = Substitute.For<ITrainingEvaluationStore>();
+        _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
+        _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
+        _ = evaluations.CreateComparisonAsync(Arg.Any<TrainingComparisonInput>(), Arg.Any<CancellationToken>())
+                       .Returns(callInfo => Report(callInfo.Arg<TrainingComparisonInput>()));
+
+        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
+        var report = await service.CreateAsync(new CreateComparisonCommand("cross-run", baseEvaluation.Id, tunedEvaluation.Id));
+
+        AssertEx.Equal(baseEvaluation.Id, report.BaseEvaluationRunId);
+    }
+
+    [Test]
     public async Task Create_WhenAPairedBenchmarkRunIsMissing_IsRejected()
     {
         var membership = Membership([SampleId(1)]);
@@ -149,6 +218,27 @@ public sealed class ComparisonReportServiceTests
 
         AssertEx.Null(suggestion.BaseModelName);
         AssertEx.True(suggestion.UnavailableReason!.Contains("accuracy comparison is unavailable", StringComparison.Ordinal));
+    }
+
+    private static Task<EvaluationRejectedException> AssertRejectedAsync(TrainingEvaluationMembershipV1 baseMembership,
+        TrainingEvaluationMembershipV1 tunedMembership) =>
+        AssertRejectedAsync(Evaluation("base-model", baseMembership, [Verdict(1, "tool-call", passed: true)]),
+            Evaluation("tuned-model", tunedMembership, [Verdict(1, "tool-call", passed: true)]));
+
+    /// <summary>A refused comparison must also persist nothing — a stored report is what later reads are trusted from.</summary>
+    private static async Task<EvaluationRejectedException> AssertRejectedAsync(TrainingEvaluationRecord baseEvaluation,
+        TrainingEvaluationRecord tunedEvaluation)
+    {
+        var evaluations = Substitute.For<ITrainingEvaluationStore>();
+        _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
+        _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
+
+        var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
+        var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(
+            () => service.CreateAsync(new CreateComparisonCommand("mismatched", baseEvaluation.Id, tunedEvaluation.Id)),
+            "Two sides that did not score the same hold-out set must be refused, not silently subtracted.");
+        _ = await evaluations.DidNotReceiveWithAnyArgs().CreateComparisonAsync(default!, default);
+        return rejection;
     }
 
     private static Guid SampleId(int index) =>
