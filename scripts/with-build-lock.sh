@@ -7,7 +7,8 @@
 #   PHANTOM failures — observed on this repo as `failed: 97` and `failed: 1` on runs that were clean
 #   on re-run, and as `FileNotFoundException: Microsoft.AspNetCore.SignalR.Client.Core` in E2E, each
 #   with DLL mtimes falling inside the run window. A contaminated run is indistinguishable from a
-#   real regression, and with GitHub Actions disabled this suite is the only gate the project has.
+#   real regression, and this suite is the last gate before a release is cut — CI runs the same
+#   suite, but only after the contaminated result has already been believed locally.
 #
 #   The only lock that existed was a SemaphoreSlim inside XEReactClientFixture — in-process, and
 #   therefore invisible to another agent's shell. This is the cross-process equivalent: an exclusive
