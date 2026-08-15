@@ -178,9 +178,18 @@ public sealed class EvaluationRunExecutor(
         }
 
         ChatResponse response;
+        // Same per-turn bound the teacher runner carries: a completion that never returns must be this sample's
+        // verdict, not a queue wedge that also blocks every training run behind it.
+        using var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        turnCancellation.CancelAfter(StructuredAgentRunner.TurnTimeout);
         try
         {
-            response = await chatClient.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            response = await chatClient.GetResponseAsync(messages, options, turnCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new TrainingEvaluationResultEntry(sampleId, sample.Kind, Passed: false, EvaluationScorer.Deterministic,
+                $"The model did not answer within {StructuredAgentRunner.TurnTimeout.TotalMinutes:0} minutes.");
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
