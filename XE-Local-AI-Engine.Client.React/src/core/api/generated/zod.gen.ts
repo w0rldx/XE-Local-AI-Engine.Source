@@ -393,6 +393,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationRespo
 	modelName: z.string(),
 	modelContentFingerprint: z.string().nullish(),
 	datasetId: z.guid(),
+	datasetContentFingerprint: z.string(),
 	status: z.string(),
 	workStatus: z.string().nullish(),
 	totalCount: z
@@ -595,6 +596,8 @@ export const zXeLocalAiEngineClientEndpointsTrainingV1GetTrainingDatasetRequest 
 export const zXeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest = z.object({
 	expectedVersion: z.int().optional(),
 });
+
+export const zXeLocalAiEngineClientEndpointsTrainingV1CancelTrainingDatasetRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState = z.enum(["Pending", "Approved", "Rejected"]);
 
@@ -5168,6 +5171,15 @@ export const zGetTrainingDatasetPath = z.object({
  * Success
  */
 export const zGetTrainingDatasetResponse = zXeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse;
+
+export const zCancelTrainingDatasetPath = z.object({
+	datasetId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zCancelTrainingDatasetResponse = z.void();
 
 export const zListTrainingSamplesPath = z.object({
 	datasetId: z.guid(),

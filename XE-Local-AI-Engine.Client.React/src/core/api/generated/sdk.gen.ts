@@ -80,6 +80,9 @@ import type {
 	CancelStableDiffusionCppSourceBuildData,
 	CancelStableDiffusionCppSourceBuildErrors,
 	CancelStableDiffusionCppSourceBuildResponses,
+	CancelTrainingDatasetData,
+	CancelTrainingDatasetErrors,
+	CancelTrainingDatasetResponses,
 	CancelTrainingRunData,
 	CancelTrainingRunErrors,
 	CancelTrainingRunResponses,
@@ -981,6 +984,8 @@ import {
 	zCancelScheduledJobRunResponse,
 	zCancelStableDiffusionCppSourceBuildBody,
 	zCancelStableDiffusionCppSourceBuildResponse,
+	zCancelTrainingDatasetPath,
+	zCancelTrainingDatasetResponse,
 	zCancelTrainingRunPath,
 	zCancelTrainingRunResponse,
 	zClearCloudSettingsResponse,
@@ -2452,6 +2457,27 @@ export const getTrainingDataset = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}",
+		...options,
+	});
+
+export const cancelTrainingDataset = <ThrowOnError extends boolean = false>(
+	options: Options<CancelTrainingDatasetData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelTrainingDatasetResponses, CancelTrainingDatasetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelTrainingDatasetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zCancelTrainingDatasetResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/datasets/{datasetId}/cancel",
 		...options,
 	});
 

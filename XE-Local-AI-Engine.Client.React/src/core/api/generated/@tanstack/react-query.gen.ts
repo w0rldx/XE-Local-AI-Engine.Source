@@ -36,6 +36,7 @@ import {
 	cancelPreviewRun,
 	cancelScheduledJobRun,
 	cancelStableDiffusionCppSourceBuild,
+	cancelTrainingDataset,
 	cancelTrainingRun,
 	clearCloudSettings,
 	codexLogin,
@@ -375,6 +376,8 @@ import type {
 	CancelScheduledJobRunResponse,
 	CancelStableDiffusionCppSourceBuildData,
 	CancelStableDiffusionCppSourceBuildResponse,
+	CancelTrainingDatasetData,
+	CancelTrainingDatasetResponse,
 	CancelTrainingRunData,
 	CancelTrainingRunResponse,
 	ClearCloudSettingsData,
@@ -1917,6 +1920,26 @@ export const getTrainingDatasetOptions = (options: Options<GetTrainingDatasetDat
 		},
 		queryKey: getTrainingDatasetQueryKey(options),
 	});
+
+export const cancelTrainingDatasetMutation = (
+	options?: Partial<Options<CancelTrainingDatasetData>>,
+): UseMutationOptions<CancelTrainingDatasetResponse, AxiosError<DefaultError>, Options<CancelTrainingDatasetData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelTrainingDatasetResponse,
+		AxiosError<DefaultError>,
+		Options<CancelTrainingDatasetData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelTrainingDataset({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listTrainingSamplesQueryKey = (options: Options<ListTrainingSamplesData>) =>
 	createQueryKey("listTrainingSamples", options);

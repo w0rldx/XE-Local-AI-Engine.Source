@@ -349,6 +349,7 @@ export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationRespons
 	modelName: string;
 	modelContentFingerprint?: string | null;
 	datasetId: string;
+	datasetContentFingerprint: string;
 	status: string;
 	workStatus?: string | null;
 	totalCount: number;
@@ -521,6 +522,10 @@ export type XeLocalAiEngineClientEndpointsTrainingV1GetTrainingDatasetRequest = 
 
 export type XeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest = {
 	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1CancelTrainingDatasetRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingV1ListTrainingSamplesResponse = {
@@ -5213,6 +5218,35 @@ export type GetTrainingDatasetResponses = {
 };
 
 export type GetTrainingDatasetResponse = GetTrainingDatasetResponses[keyof GetTrainingDatasetResponses];
+
+export type CancelTrainingDatasetData = {
+	body?: never;
+	path: {
+		datasetId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/datasets/{datasetId}/cancel";
+};
+
+export type CancelTrainingDatasetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelTrainingDatasetResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type CancelTrainingDatasetResponse = CancelTrainingDatasetResponses[keyof CancelTrainingDatasetResponses];
 
 export type ListTrainingSamplesData = {
 	body?: never;

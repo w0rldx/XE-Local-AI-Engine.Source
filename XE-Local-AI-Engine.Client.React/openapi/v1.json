@@ -1992,6 +1992,44 @@
         ]
       }
     },
+    "/api/local/v1/training/datasets/{datasetId}/cancel": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "cancelTrainingDataset",
+        "parameters": [
+          {
+            "name": "datasetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/training/datasets/{datasetId}/samples": {
       "get": {
         "tags": [
@@ -15490,6 +15528,7 @@
           "id",
           "modelName",
           "datasetId",
+          "datasetContentFingerprint",
           "status",
           "totalCount",
           "scoredCount",
@@ -15524,6 +15563,9 @@
           "datasetId": {
             "type": "string",
             "format": "guid"
+          },
+          "datasetContentFingerprint": {
+            "type": "string"
           },
           "status": {
             "type": "string"
@@ -16095,6 +16137,10 @@
             "type": "integer"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1CancelTrainingDatasetRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsTrainingV1ListTrainingSamplesResponse": {
         "type": "object",
