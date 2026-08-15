@@ -3,9 +3,12 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { vi } from "vitest";
 
-// MantineProvider reads the color scheme through matchMedia on mount, and several components measure
-// themselves through ResizeObserver. jsdom implements neither, so every Mantine render needs these stubs
-// installed first — without them the provider throws before the component under test ever renders.
+// MantineProvider reads the color scheme through matchMedia on mount, several components measure themselves
+// through ResizeObserver, and an autosize <Textarea> subscribes to `document.fonts` ("loadingdone" re-measures
+// after a web font swaps in). jsdom implements none of the three, so every Mantine render needs these stubs
+// installed first — without them the provider (or the first autosize Textarea) throws before the component under
+// test ever renders. The FontFaceSet stub is why an autosize Textarea no longer fails with
+// "Cannot read properties of undefined (reading 'addEventListener')".
 export function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
 		writable: true,
@@ -26,6 +29,15 @@ export function installJsdomEnvironmentMocks(): void {
 			unobserve = vi.fn();
 
 			disconnect = vi.fn();
+		},
+	});
+	Object.defineProperty(document, "fonts", {
+		writable: true,
+		configurable: true,
+		value: {
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			ready: Promise.resolve(),
 		},
 	});
 }

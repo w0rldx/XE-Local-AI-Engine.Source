@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated hey-api TanStack factories. Each mutation factory returns an object carrying a `mutationFn` the
@@ -39,6 +37,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import { useCreateSkill, useDeleteSkill, useSkill, useSkills, useUpdateSkill } from "@/features/skills/queries/useSkills";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const listKey = fakeListKey();
 
@@ -47,17 +46,12 @@ const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {
 	invalidatedKeys.length = 0;
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
+	const { wrapper, queryClient } = createProvidersWrapper();
 	vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters) => {
 		invalidatedKeys.push((filters as { queryKey?: unknown } | undefined)?.queryKey);
 		return Promise.resolve();
 	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	return { wrapper };
 }
 
 const createBody = { name: "invoice-review", description: "How to review", body: "# Body" };
@@ -86,8 +80,8 @@ describe("useSkills reads", () => {
 	});
 
 	it("maps the list response into domain skill summaries (body omitted)", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useSkills(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useSkills(), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -113,16 +107,16 @@ describe("useSkills reads", () => {
 	});
 
 	it("does not fetch the single skill when no id is supplied (create path)", () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useSkill(null), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useSkill(null), { wrapper });
 
 		expect(result.current.fetchStatus).toBe("idle");
 		expect(getFn).not.toHaveBeenCalled();
 	});
 
 	it("fetches and maps the full single skill (body included) when an id is supplied", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useSkill("skill-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useSkill("skill-1"), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -159,8 +153,8 @@ describe("useSkills mutations", () => {
 	});
 
 	it("create forwards the body and invalidates the skills list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useCreateSkill(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useCreateSkill(), { wrapper });
 
 		result.current.mutate({ body: createBody });
 
@@ -171,8 +165,8 @@ describe("useSkills mutations", () => {
 	});
 
 	it("update forwards path + body and invalidates both the list and the single-skill cache", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useUpdateSkill(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useUpdateSkill(), { wrapper });
 
 		result.current.mutate({ path: { skillId: "skill-1" }, body: updateBody });
 
@@ -186,8 +180,8 @@ describe("useSkills mutations", () => {
 	});
 
 	it("delete forwards the path and invalidates the skills list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useDeleteSkill(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useDeleteSkill(), { wrapper });
 
 		result.current.mutate({ path: { skillId: "skill-1" } });
 

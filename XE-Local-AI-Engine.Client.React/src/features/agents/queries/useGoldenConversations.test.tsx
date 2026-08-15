@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated TanStack module so the hooks run against owned query/mutation fns (no network). The hooks still
@@ -34,6 +32,7 @@ import {
 	useGoldenConversations,
 	useHarvestGolden,
 } from "@/features/agents/queries/useGoldenConversations";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // The generated query key the mutations invalidate (partial `_id` match), built via the production helper.
 const LIST_KEY = goldenConversationsInvalidationKey(goldenConversationsQueryIds.list);
@@ -63,17 +62,12 @@ const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {
 	invalidatedKeys.length = 0;
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
+	const { wrapper, queryClient } = createProvidersWrapper();
 	vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters) => {
 		invalidatedKeys.push((filters as { queryKey?: unknown } | undefined)?.queryKey);
 		return Promise.resolve();
 	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	return { wrapper };
 }
 
 describe("useGoldenConversations (read)", () => {
@@ -90,8 +84,8 @@ describe("useGoldenConversations (read)", () => {
 	});
 
 	it("passes the agent id as a path param and maps the generated response into domain cases", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useGoldenConversations("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useGoldenConversations("agent-1"), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -114,8 +108,8 @@ describe("useGoldenConversations (read)", () => {
 	});
 
 	it("is disabled (does not fetch) when no agent is selected", () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useGoldenConversations(null), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useGoldenConversations(null), { wrapper });
 
 		expect(result.current.fetchStatus).toBe("idle");
 		expect(result.current.isPending).toBe(true);
@@ -140,8 +134,8 @@ describe("golden conversation mutations", () => {
 	});
 
 	it("create dispatches the domain request into the generated { path, body } envelope and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useCreateGoldenConversation("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useCreateGoldenConversation("agent-1"), { wrapper });
 
 		result.current.mutate({ title: "T", inputTurns: [{ role: "user", text: "hi" }], rubric: "ok" });
 
@@ -158,8 +152,8 @@ describe("golden conversation mutations", () => {
 	});
 
 	it("delete dispatches the golden id into the generated { path } envelope and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useDeleteGoldenConversation("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useDeleteGoldenConversation("agent-1"), { wrapper });
 
 		result.current.mutate("g-7");
 
@@ -172,8 +166,8 @@ describe("golden conversation mutations", () => {
 	});
 
 	it("harvest dispatches the bound { path } envelope, maps the counts, and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useHarvestGolden("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useHarvestGolden("agent-1"), { wrapper });
 
 		result.current.mutate();
 
@@ -190,8 +184,8 @@ describe("golden conversation mutations", () => {
 	});
 
 	it("approve dispatches the golden id into the generated { path } envelope and invalidates the list", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useApproveGolden("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useApproveGolden("agent-1"), { wrapper });
 
 		result.current.mutate("g-1");
 
@@ -205,8 +199,8 @@ describe("golden conversation mutations", () => {
 
 	it("surfaces a mutation error and does not invalidate", async () => {
 		createMutationFn.mockRejectedValue(new Error("Request failed with status code 400"));
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useCreateGoldenConversation("agent-1"), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useCreateGoldenConversation("agent-1"), { wrapper });
 
 		result.current.mutate({ title: "T", inputTurns: [{ role: "user", text: "hi" }], rubric: "ok" });
 
