@@ -104,7 +104,8 @@ public sealed record AgentSkillRecord(
     string? SourceUri = null,
     long? ImportedAtUtc = null,
     string? ContentSha256 = null,
-    IReadOnlyList<AgentSkillResourceRecord>? Resources = null);
+    IReadOnlyList<AgentSkillResourceRecord>? Resources = null,
+    string? GenerationMetadataJson = null);
 
 /// <summary>
 ///     Mutable fields of an agent skill supplied on create/update. Free text is passed as plaintext strings; the store
@@ -121,6 +122,11 @@ public sealed record AgentSkillRecord(
 ///         its <em>kind</em> only — the operator's filename, or the model that drafted it, must not become the one
 ///         unencrypted free-text string in this table.
 ///     </para>
+///     <para>
+///         <see cref="GenerationMetadataJson" /> is set-if-present on update: <c>null</c> leaves the stored provenance
+///         alone rather than clearing it, so an ordinary operator edit that did not echo the block back cannot erase
+///         the record of how the skill was drafted (same reasoning as the promote-only provenance above).
+///     </para>
 /// </summary>
 public sealed record AgentSkillInput(
     string Name,
@@ -134,7 +140,8 @@ public sealed record AgentSkillInput(
     AgentSkillOrigin Origin = AgentSkillOrigin.Local,
     string? SourceUri = null,
     long? ImportedAtUtc = null,
-    string? ContentSha256 = null);
+    string? ContentSha256 = null,
+    string? GenerationMetadataJson = null);
 
 /// <summary>
 ///     Decrypted projection of one bundled skill file. <see cref="Name" /> is the skill-root-relative path the model
