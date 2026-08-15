@@ -42,6 +42,25 @@ class RuntimeFloorVerifierTests(unittest.TestCase):
         result = self.run_verifier("10.0.11", "10.0.10")
         self.assertEqual(0, result.returncode, result.stderr)
 
+    def test_non_http_metadata_url_is_rejected_before_any_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            props = root / "ReleaseVersion.props"
+            props.write_text(
+                "<Project><PropertyGroup><DotNetRuntimeVersion>10.0.10</DotNetRuntimeVersion></PropertyGroup></Project>",
+                encoding="utf-8",
+            )
+            local_metadata = root / "releases.json"
+            local_metadata.write_text(json.dumps({"latest-release": "10.0.10"}), encoding="utf-8")
+            result = subprocess.run(
+                [str(VERIFIER), "--props", str(props), "--metadata-url", local_metadata.as_uri()],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("must use http or https", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
