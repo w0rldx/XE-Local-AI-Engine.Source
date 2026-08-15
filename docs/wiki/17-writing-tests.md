@@ -151,6 +151,13 @@ assert the resulting schema — see `AddAgentDefinitionsMigrationTests.cs`. Use 
 rather than hand-rolling `PRAGMA` SQL per file. Remember `MigrateAsync()` applies *every* later migration too, so
 assert the columns you added exist — not that the table's column set is exactly yours.
 
+A migration that converts, repairs or deletes **data** needs rows to convert, or it is only being tested as a
+schema change. The probe's three-step seam is `MigrateChatAsync(file, predecessorId)` → `ExecuteAsync(insert…)`
+→ `MigrateToAsync(thisMigrationId)`: seed the historical rows through raw SQL (the entity model describes head,
+not the schema those rows were valid under), then run exactly the one migration over them and assert what it
+did. `EncryptConversationTitleMigrationTests.cs` (titles cleared) and
+`RepairAndUniqueMessageSequenceMigrationTests.cs` (colliding sequences renumbered) are the worked examples.
+
 ### React components
 
 Render through the shared provider wrapper `src/test/RenderWithProviders.tsx` (Mantine theme, i18n, TanStack
