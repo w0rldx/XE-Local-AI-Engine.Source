@@ -1,8 +1,11 @@
 import { Stack, Textarea, TextInput } from "@mantine/core";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import type { AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
+import { AssistActions } from "@/features/assist/components/AssistActions";
+import type { AssistDraft } from "@/features/assist/models/AssistModels";
 
 interface AgentDefinitionBasicFieldsProps {
 	values: AgentDefinitionFormValues;
@@ -15,8 +18,34 @@ interface AgentDefinitionBasicFieldsProps {
 export function AgentDefinitionBasicFields({ values, nameError, instructionsError, onFieldChange }: AgentDefinitionBasicFieldsProps) {
 	const { t } = useTranslation();
 
+	// An applied draft overwrites the three drafted fields and records where they came from. The provenance survives
+	// later hand edits on purpose — the server recomputes the content hash at save time and stores `wasEdited`
+	// itself, so dropping the block here would hide that the instructions started as a generation.
+	const handleApplyDraft = useCallback(
+		(draft: AssistDraft) => {
+			onFieldChange((current) => ({
+				...current,
+				name: draft.name,
+				description: draft.description,
+				instructions: draft.content,
+				generationMetadata: draft.generationMetadata,
+			}));
+		},
+		[onFieldChange],
+	);
+
+	const handleDiscardDraft = useCallback(() => {
+		onFieldChange((current) => ({ ...current, generationMetadata: null }));
+	}, [onFieldChange]);
+
 	return (
 		<Stack gap="md">
+			<AssistActions
+				surface="agent"
+				existing={{ name: values.name, description: values.description, content: values.instructions }}
+				onApply={handleApplyDraft}
+				onDiscard={handleDiscardDraft}
+			/>
 			<TextInput
 				label={t("pages.agents.form.name.label", "Name")}
 				placeholder={t("pages.agents.form.name.placeholder", "Research assistant")}

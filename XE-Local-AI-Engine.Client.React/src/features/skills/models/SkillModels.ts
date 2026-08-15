@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { GenerationMetadata } from "@/features/assist/models/AssistModels";
+
 // Agent Skills specification name: lowercase letters/digits separated by SINGLE hyphens; no leading, trailing or
 // consecutive hyphens. This is a client-side convenience only — the backend delegates to MAF's own
 // AgentSkillFrontmatter.ValidateName and stays authoritative. The earlier pattern
@@ -33,10 +35,11 @@ export interface SkillFrontmatter {
 	readonly metadata: Readonly<Record<string, string>> | null;
 }
 
-// Where a skill came from. `sourceUri` is one of exactly two values — `upload` or `github:owner/repo` — enforced by
-// AgentSkillStore.ValidateSourceUri, which throws on anything else. A pasted SKILL.md is recorded as `upload`; there
-// is no `paste` source, so do not switch on one. For an upload the kind is all that is stored: an operator-chosen
-// filename would be the one plaintext string in a table where everything else is AEAD-encrypted.
+// Where a skill came from. `sourceUri` is one of exactly three values — `upload`, `github:owner/repo`, or
+// `generated` (written by an AI draft) — enforced by AgentSkillStore.ValidateSourceUri, which throws on anything
+// else. A pasted SKILL.md is recorded as `upload`; there is no `paste` source, so do not switch on one. For an
+// upload the kind is all that is stored: an operator-chosen filename would be the one plaintext string in a table
+// where everything else is AEAD-encrypted.
 export interface SkillProvenance {
 	readonly origin: SkillOrigin;
 	readonly sourceUri: string | null;
@@ -84,6 +87,13 @@ export interface SkillFormValues {
 	compatibility: string;
 	allowedTools: string;
 	metadata: Readonly<Record<string, string>> | null;
+	// True once an AI draft has been applied to this form. Set on Apply, KEPT through subsequent hand edits (the
+	// server computes `wasEdited` from the content hash), cleared only by an explicit Discard. Saving it demotes the
+	// skill server-side: Imported, disabled, sourceUri `generated` — from any prior state.
+	generated: boolean;
+	// The opaque provenance block from the draft response, echoed back verbatim on save. `null` means "no draft
+	// applied", which the save path sends as null — the server reads that as "leave the stored provenance alone".
+	generationMetadata: GenerationMetadata | null;
 }
 
 // Zod schema validating the form before submit. Name is required and must match the MAF-safe pattern; description
@@ -99,6 +109,10 @@ export const skillFormSchema = z.object({
 	compatibility: z.string().trim().max(SKILL_COMPATIBILITY_MAX),
 	allowedTools: z.string().trim().max(SKILL_ALLOWED_TOOLS_MAX),
 	metadata: z.record(z.string(), z.string()).nullable(),
+	generated: z.boolean(),
+	// Deliberately unvalidated: the provenance block is opaque client-side and must survive submit byte-for-byte, so
+	// modelling it as a z.object() (which strips unknown keys) would quietly drop any field the server adds later.
+	generationMetadata: z.custom<GenerationMetadata>().nullable(),
 });
 
 /** True when a stored name would be REJECTED by MAF and therefore dropped at resolve time (the operator must rename
