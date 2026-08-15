@@ -714,9 +714,9 @@ public sealed class CloudSettingsEndpointTests
         };
     }
 
-    private static TestingWebAppFactory CreateFactory(ICloudCredentialStore cloudCredentialStore, ICapabilityReporter? capabilityReporter = null)
+    private static TestServerWebAppFactory CreateFactory(ICloudCredentialStore cloudCredentialStore, ICapabilityReporter? capabilityReporter = null)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -728,7 +728,7 @@ public sealed class CloudSettingsEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

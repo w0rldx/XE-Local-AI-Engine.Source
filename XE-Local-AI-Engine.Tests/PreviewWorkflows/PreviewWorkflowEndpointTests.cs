@@ -21,7 +21,7 @@ public sealed class PreviewWorkflowEndpointTests
     [Test]
     public async Task PreviewEndpoints_RequireOperator()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var unauthorized = new (HttpMethod Method, string Route)[]
@@ -59,7 +59,7 @@ public sealed class PreviewWorkflowEndpointTests
     public async Task PreviewEndpoints_ExecuteUnsaved_RunsWithoutPersisting()
     {
         // Substitute the runner with a scripted session so the inline run never touches Ollama.
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -107,7 +107,7 @@ public sealed class PreviewWorkflowEndpointTests
         // sends no body — and therefore no Content-Type. The endpoints must accept that instead of answering 415
         // Unsupported Media Type. An unknown run yields 404 (authorized, body accepted, run simply not found), which
         // proves the request was bound and dispatched rather than rejected at the media-type gate.
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
@@ -125,7 +125,7 @@ public sealed class PreviewWorkflowEndpointTests
     {
         // The reload-leak recovery path end to end over HTTP: a run whose id is no longer held by any page must be
         // findable via GET preview/runs, fetchable by id, and clearable via cancel-all — none of which existed before.
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -183,7 +183,7 @@ public sealed class PreviewWorkflowEndpointTests
         AssertEx.Equal(expected: "Cancelled", after.GetProperty("state").GetString());
     }
 
-    private static async Task<List<Guid>> ListRunIds(HttpClient client, TestingWebAppFactory factory)
+    private static async Task<List<Guid>> ListRunIds(HttpClient client, TestServerWebAppFactory factory)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/preview/runs");
         factory.AddNodeBearerToken(request);
@@ -195,7 +195,7 @@ public sealed class PreviewWorkflowEndpointTests
 
     /// <summary>GETs the run until <paramref name="predicate" /> holds (the run's state machine advances on a background drain).</summary>
     private static async Task<JsonElement> PollRunAsync(HttpClient client,
-        TestingWebAppFactory factory,
+        TestServerWebAppFactory factory,
         Guid runId,
         Func<JsonElement, bool> predicate)
     {

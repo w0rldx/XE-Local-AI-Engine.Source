@@ -16,7 +16,7 @@ public sealed class NodeChatEndpointTests
     [Test]
     public async Task Conversations_WhenCreated_CanBeListedAndLoaded()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var createRequest = CreateJsonRequest(factory,
@@ -50,7 +50,7 @@ public sealed class NodeChatEndpointTests
     {
         // A non-default value proves the composer's pre-check limit tracks the operator's Security:MaxMessageSizeKb
         // instead of a constant baked into the response.
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services => services.Configure<SecurityOptions>(options => options.MaxMessageSizeKb = 7)
         };
@@ -67,7 +67,7 @@ public sealed class NodeChatEndpointTests
     [Test]
     public async Task Cancel_WhenCorrelationMatches_TerminalizesOnlyThatMessage()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel API", UserId: null, CreatedAtUtc: 10)).ConfigureAwait(false);
@@ -105,7 +105,7 @@ public sealed class NodeChatEndpointTests
     [Test]
     public async Task ConversationDelete_WhenConversationExists_HidesConversationFromGetAndList()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete API", UserId: null, CreatedAtUtc: 20)).ConfigureAwait(false);
@@ -131,7 +131,7 @@ public sealed class NodeChatEndpointTests
     [Test]
     public async Task SetSelectedPath_WhenOriginLocal_PersistsAndReturnsMap()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Selected path API", UserId: null, CreatedAtUtc: 50)).ConfigureAwait(false);
@@ -160,14 +160,14 @@ public sealed class NodeChatEndpointTests
         AssertEx.Equal(chosenId, persisted[groupId]);
     }
 
-    private static HttpRequestMessage CreateJsonRequest<T>(TestingWebAppFactory factory, HttpMethod method, string uri, T content)
+    private static HttpRequestMessage CreateJsonRequest<T>(TestServerWebAppFactory factory, HttpMethod method, string uri, T content)
     {
         var request = CreateRequest(factory, method, uri);
         request.Content = JsonContent.Create(content);
         return request;
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

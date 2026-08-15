@@ -24,7 +24,7 @@ public sealed class GgufDownloadOperationStatusEndpointTests
     [Test]
     public async Task ForADownloadOperation_ReturnsSameStatusAsTheModelNameView()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var registry = factory.Services.GetRequiredService<IGgufAcquisitionOperationRegistry>();
@@ -61,7 +61,7 @@ public sealed class GgufDownloadOperationStatusEndpointTests
     [Test]
     public async Task ForAnImportOperationId_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var registry = factory.Services.GetRequiredService<IGgufAcquisitionOperationRegistry>();
@@ -81,7 +81,7 @@ public sealed class GgufDownloadOperationStatusEndpointTests
     [Test]
     public async Task DownloadsRoute_WhenModelNameIsLiterallyOperations_IsNotCapturedByTheOperationsRoute()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // No model is ever tracked under the literal name "operations", so the single-segment {modelName} route must

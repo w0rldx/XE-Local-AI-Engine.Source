@@ -149,10 +149,10 @@ public sealed class CodexEndpointTests
         return statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
     }
 
-    private static TestingWebAppFactory CreateFactory(ICodexTokenStore? tokenStore = null,
+    private static TestServerWebAppFactory CreateFactory(ICodexTokenStore? tokenStore = null,
         ICodexLoginCoordinator? loginCoordinator = null)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -169,7 +169,7 @@ public sealed class CodexEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

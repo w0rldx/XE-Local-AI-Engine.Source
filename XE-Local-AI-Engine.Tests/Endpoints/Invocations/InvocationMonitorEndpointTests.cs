@@ -156,9 +156,9 @@ public sealed class InvocationMonitorEndpointTests
         history.DidNotReceive().Snapshot();
     }
 
-    private static TestingWebAppFactory CreateFactory(IWorkerEventDispatcher dispatcher, IInvocationHistory history)
+    private static TestServerWebAppFactory CreateFactory(IWorkerEventDispatcher dispatcher, IInvocationHistory history)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -170,7 +170,7 @@ public sealed class InvocationMonitorEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

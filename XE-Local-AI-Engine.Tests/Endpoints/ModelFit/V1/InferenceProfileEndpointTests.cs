@@ -211,9 +211,9 @@ public sealed class InferenceProfileEndpointTests
         AssertEx.False(json.Contains("machine_key", StringComparison.OrdinalIgnoreCase), "Profiles response must not expose the machine key.");
     }
 
-    private static TestingWebAppFactory CreateFactory(IInferenceProfileService inferenceProfileService)
+    private static TestServerWebAppFactory CreateFactory(IInferenceProfileService inferenceProfileService)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
