@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Default <see cref="IKnowledgeIngestionAdmissionService" />. Holds the upload admission rule that used to live in
-///     the upload endpoint handler.
+///     Default <see cref="IKnowledgeIngestionAdmissionService" />. Holds the single admission rule that used to live in
+///     the upload endpoint handler and, duplicated, in the repository importer's per-file loop.
 /// </summary>
 public sealed class KnowledgeIngestionAdmissionService(
     IKnowledgeDocumentCatalogService catalogService,
@@ -11,13 +11,14 @@ public sealed class KnowledgeIngestionAdmissionService(
     private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
     private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher = ingestionDispatcher ?? throw new ArgumentNullException(nameof(ingestionDispatcher));
 
-    public async Task<KnowledgeIngestionAdmissionResult> AdmitUploadedDocumentAsync(Guid documentId,
-        bool wasInserted,
+    public async Task<KnowledgeIngestionAdmissionResult> AdmitStoredDocumentAsync(Guid documentId,
+        bool wasWritten,
         CancellationToken cancellationToken)
     {
         // Resolve the current status once. Ingestion flips a document out of Pending the instant it starts, so a Pending
         // row is one that has NOT been ingested — either freshly inserted or a prior upload whose admission a full queue
-        // rejected (503), leaving the persisted blob stranded. Enqueue when the document was freshly inserted OR is a
+        // rejected (503), leaving the persisted blob stranded. Enqueue when the store WROTE the document (a fresh insert,
+        // or a repository document whose bytes changed) OR it is a
         // dedupe hit in a RETRYABLE state, so retrying a stranded or failed upload actually recovers instead of returning
         // success for work that was never queued. A dedupe hit already Indexed (or mid-ingestion) is left alone.
         // Admission is idempotent, so retrying a document already queued is a harmless no-op rather than a duplicate
@@ -25,13 +26,13 @@ public sealed class KnowledgeIngestionAdmissionService(
         var status = await _catalogService.GetStatusAsync(documentId, cancellationToken).ConfigureAwait(false)
                      ?? KnowledgeDocumentStatus.Pending;
 
-        if (!wasInserted && !IsRetryableOnReUpload(status))
+        if (!wasWritten && !IsRetryableOnReUpload(status))
         {
-            return new KnowledgeIngestionAdmissionResult(status, QueueFull: false);
+            return new KnowledgeIngestionAdmissionResult(status, Enqueue: null);
         }
 
         var admission = await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken).ConfigureAwait(false);
-        return new KnowledgeIngestionAdmissionResult(status, admission == KnowledgeIngestionEnqueueResult.QueueFull);
+        return new KnowledgeIngestionAdmissionResult(status, admission);
     }
 
     /// <summary>
