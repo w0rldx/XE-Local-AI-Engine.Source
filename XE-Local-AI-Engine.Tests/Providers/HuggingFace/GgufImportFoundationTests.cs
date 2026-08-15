@@ -85,6 +85,65 @@ public sealed class GgufImportFoundationTests
     }
 
     [Test]
+    public async Task Inspector_AdapterWorkload_InProcessOnly()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildAdapterGguf(), "tuned-lora-Q4_K_M.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+
+        var inProcess = await inspector.InspectAsync(new GgufImportSource(source),
+            GgufImportInspectionMode.InProcessTrainedCommit,
+            CancellationToken.None);
+        AssertEx.True(inProcess.IsAccepted, "A trained LoRA adapter must be accepted on the in-process path.");
+        AssertEx.Equal(GgufImportWorkload.LoraAdapter, inProcess.Workload);
+
+        // The public HTTP import surface is unchanged: an adapter upload is still refused on its type.
+        var publicImport = await inspector.InspectAsync(new GgufImportSource(source), CancellationToken.None);
+        AssertEx.False(publicImport.IsAccepted);
+        AssertEx.Contains(publicImport.Rejections, GgufImportRejectionCode.UnsupportedModelType);
+        AssertEx.Null(publicImport.Workload);
+    }
+
+    [Test]
+    public async Task Inspector_MergedNamedAdapter_MetadataDecided()
+    {
+        // A merged fine-tune is an ordinary model whose FILE NAME happens to contain "adapter". On the in-process path
+        // the decision comes from general.type, so the name costs it nothing; on the public path the name heuristic
+        // still rejects it, exactly as before.
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(), "merged-adapter-model-Q4_K_M.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+
+        var inProcess = await inspector.InspectAsync(new GgufImportSource(source),
+            GgufImportInspectionMode.InProcessTrainedCommit,
+            CancellationToken.None);
+        AssertEx.True(inProcess.IsAccepted, "A merged fine-tune must not be rejected for its file name.");
+        AssertEx.Equal(GgufImportWorkload.CausalChat, inProcess.Workload);
+
+        var publicImport = await inspector.InspectAsync(new GgufImportSource(source), CancellationToken.None);
+        AssertEx.False(publicImport.IsAccepted);
+        AssertEx.Contains(publicImport.Rejections, GgufImportRejectionCode.UnsupportedArchitecture);
+    }
+
+    [Test]
+    public async Task Inspector_InProcess_StillRejectsUnsupportedArchitecture()
+    {
+        // The bypass covers the display-name heuristic only. A non-causal architecture stays rejected on both paths —
+        // an export that produced one is a bug, not a model to register.
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(architecture: "bert"), "tuned-Q4_K_M.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+
+        var inProcess = await inspector.InspectAsync(new GgufImportSource(source),
+            GgufImportInspectionMode.InProcessTrainedCommit,
+            CancellationToken.None);
+
+        AssertEx.False(inProcess.IsAccepted);
+        AssertEx.Contains(inProcess.Rejections, GgufImportRejectionCode.UnsupportedArchitecture);
+        AssertEx.Equal("bert", inProcess.Architecture);
+    }
+
+    [Test]
     public async Task Inspector_SourceIdentityToken_ChangesWhenSamePathIsAtomicallyReplaced()
     {
         using var paths = new ImportPaths();
@@ -808,6 +867,16 @@ public sealed class GgufImportFoundationTests
         }
 
         return builder.Build();
+    }
+
+    // A LoRA adapter: same architecture as the base it was trained against, distinguished only by general.type.
+    private static byte[] BuildAdapterGguf(string architecture = "llama")
+    {
+        return new GgufHeaderBytesBuilder()
+               .WithString("general.architecture", architecture)
+               .WithString("general.type", "adapter")
+               .WithUint32("general.file_type", value: 15)
+               .Build();
     }
 
     private static GgufModelRegistryEntry GoldenEntry()
