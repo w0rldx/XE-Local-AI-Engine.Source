@@ -25,6 +25,7 @@ import {
 	cancelBenchmarkRun,
 	cancelCudaBuild,
 	cancelDevelopmentAttempt,
+	cancelEvaluation,
 	cancelGgufDownload,
 	cancelGgufImport,
 	cancelImageJob,
@@ -48,9 +49,11 @@ import {
 	createAgentDefinition,
 	createBaseArtifact,
 	createBenchmarkProject,
+	createComparison,
 	createCustomTool,
 	createDevelopmentProject,
 	createDevelopmentRepositoryFromTemplate,
+	createEvaluation,
 	createGoldenConversation,
 	createImageJob,
 	createMcpServer,
@@ -69,8 +72,10 @@ import {
 	deleteBaseArtifact,
 	deleteBenchmarkProject,
 	deleteBenchmarkRun,
+	deleteComparison,
 	deleteConversationFile,
 	deleteCustomTool,
+	deleteEvaluation,
 	deleteGoldenConversation,
 	deleteImageModel,
 	deleteKnowledgeDocument,
@@ -121,6 +126,7 @@ import {
 	getBenchmarkProject,
 	getBenchmarkRun,
 	getCloudSettings,
+	getComparison,
 	getConnectionStatus,
 	getCudaBuildPrerequisites,
 	getCudaBuildStatus,
@@ -129,6 +135,7 @@ import {
 	getDevelopmentCapability,
 	getDevelopmentProject,
 	getDevelopmentTask,
+	getEvaluation,
 	getGgufDownloadOperationStatus,
 	getGgufDownloads,
 	getGgufDownloadStatus,
@@ -190,6 +197,7 @@ import {
 	listBaseArtifacts,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
+	listComparisons,
 	listConversationFiles,
 	listCustomTools,
 	listDevelopmentArtifacts,
@@ -199,6 +207,7 @@ import {
 	listDevelopmentTemplates,
 	listEligibleBenchmarkAgents,
 	listEligibleBenchmarkModels,
+	listEvaluations,
 	listGoldenConversations,
 	listImageJobs,
 	listImageModelDownloads,
@@ -257,6 +266,7 @@ import {
 	renameNodeChatConversation,
 	resolveToolApproval,
 	resolveUserQuestion,
+	resumeEvaluation,
 	retrieveImage,
 	reviewTrainingSample,
 	revokeLocalModelProxyApiKey,
@@ -283,6 +293,7 @@ import {
 	startNodeBinding,
 	startStableDiffusionCppSourceBuild,
 	startTrainingRuntimeInstall,
+	suggestComparison,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
 	unloadLocalModel,
@@ -335,6 +346,8 @@ import type {
 	CancelCudaBuildResponse,
 	CancelDevelopmentAttemptData,
 	CancelDevelopmentAttemptResponse,
+	CancelEvaluationData,
+	CancelEvaluationResponse,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
 	CancelGgufImportData,
@@ -383,12 +396,18 @@ import type {
 	CreateBaseArtifactResponse,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectResponse,
+	CreateComparisonData,
+	CreateComparisonError,
+	CreateComparisonResponse,
 	CreateCustomToolData,
 	CreateCustomToolResponse,
 	CreateDevelopmentProjectData,
 	CreateDevelopmentProjectResponse,
 	CreateDevelopmentRepositoryFromTemplateData,
 	CreateDevelopmentRepositoryFromTemplateResponse,
+	CreateEvaluationData,
+	CreateEvaluationError,
+	CreateEvaluationResponse,
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
 	CreateImageJobData,
@@ -430,10 +449,16 @@ import type {
 	DeleteBenchmarkProjectResponse,
 	DeleteBenchmarkRunData,
 	DeleteBenchmarkRunResponse,
+	DeleteComparisonData,
+	DeleteComparisonError,
+	DeleteComparisonResponse,
 	DeleteConversationFileData,
 	DeleteConversationFileResponse,
 	DeleteCustomToolData,
 	DeleteCustomToolResponse,
+	DeleteEvaluationData,
+	DeleteEvaluationError,
+	DeleteEvaluationResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
 	DeleteImageModelData,
@@ -541,6 +566,8 @@ import type {
 	GetBenchmarkRunResponse,
 	GetCloudSettingsData,
 	GetCloudSettingsResponse,
+	GetComparisonData,
+	GetComparisonResponse,
 	GetConnectionStatusData,
 	GetConnectionStatusResponse,
 	GetCudaBuildPrerequisitesData,
@@ -557,6 +584,8 @@ import type {
 	GetDevelopmentProjectResponse,
 	GetDevelopmentTaskData,
 	GetDevelopmentTaskResponse,
+	GetEvaluationData,
+	GetEvaluationResponse,
 	GetGgufDownloadOperationStatusData,
 	GetGgufDownloadOperationStatusResponse,
 	GetGgufDownloadsData,
@@ -684,6 +713,8 @@ import type {
 	ListBenchmarkProjectsResponse,
 	ListBenchmarkRunsData,
 	ListBenchmarkRunsResponse,
+	ListComparisonsData,
+	ListComparisonsResponse,
 	ListConversationFilesData,
 	ListConversationFilesResponse,
 	ListCustomToolsData,
@@ -702,6 +733,8 @@ import type {
 	ListEligibleBenchmarkAgentsResponse,
 	ListEligibleBenchmarkModelsData,
 	ListEligibleBenchmarkModelsResponse,
+	ListEvaluationsData,
+	ListEvaluationsResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
@@ -825,6 +858,8 @@ import type {
 	ResolveUserQuestionData,
 	ResolveUserQuestionError,
 	ResolveUserQuestionResponse,
+	ResumeEvaluationData,
+	ResumeEvaluationResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
 	ReviewTrainingSampleData,
@@ -884,6 +919,9 @@ import type {
 	StartTrainingRuntimeInstallData,
 	StartTrainingRuntimeInstallError,
 	StartTrainingRuntimeInstallResponse,
+	SuggestComparisonData,
+	SuggestComparisonError,
+	SuggestComparisonResponse,
 	TriggerScheduledJobData,
 	TriggerScheduledJobResponse,
 	UnhandledExceptionProbeData,
@@ -1161,6 +1199,179 @@ export const startTrainingRuntimeInstallMutation = (
 	return mutationOptions;
 };
 
+export const listTrainingRunsQueryKey = (options: Options<ListTrainingRunsData>) => createQueryKey("listTrainingRuns", options);
+
+export const listTrainingRunsOptions = (options: Options<ListTrainingRunsData>) =>
+	queryOptions<
+		ListTrainingRunsResponse,
+		AxiosError<DefaultError>,
+		ListTrainingRunsResponse,
+		ReturnType<typeof listTrainingRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listTrainingRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listTrainingRunsQueryKey(options),
+	});
+
+const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
+	queryKey: QueryKey<Options>,
+	page: K,
+) => {
+	const params = { ...queryKey[0] };
+	if (page.body) {
+		params.body = {
+			...(queryKey[0].body as any),
+			...(page.body as any),
+		};
+	}
+	if (page.headers) {
+		params.headers = {
+			...queryKey[0].headers,
+			...page.headers,
+		};
+	}
+	if (page.path) {
+		params.path = {
+			...(queryKey[0].path as any),
+			...(page.path as any),
+		};
+	}
+	if (page.query) {
+		params.query = {
+			...(queryKey[0].query as any),
+			...(page.query as any),
+		};
+	}
+	return params as unknown as typeof page;
+};
+
+export const listTrainingRunsInfiniteQueryKey = (
+	options: Options<ListTrainingRunsData>,
+): QueryKey<Options<ListTrainingRunsData>> => createQueryKey("listTrainingRuns", options, true);
+
+export const listTrainingRunsInfiniteOptions = (options: Options<ListTrainingRunsData>) =>
+	infiniteQueryOptions<
+		ListTrainingRunsResponse,
+		AxiosError<DefaultError>,
+		InfiniteData<ListTrainingRunsResponse>,
+		QueryKey<Options<ListTrainingRunsData>>,
+		number | Pick<QueryKey<Options<ListTrainingRunsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListTrainingRunsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									page: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listTrainingRuns({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listTrainingRunsInfiniteQueryKey(options),
+		},
+	);
+
+export const createTrainingRunMutation = (
+	options?: Partial<Options<CreateTrainingRunData>>,
+): UseMutationOptions<CreateTrainingRunResponse, AxiosError<CreateTrainingRunError>, Options<CreateTrainingRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateTrainingRunResponse,
+		AxiosError<CreateTrainingRunError>,
+		Options<CreateTrainingRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createTrainingRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getTrainingRunQueryKey = (options: Options<GetTrainingRunData>) => createQueryKey("getTrainingRun", options);
+
+export const getTrainingRunOptions = (options: Options<GetTrainingRunData>) =>
+	queryOptions<
+		GetTrainingRunResponse,
+		AxiosError<DefaultError>,
+		GetTrainingRunResponse,
+		ReturnType<typeof getTrainingRunQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTrainingRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTrainingRunQueryKey(options),
+	});
+
+export const cancelTrainingRunMutation = (
+	options?: Partial<Options<CancelTrainingRunData>>,
+): UseMutationOptions<CancelTrainingRunResponse, AxiosError<DefaultError>, Options<CancelTrainingRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelTrainingRunResponse,
+		AxiosError<DefaultError>,
+		Options<CancelTrainingRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelTrainingRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getTrainingRunDefaultsQueryKey = (options: Options<GetTrainingRunDefaultsData>) =>
+	createQueryKey("getTrainingRunDefaults", options);
+
+export const getTrainingRunDefaultsOptions = (options: Options<GetTrainingRunDefaultsData>) =>
+	queryOptions<
+		GetTrainingRunDefaultsResponse,
+		AxiosError<GetTrainingRunDefaultsError>,
+		GetTrainingRunDefaultsResponse,
+		ReturnType<typeof getTrainingRunDefaultsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTrainingRunDefaults({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTrainingRunDefaultsQueryKey(options),
+	});
+
 export const listToolMocksQueryKey = (options?: Options<ListToolMocksData>) => createQueryKey("listToolMocks", options);
 
 export const listToolMocksOptions = (options?: Options<ListToolMocksData>) =>
@@ -1247,6 +1458,115 @@ export const verifyToolMockMutation = (
 	const mutationOptions: UseMutationOptions<VerifyToolMockResponse, AxiosError<DefaultError>, Options<VerifyToolMockData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await verifyToolMock({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listEvaluationsQueryKey = (options?: Options<ListEvaluationsData>) => createQueryKey("listEvaluations", options);
+
+export const listEvaluationsOptions = (options?: Options<ListEvaluationsData>) =>
+	queryOptions<
+		ListEvaluationsResponse,
+		AxiosError<DefaultError>,
+		ListEvaluationsResponse,
+		ReturnType<typeof listEvaluationsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listEvaluations({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listEvaluationsQueryKey(options),
+	});
+
+export const createEvaluationMutation = (
+	options?: Partial<Options<CreateEvaluationData>>,
+): UseMutationOptions<CreateEvaluationResponse, AxiosError<CreateEvaluationError>, Options<CreateEvaluationData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateEvaluationResponse,
+		AxiosError<CreateEvaluationError>,
+		Options<CreateEvaluationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createEvaluation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteEvaluationMutation = (
+	options?: Partial<Options<DeleteEvaluationData>>,
+): UseMutationOptions<DeleteEvaluationResponse, AxiosError<DeleteEvaluationError>, Options<DeleteEvaluationData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteEvaluationResponse,
+		AxiosError<DeleteEvaluationError>,
+		Options<DeleteEvaluationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteEvaluation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getEvaluationQueryKey = (options: Options<GetEvaluationData>) => createQueryKey("getEvaluation", options);
+
+export const getEvaluationOptions = (options: Options<GetEvaluationData>) =>
+	queryOptions<GetEvaluationResponse, AxiosError<DefaultError>, GetEvaluationResponse, ReturnType<typeof getEvaluationQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getEvaluation({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getEvaluationQueryKey(options),
+	});
+
+export const resumeEvaluationMutation = (
+	options?: Partial<Options<ResumeEvaluationData>>,
+): UseMutationOptions<ResumeEvaluationResponse, AxiosError<DefaultError>, Options<ResumeEvaluationData>> => {
+	const mutationOptions: UseMutationOptions<ResumeEvaluationResponse, AxiosError<DefaultError>, Options<ResumeEvaluationData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resumeEvaluation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelEvaluationMutation = (
+	options?: Partial<Options<CancelEvaluationData>>,
+): UseMutationOptions<CancelEvaluationResponse, AxiosError<DefaultError>, Options<CancelEvaluationData>> => {
+	const mutationOptions: UseMutationOptions<CancelEvaluationResponse, AxiosError<DefaultError>, Options<CancelEvaluationData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelEvaluation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1467,38 +1787,6 @@ export const listTrainingSamplesOptions = (options: Options<ListTrainingSamplesD
 		queryKey: listTrainingSamplesQueryKey(options),
 	});
 
-const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
-	queryKey: QueryKey<Options>,
-	page: K,
-) => {
-	const params = { ...queryKey[0] };
-	if (page.body) {
-		params.body = {
-			...(queryKey[0].body as any),
-			...(page.body as any),
-		};
-	}
-	if (page.headers) {
-		params.headers = {
-			...queryKey[0].headers,
-			...page.headers,
-		};
-	}
-	if (page.path) {
-		params.path = {
-			...(queryKey[0].path as any),
-			...(page.path as any),
-		};
-	}
-	if (page.query) {
-		params.query = {
-			...(queryKey[0].query as any),
-			...(page.query as any),
-		};
-	}
-	return params as unknown as typeof page;
-};
-
 export const listTrainingSamplesInfiniteQueryKey = (
 	options: Options<ListTrainingSamplesData>,
 ): QueryKey<Options<ListTrainingSamplesData>> => createQueryKey("listTrainingSamples", options, true);
@@ -1576,6 +1864,105 @@ export const exportTrainingDatasetOptions = (options: Options<ExportTrainingData
 			return data;
 		},
 		queryKey: exportTrainingDatasetQueryKey(options),
+	});
+
+export const listComparisonsQueryKey = (options?: Options<ListComparisonsData>) => createQueryKey("listComparisons", options);
+
+export const listComparisonsOptions = (options?: Options<ListComparisonsData>) =>
+	queryOptions<
+		ListComparisonsResponse,
+		AxiosError<DefaultError>,
+		ListComparisonsResponse,
+		ReturnType<typeof listComparisonsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listComparisons({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listComparisonsQueryKey(options),
+	});
+
+export const createComparisonMutation = (
+	options?: Partial<Options<CreateComparisonData>>,
+): UseMutationOptions<CreateComparisonResponse, AxiosError<CreateComparisonError>, Options<CreateComparisonData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateComparisonResponse,
+		AxiosError<CreateComparisonError>,
+		Options<CreateComparisonData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createComparison({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteComparisonMutation = (
+	options?: Partial<Options<DeleteComparisonData>>,
+): UseMutationOptions<DeleteComparisonResponse, AxiosError<DeleteComparisonError>, Options<DeleteComparisonData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteComparisonResponse,
+		AxiosError<DeleteComparisonError>,
+		Options<DeleteComparisonData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteComparison({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getComparisonQueryKey = (options: Options<GetComparisonData>) => createQueryKey("getComparison", options);
+
+export const getComparisonOptions = (options: Options<GetComparisonData>) =>
+	queryOptions<GetComparisonResponse, AxiosError<DefaultError>, GetComparisonResponse, ReturnType<typeof getComparisonQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getComparison({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getComparisonQueryKey(options),
+	});
+
+export const suggestComparisonQueryKey = (options: Options<SuggestComparisonData>) =>
+	createQueryKey("suggestComparison", options);
+
+export const suggestComparisonOptions = (options: Options<SuggestComparisonData>) =>
+	queryOptions<
+		SuggestComparisonResponse,
+		AxiosError<SuggestComparisonError>,
+		SuggestComparisonResponse,
+		ReturnType<typeof suggestComparisonQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await suggestComparison({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: suggestComparisonQueryKey(options),
 	});
 
 export const cancelBaseArtifactMutation = (
@@ -7011,144 +7398,3 @@ export const updateSuggestedPlaybookActionMutation = (
 	};
 	return mutationOptions;
 };
-
-export const listTrainingRunsQueryKey = (options: Options<ListTrainingRunsData>) => createQueryKey("listTrainingRuns", options);
-
-export const listTrainingRunsOptions = (options: Options<ListTrainingRunsData>) =>
-	queryOptions<
-		ListTrainingRunsResponse,
-		AxiosError<DefaultError>,
-		ListTrainingRunsResponse,
-		ReturnType<typeof listTrainingRunsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listTrainingRuns({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listTrainingRunsQueryKey(options),
-	});
-
-export const listTrainingRunsInfiniteQueryKey = (
-	options: Options<ListTrainingRunsData>,
-): QueryKey<Options<ListTrainingRunsData>> => createQueryKey("listTrainingRuns", options, true);
-
-export const listTrainingRunsInfiniteOptions = (options: Options<ListTrainingRunsData>) =>
-	infiniteQueryOptions<
-		ListTrainingRunsResponse,
-		AxiosError<DefaultError>,
-		InfiniteData<ListTrainingRunsResponse>,
-		QueryKey<Options<ListTrainingRunsData>>,
-		number | Pick<QueryKey<Options<ListTrainingRunsData>>[0], "body" | "headers" | "path" | "query">
-	>(
-		// @ts-ignore
-		{
-			queryFn: async ({ pageParam, queryKey, signal }) => {
-				// @ts-ignore
-				const page: Pick<QueryKey<Options<ListTrainingRunsData>>[0], "body" | "headers" | "path" | "query"> =
-					typeof pageParam === "object"
-						? pageParam
-						: {
-								query: {
-									page: pageParam,
-								},
-							};
-				const params = createInfiniteParams(queryKey, page);
-				const { data } = await listTrainingRuns({
-					...options,
-					...params,
-					signal,
-					throwOnError: true,
-				});
-				return data;
-			},
-			queryKey: listTrainingRunsInfiniteQueryKey(options),
-		},
-	);
-
-export const createTrainingRunMutation = (
-	options?: Partial<Options<CreateTrainingRunData>>,
-): UseMutationOptions<CreateTrainingRunResponse, AxiosError<CreateTrainingRunError>, Options<CreateTrainingRunData>> => {
-	const mutationOptions: UseMutationOptions<
-		CreateTrainingRunResponse,
-		AxiosError<CreateTrainingRunError>,
-		Options<CreateTrainingRunData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createTrainingRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getTrainingRunQueryKey = (options: Options<GetTrainingRunData>) => createQueryKey("getTrainingRun", options);
-
-export const getTrainingRunOptions = (options: Options<GetTrainingRunData>) =>
-	queryOptions<
-		GetTrainingRunResponse,
-		AxiosError<DefaultError>,
-		GetTrainingRunResponse,
-		ReturnType<typeof getTrainingRunQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getTrainingRun({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getTrainingRunQueryKey(options),
-	});
-
-export const cancelTrainingRunMutation = (
-	options?: Partial<Options<CancelTrainingRunData>>,
-): UseMutationOptions<CancelTrainingRunResponse, AxiosError<DefaultError>, Options<CancelTrainingRunData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelTrainingRunResponse,
-		AxiosError<DefaultError>,
-		Options<CancelTrainingRunData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelTrainingRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getTrainingRunDefaultsQueryKey = (options: Options<GetTrainingRunDefaultsData>) =>
-	createQueryKey("getTrainingRunDefaults", options);
-
-export const getTrainingRunDefaultsOptions = (options: Options<GetTrainingRunDefaultsData>) =>
-	queryOptions<
-		GetTrainingRunDefaultsResponse,
-		AxiosError<GetTrainingRunDefaultsError>,
-		GetTrainingRunDefaultsResponse,
-		ReturnType<typeof getTrainingRunDefaultsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getTrainingRunDefaults({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getTrainingRunDefaultsQueryKey(options),
-	});
