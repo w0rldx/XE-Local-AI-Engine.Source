@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 internal static class AddNodeTrainingDatasetExtensions
 {
@@ -13,9 +14,13 @@ internal static class AddNodeTrainingDatasetExtensions
         ArgumentNullException.ThrowIfNull(builder);
         builder.Services.AddScoped<ITrainingDatasetStore, TrainingDatasetStore>();
 
-        // Process-wide exclusivity flag (decision #13). Singleton: it is the whole point that every consumer sees the
-        // same one. TryAdd so the Slice 3 runtime module can register it too without a duplicate winning.
-        builder.Services.TryAddSingleton<ITrainingActivity, TrainingActivity>();
+        // The node's GPU-work admission gate (decision #13). Singleton: it is the whole point that every consumer sees
+        // the same one. TryAdd so the run module can register it too without a duplicate winning.
+        builder.Services.TryAddSingleton<IGpuWorkGate, GpuWorkGate>();
+
+        // Shared with the run module: the generation executor registers its live cancellation under the DATASET id,
+        // which is never a run id. TryAdd for the same reason as the gate.
+        builder.Services.TryAddSingleton<TrainingRunCancellationRegistry>();
 
         builder.Services.AddScoped<IDatasetDefinitionService, DatasetDefinitionService>();
         builder.Services.AddScoped<IDatasetGenerationService, DatasetGenerationService>();

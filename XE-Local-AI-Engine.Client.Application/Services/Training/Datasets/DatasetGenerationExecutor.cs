@@ -8,6 +8,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 public interface IDatasetGenerationExecutor
@@ -19,12 +20,19 @@ public interface IDatasetGenerationExecutor
 ///     Runs one dataset's generation to a terminal state. It owns durable terminalization: the queue's outer guard only
 ///     ever sees a failure of THIS method's own error handling, never an ordinary generation failure.
 /// </summary>
+/// <remarks>
+///     The run is registered in <see cref="TrainingRunCancellationRegistry" /> under the DATASET id — a dataset id is
+///     never a run id, and the evaluation executor already shares the registry the same way. An operator cancel
+///     terminalizes as <c>Cancelled</c> and returns normally; only a host shutdown rethrows, because the queue loop
+///     reads that as its own stop signal rather than as a failure to log.
+/// </remarks>
 public sealed class DatasetGenerationExecutor(
     ITrainingDatasetStore store,
     IStructuredAgentRunner runner,
     ISampleValidationPipeline pipeline,
     ILocalModelProviderResolver providerResolver,
     IDatasetGenerationEventBuffer events,
+    TrainingRunCancellationRegistry cancellations,
     ILogger<DatasetGenerationExecutor> logger) : IDatasetGenerationExecutor
 {
     /// <summary>
@@ -46,6 +54,7 @@ public sealed class DatasetGenerationExecutor(
         }
         """).RootElement.Clone();
 
+    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
     private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly ILogger<DatasetGenerationExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly ISampleValidationPipeline _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
@@ -56,18 +65,28 @@ public sealed class DatasetGenerationExecutor(
     public async Task ExecuteAsync(DatasetGenerationClaimedWork work, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(work);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var registration = _cancellations.Register(work.DatasetId, cancellation);
+        var generationToken = cancellation.Token;
         try
         {
-            await GenerateAsync(work, cancellationToken).ConfigureAwait(false);
+            await GenerateAsync(work, generationToken).ConfigureAwait(false);
             _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Ready)));
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, cancellationToken)
+            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, generationToken)
                             .ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (generationToken.IsCancellationRequested)
         {
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Cancelled, errorMessage: null, CancellationToken.None)
                             .ConfigureAwait(false);
-            throw;
+
+            // An operator cancel is an ordinary outcome, already recorded — rethrowing it would make the queue log a
+            // "queue failed" error for work that ended exactly as asked. Only a host stop propagates, because that is
+            // the loop's own signal to return.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
         }
         catch (Exception exception)
         {

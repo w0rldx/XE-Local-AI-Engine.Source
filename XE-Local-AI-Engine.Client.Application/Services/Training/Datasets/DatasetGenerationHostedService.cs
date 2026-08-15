@@ -8,25 +8,26 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     generalized. Startup recovery runs once before the loop: an interrupted <c>Running</c> work item is terminalized
 ///     as failed (attempt is pinned to 1, so nothing is retried in place) and its replay buffer is evicted.
 ///     <para>
-///         The loop refuses to CLAIM while a training run holds <see cref="ITrainingActivity" /> (decision #13). Refusing
-///         at the claim rather than at the executor keeps queued work queued: it resumes on the next poll once the run
-///         releases, instead of being terminalized as failed.
+///         The loop takes a shared <see cref="IGpuWorkGate" /> hold BEFORE it CLAIMS and keeps it until the work is
+///         done (decision #13), so an exclusive holder can never admit beside generation that is already executing.
+///         Refusing at the claim rather than at the executor keeps queued work queued: it resumes on the next poll once
+///         the exclusive holder releases, instead of being terminalized as failed.
 ///     </para>
 /// </summary>
 public sealed class DatasetGenerationHostedService(
     IServiceScopeFactory scopeFactory,
     IDatasetGenerationQueueSignal signal,
     IDatasetGenerationEventBuffer events,
-    ITrainingActivity trainingActivity,
+    IGpuWorkGate gpuWorkGate,
     IOptions<DatasetGenerationQueueOptions> options,
     ILogger<DatasetGenerationHostedService> logger) : BackgroundService
 {
     private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
+    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
     private readonly ILogger<DatasetGenerationHostedService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly TimeSpan _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     private readonly IDatasetGenerationQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly ITrainingActivity _trainingActivity = trainingActivity ?? throw new ArgumentNullException(nameof(trainingActivity));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -34,35 +35,45 @@ public sealed class DatasetGenerationHostedService(
         while (!stoppingToken.IsCancellationRequested)
         {
             DatasetGenerationClaimedWork? work = null;
-            if (!_trainingActivity.IsActive)
+            var admission = _gpuWorkGate.TryBeginShared(GpuWorkKind.DatasetGeneration);
+            try
             {
-                await using var claimScope = _scopeFactory.CreateAsyncScope();
-                var store = claimScope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
-                work = await store.ClaimNextAsync(stoppingToken).ConfigureAwait(false);
+                if (admission is not null)
+                {
+                    await using var claimScope = _scopeFactory.CreateAsyncScope();
+                    var store = claimScope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
+                    work = await store.ClaimNextAsync(stoppingToken).ConfigureAwait(false);
+                }
+
+                if (work is not null)
+                {
+                    await using var executionScope = _scopeFactory.CreateAsyncScope();
+                    try
+                    {
+                        await executionScope.ServiceProvider.GetRequiredService<IDatasetGenerationExecutor>()
+                                            .ExecuteAsync(work, stoppingToken)
+                                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (Exception exception)
+                    {
+                        // The executor owns durable terminalization. Reaching this guard means its own failure handling
+                        // failed; keep the single consumer alive so later durable work is not starved.
+                        _logger.LogError(exception, "The dataset generation queue failed while executing dataset {DatasetId}.", work.DatasetId);
+                    }
+                }
+            }
+            finally
+            {
+                admission?.Dispose();
             }
 
             if (work is null)
             {
                 await WaitAsync(stoppingToken).ConfigureAwait(false);
-                continue;
-            }
-
-            await using var executionScope = _scopeFactory.CreateAsyncScope();
-            try
-            {
-                await executionScope.ServiceProvider.GetRequiredService<IDatasetGenerationExecutor>()
-                                    .ExecuteAsync(work, stoppingToken)
-                                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception exception)
-            {
-                // The executor owns durable terminalization. Reaching this guard means its own failure handling failed;
-                // keep the single consumer alive so later durable work is not starved.
-                _logger.LogError(exception, "The dataset generation queue failed while executing dataset {DatasetId}.", work.DatasetId);
             }
         }
     }

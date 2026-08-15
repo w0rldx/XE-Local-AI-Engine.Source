@@ -208,11 +208,6 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<bool> HasActiveGenerationAsync(CancellationToken cancellationToken = default) =>
-        _dbContext.DatasetGenerationWorkItems.AsNoTracking()
-                  .AnyAsync(item => item.Status == DatasetGenerationWorkStatus.Queued || item.Status == DatasetGenerationWorkStatus.Running,
-                      cancellationToken);
-
     public async Task<DatasetGenerationClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)
