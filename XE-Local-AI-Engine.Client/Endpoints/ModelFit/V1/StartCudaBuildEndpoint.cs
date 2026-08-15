@@ -28,6 +28,9 @@ public sealed class StartCudaBuildEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.CudaBuild);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+                               .Produces<StartCudaBuildResponse>(StatusCodes.Status200OK)
+                               .Produces<CudaBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
