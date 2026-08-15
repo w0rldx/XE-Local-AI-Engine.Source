@@ -17,7 +17,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimeStatus_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync($"{ApiPrefix}/runtime/status").ConfigureAwait(false);
@@ -28,7 +28,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task BaseArtifacts_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync($"{ApiPrefix}/base-artifacts").ConfigureAwait(false);
@@ -39,7 +39,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimeInstall_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/runtime/install");
@@ -52,7 +52,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimeStatus_WithOperatorToken_ReportsAnIdleRuntimeOnACleanBox()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/runtime/status");
@@ -74,7 +74,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimePrerequisites_WithOperatorToken_ReportsEveryItem()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/runtime/prerequisites");
@@ -91,7 +91,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task ListBaseArtifacts_WithOperatorToken_ReturnsAnEmptyCollectionOnACleanDatabase()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/base-artifacts");
@@ -107,7 +107,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task GetBaseArtifact_WhenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/base-artifacts/{Guid.NewGuid()}");
@@ -120,7 +120,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task DeleteBaseArtifact_WhenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/base-artifacts/{Guid.NewGuid()}");
@@ -134,7 +134,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task CreateBaseArtifact_WhenTheRepoIdIsBlank_IsRejectedByValidation()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/base-artifacts")

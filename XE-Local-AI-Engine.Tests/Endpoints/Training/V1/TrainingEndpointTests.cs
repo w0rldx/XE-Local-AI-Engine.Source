@@ -157,7 +157,7 @@ public sealed class TrainingEndpointTests
         AssertEx.Contains(body, "\"verificationState\":\"Verified\"", StringComparison.Ordinal);
     }
 
-    private static HttpRequestMessage Authorized(TestingWebAppFactory factory, HttpMethod method, string path, object? content = null)
+    private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)
     {
         var request = new HttpRequestMessage(method, path);
         factory.AddNodeBearerToken(request);
@@ -181,7 +181,7 @@ public sealed class TrainingEndpointTests
     private sealed class Context : IAsyncDisposable
     {
         public Context() =>
-            Factory = new TestingWebAppFactory
+            Factory = new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {
@@ -208,7 +208,7 @@ public sealed class TrainingEndpointTests
 
         public IToolMockService Mocks { get; } = Substitute.For<IToolMockService>();
 
-        public TestingWebAppFactory Factory { get; }
+        public TestServerWebAppFactory Factory { get; }
 
         public ValueTask DisposeAsync() =>
             Factory.DisposeAsync();
