@@ -4554,6 +4554,43 @@
 		"export": {
 			"title": "Export ({{format}})"
 		},
+		"artifacts": {
+			"export": "Exportieren",
+			"exportTitle": "Diesen Lauf exportieren",
+			"kindLabel": "Was exportiert wird",
+			"quantLabel": "Quantisierung",
+			"startExport": "Export starten",
+			"adapterNote": "Ein Adapter wird immer als F16 exportiert und auf dem Basismodell ausgeführt, gegen das er trainiert wurde.",
+			"retestSmoke": "Rauchtest wiederholen",
+			"promote": "Als Modell registrieren",
+			"promoteTitle": "Als lokales Modell registrieren",
+			"promoteNote": "Die Quantisierung wird automatisch an den Namen angehängt, und das Modell hält fest, aus welchem Checkpoint und Datensatz es stammt.",
+			"modelNameLabel": "Modellname",
+			"modelNamePlaceholder": "mein-feinabgestimmtes-modell",
+			"delete": "Löschen",
+			"kind": {
+				"MergedGguf": "Zusammengeführtes Modell",
+				"AdapterGguf": "Nur Adapter"
+			},
+			"smoke": {
+				"Pending": "Nicht geprüft",
+				"Passed": "Rauchtest bestanden",
+				"Failed": "Rauchtest fehlgeschlagen",
+				"Skipped": "Rauchtest übersprungen"
+			},
+			"phase": {
+				"preparing": "Export wird vorbereitet",
+				"merging": "Adapter wird ins Basismodell eingerechnet",
+				"converting": "Wird nach GGUF konvertiert",
+				"quantizing": "Wird quantisiert",
+				"inspecting": "Exportiertes Modell wird geprüft",
+				"smoke": "Rauchtest läuft",
+				"ready": "Bereit",
+				"smokeFailed": "Rauchtest fehlgeschlagen",
+				"skipped": "Übersprungen",
+				"failed": "Export fehlgeschlagen"
+			}
+		},
 		"errors": {
 			"request": "Die Trainings-Anfrage ist fehlgeschlagen."
 		},

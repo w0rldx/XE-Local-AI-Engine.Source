@@ -11,6 +11,7 @@ import type {
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse as TrainingRunDefaultsResponse,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload as TrainingRunOptionsPayload,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse as TrainingRunResponse,
+	XeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactResponse as TrainingArtifactResponse,
 } from "@/core/api/generated";
 import type { ChatMessagePart } from "@/features/chat/models/ChatModels";
 
@@ -517,7 +518,9 @@ export interface TrainingRunDefaultsView {
 export const trainingRunEventSchema = z.object({
 	runId: z.string(),
 	sequence: z.number(),
-	kind: z.enum(["State", "Phase", "Progress", "Artifact", "Error"]),
+	// "Export" rides the same stream as training progress: the run's own status never moves for an export, so this
+	// is the only live signal that one is happening.
+	kind: z.enum(["State", "Phase", "Progress", "Artifact", "Export", "Error"]),
 	payload: z.object({
 		state: z.string().nullish(),
 		phase: z.string().nullish(),
@@ -659,6 +662,65 @@ export function applyRunEvent(current: TrainingRunLiveProgress, event: TrainingR
 /** True while the run still owns the GPU. A terminal run is done and its row stops polling. */
 export function isRunActive(status: TrainingRunStatusValue): boolean {
 	return status !== "Succeeded" && status !== "Failed" && status !== "Cancelled";
+}
+
+// ---------------------------------------------------------------------------
+// Staged export artifacts (Slice 4 surface).
+// ---------------------------------------------------------------------------
+
+export type TrainingArtifactKindValue = "AdapterGguf" | "MergedGguf" | "HfAdapterDir";
+export type TrainingArtifactSmokeStateValue = "Pending" | "Passed" | "Failed" | "Skipped";
+
+export interface TrainingArtifactView {
+	readonly id: string;
+	readonly runId: string;
+	readonly kind: TrainingArtifactKindValue;
+	readonly fileName: string;
+	readonly sha256: string | null;
+	readonly sizeBytes: number;
+	readonly smokeState: TrainingArtifactSmokeStateValue;
+	readonly smokeReason: string | null;
+	/** The registry name once promoted; null while the artifact is still staged and inert. */
+	readonly committedModelName: string | null;
+	readonly version: number;
+}
+
+export function toTrainingArtifactView(response: TrainingArtifactResponse): TrainingArtifactView {
+	return {
+		id: response.id,
+		runId: response.runId,
+		kind: response.kind as TrainingArtifactKindValue,
+		fileName: response.fileName,
+		sha256: response.sha256 ?? null,
+		sizeBytes: response.sizeBytes,
+		smokeState: response.smokeState as TrainingArtifactSmokeStateValue,
+		smokeReason: response.smokeReason ?? null,
+		committedModelName: response.committedModelName ?? null,
+		version: response.version,
+	};
+}
+
+/** The first characters of the digest — enough to tell two builds apart without a 64-character wall of hex. */
+export function shortDigest(sha256: string | null): string | null {
+	return sha256 == null || sha256.length < 12 ? sha256 : sha256.slice(0, 12);
+}
+
+/** Only a smoke-passed artifact can be registered, and only one that is not registered yet. */
+export function canPromote(artifact: TrainingArtifactView): boolean {
+	return artifact.smokeState === "Passed" && artifact.committedModelName == null;
+}
+
+/** The trainer's own adapter directory is an input to an export, never an export target itself. */
+export function isExportedArtifact(artifact: TrainingArtifactView): boolean {
+	return artifact.kind !== "HfAdapterDir";
+}
+
+// The phases the export pipeline ends on. Everything else it publishes means work is still in flight.
+const terminalExportPhases = new Set(["ready", "smokeFailed", "skipped", "failed"]);
+
+/** True while an export is still running, from its latest published phase. */
+export function isExportRunning(phase: string | null): boolean {
+	return phase != null && !terminalExportPhases.has(phase);
 }
 
 /** Percentage through the current epoch's steps, or null when the trainer has not reported a total yet. */
