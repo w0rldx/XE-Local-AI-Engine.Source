@@ -36,6 +36,31 @@ public sealed class TrainingDatasetStoreTests : IDisposable
     }
 
     [Test]
+    public async Task DatasetCreate_PinsTheDefinitionBody_AndALaterEditDoesNotMoveIt()
+    {
+        await using var context = await CreateDatabaseAsync("definition-pin.sqlite");
+        var store = new TrainingDatasetStore(context, TimeProvider.System);
+        var definition = await store.CreateDefinitionAsync(Definition("pinned"));
+
+        var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
+        AssertEx.Equal(BodyOf("pinned"), PinnedBody(dataset), "A new dataset pins its definition body.");
+
+        // The edit bumps DefinitionVersion; the dataset keeps both the version it claims AND the body that version named.
+        var edited = await store.UpdateDefinitionAsync(definition.Id, definition.Version, Definition("edited"));
+        AssertEx.Equal(expected: 2L, edited.DefinitionVersion);
+
+        var reread = AssertEx.NotNull(await store.GetDatasetAsync(dataset.Id));
+        AssertEx.Equal(expected: 1L, reread.DefinitionVersion);
+        AssertEx.Equal(BodyOf("pinned"), PinnedBody(reread), "The pin survives an edit.");
+
+        // A sample append rewrites the dataset row's counters; the untouched pin must not be re-encrypted or lost.
+        _ = await store.ClaimNextAsync();
+        _ = await store.AppendSampleAsync(Sample(dataset.Id, "hash-a"));
+        var afterAppend = AssertEx.NotNull(await store.GetDatasetAsync(dataset.Id));
+        AssertEx.Equal(BodyOf("pinned"), PinnedBody(afterAppend), "A counter update must not drop the pin.");
+    }
+
+    [Test]
     public async Task GenerationQueue_ClaimsRecoversAndTerminalizesIdempotently()
     {
         var databasePath = GetDatabasePath("queue.sqlite");
@@ -184,7 +209,17 @@ public sealed class TrainingDatasetStoreTests : IDisposable
     }
 
     private static TrainingDefinitionInput Definition(string name) =>
-        new(name, TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}"""));
+        new(name, TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes(BodyOf(name)));
+
+    private static string PinnedBody(TrainingDatasetRecord dataset)
+    {
+        AssertEx.True(dataset.DefinitionJson.HasValue, "The dataset must carry a pinned definition body.");
+        return Encoding.UTF8.GetString(dataset.DefinitionJson!.Value.Span);
+    }
+
+    /// <summary>The definition body, distinguishable per name so a pin can be told apart from a later edit.</summary>
+    private static string BodyOf(string name) =>
+        $$"""{"schemaVersion":1,"teacherModelName":"{{name}}-teacher.gguf"}""";
 
     private static TrainingSampleInput Sample(Guid datasetId, string sourceHash) =>
         new(datasetId, "tool-call", TrainingSampleLabel.Good,

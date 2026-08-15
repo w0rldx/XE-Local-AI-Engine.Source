@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training;
 
+using System.Text;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -104,6 +105,7 @@ public sealed class DatasetGenerationQueueTests
     }
 
     private static TrainingDatasetRecord Dataset() =>
-        new(Guid.NewGuid(), Guid.NewGuid(), 1, "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
+        new(Guid.NewGuid(), Guid.NewGuid(), 1, Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}"""),
+            "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
             DatasetGenerationWorkStatus.Queued, null);
 }

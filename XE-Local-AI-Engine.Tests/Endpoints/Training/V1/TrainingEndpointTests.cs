@@ -171,7 +171,8 @@ public sealed class TrainingEndpointTests
     }
 
     private static TrainingDatasetRecord Dataset() =>
-        new(DatasetId, DefinitionId, 3, "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
+        new(DatasetId, DefinitionId, 3, Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}"""),
+            "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
             DatasetGenerationWorkStatus.Queued, null);
 
     private static ToolMockRecord Mock(ToolMockVerificationState state) =>

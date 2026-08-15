@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class TrainingEncryptionTests : IDisposable
 {
     private const string DefinitionJson = """{"toolNames":["read_file"],"sizeTarget":32,"holdoutFraction":0.1}""";
+    private const string PinnedDefinitionJson = """{"toolNames":["read_file"],"sizeTarget":32,"holdoutFraction":0.1,"pinned":true}""";
     private const string SampleContentJson = """[{"kind":"tool","name":"read_file","args":{"path":"README.md"}}]""";
     private const string SampleValidationJson = """{"schema":"pass","execution":"mocked"}""";
     private const string MockJson = """{"rules":[{"match":{"path":"README.md"},"response":"# Title"}]}""";
@@ -44,6 +45,9 @@ public sealed class TrainingEncryptionTests : IDisposable
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         var definition = AssertEx.NotNull(await readContext.TrainingDatasetDefinitions.SingleAsync(), "Definition should be readable.");
         AssertEx.Equal(DefinitionJson, Encoding.UTF8.GetString(definition.DefinitionJson));
+
+        var dataset = AssertEx.NotNull(await readContext.TrainingDatasets.SingleAsync(item => item.Id == datasetId), "Dataset should be readable.");
+        AssertEx.Equal(PinnedDefinitionJson, Encoding.UTF8.GetString(dataset.DefinitionJson!));
 
         var sample = AssertEx.NotNull(await readContext.TrainingDatasetSamples.SingleAsync(), "Sample should be readable.");
         AssertEx.Equal(SampleContentJson, Encoding.UTF8.GetString(sample.ContentJson));
@@ -75,6 +79,12 @@ public sealed class TrainingEncryptionTests : IDisposable
         {
             command.CommandText = "SELECT definition_json FROM training_dataset_definitions LIMIT 1;";
             await AssertCiphertextAsync(command, DefinitionJson);
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT definition_json FROM training_datasets WHERE name = 'Primary' LIMIT 1;";
+            await AssertCiphertextAsync(command, PinnedDefinitionJson);
         }
 
         await using (var command = connection.CreateCommand())
@@ -212,6 +222,7 @@ public sealed class TrainingEncryptionTests : IDisposable
             Id = Guid.NewGuid(),
             DefinitionId = definitionId,
             DefinitionVersion = 1,
+            DefinitionJson = Encoding.UTF8.GetBytes(PinnedDefinitionJson),
             Name = name,
             Status = TrainingDatasetStatus.Generating,
             Revision = 1,

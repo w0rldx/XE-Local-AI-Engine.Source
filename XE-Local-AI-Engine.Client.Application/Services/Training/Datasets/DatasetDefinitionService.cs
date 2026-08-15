@@ -63,6 +63,24 @@ public sealed class DatasetDefinitionService(
     public Task DeleteAsync(Guid definitionId, long expectedVersion, CancellationToken cancellationToken = default) =>
         _store.DeleteDefinitionAsync(definitionId, expectedVersion, cancellationToken);
 
+    /// <summary>
+    ///     What a consumer of an unpinned dataset is told. Operator-facing: there is no honest way to generate or
+    ///     evaluate against a body that was never recorded, and reading the LIVE definition instead is exactly the
+    ///     silent re-shaping the pin exists to prevent.
+    /// </summary>
+    public const string UnpinnedDatasetReason =
+        "This dataset was created before its definition was pinned, so the definition it was generated from is unknown. Re-create the dataset.";
+
+    /// <summary>
+    ///     Reads the definition body a dataset PINNED at creation, or <see langword="null" /> when it predates pinning.
+    ///     Every consumer of a dataset's definition goes through here rather than through the live definition row.
+    /// </summary>
+    public static DatasetDefinitionBodyV1? ReadPinnedBody(TrainingDatasetRecord dataset)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        return dataset.DefinitionJson is { IsEmpty: false } body ? ReadBody(body) : null;
+    }
+
     /// <summary>Reads a persisted definition body. Throws <see cref="TrainingValidationException" /> on an unreadable payload.</summary>
     public static DatasetDefinitionBodyV1 ReadBody(ReadOnlyMemory<byte> definitionJson)
     {
