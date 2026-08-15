@@ -145,6 +145,12 @@ public sealed record GetTrainingDatasetRequest
     public Guid DatasetId { get; init; }
 }
 
+/// <summary>The dataset id is the whole request; it comes from the route, so the POST carries no body.</summary>
+public sealed record CancelTrainingDatasetRequest
+{
+    public Guid DatasetId { get; init; }
+}
+
 public sealed record DeleteTrainingDatasetRequest
 {
     public Guid DatasetId { get; init; }

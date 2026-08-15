@@ -51,7 +51,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ImageJobCoordinator> _logger;
     private readonly IImageRuntimeActivityGate _runtimeActivityGate;
-    private readonly ITrainingActivity _trainingActivity;
+    private readonly IGpuWorkGate _gpuWorkGate;
 
     // Serializes generation to one running job; extra jobs wait here (still Queued) until the slot frees.
     private readonly SemaphoreSlim _generationSlot = new(initialCount: 1, maxCount: 1);
@@ -86,9 +86,9 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         TimeProvider timeProvider,
         ILogger<ImageJobCoordinator> logger,
         IImageRuntimeActivityGate runtimeActivityGate,
-        ITrainingActivity trainingActivity)
+        IGpuWorkGate gpuWorkGate)
     {
-        _trainingActivity = trainingActivity ?? throw new ArgumentNullException(nameof(trainingActivity));
+        _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _imageStore = imageStore ?? throw new ArgumentNullException(nameof(imageStore));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -189,10 +189,6 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         return await store.ListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Detached run tasks are registered from enqueue until terminal, so the map IS the in-flight set.</summary>
-    public bool HasActiveJob =>
-        !_runTasks.IsEmpty;
-
     public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId)
     {
         return _eventLogs.TryGetValue(jobId, out var log) ? log.Snapshot() : [];
@@ -287,14 +283,17 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             return;
         }
 
+        IDisposable? gpuAdmission = null;
         try
         {
             token.ThrowIfCancellationRequested();
 
-            // A training run holds the whole GPU (decision #13). The check sits here, after the slot is held and
+            // A training run holds the whole GPU (decision #13). The admission sits here, after the slot is held and
             // before the runtime is called, because that is the only point at which this job is definitely the one
-            // about to allocate VRAM: a run can begin while this job is still waiting behind another.
-            if (_trainingActivity.IsActive)
+            // about to allocate VRAM: a run can begin while this job is still waiting behind another. It is HELD
+            // through generation — checking and then releasing would let a run admit while the job allocates.
+            gpuAdmission = _gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob);
+            if (gpuAdmission is null)
             {
                 const string trainingBusy = "A training run is using the GPU. Try again once it finishes.";
                 await RunStoreAsync(store => store.MarkFailedAsync(jobId, trainingBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed")
@@ -353,6 +352,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
         finally
         {
+            gpuAdmission?.Dispose();
             if (acquired)
             {
                 try

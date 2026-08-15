@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -20,38 +18,43 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         refusal simply leaves the item Queued for the next poll.
 ///     </para>
 ///     <para>
-///         Three gates, in order: no other GPU work in flight (benchmark, dataset generation, image job), the
-///         process-wide <see cref="ITrainingActivity" /> flag, and the llama.cpp runtime-mutation lease — which refuses
-///         while any inference process is running, so a run cannot start behind a warm model.
+///         Two gates, in order: an exclusive hold on <see cref="IGpuWorkGate" />, and the llama.cpp runtime-mutation
+///         lease — which refuses while any inference process is running, so a run cannot start behind a warm model. The
+///         gate replaces what used to be a status sweep over the other queues followed by a separate flag: those were
+///         two decisions with a window between them, and another queue could admit inside it.
 ///     </para>
 ///     <para>
-///         <strong>The evaluation branch takes the first two gates and NOT the third.</strong> An evaluation's whole job
+///         <strong>Only work that HOLDS the gate blocks a run; queued-but-unclaimed work no longer does.</strong> The
+///         old sweep refused while a benchmark or generation work item merely sat Queued in the database. Both are
+///         safe — the loser simply waits — but the gate is now the single authority, and it can only speak for work
+///         that has actually been admitted.
+///     </para>
+///     <para>
+///         <strong>The evaluation branch takes the first gate and NOT the second.</strong> An evaluation's whole job
 ///         is to load a model and ask it one question per hold-out sample, and the mutation lease exists to forbid
 ///         exactly that — it refuses while a model is loaded, and a model load refuses while it is held. So an
-///         evaluation holds <see cref="ITrainingActivity" /> (nothing else GPU-bound starts beside it, and it does not
-///         start beside anything else) but reaches its model through the ordinary chat path. The queue peeks the head's
-///         kind BEFORE claiming, because the exclusivity a kind needs has to be held before the claim: attempt is
-///         pinned to 1, so a claim that turned out to need locks the consumer is not holding could not be handed back.
+///         evaluation holds the gate exclusively (nothing else GPU-bound starts beside it, and it does not start beside
+///         anything else) but reaches its model through the ordinary chat path. The queue peeks the head's kind BEFORE
+///         acquiring, because the exclusivity a kind needs has to be held before the claim: attempt is pinned to 1, so
+///         a claim that turned out to need locks the consumer is not holding could not be handed back.
 ///     </para>
 /// </remarks>
 public sealed class TrainingRunQueueHostedService(
     IServiceScopeFactory scopeFactory,
     ITrainingRunQueueSignal signal,
     ITrainingRunEventBuffer events,
-    ITrainingActivity trainingActivity,
+    IGpuWorkGate gpuWorkGate,
     ILlamaServerProcessSupervisor supervisor,
-    IImageJobCoordinator imageJobs,
     IOptions<TrainingRunQueueOptions> options,
     ILogger<TrainingRunQueueHostedService> logger) : BackgroundService
 {
     private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly IImageJobCoordinator _imageJobs = imageJobs ?? throw new ArgumentNullException(nameof(imageJobs));
+    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
     private readonly ILogger<TrainingRunQueueHostedService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly TimeSpan _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     private readonly ITrainingRunQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
     private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-    private readonly ITrainingActivity _trainingActivity = trainingActivity ?? throw new ArgumentNullException(nameof(trainingActivity));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -59,16 +62,20 @@ public sealed class TrainingRunQueueHostedService(
         while (!stoppingToken.IsCancellationRequested)
         {
             TrainingWorkClaim? claim = null;
-            IDisposable? activity = null;
+            IDisposable? admission = null;
             ILlamaServerRuntimeMutationLease? lease = null;
             try
             {
-                if (!await OtherGpuWorkActiveAsync(stoppingToken).ConfigureAwait(false))
+                // Peek first: the exclusivity a kind needs has to be held before the claim, and an idle queue must not
+                // take the gate at all — holding it across the poll would starve every other GPU path on a quiet node.
+                var kind = await PeekAsync(stoppingToken).ConfigureAwait(false);
+                if (kind is TrainingWorkKind.TrainingRun or TrainingWorkKind.EvaluationRun)
                 {
-                    activity = _trainingActivity.TryBegin();
-                    if (activity is not null)
+                    admission = _gpuWorkGate.TryBeginExclusive(kind == TrainingWorkKind.TrainingRun
+                        ? GpuWorkKind.TrainingRun
+                        : GpuWorkKind.EvaluationRun);
+                    if (admission is not null)
                     {
-                        var kind = await PeekAsync(stoppingToken).ConfigureAwait(false);
                         if (kind == TrainingWorkKind.TrainingRun)
                         {
                             lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(stoppingToken).ConfigureAwait(false);
@@ -77,9 +84,9 @@ public sealed class TrainingRunQueueHostedService(
                                 claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken).ConfigureAwait(false);
                             }
                         }
-                        else if (kind == TrainingWorkKind.EvaluationRun)
+                        else
                         {
-                            // No lease: see the class remarks. The activity flag is the exclusivity an evaluation needs.
+                            // No lease: see the class remarks. The exclusive hold is the exclusivity an evaluation needs.
                             claim = await ClaimAsync(TrainingWorkKind.EvaluationRun, stoppingToken).ConfigureAwait(false);
                         }
                     }
@@ -119,7 +126,7 @@ public sealed class TrainingRunQueueHostedService(
                     await lease.DisposeAsync().ConfigureAwait(false);
                 }
 
-                activity?.Dispose();
+                admission?.Dispose();
             }
 
             if (claim is null)
@@ -127,28 +134,6 @@ public sealed class TrainingRunQueueHostedService(
                 await WaitAsync(stoppingToken).ConfigureAwait(false);
             }
         }
-    }
-
-    /// <summary>
-    ///     The converse of the exclusivity checks the other queues make. Each is a status query against the store that
-    ///     already owns the enum, rather than a fourth "is anything running" registry.
-    /// </summary>
-    private async Task<bool> OtherGpuWorkActiveAsync(CancellationToken cancellationToken)
-    {
-        if (_imageJobs.HasActiveJob)
-        {
-            return true;
-        }
-
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var benchmarks = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
-        if (await benchmarks.HasActiveWorkAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return true;
-        }
-
-        var datasets = scope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
-        return await datasets.HasActiveGenerationAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<TrainingWorkKind?> PeekAsync(CancellationToken stoppingToken)
