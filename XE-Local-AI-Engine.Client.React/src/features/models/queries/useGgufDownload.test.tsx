@@ -372,10 +372,14 @@ describe("useActiveGgufDownloads", () => {
 			operationKind: "Import",
 			modelName: "private:Q4_K_M",
 		};
+		// Relative to now on purpose: this path runs the retention sweep against the real clock, so a fixed date makes
+		// the terminal status age out of the window and the test fail a day after it was written.
+		const completedAt = new Date(Date.now() - 2_000).toISOString();
+		const delayedAt = new Date(Date.now() - 3_000).toISOString();
 
 		act(() => {
-			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Completed", updatedAtUtc: "2026-08-14T10:00:02Z" });
-			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Running", updatedAtUtc: "2026-08-14T10:00:01Z" });
+			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Completed", updatedAtUtc: completedAt });
+			handlers.get(STATUS_CHANGED)?.({ ...base, phase: "Running", updatedAtUtc: delayedAt });
 		});
 
 		expect(result.current.get(base.operationId)?.phase).toBe("Completed");
