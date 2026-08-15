@@ -55,6 +55,7 @@ public sealed class TrainingRunQueueHostedService(
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     private readonly ITrainingRunQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
     private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    private bool _waitingForLease;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -83,6 +84,8 @@ public sealed class TrainingRunQueueHostedService(
                             {
                                 claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken).ConfigureAwait(false);
                             }
+
+                            LogLeaseWait(lease is null);
                         }
                         else
                         {
@@ -133,6 +136,28 @@ public sealed class TrainingRunQueueHostedService(
             {
                 await WaitAsync(stoppingToken).ConfigureAwait(false);
             }
+        }
+    }
+
+    /// <summary>
+    ///     A queued run behind a warm model waits on the eject-first rule silently otherwise: no status change, no
+    ///     reason, no log line — found live. Logged once per transition (waiting → admitted), never per poll.
+    /// </summary>
+    private void LogLeaseWait(bool waiting)
+    {
+        if (waiting == _waitingForLease)
+        {
+            return;
+        }
+
+        _waitingForLease = waiting;
+        if (waiting)
+        {
+            _logger.LogInformation("A training run is queued but a model is loaded; it starts once the runtime is idle (eject the loaded model to start it now).");
+        }
+        else
+        {
+            _logger.LogInformation("The runtime became idle; the queued training run is being admitted.");
         }
     }
 

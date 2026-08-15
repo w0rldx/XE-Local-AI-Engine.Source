@@ -79,6 +79,41 @@ public sealed class TrainingEvaluationEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, comparisonResponse.StatusCode);
     }
 
+    /// <summary>
+    ///     The generated client sends the id in the route and ONLY <c>expectedVersion</c> in the body. A DTO that marks
+    ///     the route-bound id <c>required</c> turns every such delete into a 400 (the body is deserialized before the
+    ///     route value is applied) — found live; an unknown id must reach the service and come back 404.
+    /// </summary>
+    [Test]
+    public async Task DeleteEvaluationAndComparison_WithTheGeneratedClientsBody_ReachTheServiceAndReturnNotFound()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var evaluationRequest = new HttpRequestMessage(HttpMethod.Delete, $"{Evaluations}/{Guid.NewGuid()}")
+        {
+            Content = JsonContent.Create(new
+            {
+                expectedVersion = 1
+            })
+        };
+        factory.AddNodeBearerToken(evaluationRequest);
+        using var evaluationResponse = await client.SendAsync(evaluationRequest).ConfigureAwait(false);
+
+        using var comparisonRequest = new HttpRequestMessage(HttpMethod.Delete, $"{Comparisons}/{Guid.NewGuid()}")
+        {
+            Content = JsonContent.Create(new
+            {
+                expectedVersion = 1
+            })
+        };
+        factory.AddNodeBearerToken(comparisonRequest);
+        using var comparisonResponse = await client.SendAsync(comparisonRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, evaluationResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NotFound, comparisonResponse.StatusCode);
+    }
+
     [Test]
     public async Task CreateEvaluation_ForAnUnknownRun_IsARejectionNotAFault()
     {

@@ -18,11 +18,15 @@ public sealed class EvaluationByIdRequest
     public required Guid EvaluationId { get; init; }
 }
 
+/// <summary>
+///     The id is route-bound and the version comes from the body; neither can be <c>required</c>, because the body
+///     is deserialized before the route value is applied and the generated client sends only <c>expectedVersion</c>.
+/// </summary>
 public sealed class DeleteEvaluationRequest
 {
-    public required Guid EvaluationId { get; init; }
+    public Guid EvaluationId { get; init; }
 
-    public required long ExpectedVersion { get; init; }
+    public long ExpectedVersion { get; init; }
 }
 
 public sealed class ListEvaluationsRequest
