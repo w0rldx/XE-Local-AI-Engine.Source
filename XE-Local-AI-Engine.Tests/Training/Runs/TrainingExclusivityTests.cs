@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Images;
@@ -90,6 +91,8 @@ public sealed class TrainingExclusivityTests
         {
             var runs = Substitute.For<ITrainingRunStore>();
             _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+            // Something IS queued: without this the refusal would be indistinguishable from an empty queue.
+            _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
             var benchmarks = Substitute.For<IBenchmarkStore>();
             _ = benchmarks.HasActiveWorkAsync(Arg.Any<CancellationToken>()).Returns(benchmarkActive);
             var datasets = Substitute.For<ITrainingDatasetStore>();
@@ -100,7 +103,7 @@ public sealed class TrainingExclusivityTests
             using var queue = BuildRunQueue(runs, benchmarks, datasets, images, new TrainingActivity());
             await RunBrieflyAsync(queue);
 
-            _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
+            _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
             AssertEx.True(condition: true, label);
         }
     }
@@ -112,11 +115,12 @@ public sealed class TrainingExclusivityTests
         using var held = AssertEx.NotNull(activity.TryBegin(), "Something else already holds the flag.");
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
 
         using var queue = BuildRunQueue(runs, IdleBenchmarks(), IdleDatasets(), IdleImages(), activity);
         await RunBrieflyAsync(queue);
 
-        _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
+        _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
 
     [Test]
@@ -124,6 +128,7 @@ public sealed class TrainingExclusivityTests
     {
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         // The lease refuses while ANY llama-server process is running or spawning — the eject-first gate.
         _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()).Returns((ILlamaServerRuntimeMutationLease?)null);
@@ -131,7 +136,7 @@ public sealed class TrainingExclusivityTests
         using var queue = BuildRunQueue(runs, IdleBenchmarks(), IdleDatasets(), IdleImages(), new TrainingActivity(), supervisor);
         await RunBrieflyAsync(queue);
 
-        _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
+        _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
 
     [Test]
@@ -139,12 +144,52 @@ public sealed class TrainingExclusivityTests
     {
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
 
         using var queue = BuildRunQueue(runs, IdleBenchmarks(), IdleDatasets(), IdleImages(), new TrainingActivity());
         await RunBrieflyAsync(queue);
 
-        _ = await runs.ReceivedWithAnyArgs().ClaimNextAsync(default);
+        _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The Slice 5 split. An evaluation loads a model through the ordinary chat path, and the runtime-mutation
+    ///     lease forbids exactly that, so the evaluation branch takes the activity flag and NOT the lease. Taking the
+    ///     lease would deadlock an evaluation against its own model load.
+    /// </summary>
+    [Test]
+    public async Task Exclusivity_EvaluationClaimsWithoutTheRuntimeMutationLease()
+    {
+        var runs = Substitute.For<ITrainingRunStore>();
+        _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.EvaluationRun);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                      .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
+
+        using var queue = BuildRunQueue(runs, IdleBenchmarks(), IdleDatasets(), IdleImages(), new TrainingActivity(), supervisor);
+        await RunBrieflyAsync(queue);
+
+        _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>());
+        _ = await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+    }
+
+    [Test]
+    public async Task Exclusivity_EvaluationStartRefusedWhileTheActivityFlagIsAlreadyHeld()
+    {
+        var activity = new TrainingActivity();
+        using var held = AssertEx.NotNull(activity.TryBegin(), "A training run already holds the flag.");
+        var runs = Substitute.For<ITrainingRunStore>();
+        _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.EvaluationRun);
+
+        using var queue = BuildRunQueue(runs, IdleBenchmarks(), IdleDatasets(), IdleImages(), activity);
+        await RunBrieflyAsync(queue);
+
+        // Both kinds inherit the same flag, so an evaluation cannot start beside a run either.
+        _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
 
     [Test]
@@ -153,7 +198,7 @@ public sealed class TrainingExclusivityTests
         var activity = new TrainingActivity();
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns((TrainingWorkKind?)null);
 
         using var queue = BuildRunQueue(runs, IdleBenchmarks(), IdleDatasets(), IdleImages(), activity);
         await RunBrieflyAsync(queue);
