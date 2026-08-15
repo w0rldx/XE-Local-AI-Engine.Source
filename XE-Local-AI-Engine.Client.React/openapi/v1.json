@@ -5,11 +5,6 @@
     "title": "XE Local AI Engine",
     "version": "v1"
   },
-  "servers": [
-    {
-      "url": "http://127.0.0.1:35073"
-    }
-  ],
   "paths": {
     "/api/local/v1/workspaces": {
       "post": {
@@ -107,6 +102,15 @@
           }
         ],
         "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -116,15 +120,6 @@
                 }
               }
             }
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -294,6 +289,12 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -303,12 +304,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -338,6 +333,12 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -347,12 +348,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -932,6 +927,354 @@
         ]
       }
     },
+    "/api/local/v1/training/runs/{runId}/exports": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "startTrainingExport",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "StartTrainingExportRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1StartTrainingExportRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/runs/{runId}/artifacts": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "listTrainingArtifacts",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1ListTrainingArtifactsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "getTrainingArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "deleteTrainingArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteTrainingArtifactRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/smoke": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "runTrainingArtifactSmoke",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactSmokeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/promote": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "promoteTrainingArtifact",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "PromoteTrainingArtifactRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/training/evaluations": {
       "post": {
         "tags": [
@@ -1114,6 +1457,12 @@
           "204": {
             "description": "No Content"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -1123,12 +1472,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -2049,6 +2392,12 @@
           "204": {
             "description": "No Content"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -2058,12 +2407,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -3299,7 +3642,6 @@
             "in": "query",
             "schema": {
               "type": "integer",
-              "format": "int64",
               "nullable": true
             }
           },
@@ -3308,7 +3650,6 @@
             "in": "query",
             "schema": {
               "type": "integer",
-              "format": "int64",
               "nullable": true
             }
           },
@@ -5703,6 +6044,12 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -5712,12 +6059,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -6478,6 +6819,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -8981,6 +9332,12 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -8990,12 +9347,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -9400,6 +9751,12 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "",
             "content": {
@@ -9409,12 +9766,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -12129,14 +12480,14 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found"
-          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "security": [
@@ -12247,14 +12598,14 @@
           "204": {
             "description": "No Content"
           },
-          "404": {
-            "description": "Not Found"
-          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "security": [
@@ -13449,7 +13800,6 @@
             "in": "query",
             "schema": {
               "type": "integer",
-              "format": "int64",
               "nullable": true
             }
           },
@@ -13458,7 +13808,6 @@
             "in": "query",
             "schema": {
               "type": "integer",
-              "format": "int64",
               "nullable": true
             }
           }
@@ -14181,8 +14530,7 @@
             "type": "boolean"
           },
           "logStartSequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "logLines": {
             "type": "array",
@@ -14204,12 +14552,10 @@
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -14235,8 +14581,7 @@
             "format": "int32"
           },
           "installedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "torchVersion": {
             "type": "string",
@@ -14358,16 +14703,13 @@
             ]
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -14408,7 +14750,6 @@
           },
           "vramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -14506,8 +14847,7 @@
             "format": "guid"
           },
           "expectedDatasetVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "baseArtifactId": {
             "type": "string",
@@ -14610,8 +14950,7 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunFootprintResponse"
           },
           "availableVramBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "vramKnown": {
             "type": "boolean"
@@ -14645,20 +14984,16 @@
         ],
         "properties": {
           "gpuBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "ramBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "parameterCount": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "trainableParameterCount": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "experimental": {
             "type": "boolean"
@@ -14751,16 +15086,13 @@
             "type": "boolean"
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -14881,8 +15213,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "toolName": {
             "type": "string"
@@ -14900,8 +15231,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -14910,8 +15240,211 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportAcceptedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "kind",
+          "quantType"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "quantType": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingExportBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1StartTrainingExportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "nullable": false,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesTrainingArtifactKind"
+              }
+            ]
+          },
+          "quantType": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesTrainingArtifactKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "AdapterGguf",
+          "MergedGguf",
+          "HfAdapterDir"
+        ],
+        "enum": [
+          "AdapterGguf",
+          "MergedGguf",
+          "HfAdapterDir"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1ListTrainingArtifactsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "runId",
+          "kind",
+          "fileName",
+          "sizeBytes",
+          "smokeState",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "smokeState": {
+            "type": "string"
+          },
+          "smokeReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "committedModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingRunArtifactsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactByIdRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1DeleteTrainingArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactSmokeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "smokeState"
+        ],
+        "properties": {
+          "smokeState": {
+            "type": "string"
+          },
+          "smokeReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
           }
         }
       },
@@ -14987,16 +15520,13 @@
             "nullable": true
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15126,8 +15656,7 @@
         ],
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15174,20 +15703,16 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1"
           },
           "definitionVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15357,8 +15882,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "name": {
             "type": "string"
@@ -15373,8 +15897,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15407,8 +15930,7 @@
             "format": "guid"
           },
           "definitionVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "name": {
             "type": "string"
@@ -15457,16 +15979,13 @@
             "nullable": true
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15507,8 +16026,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "name": {
             "type": "string"
@@ -15539,8 +16057,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15630,12 +16147,10 @@
             ]
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -15888,16 +16403,13 @@
             ]
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -16043,12 +16555,10 @@
           },
           "baseDurationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "tunedDurationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "baseUserScore": {
@@ -16147,8 +16657,7 @@
         ],
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -16220,8 +16729,7 @@
             "type": "string"
           },
           "totalBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "files": {
             "type": "array",
@@ -16242,16 +16750,13 @@
             "nullable": true
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "progress": {
             "nullable": true,
@@ -16279,8 +16784,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "sha256": {
             "type": "string",
@@ -16308,8 +16812,7 @@
             "type": "boolean"
           },
           "fetchedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -16323,12 +16826,10 @@
         ],
         "properties": {
           "completedBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "fileIndex": {
@@ -16517,12 +17018,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "license": {
             "type": "string",
@@ -16552,7 +17051,6 @@
           },
           "importedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "resourceCount": {
@@ -16742,12 +17240,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "license": {
             "type": "string",
@@ -16777,7 +17273,6 @@
           },
           "importedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -16983,7 +17478,6 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -17036,7 +17530,6 @@
           },
           "intervalSeconds": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "repeatCount": {
@@ -17046,12 +17539,10 @@
           },
           "startAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "timeZoneId": {
@@ -17075,21 +17566,17 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobCreator"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "disabledAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "deletedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -17166,7 +17653,6 @@
           },
           "intervalSeconds": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "repeatCount": {
@@ -17176,12 +17662,10 @@
           },
           "startAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "timeZoneId": {
@@ -17243,22 +17727,18 @@
           },
           "scheduledFireTimeUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "actualFireTimeUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "durationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "summary": {
@@ -17271,12 +17751,10 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -17459,7 +17937,6 @@
           },
           "intervalSeconds": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "repeatCount": {
@@ -17469,12 +17946,10 @@
           },
           "startAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "timeZoneId": {
@@ -17609,12 +18084,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -17758,12 +18231,10 @@
             "type": "boolean"
           },
           "startedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastSeq": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "subscriberCount": {
             "type": "integer",
@@ -17825,12 +18296,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -18015,7 +18484,6 @@
           },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "orchestrationIdleTimeoutSeconds": {
@@ -18051,12 +18519,10 @@
           },
           "agentHomeMaxSelectedFolderBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "agentHomeMaxPatchBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "maxPendingToolCallAgeMinutes": {
@@ -18295,7 +18761,6 @@
           },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "orchestrationIdleTimeoutSeconds": {
@@ -18315,12 +18780,10 @@
           },
           "agentHomeMaxSelectedFolderBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "agentHomeMaxPatchBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "maxPendingToolCallAgeMinutes": {
@@ -18636,47 +19099,38 @@
           },
           "vramLoadBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "vramAfterBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "globalFreeVramLoadBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "globalFreeVramAfterBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "processBudgetVramLoadBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "processBudgetVramAfterBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "minimumGlobalFreeVramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "minimumProcessBudgetVramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "peakProcessRamBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "externalPressureDetected": {
@@ -18755,7 +19209,6 @@
           },
           "nParams": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "isMoe": {
@@ -18777,12 +19230,10 @@
           },
           "globalFreeVramAtFreezeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "processBudgetVramAtFreezeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "status": {
@@ -18794,12 +19245,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -18853,16 +19302,14 @@
             "type": "boolean"
           },
           "downloads": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "likes": {
             "type": "integer",
             "format": "int32"
           },
           "lastModifiedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "license": {
             "type": "string",
@@ -18991,12 +19438,10 @@
           },
           "completedBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "startedAtUtc": {
@@ -19042,8 +19487,7 @@
             "type": "boolean"
           },
           "logStartSequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "logLines": {
             "type": "array",
@@ -19065,12 +19509,10 @@
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -19349,12 +19791,10 @@
           },
           "completedBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sanitizedError": {
@@ -19441,16 +19881,13 @@
         ],
         "properties": {
           "totalRamBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "availableRamBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "vramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "vramKnown": {
@@ -19467,8 +19904,7 @@
             "format": "int32"
           },
           "freeDiskBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "inferenceBackend": {
             "type": "string"
@@ -19553,7 +19989,6 @@
           },
           "lastRefreshedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "recommendations": {
@@ -19762,8 +20197,7 @@
             "type": "string"
           },
           "installedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "isSourceBuild": {
             "type": "boolean"
@@ -19871,7 +20305,6 @@
           },
           "fetchedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sourceUrl": {
@@ -19898,8 +20331,7 @@
         ],
         "properties": {
           "sequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "phase": {
             "type": "string"
@@ -19914,12 +20346,10 @@
           },
           "completedBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "stepIndex": {
@@ -19982,8 +20412,7 @@
             "type": "boolean"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "qualityTier": {
             "type": "string"
@@ -20102,8 +20531,7 @@
             "nullable": true
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "sourceDisplayName": {
             "type": "string"
@@ -20450,12 +20878,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -20773,6 +21199,22 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelRequest": {
         "type": "object",
         "additionalProperties": false
@@ -20935,17 +21377,14 @@
           },
           "sizeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sizeVramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "expiresAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -21003,12 +21442,10 @@
           },
           "sizeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "modifiedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "family": {
@@ -21219,7 +21656,6 @@
           },
           "updatedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "modelUsed": {
@@ -21269,12 +21705,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastSeenUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "purged": {
             "type": "boolean"
@@ -21358,12 +21792,10 @@
             "type": "string"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "origin": {
             "type": "string"
@@ -21436,7 +21868,6 @@
           },
           "generationDurationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sources": {
@@ -21622,8 +22053,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "extractionStatus": {
             "type": "string"
@@ -21634,8 +22064,7 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -21685,12 +22114,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastSeenUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastMessagePreview": {
             "type": "string",
@@ -21848,12 +22275,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -22143,16 +22568,13 @@
             "type": "boolean"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "collectionId": {
             "type": "string"
@@ -22368,12 +22790,10 @@
             "type": "boolean"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "collectionId": {
             "type": "string"
@@ -22767,8 +23187,7 @@
             "format": "date-time"
           },
           "durationMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "error": {
             "type": "string",
@@ -22831,16 +23250,14 @@
             "type": "boolean"
           },
           "downloads": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "likes": {
             "type": "integer",
             "format": "int32"
           },
           "lastModifiedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "license": {
             "type": "string",
@@ -22911,8 +23328,7 @@
             "type": "boolean"
           },
           "logStartSequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "logLines": {
             "type": "array",
@@ -22934,12 +23350,10 @@
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -23088,22 +23502,18 @@
             "type": "string"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "durationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "imageId": {
@@ -23117,7 +23527,6 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -23281,8 +23690,7 @@
             "nullable": true
           },
           "installedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "invalidReason": {
             "type": "string",
@@ -23373,8 +23781,7 @@
             }
           },
           "totalSizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "isInstalled": {
             "type": "boolean"
@@ -23383,12 +23790,10 @@
             "type": "string"
           },
           "residentBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "fitBudgetBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "fitsOnDisk": {
             "type": "boolean"
@@ -23415,8 +23820,7 @@
             "nullable": true
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -23511,8 +23915,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "suggestedRole": {
             "type": "string"
@@ -23569,12 +23972,10 @@
           },
           "completedBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sanitizedError": {
@@ -23637,8 +24038,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "parts": {
             "type": "array",
@@ -23647,8 +24047,7 @@
             }
           },
           "downloadedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "defaultSteps": {
             "type": "integer",
@@ -23679,8 +24078,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -23767,7 +24165,6 @@
           },
           "sizeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -24105,16 +24502,13 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "commandProfileId": {
             "type": "string",
@@ -24213,8 +24607,7 @@
             "nullable": true
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -24249,12 +24642,10 @@
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "terminalReason": {
@@ -24263,17 +24654,14 @@
           },
           "inputTokens": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "outputTokens": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -24305,12 +24693,10 @@
             "type": "string"
           },
           "byteCount": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "baseCommit": {
             "type": "string",
@@ -24360,15 +24746,13 @@
             "nullable": true
           },
           "sequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "eventType": {
             "type": "string"
           },
           "occurredAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "operationId": {
             "type": "string",
@@ -24596,12 +24980,10 @@
             "type": "string"
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "sequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -24614,8 +24996,7 @@
             "format": "guid"
           },
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -24663,12 +25044,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "parameters": {
             "type": "array",
@@ -25417,16 +25796,13 @@
             "type": "boolean"
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -25520,8 +25896,7 @@
             "additionalProperties": false,
             "properties": {
               "expectedVersion": {
-                "type": "integer",
-                "format": "int64"
+                "type": "integer"
               }
             }
           }
@@ -25532,8 +25907,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -25596,8 +25970,7 @@
             "type": "string"
           },
           "agentVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "requestedContextTokens": {
             "type": "integer",
@@ -25616,7 +25989,6 @@
           },
           "durationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "totalTokens": {
@@ -25635,20 +26007,16 @@
             "nullable": true
           },
           "lastStreamSequence": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "version": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -25730,22 +26098,18 @@
               },
               "startedAtUtc": {
                 "type": "integer",
-                "format": "int64",
                 "nullable": true
               },
               "primaryCompletedAtUtc": {
                 "type": "integer",
-                "format": "int64",
                 "nullable": true
               },
               "judgeStartedAtUtc": {
                 "type": "integer",
-                "format": "int64",
                 "nullable": true
               },
               "judgeCompletedAtUtc": {
                 "type": "integer",
-                "format": "int64",
                 "nullable": true
               }
             }
@@ -25784,8 +26148,7 @@
             "type": "string"
           },
           "expectedProjectVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -25798,8 +26161,7 @@
         "additionalProperties": false,
         "properties": {
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -25811,8 +26173,7 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesBenchmarksBenchmarkCancellationTarget"
           },
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -25837,8 +26198,7 @@
             "format": "int32"
           },
           "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -26121,7 +26481,6 @@
           },
           "lastCheckedUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -26229,12 +26588,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "sourceFeedbackIds": {
             "type": "array",
@@ -26313,8 +26670,7 @@
             "type": "boolean"
           },
           "evaluatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "actionVersionAtEval": {
             "type": "integer",
@@ -26441,12 +26797,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -26569,12 +26923,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -26753,8 +27105,7 @@
             "type": "string"
           },
           "generatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "minOccurrenceThreshold": {
             "type": "integer",
@@ -26872,8 +27223,7 @@
             "format": "guid"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "truncated": {
             "type": "boolean"
@@ -26908,8 +27258,7 @@
             "format": "guid"
           },
           "enabledAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "beforeDownRate": {
             "type": "number",
@@ -27030,28 +27379,23 @@
             "type": "string"
           },
           "dayStartUtcMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "runCount": {
             "type": "integer",
             "format": "int32"
           },
           "promptTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "completionTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "reasoningTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "totalTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "estimatedCostUsd": {
             "type": "number",
@@ -27080,20 +27424,16 @@
             "format": "int32"
           },
           "promptTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "completionTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "reasoningTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "totalTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "estimatedCostUsd": {
             "type": "number",
@@ -27126,20 +27466,16 @@
             "format": "int32"
           },
           "promptTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "completionTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "reasoningTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "totalTokens": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "estimatedCostUsd": {
             "type": "number",
@@ -27305,8 +27641,7 @@
             "type": "string"
           },
           "latencyMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "promptTokens": {
             "type": "integer",
@@ -27326,8 +27661,7 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -27485,8 +27819,7 @@
             "nullable": true
           },
           "durationMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "promptTokens": {
             "type": "integer",
@@ -27524,12 +27857,10 @@
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
