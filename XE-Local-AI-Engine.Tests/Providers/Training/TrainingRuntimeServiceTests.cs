@@ -202,10 +202,99 @@ public sealed class TrainingRuntimeServiceTests
         _ = await breaking.Service.InstallAsync(CancellationToken.None);
         await breaking.Service.DrainAsync(CancellationToken.None);
 
-        AssertEx.Equal(TrainingRuntimePhase.Failed, breaking.Service.GetStatus().Phase);
+        var status = breaking.Service.GetStatus();
+        // Ready, not Failed. The rollback put a working runtime back, and the training and export paths gate on the
+        // phase — reporting Failed here would retire a runtime that still works until some later install succeeded.
+        AssertEx.Equal(TrainingRuntimePhase.Ready, status.Phase);
+        AssertEx.NotNull(status.SanitizedError, "The failed attempt still has to be reported; it rides on the error field.");
         AssertEx.True(File.Exists(marker), "A failed reprovision must restore the previous working runtime.");
         AssertEx.False(Directory.Exists(TrainingRuntimeLayout.BackupVenv(harness.CacheRoot)),
             "The backup must not be left behind after the rollback.");
+        AssertEx.NotNull(breaking.Service.ResolveInterpreterPath(), "The restored runtime must still be usable.");
+    }
+
+    /// <summary>
+    ///     The rollback boundary has to span the state write, not stop at the directory swap. A cancellation between
+    ///     the two leaves the NEW venv active, the previous one parked in a backup that the next install's
+    ///     <c>Recover()</c> deletes as garbage, and a state record describing neither — i.e. the working runtime is
+    ///     gone even though nothing was ever adopted.
+    /// </summary>
+    [Test]
+    public async Task Install_WhenTheStateWriteFailsAfterTheSwap_RestoresBothThePreviousRuntimeAndItsStateRecord()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+        var marker = Path.Combine(TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot), "previous-runtime.marker");
+        await File.WriteAllTextAsync(marker, "the working runtime");
+
+        // Cancel once verification has produced its report: the next thing the install touches is the state write, and
+        // that is the only step between the directory swap and the point the backup would be deleted.
+        TrainingRuntimeService? cancelling = null;
+        using var breaking = harness.Restart(new FakeProcessRunner((file, args, logSink) =>
+        {
+            if (file.EndsWith(TrainingRuntimePins.UvExecutableName, StringComparison.Ordinal))
+            {
+                var binDirectory = Path.Combine(TrainingRuntimeLayout.StagingVenv(harness.CacheRoot), ".venv", "bin");
+                _ = Directory.CreateDirectory(binDirectory);
+                File.WriteAllText(Path.Combine(binDirectory, "python"), "#!/bin/sh\n");
+                return 0;
+            }
+
+            // A different python version, so the restored state record is distinguishable from the one never adopted.
+            logSink("""{"contractVersion":1,"ready":true,"cudaAvailable":true,"python":"9.9.9","torch":"2.11.0+cu128"}""");
+            _ = cancelling!.Cancel();
+            return 0;
+        }));
+        cancelling = breaking.Service;
+
+        _ = await breaking.Service.InstallAsync(CancellationToken.None);
+        await breaking.Service.DrainAsync(CancellationToken.None);
+
+        var status = breaking.Service.GetStatus();
+        AssertEx.Equal(TrainingRuntimePhase.Ready, status.Phase);
+        AssertEx.Contains(status.SanitizedError, "cancelled");
+        AssertEx.True(File.Exists(marker), "The previous runtime must be back in place, not left parked in the backup.");
+        AssertEx.False(Directory.Exists(TrainingRuntimeLayout.BackupVenv(harness.CacheRoot)),
+            "The backup is only consumed once BOTH the swap and the state write have succeeded.");
+        AssertEx.Equal("3.13.15", AssertEx.NotNull(status.Installed, "A surviving runtime must still be reported.").PythonVersion);
+
+        // And the record on disk, which is what a restart reads, describes the runtime that is actually there.
+        using var restarted = harness.Restart();
+        AssertEx.Equal("3.13.15", AssertEx.NotNull(restarted.Service.GetStatus().Installed).PythonVersion);
+        AssertEx.NotNull(restarted.Service.ResolveInterpreterPath());
+    }
+
+    /// <summary>
+    ///     The same rule one step earlier: a reprovision that fails BEFORE it touches the active directory has not
+    ///     harmed anything, so the node keeps the runtime it had and only carries the failure as the error.
+    /// </summary>
+    [Test]
+    public async Task Install_WhenAReprovisionFailsBeforeAdopting_KeepsThePreviousRuntimeUsable()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var harness = new Harness(SucceedingRunner());
+        _ = await harness.Service.InstallAsync(CancellationToken.None);
+        await harness.Service.DrainAsync(CancellationToken.None);
+
+        using var breaking = harness.Restart(SucceedingRunner("""{"contractVersion":99,"ready":true,"cudaAvailable":true}"""));
+        _ = await breaking.Service.InstallAsync(CancellationToken.None);
+        await breaking.Service.DrainAsync(CancellationToken.None);
+
+        var status = breaking.Service.GetStatus();
+        AssertEx.Equal(TrainingRuntimePhase.Ready, status.Phase);
+        AssertEx.Contains(status.SanitizedError, "different version");
+        AssertEx.NotNull(status.Installed, "The previous runtime is untouched, so it must still be reported as installed.");
+        AssertEx.NotNull(breaking.Service.ResolveInterpreterPath(), "Training and export must still be able to run.");
     }
 
     [Test]
