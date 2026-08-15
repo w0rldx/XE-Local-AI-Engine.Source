@@ -718,6 +718,17 @@ public static class LocalApiRoutes
         public const string BaseArtifactById = "training/base-artifacts/{artifactId}";
         public const string BaseArtifactCancel = "training/base-artifacts/{artifactId}/cancel";
         public const string BaseArtifactLicense = "training/base-artifacts/{artifactId}/license";
+
+        // Training runs. The queue is single-consumer, so create only enqueues — the run starts once the GPU is free.
+        public const string Runs = "training/runs";
+        public const string RunById = "training/runs/{runId}";
+        public const string RunCancel = "training/runs/{runId}/cancel";
+
+        /// <summary>Computed hyper-parameters plus the VRAM estimate and the licensing text the run wizard renders.</summary>
+        public const string RunDefaults = "training/runs/defaults";
+
+        /// <summary>SignalR push hub for per-run status, phase and training progress.</summary>
+        public const string RunHub = "/api/local/v1/training/runs/hub";
     }
 
     public static class Automation

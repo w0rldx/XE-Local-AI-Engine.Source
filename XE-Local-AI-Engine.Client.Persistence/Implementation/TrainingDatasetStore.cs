@@ -189,6 +189,14 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             throw new TrainingConflictException("GenerationActive");
         }
 
+        // A run froze its own copy of this dataset, but its FreezeJson still names the dataset it came from. Deleting
+        // the dataset out from under a run would leave that lineage pointing at nothing, so it is refused for as long
+        // as any run — including a finished one — references it.
+        if (await _dbContext.TrainingRuns.AnyAsync(item => item.DatasetId == datasetId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TrainingConflictException("DatasetReferenced");
+        }
+
         // Explicit ordered deletes: the node connection never sets PRAGMA foreign_keys=ON, so the declared cascade on
         // training_dataset_samples never fires. Children first, then the work item, then the dataset itself.
         _ = await _dbContext.TrainingDatasetSamples.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
@@ -199,6 +207,11 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         _ = await _dbContext.TrainingDatasets.Where(item => item.Id == datasetId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public Task<bool> HasActiveGenerationAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.DatasetGenerationWorkItems.AsNoTracking()
+                  .AnyAsync(item => item.Status == DatasetGenerationWorkStatus.Queued || item.Status == DatasetGenerationWorkStatus.Running,
+                      cancellationToken);
 
     public async Task<DatasetGenerationClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {

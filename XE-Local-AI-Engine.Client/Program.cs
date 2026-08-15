@@ -461,6 +461,8 @@ namespace XE_Local_AI_Engine.Client
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<TrainingRuntimeHub>(LocalApiRoutes.Training.RuntimeHub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+            app.MapHub<TrainingRunHub>(LocalApiRoutes.Training.RunHub)
+               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<CudaBuildHub>(LocalApiRoutes.ModelFit.CudaBuildHub)

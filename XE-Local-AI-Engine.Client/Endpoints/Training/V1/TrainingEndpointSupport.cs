@@ -56,6 +56,7 @@ internal static class TrainingEndpointSupport
             "VersionConflict" or "DuplicateWork" => TrainingErrorCode.VersionConflict,
             "GenerationActive" => TrainingErrorCode.GenerationActive,
             "DefinitionReferenced" => TrainingErrorCode.DefinitionReferenced,
+            "DatasetReferenced" => TrainingErrorCode.DatasetReferenced,
             "TrainingBusy" => TrainingErrorCode.TrainingBusy,
             _ => TrainingErrorCode.InvalidLifecycleTransition
         };
@@ -67,7 +68,9 @@ internal static class TrainingEndpointSupport
             "DuplicateWork" => "A generation work item already exists for this dataset.",
             "GenerationActive" => "The dataset is still generating.",
             "DefinitionReferenced" => "The definition has datasets and cannot be deleted.",
+            "DatasetReferenced" => "A training run was created from this dataset and it cannot be deleted.",
             "TrainingBusy" => "A training run is active; dataset generation cannot start.",
+            "RunActive" => "The training run is still queued or running.",
             _ => "The training lifecycle transition is not allowed."
         };
 }

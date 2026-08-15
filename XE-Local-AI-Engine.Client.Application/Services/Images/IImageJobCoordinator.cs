@@ -38,6 +38,12 @@ public interface IImageJobCoordinator
     ///     has no live replay log (already evicted or never seen).
     /// </summary>
     IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId);
+
+    /// <summary>
+    ///     Whether any job is queued or generating. Read by the training run queue, which must not start a run behind
+    ///     image work already in flight — the converse of the training-activity refusal this coordinator makes.
+    /// </summary>
+    bool HasActiveJob { get; }
 }
 
 /// <summary>

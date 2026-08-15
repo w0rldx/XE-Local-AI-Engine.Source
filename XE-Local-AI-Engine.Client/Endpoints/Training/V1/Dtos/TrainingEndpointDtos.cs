@@ -17,6 +17,9 @@ public enum TrainingErrorCode
     VersionConflict,
     GenerationActive,
     DefinitionReferenced,
+
+    /// <summary>A training run still references the dataset, so deleting it would orphan that run's lineage.</summary>
+    DatasetReferenced,
     TrainingBusy,
     InvalidLifecycleTransition
 }

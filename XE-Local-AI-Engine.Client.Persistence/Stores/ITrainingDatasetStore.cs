@@ -34,6 +34,13 @@ public interface ITrainingDatasetStore
 
     Task<DatasetGenerationClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Whether any generation work item is queued or running. The converse of the training-activity check this
+    ///     queue already makes at its own claim: a training run holds the whole GPU and must not start behind
+    ///     generation work that is already in flight.
+    /// </summary>
+    Task<bool> HasActiveGenerationAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Terminalizes every interrupted <c>Running</c> work item as failed. Attempt is pinned to 1: never retried in place.</summary>
     Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default);
 

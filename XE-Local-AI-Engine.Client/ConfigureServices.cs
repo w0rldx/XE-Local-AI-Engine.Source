@@ -167,6 +167,9 @@ public static class ConfigureServices
         // service only bridges its published events to the Operator-scoped generation hub.
         builder.Services.AddHostedService<DatasetGenerationHubEventRelay>();
 
+        // And again for training runs: the run buffer owns replay, this only bridges to the Operator-scoped run hub.
+        builder.Services.AddHostedService<TrainingRunHubEventRelay>();
+
         // Hub-backed GGUF download event publisher — supersedes the no-op default registered in AddNodeModelFit so
         // download status changes push live to operator clients (GgufDownloadHub mapped in Program), replacing the
         // per-second downloads poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.

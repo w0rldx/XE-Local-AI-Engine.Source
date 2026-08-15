@@ -12,5 +12,6 @@
 	"/api/local/v1/development/hub",
 	"/api/local/v1/benchmarks/hub",
 	"/api/local/v1/training/datasets/hub",
-	"/api/local/v1/training/runtime/hub"
+	"/api/local/v1/training/runtime/hub",
+	"/api/local/v1/training/runs/hub"
 ]

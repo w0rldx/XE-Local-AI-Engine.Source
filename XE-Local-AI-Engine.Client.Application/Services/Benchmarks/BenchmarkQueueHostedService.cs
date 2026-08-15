@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Training;
 
 public interface IBenchmarkQueueSignal
 {
@@ -44,6 +45,7 @@ public sealed class BenchmarkQueueHostedService(
     IServiceScopeFactory scopeFactory,
     IBenchmarkQueueSignal signal,
     IBenchmarkEventBuffer events,
+    ITrainingActivity trainingActivity,
     IOptions<BenchmarkQueueOptions> options,
     ILogger<BenchmarkQueueHostedService> logger) : BackgroundService
 {
@@ -56,9 +58,13 @@ public sealed class BenchmarkQueueHostedService(
         await RecoverAsync(stoppingToken).ConfigureAwait(false);
         while (!stoppingToken.IsCancellationRequested)
         {
-            BenchmarkClaimedWork? work;
-            await using (var claimScope = scopeFactory.CreateAsyncScope())
+            BenchmarkClaimedWork? work = null;
+            // A training run holds the whole GPU (decision #13). Refusing at the CLAIM rather than at the executor
+            // keeps queued benchmark work queued: it resumes on the next poll once the run releases, instead of being
+            // terminalized as failed with no retry to fall back on — the work item pins attempt to 1.
+            if (!trainingActivity.IsActive)
             {
+                await using var claimScope = scopeFactory.CreateAsyncScope();
                 var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
                 work = await store.ClaimNextAsync(stoppingToken).ConfigureAwait(false);
             }

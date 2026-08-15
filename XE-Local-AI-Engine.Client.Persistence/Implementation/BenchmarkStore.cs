@@ -166,6 +166,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                          .ToListAsync(cancellationToken)
                          .ConfigureAwait(false)).Select(ToRecord).ToArray();
 
+    public Task<bool> HasActiveWorkAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.BenchmarkWorkItems.AsNoTracking()
+                  .AnyAsync(entity => entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running,
+                      cancellationToken);
+
     public async Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)
