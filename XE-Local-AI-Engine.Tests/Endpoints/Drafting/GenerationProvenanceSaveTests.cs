@@ -52,7 +52,7 @@ public sealed class GenerationProvenanceSaveTests
         };
     }
 
-    private static async Task<JsonDocument> SendAsync(TestingWebAppFactory factory,
+    private static async Task<JsonDocument> SendAsync(TestServerWebAppFactory factory,
         HttpClient client,
         HttpMethod method,
         string route,
@@ -72,7 +72,7 @@ public sealed class GenerationProvenanceSaveTests
         return JsonDocument.Parse(payload);
     }
 
-    private static async Task<JsonDocument> GetAsync(TestingWebAppFactory factory, HttpClient client, string route)
+    private static async Task<JsonDocument> GetAsync(TestServerWebAppFactory factory, HttpClient client, string route)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, route);
         factory.AddNodeBearerToken(request);
@@ -87,7 +87,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task CreateSkill_GeneratedTrue_LandsImportedAndDisabled()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var created = await SendAsync(factory,
@@ -120,7 +120,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task UpdateSkill_GeneratedTrue_FromLocalEnabled_DemotesToImportedDisabled()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // Start from the state the demotion has to survive: an ordinary operator-authored skill, Local and enabled.
@@ -170,7 +170,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task UpdateSkill_NonAiEdit_PreservesEnabledAndStoredMetadataWhenOmitted()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var created = await SendAsync(factory,
@@ -218,7 +218,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task CreateSkill_WhenContentEditedAfterDraft_MarksWasEditedTrue()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // The hash is over what the model drafted; the operator then rewrote the body before saving.
@@ -246,7 +246,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task CreateSkill_WhenBrowserReturnsDraftWithCrlfLineEndings_WasEditedStaysFalse()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // A textarea round-trips LF content back as CRLF. That is not an operator edit, and the canonical hash folds it.
@@ -274,7 +274,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task CreateSkill_WhenEchoedMetadataBreachesACap_Returns400()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, SkillsRoute)
@@ -303,7 +303,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task CreateAgent_WithGenerationMetadata_PersistsEncryptedAndSingleItemReadsCarryIt()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         const string AgentName = "Terraform Reviewer";
@@ -355,7 +355,7 @@ public sealed class GenerationProvenanceSaveTests
     [Test]
     public async Task UpdateAgent_WithGenerationMetadata_PersistsAndOmittingItPreservesTheStoredBlock()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         const string AgentName = "Terraform Reviewer";
@@ -416,7 +416,7 @@ public sealed class GenerationProvenanceSaveTests
     // Reads the raw generation_metadata_json bytes straight out of SQLite — the only agent row in this test host that
     // has one. Going through the DbContext's entity materialization would hand back the DECRYPTED payload (the
     // interceptor runs on load), which is exactly what this assertion must not see.
-    private static async Task<byte[]?> ReadRawStoredProvenanceAsync(TestingWebAppFactory factory)
+    private static async Task<byte[]?> ReadRawStoredProvenanceAsync(TestServerWebAppFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
