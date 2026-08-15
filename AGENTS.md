@@ -22,9 +22,13 @@ this whole file as its `validate` job before packaging):
 - **release-contracts** — `scripts/run-release-contract-tests.sh` (auto-enrolled `scripts/tests`,
   `scripts/compliance/tests`, `scripts/performance/tests`), then `scripts/lint-release-scripts.sh
   --no-behavior --bootstrap` (shellcheck, PSScriptAnalyzer, Pester, the `P0_SPIKE` compile gate).
+  shellcheck is installed pinned (`v0.11.0`, sha256-verified) because `ubuntu-latest` ships 0.9.0,
+  whose SC2317/SC2015 false positives fail the `--severity=style` pass; the script refuses < 0.10.0.
 - **build-and-test** — Release build, `scripts/openapi-live-check.sh`, then one `dotnet test` per
   test project in the solution with Cobertura coverage; `scripts/merge-cobertura.py` enforces
   `scripts/backend-coverage-baseline.txt`. Coverage XML + TRX are uploaded as `backend-test-results`.
+  `--report-trx` copies each coverage report as a TRX attachment under
+  `<module>/_<machine>_<timestamp>/In/<machine>/`, so the report glob is depth-2 only.
 - **client-react** — `openapi:check`, `licenses:check`, `validate` (= `lint` + `knip` +
   `signalr:check` + `depcruise`), `test:coverage:check`, `test:tooling`, `build`, `pnpm audit`.
 
