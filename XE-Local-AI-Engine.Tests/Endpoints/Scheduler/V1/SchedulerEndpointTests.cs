@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -328,6 +329,42 @@ public sealed class SchedulerEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    public async Task CancelRun_WhenRunAlreadyTerminal_ReturnsProblemDetailsConflictWithOutcome()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        // Seed a run that already reached a terminal state — the only way CancelRunAsync reports AlreadyTerminal.
+        Guid runId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
+            var stored = await runStore.AddAsync(new ScheduledJobRunInput(Guid.NewGuid(),
+                                                     "terminal-run-template",
+                                                     QuartzFireInstanceId: null,
+                                                     ScheduledRunTrigger.Manual,
+                                                     ScheduledRunStatus.Succeeded,
+                                                     ScheduledFireTimeUtc: null,
+                                                     ActualFireTimeUtc: null))
+                                        .ConfigureAwait(false);
+            runId = stored.Id;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(runId));
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 409, document.RootElement.GetProperty("status").GetInt32());
+        AssertEx.Equal(nameof(RunCancellationOutcome.AlreadyTerminal), document.RootElement.GetProperty("outcome").GetString());
+        AssertEx.Equal("The run already reached a terminal state and cannot be cancelled.",
+            document.RootElement.GetProperty("detail").GetString());
     }
 
     // ──────────────────────────────────────────────────────────────────────
