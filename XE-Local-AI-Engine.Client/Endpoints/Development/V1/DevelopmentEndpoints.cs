@@ -110,6 +110,9 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
     {
         Post(LocalApiRoutes.Development.Repositories);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(RegisterDevelopmentRepositoryRequest req, CancellationToken ct)
@@ -214,6 +217,9 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
     {
         Post(LocalApiRoutes.Development.RepositoriesFromTemplate);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateDevelopmentRepositoryFromTemplateRequest req, CancellationToken ct)
@@ -262,6 +268,9 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint
     {
         Get(LocalApiRoutes.Development.RepositoryProfileDetection);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentProfileDetectionRequest req, CancellationToken ct)
@@ -320,6 +329,9 @@ public sealed class CreateDevelopmentProjectEndpoint
     {
         Post(LocalApiRoutes.Development.Projects);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateDevelopmentProjectRequest req, CancellationToken ct)
@@ -425,6 +437,9 @@ public sealed class StartDevelopmentNextActionEndpoint
     {
         Post(LocalApiRoutes.Development.NextAction);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
@@ -583,6 +598,9 @@ public sealed class PreviewDevelopmentPatchEndpoint
     {
         Post(LocalApiRoutes.Development.PatchPreview);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
@@ -632,6 +650,9 @@ public sealed class ApplyDevelopmentPatchEndpoint
     {
         Post(LocalApiRoutes.Development.Apply);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
@@ -683,6 +704,9 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
     {
         Post(LocalApiRoutes.Development.RepositoryConnection);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ReconnectDevelopmentRepositoryRequest req, CancellationToken ct)

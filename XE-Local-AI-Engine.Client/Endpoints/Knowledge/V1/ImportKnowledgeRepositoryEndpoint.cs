@@ -19,6 +19,9 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
     {
         Post(LocalApiRoutes.KnowledgeBase.RepositoryImport);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ImportKnowledgeRepositoryRequest req, CancellationToken ct)

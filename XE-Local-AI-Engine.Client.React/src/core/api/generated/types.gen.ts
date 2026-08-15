@@ -15,6 +15,45 @@ export type XeLocalAiEngineClientEndpointsWorkspacesV1CreateWorkspaceRequest = {
 	hostPath?: string | null;
 };
 
+/**
+ * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
+ * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
+ */
+export type FastEndpointsProblemDetails = {
+	type?: string;
+	title?: string;
+	status?: number;
+	instance?: string;
+	traceId?: string;
+	/**
+	 * the details of the error
+	 */
+	detail?: string | null;
+	errors?: Array<FastEndpointsProblemDetailsError>;
+};
+
+/**
+ * the error details object
+ */
+export type FastEndpointsProblemDetailsError = {
+	/**
+	 * the name of the error or property of the dto that caused the error
+	 */
+	name?: string;
+	/**
+	 * the reason for the error
+	 */
+	reason?: string;
+	/**
+	 * the code of the error
+	 */
+	code?: string | null;
+	/**
+	 * the severity of the error
+	 */
+	severity?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = {
 	code?: string;
 	message: string;
@@ -637,45 +676,6 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	usageRates?: {
 		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
 	} | null;
-};
-
-/**
- * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
- * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
- */
-export type FastEndpointsProblemDetails = {
-	type?: string;
-	title?: string;
-	status?: number;
-	instance?: string;
-	traceId?: string;
-	/**
-	 * the details of the error
-	 */
-	detail?: string | null;
-	errors?: Array<FastEndpointsProblemDetailsError>;
-};
-
-/**
- * the error details object
- */
-export type FastEndpointsProblemDetailsError = {
-	/**
-	 * the name of the error or property of the dto that caused the error
-	 */
-	name?: string;
-	/**
-	 * the reason for the error
-	 */
-	reason?: string;
-	/**
-	 * the code of the error
-	 */
-	code?: string | null;
-	/**
-	 * the severity of the error
-	 */
-	severity?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = {
@@ -3420,6 +3420,10 @@ export type CreateWorkspaceData = {
 
 export type CreateWorkspaceErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -3427,7 +3431,14 @@ export type CreateWorkspaceErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateWorkspaceError = CreateWorkspaceErrors[keyof CreateWorkspaceErrors];
 
 export type CreateWorkspaceResponses = {
 	/**
@@ -3449,6 +3460,10 @@ export type DeleteWorkspaceData = {
 
 export type DeleteWorkspaceErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -3456,6 +3471,10 @@ export type DeleteWorkspaceErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
 	409: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse;
 };
 
@@ -5777,8 +5796,17 @@ export type StartGgufDownloadErrors = {
 	/**
 	 * Forbidden
 	 */
-	403: unknown;
+	403: FastEndpointsProblemDetails;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
+	503: FastEndpointsProblemDetails;
+	507: FastEndpointsProblemDetails;
 };
+
+export type StartGgufDownloadError = StartGgufDownloadErrors[keyof StartGgufDownloadErrors];
 
 export type StartGgufDownloadResponses = {
 	/**
@@ -7262,8 +7290,17 @@ export type DownloadRecommendedEmbeddingErrors = {
 	/**
 	 * Forbidden
 	 */
-	403: unknown;
+	403: FastEndpointsProblemDetails;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
+	503: FastEndpointsProblemDetails;
+	507: FastEndpointsProblemDetails;
 };
+
+export type DownloadRecommendedEmbeddingError = DownloadRecommendedEmbeddingErrors[keyof DownloadRecommendedEmbeddingErrors];
 
 export type DownloadRecommendedEmbeddingResponses = {
 	/**
@@ -7290,8 +7327,17 @@ export type DownloadRecommendedRerankerErrors = {
 	/**
 	 * Forbidden
 	 */
-	403: unknown;
+	403: FastEndpointsProblemDetails;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsProblemDetails;
+	409: FastEndpointsProblemDetails;
+	503: FastEndpointsProblemDetails;
+	507: FastEndpointsProblemDetails;
 };
+
+export type DownloadRecommendedRerankerError = DownloadRecommendedRerankerErrors[keyof DownloadRecommendedRerankerErrors];
 
 export type DownloadRecommendedRerankerResponses = {
 	/**
@@ -7312,6 +7358,10 @@ export type ImportKnowledgeRepositoryData = {
 
 export type ImportKnowledgeRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -7319,7 +7369,14 @@ export type ImportKnowledgeRepositoryErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ImportKnowledgeRepositoryError = ImportKnowledgeRepositoryErrors[keyof ImportKnowledgeRepositoryErrors];
 
 export type ImportKnowledgeRepositoryResponses = {
 	/**
@@ -8179,6 +8236,10 @@ export type RegisterDevelopmentRepositoryData = {
 
 export type RegisterDevelopmentRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8186,7 +8247,14 @@ export type RegisterDevelopmentRepositoryErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type RegisterDevelopmentRepositoryError = RegisterDevelopmentRepositoryErrors[keyof RegisterDevelopmentRepositoryErrors];
 
 export type RegisterDevelopmentRepositoryResponses = {
 	/**
@@ -8291,6 +8359,10 @@ export type CreateDevelopmentRepositoryFromTemplateData = {
 
 export type CreateDevelopmentRepositoryFromTemplateErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8298,7 +8370,15 @@ export type CreateDevelopmentRepositoryFromTemplateErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateDevelopmentRepositoryFromTemplateError =
+	CreateDevelopmentRepositoryFromTemplateErrors[keyof CreateDevelopmentRepositoryFromTemplateErrors];
 
 export type CreateDevelopmentRepositoryFromTemplateResponses = {
 	/**
@@ -8321,6 +8401,10 @@ export type DetectDevelopmentRepositoryProfileData = {
 
 export type DetectDevelopmentRepositoryProfileErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8328,7 +8412,15 @@ export type DetectDevelopmentRepositoryProfileErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type DetectDevelopmentRepositoryProfileError =
+	DetectDevelopmentRepositoryProfileErrors[keyof DetectDevelopmentRepositoryProfileErrors];
 
 export type DetectDevelopmentRepositoryProfileResponses = {
 	/**
@@ -8376,6 +8468,10 @@ export type CreateDevelopmentProjectData = {
 
 export type CreateDevelopmentProjectErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8383,7 +8479,14 @@ export type CreateDevelopmentProjectErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateDevelopmentProjectError = CreateDevelopmentProjectErrors[keyof CreateDevelopmentProjectErrors];
 
 export type CreateDevelopmentProjectResponses = {
 	/**
@@ -8465,6 +8568,10 @@ export type StartDevelopmentNextActionData = {
 
 export type StartDevelopmentNextActionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8472,7 +8579,14 @@ export type StartDevelopmentNextActionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type StartDevelopmentNextActionError = StartDevelopmentNextActionErrors[keyof StartDevelopmentNextActionErrors];
 
 export type StartDevelopmentNextActionResponses = {
 	/**
@@ -8616,6 +8730,10 @@ export type PreviewDevelopmentPatchData = {
 
 export type PreviewDevelopmentPatchErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8623,7 +8741,14 @@ export type PreviewDevelopmentPatchErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type PreviewDevelopmentPatchError = PreviewDevelopmentPatchErrors[keyof PreviewDevelopmentPatchErrors];
 
 export type PreviewDevelopmentPatchResponses = {
 	/**
@@ -8646,6 +8771,10 @@ export type ApplyDevelopmentPatchData = {
 
 export type ApplyDevelopmentPatchErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8653,7 +8782,14 @@ export type ApplyDevelopmentPatchErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ApplyDevelopmentPatchError = ApplyDevelopmentPatchErrors[keyof ApplyDevelopmentPatchErrors];
 
 export type ApplyDevelopmentPatchResponses = {
 	/**
@@ -8675,6 +8811,10 @@ export type ReconnectDevelopmentRepositoryData = {
 
 export type ReconnectDevelopmentRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -8682,7 +8822,15 @@ export type ReconnectDevelopmentRepositoryErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ReconnectDevelopmentRepositoryError =
+	ReconnectDevelopmentRepositoryErrors[keyof ReconnectDevelopmentRepositoryErrors];
 
 export type ReconnectDevelopmentRepositoryResponses = {
 	/**

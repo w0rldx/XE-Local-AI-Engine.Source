@@ -34,6 +34,12 @@ public sealed class DownloadRecommendedRerankerEndpoint(
     {
         Post(LocalApiRoutes.KnowledgeBase.RerankerDownloadRecommended);
         Policies(NodeAuthorizationPolicies.Operator);
+        // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status403Forbidden)
+                                      .ProducesProblemDetails(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                      .ProducesProblemDetails(StatusCodes.Status503ServiceUnavailable)
+                                      .ProducesProblemDetails(StatusCodes.Status507InsufficientStorage));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
