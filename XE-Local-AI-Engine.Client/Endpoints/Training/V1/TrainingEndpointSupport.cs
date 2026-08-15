@@ -71,6 +71,11 @@ internal static class TrainingEndpointSupport
             "DatasetReferenced" => "A training run was created from this dataset and it cannot be deleted.",
             "TrainingBusy" => "A training run is active; dataset generation cannot start.",
             "RunActive" => "The training run is still queued or running.",
+            "RunEvaluated" => "An evaluation run was created from this training run and it cannot be deleted.",
+            "EvaluationBound" => "The evaluation run is part of a comparison report.",
+            "EvaluationActive" => "The evaluation run is still queued or running.",
+            "EvaluationComplete" => "The evaluation run has already scored every hold-out sample.",
+            "EvaluationTerminal" => "The evaluation run has already finished.",
             _ => "The training lifecycle transition is not allowed."
         };
 }
