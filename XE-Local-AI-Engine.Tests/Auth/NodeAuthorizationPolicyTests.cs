@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -78,7 +77,8 @@ public sealed class NodeAuthorizationPolicyTests
     {
         using var client = Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, OperatorEndpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateTokenWithRoles("Viewer"));
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, Factory.CreateNonOperatorAccessToken("Viewer"));
 
         using var response = await client.SendAsync(request);
 
@@ -142,21 +142,6 @@ public sealed class NodeAuthorizationPolicyTests
 
     private static string OperatorEndpoint =>
         "/" + LocalApiRoutes.Prefix + "/" + LocalApiRoutes.LocalModels.Models;
-
-    private string CreateTokenWithRoles(params string[] roles)
-    {
-        var tokenService = Factory.Services.GetRequiredService<INodeTokenService>();
-        var user = new NodeUser
-        {
-            Id = "node-nonadmin-test",
-            UserName = "viewer@example.test",
-            Email = "viewer@example.test",
-            SetupCompleted = true,
-            SecurityStamp = TestServerWebAppFactory.NodeAdminTestSecurityStamp
-        };
-
-        return tokenService.CreateAccessToken(user, roles).AccessToken;
-    }
 
     private async Task<AuthorizationPolicy> GetPolicyAsync(string policyName)
     {

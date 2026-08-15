@@ -137,12 +137,25 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     }
 
     /// <summary>
-    ///     A valid, correctly signed access token carrying NO role claim. It authenticates, so an endpoint gated by the
-    ///     <c>NodeOperator</c> policy (authenticated AND in the Admin role) must answer 403 rather than 401 — the
-    ///     distinction that separates "you are not signed in" from "your principal is not the operator".
+    ///     A valid, correctly signed access token that is <b>not</b> the operator's. It authenticates, so an endpoint
+    ///     gated by the <c>NodeOperator</c> policy (authenticated AND in the Admin role) must answer 403 rather than 401
+    ///     — the distinction that separates "you are not signed in" from "your principal is not the operator".
+    ///     <para>
+    ///         With no arguments the principal carries no role claim at all. Pass <paramref name="roles" /> to give it
+    ///         the <i>wrong</i> role rather than none, which reaches the policy's role requirement instead of stopping
+    ///         at the absent claim. The admin role is rejected outright: minting it here would return an operator token
+    ///         from a method whose name promises the opposite, and every assertion built on it would pass vacuously.
+    ///     </para>
     /// </summary>
-    public string CreateNonOperatorAccessToken()
+    public string CreateNonOperatorAccessToken(params string[] roles)
     {
+        ArgumentNullException.ThrowIfNull(roles);
+
+        if (roles.Contains(NodeAuthorizationPolicies.AdminRole, StringComparer.Ordinal))
+        {
+            throw new ArgumentException($"'{NodeAuthorizationPolicies.AdminRole}' is the operator role; use {nameof(CreateNodeAccessToken)}().", nameof(roles));
+        }
+
         var tokenService = Services.GetRequiredService<INodeTokenService>();
         var user = new NodeUser
         {
@@ -153,7 +166,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             SecurityStamp = NodeAdminTestSecurityStamp
         };
 
-        return tokenService.CreateAccessToken(user, []).AccessToken;
+        return tokenService.CreateAccessToken(user, roles).AccessToken;
     }
 
     public void AddNodeBearerToken(HttpRequestMessage request)
@@ -291,8 +304,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     // The same content root WebApplicationFactory resolves: the Client project's source directory, taken from the
     // MvcTestingAppManifest.json that Microsoft.AspNetCore.Mvc.Testing writes into the test output. Fail loud if the
-    // manifest or entry is missing — a silently wrong content root would load no appsettings.json.
-    private static string ResolveClientContentRoot()
+    // manifest or entry is missing — a silently wrong content root would load no appsettings.json. Internal because
+    // Hosting/ServiceProviderValidationTests builds its own host and needs the identical root.
+    internal static string ResolveClientContentRoot()
     {
         var manifestPath = Path.Combine(AppContext.BaseDirectory, "MvcTestingAppManifest.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
