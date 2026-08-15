@@ -14,6 +14,7 @@ internal static class TrainingRunEndpointMapper
             Id = record.Id,
             DatasetId = record.DatasetId,
             BaseArtifactId = record.BaseArtifactId,
+            LinkedInstalledModelName = record.LinkedInstalledModelName,
             Status = record.Status.ToString(),
             DatasetRevision = record.DatasetRevision,
             DatasetContentFingerprint = record.DatasetContentFingerprint,
