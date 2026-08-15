@@ -213,6 +213,10 @@ internal sealed class HeadlessToolExecutor(
         {
             null => string.Empty,
             string text => text,
+            // AIFunction.InvokeAsync hands back the serialized return value, so a string-returning tool arrives as a JSON
+            // string element. Unwrap it: the sample's tool result should read like the tool's own output, not a quoted
+            // JSON literal.
+            JsonElement { ValueKind: JsonValueKind.String } text => text.GetString() ?? string.Empty,
             JsonElement json => json.GetRawText(),
             _ => JsonSerializer.Serialize(result, TrainingJson.Options)
         };

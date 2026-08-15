@@ -157,7 +157,8 @@ public interface IDatasetGenerationQueueSignal
 {
     void Wake();
 
-    Task WaitAsync(TimeSpan timeout, CancellationToken cancellationToken);
+    /// <summary>Waits for a wake or the timeout. True means a wake was consumed, false that the poll interval elapsed.</summary>
+    Task<bool> WaitAsync(TimeSpan timeout, CancellationToken cancellationToken);
 }
 
 /// <summary>Coalescing wake-up for the single generation consumer: a pending wake is sufficient, so a second is dropped.</summary>
@@ -180,7 +181,7 @@ public sealed class DatasetGenerationQueueSignal : IDatasetGenerationQueueSignal
         }
     }
 
-    public Task WaitAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+    public Task<bool> WaitAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
         _semaphore.WaitAsync(timeout, cancellationToken);
 }
 
