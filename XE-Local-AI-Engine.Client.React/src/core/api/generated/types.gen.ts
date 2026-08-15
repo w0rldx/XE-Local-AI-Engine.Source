@@ -54,11 +54,6 @@ export type FastEndpointsProblemDetailsError = {
 	severity?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = {
-	code?: string;
-	message: string;
-};
-
 export type XeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = {
 	[key: string]: never;
 };
@@ -3475,7 +3470,7 @@ export type DeleteWorkspaceErrors = {
 	 * Not Found
 	 */
 	404: unknown;
-	409: XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse;
+	409: FastEndpointsProblemDetails;
 };
 
 export type DeleteWorkspaceError = DeleteWorkspaceErrors[keyof DeleteWorkspaceErrors];
@@ -4511,7 +4506,10 @@ export type ExecuteSavedPreviewWorkflowErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ExecuteSavedPreviewWorkflowError = ExecuteSavedPreviewWorkflowErrors[keyof ExecuteSavedPreviewWorkflowErrors];
 
 export type ExecuteSavedPreviewWorkflowResponses = {
 	/**
@@ -4539,7 +4537,10 @@ export type ExecuteUnsavedPreviewWorkflowErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ExecuteUnsavedPreviewWorkflowError = ExecuteUnsavedPreviewWorkflowErrors[keyof ExecuteUnsavedPreviewWorkflowErrors];
 
 export type ExecuteUnsavedPreviewWorkflowResponses = {
 	/**
@@ -6585,6 +6586,7 @@ export type CancelNodeChatMessageErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
 
 export type CancelNodeChatMessageError = CancelNodeChatMessageErrors[keyof CancelNodeChatMessageErrors];
@@ -6616,7 +6618,10 @@ export type CompactNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CompactNodeChatConversationError = CompactNodeChatConversationErrors[keyof CompactNodeChatConversationErrors];
 
 export type CompactNodeChatConversationResponses = {
 	/**
@@ -6873,7 +6878,10 @@ export type RenameNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type RenameNodeChatConversationError = RenameNodeChatConversationErrors[keyof RenameNodeChatConversationErrors];
 
 export type RenameNodeChatConversationResponses = {
 	/**
@@ -6902,7 +6910,10 @@ export type PinNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type PinNodeChatConversationError = PinNodeChatConversationErrors[keyof PinNodeChatConversationErrors];
 
 export type PinNodeChatConversationResponses = {
 	/**
@@ -6931,7 +6942,10 @@ export type ArchiveNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type ArchiveNodeChatConversationError = ArchiveNodeChatConversationErrors[keyof ArchiveNodeChatConversationErrors];
 
 export type ArchiveNodeChatConversationResponses = {
 	/**
@@ -6961,7 +6975,11 @@ export type SetNodeChatConversationMemoryExcludedErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type SetNodeChatConversationMemoryExcludedError =
+	SetNodeChatConversationMemoryExcludedErrors[keyof SetNodeChatConversationMemoryExcludedErrors];
 
 export type SetNodeChatConversationMemoryExcludedResponses = {
 	/**
@@ -6992,7 +7010,10 @@ export type BranchNodeChatConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type BranchNodeChatConversationError = BranchNodeChatConversationErrors[keyof BranchNodeChatConversationErrors];
 
 export type BranchNodeChatConversationResponses = {
 	/**
@@ -7053,7 +7074,10 @@ export type CreateNodeChatMessageRevisionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CreateNodeChatMessageRevisionError = CreateNodeChatMessageRevisionErrors[keyof CreateNodeChatMessageRevisionErrors];
 
 export type CreateNodeChatMessageRevisionResponses = {
 	/**
@@ -7114,7 +7138,10 @@ export type SetNodeChatMessageFeedbackErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type SetNodeChatMessageFeedbackError = SetNodeChatMessageFeedbackErrors[keyof SetNodeChatMessageFeedbackErrors];
 
 export type SetNodeChatMessageFeedbackResponses = {
 	/**
@@ -7147,6 +7174,7 @@ export type SetNodeChatSelectedPathErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
 
 export type SetNodeChatSelectedPathError = SetNodeChatSelectedPathErrors[keyof SetNodeChatSelectedPathErrors];

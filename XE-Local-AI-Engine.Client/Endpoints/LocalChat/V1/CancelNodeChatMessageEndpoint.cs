@@ -20,27 +20,19 @@ public sealed class CancelNodeChatMessageEndpoint(
     {
         Post(LocalApiRoutes.LocalChat.Cancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
+        // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
+        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancelNodeChatMessageRequest req, CancellationToken ct)
     {
         var correlation = new NodeChatMessageCorrelation(req.ConversationId, req.MessageId, req.RequestId);
 
-        // Catch the read-only guard rejection BEFORE the generic InvalidOperationException -> NotFound branch,
-        // since NodeChatReadOnlyConversationException derives from InvalidOperationException.
-        try
-        {
-            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
-        }
-        catch (NodeChatReadOnlyConversationException)
-        {
-            await Send.ResultAsync(Results.Conflict(new NodeChatConflictResponse
-            {
-                Code = NodeChatReadOnlyConversationException.Code,
-                Reason = NodeChatReadOnlyConversationException.Reason
-            })).ConfigureAwait(false);
-            return;
-        }
+        // The guard runs OUTSIDE the try below on purpose: NodeChatReadOnlyConversationException derives from
+        // InvalidOperationException, so inside it the generic -> NotFound arm would swallow the 409 the global
+        // ConflictExceptionHandler must write.
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         try
         {

@@ -42,11 +42,6 @@ export const zFastEndpointsProblemDetails = z.object({
 	errors: z.array(zFastEndpointsProblemDetailsError).optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceConflictResponse = z.object({
-	code: z.string().optional(),
-	message: z.string(),
-});
-
 export const zXeLocalAiEngineClientEndpointsWorkspacesV1DeleteWorkspaceRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = z.object({
