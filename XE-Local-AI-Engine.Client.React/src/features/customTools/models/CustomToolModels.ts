@@ -132,13 +132,17 @@ export const customToolFormSchema = z
 		parameters: z.array(parameterSchema),
 		http: z.object({
 			method: z.string().trim().min(1),
-			urlTemplate: z.string().trim().min(1),
+			// Required only for the ACTIVE kind — see superRefine. Only the active kind's block is submitted
+			// (toDefinition) and only its editor is rendered, so requiring this unconditionally made the empty
+			// create form unsavable with the error attached to an off-screen field.
+			urlTemplate: z.string().trim(),
 			headers: z.array(headerSchema),
 			bodyTemplate: z.string(),
 			allowedHosts: z.array(z.string().trim().min(1)),
 		}),
 		command: z.object({
-			executable: z.string().trim().min(1),
+			// Required only for the ACTIVE kind — see superRefine, and the urlTemplate note above.
+			executable: z.string().trim(),
 			argsTemplate: z.array(z.string()),
 			workingDirectory: z.string(),
 			timeoutSeconds: z.number().int().min(0).max(CUSTOM_TOOL_TIMEOUT_MAX),
