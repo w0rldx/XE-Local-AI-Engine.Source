@@ -118,6 +118,74 @@ public sealed class ContainerSandboxOptionsValidatorTests
         AssertEx.Contains(string.Join(" ", result.Failures ?? []), "absolute in-container path");
     }
 
+    [Test]
+    [Arguments("WorkspaceMountTarget")]
+    [Arguments("ScratchMountTarget")]
+    [Arguments("TempMountTarget")]
+    public void Validate_ABlankMountTarget_IsRejected(string property)
+    {
+        AssertRejected(WithMountTarget(property, string.Empty), "'" + property + "' is required.");
+    }
+
+    [Test]
+    [Arguments("WorkspaceMountTarget")]
+    [Arguments("ScratchMountTarget")]
+    [Arguments("TempMountTarget")]
+    public void Validate_AMountTargetContainingDotDot_IsRejected(string property)
+    {
+        // The target is joined into a container path; a traversal segment there escapes the intended mount point.
+        AssertRejected(WithMountTarget(property, "/workspace/../etc"), "must not contain '..'");
+    }
+
+    [Test]
+    [Arguments("WorkspaceMountTarget")]
+    [Arguments("ScratchMountTarget")]
+    [Arguments("TempMountTarget")]
+    public void Validate_TheContainerRootAsAMountTarget_IsRejected(string property)
+    {
+        // Mounting over "/" would shadow the whole image filesystem.
+        AssertRejected(WithMountTarget(property, "/"), "must not be the container root");
+    }
+
+    [Test]
+    public void Validate_ARelativeScratchMountTarget_IsRejected()
+    {
+        AssertRejected(Options() with { ScratchMountTarget = "scratch" }, "absolute in-container path");
+    }
+
+    [Test]
+    [Arguments("1")]
+    [Arguments("1.41.0")]
+    [Arguments("v1.41")]
+    [Arguments("latest")]
+    public void Validate_AMinimumApiVersionThatIsNotMajorMinor_IsRejected(string value)
+    {
+        AssertRejected(Options() with { MinimumApiVersion = value }, "must be 'major.minor'");
+    }
+
+    [Test]
+    public void Validate_TheDefaultMinimumApiVersion_IsAccepted()
+    {
+        AssertEx.True(Validate(Options()).Succeeded);
+    }
+
+    private static ContainerSandboxOptions WithMountTarget(string property, string value) =>
+        property switch
+        {
+            "WorkspaceMountTarget" => Options() with { WorkspaceMountTarget = value },
+            "ScratchMountTarget" => Options() with { ScratchMountTarget = value },
+            "TempMountTarget" => Options() with { TempMountTarget = value },
+            _ => throw new ArgumentOutOfRangeException(nameof(property), property, "Unknown mount-target property.")
+        };
+
+    private static void AssertRejected(ContainerSandboxOptions options, string expectedFragment)
+    {
+        var result = Validate(options);
+
+        AssertEx.True(result.Failed);
+        AssertEx.Contains(string.Join(" ", result.Failures ?? []), expectedFragment);
+    }
+
     private static ValidateOptionsResult Validate(ContainerSandboxOptions options)
     {
         return new ContainerSandboxOptionsValidator().Validate(name: null, options);

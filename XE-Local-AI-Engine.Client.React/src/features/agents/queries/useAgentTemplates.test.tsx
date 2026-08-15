@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated TanStack module so the hooks run against owned query/mutation fns (no network). The hooks still
@@ -23,6 +21,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/features/agents/queries/useAgentDefinitions";
 import { useAgentTemplates, useImportAgentTemplates } from "@/features/agents/queries/useAgentTemplates";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const DEFINITIONS_KEY = agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list);
 // biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
@@ -43,17 +42,12 @@ const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {
 	invalidatedKeys.length = 0;
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
+	const { wrapper, queryClient } = createProvidersWrapper();
 	vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters) => {
 		invalidatedKeys.push((filters as { queryKey?: unknown } | undefined)?.queryKey);
 		return Promise.resolve();
 	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	}
-	return { Wrapper };
+	return { wrapper };
 }
 
 describe("agent template reads", () => {
@@ -71,8 +65,8 @@ describe("agent template reads", () => {
 	});
 
 	it("returns the template summaries from the generated list response", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useAgentTemplates(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useAgentTemplates(), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -85,8 +79,8 @@ describe("agent template reads", () => {
 			queryKey: [{ _id: "listAgentTemplates" }],
 			queryFn: async () => ({}),
 		}));
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useAgentTemplates(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useAgentTemplates(), { wrapper });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -105,8 +99,8 @@ describe("agent template import", () => {
 	});
 
 	it("dispatches the { body: { slugs } } envelope and invalidates both lists", async () => {
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useImportAgentTemplates(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useImportAgentTemplates(), { wrapper });
 
 		result.current.mutate({ body: { slugs: ["engineering-backend-architect"] } });
 
@@ -119,8 +113,8 @@ describe("agent template import", () => {
 
 	it("surfaces a mutation error and does not invalidate", async () => {
 		importMutationFn.mockRejectedValue(new Error("Request failed with status code 400"));
-		const { Wrapper } = makeWrapper();
-		const { result } = renderHook(() => useImportAgentTemplates(), { wrapper: Wrapper });
+		const { wrapper } = makeWrapper();
+		const { result } = renderHook(() => useImportAgentTemplates(), { wrapper });
 
 		result.current.mutate({ body: { slugs: ["engineering-backend-architect"] } });
 
