@@ -455,7 +455,7 @@ export type XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode =
 	| "InvalidLifecycleTransition";
 
 export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest = {
-	expectedVersion: number;
+	expectedVersion?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingV1ListTrainingDefinitionsResponse = {
@@ -732,7 +732,7 @@ export type XeLocalAiEngineClientEndpointsTrainingComparisonsV1ComparisonByIdReq
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest = {
-	expectedVersion: number;
+	expectedVersion?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingComparisonsV1ComparisonSuggestionResponse = {

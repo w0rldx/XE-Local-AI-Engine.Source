@@ -505,7 +505,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse = z.
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest = z.object({
-	expectedVersion: z.int(),
+	expectedVersion: z.int().optional(),
 });
 
 export const zXeLocalAiEngineClientPersistenceEntitiesTrainingDatasetKind = z.enum(["ToolCalling"]);
@@ -878,7 +878,7 @@ export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1ListComparisons
 export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1ComparisonByIdRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest = z.object({
-	expectedVersion: z.int(),
+	expectedVersion: z.int().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingComparisonsV1ComparisonSuggestionResponse = z.object({
