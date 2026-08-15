@@ -43,6 +43,268 @@ export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateReques
 	status?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsTrainingV1ListToolMocksResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse = {
+	id: string;
+	toolName: string;
+	body: XeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1;
+	verification?: XeLocalAiEngineClientServicesTrainingDatasetsToolMockVerificationV1 | null;
+	verificationState: XeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState;
+	enabled: boolean;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1 = {
+	schemaVersion?: number;
+	rules?: Array<XeLocalAiEngineClientServicesTrainingDatasetsToolMockRuleV1>;
+	defaultResponse?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsToolMockRuleV1 = {
+	field?: string;
+	match?: XeLocalAiEngineClientServicesTrainingDatasetsToolMockMatchKind;
+	value?: string | null;
+	anyOf?: Array<string> | null;
+	response?: string;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsToolMockMatchKind = "Equality" | "Presence" | "Enum";
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsToolMockVerificationV1 = {
+	schemaVersion?: number;
+	passed?: boolean;
+	findings?: Array<string>;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState = "Unverified" | "Verified" | "Rejected";
+
+export type XeLocalAiEngineClientEndpointsTrainingV1GetToolMockRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1CreateToolMockRequest = {
+	toolName?: string;
+	enabled?: boolean;
+	body?: XeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1UpdateToolMockRequest = {
+	expectedVersion?: number;
+	toolName?: string;
+	enabled?: boolean;
+	body?: XeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1VerifyToolMockRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ListTrainingDefinitionsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse = {
+	id: string;
+	name: string;
+	kind: XeLocalAiEngineClientPersistenceEntitiesTrainingDatasetKind;
+	body: XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1;
+	definitionVersion: number;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesTrainingDatasetKind = "ToolCalling";
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 = {
+	schemaVersion?: number;
+	description?: string | null;
+	teacherModelName?: string;
+	teacherOutputMode?: XeLocalAiEngineClientServicesTrainingDatasetsTeacherOutputMode;
+	systemInstructions?: string;
+	tools?: Array<XeLocalAiEngineClientServicesTrainingDatasetsDatasetToolSnapshotV1>;
+	sampleKinds?: Array<XeLocalAiEngineClientServicesTrainingDatasetsDatasetSampleKindTargetV1>;
+	holdoutFraction?: number;
+	temperature?: number;
+	baseSeed?: string | null;
+	criticEnabled?: boolean;
+	criticModelName?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsTeacherOutputMode = "Constrained" | "ValidateAfter";
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsDatasetToolSnapshotV1 = {
+	name?: string;
+	description?: string | null;
+	parameterSchema?: string | null;
+	requiresApproval?: boolean;
+	category?: XeLocalAiEngineAiAgentToolsToolCategory;
+};
+
+export type XeLocalAiEngineAiAgentToolsToolCategory = "ReadLocal" | "WriteExecute" | "Orchestration" | "Network" | "Unknown";
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsDatasetSampleKindTargetV1 = {
+	kind?: string;
+	count?: number;
+	label?: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleLabel;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesTrainingSampleLabel = "Good" | "Bad";
+
+export type XeLocalAiEngineClientEndpointsTrainingV1GetTrainingDefinitionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1CreateTrainingDefinitionRequest = {
+	name?: string;
+	body?: XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1UpdateTrainingDefinitionRequest = {
+	expectedVersion?: number;
+	name?: string;
+	body?: XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDefinitionRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse = {
+	id: string;
+	definitionId: string;
+	definitionVersion: number;
+	name: string;
+	status: XeLocalAiEngineClientPersistenceEntitiesTrainingDatasetStatus;
+	revision: number;
+	contentFingerprint?: string | null;
+	totalSampleCount: number;
+	goodSampleCount: number;
+	badSampleCount: number;
+	rejectedSampleCount: number;
+	duplicateSampleCount: number;
+	workStatus?: XeLocalAiEngineClientPersistenceEntitiesDatasetGenerationWorkStatus | null;
+	workErrorMessage?: string | null;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesTrainingDatasetStatus = "Generating" | "Ready" | "Failed";
+
+export type XeLocalAiEngineClientPersistenceEntitiesDatasetGenerationWorkStatus =
+	| "Queued"
+	| "Running"
+	| "Succeeded"
+	| "Failed"
+	| "Cancelled";
+
+export type XeLocalAiEngineClientEndpointsTrainingV1GenerateTrainingDatasetRequest = {
+	expectedVersion?: number;
+	name?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ListTrainingDatasetsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1GetTrainingDatasetRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ListTrainingSamplesResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse>;
+	totalCount: number;
+	page: number;
+	pageSize: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse = {
+	id: string;
+	datasetId: string;
+	sequence: number;
+	kind: string;
+	label: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleLabel;
+	reviewState: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState;
+	provenance: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleProvenance;
+	sourceHash: string;
+	content: XeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleContentV1;
+	validation?: XeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleValidationV1 | null;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState = "Pending" | "Approved" | "Rejected";
+
+export type XeLocalAiEngineClientPersistenceEntitiesTrainingSampleProvenance = "Generated" | "Manual";
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleContentV1 = {
+	schemaVersion?: number;
+	systemInstructions?: string;
+	parts?: Array<XeLocalAiEngineClientServicesTrainingDatasetsTrainingSamplePartV1>;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsTrainingSamplePartV1 = {
+	kind?: string;
+	sequence?: number;
+	content?: string | null;
+	toolCallId?: string | null;
+	toolName?: string | null;
+	arguments?: string | null;
+	result?: string | null;
+	isError?: boolean | null;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleValidationV1 = {
+	schemaVersion?: number;
+	passed?: boolean;
+	layers?: Array<XeLocalAiEngineClientServicesTrainingDatasetsSampleValidationLayerResultV1>;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsSampleValidationLayerResultV1 = {
+	layer?: string;
+	passed?: boolean;
+	scoredBy?: string;
+	reason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ListTrainingSamplesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ReviewTrainingSampleRequest = {
+	verb?: XeLocalAiEngineClientPersistenceStoresTrainingSampleReviewVerb;
+	label?: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleLabel | null;
+};
+
+export type XeLocalAiEngineClientPersistenceStoresTrainingSampleReviewVerb = "Approve" | "Reject" | "Relabel";
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ExportTrainingDatasetResponse = {
+	datasetId: string;
+	format: XeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat;
+	content: string;
+	lineCount: number;
+};
+
+export type XeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat = "Jsonl" | "Hermes";
+
+export type XeLocalAiEngineClientEndpointsTrainingV1ExportTrainingDatasetRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitResponse = {
 	outcomes: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillImportOutcomeResponse>;
 };
@@ -3450,6 +3712,527 @@ export type SaveTutorialStateResponses = {
 };
 
 export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
+
+export type ListToolMocksData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/mocks";
+};
+
+export type ListToolMocksErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListToolMocksResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ListToolMocksResponse;
+};
+
+export type ListToolMocksResponse = ListToolMocksResponses[keyof ListToolMocksResponses];
+
+export type CreateToolMockData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1CreateToolMockRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/mocks";
+};
+
+export type CreateToolMockErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateToolMockResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
+};
+
+export type CreateToolMockResponse = CreateToolMockResponses[keyof CreateToolMockResponses];
+
+export type DeleteToolMockData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest;
+	path: {
+		mockId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/mocks/{mockId}";
+};
+
+export type DeleteToolMockErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteToolMockResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteToolMockResponse = DeleteToolMockResponses[keyof DeleteToolMockResponses];
+
+export type GetToolMockData = {
+	body?: never;
+	path: {
+		mockId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/mocks/{mockId}";
+};
+
+export type GetToolMockErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetToolMockResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
+};
+
+export type GetToolMockResponse = GetToolMockResponses[keyof GetToolMockResponses];
+
+export type UpdateToolMockData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1UpdateToolMockRequest;
+	path: {
+		mockId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/mocks/{mockId}";
+};
+
+export type UpdateToolMockErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateToolMockResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
+};
+
+export type UpdateToolMockResponse = UpdateToolMockResponses[keyof UpdateToolMockResponses];
+
+export type VerifyToolMockData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1VerifyToolMockRequest;
+	path: {
+		mockId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/mocks/{mockId}/verify";
+};
+
+export type VerifyToolMockErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type VerifyToolMockResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
+};
+
+export type VerifyToolMockResponse = VerifyToolMockResponses[keyof VerifyToolMockResponses];
+
+export type ListTrainingDefinitionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/definitions";
+};
+
+export type ListTrainingDefinitionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListTrainingDefinitionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ListTrainingDefinitionsResponse;
+};
+
+export type ListTrainingDefinitionsResponse = ListTrainingDefinitionsResponses[keyof ListTrainingDefinitionsResponses];
+
+export type CreateTrainingDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1CreateTrainingDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/definitions";
+};
+
+export type CreateTrainingDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateTrainingDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse;
+};
+
+export type CreateTrainingDefinitionResponse = CreateTrainingDefinitionResponses[keyof CreateTrainingDefinitionResponses];
+
+export type DeleteTrainingDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDefinitionRequest;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/definitions/{definitionId}";
+};
+
+export type DeleteTrainingDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteTrainingDefinitionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteTrainingDefinitionResponse = DeleteTrainingDefinitionResponses[keyof DeleteTrainingDefinitionResponses];
+
+export type GetTrainingDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/definitions/{definitionId}";
+};
+
+export type GetTrainingDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetTrainingDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse;
+};
+
+export type GetTrainingDefinitionResponse = GetTrainingDefinitionResponses[keyof GetTrainingDefinitionResponses];
+
+export type UpdateTrainingDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1UpdateTrainingDefinitionRequest;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/definitions/{definitionId}";
+};
+
+export type UpdateTrainingDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateTrainingDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse;
+};
+
+export type UpdateTrainingDefinitionResponse = UpdateTrainingDefinitionResponses[keyof UpdateTrainingDefinitionResponses];
+
+export type GenerateTrainingDatasetData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1GenerateTrainingDatasetRequest;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/definitions/{definitionId}/generate";
+};
+
+export type GenerateTrainingDatasetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GenerateTrainingDatasetResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse;
+};
+
+export type GenerateTrainingDatasetResponse = GenerateTrainingDatasetResponses[keyof GenerateTrainingDatasetResponses];
+
+export type ListTrainingDatasetsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/training/datasets";
+};
+
+export type ListTrainingDatasetsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListTrainingDatasetsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ListTrainingDatasetsResponse;
+};
+
+export type ListTrainingDatasetsResponse = ListTrainingDatasetsResponses[keyof ListTrainingDatasetsResponses];
+
+export type DeleteTrainingDatasetData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest;
+	path: {
+		datasetId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/datasets/{datasetId}";
+};
+
+export type DeleteTrainingDatasetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteTrainingDatasetResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteTrainingDatasetResponse = DeleteTrainingDatasetResponses[keyof DeleteTrainingDatasetResponses];
+
+export type GetTrainingDatasetData = {
+	body?: never;
+	path: {
+		datasetId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/datasets/{datasetId}";
+};
+
+export type GetTrainingDatasetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetTrainingDatasetResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1TrainingDatasetResponse;
+};
+
+export type GetTrainingDatasetResponse = GetTrainingDatasetResponses[keyof GetTrainingDatasetResponses];
+
+export type ListTrainingSamplesData = {
+	body?: never;
+	path: {
+		datasetId: string;
+	};
+	query: {
+		page: number;
+		pageSize: number;
+		label?: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleLabel | null;
+		reviewState?: XeLocalAiEngineClientPersistenceEntitiesTrainingSampleReviewState | null;
+		kind?: string | null;
+	};
+	url: "/api/local/v1/training/datasets/{datasetId}/samples";
+};
+
+export type ListTrainingSamplesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListTrainingSamplesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ListTrainingSamplesResponse;
+};
+
+export type ListTrainingSamplesResponse = ListTrainingSamplesResponses[keyof ListTrainingSamplesResponses];
+
+export type ReviewTrainingSampleData = {
+	body: XeLocalAiEngineClientEndpointsTrainingV1ReviewTrainingSampleRequest;
+	path: {
+		datasetId: string;
+		sampleId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/datasets/{datasetId}/samples/{sampleId}";
+};
+
+export type ReviewTrainingSampleErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ReviewTrainingSampleResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse;
+};
+
+export type ReviewTrainingSampleResponse = ReviewTrainingSampleResponses[keyof ReviewTrainingSampleResponses];
+
+export type ExportTrainingDatasetData = {
+	body?: never;
+	path: {
+		datasetId: string;
+	};
+	query: {
+		format: XeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat;
+	};
+	url: "/api/local/v1/training/datasets/{datasetId}/export";
+};
+
+export type ExportTrainingDatasetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ExportTrainingDatasetResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingV1ExportTrainingDatasetResponse;
+};
+
+export type ExportTrainingDatasetResponse = ExportTrainingDatasetResponses[keyof ExportTrainingDatasetResponses];
 
 export type CommitSkillImportData = {
 	body: XeLocalAiEngineClientEndpointsSkillsV1SkillImportCommitEndpointRequest;
