@@ -47,7 +47,10 @@ internal sealed class HuggingFaceBaseCheckpointStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
 
-        var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false)
+        // Read the metadata AT the requested revision. Labelling the default branch's file list with a pinned revision
+        // describes a checkpoint that may not exist: the download then fetches those names at the pin, and a file the
+        // pin does not have (or has at another size) fails mid-transfer rather than at resolve time.
+        var detail = await _hubClient.GetRepoAsync(repoId, revision, ct).ConfigureAwait(false)
                      ?? throw new BaseCheckpointNotTrainableException("The base checkpoint repository could not be read from Hugging Face.");
 
         var files = new List<BaseCheckpointFile>();
