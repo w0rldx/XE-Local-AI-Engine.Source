@@ -36,7 +36,7 @@ The corollary that matters for review: a pull request that adds a training conce
 
 A run acquires two things for its whole duration:
 
-- a process-wide `ITrainingActivity` marker, and
+- a process-wide `ITrainingActivity` marker (implemented as the shared `IGpuWorkGate`, whose exclusive/shared admission makes this marker and every other queue's converse check one atomic decision under one lock), and
 - the existing supervisor runtime-mutation lease (`TryAcquireRuntimeMutationLeaseAsync`), which already refuses while any model is loaded.
 
 That second acquisition gives training the same eject-first user experience the llama.cpp source build already has: a run cannot start while a model is resident, and the refusal surfaces as the established `runtime-busy` outcome rather than as a new failure vocabulary. Dataset generation, benchmark runs and image jobs check `ITrainingActivity` before starting, and conversely a run start refuses while any of them is active.

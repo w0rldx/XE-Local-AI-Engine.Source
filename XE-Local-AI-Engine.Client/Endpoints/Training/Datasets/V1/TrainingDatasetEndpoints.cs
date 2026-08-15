@@ -78,6 +78,43 @@ public sealed class DeleteTrainingDatasetEndpoint(ITrainingDatasetStore store)
     }
 }
 
+/// <summary>
+///     Cancels generation. Mirrors the training-run cancel: a queued dataset is terminalized, a generating one is
+///     signalled through the executor's registry, and an unknown or already-finished dataset is a 404.
+/// </summary>
+public sealed class CancelTrainingDatasetEndpoint(IDatasetGenerationService generation)
+    : Endpoint<CancelTrainingDatasetRequest>
+{
+    private readonly IDatasetGenerationService _generation = generation ?? throw new ArgumentNullException(nameof(generation));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Training.DatasetCancel);
+        Policies(NodeAuthorizationPolicies.Operator);
+        // The dataset id is the whole request and it comes from the route, so this POST has no body. Without declaring
+        // that, FastEndpoints requires a JSON body and a bodyless cancel is answered with 415 instead of acting.
+        Description(builder => builder.Accepts<CancelTrainingDatasetRequest>());
+    }
+
+    public override async Task HandleAsync(CancelTrainingDatasetRequest req, CancellationToken ct)
+    {
+        try
+        {
+            if (!await _generation.CancelAsync(req.DatasetId, ct).ConfigureAwait(false))
+            {
+                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                return;
+            }
+
+            await Send.NoContentAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
+        }
+    }
+}
+
 public sealed class ListTrainingSamplesEndpoint(ITrainingDatasetStore store)
     : Endpoint<ListTrainingSamplesRequest, ListTrainingSamplesResponse>
 {

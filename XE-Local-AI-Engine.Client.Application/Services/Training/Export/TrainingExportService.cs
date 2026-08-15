@@ -19,8 +19,8 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <strong>Exclusivity.</strong> An export takes the same three-part hold a run does — no other GPU work, the
-///         process-wide <see cref="ITrainingActivity" /> flag, and the llama.cpp runtime-mutation lease — acquired
+///         <strong>Exclusivity.</strong> An export takes the same hold a run does — an exclusive
+///         <see cref="IGpuWorkGate" /> admission and the llama.cpp runtime-mutation lease — acquired
 ///         BEFORE anything is written, so a refusal is an immediate, harmless 409. The merge step genuinely needs the
 ///         GPU; the adapter conversion does not, but it is held to the same single-flight rule rather than given its
 ///         own concurrency model for a path that runs for seconds.
@@ -37,7 +37,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 public sealed class TrainingExportService(
     IServiceScopeFactory scopeFactory,
     ITrainingRunEventBuffer events,
-    ITrainingActivity trainingActivity,
+    IGpuWorkGate gpuWorkGate,
     ILlamaServerProcessSupervisor supervisor,
     ITrainingRuntimeService runtime,
     ITrainingProcessSpawner spawner,
@@ -65,6 +65,7 @@ public sealed class TrainingExportService(
     private readonly IConvertScriptProvisioner _convertScripts = convertScripts ?? throw new ArgumentNullException(nameof(convertScripts));
     private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
     private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
+    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
     private readonly IGgufImportInspector _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
     private readonly ILogger<TrainingExportService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly ITrainingRuntimeService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
@@ -72,7 +73,6 @@ public sealed class TrainingExportService(
     private readonly ITrainedModelSmokeGate _smokeGate = smokeGate ?? throw new ArgumentNullException(nameof(smokeGate));
     private readonly ITrainingProcessSpawner _spawner = spawner ?? throw new ArgumentNullException(nameof(spawner));
     private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-    private readonly ITrainingActivity _trainingActivity = trainingActivity ?? throw new ArgumentNullException(nameof(trainingActivity));
     private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
     private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
 
@@ -113,7 +113,7 @@ public sealed class TrainingExportService(
 
         // Acquired in the queue's order and BEFORE anything is written, so a busy box costs a refused request rather
         // than a half-written staged file.
-        var activity = _trainingActivity.TryBegin();
+        var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export);
         if (activity is null)
         {
             return new TrainingExportStart(TrainingExportStartOutcome.Busy, "Training or another export is already running.");
@@ -155,7 +155,7 @@ public sealed class TrainingExportService(
         }
 
         var view = await ResolveSmokeViewAsync(store, artifact, cancellationToken).ConfigureAwait(false);
-        var activity = _trainingActivity.TryBegin()
+        var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export)
                        ?? throw new TrainingExportRejectedException("Training or an export is already running.");
         ILlamaServerRuntimeMutationLease? lease = null;
         try

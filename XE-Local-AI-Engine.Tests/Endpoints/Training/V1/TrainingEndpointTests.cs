@@ -31,6 +31,7 @@ public sealed class TrainingEndpointTests
     [Arguments("GET", "/datasets/00000000-0000-0000-0000-0000000000d2/samples")]
     [Arguments("PATCH", "/datasets/00000000-0000-0000-0000-0000000000d2/samples/00000000-0000-0000-0000-0000000000d4")]
     [Arguments("GET", "/datasets/00000000-0000-0000-0000-0000000000d2/export")]
+    [Arguments("POST", "/datasets/00000000-0000-0000-0000-0000000000d2/cancel")]
     [Arguments("GET", "/mocks")]
     [Arguments("POST", "/mocks")]
     [Arguments("GET", "/mocks/00000000-0000-0000-0000-0000000000d3")]
@@ -107,6 +108,34 @@ public sealed class TrainingEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Contains(body, "GenerationActive", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task CancelDataset_WhenTheCancelIsAccepted_ReturnsNoContent()
+    {
+        await using var context = new Context();
+        _ = context.Generation.CancelAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(true);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        _ = await context.Generation.Received(1).CancelAsync(DatasetId, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Unknown and already-terminal are the same answer here, exactly as the run cancel reports them.</summary>
+    [Test]
+    public async Task CancelDataset_WhenTheDatasetIsUnknownOrAlreadyTerminal_ReturnsNotFound()
+    {
+        await using var context = new Context();
+        _ = context.Generation.CancelAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Test]

@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class DatasetGenerationQueueTests
@@ -14,11 +15,11 @@ public sealed class DatasetGenerationQueueTests
     [Test]
     public async Task Exclusivity_TrainingRunActive_GenerationRefused()
     {
-        var activity = new TrainingActivity();
+        var gate = new GpuWorkGate();
         var store = Substitute.For<ITrainingDatasetStore>();
         using var startSignal = new DatasetGenerationQueueSignal();
-        var service = new DatasetGenerationService(store, activity, startSignal);
-        using var held = AssertEx.NotNull(activity.TryBegin(), "The first acquisition wins the exclusive flag.");
+        var service = Service(store, gate, startSignal);
+        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A run holds the gate exclusively.");
 
         var exception = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.StartAsync(Guid.NewGuid(), 1, "dataset"));
 
@@ -29,12 +30,12 @@ public sealed class DatasetGenerationQueueTests
     [Test]
     public async Task Exclusivity_AfterTheRunReleases_GenerationEnqueuesAndWakesTheQueue()
     {
-        var activity = new TrainingActivity();
-        activity.TryBegin()!.Dispose();
+        var gate = new GpuWorkGate();
+        gate.TryBeginExclusive(GpuWorkKind.TrainingRun)!.Dispose();
         var store = Substitute.For<ITrainingDatasetStore>();
         _ = store.CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>()).Returns(Dataset());
         using var signal = new DatasetGenerationQueueSignal();
-        var service = new DatasetGenerationService(store, activity, signal);
+        var service = Service(store, gate, signal);
 
         _ = await service.StartAsync(Guid.NewGuid(), 1, "dataset");
 
@@ -42,20 +43,59 @@ public sealed class DatasetGenerationQueueTests
         AssertEx.True(await signal.WaitAsync(TimeSpan.Zero, CancellationToken.None), "Enqueueing must wake the single consumer.");
     }
 
+    /// <summary>A dataset the queue has not claimed yet has no executor to signal, so the service terminalizes it.</summary>
     [Test]
-    public void TrainingActivity_IsExclusiveAndReleasesOnDispose()
+    public async Task Cancel_AQueuedDataset_TerminalizesItAsCancelled()
     {
-        var activity = new TrainingActivity();
-        AssertEx.False(activity.IsActive);
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var datasetId = Guid.NewGuid();
+        _ = store.GetDatasetAsync(datasetId, Arg.Any<CancellationToken>()).Returns(Dataset());
+        using var signal = new DatasetGenerationQueueSignal();
+        var service = Service(store, new GpuWorkGate(), signal);
 
-        var first = AssertEx.NotNull(activity.TryBegin());
-        AssertEx.True(activity.IsActive);
-        AssertEx.Null(activity.TryBegin(), "A second acquisition while held must fail.");
+        AssertEx.True(await service.CancelAsync(datasetId));
 
-        first.Dispose();
-        AssertEx.False(activity.IsActive);
-        first.Dispose();
-        AssertEx.False(activity.IsActive, "Disposing twice is a no-op, not a release of somebody else's hold.");
+        _ = await store.Received(1).CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Cancel_ARunningDataset_SignalsTheExecutorInsteadOfTerminalizingIt()
+    {
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var datasetId = Guid.NewGuid();
+        _ = store.GetDatasetAsync(datasetId, Arg.Any<CancellationToken>())
+                 .Returns(Dataset() with
+                 {
+                     WorkStatus = DatasetGenerationWorkStatus.Running
+                 });
+        var cancellations = new TrainingRunCancellationRegistry();
+        using var source = new CancellationTokenSource();
+        using var registration = cancellations.Register(datasetId, source);
+        using var signal = new DatasetGenerationQueueSignal();
+        var service = Service(store, new GpuWorkGate(), signal, cancellations);
+
+        AssertEx.True(await service.CancelAsync(datasetId));
+
+        AssertEx.True(source.IsCancellationRequested, "A running generation is signalled, not terminalized behind the executor's back.");
+        _ = await store.DidNotReceiveWithAnyArgs().CompleteGenerationAsync(Arg.Any<Guid>(), Arg.Any<DatasetGenerationWorkStatus>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Cancel_AnUnknownOrTerminalDataset_ReturnsFalse()
+    {
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var terminal = Guid.NewGuid();
+        _ = store.GetDatasetAsync(terminal, Arg.Any<CancellationToken>())
+                 .Returns(Dataset() with
+                 {
+                     WorkStatus = DatasetGenerationWorkStatus.Succeeded
+                 });
+        using var signal = new DatasetGenerationQueueSignal();
+        var service = Service(store, new GpuWorkGate(), signal);
+
+        AssertEx.False(await service.CancelAsync(Guid.NewGuid()), "An unknown dataset cannot be cancelled.");
+        AssertEx.False(await service.CancelAsync(terminal), "A finished dataset cannot be cancelled.");
+        _ = await store.DidNotReceiveWithAnyArgs().CompleteGenerationAsync(Arg.Any<Guid>(), Arg.Any<DatasetGenerationWorkStatus>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -103,6 +143,12 @@ public sealed class DatasetGenerationQueueTests
         AssertEx.True(buffer.Replay(datasetId, afterSequence: 0).ResetRequired, "A cursor older than the retained window forces a reset.");
         AssertEx.Equal(expected: 1, buffer.Replay(datasetId, afterSequence: 4).Events.Count);
     }
+
+    private static DatasetGenerationService Service(ITrainingDatasetStore store,
+        IGpuWorkGate gate,
+        IDatasetGenerationQueueSignal signal,
+        TrainingRunCancellationRegistry? cancellations = null) =>
+        new(store, gate, cancellations ?? new TrainingRunCancellationRegistry(), signal);
 
     private static TrainingDatasetRecord Dataset() =>
         new(Guid.NewGuid(), Guid.NewGuid(), 1, Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}"""),

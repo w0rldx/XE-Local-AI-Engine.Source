@@ -22,8 +22,8 @@ internal static class AddNodeTrainingRunExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        // Also registered by the dataset module; TryAdd so whichever composes first wins and both see the same flag.
-        builder.Services.TryAddSingleton<ITrainingActivity, TrainingActivity>();
+        // Also registered by the dataset module; TryAdd so whichever composes first wins and both see the same gate.
+        builder.Services.TryAddSingleton<IGpuWorkGate, GpuWorkGate>();
 
         builder.Services.AddOptions<TrainingRunEventBufferOptions>();
         builder.Services.AddOptions<TrainingRunQueueOptions>();
@@ -32,8 +32,9 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddSingleton<ITrainingRunQueueSignal>(provider => provider.GetRequiredService<TrainingRunQueueSignal>());
 
         // Singletons: the registry outlives the executor's scope (cancel arrives on a request scope), and the
-        // workspace is a pure path/crypto helper with no per-request state.
-        builder.Services.AddSingleton<TrainingRunCancellationRegistry>();
+        // workspace is a pure path/crypto helper with no per-request state. The registry is TryAdd because the dataset
+        // module registers the same one for dataset-generation cancels.
+        builder.Services.TryAddSingleton<TrainingRunCancellationRegistry>();
         builder.Services.AddSingleton<TrainingRunWorkspace>();
 
         builder.Services.AddScoped<ITrainingOptionDefaultsCalculator, TrainingOptionDefaultsCalculator>();
