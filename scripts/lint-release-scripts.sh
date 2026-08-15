@@ -148,7 +148,14 @@ if [[ "${RUN_SHELL}" == "true" ]]; then
              mise use -g shellcheck   (this repo already resolves shellcheck via mise)
              — or —  apt-get install shellcheck  /  brew install shellcheck
              Re-run with --ps-only ONLY if you have separately verified the shell scripts."
-  log "shellcheck $(shellcheck --version | awk '/^version:/ { print $2 }')"
+  shellcheck_version="$(shellcheck --version | awk '/^version:/ { print $2 }')"
+  # 0.9.x reports SC2317 (unreachable) and SC2015 (`a && b || true`) false positives that 0.10.0
+  # removed; at --severity=style those fail the pass on scripts that are clean under a current
+  # release. Refuse the stale linter outright rather than let it grade the scripts wrong.
+  if [[ "$(printf '%s\n' "0.10.0" "${shellcheck_version}" | sort -V | head -n1)" != "0.10.0" ]]; then
+    prereq_fail "shellcheck ${shellcheck_version} is too old (need >= 0.10.0; 0.9.x has SC2317/SC2015 false positives). Upgrade: mise use -g shellcheck"
+  fi
+  log "shellcheck ${shellcheck_version}"
 
   existing_shell=()
   for target in "${SHELL_TARGETS[@]}"; do
