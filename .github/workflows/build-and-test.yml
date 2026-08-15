@@ -41,11 +41,29 @@ jobs:
       - name: Run auto-enrolled release contract tests
         run: scripts/run-release-contract-tests.sh
 
+      # ubuntu-latest ships shellcheck 0.9.0, whose SC2317/SC2015 false positives (fixed in 0.10)
+      # fail the --severity=style pass on scripts that are clean under the 0.11.0 mise resolves
+      # locally. Pin the exact release the scripts are validated against, sha256-verified, so the
+      # gate does not drift with the runner image. lint-release-scripts.sh refuses (exit 2) anything
+      # older than 0.10.0, so a broken install here is loud rather than a wall of stale findings.
+      - name: Install pinned shellcheck
+        env:
+          SHELLCHECK_VERSION: v0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/shellcheck.tar.xz"
+          curl -sSfL -o "$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xJf "$archive" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/shellcheck-${SHELLCHECK_VERSION}" >> "$GITHUB_PATH"
+
       # Static analysis of the release-critical shell/PowerShell scripts, the Pester suites, and the
-      # P0_SPIKE compile gate. ubuntu-latest already ships shellcheck, pwsh, PSScriptAnalyzer and
-      # Pester; --bootstrap only installs PSScriptAnalyzer if a future image drops it (a missing
-      # linter is exit 2 here, never a silent pass). --no-behavior skips the contract-test pass the
-      # step above already ran.
+      # P0_SPIKE compile gate. shellcheck comes from the pinned step above; ubuntu-latest already
+      # ships pwsh, PSScriptAnalyzer and Pester; --bootstrap only installs PSScriptAnalyzer if a
+      # future image drops it (a missing linter is exit 2 here, never a silent pass). --no-behavior
+      # skips the contract-test pass the step above already ran.
       - name: Lint release-critical scripts
         run: scripts/lint-release-scripts.sh --no-behavior --bootstrap
 
@@ -147,7 +165,11 @@ jobs:
             fi
           done
 
-          mapfile -t reports < <(find "$COVERAGE_ROOT" -type f -name 'coverage.cobertura.xml' | sort)
+          # Depth 2 only: each report lives at $COVERAGE_ROOT/<module>/coverage.cobertura.xml.
+          # --report-trx also copies it as a TRX attachment under
+          # <module>/_<machine>_<timestamp>/In/<machine>/, and a recursive find would count that
+          # byte-identical copy a second time.
+          mapfile -t reports < <(find "$COVERAGE_ROOT" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
           if [[ "${#reports[@]}" -ne "${#test_projects[@]}" ]]; then
             echo "ERROR: expected ${#test_projects[@]} Cobertura reports, found ${#reports[@]}." >&2
             exit 1
