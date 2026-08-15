@@ -15,6 +15,7 @@ describe("ComparisonModels", () => {
 			id: "e1",
 			modelName: "base-model",
 			datasetId: "d1",
+			datasetContentFingerprint: "fp-1",
 			status: "Running",
 			totalCount: 10,
 			scoredCount: 4,
@@ -29,11 +30,14 @@ describe("ComparisonModels", () => {
 		expect(run.comparisonId).toBeNull();
 		expect(run.errorMessage).toBeNull();
 		expect(run.perKind).toEqual([{ kind: "tool-call", total: 4, passed: 3 }]);
+		// The frozen fingerprint rides through verbatim — it is what the drift warning compares against.
+		expect(run.datasetId).toBe("d1");
+		expect(run.datasetContentFingerprint).toBe("fp-1");
 	});
 
 	it("degrades an unrecognized status to Queued rather than throwing", () => {
 		// A wire value this build does not know is not worth a blank page over.
-		expect(toEvaluationRun({ id: "e1", modelName: "m", datasetId: "d", status: "Reticulating", totalCount: 1, scoredCount: 0, passedCount: 0, perKind: [], version: 1, createdAtUtc: 1, updatedAtUtc: 1 }).status).toBe(
+		expect(toEvaluationRun({ id: "e1", modelName: "m", datasetId: "d", datasetContentFingerprint: "fp", status: "Reticulating", totalCount: 1, scoredCount: 0, passedCount: 0, perKind: [], version: 1, createdAtUtc: 1, updatedAtUtc: 1 }).status).toBe(
 			"Queued",
 		);
 	});
@@ -82,6 +86,8 @@ const base = {
 	trainingRunId: null,
 	comparisonId: null,
 	modelName: "m",
+	datasetId: "d1",
+	datasetContentFingerprint: "fp-1",
 	status: "Succeeded" as const,
 	totalCount: 3,
 	scoredCount: 3,
