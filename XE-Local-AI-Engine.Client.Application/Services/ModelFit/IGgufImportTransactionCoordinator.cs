@@ -186,8 +186,16 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             _logger.LogDebug(exception, "Rejected a GGUF import identity during acquisition preflight.");
             throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.");
         }
+        catch (GgufAcquisitionConflictException)
+        {
+            throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.");
+        }
         catch (InvalidOperationException)
         {
+            // Still broad on purpose: InstalledModelSnapshotCoordinator.AcquireMutationAsync gives up with
+            // InvalidOperationException("InstalledModelSnapshotUnstable") when the model's members keep changing under
+            // it, which is the same operator-visible situation as a conflict. Narrowing this to the typed conflict
+            // alone would turn that concurrency case into a 500.
             throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.");
         }
 

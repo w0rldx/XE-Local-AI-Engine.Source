@@ -137,7 +137,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         }, CancellationToken.None);
         await transaction.PrepareStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(new GgufModelRequest
+        var exception = await AssertEx.ThrowsAsync<GgufAcquisitionConflictException>(() => coordinator.StartAsync(new GgufModelRequest
             {
                 RepoId = Repo,
                 Quant = Quant,
@@ -145,7 +145,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             },
             CancellationToken.None));
 
-        AssertEx.Equal("ModelConflict", exception.Message);
+        AssertEx.Equal("The model name or destination is already in use.", exception.Message);
         AssertEx.Equal(expected: 1, transaction.PrepareCount);
         transaction.ReleasePrepare();
         await WaitForPhaseAsync(coordinator, first.ModelName, GgufDownloadPhase.Completed);
@@ -205,14 +205,14 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             GgufAcquisitionDisposition.VerifiedInstalled,
             publisher);
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(new GgufModelRequest
+        var exception = await AssertEx.ThrowsAsync<GgufAcquisitionConflictException>(() => coordinator.StartAsync(new GgufModelRequest
             {
                 RepoId = Repo,
                 Quant = Quant
             },
             CancellationToken.None));
 
-        AssertEx.Equal("ModelConflict", exception.Message);
+        AssertEx.Equal("The model name or destination is already in use.", exception.Message);
         AssertEx.Equal(expected: 0, coordinator.ListStatuses().Count);
         AssertEx.Equal(expected: 0, publisher.Events.Count);
     }
