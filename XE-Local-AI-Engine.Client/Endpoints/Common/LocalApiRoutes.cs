@@ -699,6 +699,7 @@ public static class LocalApiRoutes
         public const string DatasetSamples = "training/datasets/{datasetId}/samples";
         public const string DatasetSampleById = "training/datasets/{datasetId}/samples/{sampleId}";
         public const string DatasetExport = "training/datasets/{datasetId}/export";
+        public const string DatasetCancel = "training/datasets/{datasetId}/cancel";
         public const string Mocks = "training/mocks";
         public const string MockById = "training/mocks/{mockId}";
         public const string MockVerify = "training/mocks/{mockId}/verify";
