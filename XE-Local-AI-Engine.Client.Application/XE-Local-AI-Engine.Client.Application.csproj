@@ -76,6 +76,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The training export runs its pipeline on a detached background task; tests await the same handle the service
+         holds rather than racing a store substitute for a side effect that may not have landed yet. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
     <Using Include="Microsoft.Extensions.Configuration"/>

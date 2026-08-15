@@ -24,7 +24,14 @@ public enum TrainingRunEventKind
     EvaluationState,
 
     /// <summary>One more hold-out sample carries a verdict. <c>Step</c>/<c>TotalSteps</c> are scored/total.</summary>
-    EvaluationProgress
+    EvaluationProgress,
+
+    /// <summary>
+    ///     An export step moved. Carries the pipeline phase (merging, converting, quantizing, inspecting, smoke) and,
+    ///     on a terminal phase, the reason. The run's own status never moves for an export — the artifact row is the
+    ///     durable record — so this stream is how the operator watches one happen.
+    /// </summary>
+    Export
 }
 
 public sealed record TrainingRunPayload(

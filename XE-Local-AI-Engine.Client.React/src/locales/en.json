@@ -4559,6 +4559,43 @@
 		"export": {
 			"title": "Export ({{format}})"
 		},
+		"artifacts": {
+			"export": "Export",
+			"exportTitle": "Export this run",
+			"kindLabel": "What to export",
+			"quantLabel": "Quantization",
+			"startExport": "Start export",
+			"adapterNote": "An adapter is always exported at F16 and is served on top of the base model it was trained against.",
+			"retestSmoke": "Re-run smoke test",
+			"promote": "Register as model",
+			"promoteTitle": "Register as a local model",
+			"promoteNote": "The quantization is appended to the name automatically, and the model records the checkpoint and dataset it came from.",
+			"modelNameLabel": "Model name",
+			"modelNamePlaceholder": "my-tuned-model",
+			"delete": "Delete",
+			"kind": {
+				"MergedGguf": "Merged model",
+				"AdapterGguf": "Adapter only"
+			},
+			"smoke": {
+				"Pending": "Not tested",
+				"Passed": "Smoke passed",
+				"Failed": "Smoke failed",
+				"Skipped": "Smoke skipped"
+			},
+			"phase": {
+				"preparing": "Preparing the export",
+				"merging": "Merging the adapter into the base model",
+				"converting": "Converting to GGUF",
+				"quantizing": "Quantizing",
+				"inspecting": "Checking the exported model",
+				"smoke": "Running the smoke test",
+				"ready": "Ready",
+				"smokeFailed": "Smoke test failed",
+				"skipped": "Skipped",
+				"failed": "Export failed"
+			}
+		},
 		"errors": {
 			"request": "The training request failed."
 		},

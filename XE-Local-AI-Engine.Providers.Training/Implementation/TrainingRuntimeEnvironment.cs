@@ -99,6 +99,21 @@ internal static class TrainingRuntimeEnvironment
         return scrubbed;
     }
 
+    /// <summary>
+    ///     The environment for an export subprocess — the merge step and the llama.cpp conversion scripts alike. Same
+    ///     containment as <see cref="BuildTrainEnvironment" />, plus the vendored <c>gguf-py</c> on
+    ///     <c>PYTHONPATH</c>: the conversion scripts resolve that package relative to the llama.cpp repository they
+    ///     normally live in, which the provisioned script tree deliberately is not.
+    /// </summary>
+    public static Dictionary<string, string> BuildExportEnvironment(string cacheRoot, string workDirectory, string ggufPyDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ggufPyDirectory);
+
+        var scrubbed = BuildTrainEnvironment(cacheRoot, workDirectory);
+        scrubbed["PYTHONPATH"] = ggufPyDirectory;
+        return scrubbed;
+    }
+
     /// <summary>The directories <see cref="BuildTrainEnvironment" /> points at that must exist before the spawn.</summary>
     public static IReadOnlyList<string> TrainEnvironmentDirectories(string cacheRoot, string workDirectory) =>
     [

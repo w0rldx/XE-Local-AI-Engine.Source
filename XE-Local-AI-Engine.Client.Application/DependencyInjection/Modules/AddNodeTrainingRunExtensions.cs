@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
+using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 /// <summary>
@@ -45,6 +46,12 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddScoped<IEvaluationRunService, EvaluationRunService>();
         builder.Services.AddScoped<IEvaluationRunExecutor, EvaluationRunExecutor>();
         builder.Services.AddScoped<IComparisonReportService, ComparisonReportService>();
+        // Export/smoke/promotion. The export service is a SINGLETON because it owns background work that outlives the
+        // request that started it (and the single-flight hold that goes with it); it opens its own scopes for stores.
+        builder.Services.AddSingleton<ITrainedModelSmokeGate, TrainedModelSmokeGate>();
+        builder.Services.AddSingleton<TrainingExportService>();
+        builder.Services.AddSingleton<ITrainingExportService>(provider => provider.GetRequiredService<TrainingExportService>());
+        builder.Services.AddScoped<IArtifactPromotionService, ArtifactPromotionService>();
 
         builder.Services.AddHostedService<TrainingRunStartupReaper>();
         builder.Services.AddHostedService<TrainingRunQueueHostedService>();
