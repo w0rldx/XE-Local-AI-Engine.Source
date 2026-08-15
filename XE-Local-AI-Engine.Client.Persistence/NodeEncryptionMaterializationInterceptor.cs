@@ -204,6 +204,38 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     baseArtifact.Id,
                     "training_base_license_json");
                 break;
+            case TrainingRun run:
+                run.FreezeJson = NodePayloadProtector.Decrypt(run.FreezeJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_freeze_json");
+                run.OptionsJson = NodePayloadProtector.Decrypt(run.OptionsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_options_json");
+                run.LicenseConfirmationJson = DecryptIfPresent(run.LicenseConfirmationJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_license_confirmation_json");
+                run.ProgressJson = DecryptIfPresent(run.ProgressJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_progress_json");
+                run.LogTail = DecryptIfPresent(run.LogTail,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_log_tail");
+                run.LaunchReceiptJson = DecryptIfPresent(run.LaunchReceiptJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    run.Id,
+                    "training_run_launch_receipt_json");
+                break;
         }
 
         return entity;

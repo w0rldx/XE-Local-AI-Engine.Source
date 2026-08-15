@@ -130,6 +130,12 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<DatasetGenerationWorkItem> DatasetGenerationWorkItems => Set<DatasetGenerationWorkItem>();
 
+    internal DbSet<TrainingRun> TrainingRuns => Set<TrainingRun>();
+
+    internal DbSet<TrainingWorkItem> TrainingWorkItems => Set<TrainingWorkItem>();
+
+    internal DbSet<TrainingArtifact> TrainingArtifacts => Set<TrainingArtifact>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -385,5 +391,8 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ToolMockDefinitionConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingBaseArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new DatasetGenerationWorkItemConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingRunConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingWorkItemConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingArtifactConfiguration());
     }
 }

@@ -57,3 +57,55 @@ public enum DatasetGenerationWorkStatus
     Failed,
     Cancelled
 }
+
+/// <summary>
+///     Lifecycle of one training run. The four middle states are the executor's own progression; the last three are
+///     terminal and only <c>ITrainingRunStore.CompleteRunAsync</c> writes them.
+/// </summary>
+public enum TrainingRunStatus
+{
+    Queued,
+    Preparing,
+    Training,
+    Exporting,
+    Smoke,
+    Succeeded,
+    Failed,
+    Cancelled
+}
+
+/// <summary>What a <c>TrainingWorkItem</c> row's target id points at.</summary>
+public enum TrainingWorkKind
+{
+    TrainingRun,
+    EvaluationRun
+}
+
+public enum TrainingWorkStatus
+{
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled
+}
+
+/// <summary>What a run produced. All three are staged under the run's own directory until promotion.</summary>
+public enum TrainingArtifactKind
+{
+    AdapterGguf,
+    MergedGguf,
+    HfAdapterDir
+}
+
+/// <summary>
+///     Outcome of the post-export smoke load. <see cref="Skipped" /> is a deliberate operator choice, not a silent
+///     pass — an artifact only reaches the registry from <see cref="Passed" /> or an explicit <see cref="Skipped" />.
+/// </summary>
+public enum TrainingArtifactSmokeState
+{
+    Pending,
+    Passed,
+    Failed,
+    Skipped
+}

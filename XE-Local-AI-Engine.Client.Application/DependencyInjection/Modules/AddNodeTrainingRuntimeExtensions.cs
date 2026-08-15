@@ -24,6 +24,7 @@ internal static class AddNodeTrainingRuntimeExtensions
         _ = builder.Services.AddHuggingFaceBaseCheckpointStore();
 
         builder.Services.AddScoped<ITrainingBaseArtifactStore, TrainingBaseArtifactStore>();
+        builder.Services.AddScoped<ITrainingRunStore, TrainingRunStore>();
         builder.Services.AddSingleton<BaseArtifactDownloadCoordinator>();
         builder.Services.AddScoped<IBaseArtifactService, BaseArtifactService>();
         return builder;
