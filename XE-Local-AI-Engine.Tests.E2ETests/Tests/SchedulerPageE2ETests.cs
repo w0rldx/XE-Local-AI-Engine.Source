@@ -28,9 +28,18 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         test does not inject a secret into parameters (the chosen template's defaults are non-secret),
 ///         but it asserts the create round-trip stays clean (no error toast / page error).
 ///     </para>
+///     <para>
+///         SERIAL on purpose, even though nothing here reads shared state. Creating a
+///         <c>model-recommendation-check</c> job is what flips the gating this host exposes to
+///         <c>ModelRecommendationsPageE2ETests</c>, whose refresh test branches on whether such a job exists.
+///         Running the two concurrently would let the job appear between that test's enabled-state read and
+///         its assertions. Keeping this class in the serial group puts it in a phase that never overlaps the
+///         pooled one, so the pooled test always observes a settled gate — whichever phase runs first (it
+///         branches on both states, so it does not care which).
+///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class SchedulerPageE2ETests : XEE2ETestBase
+public sealed class SchedulerPageE2ETests : XESerialE2ETestBase
 {
     // The only template registered in-host (ModelRecommendationCheckHandler.Descriptor.DisplayName).
     private const string TemplateDisplayName = "Model recommendation check";

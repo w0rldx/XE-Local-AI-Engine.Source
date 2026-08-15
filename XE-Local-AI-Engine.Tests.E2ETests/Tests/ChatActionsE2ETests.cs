@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class ChatActionsE2ETests : XEE2ETestBase
+public sealed class ChatActionsE2ETests : XESerialE2ETestBase
 {
     private const string ChatInputPlaceholder = "Type your message";
     private const string SendButtonTestId = "chat-send-button";

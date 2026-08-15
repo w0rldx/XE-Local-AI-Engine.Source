@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     isolation and provenance, reconcile an update plus deletion, then ground a plain-chat turn with persisted sources.
 /// </summary>
 [Category("Page")]
-public sealed class KnowledgeBaseRagE2ETests : XEE2ETestBase
+public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
 {
     private const string DefaultCollection = "DEFAULT";
     private const string SecondaryCollection = "RAG-E2E-SECONDARY";
