@@ -73,7 +73,7 @@ export function DiagnosticsPanel() {
 	}
 
 	return (
-		<PageShell>
+		<PageShell data-testid="diagnostics-page">
 			<PageHeader
 				title={t("diagnostics.title")}
 				icon={<IconStethoscope size={24} />}
@@ -123,6 +123,7 @@ export function DiagnosticsPanel() {
 
 			{!isLoading && !isError && snapshots && snapshots.length === 0 && (
 				<EmptyState
+					data-testid="diagnostics-empty"
 					icon={<IconFileSearch size={40} opacity={0.6} />}
 					message={
 						<>
