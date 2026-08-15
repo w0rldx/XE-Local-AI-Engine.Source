@@ -108,7 +108,7 @@ public sealed class UploadKnowledgeDocumentEndpoint(
 
         var result = await _blobStore.AddAsync(input, ct).ConfigureAwait(false);
 
-        var admission = await _ingestionAdmission.AdmitUploadedDocumentAsync(result.DocumentId, result.WasInserted, ct)
+        var admission = await _ingestionAdmission.AdmitStoredDocumentAsync(result.DocumentId, result.WasInserted, ct)
                                                  .ConfigureAwait(false);
         if (admission.QueueFull)
         {

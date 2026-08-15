@@ -22,7 +22,7 @@ public sealed class CancelNodeChatMessageEndpoint(
         Policies(NodeAuthorizationPolicies.Operator);
         // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
         // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
-        Description(static x => x.ProducesProblemDetails(StatusCodes.Status409Conflict));
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(CancelNodeChatMessageRequest req, CancellationToken ct)

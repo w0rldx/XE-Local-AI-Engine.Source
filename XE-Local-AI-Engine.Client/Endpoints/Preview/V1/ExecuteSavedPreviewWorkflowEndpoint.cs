@@ -31,7 +31,7 @@ public sealed class ExecuteSavedPreviewWorkflowEndpoint(
         // 409 = a run-cap rejection written by the global ConflictExceptionHandler (conflictType =
         // PreviewWorkflowCapReached / PreviewWorkflowModelCapExceeded).
         Description(x => x.Accepts<PreviewWorkflowRouteRequest>()
-                          .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                          .ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(PreviewWorkflowRouteRequest req, CancellationToken ct)

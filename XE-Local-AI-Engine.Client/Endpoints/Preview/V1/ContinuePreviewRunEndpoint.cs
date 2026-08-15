@@ -24,7 +24,7 @@ public sealed class ContinuePreviewRunEndpoint(IPreviewWorkflowExecutionService 
         // with 415 when the header is absent. Overriding Accepts to accept any content-type lets a body-less request
         // through (the runId still binds from the route).
         Description(x => x.Accepts<PreviewRunRouteRequest>()
-                          .ProducesProblemDetails(StatusCodes.Status409Conflict));
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(PreviewRunRouteRequest req, CancellationToken ct)
