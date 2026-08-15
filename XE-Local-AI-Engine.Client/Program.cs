@@ -382,6 +382,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<StableDiffusionCppSourceBuildHub>(LocalApiRoutes.Images.RuntimeSourceBuildHub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<TrainingRuntimeHub>(LocalApiRoutes.Training.RuntimeHub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     if (isDevelopmentModeEnabled)
     {
         app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub)
