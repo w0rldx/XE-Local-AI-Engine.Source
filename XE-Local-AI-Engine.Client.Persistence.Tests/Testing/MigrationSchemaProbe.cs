@@ -20,14 +20,16 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 internal sealed class MigrationSchemaProbe : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
+    private readonly string _databasePath;
     private readonly INodeSqliteKeyHolder _keyHolder;
     private readonly string _rootPath;
 
-    private MigrationSchemaProbe(SqliteConnection connection, INodeSqliteKeyHolder keyHolder, string rootPath)
+    private MigrationSchemaProbe(SqliteConnection connection, INodeSqliteKeyHolder keyHolder, string rootPath, string databasePath)
     {
         _connection = connection;
         _keyHolder = keyHolder;
         _rootPath = rootPath;
+        _databasePath = databasePath;
     }
 
     /// <summary>Applies the whole <see cref="NodeChatDbContext" /> chain to an empty database.</summary>
@@ -44,19 +46,22 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     {
         var (databasePath, rootPath, keyHolder) = Prepare(fileName);
 
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
-        {
-            if (targetMigration is null)
-            {
-                await context.Database.MigrateAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                await context.Database.GetService<IMigrator>().MigrateAsync(targetMigration).ConfigureAwait(false);
-            }
-        }
+        await ApplyChatAsync(databasePath, keyHolder, targetMigration).ConfigureAwait(false);
 
-        return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath);
+        return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath, databasePath);
+    }
+
+    /// <summary>
+    ///     Applies the chat chain further, up to <paramref name="targetMigration" /> (null = latest), over whatever this
+    ///     probe's database already holds. With <see cref="ExecuteAsync" /> this is how a data-bearing migration is
+    ///     tested: migrate to its predecessor, seed the historical rows, then run exactly that migration over them.
+    /// </summary>
+    public async Task MigrateToAsync(string? targetMigration)
+    {
+        // The migration runs on its own connection; ours is closed across it so no reader holds a lock during the DDL.
+        await _connection.CloseAsync().ConfigureAwait(false);
+        await ApplyChatAsync(_databasePath, _keyHolder, targetMigration).ConfigureAwait(false);
+        await _connection.OpenAsync().ConfigureAwait(false);
     }
 
     /// <summary>Applies the whole <see cref="NodeIdentityDbContext" /> chain to an empty database.</summary>
@@ -75,7 +80,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
             await context.Database.MigrateAsync().ConfigureAwait(false);
         }
 
-        return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath);
+        return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath, databasePath);
     }
 
     public async ValueTask DisposeAsync()
@@ -91,6 +96,52 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         {
             Directory.Delete(_rootPath, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///     Runs <paramref name="sql" /> against the probed database. This is the seed seam: the historical rows a
+    ///     data-bearing migration has to convert cannot be written through the entity model, because the model describes
+    ///     the schema as it is at head, not as it was when those rows were valid.
+    /// </summary>
+    public async Task ExecuteAsync(string sql, Action<SqliteCommand>? configure = null)
+    {
+        await using var command = _connection.CreateCommand();
+#pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value goes in through `configure` as a bound parameter.
+        command.CommandText = sql;
+#pragma warning restore CA2100
+        configure?.Invoke(command);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>The first column of the first row of <paramref name="sql" />, with <c>DBNull</c> flattened to null.</summary>
+    public async Task<object?> ScalarAsync(string sql, Action<SqliteCommand>? configure = null)
+    {
+        await using var command = _connection.CreateCommand();
+#pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value goes in through `configure` as a bound parameter.
+        command.CommandText = sql;
+#pragma warning restore CA2100
+        configure?.Invoke(command);
+        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return value is DBNull ? null : value;
+    }
+
+    /// <summary>Every value of the first column of <paramref name="sql" />, in row order, read as an integer.</summary>
+    public async Task<IReadOnlyList<long>> LongsAsync(string sql, Action<SqliteCommand>? configure = null)
+    {
+        await using var command = _connection.CreateCommand();
+#pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value goes in through `configure` as a bound parameter.
+        command.CommandText = sql;
+#pragma warning restore CA2100
+        configure?.Invoke(command);
+
+        var values = new List<long>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            values.Add(reader.GetInt64(ordinal: 0));
+        }
+
+        return values;
     }
 
     public async Task<bool> TableExistsAsync(string tableName)
@@ -194,6 +245,20 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         }
 
         return values;
+    }
+
+    private static async Task ApplyChatAsync(string databasePath, INodeSqliteKeyHolder keyHolder, string? targetMigration)
+    {
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
+
+        if (targetMigration is null)
+        {
+            await context.Database.MigrateAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(targetMigration).ConfigureAwait(false);
+        }
     }
 
     private static (string DatabasePath, string RootPath, INodeSqliteKeyHolder KeyHolder) Prepare(string fileName)
