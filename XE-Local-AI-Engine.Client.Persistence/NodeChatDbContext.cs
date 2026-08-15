@@ -118,6 +118,18 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<BenchmarkWorkItem> BenchmarkWorkItems => Set<BenchmarkWorkItem>();
 
+    internal DbSet<TrainingDatasetDefinition> TrainingDatasetDefinitions => Set<TrainingDatasetDefinition>();
+
+    internal DbSet<TrainingDataset> TrainingDatasets => Set<TrainingDataset>();
+
+    internal DbSet<TrainingDatasetSample> TrainingDatasetSamples => Set<TrainingDatasetSample>();
+
+    internal DbSet<ToolMockDefinition> ToolMockDefinitions => Set<ToolMockDefinition>();
+
+    internal DbSet<TrainingBaseArtifact> TrainingBaseArtifacts => Set<TrainingBaseArtifact>();
+
+    internal DbSet<DatasetGenerationWorkItem> DatasetGenerationWorkItems => Set<DatasetGenerationWorkItem>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -367,5 +379,11 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new BenchmarkProjectConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkRunConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkWorkItemConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingDatasetDefinitionConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingDatasetConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingDatasetSampleConfiguration());
+        modelBuilder.ApplyConfiguration(new ToolMockDefinitionConfiguration());
+        modelBuilder.ApplyConfiguration(new TrainingBaseArtifactConfiguration());
+        modelBuilder.ApplyConfiguration(new DatasetGenerationWorkItemConfiguration());
     }
 }

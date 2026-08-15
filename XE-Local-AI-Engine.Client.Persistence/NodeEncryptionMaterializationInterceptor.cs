@@ -159,6 +159,51 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     benchmarkRun.Id,
                     "benchmark_judge_result_json");
                 break;
+            case TrainingDatasetDefinition datasetDefinition:
+                datasetDefinition.DefinitionJson = NodePayloadProtector.Decrypt(datasetDefinition.DefinitionJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    datasetDefinition.Id,
+                    "training_definition_json");
+                break;
+            case TrainingDatasetSample sample:
+                // Dataset id in the conversation slot — see the matching block in NodeEncryptionSaveChangesInterceptor.
+                // A sample re-parented onto another dataset fails the tag check here rather than reaching a training run.
+                sample.ContentJson = NodePayloadProtector.Decrypt(sample.ContentJson,
+                    context.NodeEncryptionKey.Span,
+                    sample.DatasetId,
+                    sample.Id,
+                    "training_sample_content_json");
+                sample.ValidationJson = DecryptIfPresent(sample.ValidationJson,
+                    context.NodeEncryptionKey.Span,
+                    sample.DatasetId,
+                    sample.Id,
+                    "training_sample_validation_json");
+                break;
+            case ToolMockDefinition toolMock:
+                toolMock.MockJson = NodePayloadProtector.Decrypt(toolMock.MockJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    toolMock.Id,
+                    "tool_mock_json");
+                toolMock.VerificationJson = DecryptIfPresent(toolMock.VerificationJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    toolMock.Id,
+                    "tool_mock_verification_json");
+                break;
+            case TrainingBaseArtifact baseArtifact:
+                baseArtifact.FilesJson = NodePayloadProtector.Decrypt(baseArtifact.FilesJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    baseArtifact.Id,
+                    "training_base_files_json");
+                baseArtifact.LicenseJson = DecryptIfPresent(baseArtifact.LicenseJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    baseArtifact.Id,
+                    "training_base_license_json");
+                break;
         }
 
         return entity;
