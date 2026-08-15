@@ -66,6 +66,7 @@ describe("nodeCapabilities", () => {
 			benchmarks: "/benchmarks",
 			training: "/training",
 			trainingDatasets: "/training/datasets",
+			trainingComparisons: "/training/comparisons",
 			usage: "/usage",
 			tools: "/tools",
 			agents: "/agents",

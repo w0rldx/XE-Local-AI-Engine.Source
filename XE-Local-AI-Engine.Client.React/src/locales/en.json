@@ -79,7 +79,8 @@
 		"images": "Image Generation",
 		"trainingGroup": "Training",
 		"training": "Training",
-		"trainingDatasets": "Datasets"
+		"trainingDatasets": "Datasets",
+		"trainingComparisons": "Comparisons"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -4014,6 +4015,10 @@
 			"datasets": {
 				"title": "Training datasets",
 				"subtitle": "Generate tool-calling datasets from a definition, review every sample, and export them for a training run."
+			},
+			"comparisons": {
+				"title": "Comparisons",
+				"subtitle": "Score a base model and its tuned counterpart on the same frozen hold-out samples, then read the difference."
 			}
 		}
 	},
@@ -4601,6 +4606,66 @@
 				"tokenizing": "Preparing the dataset",
 				"training": "Training",
 				"saving": "Saving the adapter"
+			}
+		},
+		"comparisons": {
+			"list": {
+				"title": "Comparison reports",
+				"empty": "No comparison reports yet. Create one from a finished training run.",
+				"create": "New comparison",
+				"delete": "Delete",
+				"deleteFailed": "Could not delete the comparison report."
+			},
+			"create": {
+				"title": "New comparison",
+				"run": "Training run",
+				"runPlaceholder": "Pick a finished training run",
+				"name": "Report name",
+				"baseModel": "Base model",
+				"tunedModel": "Tuned model",
+				"baseEvaluation": "Base evaluation",
+				"tunedEvaluation": "Tuned evaluation",
+				"missing": "Not evaluated yet",
+				"evaluate": "Evaluate",
+				"evaluating": "Scoring {{scored}} of {{total}}",
+				"benchmarkPairing": "Optional benchmark pairing",
+				"benchmarkProject": "Benchmark project",
+				"baseBenchmark": "Base benchmark run",
+				"tunedBenchmark": "Tuned benchmark run",
+				"benchmarkNone": "None",
+				"submit": "Create report",
+				"cancel": "Cancel",
+				"failed": "Could not create the comparison report.",
+				"evaluateFailed": "Could not start the evaluation.",
+				"needsBothEvaluations": "Both sides need a finished evaluation before a report can be created."
+			},
+			"report": {
+				"accuracy": "Hold-out accuracy",
+				"kind": "Sample kind",
+				"base": "Base",
+				"tuned": "Tuned",
+				"delta": "Delta",
+				"overall": "Overall",
+				"unavailable": "The accuracy comparison is unavailable.",
+				"samples": "{{passed}} of {{scored}} samples",
+				"benchmark": "Benchmark deltas",
+				"tokensPerSecond": "Tokens per second",
+				"duration": "Duration (ms)",
+				"userScore": "Your score",
+				"judgeScore": "Judge score",
+				"compareLive": "Compare outputs live on the benchmarks page"
+			},
+			"evaluation": {
+				"status": {
+					"Queued": "Queued",
+					"Running": "Scoring",
+					"Succeeded": "Scored",
+					"Failed": "Failed",
+					"Cancelled": "Cancelled"
+				},
+				"resume": "Resume",
+				"resumeFailed": "Could not resume the evaluation.",
+				"progress": "{{scored}} of {{total}} scored, {{passed}} passed"
 			}
 		}
 	}

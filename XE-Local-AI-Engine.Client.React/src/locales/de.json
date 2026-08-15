@@ -79,7 +79,8 @@
 		"images": "Bildgenerierung",
 		"trainingGroup": "Training",
 		"training": "Training",
-		"trainingDatasets": "Datensätze"
+		"trainingDatasets": "Datensätze",
+		"trainingComparisons": "Vergleiche"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -4014,6 +4015,10 @@
 			"datasets": {
 				"title": "Trainings-Datensätze",
 				"subtitle": "Erzeuge Tool-Calling-Datensätze aus einer Definition, prüfe jedes Beispiel und exportiere sie für einen Trainingslauf."
+			},
+			"comparisons": {
+				"title": "Vergleiche",
+				"subtitle": "Bewerte ein Basismodell und sein feinabgestimmtes Gegenstück anhand derselben eingefrorenen Hold-out-Beispiele und lies die Differenz ab."
 			}
 		}
 	},
@@ -4601,6 +4606,66 @@
 				"tokenizing": "Datensatz wird vorbereitet",
 				"training": "Training",
 				"saving": "Adapter wird gespeichert"
+			}
+		},
+		"comparisons": {
+			"list": {
+				"title": "Vergleichsberichte",
+				"empty": "Noch keine Vergleichsberichte. Erstelle einen aus einem abgeschlossenen Trainingslauf.",
+				"create": "Neuer Vergleich",
+				"delete": "Löschen",
+				"deleteFailed": "Der Vergleichsbericht konnte nicht gelöscht werden."
+			},
+			"create": {
+				"title": "Neuer Vergleich",
+				"run": "Trainingslauf",
+				"runPlaceholder": "Abgeschlossenen Trainingslauf wählen",
+				"name": "Berichtsname",
+				"baseModel": "Basismodell",
+				"tunedModel": "Feinabgestimmtes Modell",
+				"baseEvaluation": "Basis-Auswertung",
+				"tunedEvaluation": "Auswertung des feinabgestimmten Modells",
+				"missing": "Noch nicht ausgewertet",
+				"evaluate": "Auswerten",
+				"evaluating": "Bewertet {{scored}} von {{total}}",
+				"benchmarkPairing": "Optionale Benchmark-Zuordnung",
+				"benchmarkProject": "Benchmark-Projekt",
+				"baseBenchmark": "Benchmark-Lauf (Basis)",
+				"tunedBenchmark": "Benchmark-Lauf (feinabgestimmt)",
+				"benchmarkNone": "Keiner",
+				"submit": "Bericht erstellen",
+				"cancel": "Abbrechen",
+				"failed": "Der Vergleichsbericht konnte nicht erstellt werden.",
+				"evaluateFailed": "Die Auswertung konnte nicht gestartet werden.",
+				"needsBothEvaluations": "Beide Seiten brauchen eine abgeschlossene Auswertung, bevor ein Bericht erstellt werden kann."
+			},
+			"report": {
+				"accuracy": "Hold-out-Genauigkeit",
+				"kind": "Beispielart",
+				"base": "Basis",
+				"tuned": "Feinabgestimmt",
+				"delta": "Differenz",
+				"overall": "Gesamt",
+				"unavailable": "Der Genauigkeitsvergleich ist nicht verfügbar.",
+				"samples": "{{passed}} von {{scored}} Beispielen",
+				"benchmark": "Benchmark-Differenzen",
+				"tokensPerSecond": "Token pro Sekunde",
+				"duration": "Dauer (ms)",
+				"userScore": "Deine Bewertung",
+				"judgeScore": "Judge-Bewertung",
+				"compareLive": "Ausgaben live auf der Benchmark-Seite vergleichen"
+			},
+			"evaluation": {
+				"status": {
+					"Queued": "In Warteschlange",
+					"Running": "Wird bewertet",
+					"Succeeded": "Bewertet",
+					"Failed": "Fehlgeschlagen",
+					"Cancelled": "Abgebrochen"
+				},
+				"resume": "Fortsetzen",
+				"resumeFailed": "Die Auswertung konnte nicht fortgesetzt werden.",
+				"progress": "{{scored}} von {{total}} bewertet, {{passed}} bestanden"
 			}
 		}
 	}
