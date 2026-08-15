@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -149,7 +150,7 @@ public sealed class LocalChatHub(
 
         try
         {
-            await foreach (var streamEvent in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+            await foreach (var streamEvent in RejectReadOnlyConversation(source, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 if (attachment is null)
                 {
@@ -169,6 +170,56 @@ public sealed class LocalChatHub(
         finally
         {
             attachment?.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     Re-throws the read-only-conversation rejection as a <see cref="HubException" /> — the only exception type
+    ///     whose message SignalR forwards to the client (see <see cref="EnsureMessageWithinSizeCap" />). Without this,
+    ///     a send or regenerate against an <c>Origin=Remote</c> (view-only) conversation reaches the browser as the
+    ///     bare "An unexpected error occurred invoking 'SendMessage' on the server." instead of the view-only notice
+    ///     the REST 409 path already produces.
+    ///     <para>
+    ///         The message is PREFIXED with the <see cref="NodeConflictProblemType.ReadOnlyConversation" /> name, which
+    ///         is the exact same discriminator token the REST 409 carries as <c>ConflictProblemDetails.conflictType</c>
+    ///         — so the SPA's <c>isNodeChatReadOnlyConflict</c> recognises both shapes off one constant. Referenced via
+    ///         the enum, never a literal, so a rename there cannot silently desynchronise the two paths.
+    ///     </para>
+    ///     <para>
+    ///         Composed into <see cref="TrackAttachment" /> rather than at the individual call sites, so all four stream
+    ///         entry points are covered by one seam; it is a no-op for the resume paths, which never run the mutation
+    ///         guard. The guard throws LAZILY during enumeration (it lives inside the services' async iterators), so the
+    ///         conversion has to happen around <c>MoveNextAsync</c>; C# forbids <c>yield return</c> inside a <c>try</c>
+    ///         that has a <c>catch</c>, hence the manual enumeration with the yield outside the try.
+    ///     </para>
+    /// </summary>
+    private static async IAsyncEnumerable<ChatStreamEvent> RejectReadOnlyConversation(
+        IAsyncEnumerable<ChatStreamEvent> source,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        var enumerator = source.GetAsyncEnumerator(cancellationToken);
+        await using (enumerator.ConfigureAwait(false))
+        {
+            while (true)
+            {
+                bool hasNext;
+                try
+                {
+                    hasNext = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                }
+                catch (NodeChatReadOnlyConversationException exception)
+                {
+                    throw new HubException($"{NodeConflictProblemType.ReadOnlyConversation}: {exception.Message}", exception);
+                }
+
+                if (!hasNext)
+                {
+                    yield break;
+                }
+
+                yield return enumerator.Current;
+            }
         }
     }
 }
