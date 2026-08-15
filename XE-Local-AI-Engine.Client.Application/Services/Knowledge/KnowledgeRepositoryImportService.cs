@@ -27,7 +27,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     private readonly IDevelopmentRepositoryBindingService _repositories;
     private readonly ISensitiveFileExclusionService _exclusions;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
-    private readonly IKnowledgeIngestionDispatcher _dispatcher;
+    private readonly IKnowledgeIngestionAdmissionService _admission;
     private readonly IKnowledgeDocumentCatalogService _catalog;
     private readonly IKnowledgeDocumentPurgeService _purge;
     private readonly IDocumentTextExtractor _extractor;
@@ -36,7 +36,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     public KnowledgeRepositoryImportService(IDevelopmentRepositoryBindingService repositories,
         ISensitiveFileExclusionService exclusions,
         IKnowledgeDocumentBlobStore blobStore,
-        IKnowledgeIngestionDispatcher dispatcher,
+        IKnowledgeIngestionAdmissionService admission,
         IKnowledgeDocumentCatalogService catalog,
         IKnowledgeDocumentPurgeService purge,
         IDocumentTextExtractor extractor,
@@ -45,7 +45,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _exclusions = exclusions ?? throw new ArgumentNullException(nameof(exclusions));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _admission = admission ?? throw new ArgumentNullException(nameof(admission));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _purge = purge ?? throw new ArgumentNullException(nameof(purge));
         _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
@@ -155,22 +155,22 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
                 deduplicated++;
             }
 
-            var status = await _catalog.GetStatusAsync(result.DocumentId, cancellationToken).ConfigureAwait(false)
-                         ?? KnowledgeDocumentStatus.Pending;
-            if (!result.WasInserted && !result.WasUpdated
-                                    && status is not (KnowledgeDocumentStatus.Pending or KnowledgeDocumentStatus.Failed))
+            // The "does this stored document have to be (re-)enqueued" rule lives once, in the admission service: a
+            // written document (inserted, or a repository file whose bytes changed) is always queued, an unchanged
+            // dedupe hit only from a retryable status. Enqueue is null when it decided not to queue at all.
+            var admission = await _admission.AdmitStoredDocumentAsync(result.DocumentId,
+                    result.WasInserted || result.WasUpdated,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (admission.QueueFull)
             {
-                continue;
-            }
-
-            var admission = await _dispatcher.EnqueueAsync(result.DocumentId, cancellationToken).ConfigureAwait(false);
-            if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
-            {
+                // Stop the scan: the rest of the repository was never offered to the queue, so the snapshot is partial
+                // and the deleted-path reconciliation below must not run on it.
                 queueFull = true;
                 break;
             }
 
-            if (admission == KnowledgeIngestionEnqueueResult.Accepted)
+            if (admission.Enqueue == KnowledgeIngestionEnqueueResult.Accepted)
             {
                 enqueued++;
             }
