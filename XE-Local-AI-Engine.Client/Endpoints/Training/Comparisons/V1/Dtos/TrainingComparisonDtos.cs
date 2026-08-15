@@ -18,10 +18,15 @@ public sealed class ComparisonByIdRequest
     public required Guid ComparisonId { get; init; }
 }
 
+/// <summary>
+///     The id is route-bound and the version comes from the body; neither can be <c>required</c>, because the body
+///     is deserialized before the route value is applied and the generated client sends only <c>expectedVersion</c>.
+/// </summary>
 public sealed class DeleteComparisonRequest
 {
-    public required Guid ComparisonId { get; init; }
-    public required long ExpectedVersion { get; init; }
+    public Guid ComparisonId { get; init; }
+
+    public long ExpectedVersion { get; init; }
 }
 
 public sealed class SuggestComparisonRequest
