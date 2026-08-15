@@ -4,8 +4,15 @@ import type {
 	XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse,
 	XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse,
 } from "@/core/api/generated";
-import type { DatasetGenerationProgress } from "@/features/training/models/TrainingModels";
-import { applyGenerationEvent, HOLDOUT_FRACTION_DEFAULT, toTrainingDefinition, toTrainingSample } from "@/features/training/models/TrainingModels";
+import type { DatasetGenerationProgress, TrainingDataset } from "@/features/training/models/TrainingModels";
+import {
+	applyGenerationEvent,
+	datasetDriftState,
+	HOLDOUT_FRACTION_DEFAULT,
+	isDatasetGenerationCancellable,
+	toTrainingDefinition,
+	toTrainingSample,
+} from "@/features/training/models/TrainingModels";
 
 const emptyProgress: DatasetGenerationProgress = { completed: 0, total: 0, rejected: 0, state: null };
 
@@ -132,5 +139,54 @@ describe("applyGenerationEvent", () => {
 		const terminal = applyGenerationEvent(emptyProgress, { datasetId: "d", sequence: 1, kind: "State", payload: { state: "Ready" } });
 
 		expect(terminal.state).toBe("Ready");
+	});
+});
+
+function dataset(overrides: Partial<TrainingDataset> = {}): TrainingDataset {
+	return {
+		id: "dataset-1",
+		definitionId: "definition-1",
+		definitionVersion: 1,
+		name: "dataset",
+		status: "Ready",
+		revision: 1,
+		contentFingerprint: "fp-1",
+		totalSampleCount: 0,
+		goodSampleCount: 0,
+		badSampleCount: 0,
+		rejectedSampleCount: 0,
+		duplicateSampleCount: 0,
+		workStatus: null,
+		workErrorMessage: null,
+		version: 1,
+		updatedAtUtc: 0,
+		...overrides,
+	};
+}
+
+describe("datasetDriftState", () => {
+	it("reads as current while the dataset list is still loading, never as deleted", () => {
+		expect(datasetDriftState("fp-1", "dataset-1", undefined)).toBe("current");
+	});
+
+	it("reports a deleted dataset separately from an edited one", () => {
+		expect(datasetDriftState("fp-1", "dataset-1", [])).toBe("deleted");
+		expect(datasetDriftState("fp-old", "dataset-1", [dataset()])).toBe("edited");
+		expect(datasetDriftState("fp-1", "dataset-1", [dataset()])).toBe("current");
+	});
+
+	it("stays silent when either side has no fingerprint at all — an absence is not a mismatch", () => {
+		expect(datasetDriftState(null, "dataset-1", [dataset()])).toBe("current");
+		expect(datasetDriftState("fp-1", "dataset-1", [dataset({ contentFingerprint: null })])).toBe("current");
+	});
+});
+
+describe("isDatasetGenerationCancellable", () => {
+	it("offers cancel only while the generation work item is still queued or running", () => {
+		expect(isDatasetGenerationCancellable(dataset({ workStatus: "Queued" }))).toBe(true);
+		expect(isDatasetGenerationCancellable(dataset({ workStatus: "Running" }))).toBe(true);
+		expect(isDatasetGenerationCancellable(dataset({ workStatus: "Succeeded" }))).toBe(false);
+		expect(isDatasetGenerationCancellable(dataset({ workStatus: "Cancelled" }))).toBe(false);
+		expect(isDatasetGenerationCancellable(dataset())).toBe(false);
 	});
 });

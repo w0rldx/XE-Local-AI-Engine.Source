@@ -24,6 +24,7 @@ export type SampleLabel = "Good" | "Bad";
 export type SampleReviewState = "Pending" | "Approved" | "Rejected";
 export type MockVerificationState = "Unverified" | "Verified" | "Rejected";
 export type TeacherOutputMode = "Constrained" | "ValidateAfter";
+export type DatasetWorkStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
 
 /** Mirrors the backend's DatasetDefinitionBodyV1 default (plan decision #17). */
 export const HOLDOUT_FRACTION_DEFAULT = 0.1;
@@ -38,7 +39,9 @@ export interface TrainingDefinition {
 	sampleKinds: { kind: string; count: number; label: SampleLabel }[];
 	holdoutFraction: number;
 	temperature: number;
+	baseSeed: string | null;
 	criticEnabled: boolean;
+	criticModelName: string | null;
 	definitionVersion: number;
 	version: number;
 	updatedAtUtc: number;
@@ -57,6 +60,7 @@ export interface TrainingDataset {
 	badSampleCount: number;
 	rejectedSampleCount: number;
 	duplicateSampleCount: number;
+	workStatus: DatasetWorkStatus | null;
 	workErrorMessage: string | null;
 	version: number;
 	updatedAtUtc: number;
@@ -139,7 +143,9 @@ export function toTrainingDefinition(dto: XeLocalAiEngineClientEndpointsTraining
 		})),
 		holdoutFraction: body.holdoutFraction ?? HOLDOUT_FRACTION_DEFAULT,
 		temperature: body.temperature ?? 0,
+		baseSeed: body.baseSeed ?? null,
 		criticEnabled: body.criticEnabled ?? false,
+		criticModelName: body.criticModelName ?? null,
 		definitionVersion: dto.definitionVersion,
 		version: dto.version,
 		updatedAtUtc: dto.updatedAtUtc,
@@ -160,10 +166,42 @@ export function toTrainingDataset(dto: XeLocalAiEngineClientEndpointsTrainingV1T
 		badSampleCount: dto.badSampleCount,
 		rejectedSampleCount: dto.rejectedSampleCount,
 		duplicateSampleCount: dto.duplicateSampleCount,
+		workStatus: dto.workStatus ?? null,
 		workErrorMessage: dto.workErrorMessage ?? null,
 		version: dto.version,
 		updatedAtUtc: dto.updatedAtUtc,
 	};
+}
+
+/** Generation is only interruptible while the work item is still queued or running. */
+export function isDatasetGenerationCancellable(dataset: TrainingDataset): boolean {
+	return dataset.workStatus === "Queued" || dataset.workStatus === "Running";
+}
+
+/**
+ * How a frozen dataset fingerprint (carried by a training run or an evaluation) relates to the dataset as it stands
+ * now. "edited" means the hold-out set the scores were computed against no longer matches the dataset, so the numbers
+ * are not comparable with anything scored after the edit. `datasets` is undefined while the list is still loading —
+ * that reads as "current", never as "deleted", so a slow query cannot flash a false warning.
+ */
+export type DatasetDriftState = "current" | "edited" | "deleted";
+
+export function datasetDriftState(
+	frozenFingerprint: string | null,
+	datasetId: string,
+	datasets: readonly TrainingDataset[] | undefined,
+): DatasetDriftState {
+	if (datasets === undefined) {
+		return "current";
+	}
+	const dataset = datasets.find((candidate) => candidate.id === datasetId);
+	if (dataset === undefined) {
+		return "deleted";
+	}
+	if (frozenFingerprint == null || dataset.contentFingerprint == null) {
+		return "current";
+	}
+	return frozenFingerprint === dataset.contentFingerprint ? "current" : "edited";
 }
 
 /**

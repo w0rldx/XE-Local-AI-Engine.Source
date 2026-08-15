@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	cancelTrainingDataset,
+	createTrainingDefinition,
 	deleteTrainingDataset,
 	deleteTrainingDefinition,
 	exportTrainingDataset,
@@ -10,9 +12,12 @@ import {
 	listTrainingDefinitions,
 	listTrainingSamples,
 	reviewTrainingSample,
+	updateTrainingDefinition,
 	verifyToolMock,
 } from "@/core/api/generated";
-import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import type { XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 as DatasetDefinitionBody } from "@/core/api/generated";
+import { getToolCapableModelsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import type { SampleLabel, SampleReviewState, ToolMock, TrainingDataset, TrainingDefinition, TrainingSample } from "@/features/training/models/TrainingModels";
 import { toToolMock, toTrainingDataset, toTrainingDefinition, toTrainingSample } from "@/features/training/models/TrainingModels";
 
@@ -99,6 +104,59 @@ export function useGenerateDataset() {
 	});
 }
 
+/**
+ * The models a definition may name as its teacher or critic: node-local only (invariant #5), narrowed to the
+ * tool-capable ones because a tool-calling dataset is what the teacher has to produce. An empty capability list means
+ * the node has not populated that capability yet — then every local model is offered rather than none, the same
+ * "do not enforce" posture the agent form takes.
+ */
+export function useTeacherModelNames(): string[] {
+	const localModels = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const toolCapable = useQuery(withResponseValidation(getToolCapableModelsOptions()));
+
+	const localNames = (localModels.data?.items ?? []).map((model) => model.modelName ?? "").filter((name) => name.length > 0);
+	const capableNames = new Set(toolCapable.data?.models ?? []);
+	if (capableNames.size === 0) {
+		return localNames;
+	}
+	const narrowed = localNames.filter((name) => capableNames.has(name));
+	return narrowed.length > 0 ? narrowed : localNames;
+}
+
+export function useCreateTrainingDefinition() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (input: { name: string; body: DatasetDefinitionBody }) => {
+			const { data } = await callWithResponseValidation(
+				createTrainingDefinition({ body: { name: input.name, body: input.body }, throwOnError: true }),
+			);
+			return toTrainingDefinition(data);
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.definitions });
+		},
+	});
+}
+
+export function useUpdateTrainingDefinition() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (input: { definitionId: string; expectedVersion: number; name: string; body: DatasetDefinitionBody }) => {
+			const { data } = await callWithResponseValidation(
+				updateTrainingDefinition({
+					path: { definitionId: input.definitionId },
+					body: { expectedVersion: input.expectedVersion, name: input.name, body: input.body },
+					throwOnError: true,
+				}),
+			);
+			return toTrainingDefinition(data);
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.definitions });
+		},
+	});
+}
+
 export function useDeleteTrainingDefinition() {
 	const queryClient = useQueryClient();
 	return useMutation({
@@ -124,6 +182,19 @@ export function useDeleteTrainingDataset() {
 				body: { expectedVersion: input.expectedVersion },
 				throwOnError: true,
 			});
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.datasets });
+		},
+	});
+}
+
+/** Asks the node to stop an in-flight generation. The dataset itself survives, with whatever samples it already has. */
+export function useCancelTrainingDataset() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (input: { datasetId: string }) => {
+			await cancelTrainingDataset({ path: { datasetId: input.datasetId }, throwOnError: true });
 		},
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: trainingQueryKeys.datasets });
