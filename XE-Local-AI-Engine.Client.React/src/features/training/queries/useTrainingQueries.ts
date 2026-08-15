@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
 
 import {
 	cancelBaseArtifactMutation,
@@ -123,13 +122,4 @@ export function useCancelBaseArtifact() {
 			await invalidate(queryClient, trainingQueryIds.baseArtifacts);
 		},
 	});
-}
-
-/** Refreshes the artifact list the moment a transfer settles, so the row stops showing stale progress. */
-export function useRefreshBaseArtifacts(): () => void {
-	const queryClient = useQueryClient();
-	return useCallback(() => {
-		// Fire-and-forget from a render effect: a failed invalidation only means the next poll refreshes the list.
-		invalidate(queryClient, trainingQueryIds.baseArtifacts).catch(() => undefined);
-	}, [queryClient]);
 }
