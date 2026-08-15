@@ -22,7 +22,9 @@ internal sealed class GgufModelImporter(
         ValidateDestination(destination);
 
         await using var openedSource = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
-        var inspection = await GgufImportInspector.InspectOpenedAsync(openedSource, cancellationToken).ConfigureAwait(false);
+        var inspection = await GgufImportInspector
+                               .InspectOpenedAsync(openedSource, GgufImportInspectionMode.PublicImport, cancellationToken)
+                               .ConfigureAwait(false);
         if (!IsUsableInspection(inspection, destination.CanonicalQuant))
         {
             var reason = inspection.Rejections.Count > 0

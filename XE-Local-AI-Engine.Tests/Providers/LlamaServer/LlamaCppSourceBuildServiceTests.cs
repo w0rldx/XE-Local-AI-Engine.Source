@@ -415,6 +415,94 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    public async Task Quantizer_BuiltAndAdopted_OnSourceBuild()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        var cmakeArgs = Path.Combine(temp.Path, "cmake.txt");
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
+
+        // The stub emits all three targets, so the assertion below proves the quantizer travelled through the staged →
+        // adopted swap with the server, not merely that cmake was asked for it.
+        WriteScript(Path.Combine(stubs, "cmake"),
+            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params llama-quantize; do printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");
+        using var path = new PathScope(stubs);
+
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        var manager = new CapturingBinaryManager(store, signal);
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            manager,
+            store,
+            signal,
+            new LeaseOnlySupervisor(),
+            new LlamaCppSourceBuildActivity(),
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            temp.Path);
+
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
+
+        var args = await File.ReadAllTextAsync(cmakeArgs);
+        AssertEx.True(args.Contains("--target llama-server llama-fit-params llama-quantize", StringComparison.Ordinal),
+            "The quantizer must be a cmake build target.");
+
+        var adoptedBin = Path.Combine(temp.Path, "llama.cpp", "source-build", "active", "build", "bin");
+        AssertEx.True(File.Exists(Path.Combine(adoptedBin, "llama-quantize")),
+            "The built quantizer must be adopted alongside the server.");
+        AssertEx.Equal(Path.Combine(adoptedBin, "llama-quantize"), LlamaCppToolBinaries.TryResolveQuantizer(adoptedBin));
+    }
+
+    [Test]
+    public async Task Quantizer_Missing_DoesNotFailAdoption()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
+
+        // Server + fit-params only: the quantizer is off the inference path, so a runtime without one must still adopt.
+        WriteScript(Path.Combine(stubs, "cmake"),
+            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params; do printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");
+        using var path = new PathScope(stubs);
+
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            new CapturingBinaryManager(store, signal),
+            store,
+            signal,
+            new LeaseOnlySupervisor(),
+            new LlamaCppSourceBuildActivity(),
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            temp.Path);
+
+        _ = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
+        var adoptedBin = Path.Combine(temp.Path, "llama.cpp", "source-build", "active", "build", "bin");
+        AssertEx.Null(LlamaCppToolBinaries.TryResolveQuantizer(adoptedBin));
+    }
+
+    [Test]
     public async Task Start_OfficialCpu_UsesPinnedCommitScrubbedGitAndCpuMatrix()
     {
         if (!OperatingSystem.IsLinux())

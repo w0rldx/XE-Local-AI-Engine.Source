@@ -14,11 +14,32 @@ public sealed record GgufImportDestination(
     LocalModelOrigin Origin,
     string? ProjectorRelativePath = null);
 
-/// <summary>Supported V1 imported workload.</summary>
+/// <summary>Supported imported workload.</summary>
 public enum GgufImportWorkload
 {
     /// <summary>Causal/chat generation model.</summary>
-    CausalChat = 0
+    CausalChat = 0,
+
+    /// <summary>
+    ///     A LoRA adapter (GGUF <c>general.type == "adapter"</c>), which llama-server applies to a base model via
+    ///     <c>--lora</c>. Only ever produced on the in-process path — see <see cref="GgufImportInspectionMode" />.
+    /// </summary>
+    LoraAdapter = 1
+}
+
+/// <summary>
+///     Who is asking. The public HTTP import surface accepts exactly one thing — a standalone causal-chat model — and
+///     leans on file-name heuristics as a second line of defence against an operator uploading a projector or adapter
+///     under a misleading name. An in-process commit from a local training run needs neither: the engine wrote the file
+///     it is committing, so the decision is made from the GGUF metadata alone and the name is not evidence of anything.
+/// </summary>
+public enum GgufImportInspectionMode
+{
+    /// <summary>Operator-supplied file arriving over the import surface. Today's behavior, unchanged.</summary>
+    PublicImport = 0,
+
+    /// <summary>Engine-produced artifact committed in-process by a training run's export.</summary>
+    InProcessTrainedCommit = 1
 }
 
 /// <summary>Stable strict-inspection rejection codes.</summary>
@@ -59,7 +80,13 @@ public sealed record GgufImportInspection(
 /// <summary>Strict local GGUF preview/execution inspection seam.</summary>
 public interface IGgufImportInspector
 {
-    Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken);
+    Task<GgufImportInspection> InspectAsync(GgufImportSource source,
+        GgufImportInspectionMode mode,
+        CancellationToken cancellationToken);
+
+    /// <summary>Inspects under the strict public-import rules.</summary>
+    Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken) =>
+        InspectAsync(source, GgufImportInspectionMode.PublicImport, cancellationToken);
 }
 
 /// <summary>Copy progress for an import preparation.</summary>

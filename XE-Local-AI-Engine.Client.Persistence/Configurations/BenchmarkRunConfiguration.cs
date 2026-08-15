@@ -12,7 +12,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.ToTable("benchmark_runs", table =>
         {
             table.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 1 AND user_score <= 5)");
-            table.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported')");
+            table.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported', 'trained')");
             table.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
         });
         builder.HasKey(entity => entity.Id);
@@ -61,6 +61,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             null => null,
             LocalModelOrigin.HuggingFace => "huggingface",
             LocalModelOrigin.Imported => "imported",
+            LocalModelOrigin.Trained => "trained",
             _ => throw new InvalidOperationException("Unknown benchmark model origin enum value.")
         };
 
@@ -70,6 +71,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             null => null,
             "huggingface" => LocalModelOrigin.HuggingFace,
             "imported" => LocalModelOrigin.Imported,
+            "trained" => LocalModelOrigin.Trained,
             _ => throw new InvalidOperationException("Unknown benchmark model origin database value.")
         };
 }

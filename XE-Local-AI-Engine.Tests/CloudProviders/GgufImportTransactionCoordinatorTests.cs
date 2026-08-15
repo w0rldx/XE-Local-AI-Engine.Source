@@ -357,7 +357,9 @@ public sealed class GgufImportTransactionCoordinatorTests
 
     private sealed class AcceptedInspector(GgufImportInspection inspection) : IGgufImportInspector
     {
-        public Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken) =>
+        public Task<GgufImportInspection> InspectAsync(GgufImportSource source,
+            GgufImportInspectionMode mode,
+            CancellationToken cancellationToken) =>
             Task.FromResult(inspection);
     }
 
@@ -365,7 +367,9 @@ public sealed class GgufImportTransactionCoordinatorTests
     {
         private int _index;
 
-        public Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken)
+        public Task<GgufImportInspection> InspectAsync(GgufImportSource source,
+            GgufImportInspectionMode mode,
+            CancellationToken cancellationToken)
         {
             var index = Math.Min(Interlocked.Increment(ref _index) - 1, inspections.Length - 1);
             return Task.FromResult(inspections[index]);
