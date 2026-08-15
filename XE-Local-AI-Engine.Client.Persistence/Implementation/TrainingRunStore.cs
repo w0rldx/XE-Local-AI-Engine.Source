@@ -578,26 +578,9 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
     private static TrainingRunRecord ToRecord(TrainingRun entity, TrainingWorkStatus? workStatus, string? workErrorMessage) =>
         new(entity.Id, entity.DatasetId, entity.DatasetContentFingerprint, entity.DatasetRevision, entity.FreezeJson.ToArray(),
             entity.BaseArtifactId, entity.LinkedInstalledModelName, entity.LinkedModelContentFingerprint, entity.OptionsJson.ToArray(),
-            AsOptionalMemory(entity.LicenseConfirmationJson), entity.Status, AsOptionalMemory(entity.ProgressJson),
-            entity.LogTail is null ? null : Encoding.UTF8.GetString(entity.LogTail), AsOptionalMemory(entity.LaunchReceiptJson),
+            OptionalBlob.AsOptionalMemory(entity.LicenseConfirmationJson), entity.Status, OptionalBlob.AsOptionalMemory(entity.ProgressJson),
+            entity.LogTail is null ? null : Encoding.UTF8.GetString(entity.LogTail), OptionalBlob.AsOptionalMemory(entity.LaunchReceiptJson),
             entity.ErrorMessage, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus, workErrorMessage);
-
-    /// <summary>
-    ///     Turns an absent column into an absent <see cref="ReadOnlyMemory{T}" />, which needs spelling out as two
-    ///     statements. <c>ReadOnlyMemory&lt;byte&gt;</c> has an implicit operator from <c>byte[]</c>, so a null array —
-    ///     and even a bare <c>null</c> inside a conditional expression — converts to an EMPTY memory rather than to a
-    ///     null <see cref="Nullable{T}" />. Both <c>value?.ToArray()</c> and <c>value is null ? null : ...</c> silently
-    ///     produce <c>HasValue == true</c>; only a plain <c>return null;</c> against the nullable return type does not.
-    /// </summary>
-    private static ReadOnlyMemory<byte>? AsOptionalMemory(byte[]? value)
-    {
-        if (value is null)
-        {
-            return null;
-        }
-
-        return new ReadOnlyMemory<byte>(value);
-    }
 
     private static TrainingArtifactRecord ToRecord(TrainingArtifact entity) =>
         new(entity.Id, entity.RunId, entity.Kind, entity.Path, entity.Sha256, entity.SizeBytes, entity.SmokeState,
