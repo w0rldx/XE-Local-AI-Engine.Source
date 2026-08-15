@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
@@ -18,6 +18,15 @@ vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
 }));
 vi.mock("@/features/development/queries/useDevelopment", () => queriesMock);
+// The real viewer lazily boots Monaco, which jsdom cannot host; what this file pins is that the panel hands the
+// artifact body and the right language to it.
+vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
+	CodeEditor: ({ value, language, "data-testid": testId }: { value: string; language?: string; "data-testid"?: string }) => (
+		<pre data-testid={testId} data-language={language}>
+			{value}
+		</pre>
+	),
+}));
 
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
 
@@ -311,5 +320,49 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		renderPanel([]);
 		expect(screen.getByTestId("development-validation-no-report")).toBeTruthy();
 		expect(queriesMock.useDevelopmentArtifactContent).toHaveBeenLastCalledWith(undefined, undefined, undefined);
+	});
+});
+
+describe("DevelopmentLivePanel artifact viewer", () => {
+	const patchArtifact: DevelopmentArtifact = { ...validationArtifact, id: "artifact-patch", kind: "Patch" };
+
+	beforeEach(() => {
+		installDomMocks();
+		vi.clearAllMocks();
+		queriesMock.useDevelopmentArtifactContent.mockReturnValue({ data: undefined, isPending: true, error: null });
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("opens the patch artifact as a unified diff in the code viewer on demand", async () => {
+		queriesMock.useDevelopmentArtifactContent.mockImplementation((_project, _task, artifactId) => ({
+			data: artifactId === "artifact-patch" ? { artifact: patchArtifact, content: "+added line" } : undefined,
+			isPending: artifactId !== "artifact-patch",
+			error: null,
+		}));
+
+		renderPanel([validationArtifact, patchArtifact]);
+		expect(screen.queryByTestId("development-artifact-content-artifact-patch")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("development-artifact-view-artifact-patch"));
+
+		const viewer = await screen.findByTestId("development-artifact-content-artifact-patch");
+		expect(viewer.getAttribute("data-language")).toBe("diff");
+		expect(viewer.textContent).toBe("+added line");
+
+		fireEvent.click(screen.getByTestId("development-artifact-view-artifact-patch"));
+		expect(screen.queryByTestId("development-artifact-content-artifact-patch")).toBeNull();
+	});
+
+	it("opens stored validation evidence as JSON", async () => {
+		contentQuery(JSON.stringify(report()));
+
+		renderPanel();
+		fireEvent.click(screen.getByTestId("development-artifact-view-artifact-1"));
+
+		const viewer = await screen.findByTestId("development-artifact-content-artifact-1");
+		expect(viewer.getAttribute("data-language")).toBe("json");
 	});
 });
