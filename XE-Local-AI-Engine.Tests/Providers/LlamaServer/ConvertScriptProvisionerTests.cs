@@ -30,6 +30,8 @@ public sealed class ConvertScriptProvisionerTests
         AssertEx.True(File.Exists(paths.HfToGgufScriptPath), "convert_hf_to_gguf.py must be provisioned.");
         AssertEx.True(File.Exists(paths.LoraToGgufScriptPath), "convert_lora_to_gguf.py must be provisioned.");
         AssertEx.True(Directory.Exists(paths.GgufPyDirectory), "gguf-py must be provisioned.");
+        AssertEx.True(File.Exists(Path.Combine(Path.GetDirectoryName(paths.HfToGgufScriptPath)!, "conversion", "base.py")),
+            "The conversion package both scripts import must be provisioned beside them (live-found at b10201).");
         AssertEx.True(File.Exists(Path.Combine(paths.GgufPyDirectory, "gguf", "__init__.py")),
             "The gguf-py package must be copied recursively, not just its top directory.");
 
@@ -108,6 +110,10 @@ public sealed class ConvertScriptProvisionerTests
             var package = Path.Combine(destinationDirectory, "gguf-py", "gguf");
             _ = Directory.CreateDirectory(package);
             await File.WriteAllTextAsync(Path.Combine(package, "__init__.py"), "\n", ct);
+            var conversion = Path.Combine(destinationDirectory, "conversion");
+            _ = Directory.CreateDirectory(conversion);
+            await File.WriteAllTextAsync(Path.Combine(conversion, "__init__.py"), "\n", ct);
+            await File.WriteAllTextAsync(Path.Combine(conversion, "base.py"), "# per-arch converters\n", ct);
             return ReportedCommit ?? commitSha;
         }
     }
