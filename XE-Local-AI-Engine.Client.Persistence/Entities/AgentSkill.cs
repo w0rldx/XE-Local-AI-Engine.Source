@@ -42,6 +42,17 @@ internal sealed record class AgentSkill
     public byte[]? FrontmatterJson { get; set; }
 
     /// <summary>
+    ///     AI-generation provenance for a drafted skill as a UTF-8 JSON object, or <c>null</c> for a row with no AI
+    ///     provenance. Plaintext while tracked in memory; encrypted at rest by
+    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
+    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     <c>generation_metadata_json</c>. Informational only: on a single-operator node the operator supplies most of
+    ///     it, so it records what a draft claimed, not a tamper-proof attestation. Deliberately not part of
+    ///     <see cref="FrontmatterJson" /> — that is spec surface the model sees, and provenance stays out of the prompt.
+    /// </summary>
+    public byte[]? GenerationMetadataJson { get; set; }
+
+    /// <summary>
     ///     Backing int for <see cref="AgentSkillOrigin" />; provenance of the row. Plaintext (structural — the UI badge
     ///     reads it and the resolver branches on it to fence imported content). Default <c>0</c> (Local), backfilled
     ///     <c>0</c> for every pre-import row.
@@ -51,7 +62,8 @@ internal sealed record class AgentSkill
     /// <summary>
     ///     Where an <see cref="AgentSkillOrigin.Imported" /> row came from, or <c>null</c> for a local skill.
     ///     Deliberately plaintext: provenance is shown in the UI and has to be greppable in logs. For that reason it
-    ///     carries the <em>kind only</em> (<c>upload</c>) for uploaded archives — an operator-chosen filename must not
+    ///     carries the <em>kind only</em> (<c>upload</c> for an uploaded archive, <c>generated</c> for AI-drafted
+    ///     content) — an operator-chosen filename must not
     ///     become the one unencrypted free-text string in a table where everything else is AEAD-sealed. A GitHub source
     ///     keeps its full <c>github:owner/repo</c> value, which is already public. Shape is enforced at the store
     ///     boundary.

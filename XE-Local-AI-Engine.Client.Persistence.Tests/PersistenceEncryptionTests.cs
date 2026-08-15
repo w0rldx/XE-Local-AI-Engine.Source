@@ -230,6 +230,113 @@ public sealed class PersistenceEncryptionTests : IDisposable
     }
 
     [Test]
+    public async Task GenerationMetadata_WhenSavedViaEfInterceptor_IsCiphertextAtRestAndDecryptsOnRead()
+    {
+        // Arrange — an AI-drafted definition and skill both carry generation provenance. It quotes the operator's brief
+        // back, so it belongs on the encrypted surface exactly like the instructions it was drafted from.
+        var databasePath = GetDatabasePath("generation-metadata.sqlite");
+        var definitionMetadata = Encoding.UTF8.GetBytes("{\"mode\":\"create\",\"userBrief\":\"definition-provenance-sentinel\"}");
+        var skillMetadata = Encoding.UTF8.GetBytes("{\"mode\":\"improve\",\"userBrief\":\"skill-provenance-sentinel\"}");
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            context.AgentDefinitions.Add(new AgentDefinition
+            {
+                Id = Guid.NewGuid(),
+                Name = "Drafted builder",
+                Instructions = Encoding.UTF8.GetBytes("You are a drafted agent."),
+                GenerationMetadataJson = definitionMetadata.ToArray(),
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            });
+
+            context.AgentSkills.Add(new AgentSkill
+            {
+                Id = Guid.NewGuid(),
+                Name = "drafted-skill",
+                Description = Encoding.UTF8.GetBytes("A drafted skill."),
+                Body = Encoding.UTF8.GetBytes("# Drafted"),
+                GenerationMetadataJson = skillMetadata.ToArray(),
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        // Assert — the stored column is ciphertext, not the plaintext JSON the entity carried. A context without the
+        // materialization interceptor hands back the bytes exactly as SQLite holds them.
+        await using (var rawContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
+        {
+            var storedDefinitionMetadata = AssertEx.NotNull((await rawContext.AgentDefinitions.SingleAsync()).GenerationMetadataJson, "The definition column should hold a payload.");
+            var storedSkillMetadata = AssertEx.NotNull((await rawContext.AgentSkills.SingleAsync()).GenerationMetadataJson, "The skill column should hold a payload.");
+
+            AssertEx.False(storedDefinitionMetadata.SequenceEqual(definitionMetadata), "Definition generation metadata should be encrypted at rest.");
+            AssertEx.False(storedSkillMetadata.SequenceEqual(skillMetadata), "Skill generation metadata should be encrypted at rest.");
+        }
+
+        // Assert — reading back through the materialization interceptor decrypts both columns.
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var definition = await readContext.AgentDefinitions.SingleAsync();
+        var skill = await readContext.AgentSkills.SingleAsync();
+
+        AssertBytesEqual(definitionMetadata, AssertEx.NotNull(definition.GenerationMetadataJson, "Definition provenance should survive the round-trip."),
+            "Definition generation metadata should decrypt on materialization.");
+        AssertBytesEqual(skillMetadata, AssertEx.NotNull(skill.GenerationMetadataJson, "Skill provenance should survive the round-trip."),
+            "Skill generation metadata should decrypt on materialization.");
+    }
+
+    [Test]
+    public async Task GenerationMetadata_WhenAbsent_RoundTripsNull()
+    {
+        // The column is null for every row that was not AI-drafted, which is the common case — the optional-property
+        // encryption path must leave it alone rather than sealing an empty payload.
+        var databasePath = GetDatabasePath("generation-metadata-null.sqlite");
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            context.AgentDefinitions.Add(new AgentDefinition
+            {
+                Id = Guid.NewGuid(),
+                Name = "Hand-written builder",
+                Instructions = Encoding.UTF8.GetBytes("You are a hand-written agent."),
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            });
+
+            context.AgentSkills.Add(new AgentSkill
+            {
+                Id = Guid.NewGuid(),
+                Name = "hand-written-skill",
+                Description = Encoding.UTF8.GetBytes("A hand-written skill."),
+                Body = Encoding.UTF8.GetBytes("# Hand written"),
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        AssertEx.Null((await readContext.AgentDefinitions.SingleAsync()).GenerationMetadataJson, "A definition without AI provenance should read back null.");
+        AssertEx.Null((await readContext.AgentSkills.SingleAsync()).GenerationMetadataJson, "A skill without AI provenance should read back null.");
+    }
+
+    [Test]
     public void NodeSqliteKeyHolder_WhenConfigured_DerivesExpectedHkdfKey()
     {
         var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();

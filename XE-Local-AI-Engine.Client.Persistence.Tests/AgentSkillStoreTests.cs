@@ -486,6 +486,15 @@ public sealed class AgentSkillStoreTests : IDisposable
 
         var accepted = await store.CreateAsync(new AgentSkillInput(Name, Description, Body, Origin: AgentSkillOrigin.Imported, SourceUri: "upload"));
         AssertEx.Equal("upload", accepted.SourceUri);
+
+        // AI-drafted content lands with the Imported posture too, and 'generated' is its kind — a third literal, not a
+        // free-text slot, so it stays as greppable as the other two.
+        var generated = await store.CreateAsync(new AgentSkillInput("generated-skill", Description, Body, Origin: AgentSkillOrigin.Imported, SourceUri: "generated"));
+        AssertEx.Equal("generated", generated.SourceUri);
+
+        _ = AssertEx.Throws<ArgumentException>(
+            () => store.CreateAsync(new AgentSkillInput("generated-model-skill", Description, Body, Origin: AgentSkillOrigin.Imported, SourceUri: "generated:qwen3-8b")).GetAwaiter().GetResult(),
+            "A generated source must not carry the model that drafted it.");
     }
 
     [Test]

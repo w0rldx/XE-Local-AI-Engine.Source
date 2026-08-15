@@ -61,7 +61,10 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
             "origin",
             "source_uri",
             "imported_at_utc",
-            "content_sha256"
+            "content_sha256",
+
+            // Added later by AddGenerationMetadata (AI-drafting provenance).
+            "generation_metadata_json"
         }), "agent_skills should expose the mapped columns.");
 
         AssertEx.True(await NameUsesNoCaseUniqueAsync(connection).ConfigureAwait(false),
