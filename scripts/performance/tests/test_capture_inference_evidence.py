@@ -16,7 +16,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-
 MODULE_PATH = Path(__file__).parents[1] / "capture_inference_evidence.py"
 REPOSITORY_ROOT = Path(__file__).parents[3]
 POLICY_SCHEMA_PATH = REPOSITORY_ROOT / "docs/performance/schemas/inference-comparison-policy.schema.json"
@@ -99,9 +98,7 @@ def framework_baseline_spec(root: Path, repository: Path, marker: Path) -> dict:
                 "comparability": "same test filter; verified framework identity is the intended variable",
                 "argv": ["/bin/sh", "-c", f"printf done > {marker}; printf '{{\"latency_ms\": 10}}'"],
                 "cwd": str(repository),
-                "framework_assemblies": [
-                    {"name": assembly.name, "path": str(assembly), "sha256": digest(assembly)}
-                ],
+                "framework_assemblies": [{"name": assembly.name, "path": str(assembly), "sha256": digest(assembly)}],
                 "warmups": 0,
                 "repeats": 1,
                 "timeout_seconds": 5,
@@ -113,43 +110,65 @@ def framework_baseline_spec(root: Path, repository: Path, marker: Path) -> dict:
 def fit_capture_spec(server: Path, helper: Path) -> dict:
     base = [
         str(server),
-        "-m", "model.gguf",
-        "--host", "127.0.0.1",
-        "--port", "19150",
-        "--parallel", "1",
+        "-m",
+        "model.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "19150",
+        "--parallel",
+        "1",
         "--no-warmup",
     ]
     explore = [
         *base,
-        "--fit", "on",
+        "--fit",
+        "on",
         "--metrics",
-        "-c", "4096",
-        "-fa", "on",
-        "-ctk", "q8_0",
-        "-ctv", "q8_0",
+        "-c",
+        "4096",
+        "-fa",
+        "on",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
         "--jinja",
         "-v",
     ]
     replay = [
         *base,
-        "-c", "4096",
-        "--n-gpu-layers", "99",
-        "-ts", "1.0",
-        "-ctk", "q8_0",
-        "-ctv", "q8_0",
-        "--flash-attn", "on",
+        "-c",
+        "4096",
+        "--n-gpu-layers",
+        "99",
+        "-ts",
+        "1.0",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
+        "--flash-attn",
+        "on",
         "--jinja",
         "--metrics",
     ]
     helper_argv = [
         str(helper),
-        "-m", "model.gguf",
-        "--parallel", "1",
-        "--fit", "on",
-        "-c", "4096",
-        "-fa", "on",
-        "-ctk", "q8_0",
-        "-ctv", "q8_0",
+        "-m",
+        "model.gguf",
+        "--parallel",
+        "1",
+        "--fit",
+        "on",
+        "-c",
+        "4096",
+        "-fa",
+        "on",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
     ]
     return {
         "schema_version": "1.0",
@@ -298,7 +317,9 @@ def gate_policy(
     policy = {
         "schema_version": "1.0",
         "policy_id": "test-throughput-policy",
-        "rules": rules if rules is not None else [
+        "rules": rules
+        if rules is not None
+        else [
             {
                 "id": "throughput",
                 "command": "chat",
@@ -319,39 +340,41 @@ def add_verified_framework_command_tree(artifact: dict, marker: str) -> None:
     framework["source_commit"] = marker * 16
     framework["maf_version"] = f"1.{marker}.0"
     identity = artifact["verified_identity"]["framework"]
-    identity.update({
-        "required": True,
-        "verified": True,
-        "declaration": copy.deepcopy(framework),
-        "command_trees": [
-            {
-                "command": "chat",
-                "partition": "framework-contract",
-                "git_head": marker * 16,
-                "git_head_verified": True,
-                "git_clean": True,
-                "declared_versions_verified": True,
-                "central_package_pins": {
-                    "path": "Directory.Packages.props",
-                    "sha256": marker * 64,
-                    "sha256_verified": True,
-                },
-                "resolved_package_versions": {
-                    "Microsoft.Agents.AI": f"1.{marker}.0",
-                    "Microsoft.Extensions.AI": framework["meai_version"],
-                    "OpenAI": framework["openai_version"],
-                },
-                "assemblies": [
-                    {
-                        "name": "Framework.Tests.dll",
-                        "path": f"/verified/{marker}/Framework.Tests.dll",
+    identity.update(
+        {
+            "required": True,
+            "verified": True,
+            "declaration": copy.deepcopy(framework),
+            "command_trees": [
+                {
+                    "command": "chat",
+                    "partition": "framework-contract",
+                    "git_head": marker * 16,
+                    "git_head_verified": True,
+                    "git_clean": True,
+                    "declared_versions_verified": True,
+                    "central_package_pins": {
+                        "path": "Directory.Packages.props",
                         "sha256": marker * 64,
                         "sha256_verified": True,
-                    }
-                ],
-            }
-        ],
-    })
+                    },
+                    "resolved_package_versions": {
+                        "Microsoft.Agents.AI": f"1.{marker}.0",
+                        "Microsoft.Extensions.AI": framework["meai_version"],
+                        "OpenAI": framework["openai_version"],
+                    },
+                    "assemblies": [
+                        {
+                            "name": "Framework.Tests.dll",
+                            "path": f"/verified/{marker}/Framework.Tests.dll",
+                            "sha256": marker * 64,
+                            "sha256_verified": True,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
 
 
 def write_gate_inputs(
@@ -380,13 +403,16 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
                 capture.verify_identity("model", {"path": str(payload), "sha256": "0" * 64})
 
     def test_command_capture_computes_median_and_nearest_rank_p95(self) -> None:
-        result = capture.run_command({
-            "name": "deterministic-json",
-            "argv": ["/bin/sh", "-c", "printf '{\"throughput\": 42, \"latency_ms\": 10}'"],
-            "warmups": 1,
-            "repeats": 3,
-            "timeout_seconds": 5,
-        }, "command")
+        result = capture.run_command(
+            {
+                "name": "deterministic-json",
+                "argv": ["/bin/sh", "-c", 'printf \'{"throughput": 42, "latency_ms": 10}\''],
+                "warmups": 1,
+                "repeats": 3,
+                "timeout_seconds": 5,
+            },
+            "command",
+        )
         self.assertEqual(42, result["aggregates"]["throughput"]["median"])
         self.assertEqual(10, result["aggregates"]["latency_ms"]["p95"])
         self.assertEqual(3, len(result["runs"]))
@@ -441,10 +467,12 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         self.assertEqual(len(stderr), result["stderr_bytes"])
 
     def test_run_once_uses_only_bounded_post_kill_waits(self) -> None:
-        source = "\n".join((
-            inspect.getsource(capture.run_once),
-            inspect.getsource(capture.cleanup_process_group),
-        ))
+        source = "\n".join(
+            (
+                inspect.getsource(capture.run_once),
+                inspect.getsource(capture.cleanup_process_group),
+            )
+        )
 
         self.assertNotRegex(source, r"process\.wait\(\)")
         self.assertRegex(source, r"process\.wait\(timeout=")
@@ -452,20 +480,38 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         self.assertRegex(source, r"\.join\(timeout=")
 
     def test_llama_bench_json_is_projected_to_role_metrics(self) -> None:
-        stdout = json.dumps([
-            {"n_prompt": 128, "n_gen": 0, "embeddings": False, "avg_ts": 1000.0},
-            {"n_prompt": 0, "n_gen": 32, "embeddings": False, "avg_ts": 80.0},
-            {"n_prompt": 512, "n_gen": 0, "embeddings": True, "avg_ts": 2400.0},
-        ])
-        self.assertEqual({
-            "prompt_tokens_per_second": 1000.0,
-            "generation_tokens_per_second": 80.0,
-            "embedding_tokens_per_second": 2400.0,
-        }, capture.numeric_metrics(stdout))
+        stdout = json.dumps(
+            [
+                {"n_prompt": 128, "n_gen": 0, "embeddings": False, "avg_ts": 1000.0},
+                {"n_prompt": 0, "n_gen": 32, "embeddings": False, "avg_ts": 80.0},
+                {"n_prompt": 512, "n_gen": 0, "embeddings": True, "avg_ts": 2400.0},
+            ]
+        )
+        self.assertEqual(
+            {
+                "prompt_tokens_per_second": 1000.0,
+                "generation_tokens_per_second": 80.0,
+                "embedding_tokens_per_second": 2400.0,
+            },
+            capture.numeric_metrics(stdout),
+        )
 
     def test_supervisor_fit_on_and_long_gpu_layers_alias_normalize_for_replay(self) -> None:
         explore = ["--fit", "on", "--metrics", "-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0", "--jinja", "-v"]
-        replay = ["-c", "0", "--n-gpu-layers", "-1", "-ctk", "q8_0", "-ctv", "q8_0", "--flash-attn", "on", "--jinja", "--metrics"]
+        replay = [
+            "-c",
+            "0",
+            "--n-gpu-layers",
+            "-1",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0",
+            "--flash-attn",
+            "on",
+            "--jinja",
+            "--metrics",
+        ]
         self.assertEqual(["--jinja"], capture.without_fit_semantics(explore))
         self.assertEqual(["--jinja"], capture.without_fit_semantics(replay))
         self.assertEqual(
@@ -481,26 +527,42 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
 
     def test_fit_helper_projection_matches_production_runner_contract(self) -> None:
         common = [
-            "-m", "model.gguf",
-            "--host", "127.0.0.1",
-            "--port", "19150",
-            "--parallel", "1",
+            "-m",
+            "model.gguf",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "19150",
+            "--parallel",
+            "1",
             "--no-warmup",
-            "--fit", "on",
+            "--fit",
+            "on",
             "--metrics",
-            "-c", "4096",
-            "-fa", "on",
-            "-ctk", "q8_0",
-            "-ctv", "q8_0",
+            "-c",
+            "4096",
+            "-fa",
+            "on",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0",
         ]
         expected = [
-            "-m", "model.gguf",
-            "--parallel", "1",
-            "--fit", "on",
-            "-c", "4096",
-            "-fa", "on",
-            "-ctk", "q8_0",
-            "-ctv", "q8_0",
+            "-m",
+            "model.gguf",
+            "--parallel",
+            "1",
+            "--fit",
+            "on",
+            "-c",
+            "4096",
+            "-fa",
+            "on",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0",
         ]
         role_vectors = (
             ("chat", ["--jinja"]),
@@ -595,14 +657,43 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             runtime.write_text("#!/bin/sh\nprintf 'fake runtime\\n'\n", encoding="utf-8")
             runtime.chmod(0o755)
             spec = {
-                "schema_version": "1.0", "kind": "inference-benchmark-capture", "capture_id": "baseline-test", "phase": "baseline",
-                "models": [{"name": "dense", "role": "chat", "quant": "Q4_K_M", "path": str(model), "sha256": digest(model)}],
+                "schema_version": "1.0",
+                "kind": "inference-benchmark-capture",
+                "capture_id": "baseline-test",
+                "phase": "baseline",
+                "models": [
+                    {"name": "dense", "role": "chat", "quant": "Q4_K_M", "path": str(model), "sha256": digest(model)}
+                ],
                 "corpus": {"name": "golden", "path": str(corpus), "sha256": digest(corpus)},
-                "runtime": {"tag": "b9692", "provenance": "managed-source-build", "backend": "cuda", "path": str(runtime), "sha256": digest(runtime)},
-                "framework": {"source_commit": "1234567", "maf_version": "1.15.0", "meai_version": "10.8.1", "openai_version": "2.12.0"},
-                "benchmark": {"cache_state": "cold", "cache_preparation": "delete cache", "ambient_load_policy": "idle", "acceptance_rule": "median/p95"},
+                "runtime": {
+                    "tag": "b9692",
+                    "provenance": "managed-source-build",
+                    "backend": "cuda",
+                    "path": str(runtime),
+                    "sha256": digest(runtime),
+                },
+                "framework": {
+                    "source_commit": "1234567",
+                    "maf_version": "1.15.0",
+                    "meai_version": "10.8.1",
+                    "openai_version": "2.12.0",
+                },
+                "benchmark": {
+                    "cache_state": "cold",
+                    "cache_preparation": "delete cache",
+                    "ambient_load_policy": "idle",
+                    "acceptance_rule": "median/p95",
+                },
                 "coverage": {"unvalidated": [{"target": "Vulkan", "reason": "No ICD"}]},
-                "commands": [{"name": "chat", "argv": ["/bin/sh", "-c", "printf '{\"ttft_ms\": 10}'"], "warmups": 0, "repeats": 2, "timeout_seconds": 5}],
+                "commands": [
+                    {
+                        "name": "chat",
+                        "argv": ["/bin/sh", "-c", "printf '{\"ttft_ms\": 10}'"],
+                        "warmups": 0,
+                        "repeats": 2,
+                        "timeout_seconds": 5,
+                    }
+                ],
             }
             spec_path, output = root / "spec.json", root / "output.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
@@ -827,7 +918,8 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
                     "command_trees": [],
                 },
             },
-            "host": {}, "commands": [],
+            "host": {},
+            "commands": [],
         }
         candidate = json.loads(json.dumps(baseline))
         candidate["verified_identity"]["runtime"]["tag"] = "b"
@@ -883,7 +975,10 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             root = Path(raw)
             source = root / "raw.json"
             output = root / "safe.json"
-            source.write_text(json.dumps({"path": "/home/sam/models/model.gguf", "argv": ["/opt/runtime/llama-server"]}), encoding="utf-8")
+            source.write_text(
+                json.dumps({"path": "/home/sam/models/model.gguf", "argv": ["/opt/runtime/llama-server"]}),
+                encoding="utf-8",
+            )
             with self.assertRaisesRegex(capture.CaptureError, "user-home path"):
                 capture.sanitize_artifact(source, output, ["/opt/runtime=$RUNTIME_ROOT"])
             capture.sanitize_artifact(
@@ -902,11 +997,13 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             source = root / "raw.json"
             output = root / "safe.json"
             source.write_text(
-                json.dumps({
-                    "gpu": "GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5",
-                    "mig_legacy": "MIG-GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5/7/3",
-                    "mig_current": "MIG-3f3f2b11-0f24-4f10-a2d8-65d7bd9a4c99",
-                }),
+                json.dumps(
+                    {
+                        "gpu": "GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5",
+                        "mig_legacy": "MIG-GPU-d753e8bb-b687-daf2-f54f-79c1ed60cae5/7/3",
+                        "mig_current": "MIG-3f3f2b11-0f24-4f10-a2d8-65d7bd9a4c99",
+                    }
+                ),
                 encoding="utf-8",
             )
 
@@ -1010,12 +1107,14 @@ class GateInferencePolicyTests(unittest.TestCase):
         baseline = gate_artifact(100)
         candidate = gate_artifact(110)
         for artifact in (baseline, candidate):
-            artifact["verified_identity"]["framework"].update({
-                "required": False,
-                "verified": True,
-                "declaration": copy.deepcopy(artifact["framework"]),
-                "command_trees": [],
-            })
+            artifact["verified_identity"]["framework"].update(
+                {
+                    "required": False,
+                    "verified": True,
+                    "declaration": copy.deepcopy(artifact["framework"]),
+                    "command_trees": [],
+                }
+            )
 
         exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
 
@@ -1026,10 +1125,12 @@ class GateInferencePolicyTests(unittest.TestCase):
     def test_gate_rejects_inconsistent_framework_required_and_command_tree_states(self) -> None:
         mutations = {
             "native-only-with-tree": lambda identity: identity.update({"required": False}),
-            "framework-required-without-tree": lambda identity: identity.update({
-                "required": True,
-                "command_trees": [],
-            }),
+            "framework-required-without-tree": lambda identity: identity.update(
+                {
+                    "required": True,
+                    "command_trees": [],
+                }
+            ),
         }
         for case, mutation in mutations.items():
             with self.subTest(case=case):
@@ -1048,11 +1149,13 @@ class GateInferencePolicyTests(unittest.TestCase):
     def test_gate_accepts_declared_verified_runtime_change(self) -> None:
         baseline = gate_artifact(100)
         candidate = gate_artifact(110)
-        candidate["verified_identity"]["runtime"].update({
-            "tag": "b9999",
-            "sha256": "7" * 64,
-            "runtime_local_dependencies": {"manifest_sha256": "8" * 64},
-        })
+        candidate["verified_identity"]["runtime"].update(
+            {
+                "tag": "b9999",
+                "sha256": "7" * 64,
+                "runtime_local_dependencies": {"manifest_sha256": "8" * 64},
+            }
+        )
 
         exit_code, verdict = self.run_gate(
             baseline,
@@ -1067,13 +1170,9 @@ class GateInferencePolicyTests(unittest.TestCase):
         changes = {
             "framework": lambda artifact: (
                 artifact["framework"].update({"source_commit": "fedcba9876543210"}),
-                artifact["verified_identity"]["framework"]["declaration"].update(
-                    {"source_commit": "fedcba9876543210"}
-                ),
+                artifact["verified_identity"]["framework"]["declaration"].update({"source_commit": "fedcba9876543210"}),
             ),
-            "runtime": lambda artifact: artifact["verified_identity"]["runtime"].update(
-                {"tag": "b9999"}
-            ),
+            "runtime": lambda artifact: artifact["verified_identity"]["runtime"].update({"tag": "b9999"}),
         }
         for dimension, change in changes.items():
             with self.subTest(dimension=dimension):
@@ -1124,18 +1223,12 @@ class GateInferencePolicyTests(unittest.TestCase):
         mutations = {
             "empty-identity": lambda artifact: artifact.update({"verified_identity": {}}),
             "empty-models": lambda artifact: artifact["verified_identity"].update({"models": []}),
-            "empty-model-digest": lambda artifact: artifact["verified_identity"]["models"][0].update(
-                {"sha256": ""}
-            ),
-            "empty-corpus-digest": lambda artifact: artifact["verified_identity"]["corpus"].update(
-                {"sha256": ""}
-            ),
-            "empty-runtime-digest": lambda artifact: artifact["verified_identity"]["runtime"].update(
-                {"sha256": ""}
-            ),
-            "empty-runtime-dependency-digest": lambda artifact: artifact["verified_identity"][
-                "runtime"
-            ]["runtime_local_dependencies"].update({"manifest_sha256": ""}),
+            "empty-model-digest": lambda artifact: artifact["verified_identity"]["models"][0].update({"sha256": ""}),
+            "empty-corpus-digest": lambda artifact: artifact["verified_identity"]["corpus"].update({"sha256": ""}),
+            "empty-runtime-digest": lambda artifact: artifact["verified_identity"]["runtime"].update({"sha256": ""}),
+            "empty-runtime-dependency-digest": lambda artifact: artifact["verified_identity"]["runtime"][
+                "runtime_local_dependencies"
+            ].update({"manifest_sha256": ""}),
             "empty-framework-declaration": lambda artifact: (
                 artifact.update({"framework": {}}),
                 artifact["verified_identity"]["framework"].update({"declaration": {}}),
@@ -1163,13 +1256,9 @@ class GateInferencePolicyTests(unittest.TestCase):
             "model-string": lambda artifact: artifact["verified_identity"].update({"models": ["model"]}),
             "corpus-string": lambda artifact: artifact["verified_identity"].update({"corpus": "corpus"}),
             "runtime-string": lambda artifact: artifact["verified_identity"].update({"runtime": "runtime"}),
-            "framework-string": lambda artifact: artifact["verified_identity"].update(
-                {"framework": "framework"}
-            ),
+            "framework-string": lambda artifact: artifact["verified_identity"].update({"framework": "framework"}),
             "host-string": lambda artifact: artifact.update({"host": "host"}),
-            "devices-string": lambda artifact: artifact["host"].update(
-                {"runtime_devices": "devices"}
-            ),
+            "devices-string": lambda artifact: artifact["host"].update({"runtime_devices": "devices"}),
         }
         for case, mutation in mutations.items():
             with self.subTest(case=case):
@@ -1596,16 +1685,20 @@ class GateInferencePolicyTests(unittest.TestCase):
     def test_gate_unreferenced_extra_command_name_mismatch_makes_every_rule_unevaluable(self) -> None:
         baseline = gate_artifact(100)
         candidate = gate_artifact(110)
-        baseline["commands"].append({
-            "name": "baseline-diagnostic",
-            "argv_sha256": "a" * 64,
-            "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
-        })
-        candidate["commands"].append({
-            "name": "candidate-diagnostic",
-            "argv_sha256": "a" * 64,
-            "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
-        })
+        baseline["commands"].append(
+            {
+                "name": "baseline-diagnostic",
+                "argv_sha256": "a" * 64,
+                "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
+            }
+        )
+        candidate["commands"].append(
+            {
+                "name": "candidate-diagnostic",
+                "argv_sha256": "a" * 64,
+                "aggregates": {"diagnostic": {"median": 1, "p95": 1}},
+            }
+        )
 
         exit_code, verdict = self.run_gate(baseline, candidate, gate_policy())
 
@@ -1908,17 +2001,20 @@ class GateInferencePolicyTests(unittest.TestCase):
             capture.compare_artifacts(baseline_path, candidate_path, output_path)
             comparison = json.loads(output_path.read_text(encoding="utf-8"))
 
-        self.assertEqual({
-            "schema_version",
-            "kind",
-            "baseline",
-            "candidate",
-            "identity_equal",
-            "framework_identity_equal",
-            "framework_identity",
-            "commands",
-            "generated_at_utc",
-        }, set(comparison))
+        self.assertEqual(
+            {
+                "schema_version",
+                "kind",
+                "baseline",
+                "candidate",
+                "identity_equal",
+                "framework_identity_equal",
+                "framework_identity",
+                "commands",
+                "generated_at_utc",
+            },
+            set(comparison),
+        )
         self.assertEqual("1.0", comparison["schema_version"])
         self.assertTrue(comparison["identity_equal"])
         self.assertEqual({"baseline", "candidate"}, set(comparison["framework_identity"]))

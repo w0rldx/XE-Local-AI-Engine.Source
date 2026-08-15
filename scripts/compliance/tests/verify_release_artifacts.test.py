@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
-
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "verify_release_artifacts.py"
 REPOSITORY_ROOT = MODULE_PATH.parents[2]

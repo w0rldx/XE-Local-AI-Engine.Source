@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 
 def merge_reports(paths: list[Path]) -> tuple[int, int]:

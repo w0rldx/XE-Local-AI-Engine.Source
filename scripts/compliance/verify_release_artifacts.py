@@ -13,7 +13,6 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN_MARKERS = (
     b"kokoro",
@@ -100,7 +99,9 @@ def assert_framework_distribution(paths: list[str], runtime_identifier: str, lab
         None,
     )
     if forbidden is not None:
-        raise ValueError(f"{label} framework-dependent Windows payload contains forbidden runtime material: {forbidden}")
+        raise ValueError(
+            f"{label} framework-dependent Windows payload contains forbidden runtime material: {forbidden}"
+        )
 
 
 def assert_no_removed_tts(path: str, content: bytes, label: str) -> None:
@@ -258,11 +259,17 @@ def verify_zip_archive(archive: Path, runtime_identifier: str) -> None:
         names = package.namelist()
         assert_required_paths(names, runtime_identifier, str(archive))
         assert_framework_distribution(names, runtime_identifier, str(archive))
-        component_entries = [name for name in names if name.replace("\\", "/").lower().endswith("wwwroot/component-manifest.json")]
+        component_entries = [
+            name for name in names if name.replace("\\", "/").lower().endswith("wwwroot/component-manifest.json")
+        ]
         if len(component_entries) != 1:
             raise ValueError(f"{archive} must contain exactly one frontend component manifest")
         detected = component_purls(package.read(component_entries[0]), str(archive))
-        corpus_entries = [name for name in names if name.replace("\\", "/").lower().endswith("wwwroot/licenses/frontend/frontend-components.json")]
+        corpus_entries = [
+            name
+            for name in names
+            if name.replace("\\", "/").lower().endswith("wwwroot/licenses/frontend/frontend-components.json")
+        ]
         if len(corpus_entries) != 1:
             raise ValueError(f"{archive} must contain exactly one frontend corpus inventory")
         corpus_entry = corpus_entries[0]
@@ -280,7 +287,9 @@ def verify_zip_archive(archive: Path, runtime_identifier: str) -> None:
             },
             str(archive),
         )
-        backend_entries = [name for name in names if name.replace("\\", "/").lower().endswith("backend-components.json")]
+        backend_entries = [
+            name for name in names if name.replace("\\", "/").lower().endswith("backend-components.json")
+        ]
         if len(backend_entries) != 1:
             raise ValueError(f"{archive} must contain exactly one backend component manifest")
         backend_entry = backend_entries[0]
@@ -310,11 +319,7 @@ def verify_zip_archive(archive: Path, runtime_identifier: str) -> None:
         terms = backend_legal_terms(package.read(backend_entry), runtime_identifier, str(archive))
         assert_backend_terms(
             terms,
-            {
-                path: package.read(f"{prefix}{path}")
-                for path in terms
-                if f"{prefix}{path}" in names
-            },
+            {path: package.read(f"{prefix}{path}") for path in terms if f"{prefix}{path}" in names},
             str(archive),
         )
         for entry in package.infolist():
@@ -328,16 +333,21 @@ def verify_tree(root: Path, runtime_identifier: str, label: str) -> None:
     files = [path for path in root.rglob("*") if path.is_file()]
     assert_required_paths([str(path.relative_to(root)) for path in files], runtime_identifier, label)
     assert_framework_distribution([str(path.relative_to(root)) for path in files], runtime_identifier, label)
-    component_files = [path for path in files if str(path.relative_to(root)).replace("\\", "/").lower().endswith("wwwroot/component-manifest.json")]
+    component_files = [
+        path
+        for path in files
+        if str(path.relative_to(root)).replace("\\", "/").lower().endswith("wwwroot/component-manifest.json")
+    ]
     if len(component_files) != 1:
         raise ValueError(f"{label} must contain exactly one frontend component manifest")
     detected = component_purls(component_files[0].read_bytes(), label)
     corpus_files = [
         path
         for path in files
-        if str(path.relative_to(root)).replace("\\", "/").lower().endswith(
-            "wwwroot/licenses/frontend/frontend-components.json"
-        )
+        if str(path.relative_to(root))
+        .replace("\\", "/")
+        .lower()
+        .endswith("wwwroot/licenses/frontend/frontend-components.json")
     ]
     if len(corpus_files) != 1:
         raise ValueError(f"{label} must contain exactly one frontend corpus inventory")
@@ -388,11 +398,7 @@ def verify_tree(root: Path, runtime_identifier: str, label: str) -> None:
     )
     assert_backend_terms(
         terms,
-        {
-            path: (application_root / path).read_bytes()
-            for path in terms
-            if (application_root / path).is_file()
-        },
+        {path: (application_root / path).read_bytes() for path in terms if (application_root / path).is_file()},
         label,
     )
     for path in files:
@@ -426,7 +432,9 @@ def sha256_file(path: Path) -> str:
 
 def verify_linux_full_package(full_package: Path, standalone_appimage: Path) -> None:
     with zipfile.ZipFile(full_package) as package:
-        appimages = [entry for entry in package.infolist() if not entry.is_dir() and entry.filename.lower().endswith(".appimage")]
+        appimages = [
+            entry for entry in package.infolist() if not entry.is_dir() and entry.filename.lower().endswith(".appimage")
+        ]
         if len(appimages) != 1:
             raise ValueError(f"{full_package} must contain exactly one embedded AppImage, found {len(appimages)}")
         with tempfile.TemporaryDirectory(prefix="xe-full-package-") as temporary_directory:

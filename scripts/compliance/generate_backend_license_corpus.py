@@ -6,13 +6,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import re
 import shutil
+from pathlib import Path
 from urllib.parse import quote
 
 from bundle_input_evidence import load_bundle_packages
-
 
 NUGET_LICENSE_VERSION = "4.0.14"
 INVALID_LICENSES = {"", "UNKNOWN", "NOASSERTION"}
@@ -48,10 +47,7 @@ SPECIAL_SOURCE_AVAILABILITY = {
             Path("nuget/UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt"),
             Path("nuget/UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt.source.txt"),
         ),
-        "sourceArchive": (
-            "https://github.com/CharsetDetector/UTF-unknown/archive/"
-            f"{UTF_UNKNOWN_SOURCE_COMMIT}.tar.gz"
-        ),
+        "sourceArchive": (f"https://github.com/CharsetDetector/UTF-unknown/archive/{UTF_UNKNOWN_SOURCE_COMMIT}.tar.gz"),
         "sourceCommit": UTF_UNKNOWN_SOURCE_COMMIT,
         "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
         "upstreamTag": "v2.6",
@@ -107,9 +103,7 @@ def pinned_tool_version(manifest_path: Path) -> str:
     entry = tools.get("nuget-license") if isinstance(tools, dict) else None
     version = entry.get("version") if isinstance(entry, dict) else None
     if version != NUGET_LICENSE_VERSION:
-        raise ValueError(
-            f"expected pinned nuget-license {NUGET_LICENSE_VERSION} in {manifest_path}, found {version!r}"
-        )
+        raise ValueError(f"expected pinned nuget-license {NUGET_LICENSE_VERSION} in {manifest_path}, found {version!r}")
     return version
 
 
@@ -212,7 +206,9 @@ def license_mapping(name: str, version: str, expression: str, copyright_text: st
         try:
             return SPECIAL_LICENSE_TEXTS[exact_key]
         except KeyError as error:
-            raise ValueError(f"package {name}/{version} has unsupported special license mapping: {expression}") from error
+            raise ValueError(
+                f"package {name}/{version} has unsupported special license mapping: {expression}"
+            ) from error
     if expression in STANDARD_LICENSE_TEXTS:
         if expression == "ISC":
             raise ValueError(
@@ -387,16 +383,12 @@ def build_component(
         "licenseTextPath": next(entry["path"] for entry in files if entry["role"] == "license"),
         "licenseUrl": metadata.get("LicenseUrl") if isinstance(metadata.get("LicenseUrl"), str) else None,
         "name": name,
-        "projectUrl": metadata.get("PackageProjectUrl")
-        if isinstance(metadata.get("PackageProjectUrl"), str)
-        else None,
+        "projectUrl": metadata.get("PackageProjectUrl") if isinstance(metadata.get("PackageProjectUrl"), str) else None,
         "runtimeIdentifier": rid,
         "version": version,
     }
     if source_availability is not None:
-        component["sourceAvailability"] = {
-            key: value for key, value in source_availability.items() if key != "notice"
-        }
+        component["sourceAvailability"] = {key: value for key, value in source_availability.items() if key != "notice"}
     return component
 
 

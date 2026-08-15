@@ -5,12 +5,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
-
 
 SCRIPT = Path(__file__).parents[1] / "generate_backend_license_corpus.py"
 sys.path.insert(0, str(SCRIPT.parent))
@@ -210,7 +209,9 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         self.assertEqual("Example contributors", authors_component["authors"])
         self.assertIsNone(authors_component["copyright"])
         self.assertIn("not inferred", authors_component["attributionPolicy"])
-        self.assertIn("Copyright (c) 2023-present Scalar", (authors_output / authors_component["licenseTextPath"]).read_text())
+        self.assertIn(
+            "Copyright (c) 2023-present Scalar", (authors_output / authors_component["licenseTextPath"]).read_text()
+        )
         self.assertIn("Authors are not inferred", (authors_output / "THIRD-PARTY-NOTICES.md").read_text())
 
         wrong_version = deps("linux-x64", {"Scalar.AspNetCore/2.16.11": {"runtime": {"Scalar.dll": {}}}})
@@ -346,7 +347,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             ([package("Alpha", "1.0.0"), package("Alpha", "1.0.0"), package("Zeta", "2.0.0")], "duplicate"),
             ([package("Alpha", "1.0.0", "NOASSERTION"), package("Zeta", "2.0.0")], "unreviewable license"),
             ([package("Alpha", "1.0.0", "GPL-3.0-only"), package("Zeta", "2.0.0")], "unsupported license"),
-            ([package("Alpha", "1.0.0", authors="", copyright_text=""), package("Zeta", "2.0.0")], "missing attribution"),
+            (
+                [package("Alpha", "1.0.0", authors="", copyright_text=""), package("Zeta", "2.0.0")],
+                "missing attribution",
+            ),
         )
         for value, message in cases:
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):

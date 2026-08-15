@@ -7,9 +7,9 @@ import argparse
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, NamedTuple
-
+from typing import NamedTuple
 
 INTERNAL_LOCAL_FILES = {"CHECKSUMS.sha256", "assets.win.json", "assets.linux.json"}
 FEED_FILES = {"releases.win.json", "releases.linux.json", "RELEASES", "RELEASES-linux"}
@@ -78,7 +78,9 @@ def expected_channel_assets(channel: str, root: Path, version: str) -> dict[str,
     expected_count = 4 + len(deltas)
     if len(files) != expected_count:
         expected_kinds = "portable, full, optional delta, JSON feed, and legacy feed"
-        raise ValueError(f"{channel} output contains unexpected assets; expected only {expected_kinds}: {sorted(names)}")
+        raise ValueError(
+            f"{channel} output contains unexpected assets; expected only {expected_kinds}: {sorted(names)}"
+        )
     return files
 
 
@@ -176,7 +178,9 @@ def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> Non
         packages = {name: remote[name] for name in channel_files if name.endswith(".nupkg")}
         verify_json_feed(remote[policy.feed], version, packages)
         # Verify the published legacy feed from the release; the unpublished one from its retained local copy.
-        legacy_feed_path = remote[policy.legacy_feed] if policy.legacy_feed_published else channel_files[policy.legacy_feed]
+        legacy_feed_path = (
+            remote[policy.legacy_feed] if policy.legacy_feed_published else channel_files[policy.legacy_feed]
+        )
         verify_legacy_feed(legacy_feed_path, packages)
 
 

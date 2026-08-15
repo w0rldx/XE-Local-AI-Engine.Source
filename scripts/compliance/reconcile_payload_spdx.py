@@ -12,7 +12,6 @@ from urllib.parse import quote
 
 from bundle_input_evidence import load_bundle_packages
 
-
 INVALID_LICENSES = {"", "UNKNOWN", "NOASSERTION"}
 THREE_PART_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
@@ -172,7 +171,9 @@ def detected_backend_packages(
             try:
                 expression = licenses[inventory_key]
             except KeyError as error:
-                raise ValueError(f"shipped backend package {name}/{version} has no approved license inventory entry") from error
+                raise ValueError(
+                    f"shipped backend package {name}/{version} has no approved license inventory entry"
+                ) from error
             detected_inventory_keys.add(inventory_key)
         purl = f"pkg:nuget/{quote(name, safe='._-')}@{quote(version, safe='._-')}"
         packages.append(package(name, version, expression, purl))
@@ -196,7 +197,9 @@ def detected_frontend_packages(manifest: dict) -> list[dict]:
         purl = entry.get("purl")
         if not all(isinstance(value, str) and value for value in (name, version, purl)):
             raise ValueError("frontend component manifest contains an incomplete identity")
-        result.append(package(name, version, require_license(entry.get("license"), f"frontend package {name}/{version}"), purl))
+        result.append(
+            package(name, version, require_license(entry.get("license"), f"frontend package {name}/{version}"), purl)
+        )
     return result
 
 

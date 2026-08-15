@@ -6,7 +6,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-
 MODULE_PATH = Path(__file__).parents[1] / "run_scheduling_grid.py"
 SPEC = importlib.util.spec_from_file_location("run_scheduling_grid", MODULE_PATH)
 grid = importlib.util.module_from_spec(SPEC)
@@ -182,14 +181,9 @@ class SchedulingGridTests(unittest.TestCase):
                     for key in grid.SCENARIOS
                 }
         decision = grid.evaluate(data)
+        self.assertTrue(all(not item["qualifies"] for item in decision["comparisons"]))
         self.assertTrue(
-            all(not item["qualifies"] for item in decision["comparisons"])
-        )
-        self.assertTrue(
-            all(
-                not all(item["semantic_equivalence_to_baseline"].values())
-                for item in decision["comparisons"]
-            )
+            all(not all(item["semantic_equivalence_to_baseline"].values()) for item in decision["comparisons"])
         )
 
     def test_evaluator_rejects_repeat_nondeterminism_even_when_output_matches(self):
@@ -203,15 +197,8 @@ class SchedulingGridTests(unittest.TestCase):
             )
         )
         decision = grid.evaluate(data)
-        self.assertTrue(
-            all(not item["qualifies"] for item in decision["comparisons"])
-        )
-        self.assertTrue(
-            all(
-                all(item["semantic_equivalence_to_baseline"].values())
-                for item in decision["comparisons"]
-            )
-        )
+        self.assertTrue(all(not item["qualifies"] for item in decision["comparisons"]))
+        self.assertTrue(all(all(item["semantic_equivalence_to_baseline"].values()) for item in decision["comparisons"]))
 
     def test_evaluator_does_not_compare_rejecting_baseline(self):
         data = complete_grid(
@@ -225,16 +212,12 @@ class SchedulingGridTests(unittest.TestCase):
         baseline = next(
             item
             for item in data
-            if item["backend"] == "cuda"
-            and item["role"] == "reranker"
-            and item["name"] == "baseline"
+            if item["backend"] == "cuda" and item["role"] == "reranker" and item["name"] == "baseline"
         )
         baseline["token_gate"]["passed"] = False
         decision = grid.evaluate(data)
         comparison = next(
-            item
-            for item in decision["comparisons"]
-            if item["backend"] == "cuda" and item["role"] == "reranker"
+            item for item in decision["comparisons"] if item["backend"] == "cuda" and item["role"] == "reranker"
         )
         self.assertFalse(comparison["baseline_eligible"])
         self.assertFalse(comparison["comparable_to_baseline"])
@@ -298,9 +281,7 @@ class SchedulingGridTests(unittest.TestCase):
         zero = result("fast", 125, gpu_status="zero")
         unavailable = result("fast", 125, gpu_status="unavailable")
         self.assertFalse(grid.gpu_memory_delta(baseline, zero, "cuda")["passed"])
-        self.assertFalse(
-            grid.gpu_memory_delta(baseline, unavailable, "cuda")["passed"]
-        )
+        self.assertFalse(grid.gpu_memory_delta(baseline, unavailable, "cuda")["passed"])
 
     def test_role_requests_use_actual_embedding_and_reranker_routes(self):
         with patch.object(grid, "post", return_value={"ok": True}) as mocked:
@@ -338,9 +319,7 @@ class SchedulingGridTests(unittest.TestCase):
         self.assertEqual("/v1/rerank", reranker["route"])
 
     def test_context_readback_requires_explicit_runtime_log_value(self):
-        measured = grid.parse_context_readback(
-            "slot init: new slot, n_ctx = 1024\nnew slot, n_ctx = 768\n"
-        )
+        measured = grid.parse_context_readback("slot init: new slot, n_ctx = 1024\nnew slot, n_ctx = 768\n")
         missing = grid.parse_context_readback("server is ready\n")
         self.assertEqual("measured", measured["status"])
         self.assertEqual(768, measured["per_sequence_context"])

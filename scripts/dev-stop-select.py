@@ -7,7 +7,6 @@ import argparse
 import os
 import sys
 
-
 ProcessRecord = tuple[int, int, int, str, str]
 
 
@@ -63,14 +62,11 @@ def select(
     def monitors_apphost(command: str) -> bool:
         tokens = command.split()
         return any(
-            tokens[index] == "--monitor" and tokens[index + 1] == str(apphost_pid)
-            for index in range(len(tokens) - 1)
+            tokens[index] == "--monitor" and tokens[index + 1] == str(apphost_pid) for index in range(len(tokens) - 1)
         )
 
     anchors = {
-        pid
-        for pid, (_, _, _, comm, command) in processes.items()
-        if comm == "dcp" and monitors_apphost(command)
+        pid for pid, (_, _, _, comm, command) in processes.items() if comm == "dcp" and monitors_apphost(command)
     }
 
     app = processes.get(apphost_pid)
