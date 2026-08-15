@@ -5,10 +5,10 @@
 #   The E2E suite is excluded from the solution-wide `dotnet test` on purpose: the csproj
 #   demotes itself to a plain library unless -p:RunE2ETests=true is set (see
 #   XE-Local-AI-Engine.Tests.E2ETests.csproj, the PropertyGroup guarded on RunE2ETests).
-#   Its only other entry point was .github/workflows/e2e.yml, and GitHub Actions is disabled
-#   for this repo — so in practice the suite ran nowhere. This script is the local equivalent
-#   of that workflow: same property, same browser install, same TZ, plus preflight checks that
-#   fail loudly instead of producing a vacuous green run.
+#   Its only other entry point is .github/workflows/e2e.yml, which is deliberately NOT a merge
+#   gate: it runs on manual dispatch or on a PR labelled `run-e2e` only. This script is the local
+#   equivalent of that workflow: same property, same browser install, same TZ, plus preflight
+#   checks that fail loudly instead of producing a vacuous green run.
 #
 #   It is OPT-IN by design. Nothing invokes it automatically. Run it by hand before cutting a
 #   tester RC (publish/package-tester-win.ps1) or before merging a risky UI change.
