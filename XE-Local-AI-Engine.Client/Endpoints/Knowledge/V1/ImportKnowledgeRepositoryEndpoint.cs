@@ -19,6 +19,9 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
     {
         Post(LocalApiRoutes.KnowledgeBase.RepositoryImport);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ImportKnowledgeRepositoryRequest req, CancellationToken ct)
@@ -52,6 +55,15 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
                     QueueCapacityReached = result.QueueCapacityReached
                 },
                 ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or InvalidOperationException

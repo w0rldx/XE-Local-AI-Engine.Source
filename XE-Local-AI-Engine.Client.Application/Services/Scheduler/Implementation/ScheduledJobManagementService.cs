@@ -123,6 +123,23 @@ public sealed class ScheduledJobManagementService(
         bool enabled,
         CancellationToken cancellationToken = default)
     {
+        if (enabled)
+        {
+            // Resolve the template BEFORE the durable flag is flipped. A registered template is required to build the
+            // dispatch job, so a definition referencing an unknown template can never be scheduled — persisting
+            // Enabled=true first would leave a job that reads as enabled but never fires. Unknown id still returns null.
+            var existing = await _definitionStore.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+            if (existing is null)
+            {
+                return null;
+            }
+
+            if (_templateRegistry.GetTemplate(existing.TemplateId) is null)
+            {
+                throw new ScheduledJobValidationException($"Template '{existing.TemplateId}' is not registered, so this job cannot be enabled.");
+            }
+        }
+
         var updated = await _definitionStore.SetEnabledAsync(id, enabled, cancellationToken).ConfigureAwait(false);
         if (updated is null)
         {
@@ -134,15 +151,21 @@ public sealed class ScheduledJobManagementService(
 
         if (enabled)
         {
-            var descriptor = _templateRegistry.GetTemplate(updated.TemplateId);
-            // A registered template is required to build the dispatch job; a definition referencing an unknown template
-            // cannot be scheduled. Leave it unscheduled (store flag already flipped) and surface the inconsistency.
-            if (descriptor is null)
+            try
             {
-                throw new ScheduledJobValidationException($"Template '{updated.TemplateId}' is not registered, so this job cannot be enabled.");
+                await ScheduleAsync(scheduler, updated, cancellationToken).ConfigureAwait(false);
             }
-
-            await ScheduleAsync(scheduler, updated, cancellationToken).ConfigureAwait(false);
+            catch (Exception)
+            {
+                // Any scheduling failure (Quartz SchedulerException, a cron/time-zone parse error, cancellation) leaves the
+                // same wrong state, so the compensation is unconditional and runs on CancellationToken.None: an aborted
+                // request must not skip the flip-back and strand the durable flag.
+                // Nothing re-schedules an enabled-but-unscheduled job later: ReconcileDurableJobsAsync only refreshes
+                // JobDetail rows that already exist and never (re)creates a trigger. Flip the durable flag back so the
+                // stored state matches reality and the operator can retry, then surface the original failure.
+                _ = await _definitionStore.SetEnabledAsync(id, enabled: false, CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
         }
         else
         {

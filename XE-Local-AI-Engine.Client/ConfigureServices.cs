@@ -195,10 +195,12 @@ public static class ConfigureServices
             builder.Services.AddSingleton<IDevelopmentAttemptLiveEventPublisher, DevelopmentAttemptLiveEventPublisher>();
         }
 
-        // Error handling - the order of the exception handlers is important: specific handlers first,
-        // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.
+        // Error handling - the order of the exception handlers is important: specific handlers first
+        // (ConflictExceptionHandler -> 409, DomainValidationExceptionHandler -> 400), DefaultExceptionHandler last as
+        // the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.
         builder.Services
                .AddExceptionHandler<ConflictExceptionHandler>()
+               .AddExceptionHandler<DomainValidationExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();
 

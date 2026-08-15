@@ -15,7 +15,9 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
     {
         Delete(LocalApiRoutes.Workspaces.ById);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static descriptor => descriptor.Produces<WorkspaceConflictResponse>(StatusCodes.Status409Conflict)
+        Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                                   .Produces(StatusCodes.Status404NotFound)
+                                                   .Produces<WorkspaceConflictResponse>(StatusCodes.Status409Conflict)
                                                    .AutoTagOverride("Workspaces"));
     }
 
@@ -26,6 +28,12 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
             await _revocationService.RevokeAsync(req.WorkspaceId, ct).ConfigureAwait(false);
             await Send.NoContentAsync(ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        // No SelectedFolderConflictException arm: only registration can collide on an alias, and this endpoint's 409 is
+        // contractually the stable WorkspaceConflictResponse shape (declared in Configure), not FastEndpoints' ProblemDetails.
         catch (SelectedFolderValidationException exception)
         {
             AddError(exception.Message);

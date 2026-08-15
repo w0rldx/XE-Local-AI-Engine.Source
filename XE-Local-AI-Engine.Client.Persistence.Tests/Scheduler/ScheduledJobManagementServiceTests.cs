@@ -637,6 +637,53 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task SetEnabledAsync_WhenTemplateNotRegistered_ThrowsAndLeavesJobDisabledAndUnscheduled()
+    {
+        // Regression: the template check used to run AFTER the durable Enabled flag was flipped, leaving a job that
+        // read as enabled but was never scheduled. The definition is written straight to the store (CreateJobAsync
+        // would reject the unknown template) so only SetEnabledAsync is under test.
+        var dbPath = GetDatabasePath("enable-unknown-template.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var store = provider.GetRequiredService<IScheduledJobDefinitionStore>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
+                                              "Orphaned template job",
+                                              Description: null,
+                                              Enabled: false,
+                                              ScheduleKind.Cron,
+                                              "0 0 * * * ?",
+                                              IntervalSeconds: null,
+                                              RepeatCount: null,
+                                              StartAtUtc: null,
+                                              EndAtUtc: null,
+                                              "UTC",
+                                              SchedulerMisfirePolicy.Smart,
+                                              PreventOverlap: false,
+                                              MaxRuntimeSeconds: null,
+                                              ParameterJson: null,
+                                              ScheduledJobCreator.User))
+                                 .ConfigureAwait(false);
+
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.SetEnabledAsync(stored.Id, enabled: true))
+                      .ConfigureAwait(false);
+
+        var reloaded = await store.GetByIdAsync(stored.Id).ConfigureAwait(false);
+        AssertEx.NotNull(reloaded, "The definition must still exist after a rejected enable.");
+        AssertEx.Equal(expected: false, reloaded!.Enabled, "A rejected enable must not persist Enabled=true.");
+
+        AssertEx.False(await scheduler.CheckExists(new JobKey(stored.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None).ConfigureAwait(false),
+            "A rejected enable must not schedule anything in Quartz.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Delete — unschedules + soft-deletes; runs are preserved
     // ──────────────────────────────────────────────────────────────────────
