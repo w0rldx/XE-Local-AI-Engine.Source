@@ -74,24 +74,19 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, current_timestamp, sha2, concat_ws, lit
 from delta.tables import DeltaTable
 
-spark = (
-    SparkSession.builder.config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+spark = SparkSession.builder \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
     .getOrCreate()
-)
-
 
 # ── Bronze: raw ingest (append-only, schema-on-read) ─────────────────────────
 def ingest_bronze(source_path: str, bronze_table: str, source_system: str) -> int:
     df = spark.read.format("json").option("inferSchema", "true").load(source_path)
-    df = (
-        df.withColumn("_ingested_at", current_timestamp())
-        .withColumn("_source_system", lit(source_system))
-        .withColumn("_source_file", col("_metadata.file_path"))
-    )
+    df = df.withColumn("_ingested_at", current_timestamp()) \
+           .withColumn("_source_system", lit(source_system)) \
+           .withColumn("_source_file", col("_metadata.file_path"))
     df.write.format("delta").mode("append").option("mergeSchema", "true").save(bronze_table)
     return df.count()
-
 
 # ── Silver: cleanse, deduplicate, conform ────────────────────────────────────
 def upsert_silver(bronze_table: str, silver_table: str, pk_cols: list[str]) -> None:
@@ -99,34 +94,31 @@ def upsert_silver(bronze_table: str, silver_table: str, pk_cols: list[str]) -> N
     # Dedup: keep latest record per primary key based on ingestion time
     from pyspark.sql.window import Window
     from pyspark.sql.functions import row_number, desc
-
     w = Window.partitionBy(*pk_cols).orderBy(desc("_ingested_at"))
     source = source.withColumn("_rank", row_number().over(w)).filter(col("_rank") == 1).drop("_rank")
 
     if DeltaTable.isDeltaTable(spark, silver_table):
         target = DeltaTable.forPath(spark, silver_table)
         merge_condition = " AND ".join([f"target.{c} = source.{c}" for c in pk_cols])
-        target.alias("target").merge(
-            source.alias("source"), merge_condition
-        ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        target.alias("target").merge(source.alias("source"), merge_condition) \
+            .whenMatchedUpdateAll() \
+            .whenNotMatchedInsertAll() \
+            .execute()
     else:
         source.write.format("delta").mode("overwrite").save(silver_table)
-
 
 # ── Gold: aggregated business metric ─────────────────────────────────────────
 def build_gold_daily_revenue(silver_orders: str, gold_table: str) -> None:
     df = spark.read.format("delta").load(silver_orders)
-    gold = (
-        df.filter(col("status") == "completed")
-        .groupBy("order_date", "region", "product_category")
-        .agg({"revenue": "sum", "order_id": "count"})
-        .withColumnRenamed("sum(revenue)", "total_revenue")
-        .withColumnRenamed("count(order_id)", "order_count")
-        .withColumn("_refreshed_at", current_timestamp())
-    )
-    gold.write.format("delta").mode("overwrite").option(
-        "replaceWhere", f"order_date >= '{gold['order_date'].min()}'"
-    ).save(gold_table)
+    gold = df.filter(col("status") == "completed") \
+             .groupBy("order_date", "region", "product_category") \
+             .agg({"revenue": "sum", "order_id": "count"}) \
+             .withColumnRenamed("sum(revenue)", "total_revenue") \
+             .withColumnRenamed("count(order_id)", "order_count") \
+             .withColumn("_refreshed_at", current_timestamp())
+    gold.write.format("delta").mode("overwrite") \
+        .option("replaceWhere", f"order_date >= '{gold['order_date'].min()}'") \
+        .save(gold_table)
 ```
 
 ### dbt Data Quality Contract
@@ -186,12 +178,11 @@ import great_expectations as gx
 
 context = gx.get_context()
 
-
 def validate_silver_orders(df) -> dict:
     batch = context.sources.pandas_default.read_dataframe(df)
     result = batch.validate(
         expectation_suite_name="silver_orders.critical",
-        run_id={"run_name": "silver_orders_daily", "run_time": datetime.now()},
+        run_id={"run_name": "silver_orders_daily", "run_time": datetime.now()}
     )
     stats = {
         "success": result["success"],
@@ -210,39 +201,34 @@ def validate_silver_orders(df) -> dict:
 from pyspark.sql.functions import from_json, col, current_timestamp
 from pyspark.sql.types import StructType, StringType, DoubleType, TimestampType
 
-order_schema = (
-    StructType()
-    .add("order_id", StringType())
-    .add("customer_id", StringType())
-    .add("revenue", DoubleType())
+order_schema = StructType() \
+    .add("order_id", StringType()) \
+    .add("customer_id", StringType()) \
+    .add("revenue", DoubleType()) \
     .add("event_time", TimestampType())
-)
-
 
 def stream_bronze_orders(kafka_bootstrap: str, topic: str, bronze_path: str):
-    stream = (
-        spark.readStream.format("kafka")
-        .option("kafka.bootstrap.servers", kafka_bootstrap)
-        .option("subscribe", topic)
-        .option("startingOffsets", "latest")
-        .option("failOnDataLoss", "false")
+    stream = spark.readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", kafka_bootstrap) \
+        .option("subscribe", topic) \
+        .option("startingOffsets", "latest") \
+        .option("failOnDataLoss", "false") \
         .load()
-    )
 
     parsed = stream.select(
         from_json(col("value").cast("string"), order_schema).alias("data"),
         col("timestamp").alias("_kafka_timestamp"),
-        current_timestamp().alias("_ingested_at"),
+        current_timestamp().alias("_ingested_at")
     ).select("data.*", "_kafka_timestamp", "_ingested_at")
 
-    return (
-        parsed.writeStream.format("delta")
-        .outputMode("append")
-        .option("checkpointLocation", f"{bronze_path}/_checkpoint")
-        .option("mergeSchema", "true")
-        .trigger(processingTime="30 seconds")
+    return parsed.writeStream \
+        .format("delta") \
+        .outputMode("append") \
+        .option("checkpointLocation", f"{bronze_path}/_checkpoint") \
+        .option("mergeSchema", "true") \
+        .trigger(processingTime="30 seconds") \
         .start(bronze_path)
-    )
 ```
 
 ## 🔄 Your Workflow Process
