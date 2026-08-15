@@ -195,7 +195,9 @@ def detected_frontend_packages(manifest: dict) -> list[dict]:
         name = entry.get("name")
         version = entry.get("version")
         purl = entry.get("purl")
-        if not all(isinstance(value, str) and value for value in (name, version, purl)):
+        if not (
+            isinstance(name, str) and name and isinstance(version, str) and version and isinstance(purl, str) and purl
+        ):
             raise ValueError("frontend component manifest contains an incomplete identity")
         result.append(
             package(name, version, require_license(entry.get("license"), f"frontend package {name}/{version}"), purl)

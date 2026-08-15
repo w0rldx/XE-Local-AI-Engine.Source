@@ -83,7 +83,10 @@ def create_manifest(raw_path: Path, runtime_identifier: str, output_path: Path) 
         )
     )
     document = {
-        "$generated": "Captured from MSBuild FilesToBundle and loose ResolvedFileToPublish inputs at the RID-specific publish boundary.",
+        "$generated": (
+            "Captured from MSBuild FilesToBundle and loose ResolvedFileToPublish inputs "
+            "at the RID-specific publish boundary."
+        ),
         "inputs": inputs,
         "publishSingleFile": expected_single_file,
         "runtimeIdentifier": runtime_identifier,

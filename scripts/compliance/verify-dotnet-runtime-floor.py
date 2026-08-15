@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -33,8 +34,13 @@ def read_metadata(args: argparse.Namespace) -> dict[str, object]:
     if args.metadata_file:
         return json.loads(args.metadata_file.read_text(encoding="utf-8"))
 
+    url = args.metadata_url
+    if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+        raise ValueError(f"release metadata URL must use http or https, got {url!r}")
+
     try:
-        with urllib.request.urlopen(args.metadata_url, timeout=args.timeout_seconds) as response:
+        # Scheme restricted to http(s) directly above; file:/custom schemes are unreachable here.
+        with urllib.request.urlopen(url, timeout=args.timeout_seconds) as response:  # noqa: S310  # nosec B310
             return json.load(response)
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
         raise RuntimeError(f"could not retrieve authoritative .NET release metadata: {error}") from error

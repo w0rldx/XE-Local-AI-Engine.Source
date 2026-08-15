@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 from bundle_input_evidence import load_bundle_packages
@@ -40,7 +41,7 @@ SPECIAL_LICENSE_TEXTS = {
     ),
 }
 UTF_UNKNOWN_SOURCE_COMMIT = "7e69ebbdd6ef96a3625fcaf39df42429b8eb0463"
-SPECIAL_SOURCE_AVAILABILITY = {
+SPECIAL_SOURCE_AVAILABILITY: dict[tuple[str, str, str], dict[str, Any]] = {
     ("utf.unknown", "2.6.0", "MPL-1.1"): {
         "licenseBasis": "MPL-1.1",
         "notice": (

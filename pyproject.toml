@@ -49,6 +49,10 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101"]
 "tools/training/test_*.py" = ["S101"]
+# Repo automation under scripts/: subprocess with literal argv/executables and XML parsed from our
+# own build outputs (cobertura, csproj, nuspec). Blanket-flagging every call there is noise, not
+# a finding; the remaining S-rules (S310 urlopen, S105/S108, ...) stay on and are answered per call.
+"scripts/**/*.py" = ["S603", "S607", "S314"]
 
 [tool.pyrefly]
 project-includes = ["tools/training", "scripts"]
@@ -72,4 +76,6 @@ filterwarnings = [
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "node_modules"]
-skips = ["B101"]
+# B101 (assert) as in the house setup; the subprocess/xml blacklist entries mirror the ruff
+# per-file policy for scripts/** above (bandit has no per-path ignore).
+skips = ["B101", "B404", "B603", "B607", "B314", "B405"]

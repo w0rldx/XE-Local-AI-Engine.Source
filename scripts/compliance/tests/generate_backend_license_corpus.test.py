@@ -14,8 +14,8 @@ from unittest.mock import patch
 SCRIPT = Path(__file__).parents[1] / "generate_backend_license_corpus.py"
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("generate_backend_license_corpus", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 
@@ -294,9 +294,11 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             if source.name != "NOTICE":
                 real_copy(source, destination)
 
-        with patch.object(MODULE.shutil, "copyfile", side_effect=omit_notice):
-            with self.assertRaisesRegex(ValueError, "omitted expected package term.*NOTICE"):
-                self.generate([package("NSec.Cryptography", "26.4.0")], document, output_name="omitted")
+        with (
+            patch.object(MODULE.shutil, "copyfile", side_effect=omit_notice),
+            self.assertRaisesRegex(ValueError, "omitted expected package term.*NOTICE"),
+        ):
+            self.generate([package("NSec.Cryptography", "26.4.0")], document, output_name="omitted")
 
     def test_maps_special_licenses_only_to_exact_reviewed_packages(self) -> None:
         document = deps(

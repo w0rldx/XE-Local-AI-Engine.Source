@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 MODULE_PATH = Path(__file__).parents[1] / "capture_inference_evidence.py"
@@ -314,7 +315,7 @@ def gate_policy(
     allowed_identity_changes: list[str] | None = None,
     rules: list[dict] | None = None,
 ) -> dict:
-    policy = {
+    policy: dict[str, Any] = {
         "schema_version": "1.0",
         "policy_id": "test-throughput-policy",
         "rules": rules
@@ -640,7 +641,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
 
         with mock.patch.object(capture, "capture_text", side_effect=capture_command):
             capture.capture_ambient()
-            capture.capture_host(Path("/tmp/llama-server"))
+            capture.capture_host(Path("/tmp/llama-server"))  # noqa: S108  # test fixture path, never opened
 
         gpu_queries = [argument for command in commands for argument in command if argument.startswith("--query-gpu=")]
         self.assertTrue(gpu_queries)
@@ -1480,7 +1481,7 @@ class GateInferencePolicyTests(unittest.TestCase):
         self.assertIn("policy.malformed", json.dumps(verdict))
 
     def test_gate_rejects_path_or_secret_policy_metadata_without_leaking_it(self) -> None:
-        secret = "/home/private/fixture-secret-token"
+        secret = "/home/private/fixture-secret-token"  # noqa: S105  # test fixture value
         mutations = {
             "policy_id": lambda policy: policy.update({"policy_id": secret}),
             "command": lambda policy: policy["rules"][0].update({"command": secret}),
@@ -1753,9 +1754,11 @@ class GateInferencePolicyTests(unittest.TestCase):
             existing = b'{"old":true}\n'
             paths[-1].write_bytes(existing)
 
-            with mock.patch.object(capture.os, "replace", side_effect=OSError("fixture-secret")):
-                with self.assertRaises(capture.CaptureError) as raised:
-                    capture.gate_artifacts(*paths)
+            with (
+                mock.patch.object(capture.os, "replace", side_effect=OSError("fixture-secret")),
+                self.assertRaises(capture.CaptureError) as raised,
+            ):
+                capture.gate_artifacts(*paths)
 
             self.assertEqual(existing, paths[-1].read_bytes())
             self.assertNotIn("fixture-secret", str(raised.exception))
@@ -1824,7 +1827,7 @@ class GateInferencePolicyTests(unittest.TestCase):
         policy = json.loads(POLICY_EXAMPLE_PATH.read_text(encoding="utf-8"))
         baseline = gate_artifact(100)
         candidate = gate_artifact(120)
-        baseline["commands"] = [
+        baseline_commands: list[dict[str, Any]] = [
             {
                 "name": "chat-throughput",
                 "argv_sha256": "7" * 64,
@@ -1836,9 +1839,11 @@ class GateInferencePolicyTests(unittest.TestCase):
                 "aggregates": {"embeddings_per_second": {"median": 100, "p95": 100}},
             },
         ]
-        candidate["commands"] = copy.deepcopy(baseline["commands"])
-        candidate["commands"][0]["aggregates"]["tokens_per_second"]["median"] = 120
-        candidate["commands"][1]["aggregates"]["embeddings_per_second"]["median"] = 120
+        baseline["commands"] = baseline_commands
+        candidate_commands: list[dict[str, Any]] = copy.deepcopy(baseline_commands)
+        candidate["commands"] = candidate_commands
+        candidate_commands[0]["aggregates"]["tokens_per_second"]["median"] = 120
+        candidate_commands[1]["aggregates"]["embeddings_per_second"]["median"] = 120
 
         exit_code, verdict = self.run_gate(baseline, candidate, policy)
 

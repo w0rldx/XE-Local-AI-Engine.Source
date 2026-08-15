@@ -45,12 +45,14 @@ def post(port: int, route: str, payload: dict, timeout: float = 120) -> dict:
         data=json.dumps(payload, separators=(",", ":")).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    # Fixed http://127.0.0.1 prefix built directly above; no caller-supplied scheme reaches here.
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
         return json.load(response)
 
 
 def get(port: int, route: str, timeout: float = 2) -> str:
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=timeout) as response:
+    # Fixed http://127.0.0.1 prefix; no caller-supplied scheme reaches here.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=timeout) as response:  # nosec B310
         return response.read().decode()
 
 
@@ -680,7 +682,7 @@ def main():
         }.items()
     }
     results: list[dict] = []
-    corpora: dict[str, dict[str, dict]] = {}
+    corpora: dict[str, dict[str, dict | None]] = {}
     port = 19300
     for backend in ("cuda", "cpu"):
         corpora[backend] = {}

@@ -21,6 +21,29 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # Repo Python quality gate (ruff / pyrefly / pytest / bandit) over tools/training and scripts/**,
+  # driven by the root pyproject.toml + uv.lock (dev tooling only — the training runtime manifest
+  # under tools/training is a separate, shipped lockfile and is not synced here). Local equivalent:
+  # scripts/python-validation.sh --scope full. See AGENTS.md.
+  python-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.30"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Python quality gate
+        run: scripts/python-validation.sh --scope full --serial
+
   release-contracts:
     runs-on: ubuntu-latest
     # Two dotnet builds of the AI.Agent.Tests project (the P0_SPIKE gate) dominate this job.

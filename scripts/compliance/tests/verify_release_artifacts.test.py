@@ -277,8 +277,12 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
                 Path(temporary_directory),
                 {
                     **self.windows_compliance_files(),
-                    "current/wwwroot/component-manifest.json": b'{"components":[{"purl":"pkg:npm/react@19.2.7"},{"purl":"pkg:npm/zod@4.4.3"}]}',
-                    "current/wwwroot/licenses/frontend/FRONTEND-COMPONENTS.json": b'{"components":[{"purl":"pkg:npm/react@19.2.7"}]}',
+                    "current/wwwroot/component-manifest.json": (
+                        b'{"components":[{"purl":"pkg:npm/react@19.2.7"},{"purl":"pkg:npm/zod@4.4.3"}]}'
+                    ),
+                    "current/wwwroot/licenses/frontend/FRONTEND-COMPONENTS.json": (
+                        b'{"components":[{"purl":"pkg:npm/react@19.2.7"}]}'
+                    ),
                 },
             )
             with self.assertRaisesRegex(ValueError, "does not match detected components"):
