@@ -14,4 +14,13 @@ public sealed record LlamaBinary(
     string ServerExecutablePath,
     string Version,
     GpuVariant Variant,
-    bool IsPinnedFallback);
+    bool IsPinnedFallback)
+{
+    /// <summary>
+    ///     The <c>llama-quantize</c> helper beside this binary, or <see langword="null" /> when this runtime shipped
+    ///     none. Upstream prebuilt archives carry no quantizer today, so only a source build resolves one — that is the
+    ///     recorded presence check, evaluated on read rather than stored so it can never go stale against the tree.
+    ///     A null here means "training exports cannot quantize with this runtime", never that the runtime is unusable.
+    /// </summary>
+    public string? QuantizerExecutablePath => Contracts.LlamaCppToolBinaries.TryResolveQuantizerBesideServer(ServerExecutablePath);
+}
