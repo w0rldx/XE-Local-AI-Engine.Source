@@ -44,7 +44,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExtractedCandidate_CannotReachEnabled_WithoutEvalGateAndApproval()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -80,7 +80,7 @@ public sealed class AdaptiveMemoryEndpointTests
     {
         // The positive half: once the eval gate passes (and the cap is not reached) the SAME promote route enables the
         // Extracted candidate — proving governance reuse works end-to-end for the new Source, not just that it blocks.
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -112,7 +112,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ListPlaybook_WhenScopeSupplied_FiltersToThatScope()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -139,7 +139,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ListPlaybook_WhenNoScope_ReturnsAllActions()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -164,7 +164,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExecutionLogs_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(Guid.NewGuid()));
@@ -176,7 +176,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExecutionLogs_ReturnsPagedMetadata_NoContent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -211,7 +211,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task ExecutionLogs_WhenAgentMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(Guid.NewGuid()));
@@ -228,7 +228,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task CreateAgent_CarriesDefaultTemporaryChat_RoundTrip()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/agents")
@@ -263,7 +263,7 @@ public sealed class AdaptiveMemoryEndpointTests
     [Test]
     public async Task UpdateAgent_CarriesDefaultTemporaryChat_RoundTrip()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
@@ -297,7 +297,7 @@ public sealed class AdaptiveMemoryEndpointTests
     // Seed helpers.
     // ----------------------------------------------------------------------------------------------------------------
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
@@ -313,7 +313,7 @@ public sealed class AdaptiveMemoryEndpointTests
         return agent.Id;
     }
 
-    private static async Task<Guid> SeedExtractedSuggestionAsync(TestingWebAppFactory factory, Guid agentDefinitionId, MemoryScope scope)
+    private static async Task<Guid> SeedExtractedSuggestionAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, MemoryScope scope)
     {
         // Mirrors the extraction service write: Suggested + Source=Extracted + a typed MemoryScope, with evidence ids.
         using var scopeProvider = factory.Services.CreateScope();
@@ -331,7 +331,7 @@ public sealed class AdaptiveMemoryEndpointTests
         return created.Id;
     }
 
-    private static async Task SeedExecutionLogAsync(TestingWebAppFactory factory, Guid agentDefinitionId, bool success, string? errorClass)
+    private static async Task SeedExecutionLogAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, bool success, string? errorClass)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
@@ -347,7 +347,7 @@ public sealed class AdaptiveMemoryEndpointTests
             errorClass)).ConfigureAwait(false);
     }
 
-    private static async Task RecordPassingEvalAsync(TestingWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
+    private static async Task RecordPassingEvalAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
     {
         using var scope = factory.Services.CreateScope();
         var serviceProvider = scope.ServiceProvider;

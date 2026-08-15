@@ -107,6 +107,11 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
         _offlineRuntimeHttpClient.Dispose();
 
+        // Microsoft.Data.Sqlite keeps a STATIC pool group per connection string; this host's unique temp DB path
+        // would otherwise leave an immortal pool (open connection on a deleted temp file + prune timer) behind.
+        // Safe: batch runs are single-threaded, and a concurrent host merely reopens its pooled connection.
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
         // Best-effort cleanup of every temp artifact this host created. Skipping this leaks the fixture web root, the
         // SQLite database (+ WAL/SHM/journal sidecars, since the node runs in WAL mode), and the node-data directory into
         // Path.GetTempPath() on each host build; across full-module runs that accumulates to tens of thousands of files
@@ -254,7 +259,11 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
-                ["NodeData:Directory"] = _nodeDataDirectory
+                ["NodeData:Directory"] = _nodeDataDirectory,
+                // Keep this host out of EF's static ServiceProviderCache: its per-host connection string would add an
+                // immortal cache entry strongly rooting this host's ServiceProvider (see the EnableServiceProviderCaching
+                // seam in AddNodeModelRuntimeExtensions and docs/agent-knowledge.md §1).
+                ["EntityFramework:ServiceProviderCaching"] = "false"
             };
             if (EnableDevelopmentMode is { } developmentEnabled)
             {

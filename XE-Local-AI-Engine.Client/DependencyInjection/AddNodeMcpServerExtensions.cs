@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using System.Reflection;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
@@ -42,7 +43,15 @@ internal static class AddNodeMcpServerExtensions
                        // session, and there is no session table to bound or evict.
                        transport.Stateless = true;
                    })
-                   .WithTools<NodeAgentMcpTools>();
+                   // A per-host COPY of the SDK's default serializer options, not the shared static instance. This is
+                   // load-bearing for memory: Microsoft.Extensions.AI caches every reflection-built tool descriptor in
+                   // a static ConditionalWeakTable keyed by the JsonSerializerOptions used at registration, and each
+                   // descriptor's parameter-binding delegate captures this host's root IServiceProvider. Registered
+                   // with the SDK's immortal static options, that cache entry pins every host that ever registered
+                   // tools (the ~20 MB-per-test-host leak of docs/agent-knowledge.md §1). With a per-host key the
+                   // entry is weakly keyed to THIS host's options and is collected with the host. The copy is
+                   // behavior-identical (same converters and type-info resolver as the default).
+                   .WithTools<NodeAgentMcpTools>(new System.Text.Json.JsonSerializerOptions(McpJsonUtilities.DefaultOptions));
 
         return builder;
     }
