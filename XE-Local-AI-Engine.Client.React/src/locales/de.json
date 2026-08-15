@@ -76,7 +76,9 @@
 		"customTools": "Eigene Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Bildgenerierung"
+		"images": "Bildgenerierung",
+		"training": "Training",
+		"trainingDatasets": "Datensätze"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -3960,6 +3962,12 @@
 		"customTools": {
 			"title": "Eigene Tools",
 			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus."
+		},
+		"training": {
+			"datasets": {
+				"title": "Trainings-Datensätze",
+				"subtitle": "Erzeuge Tool-Calling-Datensätze aus einer Definition, prüfe jedes Beispiel und exportiere sie für einen Trainingslauf."
+			}
 		}
 	},
 	"components": {
@@ -4450,5 +4458,57 @@
 	},
 	"notifications": {
 		"emptyMessage": "Fertig."
+	},
+	"training": {
+		"tabs": {
+			"definitions": "Definitionen",
+			"datasets": "Datensätze",
+			"mocks": "Tool-Mocks"
+		},
+		"generation": {
+			"title": "Generierung läuft",
+			"counts": "{{completed}} von {{total}} Beispielen · {{rejected}} abgelehnt"
+		},
+		"definitions": {
+			"title": "Datensatz-Definitionen",
+			"empty": "Noch keine Datensatz-Definitionen.",
+			"generate": "Generieren",
+			"holdout": "{{percent}}% Holdout"
+		},
+		"datasets": {
+			"title": "Datensätze",
+			"empty": "Noch keine Datensätze. Generiere einen aus einer Definition.",
+			"revision": "Revision {{revision}}",
+			"counts": "{{total}} Beispiele · {{good}} gut · {{bad}} schlecht · {{rejected}} abgelehnt · {{duplicate}} doppelt",
+			"delete": "Löschen"
+		},
+		"samples": {
+			"title": "Beispiele — {{name}}",
+			"empty": "Keine Beispiele passen zu diesem Filter.",
+			"approve": "Freigeben",
+			"reject": "Ablehnen",
+			"relabel": "Als {{label}} markieren",
+			"layerFailed": "fehlgeschlagen",
+			"filter": {
+				"label": "Prüfstatus",
+				"all": "Alle",
+				"pending": "Offen",
+				"approved": "Freigegeben",
+				"rejected": "Abgelehnt"
+			}
+		},
+		"mocks": {
+			"title": "Tool-Mocks",
+			"empty": "Noch keine Tool-Mocks. Jeder generierte Aufruf außer einem freigabefreien Nur-Lese-Tool braucht einen.",
+			"rules": "{{count}} Regeln",
+			"verify": "Prüfen",
+			"enabled": "Aktiv"
+		},
+		"export": {
+			"title": "Export ({{format}})"
+		},
+		"errors": {
+			"request": "Die Trainings-Anfrage ist fehlgeschlagen."
+		}
 	}
 }
