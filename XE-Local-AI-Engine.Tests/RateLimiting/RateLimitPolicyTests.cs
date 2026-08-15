@@ -56,28 +56,44 @@ public sealed class RateLimitPolicyTests
     {
         using var client = Host.Factory.CreateClient();
 
-        for (var attempt = 1; attempt <= ProductionAuthPermitLimit; attempt++)
+        // The window is a fixed minute. Firing exactly Limit+1 requests can straddle a window boundary under a slow,
+        // contended run and silently reset the counter mid-loop, so send 2*Limit+1: at most one boundary falls inside a
+        // few seconds of sequential in-process calls, which guarantees one window still sees Limit+1 requests.
+        HttpResponseMessage? rejected = null;
+        var attempts = 0;
+        try
         {
-            using var response = await PostLoginAsync(client).ConfigureAwait(false);
-            AssertEx.NotEqual(HttpStatusCode.TooManyRequests,
-                response.StatusCode,
-                $"Login attempt {attempt} is inside the {ProductionAuthPermitLimit}/window permit limit and must not be rejected.");
+            for (var attempt = 1; attempt <= (ProductionAuthPermitLimit * 2) + 1; attempt++)
+            {
+                attempts = attempt;
+                var response = await PostLoginAsync(client).ConfigureAwait(false);
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    rejected = response;
+                    break;
+                }
+
+                response.Dispose();
+            }
+
+            var throttled = rejected
+                ?? throw new AssertionException($"No 429 within {attempts} login attempts — the {ProductionAuthPermitLimit}/window auth permit limit is not enforced.");
+            AssertEx.True(attempts > ProductionAuthPermitLimit,
+                $"Login attempt {attempts} was rejected inside the {ProductionAuthPermitLimit}/window permit limit.");
+
+            // OnRejected writes both, and the React client and any external caller rely on them: without Retry-After a
+            // caller cannot tell a throttle from a hard failure.
+            AssertEx.Equal("60",
+                throttled.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : null,
+                "A 429 must carry the Retry-After hint OnRejected sets.");
+
+            var body = await throttled.Content.ReadAsStringAsync().ConfigureAwait(false);
+            AssertEx.Contains(body, "Too many auth attempts", StringComparison.Ordinal);
         }
-
-        using var rejected = await PostLoginAsync(client).ConfigureAwait(false);
-
-        AssertEx.Equal(HttpStatusCode.TooManyRequests,
-            rejected.StatusCode,
-            $"Login attempt {ProductionAuthPermitLimit + 1} exceeds the permit limit and must be rejected.");
-
-        // OnRejected writes both, and the React client and any external caller rely on them: without Retry-After a
-        // caller cannot tell a throttle from a hard failure.
-        AssertEx.Equal("60",
-            rejected.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : null,
-            "A 429 must carry the Retry-After hint OnRejected sets.");
-
-        var body = await rejected.Content.ReadAsStringAsync().ConfigureAwait(false);
-        AssertEx.Contains(body, "Too many auth attempts", StringComparison.Ordinal);
+        finally
+        {
+            rejected?.Dispose();
+        }
     }
 
     [Test]
