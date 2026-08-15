@@ -59,7 +59,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     {
         var binding = await _repositories.ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
         var resolvedRoot = HostPathSafety.TryResolveTrustedRoot(binding.RepositoryRoot)
-                           ?? throw new InvalidOperationException("The registered repository is unavailable or unsafe.");
+                           ?? throw new KnowledgeRepositoryImportRejectedException("The registered repository is unavailable or unsafe.");
         var derivedCollection = string.IsNullOrWhiteSpace(collectionId)
             ? string.Concat("REPO-", selectedFolderId.ToString("N"))
             : collectionId;
@@ -73,7 +73,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         var files = await ListRepositoryFilesAsync(resolvedRoot, cancellationToken).ConfigureAwait(false);
         if (files.Count > Math.Max(1, _options.MaxRepositoryImportFiles))
         {
-            throw new InvalidOperationException("The repository contains more supported files than one import permits.");
+            throw new KnowledgeRepositoryImportRejectedException("The repository contains more supported files than one import permits.");
         }
 
         var added = 0;
@@ -112,7 +112,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             var remainingBytes = maxAggregateBytes - admittedBytes;
             if (remainingBytes <= 0)
             {
-                throw new InvalidOperationException("The repository exceeds the source-byte limit for one import.");
+                throw new KnowledgeRepositoryImportRejectedException("The repository exceeds the source-byte limit for one import.");
             }
 
             var bytes = await ReadFileUnderGuardAsync(fullPath,
@@ -123,7 +123,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             admittedBytes = checked(admittedBytes + bytes.LongLength);
             if (admittedBytes > maxAggregateBytes)
             {
-                throw new InvalidOperationException("The repository exceeds the source-byte limit for one import.");
+                throw new KnowledgeRepositoryImportRejectedException("The repository exceeds the source-byte limit for one import.");
             }
 
             var normalizedSourcePath = NormalizeRelativePath(relativePath);
@@ -219,7 +219,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             cancellationToken).ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
-            throw new InvalidOperationException("The registered repository file index could not be read.");
+            throw new KnowledgeRepositoryReadException("The registered repository file index could not be read.");
         }
 
         return result.StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries)
@@ -291,7 +291,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             var length = RandomAccess.GetLength(handle);
             if (length < 0 || length > maximumBytes || length > int.MaxValue)
             {
-                throw new InvalidOperationException("A repository file exceeds the configured per-file or aggregate byte limit.");
+                throw new KnowledgeRepositoryImportRejectedException("A repository file exceeds the configured per-file or aggregate byte limit.");
             }
 
             var content = new byte[(int)length];
@@ -310,18 +310,18 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             Memory<byte> probe = new byte[1];
             if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken).ConfigureAwait(false) > 0)
             {
-                throw new InvalidOperationException("A repository file grew while it was being read.");
+                throw new KnowledgeRepositoryReadException("A repository file grew while it was being read.");
             }
 
             return content;
         }
         catch (IOException exception)
         {
-            throw new InvalidOperationException("A repository file could not be read safely.", exception);
+            throw new KnowledgeRepositoryReadException("A repository file could not be read safely.", exception);
         }
         catch (UnauthorizedAccessException exception)
         {
-            throw new InvalidOperationException("A repository file could not be opened safely.", exception);
+            throw new KnowledgeRepositoryReadException("A repository file could not be opened safely.", exception);
         }
     }
 
