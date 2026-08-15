@@ -27,7 +27,7 @@ public sealed class ImageModelManagementEndpointTests
     [Test]
     public async Task CancelAndDelete_RequireOperator()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var cancel = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/models/downloads/cancel")
@@ -278,9 +278,9 @@ public sealed class ImageModelManagementEndpointTests
         AssertEx.Null(coordinator.LastRequest, "A duplicate role must be rejected at the boundary, before any transfer.");
     }
 
-    private static TestingWebAppFactory FactoryWith(IImageModelDownloadCoordinator coordinator)
+    private static TestServerWebAppFactory FactoryWith(IImageModelDownloadCoordinator coordinator)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -290,9 +290,9 @@ public sealed class ImageModelManagementEndpointTests
         };
     }
 
-    private static TestingWebAppFactory FactoryWith(IImageModelStore store)
+    private static TestServerWebAppFactory FactoryWith(IImageModelStore store)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -302,7 +302,7 @@ public sealed class ImageModelManagementEndpointTests
         };
     }
 
-    private static HttpRequestMessage Authorized(TestingWebAppFactory factory, HttpMethod method, string route, object? body)
+    private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string route, object? body)
     {
         var request = new HttpRequestMessage(method, route);
         if (body is not null)

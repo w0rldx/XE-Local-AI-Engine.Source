@@ -17,7 +17,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
     [Test]
     public async Task SetMemoryExcluded_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/local/v1/chat/conversations/{Guid.NewGuid()}/memory-excluded")
@@ -35,7 +35,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
     [Test]
     public async Task SetMemoryExcluded_Toggle_RoundTrips()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
 
@@ -68,7 +68,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
     [Test]
     public async Task SetMemoryExcluded_WhenConversationMissing_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/local/v1/chat/conversations/{Guid.NewGuid()}/memory-excluded")

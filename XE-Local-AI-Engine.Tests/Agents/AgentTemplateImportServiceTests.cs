@@ -16,7 +16,7 @@ public sealed class AgentTemplateImportServiceTests
     [Test]
     public async Task ImportAsync_WhenNewSlugs_CreatesSeededChatPersonaRows()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var scope = factory.Services.CreateScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IAgentTemplateCatalog>();
         var importService = scope.ServiceProvider.GetRequiredService<IAgentTemplateImportService>();
@@ -52,7 +52,7 @@ public sealed class AgentTemplateImportServiceTests
     [Test]
     public async Task ImportAsync_WhenSlugAlreadySeeded_SkipsWithoutDuplicating()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var scope = factory.Services.CreateScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IAgentTemplateCatalog>();
         var importService = scope.ServiceProvider.GetRequiredService<IAgentTemplateImportService>();
@@ -75,7 +75,7 @@ public sealed class AgentTemplateImportServiceTests
     [Test]
     public async Task ImportAsync_WhenUnknownSlug_ReportsUnknownAndWritesNothing()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var scope = factory.Services.CreateScope();
         var importService = scope.ServiceProvider.GetRequiredService<IAgentTemplateImportService>();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
@@ -95,7 +95,7 @@ public sealed class AgentTemplateImportServiceTests
     [Test]
     public async Task ImportAsync_WhenSlugRequestedTwice_DedupesToOneRow()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var scope = factory.Services.CreateScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IAgentTemplateCatalog>();
         var importService = scope.ServiceProvider.GetRequiredService<IAgentTemplateImportService>();

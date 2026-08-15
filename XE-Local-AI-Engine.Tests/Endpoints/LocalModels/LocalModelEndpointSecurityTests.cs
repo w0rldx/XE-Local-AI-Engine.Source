@@ -49,9 +49,9 @@ public sealed class LocalModelEndpointSecurityTests
         await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService)
+    private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

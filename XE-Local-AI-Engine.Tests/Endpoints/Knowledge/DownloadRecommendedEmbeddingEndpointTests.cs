@@ -202,13 +202,13 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
         AssertEx.Empty(coordinator.StartCalls);
     }
 
-    private static TestingWebAppFactory CreateFactory(IGgufDownloadCoordinator coordinator, IReadOnlyList<LocalModelDescriptor> installed)
+    private static TestServerWebAppFactory CreateFactory(IGgufDownloadCoordinator coordinator, IReadOnlyList<LocalModelDescriptor> installed)
     {
         var modelStore = Substitute.For<IGgufModelStore>();
         modelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult(installed));
 
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

@@ -194,7 +194,7 @@ public sealed class RunningLocalModelEndpointTests
         return new RunningModelEndpointTestContext(modelService);
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);
@@ -258,7 +258,7 @@ public sealed class RunningLocalModelEndpointTests
             Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)));
         }
 
-        public TestingWebAppFactory Factory { get; }
+        public TestServerWebAppFactory Factory { get; }
 
         public FakeOllamaServer? Server { get; }
 
@@ -275,9 +275,9 @@ public sealed class RunningLocalModelEndpointTests
             }
         }
 
-        private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService)
+        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService)
         {
-            return new TestingWebAppFactory
+            return new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {

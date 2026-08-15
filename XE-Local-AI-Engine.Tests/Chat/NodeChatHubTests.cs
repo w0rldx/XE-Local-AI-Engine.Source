@@ -16,7 +16,7 @@ public sealed class NodeChatHubTests
     [Test]
     public async Task Negotiate_WhenTokenMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/chat/hub/negotiate?negotiateVersion=1")
@@ -33,7 +33,7 @@ public sealed class NodeChatHubTests
     [Test]
     public async Task Negotiate_WhenOriginIsUnsafe_ReturnsForbidden()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = CreateNegotiateRequest(factory);
@@ -52,7 +52,7 @@ public sealed class NodeChatHubTests
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -95,7 +95,7 @@ public sealed class NodeChatHubTests
         // receives a message naming both sizes instead of the generic "local-chat-stream-failed" stream failure, and the
         // rejection happens below the transport's own MaximumReceiveMessageSize so the connection survives it.
         var recorder = new RecordingNodeChatStreamService();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -130,7 +130,7 @@ public sealed class NodeChatHubTests
     public async Task SendMessage_WhenTheOperatorLowersTheCap_RejectsAtTheConfiguredLimit()
     {
         var recorder = new RecordingNodeChatStreamService();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -159,7 +159,7 @@ public sealed class NodeChatHubTests
     public async Task SendMessage_WhenContentIsExactlyAtTheCap_IsAccepted()
     {
         var recorder = new RecordingNodeChatStreamService();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -180,7 +180,7 @@ public sealed class NodeChatHubTests
         AssertEx.True(recorder.Invoked, "a message exactly at the cap must reach the stream service");
     }
 
-    private static HubConnection CreateHubConnection(TestingWebAppFactory factory)
+    private static HubConnection CreateHubConnection(TestServerWebAppFactory factory)
     {
         return new HubConnectionBuilder()
                .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
@@ -192,7 +192,7 @@ public sealed class NodeChatHubTests
                .Build();
     }
 
-    private static HttpRequestMessage CreateNegotiateRequest(TestingWebAppFactory factory)
+    private static HttpRequestMessage CreateNegotiateRequest(TestServerWebAppFactory factory)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/chat/hub/negotiate?negotiateVersion=1")
         {

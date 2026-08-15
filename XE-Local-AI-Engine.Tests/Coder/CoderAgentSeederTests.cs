@@ -19,7 +19,7 @@ public sealed class CoderAgentSeederTests
     [Test]
     public async Task CoderAgentSeeder_SeedsExpectedToolNamesAndSeededSource_AndIsIdempotent()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new CoderAgentSeeder(scopeFactory, NullLogger<CoderAgentSeeder>.Instance);
 

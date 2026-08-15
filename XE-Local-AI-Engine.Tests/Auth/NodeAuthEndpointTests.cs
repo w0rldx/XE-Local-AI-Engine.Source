@@ -14,7 +14,7 @@ public sealed class NodeAuthEndpointTests
     [Test]
     public async Task AuthFlow_WhenSetupLoginRefreshAndLogout_RunSuccessfully()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var initialStatus = await client.GetFromJsonAsync<AuthStatusResponse>("/api/local/v1/auth/status").ConfigureAwait(false);
@@ -54,7 +54,7 @@ public sealed class NodeAuthEndpointTests
     [Test]
     public async Task Refresh_WhenRotatedTokenIsReplayed_ReturnsUnauthorizedAndClearsCookie()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
@@ -78,7 +78,7 @@ public sealed class NodeAuthEndpointTests
     [Test]
     public async Task Refresh_WhenCookieIsMissing_ReturnsUnauthorizedAndClearsCookie()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsync("/api/local/v1/auth/refresh", content: null).ConfigureAwait(false);
@@ -90,7 +90,7 @@ public sealed class NodeAuthEndpointTests
     [Test]
     public async Task Setup_WhenAlreadyInitialized_ReturnsConflict()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
@@ -104,7 +104,7 @@ public sealed class NodeAuthEndpointTests
     [Test]
     public async Task Setup_WhenConcurrentRequestsRace_CreatesSingleAdmin()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var firstClient = factory.CreateClient();
         using var secondClient = factory.CreateClient();
 
@@ -128,7 +128,7 @@ public sealed class NodeAuthEndpointTests
     [Test]
     public async Task Login_WhenPasswordIsInvalid_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client).ConfigureAwait(false);

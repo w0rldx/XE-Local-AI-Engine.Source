@@ -17,7 +17,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     [Test]
     public async Task PromoteSuggestedIfCurrentAsync_WhenConcurrentEditBumpsVersion_RejectsAndLeavesSuggested()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
 
@@ -51,7 +51,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     [Test]
     public async Task PromoteSuggestedIfCurrentAsync_WhenCurrentAndUnderCap_Enables()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
         var snapshot = await GetAsync(factory, actionId).ConfigureAwait(false);
@@ -74,7 +74,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     [Test]
     public async Task PromoteSuggestedIfCurrentAsync_TwoPromotesAtCapOne_ExactlyOneEnabled()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         var firstId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
         var secondId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
@@ -106,7 +106,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
         AssertEx.Equal(expected: 1, enabled.Count);
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
@@ -122,7 +122,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
         return agent.Id;
     }
 
-    private static async Task<Guid> SeedSuggestionAsync(TestingWebAppFactory factory, Guid agentDefinitionId)
+    private static async Task<Guid> SeedSuggestionAsync(TestServerWebAppFactory factory, Guid agentDefinitionId)
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
@@ -136,7 +136,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
         return created.Id;
     }
 
-    private static async Task<PlaybookActionRecord> GetAsync(TestingWebAppFactory factory, Guid actionId)
+    private static async Task<PlaybookActionRecord> GetAsync(TestServerWebAppFactory factory, Guid actionId)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();

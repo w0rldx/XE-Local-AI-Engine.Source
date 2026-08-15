@@ -10,7 +10,7 @@ public sealed class RouteCoexistenceTests
     [Test]
     public async Task HealthEndpoints_WhenSpaOwnsRoot_DoNotUseSpaFallback()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var liveResponse = await client.GetAsync("/health/live").ConfigureAwait(false);
@@ -27,7 +27,7 @@ public sealed class RouteCoexistenceTests
     [Test]
     public async Task LocalApi_WhenSpaOwnsRoot_ReturnsJsonInsteadOfHtmlShell()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         using var request = CreateProbeRequest(factory, "route-coexistence");
 
@@ -47,7 +47,7 @@ public sealed class RouteCoexistenceTests
     [Test]
     public async Task RootRoute_AfterCutover_ServesReactSpaShellWithoutBlazorScript()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/").ConfigureAwait(false);
@@ -66,7 +66,7 @@ public sealed class RouteCoexistenceTests
     [Test]
     public async Task ReactDeepLink_AtRoot_ServesSpaShellWithoutBlazorScript()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/dashboard").ConfigureAwait(false);
@@ -83,7 +83,7 @@ public sealed class RouteCoexistenceTests
     [Test]
     public async Task FileLikeAssetPath_WhenAssetIsMissing_DoesNotUseSpaFallback()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/assets/missing-route-coexistence-file.js").ConfigureAwait(false);
@@ -98,7 +98,7 @@ public sealed class RouteCoexistenceTests
     [Test]
     public async Task LocalChatHubPath_AfterCutover_IsNotSwallowedBySpaFallback()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var localChatNegotiateRequest = CreateLocalChatNegotiateRequest(factory);
@@ -111,7 +111,7 @@ public sealed class RouteCoexistenceTests
             "The local chat hub negotiate path must not be swallowed by the React SPA fallback after cutover.");
     }
 
-    private static HttpRequestMessage CreateProbeRequest(TestingWebAppFactory factory, string name)
+    private static HttpRequestMessage CreateProbeRequest(TestServerWebAppFactory factory, string name)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
         {
@@ -124,7 +124,7 @@ public sealed class RouteCoexistenceTests
         return request;
     }
 
-    private static HttpRequestMessage CreateLocalChatNegotiateRequest(TestingWebAppFactory factory)
+    private static HttpRequestMessage CreateLocalChatNegotiateRequest(TestServerWebAppFactory factory)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/chat/hub/negotiate?negotiateVersion=1")
         {
@@ -134,7 +134,7 @@ public sealed class RouteCoexistenceTests
         return request;
     }
 
-    private static void AddNodeAuthHeaders(TestingWebAppFactory factory, HttpRequestMessage request)
+    private static void AddNodeAuthHeaders(TestServerWebAppFactory factory, HttpRequestMessage request)
     {
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");

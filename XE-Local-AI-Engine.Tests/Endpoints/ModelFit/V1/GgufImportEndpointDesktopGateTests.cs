@@ -24,7 +24,7 @@ public sealed class GgufImportEndpointDesktopGateTests
     [Test]
     public async Task PreviewAndStartImportEndpoints_WhenNotDesktop_AreUnmapped()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         foreach (var route in new[]
@@ -57,7 +57,7 @@ public sealed class GgufImportEndpointDesktopGateTests
     [Test]
     public async Task Capability_WhenNotDesktop_ReturnsAvailableFalse()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/import/capability");
@@ -74,7 +74,7 @@ public sealed class GgufImportEndpointDesktopGateTests
     [Test]
     public async Task ImportsList_WhenNotDesktop_Responds()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/imports");
@@ -91,7 +91,7 @@ public sealed class GgufImportEndpointDesktopGateTests
     [Test]
     public async Task ImportStatusAndCancel_WhenNotDesktop_RespondForATrackedOperation()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         // Seed a real operation directly in the shared registry (the same singleton the import coordinator uses) so the

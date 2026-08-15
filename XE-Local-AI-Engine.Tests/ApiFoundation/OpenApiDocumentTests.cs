@@ -16,7 +16,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_DescribesLocalApiOnly()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
@@ -71,7 +71,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_DescribesGeneralizedAndLegacySourceBuildSurfaces()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -119,7 +119,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_DescribesRuntimeAcquisitionHydrateSurface()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -154,7 +154,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_DescribesGgufImportAndBenchmarkSurfaces()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -202,7 +202,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_DescribesImageRuntimeSourceBuildSurface()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -324,7 +324,7 @@ public sealed class OpenApiDocumentTests
 
     private static async Task<List<string>> GetOperationIdsAsync()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);

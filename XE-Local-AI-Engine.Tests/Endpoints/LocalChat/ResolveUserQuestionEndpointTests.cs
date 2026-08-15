@@ -195,9 +195,9 @@ public sealed class ResolveUserQuestionEndpointTests
         };
     }
 
-    private static TestingWebAppFactory CreateFactory(IWorkerEventDispatcher dispatcher)
+    private static TestServerWebAppFactory CreateFactory(IWorkerEventDispatcher dispatcher)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -207,7 +207,7 @@ public sealed class ResolveUserQuestionEndpointTests
         };
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, object body)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, object body)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, Route)
         {
