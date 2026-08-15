@@ -30,15 +30,22 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
-///     P6 spike fixture: builds the app directly through <see cref="Program.CreateAppAsync" /> and serves it on
-///     TestServer — no <c>WebApplicationFactory&lt;Program&gt;</c>, no entry-point resolution, and therefore no
+///     The host fixture for this module: builds the app directly through <see cref="Program.CreateAppAsync" /> and serves
+///     it on TestServer — no <c>WebApplicationFactory&lt;Program&gt;</c>, no entry-point resolution, and therefore no
 ///     <c>HostFactoryResolver.HostingListener</c> thread parked in <c>app.Run()</c> whose AsyncLocal roots every built
-///     host for the process lifetime (docs/agent-knowledge.md §1, dotnet/aspnetcore#48047). Mirrors
-///     <see cref="TestingWebAppFactory" />'s test overrides 1:1; drop-in for its used surface
-///     (<see cref="CreateClient" />, <see cref="Services" />, <see cref="AddNodeBearerToken" />).
+///     host for the process lifetime (docs/agent-knowledge.md §1, dotnet/aspnetcore#48047). It replaced the former
+///     <c>TestingWebAppFactory</c>, whose per-host leak was unfixable from the fixture.
 /// </summary>
 public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposable
 {
+    /// <summary>
+    ///     Fixed security stamp bound into the synthetic operator token by <see cref="CreateNodeAccessToken" />. Tests that
+    ///     ALSO persist the <c>node-admin-test</c> Identity row must seed this exact value so the JWT validator's
+    ///     fail-closed stamp check matches; tests that do not persist a user authenticate via the validator's
+    ///     user-not-found pass-through.
+    /// </summary>
+    public const string NodeAdminTestSecurityStamp = "node-admin-test-security-stamp";
+
     private const string ReactShellFixtureHtml =
         "<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>XE Local AI Engine</title></head>\n" +
         "<body><div id=\"root\"></div><script type=\"module\" src=\"/assets/index.js\"></script></body>\n</html>\n";
@@ -49,11 +56,12 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private readonly string _nodeDataDirectory;
     private readonly HttpClient _offlineRuntimeHttpClient = new(new OfflineRuntimeHandler(), disposeHandler: true);
 
-    // Process-wide: see the comment in EnsureApp. Same role as TestingWebAppFactory.HostStartupLock.
+    // Process-wide: see the comment in EnsureApp.
     private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
 
     private readonly Lock _appGate = new();
     private WebApplication? _app;
+    private bool _disposed;
 
     public TestServerWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
     {
@@ -78,7 +86,14 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     public Action<IServiceCollection>? ConfigureAdditionalTestServices { get; init; }
 
+    // Last-wins overlay on the fixture's own configuration block, replacing the WebApplicationFactory-era
+    // WithWebHostBuilder(b => b.ConfigureAppConfiguration(...)) re-configuration.
+    public IReadOnlyDictionary<string, string?>? AdditionalConfiguration { get; init; }
+
     public IServiceProvider Services => EnsureApp().Services;
+
+    // The host's TestServer, for tests that need CreateHandler() to point a SignalR client at the in-memory transport.
+    public TestServer Server => EnsureApp().GetTestServer();
 
     private static bool RunLocalIntegration =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
@@ -96,8 +111,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             UserName = "admin@example.test",
             Email = "admin@example.test",
             SetupCompleted = true,
-            // Same fixed stamp contract as TestingWebAppFactory (see its NodeAdminTestSecurityStamp doc).
-            SecurityStamp = TestingWebAppFactory.NodeAdminTestSecurityStamp
+            SecurityStamp = NodeAdminTestSecurityStamp
         };
 
         return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
@@ -113,28 +127,52 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     public async ValueTask DisposeAsync()
     {
-        if (_app is { } app)
+        // WebApplicationFactory.DisposeAsync was idempotent and some tests dispose explicitly on top of `await using`.
+        lock (_appGate)
         {
-            await app.StopAsync().ConfigureAwait(false);
-            await app.DisposeAsync().ConfigureAwait(false);
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
         }
 
-        if (_fakeOllamaServer is not null)
+        // A throwing host stop must still propagate (the test should fail loudly), but every cleanup stage below runs
+        // regardless: _disposed is already latched, so a skipped stage would never get a second chance and the temp
+        // artifacts would accumulate across the run (docs/agent-knowledge.md §1 — this once filled the 16 GB tmpfs).
+        try
         {
-            await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
+            if (_app is { } app)
+            {
+                await app.StopAsync().ConfigureAwait(false);
+                await app.DisposeAsync().ConfigureAwait(false);
+            }
         }
+        finally
+        {
+            try
+            {
+                if (_fakeOllamaServer is not null)
+                {
+                    await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _offlineRuntimeHttpClient.Dispose();
 
-        _offlineRuntimeHttpClient.Dispose();
+                // Microsoft.Data.Sqlite keeps a STATIC pool group per connection string; this host's unique temp DB
+                // path would otherwise leave an immortal pool (open connection + prune timer) behind. Clearing all
+                // pools (public API) is safe here: batch runs are single-threaded, and a concurrent host merely
+                // reopens its pooled connection.
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
 
-        // Microsoft.Data.Sqlite keeps a STATIC pool group per connection string; this host's unique temp DB path
-        // would otherwise leave an immortal pool (open connection + prune timer) behind. Clearing all pools (public
-        // API) is safe here: batch runs are single-threaded, and a concurrent host merely reopens its pooled
-        // connection.
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
-        TryDeleteDirectory(_fixtureWebRoot);
-        TryDeleteDirectory(_nodeDataDirectory);
-        TryDeleteSqliteFamily(_nodeSqlitePath);
+                TryDeleteDirectory(_fixtureWebRoot);
+                TryDeleteDirectory(_nodeDataDirectory);
+                TryDeleteSqliteFamily(_nodeSqlitePath);
+            }
+        }
     }
 
     // Lazy sync-over-async build on first use, matching WebApplicationFactory's lazy host start. TUnit has no
@@ -165,10 +203,18 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 configuration["Development:Enabled"] = developmentEnabled.ToString();
             }
 
-            // Same process-wide serialization as TestingWebAppFactory's HostStartupLock: host bootstrap is not
-            // re-entrant (docs/wiki/13-testing-and-validation.md — TUnit runs classes in parallel), and CreateAppAsync
-            // additionally mutates the global Serilog Log.Logger. Serialize app creation AND startup so a normal
-            // parallel TUnit run cannot race two bootstraps; steady-state requests are unaffected.
+            if (AdditionalConfiguration is { } additionalConfiguration)
+            {
+                foreach (var entry in additionalConfiguration)
+                {
+                    configuration[entry.Key] = entry.Value;
+                }
+            }
+
+            // Host bootstrap is not re-entrant (docs/wiki/13-testing-and-validation.md — TUnit runs classes in
+            // parallel), and CreateAppAsync additionally mutates the global Serilog Log.Logger. Serialize app creation
+            // AND startup so a normal parallel TUnit run cannot race two bootstraps; steady-state requests are
+            // unaffected.
             HostStartupLock.Wait();
             try
             {
@@ -208,8 +254,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                ?? throw new InvalidOperationException("MvcTestingAppManifest.json has a null Client content root.");
     }
 
-    // Verbatim mirror of TestingWebAppFactory.ConfigureWebHost's ConfigureTestServices body — see the comments there
-    // for why each override exists. Kept as a copy for the spike; fold into a shared helper on rollout.
+    // The test host's deviations from the product composition: no background services, a temp-scoped Data Protection
+    // ring, runtime-acquisition seams pointed at a transport that always fails (so no host build can reach GitHub), an
+    // unpaired token store, and — off RUN_LOCAL_INTEGRATION — the fake Ollama backend in place of a live model.
     private void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IHostedService>();

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Shutdown;
 
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,11 +23,10 @@ public sealed class WorkerShutdownDrainServiceTests
     public async Task ApplicationStopping_InvokesShutdownDrainSequenceInOrder()
     {
         var components = RecordingShutdownComponents.Create(true);
-        await using var baseFactory = new TestingWebAppFactory();
-        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+        await using var factory = new TestServerWebAppFactory
         {
-            builder.ConfigureTestServices(services => ReplaceShutdownComponents(services, components));
-        });
+            ConfigureAdditionalTestServices = services => ReplaceShutdownComponents(services, components)
+        };
 
         _ = factory.CreateClient();
 

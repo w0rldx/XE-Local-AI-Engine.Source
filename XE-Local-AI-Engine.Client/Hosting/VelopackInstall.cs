@@ -22,9 +22,23 @@ internal static class VelopackInstall
     ///     <c>UpdateManager.IsInstalled</c> (<c>Locator.CurrentlyInstalledVersion != null</c>) and touches only local
     ///     install metadata — no network, no update source, no GitHub token. Portable builds are installs too, so this is
     ///     <see langword="true" /> for both the installer and the portable layout.
+    ///     <para>
+    ///         When no bootstrap ran, <see cref="VelopackLocator.Current" /> does not return null — it THROWS
+    ///         <see cref="InvalidOperationException" /> ("No VelopackLocator has been set"). That is the request-time
+    ///         state of every host built through <c>Program.CreateAppAsync</c> without the entry point (the test
+    ///         fixture), so callers reached from an HTTP request would 500 instead of reading the off-flag invariant.
+    ///         Swallow it here, once, rather than at each call site.
+    ///     </para>
     /// </remarks>
     internal static bool IsManaged()
     {
-        return VelopackLocator.Current?.CurrentlyInstalledVersion is not null;
+        try
+        {
+            return VelopackLocator.Current?.CurrentlyInstalledVersion is not null;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 }

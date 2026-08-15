@@ -23,7 +23,7 @@ public sealed class NodeAuthPasswordResetTests
     [Test]
     public async Task Reset_WhenAdminExists_ReplacesPasswordSoOnlyTheNewOneLogsIn()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         await SetupAsync(client).ConfigureAwait(false);
 
@@ -40,7 +40,7 @@ public sealed class NodeAuthPasswordResetTests
     [Test]
     public async Task Reset_WhenNoAdminExists_FailsAndDoesNotThrow()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
 
         var result = await ResetAsync(factory, NewPassword).ConfigureAwait(false);
 
@@ -51,7 +51,7 @@ public sealed class NodeAuthPasswordResetTests
     [Test]
     public async Task Reset_WhenNewPasswordViolatesPolicy_RollsBackAndKeepsOldPasswordWorking()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         await SetupAsync(client).ConfigureAwait(false);
 
@@ -67,7 +67,7 @@ public sealed class NodeAuthPasswordResetTests
     [Test]
     public async Task Reset_RevokesExistingRefreshTokens()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         await SetupAsync(client).ConfigureAwait(false);
 
@@ -90,7 +90,7 @@ public sealed class NodeAuthPasswordResetTests
     [Test]
     public async Task Reset_InvalidatesAlreadyIssuedAccessTokens()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         await SetupAsync(client).ConfigureAwait(false);
 
@@ -112,7 +112,7 @@ public sealed class NodeAuthPasswordResetTests
     [Test]
     public async Task Request_WithStamplessLegacyToken_IsRejected()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
         await SetupAsync(client).ConfigureAwait(false);
 
@@ -143,7 +143,7 @@ public sealed class NodeAuthPasswordResetTests
         return await client.SendAsync(request).ConfigureAwait(false);
     }
 
-    private static async Task<NodePasswordChangeResult> ResetAsync(TestingWebAppFactory factory, string newPassword)
+    private static async Task<NodePasswordChangeResult> ResetAsync(TestServerWebAppFactory factory, string newPassword)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();

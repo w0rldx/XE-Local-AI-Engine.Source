@@ -25,7 +25,7 @@ public sealed class ImageJobEndpointTests
     [Test]
     public async Task ImageEndpoints_RequireOperator()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var unauthorized = new (HttpMethod Method, string Route)[]
@@ -58,7 +58,7 @@ public sealed class ImageJobEndpointTests
     public async Task CreateImageJob_ThenGet_RoundTrips()
     {
         var coordinator = new StubImageJobCoordinator();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -108,7 +108,7 @@ public sealed class ImageJobEndpointTests
         // it reaches the coordinator as the exact long and comes back as the exact string — a JSON number would round it.
         const string largeSeed = "9007199254740993";
         var coordinator = new StubImageJobCoordinator();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -145,7 +145,7 @@ public sealed class ImageJobEndpointTests
     {
         // A null/omitted seed requests a runtime-chosen seed — the coordinator's -1 sentinel.
         var coordinator = new StubImageJobCoordinator();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -175,7 +175,7 @@ public sealed class ImageJobEndpointTests
     public async Task CreateImageJob_WithNonIntegerSeed_Returns400()
     {
         var coordinator = new StubImageJobCoordinator();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -208,7 +208,7 @@ public sealed class ImageJobEndpointTests
         // Route-only POST binds the job id from the route, so a well-behaved client sends no body (no Content-Type). The
         // endpoint must accept that rather than 415; an unknown job then reports 404 (authorized + bound + dispatched).
         var coordinator = new StubImageJobCoordinator();
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

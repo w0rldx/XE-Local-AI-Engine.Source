@@ -49,7 +49,7 @@ public sealed class DevelopmentAttemptHubTests
     [Test]
     public async Task Negotiate_WhenOperatorTokenIsMissing_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true
         };
@@ -165,7 +165,7 @@ public sealed class DevelopmentAttemptHubTests
         return service;
     }
 
-    private static TestingWebAppFactory EnabledFactory(IDevelopmentManagementService service) =>
+    private static TestServerWebAppFactory EnabledFactory(IDevelopmentManagementService service) =>
         new()
         {
             EnableDevelopmentMode = true,
@@ -176,7 +176,7 @@ public sealed class DevelopmentAttemptHubTests
             }
         };
 
-    private static HubConnection CreateConnection(TestingWebAppFactory factory) =>
+    private static HubConnection CreateConnection(TestServerWebAppFactory factory) =>
         new HubConnectionBuilder()
             .WithUrl("http://localhost" + LocalApiRoutes.Development.Hub, options =>
             {

@@ -253,14 +253,14 @@ public sealed class LlamaCppRuntimeEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    private static TestingWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,
+    private static TestServerWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,
         ILlamaCppUpdateState updateState,
         ILlamaCppReleaseCatalog? releaseCatalog = null,
         ILlamaServerProcessSupervisor? supervisor = null,
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
         InstalledRuntimeState? installedRuntime = null)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

@@ -637,7 +637,7 @@ public sealed class LocalModelEndpointTests
         return new LocalModelEndpointTestContext(classificationService);
     }
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);
@@ -723,7 +723,7 @@ public sealed class LocalModelEndpointTests
             Factory = CreateFactory(classificationService, SettingsStore);
         }
 
-        public TestingWebAppFactory Factory { get; }
+        public TestServerWebAppFactory Factory { get; }
 
         public StubNodeSettingsStore SettingsStore { get; }
 
@@ -742,9 +742,9 @@ public sealed class LocalModelEndpointTests
             }
         }
 
-        private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService, StubNodeSettingsStore settingsStore)
+        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService, StubNodeSettingsStore settingsStore)
         {
-            return new TestingWebAppFactory
+            return new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {
@@ -757,14 +757,14 @@ public sealed class LocalModelEndpointTests
             };
         }
 
-        private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService,
+        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
             StubNodeSettingsStore settingsStore,
             string providerName,
             IGgufModelStore ggufModelStore,
             ILocalModelDeletionCoordinator? deletionCoordinator,
             ILocalModelProvider? localProvider)
         {
-            return new TestingWebAppFactory
+            return new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {
@@ -788,9 +788,9 @@ public sealed class LocalModelEndpointTests
             };
         }
 
-        private static TestingWebAppFactory CreateFactory(IModelClassificationService classificationService, StubNodeSettingsStore settingsStore)
+        private static TestServerWebAppFactory CreateFactory(IModelClassificationService classificationService, StubNodeSettingsStore settingsStore)
         {
-            return new TestingWebAppFactory
+            return new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {
