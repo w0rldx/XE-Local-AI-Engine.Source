@@ -32,8 +32,24 @@ public interface ITrainingRunStore
 
     Task<TrainingRunPage> ListAsync(TrainingRunQuery query, CancellationToken cancellationToken = default);
 
-    /// <summary>Claims the lowest-sequence queued work item by compare-and-swap. Returns null when the queue is empty.</summary>
+    /// <summary>Claims the lowest-sequence queued work item of either kind by compare-and-swap. Null when the queue is empty.</summary>
     Task<TrainingWorkClaim?> ClaimNextAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The same claim, scoped to one work kind. The consumer acquires the exclusivity a kind needs BEFORE it
+    ///     claims, so it has to be able to say "claim only what I am holding the right locks for": an unscoped claim
+    ///     that returned the other kind would be running with the wrong locks and could not be handed back, because
+    ///     attempt is pinned to 1 and there is no retry.
+    /// </summary>
+    Task<TrainingWorkClaim?> ClaimNextAsync(TrainingWorkKind onlyKind, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The kind of the work item a claim would take next, without taking it. The consumer needs it to decide which
+    ///     exclusivity to acquire; the head cannot be overtaken because queue sequences only ever increase and there is
+    ///     one consumer, and a head that terminalizes between the peek and the claim only makes the scoped claim return
+    ///     null. Null when the queue is empty.
+    /// </summary>
+    Task<TrainingWorkKind?> PeekNextKindAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Terminalizes every interrupted <c>Running</c> work item as failed and fails the non-terminal runs behind

@@ -74,6 +74,19 @@ public enum TrainingRunStatus
     Cancelled
 }
 
+/// <summary>
+///     Lifecycle of one evaluation run. Flatter than a training run's: an evaluation has no preparation or export
+///     phase, it scores samples one at a time and its progress is the scored count rather than a named phase.
+/// </summary>
+public enum TrainingEvaluationStatus
+{
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled
+}
+
 /// <summary>What a <c>TrainingWorkItem</c> row's target id points at.</summary>
 public enum TrainingWorkKind
 {

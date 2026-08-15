@@ -236,6 +236,25 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     run.Id,
                     "training_run_launch_receipt_json");
                 break;
+            case TrainingEvaluationRun evaluation:
+                evaluation.MembershipJson = NodePayloadProtector.Decrypt(evaluation.MembershipJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    evaluation.Id,
+                    "training_evaluation_membership_json");
+                evaluation.ResultsJson = DecryptIfPresent(evaluation.ResultsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    evaluation.Id,
+                    "training_evaluation_results_json");
+                break;
+            case TrainingComparisonReport comparison:
+                comparison.DeltasJson = NodePayloadProtector.Decrypt(comparison.DeltasJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    comparison.Id,
+                    "training_comparison_deltas_json");
+                break;
         }
 
         return entity;
