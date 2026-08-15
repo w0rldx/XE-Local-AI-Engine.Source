@@ -27,10 +27,3 @@ public sealed class ListWorkspacesResponse
 {
     public IReadOnlyList<WorkspaceResponse> Items { get; init; } = [];
 }
-
-public sealed class WorkspaceConflictResponse
-{
-    public string Code { get; init; } = WorkspaceRevocationBusyException.ErrorCode;
-
-    public required string Message { get; init; }
-}

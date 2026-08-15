@@ -190,8 +190,12 @@ public sealed class WorkspaceEndpointTests
         AssertEx.Equal(created.WorkspaceId, list.Items[0].WorkspaceId);
     }
 
+    /// <summary>
+    ///     The busy-lease 409 is written by the global <c>ConflictExceptionHandler</c>, not by the endpoint: the body is
+    ///     the shared ConflictProblemDetails envelope discriminated by <c>conflictType</c>.
+    /// </summary>
     [Test]
-    public async Task Delete_WhenWorkspaceLeaseIsBusy_ReturnsStableWorkspaceBusyConflict()
+    public async Task Delete_WhenWorkspaceLeaseIsBusy_ReturnsConflictProblemDetails()
     {
         var revocation = Substitute.For<IWorkspaceRevocationService>();
         revocation.RevokeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -204,8 +208,10 @@ public sealed class WorkspaceEndpointTests
         var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<WorkspaceConflictBody>(JsonOptions).ConfigureAwait(false));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        AssertEx.Equal(WorkspaceRevocationBusyException.ErrorCode, body.Code);
-        AssertEx.True(!string.IsNullOrWhiteSpace(body.Message), "The stable conflict response should include an operator-facing message.");
+        AssertEx.Contains(response.Content.Headers.ContentType?.ToString(), "problem+json", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal("WorkspaceRevocationBusy", body.ConflictType);
+        AssertEx.NotEmpty(body.Detail);
+        AssertEx.NotEmpty(body.TraceId);
     }
 
     private static TestServerWebAppFactory CreateFactory(out IWorkspaceRevocationPreparation preparation,
@@ -258,5 +264,5 @@ public sealed class WorkspaceEndpointTests
 
     private sealed record WorkspaceListBody(IReadOnlyList<WorkspaceBody> Items);
 
-    private sealed record WorkspaceConflictBody(string Code, string Message);
+    private sealed record WorkspaceConflictBody(string ConflictType, string Detail, string TraceId);
 }

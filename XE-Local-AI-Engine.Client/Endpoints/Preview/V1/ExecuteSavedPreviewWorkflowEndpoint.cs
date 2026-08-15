@@ -28,7 +28,10 @@ public sealed class ExecuteSavedPreviewWorkflowEndpoint(
         // Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
         // with 415 when the header is absent. Overriding Accepts to accept any content-type lets a body-less request
         // through (the workflowId still binds from the route).
-        Description(x => x.Accepts<PreviewWorkflowRouteRequest>());
+        // 409 = a run-cap rejection written by the global ConflictExceptionHandler (conflictType =
+        // PreviewWorkflowCapReached / PreviewWorkflowModelCapExceeded).
+        Description(x => x.Accepts<PreviewWorkflowRouteRequest>()
+                          .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(PreviewWorkflowRouteRequest req, CancellationToken ct)
@@ -55,14 +58,6 @@ public sealed class ExecuteSavedPreviewWorkflowEndpoint(
             }
 
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
-        catch (PreviewWorkflowCapReachedException exception)
-        {
-            await Send.ResultAsync(PreviewExecuteHelper.CapReached(exception)).ConfigureAwait(false);
-        }
-        catch (PreviewWorkflowModelCapExceededException exception)
-        {
-            await Send.ResultAsync(PreviewExecuteHelper.ModelCapExceeded(exception)).ConfigureAwait(false);
         }
     }
 }

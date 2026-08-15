@@ -17,7 +17,7 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
         Policies(NodeAuthorizationPolicies.Operator);
         Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                                    .Produces(StatusCodes.Status404NotFound)
-                                                   .Produces<WorkspaceConflictResponse>(StatusCodes.Status409Conflict)
+                                                   .ProducesProblemDetails(StatusCodes.Status409Conflict)
                                                    .AutoTagOverride("Workspaces"));
     }
 
@@ -32,20 +32,13 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        // No SelectedFolderConflictException arm: only registration can collide on an alias, and this endpoint's 409 is
-        // contractually the stable WorkspaceConflictResponse shape (declared in Configure), not FastEndpoints' ProblemDetails.
+        // No SelectedFolderConflictException arm: only registration can collide on an alias. A busy revocation lease
+        // throws WorkspaceRevocationBusyException, which the global ConflictExceptionHandler answers with the shared
+        // 409 ConflictProblemDetails (conflictType = WorkspaceRevocationBusy) — never hand-built here.
         catch (SelectedFolderValidationException exception)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
-        catch (WorkspaceRevocationBusyException exception)
-        {
-            await Send.ResultAsync(Results.Conflict(new WorkspaceConflictResponse
-            {
-                Code = WorkspaceRevocationBusyException.ErrorCode,
-                Message = exception.Message
-            })).ConfigureAwait(false);
         }
     }
 }
