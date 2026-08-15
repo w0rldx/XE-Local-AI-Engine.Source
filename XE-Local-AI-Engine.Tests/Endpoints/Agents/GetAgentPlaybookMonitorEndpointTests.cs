@@ -15,6 +15,14 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class GetAgentPlaybookMonitorEndpointTests
 {
+    /// <summary>
+    ///     One host for the default-configuration tests. Every assertion is scoped to the agent id the test just seeded
+    ///     (agent names are indexed but NOT unique, so duplicate seed names are safe), never to a store-wide count. The
+    ///     embedding-ranker test keeps its own host because it configures <c>PlaybookRetrieval:EmbeddingModelName</c>.
+    /// </summary>
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     private static string Route(Guid agentDefinitionId)
     {
         return $"/api/local/v1/agents/{agentDefinitionId}/playbook/monitor";
@@ -23,7 +31,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -35,7 +43,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
@@ -48,7 +56,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
     [Test]
     public async Task GetPlaybookMonitor_WhenAgentExistsWithoutEnabledActions_ReturnsOkEmptyItemsWithRetrieval()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Monitor Agent").ConfigureAwait(false);
