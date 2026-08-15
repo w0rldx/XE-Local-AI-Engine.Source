@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -119,6 +118,43 @@ public sealed class RunningLocalModelEndpointTests
     }
 
     [Test]
+    public async Task UnloadModel_WithNoBodyAndNoContentType_IsAcceptedRatherThan415()
+    {
+        // Regression: the route-only POST is called by the generated client with NO body and therefore NO Content-Type.
+        // Without `Description(x => x.Accepts<UnloadLocalModelRequest>())` FastEndpoints' default Accepts metadata
+        // (application/json only) rejects that with 415, and the operator gets an empty error toast on every eject.
+        // Sending "{}" instead is not a workaround: the generated requestValidator types this body as `never`.
+        var modelService = Substitute.For<IOllamaModelService>();
+        await using var context = CreateContext(modelService);
+        using var client = context.Factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/models/llama3:8b/unload");
+        context.Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+        AssertEx.Null(request.Content);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await modelService.Received(1).UnloadModelAsync("llama3:8b", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UnloadModel_WhenAnonymousAndBodyLess_ReturnsUnauthorized()
+    {
+        // Auth runs before content negotiation: a body-less eject from an unauthenticated caller must be 401, never the
+        // 415 that would mask the missing token (nor a 200).
+        var modelService = Substitute.For<IOllamaModelService>();
+        await using var context = CreateContext(modelService);
+        using var client = context.Factory.CreateClient();
+
+        using var response = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task UnloadModel_WhenNotLoaded_IsIdempotentSuccess()
     {
         // The runtime treats unloading a model it is not holding as a no-op; the endpoint must still report success so the
@@ -200,15 +236,9 @@ public sealed class RunningLocalModelEndpointTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        // The unload route binds its model name from the path, so the body is empty. FastEndpoints 415s a truly empty POST
-        // body, so the React client (and these tests) post "{}" — mirror that here for every POST.
-        if (method == HttpMethod.Post)
-        {
-            request.Content = JsonContent.Create(new
-            {
-            });
-        }
-
+        // The unload route binds its model name from the path, so no body and no Content-Type ride the request — exactly
+        // what the generated client sends (its requestValidator types the body as `never`). Deliberately NOT posting a
+        // dummy "{}" here: that would hide a missing Accepts<> override behind a Content-Type the real client never sets.
         return request;
     }
 
