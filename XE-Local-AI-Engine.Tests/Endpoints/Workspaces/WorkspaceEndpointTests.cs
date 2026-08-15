@@ -95,6 +95,42 @@ public sealed class WorkspaceEndpointTests
     }
 
     [Test]
+    public async Task Create_WhenAliasIsAlreadyRegistered_ReturnsConflict()
+    {
+        await using var factory = CreateFactory(out _);
+        using var client = factory.CreateClient();
+        using var firstRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "repo-one",
+            hostPath = HostPath("trusted", "repo")
+        });
+        using var first = await client.SendAsync(firstRequest).ConfigureAwait(false);
+
+        // Same alias after normalization, different host path: a collision, not a malformed request.
+        using var duplicateRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "Repo One",
+            hostPath = HostPath("trusted", "other")
+        });
+        using var duplicate = await client.SendAsync(duplicateRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
+    [Test]
+    public async Task Delete_WhenWorkspaceIdIsMalformed_ReturnsBadRequest()
+    {
+        await using var factory = CreateFactory(out _);
+        using var client = factory.CreateClient();
+        using var request = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/not-a-guid");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
     public async Task Delete_WhenRepeated_IsIdempotentAndPreparationRunsOnlyForTheActiveRow()
     {
         await using var factory = CreateFactory(out var preparation);

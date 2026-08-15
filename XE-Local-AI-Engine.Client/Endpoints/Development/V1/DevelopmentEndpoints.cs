@@ -120,6 +120,15 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
             var repository = await service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
             await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
                                               or SelectedFolderValidationException)
@@ -223,6 +232,15 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
                                               or DevelopmentTemplateMaterializationException
@@ -258,6 +276,15 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint
         catch (KeyNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
                                               or SelectedFolderValidationException
@@ -325,6 +352,15 @@ public sealed class CreateDevelopmentProjectEndpoint
                                           ct)
                                       .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
@@ -409,9 +445,19 @@ public sealed class StartDevelopmentNextActionEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderValidationException)
+        catch (SelectedFolderNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
                                               or DevelopmentConcurrencyException
@@ -557,9 +603,19 @@ public sealed class PreviewDevelopmentPatchEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderValidationException)
+        catch (SelectedFolderNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {
@@ -596,9 +652,19 @@ public sealed class ApplyDevelopmentPatchEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderValidationException)
+        catch (SelectedFolderNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
                                               or DevelopmentConcurrencyException
@@ -631,6 +697,15 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
         catch (KeyNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (SelectedFolderValidationException exception)
         {

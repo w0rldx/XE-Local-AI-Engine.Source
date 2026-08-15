@@ -111,15 +111,52 @@ public sealed class DevelopmentEndpointTests
         AssertEx.Contains(responseJson, "repository", StringComparison.Ordinal);
     }
 
+    // The selected-folder taxonomy is split by type, and the type — not the operation — carries the status:
+    // unknown id → 404, alias conflict → 409, anything else → 400. Before the split every operation caught the one
+    // aggregate exception and picked its own status, so an unknown id was 404 on start/preview/apply but 400 on
+    // create/reconnect. These three tests pin the taxonomy instead of that inconsistency.
     [Test]
-    [Arguments("create", HttpStatusCode.BadRequest)]
-    [Arguments("start", HttpStatusCode.NotFound)]
-    [Arguments("preview", HttpStatusCode.NotFound)]
-    [Arguments("apply", HttpStatusCode.NotFound)]
-    [Arguments("reconnect", HttpStatusCode.BadRequest)]
-    public async Task Operation_WhenSelectedFolderIdIsUnknown_DoesNotReturnServerError(string operation, HttpStatusCode expectedStatus)
+    [Arguments("create")]
+    [Arguments("start")]
+    [Arguments("preview")]
+    [Arguments("apply")]
+    [Arguments("reconnect")]
+    public async Task Operation_WhenSelectedFolderIdIsUnknown_ReturnsNotFound(string operation)
     {
-        var failure = new SelectedFolderValidationException("The selected folder id is not registered.");
+        using var response = await SendWithFailingServiceAsync(operation,
+                                       new SelectedFolderNotFoundException("The selected folder id is not registered."))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    [Arguments("create")]
+    [Arguments("start")]
+    [Arguments("preview")]
+    [Arguments("apply")]
+    [Arguments("reconnect")]
+    public async Task Operation_WhenSelectedFolderInputIsRejected_ReturnsBadRequest(string operation)
+    {
+        using var response = await SendWithFailingServiceAsync(operation,
+                                       new SelectedFolderValidationException("The selected folder id is not a valid identifier."))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task CreateProject_WhenSelectedFolderAliasIsAlreadyRegistered_ReturnsConflict()
+    {
+        using var response = await SendWithFailingServiceAsync("create",
+                                       new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> SendWithFailingServiceAsync(string operation, Exception failure)
+    {
         var service = Substitute.For<IDevelopmentManagementService>();
         service.CreateProjectAsync(Arg.Any<DevelopmentCreateProjectInput>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentProjectAggregate>(failure));
@@ -136,9 +173,7 @@ public sealed class DevelopmentEndpointTests
         using var request = StaleSelectedFolderRequest(operation);
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-
-        AssertEx.Equal(expectedStatus, response.StatusCode);
+        return await client.SendAsync(request).ConfigureAwait(false);
     }
 
     [Test]
