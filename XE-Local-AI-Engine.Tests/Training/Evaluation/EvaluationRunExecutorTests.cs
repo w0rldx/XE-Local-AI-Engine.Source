@@ -19,12 +19,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Pins that an evaluation scores against the definition body the DATASET pinned, not the live definition row. The
 ///     tool offers and the system instructions are the whole question an evaluation asks, so a definition edited after
-///     generation would otherwise score the model against tools the dataset never demonstrated.
+///     generation would otherwise score the model against tools the dataset never demonstrated. Pins, too, that a
+///     dataset whose samples moved since the freeze is refused rather than scored.
 /// </summary>
 public sealed class EvaluationRunExecutorTests
 {
     private static readonly Guid DatasetId = Guid.NewGuid();
     private static readonly Guid SampleId = Guid.NewGuid();
+
+    /// <summary>What the run froze and the membership carries. A dataset reporting anything else has drifted.</summary>
+    private static readonly string FrozenFingerprint = "v1:" + new string('a', count: 64);
 
     [Test]
     public async Task Evaluation_OffersThePinnedToolSnapshot_NotTheEditedLiveOne()
@@ -83,6 +87,41 @@ public sealed class EvaluationRunExecutorTests
         AssertEx.Null(client.LastOptions, "No model may be consulted when the body being scored against is unknown.");
     }
 
+    /// <summary>
+    ///     The drift guard at SCORING time, which is the one the create-time refusal cannot cover: a sample edited
+    ///     between the create and the claim (or before a resume) moves the dataset's fingerprint, and the hold-out
+    ///     rows scoring reads are the live ones. Scoring it anyway would answer different questions from an
+    ///     evaluation created before the edit, while the comparison treated both as the same frozen membership.
+    /// </summary>
+    [Test]
+    public async Task Evaluation_WhenTheDatasetDriftedSinceTheFreeze_FailsWithoutConsultingTheModel()
+    {
+        var datasets = Substitute.For<ITrainingDatasetStore>();
+        _ = datasets.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>())
+                    .Returns(Dataset(Body("PINNED INSTRUCTIONS", "pinned_tool"), "v1:" + new string('b', count: 64)));
+        _ = datasets.ListAllSamplesAsync(DatasetId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingSampleRecord>>([Sample()]);
+
+        var evaluation = Evaluation();
+        var store = Substitute.For<ITrainingEvaluationStore>();
+        _ = store.GetAsync(evaluation.Id, Arg.Any<CancellationToken>()).Returns(evaluation);
+        _ = store.CompleteAsync(evaluation.Id, Arg.Any<TrainingWorkStatus>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(evaluation);
+
+        using var client = new RecordingChatClient();
+        var executor = new EvaluationRunExecutor(store, datasets, Resolver(client), Substitute.For<ITrainingRunEventBuffer>(),
+            new TrainingRunCancellationRegistry(), NullLogger<EvaluationRunExecutor>.Instance);
+
+        await executor.ExecuteAsync(Claim(evaluation.Id), CancellationToken.None);
+
+        _ = await store.Received(1).CompleteAsync(evaluation.Id,
+            TrainingWorkStatus.Failed,
+            EvaluationRunService.DriftedDatasetReason,
+            Arg.Any<CancellationToken>());
+        AssertEx.Null(client.LastOptions, "No model may be consulted once the hold-out set is known to have moved.");
+        // Refused before the rows are even read: a partially-scored drifted evaluation is the outcome being prevented.
+        _ = await datasets.DidNotReceiveWithAnyArgs().ListAllSamplesAsync(Guid.Empty, default);
+        _ = await store.DidNotReceiveWithAnyArgs().AppendResultsAsync(Guid.Empty, default!, default);
+    }
+
     private static DatasetDefinitionBodyV1 Body(string instructions, string toolName) =>
         new()
         {
@@ -93,13 +132,13 @@ public sealed class EvaluationRunExecutorTests
         };
 
     /// <summary>A null body is a dataset created before pinning existed — the only way the column reads as absent.</summary>
-    private static TrainingDatasetRecord Dataset(DatasetDefinitionBodyV1? pinnedBody)
+    private static TrainingDatasetRecord Dataset(DatasetDefinitionBodyV1? pinnedBody, string? contentFingerprint = null)
     {
         ReadOnlyMemory<byte>? definitionJson = pinnedBody is null
             ? null
             : new ReadOnlyMemory<byte>(JsonSerializer.SerializeToUtf8Bytes(pinnedBody, TrainingJson.Options));
         return new TrainingDatasetRecord(DatasetId, Guid.NewGuid(), 1, definitionJson, "dataset", TrainingDatasetStatus.Ready, 1,
-            "v1:" + new string('a', count: 64), 1, 1, 0, 0, 0, 1, 0, 0, DatasetGenerationWorkStatus.Succeeded, null);
+            contentFingerprint ?? FrozenFingerprint, 1, 1, 0, 0, 0, 1, 0, 0, DatasetGenerationWorkStatus.Succeeded, null);
     }
 
     private static TrainingDefinitionRecord DefinitionRecord(DatasetDefinitionBodyV1 body) =>
@@ -128,7 +167,7 @@ public sealed class EvaluationRunExecutorTests
             TrainingRunId = Guid.NewGuid(),
             FreezeId = Guid.NewGuid(),
             DatasetId = DatasetId,
-            DatasetContentFingerprint = "v1:" + new string('a', count: 64),
+            DatasetContentFingerprint = FrozenFingerprint,
             HoldoutSampleIds = [SampleId]
         };
         return new TrainingEvaluationRecord(Guid.NewGuid(),

@@ -32,6 +32,13 @@ public interface IEvaluationRunExecutor
 ///         <see cref="TrainingWorkKind.TrainingRun" /> branch.
 ///     </para>
 ///     <para>
+///         <strong>A dataset that moved since the freeze fails the run.</strong> The hold-out samples are read from
+///         the LIVE dataset rows, so <see cref="LoadAsync" /> compares the dataset's current
+///         <c>ContentFingerprint</c> against the membership's frozen one and terminalizes Failed with
+///         <see cref="EvaluationRunService.DriftedDatasetReason" /> when they differ — the per-sample "no longer in
+///         the dataset" verdict below only covers a membership id that vanished while the fingerprint still matches.
+///     </para>
+///     <para>
 ///         The model is reached through the ordinary node-local chat path (the same
 ///         <c>ILocalModelProviderResolver</c> seam <c>DatasetGenerationExecutor</c> uses), NOT through an agent: an
 ///         agent would invoke the tools it was offered. Here the offers are declaration-only
@@ -217,6 +224,15 @@ public sealed class EvaluationRunExecutor(
     {
         var dataset = await _datasets.GetDatasetAsync(evaluation.DatasetId, cancellationToken).ConfigureAwait(false)
                       ?? throw new EvaluationRejectedException("The evaluated dataset no longer exists.");
+        // Re-checked HERE and not only at create: the dataset can be edited between the create and the claim, and a
+        // resume re-enters this method long after either. The hold-out samples below are the LIVE rows, so a moved
+        // fingerprint means this evaluation would answer different questions from one created before the edit — and
+        // the comparison would still treat both as the same frozen membership.
+        if (!string.Equals(dataset.ContentFingerprint, membership.DatasetContentFingerprint, StringComparison.Ordinal))
+        {
+            throw new EvaluationRejectedException(EvaluationRunService.DriftedDatasetReason);
+        }
+
         // The body the dataset PINNED at creation, which is also what generation ran against. Reading the live
         // definition would score the model against tools and instructions this dataset never demonstrated.
         var definition = DatasetDefinitionService.ReadPinnedBody(dataset)

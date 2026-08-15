@@ -112,10 +112,14 @@ public sealed class GetTrainingArtifactEndpoint(ITrainingRunStore store)
     }
 }
 
-/// <summary>Deletes a staged artifact. Refused with 409 once it has been promoted — the registry entry owns it now.</summary>
-public sealed class DeleteTrainingArtifactEndpoint(ITrainingRunStore store) : Endpoint<DeleteTrainingArtifactRequest>
+/// <summary>
+///     Deletes a staged artifact. Refused with 409 once it has been promoted — the registry entry owns it now.
+///     Routed through the export service rather than the store so the staged bytes go with the row; the store only
+///     ever removes the row.
+/// </summary>
+public sealed class DeleteTrainingArtifactEndpoint(ITrainingExportService exports) : Endpoint<DeleteTrainingArtifactRequest>
 {
-    private readonly ITrainingRunStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
 
     public override void Configure()
     {
@@ -128,7 +132,7 @@ public sealed class DeleteTrainingArtifactEndpoint(ITrainingRunStore store) : En
     {
         try
         {
-            await _store.DeleteArtifactAsync(req.ArtifactId, req.ExpectedVersion, ct).ConfigureAwait(false);
+            await _exports.DeleteArtifactAsync(req.ArtifactId, req.ExpectedVersion, ct).ConfigureAwait(false);
             await Send.NoContentAsync(ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
