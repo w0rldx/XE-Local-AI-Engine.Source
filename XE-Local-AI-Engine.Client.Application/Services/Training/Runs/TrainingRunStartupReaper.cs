@@ -19,6 +19,14 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///         interpreter, so a path match would reap any Python this node happens to be running.
 ///     </para>
 ///     <para>
+///         <strong>This class is the only thing that clears a receipt on startup, and it clears one only after the
+///         process behind it is provably gone</strong> — killed, or ruled out as a recycled pid. Everything else
+///         (<see cref="ITrainingRunStore.RecoverOnStartupAsync" />) leaves the column alone, because terminalizing a
+///         run row says nothing about the trainer: a sweep that dropped receipts on the way past would turn a live
+///         orphan into an unkillable one still holding its GPU allocation. That is also why the receipts are read
+///         unpaged and why a receipt whose inspect or kill threw survives to the next startup.
+///     </para>
+///     <para>
 ///         The scratch sweep is age-gated like <c>GgufAcquisitionArtifactStartupReaper</c>: a <c>work/</c> directory
 ///         older than the stale window belonged to a run that is long gone, and holds decrypted training data.
 ///     </para>
@@ -76,29 +84,49 @@ public sealed class TrainingRunStartupReaper(
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
 
-        // Read the receipts BEFORE recovery clears them: recovery terminalizes the interrupted runs and nulls the
-        // receipt column precisely so a later sweep cannot act on a pid the operating system has since reused.
-        var page = await store.ListAsync(new TrainingRunQuery(Page: 1, PageSize: 200), cancellationToken).ConfigureAwait(false);
-        var receipts = page.Items
-                           .Select(static run => Read(run.LaunchReceiptJson))
-                           .OfType<TrainingLaunchReceiptV1>()
-                           .ToArray();
-
-        foreach (var receipt in receipts)
+        // Every receipt, unpaged: a live trainer whose run sits behind a page of newer runs is exactly the one that
+        // must not be missed. Recovery no longer touches the column, so the read order against it does not matter.
+        foreach (var entry in await store.ListLaunchReceiptsAsync(cancellationToken).ConfigureAwait(false))
         {
-            var facts = _inspector.Inspect(receipt.Pid);
-            if (!Matches(receipt, facts))
-            {
-                _logger.LogInformation("A recorded trainer receipt for pid {Pid} no longer matches a live process; nothing was signalled.",
-                    receipt.Pid);
-                continue;
-            }
-
-            _logger.LogWarning("Reaping a trainer process group {Pgid} left behind by a previous host process.", receipt.Pgid);
-            await _inspector.KillProcessGroupAsync(receipt.Pgid, cancellationToken).ConfigureAwait(false);
+            await ReapOneAsync(store, entry, cancellationToken).ConfigureAwait(false);
         }
 
         _ = await store.RecoverOnStartupAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Inspects one receipt and clears it only once it is safe to. A receipt whose inspect or kill THREW is left in
+    ///     place and retried on the next startup — dropping it there would strand a live trainer with nothing left to
+    ///     identify it by. Failures are per-receipt: one unreadable <c>/proc</c> entry must not abandon the rest.
+    /// </summary>
+    private async Task ReapOneAsync(ITrainingRunStore store, TrainingRunLaunchReceipt entry, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (Read(entry.LaunchReceiptJson) is not { } receipt)
+            {
+                // A receipt this host cannot parse can never be matched, so it can only ever block its own removal.
+                _logger.LogWarning("The recorded trainer receipt for run {RunId} could not be read; it was cleared.", entry.RunId);
+            }
+            else if (!Matches(receipt, _inspector.Inspect(receipt.Pid)))
+            {
+                _logger.LogInformation("A recorded trainer receipt for pid {Pid} no longer matches a live process; nothing was signalled.",
+                    receipt.Pid);
+            }
+            else
+            {
+                _logger.LogWarning("Reaping a trainer process group {Pgid} left behind by a previous host process.", receipt.Pgid);
+                await _inspector.KillProcessGroupAsync(receipt.Pgid, cancellationToken).ConfigureAwait(false);
+            }
+
+            await store.SetLaunchReceiptAsync(entry.RunId, launchReceiptJson: null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception,
+                "Reaping the trainer recorded for run {RunId} failed; its receipt was kept so the next startup retries it.",
+                entry.RunId);
+        }
     }
 
     private void SweepStaleWork()

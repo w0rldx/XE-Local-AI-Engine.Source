@@ -98,7 +98,23 @@ public sealed class TrainingRunStoreTests : IDisposable
         var failed = AssertEx.NotNull(await afterStore.GetAsync(runId));
         AssertEx.Equal(TrainingRunStatus.Failed, failed.Status);
         AssertEx.Equal(TrainingWorkStatus.Failed, failed.WorkStatus!.Value);
-        AssertEx.Null(failed.LaunchReceiptJson, "Recovery clears the receipt so a reaper cannot act on a recycled PID.");
+        // Inverted deliberately: recovery used to null the receipt here. Terminalizing the row proves the HOST died,
+        // not the trainer — so dropping the receipt was dropping the only thing that could still identify a live
+        // orphan holding VRAM. The receipt now outlives recovery and only TrainingRunStartupReaper clears it, after it
+        // has killed or ruled out the process.
+        AssertEx.True(failed.LaunchReceiptJson.HasValue, "Recovery must leave the receipt for the reaper to act on.");
+
+        var receipts = await afterStore.ListLaunchReceiptsAsync();
+        AssertEx.Equal(expected: 1, receipts.Count, "The unpaged receipt query is what the reaper sweeps; a recovered run is still in it.");
+        AssertEx.Equal(runId, receipts[0].RunId);
+        AssertEx.Equal("""{"pid":4242}""", Encoding.UTF8.GetString(receipts[0].LaunchReceiptJson.Span),
+            "The receipt column is ciphertext at rest; the query must hand back the decrypted document.");
+
+        // Clearing is the reaper's move, and it is the plain SetLaunchReceiptAsync null write.
+        await afterStore.SetLaunchReceiptAsync(runId, launchReceiptJson: null);
+        AssertEx.Empty(await afterStore.ListLaunchReceiptsAsync(), "A cleared receipt leaves the sweep.");
+        AssertEx.False(AssertEx.NotNull(await afterStore.GetAsync(runId)).LaunchReceiptJson.HasValue,
+            "A cleared receipt must read as absent, not as an empty blob.");
 
         // An absent blob column must read as an absent ReadOnlyMemory. It is one keystroke from silently becoming an
         // EMPTY one instead — ReadOnlyMemory<byte> converts implicitly from byte[], so `value?.ToArray()` and

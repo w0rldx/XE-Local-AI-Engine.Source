@@ -144,6 +144,17 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         return new TrainingRunPage(items, total);
     }
 
+    public async Task<IReadOnlyList<TrainingRunLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default)
+    {
+        // Entities, not a projection: the receipt column is ciphertext at rest and only the materialization
+        // interceptor decrypts it. A `Select` of the column would hand the reaper an undeserializable blob.
+        var runs = await _dbContext.TrainingRuns.AsNoTracking()
+                                   .Where(item => item.LaunchReceiptJson != null)
+                                   .ToListAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+        return [.. runs.Select(static run => new TrainingRunLaunchReceipt(run.Id, run.LaunchReceiptJson!))];
+    }
+
     public async Task<TrainingWorkKind?> PeekNextKindAsync(CancellationToken cancellationToken = default)
     {
         var head = await _dbContext.TrainingWorkItems.AsNoTracking()
@@ -231,9 +242,9 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                 {
                     run.Status = TrainingRunStatus.Failed;
                     run.ErrorMessage = "The training run was interrupted by a host restart.";
-                    // The receipt described a process that no longer exists; leaving it would let a reaper act on a
-                    // recycled PID.
-                    run.LaunchReceiptJson = null;
+                    // The receipt is deliberately NOT cleared here. Terminalizing the row says nothing about the
+                    // trainer: it may still be running, and the receipt is the only thing that can identify it. Only
+                    // TrainingRunStartupReaper clears one, and only after it has killed or ruled out the process.
                     run.Version++;
                     run.UpdatedAtUtc = now;
                 }

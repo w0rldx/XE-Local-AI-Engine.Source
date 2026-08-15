@@ -13,10 +13,21 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     loses a working one.
 /// </summary>
 /// <remarks>
-///     Every subprocess runs under a scrubbed, allow-listed environment in an owner-only (0700) work directory inside
-///     the cache root — never <c>/tmp</c>. The install is strictly lockfile-driven (<c>uv sync --locked</c>): if the
-///     committed <c>uv.lock</c> does not match <c>pyproject.toml</c>, uv fails rather than resolving something new, which
-///     is the whole point of ADR 0005's "no floating resolves".
+///     <para>
+///         Every subprocess runs under a scrubbed, allow-listed environment in an owner-only (0700) work directory
+///         inside the cache root — never <c>/tmp</c>. The install is strictly lockfile-driven (<c>uv sync --locked</c>):
+///         if the committed <c>uv.lock</c> does not match <c>pyproject.toml</c>, uv fails rather than resolving
+///         something new, which is the whole point of ADR 0005's "no floating resolves".
+///     </para>
+///     <para>
+///         <strong>The adopt is one rollback boundary spanning the directory swap AND the state write</strong>, and the
+///         backup is deleted only once both have succeeded. Splitting them loses a working runtime: a cancellation
+///         between the swap and the write leaves the new venv active and the previous one parked in a backup that the
+///         next install's <see cref="Recover" /> deletes as garbage. For the same reason, a failure that leaves a
+///         previous runtime intact terminalizes as <see cref="TrainingRuntimePhase.Ready" /> carrying the failure as the
+///         sanitized error — <c>Failed</c> is what the training and export gates read, so reporting it would retire a
+///         runtime that still works.
+///     </para>
 /// </remarks>
 public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposable
 {
@@ -376,65 +387,141 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             SetPhase(TrainingRuntimePhase.Verifying);
             var probeReport = await RunProbeAsync(staging, ct).ConfigureAwait(false);
 
-            // 5. Adopt: park any previous runtime in the backup, move staging into place, and roll back on failure so a
-            //    failed re-provision never leaves the node without a working runtime.
+            // 5. Adopt. The rollback boundary covers the directory swap AND the state write, because the two together
+            //    are what makes a runtime adopted: a failure between them leaves the new venv active, the previous one
+            //    parked in a backup the next Recover() deletes, and a state record describing neither.
+            var previousState = ReadInstalledState();
             var hadPrevious = Directory.Exists(active);
+            var parked = false;
+            var swapped = false;
             try
             {
                 if (hadPrevious)
                 {
                     Directory.Move(active, backup);
+                    parked = true;
                 }
 
                 Directory.Move(staging, active);
+                swapped = true;
+
+                var state = new InstalledTrainingRuntimeState(TrainingRuntimePins.UvVersion,
+                    TrainingRuntimePins.UvSha256,
+                    probeReport.PythonVersion ?? "unknown",
+                    lockfileSha,
+                    probeReport.ContractVersion,
+                    DateTimeOffset.UtcNow,
+                    probeReport.TorchVersion,
+                    probeReport.UnslothVersion,
+                    probeReport.DeviceName);
+                await _stateStore.WriteAsync(state, ct).ConfigureAwait(false);
+
+                // Only now is the previous runtime genuinely superseded, so only now may the backup go.
+                TryDeleteDirectory(backup);
+                TryDeleteDirectory(workDir);
+                AppendLog($"Training runtime ready on Python {state.PythonVersion} with torch {state.TorchVersion}.");
+                await SetTerminalAsync(TrainingRuntimePhase.Ready, sanitizedError: null, state).ConfigureAwait(false);
             }
             catch
             {
-                TryDeleteDirectory(staging);
-                TryDeleteDirectory(active);
-                if (hadPrevious)
-                {
-                    Directory.Move(backup, active);
-                }
-
+                await RollbackAdoptAsync(parked, swapped, previousState, staging, active, backup).ConfigureAwait(false);
                 throw;
             }
-
-            var state = new InstalledTrainingRuntimeState(TrainingRuntimePins.UvVersion,
-                TrainingRuntimePins.UvSha256,
-                probeReport.PythonVersion ?? "unknown",
-                lockfileSha,
-                probeReport.ContractVersion,
-                DateTimeOffset.UtcNow,
-                probeReport.TorchVersion,
-                probeReport.UnslothVersion,
-                probeReport.DeviceName);
-            await _stateStore.WriteAsync(state, ct).ConfigureAwait(false);
-
-            TryDeleteDirectory(backup);
-            TryDeleteDirectory(workDir);
-            AppendLog($"Training runtime ready on Python {state.PythonVersion} with torch {state.TorchVersion}.");
-            await SetTerminalAsync(TrainingRuntimePhase.Ready, sanitizedError: null, state).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(staging);
-            await SetTerminalAsync(TrainingRuntimePhase.Failed, "The training runtime install was cancelled.", installed: null).ConfigureAwait(false);
+            await TerminalizeFailureAsync("The training runtime install was cancelled.").ConfigureAwait(false);
         }
         catch (TrainingRuntimeException exception)
         {
             _logger.LogWarning(exception, "The training runtime install failed.");
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(staging);
-            await SetTerminalAsync(TrainingRuntimePhase.Failed, exception.Message, installed: null).ConfigureAwait(false);
+            await TerminalizeFailureAsync(exception.Message).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "The training runtime install failed unexpectedly.");
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(staging);
-            await SetTerminalAsync(TrainingRuntimePhase.Failed, "The training runtime install failed unexpectedly.", installed: null).ConfigureAwait(false);
+            await TerminalizeFailureAsync("The training runtime install failed unexpectedly.").ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Undoes as much of the adopt as actually happened, in reverse: drop the staging tree, drop the half-adopted
+    ///     new runtime, restore the parked previous one, and put its state record back. The state restore is
+    ///     unconditional once the swap succeeded because <see cref="InstalledTrainingRuntimeStore.WriteAsync" /> is
+    ///     atomic (temp file + move) and there is no way to tell a write that never landed from one that did.
+    ///     Best-effort throughout: the caller rethrows the original failure, and a backup left behind by a failed
+    ///     restore is picked up by <see cref="Recover" /> on the next install.
+    /// </summary>
+    private async Task RollbackAdoptAsync(bool parked,
+        bool swapped,
+        InstalledTrainingRuntimeState? previousState,
+        string staging,
+        string active,
+        string backup)
+    {
+        try
+        {
+            TryDeleteDirectory(staging);
+            if (swapped)
+            {
+                TryDeleteDirectory(active);
+            }
+
+            if (parked)
+            {
+                Directory.Move(backup, active);
+            }
+
+            if (!swapped)
+            {
+                return;
+            }
+
+            if (previousState is not null)
+            {
+                // Not ct: the rollback of a cancelled install must still run to completion.
+                await _stateStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
+            }
+            else
+            {
+                _stateStore.Delete();
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Rolling the training runtime adopt back failed; the previous runtime may need a reinstall.");
+        }
+    }
+
+    /// <summary>
+    ///     Terminalizes a failed install. A reprovision that left the previous runtime intact ends <c>Ready</c> with the
+    ///     failure carried in the sanitized error: training and export gate on <see cref="TrainingRuntimePhase.Ready" />,
+    ///     so reporting <c>Failed</c> there would take a perfectly good runtime out of service until some later install
+    ///     happened to succeed. Only a failure with no surviving runtime ends <c>Failed</c>.
+    /// </summary>
+    private async Task TerminalizeFailureAsync(string sanitizedError)
+    {
+        var surviving = ReadInstalledState();
+        if (surviving is not null && Directory.Exists(TrainingRuntimeLayout.ActiveVenv(_cacheRoot)))
+        {
+            await SetTerminalAsync(TrainingRuntimePhase.Ready, sanitizedError, surviving).ConfigureAwait(false);
+            return;
+        }
+
+        await SetTerminalAsync(TrainingRuntimePhase.Failed, sanitizedError, installed: null).ConfigureAwait(false);
+    }
+
+    private InstalledTrainingRuntimeState? ReadInstalledState()
+    {
+        lock (_stateLock)
+        {
+            return _installed;
         }
     }
 
@@ -530,6 +617,11 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
     }
 
+    /// <summary>
+    ///     Records the resting state. <paramref name="installed" /> is written through verbatim, null included: the
+    ///     caller has already decided whether a runtime survived, and a status that kept advertising one that did not
+    ///     would be a lie the UI has no way to see through.
+    /// </summary>
     private async Task SetTerminalAsync(TrainingRuntimePhase phase, string? sanitizedError, InstalledTrainingRuntimeState? installed)
     {
         Task publish;
@@ -539,10 +631,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             _isRunning = false;
             _sanitizedError = sanitizedError;
             _completedAtUtc = DateTimeOffset.UtcNow;
-            if (installed is not null)
-            {
-                _installed = installed;
-            }
+            _installed = installed;
 
             publish = QueuePublish(new TrainingRuntimeStatusHubEvent(phase.ToString(),
                 [],
