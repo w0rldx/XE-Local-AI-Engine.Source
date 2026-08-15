@@ -100,6 +100,7 @@
 		"fake-indexeddb": "^6.2.5",
 		"jsdom": "^30.0.1",
 		"knip": "6.15.0",
+		"msw": "2.15.0",
 		"postcss": "^8.5.26",
 		"postcss-preset-mantine": "^1.18.0",
 		"postcss-simple-vars": "^7.0.1",
