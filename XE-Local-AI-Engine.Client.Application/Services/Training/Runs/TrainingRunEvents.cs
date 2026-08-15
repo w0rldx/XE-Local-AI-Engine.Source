@@ -15,7 +15,16 @@ public enum TrainingRunEventKind
     /// <summary>An artifact was registered against the run.</summary>
     Artifact,
 
-    Error
+    Error,
+
+    /// <summary>
+    ///     An evaluation created from this run changed status. Evaluations ride the run's own group rather than a
+    ///     group of their own — the kind is what separates the two streams.
+    /// </summary>
+    EvaluationState,
+
+    /// <summary>One more hold-out sample carries a verdict. <c>Step</c>/<c>TotalSteps</c> are scored/total.</summary>
+    EvaluationProgress
 }
 
 public sealed record TrainingRunPayload(
@@ -28,7 +37,11 @@ public sealed record TrainingRunPayload(
     double? LearningRate = null,
     long? VramBytes = null,
     string? Message = null,
-    long? RunVersion = null);
+    long? RunVersion = null,
+    /// <summary>Set on the evaluation kinds only — which evaluation of this run the event describes.</summary>
+    Guid? EvaluationId = null,
+    /// <summary>Evaluation kinds only: how many of the scored samples passed.</summary>
+    int? PassedCount = null);
 
 public sealed record TrainingRunEvent(Guid RunId, long Sequence, TrainingRunEventKind Kind, TrainingRunPayload Payload);
 

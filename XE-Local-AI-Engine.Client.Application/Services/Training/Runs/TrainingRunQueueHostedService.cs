@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -21,6 +23,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         Three gates, in order: no other GPU work in flight (benchmark, dataset generation, image job), the
 ///         process-wide <see cref="ITrainingActivity" /> flag, and the llama.cpp runtime-mutation lease — which refuses
 ///         while any inference process is running, so a run cannot start behind a warm model.
+///     </para>
+///     <para>
+///         <strong>The evaluation branch takes the first two gates and NOT the third.</strong> An evaluation's whole job
+///         is to load a model and ask it one question per hold-out sample, and the mutation lease exists to forbid
+///         exactly that — it refuses while a model is loaded, and a model load refuses while it is held. So an
+///         evaluation holds <see cref="ITrainingActivity" /> (nothing else GPU-bound starts beside it, and it does not
+///         start beside anything else) but reaches its model through the ordinary chat path. The queue peeks the head's
+///         kind BEFORE claiming, because the exclusivity a kind needs has to be held before the claim: attempt is
+///         pinned to 1, so a claim that turned out to need locks the consumer is not holding could not be handed back.
 ///     </para>
 /// </remarks>
 public sealed class TrainingRunQueueHostedService(
@@ -57,10 +68,19 @@ public sealed class TrainingRunQueueHostedService(
                     activity = _trainingActivity.TryBegin();
                     if (activity is not null)
                     {
-                        lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(stoppingToken).ConfigureAwait(false);
-                        if (lease is not null)
+                        var kind = await PeekAsync(stoppingToken).ConfigureAwait(false);
+                        if (kind == TrainingWorkKind.TrainingRun)
                         {
-                            claim = await ClaimAsync(stoppingToken).ConfigureAwait(false);
+                            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(stoppingToken).ConfigureAwait(false);
+                            if (lease is not null)
+                            {
+                                claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken).ConfigureAwait(false);
+                            }
+                        }
+                        else if (kind == TrainingWorkKind.EvaluationRun)
+                        {
+                            // No lease: see the class remarks. The activity flag is the exclusivity an evaluation needs.
+                            claim = await ClaimAsync(TrainingWorkKind.EvaluationRun, stoppingToken).ConfigureAwait(false);
                         }
                     }
                 }
@@ -68,9 +88,18 @@ public sealed class TrainingRunQueueHostedService(
                 if (claim is not null)
                 {
                     await using var executionScope = _scopeFactory.CreateAsyncScope();
-                    await executionScope.ServiceProvider.GetRequiredService<ITrainingRunExecutor>()
-                                        .ExecuteAsync(claim, stoppingToken)
-                                        .ConfigureAwait(false);
+                    if (claim.Kind == TrainingWorkKind.EvaluationRun)
+                    {
+                        await executionScope.ServiceProvider.GetRequiredService<IEvaluationRunExecutor>()
+                                            .ExecuteAsync(claim, stoppingToken)
+                                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await executionScope.ServiceProvider.GetRequiredService<ITrainingRunExecutor>()
+                                            .ExecuteAsync(claim, stoppingToken)
+                                            .ConfigureAwait(false);
+                    }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -122,11 +151,18 @@ public sealed class TrainingRunQueueHostedService(
         return await datasets.HasActiveGenerationAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<TrainingWorkClaim?> ClaimAsync(CancellationToken stoppingToken)
+    private async Task<TrainingWorkKind?> PeekAsync(CancellationToken stoppingToken)
+    {
+        await using var peekScope = _scopeFactory.CreateAsyncScope();
+        var store = peekScope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
+        return await store.PeekNextKindAsync(stoppingToken).ConfigureAwait(false);
+    }
+
+    private async Task<TrainingWorkClaim?> ClaimAsync(TrainingWorkKind kind, CancellationToken stoppingToken)
     {
         await using var claimScope = _scopeFactory.CreateAsyncScope();
         var store = claimScope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        return await store.ClaimNextAsync(stoppingToken).ConfigureAwait(false);
+        return await store.ClaimNextAsync(kind, stoppingToken).ConfigureAwait(false);
     }
 
     private async Task WaitAsync(CancellationToken stoppingToken)
