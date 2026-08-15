@@ -59,6 +59,8 @@ public sealed class ComparisonReportService(
         var tunedEvaluation = await _evaluations.GetAsync(command.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false)
                               ?? throw new EvaluationRejectedException("The tuned evaluation run was not found.");
 
+        EnsureComparable(baseEvaluation, tunedEvaluation);
+
         var baseBenchmark = await RequireBenchmarkAsync(command.BaseBenchmarkRunId, cancellationToken).ConfigureAwait(false);
         var tunedBenchmark = await RequireBenchmarkAsync(command.TunedBenchmarkRunId, cancellationToken).ConfigureAwait(false);
 
@@ -106,6 +108,59 @@ public sealed class ComparisonReportService(
             tunedEvaluation?.Id,
             reason);
     }
+
+    /// <summary>
+    ///     The precondition a delta rests on: both sides scored the SAME hold-out samples, of the same version of the
+    ///     same dataset. Subtracting two accuracies measured over different sample sets produces a number that looks
+    ///     exactly like a real improvement, so this is refused rather than reported.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately NOT keyed on <c>TrainingRunId</c>: a base and a tuned evaluation of the same freeze normally
+    ///     share the run, but the fingerprint plus the id set is the real invariant, and two evaluations that agree on
+    ///     both are comparable whatever run produced them.
+    /// </remarks>
+    private static void EnsureComparable(TrainingEvaluationRecord baseEvaluation, TrainingEvaluationRecord tunedEvaluation)
+    {
+        var left = ReadMembership(baseEvaluation, "base");
+        var right = ReadMembership(tunedEvaluation, "tuned");
+
+        if (left.DatasetId != right.DatasetId)
+        {
+            throw new EvaluationRejectedException(
+                "The two evaluations scored different datasets, so their accuracies cannot be subtracted. Evaluate both models against one dataset.");
+        }
+
+        if (!string.Equals(left.DatasetContentFingerprint, right.DatasetContentFingerprint, StringComparison.Ordinal))
+        {
+            throw new EvaluationRejectedException(
+                "The two evaluations scored different versions of the dataset — their content fingerprints differ, so the dataset changed between them. Re-evaluate both models against one freeze.");
+        }
+
+        // Order-insensitive: scoring walks the frozen order, but two freezes of one set are still the same hold-out.
+        if (!left.HoldoutSampleIds.ToHashSet().SetEquals(right.HoldoutSampleIds))
+        {
+            throw new EvaluationRejectedException(
+                "The two evaluations scored different hold-out samples, so their accuracies are not comparable. Both sides must come from the same freeze.");
+        }
+    }
+
+    private static TrainingEvaluationMembershipV1 ReadMembership(TrainingEvaluationRecord evaluation, string side)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<TrainingEvaluationMembershipV1>(evaluation.MembershipJson.Span, TrainingJson.Options)
+                   ?? throw new EvaluationRejectedException(UnreadableMembership(side));
+        }
+        catch (JsonException)
+        {
+            // An unreadable membership cannot be shown to match the other side, and a comparison that cannot prove its
+            // own precondition must refuse rather than assume it.
+            throw new EvaluationRejectedException(UnreadableMembership(side));
+        }
+    }
+
+    private static string UnreadableMembership(string side) =>
+        $"The {side} evaluation's frozen hold-out membership could not be read, so the two sides cannot be shown to be comparable.";
 
     /// <summary>Which half of the lineage is missing, if either — the two ways a suggestion cannot be completed.</summary>
     private static string? UnavailableReason(string? baseModelName, string? tunedModelName)
