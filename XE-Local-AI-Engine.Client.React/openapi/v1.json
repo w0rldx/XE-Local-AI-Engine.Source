@@ -16830,9 +16830,6 @@
       "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "expectedVersion"
-        ],
         "properties": {
           "expectedVersion": {
             "type": "integer"
@@ -17835,9 +17832,6 @@
       "XE_Local_AI_EngineClientEndpointsTrainingComparisonsV1DeleteComparisonRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "expectedVersion"
-        ],
         "properties": {
           "expectedVersion": {
             "type": "integer"

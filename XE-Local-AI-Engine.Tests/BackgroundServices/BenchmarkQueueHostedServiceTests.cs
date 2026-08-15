@@ -7,6 +7,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Training;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -192,6 +193,7 @@ public sealed class BenchmarkQueueHostedServiceTests
             new(_provider.GetRequiredService<IServiceScopeFactory>(),
                 Signal,
                 Events,
+                new GpuWorkGate(),
                 Options.Create(new BenchmarkQueueOptions
                 {
                     PollInterval = pollInterval ?? TimeSpan.FromMilliseconds(10)
