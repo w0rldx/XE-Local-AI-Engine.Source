@@ -65,11 +65,6 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
                 commandId = item.Id
             }, item.ToResponse(), cancellation: ct).ConfigureAwait(false);
         }
-        catch (SlashCommandValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
         catch (SlashCommandConflictException exception)
         {
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict, title: exception.Message)).ConfigureAwait(false);
@@ -101,11 +96,6 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
             }
 
             await Send.OkAsync(item.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (SlashCommandValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (SlashCommandConflictException exception)
         {

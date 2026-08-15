@@ -19,21 +19,13 @@ public sealed class UpdatePlaybookActionEndpoint(IPlaybookActionService playbook
 
     public override async Task HandleAsync(UpdatePlaybookActionRequest req, CancellationToken ct)
     {
-        try
+        var record = await _playbookActionService.UpdateAsync(req.ActionId, req.ToInput(), ct).ConfigureAwait(false);
+        if (record is null)
         {
-            var record = await _playbookActionService.UpdateAsync(req.ActionId, req.ToInput(), ct).ConfigureAwait(false);
-            if (record is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (PlaybookActionValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

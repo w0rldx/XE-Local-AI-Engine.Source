@@ -19,15 +19,7 @@ public sealed class CreatePlaybookActionEndpoint(IPlaybookActionService playbook
 
     public override async Task HandleAsync(CreatePlaybookActionRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _playbookActionService.CreateAsync(req.ToInput(), ct).ConfigureAwait(false);
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (PlaybookActionValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var record = await _playbookActionService.CreateAsync(req.ToInput(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

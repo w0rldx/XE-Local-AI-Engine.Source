@@ -30,20 +30,12 @@ public sealed class CreateAgentDefinitionEndpoint(IAgentDefinitionService agentD
             return;
         }
 
-        try
-        {
-            var record = await _agentDefinitionService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetAgentDefinitionEndpoint>(new
-                {
-                    agentDefinitionId = record.Id
-                },
-                record.ToResponse(),
-                cancellation: ct).ConfigureAwait(false);
-        }
-        catch (AgentDefinitionValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var record = await _agentDefinitionService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetAgentDefinitionEndpoint>(new
+            {
+                agentDefinitionId = record.Id
+            },
+            record.ToResponse(),
+            cancellation: ct).ConfigureAwait(false);
     }
 }
