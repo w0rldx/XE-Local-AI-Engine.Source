@@ -4556,6 +4556,52 @@
 		},
 		"errors": {
 			"request": "The training request failed."
+		},
+		"runs": {
+			"wizard": {
+				"title": "Start a training run",
+				"description": "A run trains a LoRA adapter from one dataset and one base checkpoint. It holds the whole GPU while it runs.",
+				"dataset": "Dataset",
+				"datasetPlaceholder": "Pick a ready dataset",
+				"baseCheckpoint": "Base checkpoint",
+				"baseCheckpointPlaceholder": "Pick a downloaded checkpoint",
+				"checkpointUnreadable": "This checkpoint cannot be sized for training.",
+				"doesNotFit": "This run does not fit",
+				"estimate": "About {{estimate}} VRAM of {{available}} free",
+				"vramUnknown": "unknown",
+				"experimental": "Experimental size",
+				"noLicenseMetadata": "No license metadata was found for this repository. Confirming records that fact.",
+				"confirmLicense": "I confirm I may fine-tune these weights",
+				"maxSeqLength": "Sequence length",
+				"batchSize": "Batch size",
+				"loraR": "LoRA rank",
+				"epochs": "Epochs",
+				"startFailed": "The run could not be started. Check the options and try again.",
+				"start": "Start run"
+			},
+			"list": {
+				"title": "Training runs",
+				"empty": "No training runs yet. Start one above.",
+				"cancel": "Cancel",
+				"loss": "loss {{loss}}",
+				"steps": "step {{step}} of {{total}}"
+			},
+			"status": {
+				"Queued": "Queued",
+				"Preparing": "Preparing",
+				"Training": "Training",
+				"Exporting": "Exporting",
+				"Smoke": "Smoke test",
+				"Succeeded": "Succeeded",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled"
+			},
+			"phase": {
+				"loading": "Loading the model",
+				"tokenizing": "Preparing the dataset",
+				"training": "Training",
+				"saving": "Saving the adapter"
+			}
 		}
 	}
 }
