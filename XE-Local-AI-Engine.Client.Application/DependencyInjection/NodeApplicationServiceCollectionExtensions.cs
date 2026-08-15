@@ -47,6 +47,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // AddHuggingFaceGgufStore (invoked there) registers.
         builder.AddNodeImages(configuration);
 
+        // Same ordering reason as AddNodeImages above: the base-checkpoint store reuses the Hugging Face download
+        // client AddNodeModelRuntime registers.
+        builder.AddNodeTrainingRuntime();
+
         return builder;
     }
 }

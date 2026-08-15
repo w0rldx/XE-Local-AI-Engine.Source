@@ -45,6 +45,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
 using LoggerExtensions = XE_Local_AI_Engine.Client.Common.Extensions.LoggerExtensions;
 
 /// <summary>
@@ -188,6 +189,11 @@ public static class ConfigureServices
         // so the singleton image-job coordinator can resolve it.
         builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
         builder.Services.AddSingleton<IStableDiffusionCppSourceBuildEventPublisher, StableDiffusionCppSourceBuildEventPublisher>();
+
+        // Hub-backed training-runtime event publisher — supersedes the no-op default the provider registers (a plain
+        // AddSingleton, so it wins over that TryAdd) so uv install phase + log lines push live to operator clients
+        // (TrainingRuntimeHub mapped in Program). IHubContext is singleton-safe.
+        builder.Services.AddSingleton<ITrainingRuntimeEventPublisher, TrainingRuntimeEventPublisher>();
 
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
         if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
