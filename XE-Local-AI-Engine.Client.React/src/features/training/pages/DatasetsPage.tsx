@@ -1,5 +1,5 @@
 import { Badge, Button, Code, Group, Loader, Progress, ScrollArea, Stack, Tabs, Text, UnstyledButton } from "@mantine/core";
-import { IconDatabase, IconDownload, IconPlayerPlay, IconShieldCheck, IconTrash } from "@tabler/icons-react";
+import { IconDatabase, IconDownload, IconPencil, IconPlayerPlay, IconPlus, IconShieldCheck, IconTrash } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,10 +11,14 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DatasetSampleReview } from "@/features/training/components/DatasetSampleReview";
+import { DefinitionEditorDialog } from "@/features/training/components/DefinitionEditorDialog";
 import { useDatasetGenerationHub } from "@/features/training/hooks/useDatasetGenerationHub";
-import type { TrainingDataset } from "@/features/training/models/TrainingModels";
+import type { TrainingDataset, TrainingDefinition } from "@/features/training/models/TrainingModels";
+import { isDatasetGenerationCancellable } from "@/features/training/models/TrainingModels";
 import {
+	useCancelTrainingDataset,
 	useDeleteTrainingDataset,
+	useDeleteTrainingDefinition,
 	useExportTrainingDataset,
 	useGenerateDataset,
 	useToolMocks,
@@ -27,23 +31,27 @@ type DatasetsTab = "definitions" | "datasets" | "mocks";
 
 /**
  * The dataset module surface: definitions (what to generate), datasets (what was generated, with sample review) and
- * tool mocks (what a generated tool call is allowed to hit). Definition authoring itself is intentionally not here
- * yet — a definition carries a tool-schema snapshot the backend composes at save time, so the authoring form lands
- * with the run wizard rather than as a second, drifting copy of that composition.
+ * tool mocks (what a generated tool call is allowed to hit).
  */
 export function DatasetsPage() {
 	const { t } = useTranslation();
 	const [tab, setTab] = useState<DatasetsTab>("datasets");
 	const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
 	const [exported, setExported] = useState<{ format: string; content: string } | null>(null);
+	// `undefined` = editor closed; `null` = creating; a definition = editing it.
+	const [editing, setEditing] = useState<TrainingDefinition | null | undefined>(undefined);
 
 	const definitionsQuery = useTrainingDefinitions();
 	const datasetsQuery = useTrainingDatasets();
 	const mocksQuery = useToolMocks();
 	const generate = useGenerateDataset();
+	const deleteDefinition = useDeleteTrainingDefinition();
 	const deleteDataset = useDeleteTrainingDataset();
+	const cancelDataset = useCancelTrainingDataset();
 	const verifyMock = useVerifyToolMock();
 	const exportDataset = useExportTrainingDataset();
+	const requestFailed = (error: unknown): void =>
+		toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed.")));
 
 	const datasets = datasetsQuery.data ?? [];
 	const selected = useMemo(() => datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null, [datasets, selectedDatasetId]);
@@ -100,7 +108,20 @@ export function DatasetsPage() {
 				</Tabs.List>
 
 				<Tabs.Panel value="definitions" pt="md">
-					<SectionCard gap="sm" title={t("training.definitions.title", "Dataset definitions")}>
+					<SectionCard
+						actions={
+							<Button
+								data-testid="training-definition-new"
+								leftSection={<IconPlus size={16} />}
+								onClick={() => setEditing(null)}
+								size="compact-sm"
+							>
+								{t("training.definitions.new", "New definition")}
+							</Button>
+						}
+						gap="sm"
+						title={t("training.definitions.title", "Dataset definitions")}
+					>
 						{definitionsQuery.isLoading ? <Loader size="sm" /> : null}
 						{!definitionsQuery.isLoading && (definitionsQuery.data ?? []).length === 0 ? (
 							<EmptyState
@@ -134,14 +155,35 @@ export function DatasetsPage() {
 											onClick={() => {
 												generate.mutate(
 													{ definitionId: definition.id, expectedVersion: definition.version, name: definition.name },
-													{
-														onError: (error) => toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed."))),
-														onSuccess: () => setTab("datasets"),
-													},
+													{ onError: requestFailed, onSuccess: () => setTab("datasets") },
 												);
 											}}
 										>
 											{t("training.definitions.generate", "Generate")}
+										</Button>
+										<Button
+											data-testid="training-definition-edit"
+											leftSection={<IconPencil size={14} />}
+											onClick={() => setEditing(definition)}
+											size="compact-xs"
+											variant="subtle"
+										>
+											{t("training.definitions.edit", "Edit")}
+										</Button>
+										<Button
+											color="red"
+											leftSection={<IconTrash size={14} />}
+											loading={deleteDefinition.isPending}
+											onClick={() =>
+												deleteDefinition.mutate(
+													{ definitionId: definition.id, expectedVersion: definition.version },
+													{ onError: requestFailed },
+												)
+											}
+											size="compact-xs"
+											variant="subtle"
+										>
+											{t("training.definitions.delete", "Delete")}
 										</Button>
 									</Group>
 								</Group>
@@ -168,19 +210,14 @@ export function DatasetsPage() {
 										dataset={dataset}
 										isSelected={dataset.id === selectedDatasetId}
 										onSelect={() => setSelectedDatasetId(dataset.id === selectedDatasetId ? null : dataset.id)}
+										onCancel={() => cancelDataset.mutate({ datasetId: dataset.id }, { onError: requestFailed })}
 										onDelete={() =>
-											deleteDataset.mutate(
-												{ datasetId: dataset.id, expectedVersion: dataset.version },
-												{ onError: (error) => toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed."))) },
-											)
+											deleteDataset.mutate({ datasetId: dataset.id, expectedVersion: dataset.version }, { onError: requestFailed })
 										}
 										onExport={(format) =>
 											exportDataset.mutate(
 												{ datasetId: dataset.id, format },
-												{
-													onError: (error) => toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed."))),
-													onSuccess: (result) => setExported({ format, content: result.content }),
-												},
+												{ onError: requestFailed, onSuccess: (result) => setExported({ format, content: result.content }) },
 											)
 										}
 									/>
@@ -255,6 +292,8 @@ export function DatasetsPage() {
 				</Tabs.Panel>
 			</Tabs>
 
+			<DefinitionEditorDialog definition={editing ?? null} onClose={() => setEditing(undefined)} opened={editing !== undefined} />
+
 			<DialogShell
 				opened={exported !== null}
 				onClose={() => setExported(null)}
@@ -275,11 +314,12 @@ interface DatasetRowProps {
 	dataset: TrainingDataset;
 	isSelected: boolean;
 	onSelect: () => void;
+	onCancel: () => void;
 	onDelete: () => void;
 	onExport: (format: "Jsonl" | "Hermes") => void;
 }
 
-function DatasetRow({ dataset, isSelected, onSelect, onDelete, onExport }: DatasetRowProps) {
+function DatasetRow({ dataset, isSelected, onSelect, onCancel, onDelete, onExport }: DatasetRowProps) {
 	const { t } = useTranslation();
 
 	return (
@@ -314,6 +354,11 @@ function DatasetRow({ dataset, isSelected, onSelect, onDelete, onExport }: Datas
 				</Stack>
 			</UnstyledButton>
 			<Group gap="xs">
+				{isDatasetGenerationCancellable(dataset) ? (
+					<Button color="red" data-testid="training-dataset-cancel" onClick={onCancel} size="compact-xs" variant="subtle">
+						{t("training.datasets.cancel", "Cancel")}
+					</Button>
+				) : null}
 				<Button size="compact-xs" variant="subtle" leftSection={<IconDownload size={14} />} onClick={() => onExport("Jsonl")}>
 					JSONL
 				</Button>

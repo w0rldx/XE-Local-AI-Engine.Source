@@ -9,7 +9,7 @@ import {
 	datasetGenerationReplayResetSchema,
 } from "@/features/training/models/TrainingModels";
 
-export const datasetGenerationHubEvents = {
+const datasetGenerationHubEvents = {
 	event: "datasetGeneration.event",
 	replayReset: "datasetGeneration.replayReset",
 } as const;
