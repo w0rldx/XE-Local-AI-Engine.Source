@@ -61,6 +61,10 @@ internal static class AddNodeKnowledgeBaseExtensions
         builder.Services.AddScoped<IKnowledgeDocumentCatalogService, KnowledgeDocumentCatalogService>();
         builder.Services.AddScoped<IKnowledgeRepositoryImportService, KnowledgeRepositoryImportService>();
 
+        // Upload admission rule (enqueue on a fresh insert or a retryable dedupe hit). Scoped because it reads the
+        // document status through the scoped catalog service; it enqueues onto the singleton dispatcher below.
+        builder.Services.AddScoped<IKnowledgeIngestionAdmissionService, KnowledgeIngestionAdmissionService>();
+
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();
 
