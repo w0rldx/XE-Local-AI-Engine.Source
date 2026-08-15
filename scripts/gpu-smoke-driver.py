@@ -162,9 +162,7 @@ def command_auth(args: argparse.Namespace) -> int:
 
     credentials = json.dumps({"email": args.email, "password": args.password})
     if setup_required:
-        code, _ = client.request(
-            "POST", f"{API}/auth/setup", credentials, allowed_status=(409,)
-        )
+        code, _ = client.request("POST", f"{API}/auth/setup", credentials, allowed_status=(409,))
         emit("setupPerformed", code != 409)
     else:
         emit("setupPerformed", False)
@@ -187,9 +185,7 @@ def command_auth(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 def command_runtime(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
-    payload = require_mapping(
-        client.get_json(f"{API}/model-fit/llamacpp/runtime"), "llamacpp/runtime"
-    )
+    payload = require_mapping(client.get_json(f"{API}/model-fit/llamacpp/runtime"), "llamacpp/runtime")
     installed = payload.get("installed")
     emit("installed", isinstance(installed, dict))
     if isinstance(installed, dict):
@@ -210,9 +206,7 @@ def command_audit(args: argparse.Namespace) -> int:
     determinate result would otherwise outlive the condition that produced it.
     """
     client = NodeClient(args.base_url, args.token, args.timeout)
-    payload = require_mapping(
-        client.get_json(f"{API}/model-fit/hardware-profile?refresh=true"), "hardware-profile"
-    )
+    payload = require_mapping(client.get_json(f"{API}/model-fit/hardware-profile?refresh=true"), "hardware-profile")
     for key in (
         "inferenceBackend",
         "gpuExpected",
@@ -325,16 +319,14 @@ class HubStream:
         self.hub_path = hub_path
         self.connection_url: str | None = None
 
-    def __enter__(self) -> "HubStream":
+    def __enter__(self) -> HubStream:
         _, payload = self.client.request("POST", f"{self.hub_path}/negotiate?negotiateVersion=1", b"")
         negotiate = require_mapping(payload, "hub negotiate")
         token = negotiate.get("connectionToken") or negotiate.get("connectionId")
         if not token:
             raise DriverError("hub negotiate returned neither connectionToken nor connectionId")
         transports = {
-            entry.get("transport")
-            for entry in negotiate.get("availableTransports", [])
-            if isinstance(entry, dict)
+            entry.get("transport") for entry in negotiate.get("availableTransports", []) if isinstance(entry, dict)
         }
         if "LongPolling" not in transports:
             raise DriverError(
@@ -374,14 +366,17 @@ class HubStream:
         import time
 
         assert self.connection_url is not None
-        frame = json.dumps(
-            {
-                "type": MSG_STREAM_INVOCATION,
-                "invocationId": str(uuid.uuid4()),
-                "target": target,
-                "arguments": arguments,
-            }
-        ) + RECORD_SEPARATOR
+        frame = (
+            json.dumps(
+                {
+                    "type": MSG_STREAM_INVOCATION,
+                    "invocationId": str(uuid.uuid4()),
+                    "target": target,
+                    "arguments": arguments,
+                }
+            )
+            + RECORD_SEPARATOR
+        )
         self.client.request("POST", self.connection_url, frame, "text/plain")
 
         deadline = time.monotonic() + timeout_seconds
@@ -415,9 +410,7 @@ class HubStream:
 
 def command_chat(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
-    _, payload = client.request(
-        "POST", f"{API}/chat/conversations", json.dumps({"title": args.title})
-    )
+    _, payload = client.request("POST", f"{API}/chat/conversations", json.dumps({"title": args.title}))
     conversation = require_mapping(payload, "chat/conversations")
     conversation_id = conversation.get("conversationId")
     if not conversation_id:
@@ -526,9 +519,7 @@ def command_image(args: argparse.Namespace) -> int:
         emit("png", False)
         return 0
 
-    _, raw = client.request(
-        "GET", f"{API}/images/{urllib.parse.quote(str(image_id))}", expect_binary=True
-    )
+    _, raw = client.request("GET", f"{API}/images/{urllib.parse.quote(str(image_id))}", expect_binary=True)
     data = raw if isinstance(raw, bytes) else b""
     emit("bytes", len(data))
     emit("png", data[:8] == b"\x89PNG\r\n\x1a\n")

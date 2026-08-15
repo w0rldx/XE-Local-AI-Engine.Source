@@ -11,7 +11,6 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-
 DEFAULT_METADATA_URL = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json"
 
 
@@ -63,9 +62,7 @@ def main() -> int:
                 f"runtime floor {floor_text} and metadata release {latest_value} are not on the same feature band"
             )
         if floor < latest:
-            raise ValueError(
-                f"runtime floor {floor_text} is below latest supported servicing release {latest_value}"
-            )
+            raise ValueError(f"runtime floor {floor_text} is below latest supported servicing release {latest_value}")
     except (OSError, ET.ParseError, ValueError, RuntimeError) as error:
         print(f"runtime-floor verification failed: {error}", file=sys.stderr)
         return 1

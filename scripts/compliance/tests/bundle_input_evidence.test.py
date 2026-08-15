@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 
 def load(name: str):
@@ -46,7 +46,9 @@ class BundleInputEvidenceTests(unittest.TestCase):
             self.assertFalse(document["publishSingleFile"])
             self.assertFalse(document["selfContained"])
             packages = EVIDENCE.load_bundle_packages(output, "win-x64")
-            self.assertEqual(["loose"], [entry["disposition"] for entry in packages[("example.package", "1.0.0")]["inputs"]])
+            self.assertEqual(
+                ["loose"], [entry["disposition"] for entry in packages[("example.package", "1.0.0")]["inputs"]]
+            )
 
     def test_collapses_only_byte_identical_duplicate_capture_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -72,8 +74,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
             other_asset.parent.mkdir()
             other_asset.write_bytes(b"different")
             raw.write_text(
-                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\n"
-                f"{row}loose||||wwwroot/asset.js|{other_asset}\n",
+                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\n{row}loose||||wwwroot/asset.js|{other_asset}\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "duplicate relative input"):
@@ -113,8 +114,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
 
             missing_identity = root / "missing-identity.txt"
             missing_identity.write_text(
-                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\n"
-                f"loose||||content/devui.json|{loose}\n",
+                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\nloose||||content/devui.json|{loose}\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "NuGet-root bundle input lacks package identity"):

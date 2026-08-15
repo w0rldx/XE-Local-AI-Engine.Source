@@ -20,7 +20,9 @@ def create_manifest(raw_path: Path, runtime_identifier: str, output_path: Path) 
         str(expected_single_file).lower(),
         str(expected_self_contained).lower(),
     ]
-    if len(header) != 5 or [value.casefold() for value in header[:4]] != [value.casefold() for value in expected_header]:
+    if len(header) != 5 or [value.casefold() for value in header[:4]] != [
+        value.casefold() for value in expected_header
+    ]:
         raise ValueError(f"publish-input capture header does not match {'|'.join(expected_header)}|<NuGetPackageRoot>")
     nuget_package_root = Path(header[4]).resolve()
     if not nuget_package_root.is_dir():

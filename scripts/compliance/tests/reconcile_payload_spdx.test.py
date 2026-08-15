@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-import sys
-
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "reconcile_payload_spdx.py"
 sys.path.insert(0, str(MODULE_PATH.parent))
@@ -86,11 +85,9 @@ class PayloadSpdxReconciliationTests(unittest.TestCase):
                             "name": "Example.Package",
                             "version": "2.0.0",
                             "licenseExpression": "MIT",
-                            "licenseFiles": [
-                                {"path": "licenses/nuget/packages/Example.Package@2.0.0/LICENSE"}
-                            ],
+                            "licenseFiles": [{"path": "licenses/nuget/packages/Example.Package@2.0.0/LICENSE"}],
                         }
-                    ]
+                    ],
                 }
             ),
             encoding="utf-8",
@@ -169,7 +166,9 @@ class PayloadSpdxReconciliationTests(unittest.TestCase):
             self.assertNotIn("externalDocumentRefs", document)
             self.assertEqual("Apache-2.0", document["packages"][0]["licenseDeclared"])
             self.assertEqual("Copyright 2026 w0rldx", document["packages"][0]["copyrightText"])
-            self.assertEqual(3, len([item for item in document["relationships"] if item["relationshipType"] == "DEPENDS_ON"]))
+            self.assertEqual(
+                3, len([item for item in document["relationships"] if item["relationshipType"] == "DEPENDS_ON"])
+            )
             self.assertEqual(
                 MODULE.hashlib.sha256(spdx.read_bytes()).hexdigest(),
                 spdx.with_name("manifest.spdx.json.sha256").read_text(),

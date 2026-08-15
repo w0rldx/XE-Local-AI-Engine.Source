@@ -1,0 +1,75 @@
+# Repo-wide Python quality tooling (ruff / pyrefly / pytest / bandit) — DEV ONLY.
+#
+# This is deliberately NOT tools/training/pyproject.toml. That file plus its uv.lock is the
+# shipped training runtime manifest (ADR 0005): the app copies exactly those two files into
+# staging and runs `uv sync --locked`, so anything added there lands in every user's training
+# venv and forces a re-lock behind the live GPU gate. The tooling below therefore lives at the
+# repo root with its own small uv.lock, and only ever reads tools/training/*.py.
+#
+# Run it through scripts/python-validation.sh (see AGENTS.md); the CI `python-quality` job runs
+# `--scope full`. Mirrors the house setup in ~/projects/AI/Setups/python.
+
+[project]
+name = "xe-python-tooling"
+version = "0.1.0"
+description = "Lint, type-check, test and security-scan the repository's Python (tools/training, scripts/**)."
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "pyrefly>=1.0.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.13",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["tools/training", "scripts"]
+extend-exclude = ["tools/training/.venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # imports
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplify
+    "N",   # naming
+    "S",   # security-ish rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = ["S101"]
+"tools/training/test_*.py" = ["S101"]
+
+[tool.pyrefly]
+project-includes = ["tools/training", "scripts"]
+project-excludes = ["**/.venv", "**/node_modules", "**/__pycache__"]
+search-path = ["tools/training", "scripts/compliance"]
+python-version = "3.13"
+# The training scripts import the fine-tuning stack (torch/unsloth/transformers/trl/datasets),
+# which only exists inside the 7 GB provisioned runtime venv, never in this dev venv. Those
+# imports resolve to Any; everything pure-python (trainlib, exportlib, protocol code, scripts/**)
+# is fully checked.
+replace-imports-with-any = ["unsloth", "unsloth.*", "torch", "torch.*", "transformers", "trl", "datasets"]
+
+[tool.pytest.ini_options]
+testpaths = ["tools/training", "scripts/tests", "scripts/compliance/tests", "scripts/performance/tests"]
+python_files = ["test_*.py", "*.test.py"]
+pythonpath = ["tools/training"]
+addopts = "-ra --strict-markers --strict-config --import-mode=importlib --cov=tools/training --cov=scripts --cov-report=term-missing"
+filterwarnings = [
+    "error",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "node_modules"]
+skips = ["B101"]
