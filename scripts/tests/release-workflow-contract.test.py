@@ -5,7 +5,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build-and-test.yml"
@@ -45,9 +44,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertLess(body.index("pnpm run test:tooling"), body.index("pnpm run build"))
 
     def test_cross_platform_release_job_pins_python_and_uses_python_command(self) -> None:
-        build_job = re.search(
-            r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL
-        )
+        build_job = re.search(r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL)
         self.assertIsNotNone(build_job)
         body = build_job.group("body")
         setup = "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -62,14 +59,12 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
 
     def test_windows_is_portable_only_and_linux_is_appimage(self) -> None:
         self.assertIn('pack-args: "--noInst"', self.source)
-        self.assertIn("--runtime \"${{ matrix.rid }}\"", self.source)
+        self.assertIn('--runtime "${{ matrix.rid }}"', self.source)
         self.assertNotIn("--noPortable", self.source)
         self.assertRegex(self.source, r"icon-args: .+\.png")
 
     def test_windows_publishes_csharp_launcher_for_framework_dependent_payload(self) -> None:
-        build_job = re.search(
-            r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL
-        )
+        build_job = re.search(r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL)
         self.assertIsNotNone(build_job)
         body = build_job.group("body")
         publish = body.index("name: Publish (${{ matrix.rid }})")
@@ -79,7 +74,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertLess(launcher, compliance)
         self.assertIn("XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj", body)
         self.assertIn("scripts/tests/windows-framework-launcher-smoke.ps1", body)
-        self.assertIn('main-exe: XE-Local-AI-Engine.WindowsLauncher.exe', body)
+        self.assertIn("main-exe: XE-Local-AI-Engine.WindowsLauncher.exe", body)
         self.assertIn('--mainExe "${{ matrix.main-exe }}"', body)
         self.assertNotIn("--framework", body)
         self.assertIn("scripts/read-release-version.py --dotnet-runtime", body)
@@ -92,26 +87,20 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("DOTNET-LIBRARY-LICENSE.html", self.source)
 
     def test_prerelease_seed_download_is_explicit(self) -> None:
-        download_block = re.search(
-            r"name: Download previous release.*?(?=\n\s+- name:)", self.source, re.DOTALL
-        )
+        download_block = re.search(r"name: Download previous release.*?(?=\n\s+- name:)", self.source, re.DOTALL)
         self.assertIsNotNone(download_block)
         self.assertIn("--pre", download_block.group(0))
         self.assertIn('SEED_DIR="ReleaseSeed-${{ matrix.rid }}"', download_block.group(0))
 
     def test_previous_release_probe_matches_the_current_release_track(self) -> None:
-        download_block = re.search(
-            r"name: Download previous release.*?(?=\n\s+- name:)", self.source, re.DOTALL
-        )
+        download_block = re.search(r"name: Download previous release.*?(?=\n\s+- name:)", self.source, re.DOTALL)
         self.assertIsNotNone(download_block)
         body = download_block.group(0)
         self.assertIn("--argjson include_pre", body)
         self.assertIn("$include_pre or (.prerelease == false)", body)
 
     def test_previous_full_package_is_removed_after_pack(self) -> None:
-        pack_block = re.search(
-            r"name: Pack portable artifact.*?(?=\n\s+- name:)", self.source, re.DOTALL
-        )
+        pack_block = re.search(r"name: Pack portable artifact.*?(?=\n\s+- name:)", self.source, re.DOTALL)
         self.assertIsNotNone(pack_block)
         self.assertIn('rm -- "Releases-${{ matrix.rid }}/$PREVIOUS_NAME"', pack_block.group(0))
 
@@ -122,9 +111,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn("Verify packaged update release track", self.source)
 
     def test_matrix_builds_but_does_not_upload_releases(self) -> None:
-        build_job = re.search(
-            r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL
-        )
+        build_job = re.search(r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL)
         self.assertIsNotNone(build_job)
         self.assertNotIn("vpk upload github", build_job.group("body"))
         self.assertIn("actions/upload-artifact", build_job.group("body"))
@@ -158,7 +145,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn("draft=false", body)
         self.assertIn("scripts/release/verify-release-authority.py", body)
         self.assertIn("Verify anonymous repository availability before promotion", body)
-        self.assertIn('sha256sum protected-remote/CHECKSUMS.sha256', body)
+        self.assertIn("sha256sum protected-remote/CHECKSUMS.sha256", body)
         self.assertIn('if [[ "$ACTUAL_CHECKSUM_DIGEST" != "$EXPECTED_CHECKSUM_DIGEST" ]]', body)
         self.assertLess(
             body.index("Verify anonymous repository availability before promotion"),
@@ -217,9 +204,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertNotIn('-ps "Organization: XE Local AI Engine contributors"', self.source)
 
     def test_version_job_does_not_depend_on_an_unconfigured_dotnet_runner(self) -> None:
-        version_job = re.search(
-            r"\n  version:\n(?P<body>.*?)(?=\n  build-pack:)", self.source, re.DOTALL
-        )
+        version_job = re.search(r"\n  version:\n(?P<body>.*?)(?=\n  build-pack:)", self.source, re.DOTALL)
         self.assertIsNotNone(version_job)
         self.assertNotIn("dotnet tool restore", version_job.group("body"))
 

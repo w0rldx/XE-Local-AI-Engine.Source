@@ -17,6 +17,9 @@
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# Tracked release-verification scripts; without this re-include the build-output pattern above hides
+# them from gitignore-aware tools (ruff, pyrefly) and the Python gate silently skips them.
+!/scripts/release/
 x64/
 x86/
 bld/

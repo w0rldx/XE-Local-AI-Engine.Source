@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 SCHEMA_VERSION = 2
 
 
@@ -53,13 +52,26 @@ def load_bundle_packages(path: Path, runtime_identifier: str) -> dict[tuple[str,
             raise ValueError(f"bundle-input evidence entry {index} has an invalid source type")
         if isinstance(source_type, str) and source_type.casefold() == "projectreference":
             continue
-        if not all(isinstance(value, str) and value.strip() for value in (package_id, package_version, relative_path)):
+        if not (
+            isinstance(package_id, str)
+            and package_id.strip()
+            and isinstance(package_version, str)
+            and package_version.strip()
+            and isinstance(relative_path, str)
+            and relative_path.strip()
+        ):
             raise ValueError(f"bundle-input evidence entry {index} has an incomplete package identity")
-        if not isinstance(digest, str) or len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
             raise ValueError(f"bundle-input evidence entry {index} has an invalid SHA-256")
         input_key = (package_id.casefold(), package_version, f"{disposition}:{relative_path}")
         if input_key in seen_inputs:
-            raise ValueError(f"bundle-input evidence contains duplicate input {package_id}/{package_version}:{relative_path}")
+            raise ValueError(
+                f"bundle-input evidence contains duplicate input {package_id}/{package_version}:{relative_path}"
+            )
         seen_inputs.add(input_key)
         package_key = (package_id.casefold(), package_version)
         package = packages.setdefault(package_key, {"name": package_id, "inputs": []})
