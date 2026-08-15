@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -33,6 +34,12 @@ public sealed class DownloadRecommendedRerankerEndpoint(
     {
         Post(LocalApiRoutes.KnowledgeBase.RerankerDownloadRecommended);
         Policies(NodeAuthorizationPolicies.Operator);
+        // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status403Forbidden)
+                                      .ProducesProblemDetails(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                      .ProducesProblemDetails(StatusCodes.Status503ServiceUnavailable)
+                                      .ProducesProblemDetails(StatusCodes.Status507InsufficientStorage));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -57,7 +64,17 @@ public sealed class DownloadRecommendedRerankerEndpoint(
 
         // Start (or rejoin) the download through the coordinator's detached path — the SAME path an operator-initiated
         // GGUF download uses, so progress/cancel and the model_provider_map write happen through one code path.
-        var ticket = await _downloadCoordinator.StartAsync(RecommendedRerankerModel.ToDownloadRequest(), ct).ConfigureAwait(false);
+        GgufDownloadTicket ticket;
+        try
+        {
+            ticket = await _downloadCoordinator.StartAsync(RecommendedRerankerModel.ToDownloadRequest(), ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (GgufDownloadEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(GgufDownloadEndpointSupport.Error(exception)).ConfigureAwait(false);
+            return;
+        }
+
         await Send.OkAsync(new DownloadRecommendedRerankerResponse
             {
                 ModelName = ticket.ModelName,

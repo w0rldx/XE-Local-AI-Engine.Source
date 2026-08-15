@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     FastEndpoints handler for the manual recommendation refresh (POST model-fit/recommendations/refresh). This is a
@@ -62,21 +61,13 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
             return;
         }
 
-        try
-        {
-            await _modelFitRefreshTrigger
-                  .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct)
-                  .ConfigureAwait(false);
-            await Send.OkAsync(new RefreshRecommendationsResponse
-                {
-                    ScheduledJobId = req.ScheduledJobId
-                },
-                ct).ConfigureAwait(false);
-        }
-        catch (ScheduledJobValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await _modelFitRefreshTrigger
+              .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct)
+              .ConfigureAwait(false);
+        await Send.OkAsync(new RefreshRecommendationsResponse
+            {
+                ScheduledJobId = req.ScheduledJobId
+            },
+            ct).ConfigureAwait(false);
     }
 }

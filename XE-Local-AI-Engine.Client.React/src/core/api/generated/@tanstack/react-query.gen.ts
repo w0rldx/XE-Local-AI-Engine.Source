@@ -280,6 +280,7 @@ import type {
 	ApplyAppUpdateData,
 	ApplyAppUpdateResponse,
 	ApplyDevelopmentPatchData,
+	ApplyDevelopmentPatchError,
 	ApplyDevelopmentPatchResponse,
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationResponse,
@@ -347,8 +348,10 @@ import type {
 	CreateCustomToolData,
 	CreateCustomToolResponse,
 	CreateDevelopmentProjectData,
+	CreateDevelopmentProjectError,
 	CreateDevelopmentProjectResponse,
 	CreateDevelopmentRepositoryFromTemplateData,
+	CreateDevelopmentRepositoryFromTemplateError,
 	CreateDevelopmentRepositoryFromTemplateResponse,
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
@@ -374,6 +377,7 @@ import type {
 	CreateSlashCommandError,
 	CreateSlashCommandResponse,
 	CreateWorkspaceData,
+	CreateWorkspaceError,
 	CreateWorkspaceResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
@@ -417,6 +421,7 @@ import type {
 	DeleteWorkspaceError,
 	DeleteWorkspaceResponse,
 	DetectDevelopmentRepositoryProfileData,
+	DetectDevelopmentRepositoryProfileError,
 	DetectDevelopmentRepositoryProfileResponse,
 	DisableAutoConnectData,
 	DisableAutoConnectResponse,
@@ -425,8 +430,10 @@ import type {
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
 	DownloadRecommendedEmbeddingData,
+	DownloadRecommendedEmbeddingError,
 	DownloadRecommendedEmbeddingResponse,
 	DownloadRecommendedRerankerData,
+	DownloadRecommendedRerankerError,
 	DownloadRecommendedRerankerResponse,
 	DraftAgentDefinitionData,
 	DraftAgentDefinitionError,
@@ -589,6 +596,7 @@ import type {
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesResponse,
 	ImportKnowledgeRepositoryData,
+	ImportKnowledgeRepositoryError,
 	ImportKnowledgeRepositoryResponse,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
@@ -691,6 +699,7 @@ import type {
 	PollNodeBindingData,
 	PollNodeBindingResponse,
 	PreviewDevelopmentPatchData,
+	PreviewDevelopmentPatchError,
 	PreviewDevelopmentPatchResponse,
 	PreviewGgufImportData,
 	PreviewGgufImportResponse,
@@ -703,12 +712,14 @@ import type {
 	PutModelLaunchArgumentsData,
 	PutModelLaunchArgumentsResponse,
 	ReconnectDevelopmentRepositoryData,
+	ReconnectDevelopmentRepositoryError,
 	ReconnectDevelopmentRepositoryResponse,
 	RefreshModelCatalogData,
 	RefreshModelCatalogResponse,
 	RefreshRecommendationsData,
 	RefreshRecommendationsResponse,
 	RegisterDevelopmentRepositoryData,
+	RegisterDevelopmentRepositoryError,
 	RegisterDevelopmentRepositoryResponse,
 	RegisterDevelopmentTemplateData,
 	RegisterDevelopmentTemplateResponse,
@@ -775,8 +786,10 @@ import type {
 	StartCudaBuildData,
 	StartCudaBuildResponse,
 	StartDevelopmentNextActionData,
+	StartDevelopmentNextActionError,
 	StartDevelopmentNextActionResponse,
 	StartGgufDownloadData,
+	StartGgufDownloadError,
 	StartGgufDownloadResponse,
 	StartGgufImportData,
 	StartGgufImportResponse,
@@ -894,8 +907,12 @@ export const listWorkspacesOptions = (options?: Options<ListWorkspacesData>) =>
 
 export const createWorkspaceMutation = (
 	options?: Partial<Options<CreateWorkspaceData>>,
-): UseMutationOptions<CreateWorkspaceResponse, AxiosError<DefaultError>, Options<CreateWorkspaceData>> => {
-	const mutationOptions: UseMutationOptions<CreateWorkspaceResponse, AxiosError<DefaultError>, Options<CreateWorkspaceData>> = {
+): UseMutationOptions<CreateWorkspaceResponse, AxiosError<CreateWorkspaceError>, Options<CreateWorkspaceData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateWorkspaceResponse,
+		AxiosError<CreateWorkspaceError>,
+		Options<CreateWorkspaceData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await createWorkspace({
 				...options,
@@ -2568,10 +2585,10 @@ export const startCudaBuildMutation = (
 
 export const startGgufDownloadMutation = (
 	options?: Partial<Options<StartGgufDownloadData>>,
-): UseMutationOptions<StartGgufDownloadResponse, AxiosError<DefaultError>, Options<StartGgufDownloadData>> => {
+): UseMutationOptions<StartGgufDownloadResponse, AxiosError<StartGgufDownloadError>, Options<StartGgufDownloadData>> => {
 	const mutationOptions: UseMutationOptions<
 		StartGgufDownloadResponse,
-		AxiosError<DefaultError>,
+		AxiosError<StartGgufDownloadError>,
 		Options<StartGgufDownloadData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3587,12 +3604,12 @@ export const downloadRecommendedEmbeddingMutation = (
 	options?: Partial<Options<DownloadRecommendedEmbeddingData>>,
 ): UseMutationOptions<
 	DownloadRecommendedEmbeddingResponse,
-	AxiosError<DefaultError>,
+	AxiosError<DownloadRecommendedEmbeddingError>,
 	Options<DownloadRecommendedEmbeddingData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		DownloadRecommendedEmbeddingResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DownloadRecommendedEmbeddingError>,
 		Options<DownloadRecommendedEmbeddingData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3611,12 +3628,12 @@ export const downloadRecommendedRerankerMutation = (
 	options?: Partial<Options<DownloadRecommendedRerankerData>>,
 ): UseMutationOptions<
 	DownloadRecommendedRerankerResponse,
-	AxiosError<DefaultError>,
+	AxiosError<DownloadRecommendedRerankerError>,
 	Options<DownloadRecommendedRerankerData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		DownloadRecommendedRerankerResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DownloadRecommendedRerankerError>,
 		Options<DownloadRecommendedRerankerData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3633,10 +3650,14 @@ export const downloadRecommendedRerankerMutation = (
 
 export const importKnowledgeRepositoryMutation = (
 	options?: Partial<Options<ImportKnowledgeRepositoryData>>,
-): UseMutationOptions<ImportKnowledgeRepositoryResponse, AxiosError<DefaultError>, Options<ImportKnowledgeRepositoryData>> => {
+): UseMutationOptions<
+	ImportKnowledgeRepositoryResponse,
+	AxiosError<ImportKnowledgeRepositoryError>,
+	Options<ImportKnowledgeRepositoryData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		ImportKnowledgeRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ImportKnowledgeRepositoryError>,
 		Options<ImportKnowledgeRepositoryData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4249,12 +4270,12 @@ export const registerDevelopmentRepositoryMutation = (
 	options?: Partial<Options<RegisterDevelopmentRepositoryData>>,
 ): UseMutationOptions<
 	RegisterDevelopmentRepositoryResponse,
-	AxiosError<DefaultError>,
+	AxiosError<RegisterDevelopmentRepositoryError>,
 	Options<RegisterDevelopmentRepositoryData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		RegisterDevelopmentRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<RegisterDevelopmentRepositoryError>,
 		Options<RegisterDevelopmentRepositoryData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4339,12 +4360,12 @@ export const createDevelopmentRepositoryFromTemplateMutation = (
 	options?: Partial<Options<CreateDevelopmentRepositoryFromTemplateData>>,
 ): UseMutationOptions<
 	CreateDevelopmentRepositoryFromTemplateResponse,
-	AxiosError<DefaultError>,
+	AxiosError<CreateDevelopmentRepositoryFromTemplateError>,
 	Options<CreateDevelopmentRepositoryFromTemplateData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		CreateDevelopmentRepositoryFromTemplateResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateDevelopmentRepositoryFromTemplateError>,
 		Options<CreateDevelopmentRepositoryFromTemplateData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4365,7 +4386,7 @@ export const detectDevelopmentRepositoryProfileQueryKey = (options: Options<Dete
 export const detectDevelopmentRepositoryProfileOptions = (options: Options<DetectDevelopmentRepositoryProfileData>) =>
 	queryOptions<
 		DetectDevelopmentRepositoryProfileResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DetectDevelopmentRepositoryProfileError>,
 		DetectDevelopmentRepositoryProfileResponse,
 		ReturnType<typeof detectDevelopmentRepositoryProfileQueryKey>
 	>({
@@ -4405,10 +4426,14 @@ export const listDevelopmentProjectsOptions = (options?: Options<ListDevelopment
 
 export const createDevelopmentProjectMutation = (
 	options?: Partial<Options<CreateDevelopmentProjectData>>,
-): UseMutationOptions<CreateDevelopmentProjectResponse, AxiosError<DefaultError>, Options<CreateDevelopmentProjectData>> => {
+): UseMutationOptions<
+	CreateDevelopmentProjectResponse,
+	AxiosError<CreateDevelopmentProjectError>,
+	Options<CreateDevelopmentProjectData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CreateDevelopmentProjectResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateDevelopmentProjectError>,
 		Options<CreateDevelopmentProjectData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4469,10 +4494,14 @@ export const getDevelopmentTaskOptions = (options: Options<GetDevelopmentTaskDat
 
 export const startDevelopmentNextActionMutation = (
 	options?: Partial<Options<StartDevelopmentNextActionData>>,
-): UseMutationOptions<StartDevelopmentNextActionResponse, AxiosError<DefaultError>, Options<StartDevelopmentNextActionData>> => {
+): UseMutationOptions<
+	StartDevelopmentNextActionResponse,
+	AxiosError<StartDevelopmentNextActionError>,
+	Options<StartDevelopmentNextActionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		StartDevelopmentNextActionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<StartDevelopmentNextActionError>,
 		Options<StartDevelopmentNextActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4575,10 +4604,14 @@ export const getDevelopmentArtifactOptions = (options: Options<GetDevelopmentArt
 
 export const previewDevelopmentPatchMutation = (
 	options?: Partial<Options<PreviewDevelopmentPatchData>>,
-): UseMutationOptions<PreviewDevelopmentPatchResponse, AxiosError<DefaultError>, Options<PreviewDevelopmentPatchData>> => {
+): UseMutationOptions<
+	PreviewDevelopmentPatchResponse,
+	AxiosError<PreviewDevelopmentPatchError>,
+	Options<PreviewDevelopmentPatchData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		PreviewDevelopmentPatchResponse,
-		AxiosError<DefaultError>,
+		AxiosError<PreviewDevelopmentPatchError>,
 		Options<PreviewDevelopmentPatchData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4595,10 +4628,14 @@ export const previewDevelopmentPatchMutation = (
 
 export const applyDevelopmentPatchMutation = (
 	options?: Partial<Options<ApplyDevelopmentPatchData>>,
-): UseMutationOptions<ApplyDevelopmentPatchResponse, AxiosError<DefaultError>, Options<ApplyDevelopmentPatchData>> => {
+): UseMutationOptions<
+	ApplyDevelopmentPatchResponse,
+	AxiosError<ApplyDevelopmentPatchError>,
+	Options<ApplyDevelopmentPatchData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		ApplyDevelopmentPatchResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ApplyDevelopmentPatchError>,
 		Options<ApplyDevelopmentPatchData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -4617,12 +4654,12 @@ export const reconnectDevelopmentRepositoryMutation = (
 	options?: Partial<Options<ReconnectDevelopmentRepositoryData>>,
 ): UseMutationOptions<
 	ReconnectDevelopmentRepositoryResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ReconnectDevelopmentRepositoryError>,
 	Options<ReconnectDevelopmentRepositoryData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ReconnectDevelopmentRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ReconnectDevelopmentRepositoryError>,
 		Options<ReconnectDevelopmentRepositoryData>
 	> = {
 		mutationFn: async (fnOptions) => {

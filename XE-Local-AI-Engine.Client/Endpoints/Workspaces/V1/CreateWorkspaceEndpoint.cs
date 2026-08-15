@@ -16,7 +16,10 @@ public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFold
     {
         Post(LocalApiRoutes.Workspaces.Collection);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static descriptor => descriptor.AutoTagOverride("Workspaces"));
+        Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                                   .Produces(StatusCodes.Status404NotFound)
+                                                   .ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                                   .AutoTagOverride("Workspaces"));
     }
 
     public override async Task HandleAsync(CreateWorkspaceRequest req, CancellationToken ct)
@@ -29,6 +32,15 @@ public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFold
                 ct).ConfigureAwait(false);
 
             await Send.OkAsync(ToResponse(reference), ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderConflictException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
         }
         catch (SelectedFolderValidationException exception)
         {
