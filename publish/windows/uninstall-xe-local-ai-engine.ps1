@@ -14,7 +14,9 @@
       3. After an explicit confirmation, deletes ONLY the per-user data directory
          (%LOCALAPPDATA%\XE-Local-AI-Engine): node.sqlite, node.key, node-settings.json,
          hf-token.enc, the downloaded llama.cpp / stable-diffusion.cpp binaries, the
-         GGUF/image models, and the AgentHome workspace.
+         GGUF/image models, the AgentHome workspace, training-runtime\ (uv, the
+         provisioned Python interpreter and the multi-gigabyte package venv), and
+         training\ (downloaded base checkpoints, datasets and run artifacts).
 
     It NEVER deletes anything outside that exact directory. Portable-zip users: after
     running this, also delete the folder you unzipped the app into.

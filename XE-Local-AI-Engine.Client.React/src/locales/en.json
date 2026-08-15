@@ -76,7 +76,10 @@
 		"customTools": "Custom Tools",
 		"benchmarks": "Benchmarks",
 		"preview": "Open Canvas",
-		"images": "Image Generation"
+		"images": "Image Generation",
+		"trainingGroup": "Training",
+		"training": "Training",
+		"trainingDatasets": "Datasets"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -3960,6 +3963,58 @@
 		"customTools": {
 			"title": "Custom tools",
 			"subtitle": "Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default."
+		},
+		"training": {
+			"title": "Training",
+			"subtitle": "Fine-tune a local model on your own data. Training holds the whole GPU while it runs, so no chat, image or benchmark work happens at the same time.",
+			"runtime": {
+				"title": "Python training runtime",
+				"description": "Fine-tuning runs in a pinned, uv-managed Python environment. It is installed once and used by every training run.",
+				"prerequisites": "Prerequisites",
+				"install": "Install runtime",
+				"reinstall": "Reinstall runtime",
+				"remove": "Remove runtime",
+				"cancel": "Cancel install",
+				"failed": "Install failed",
+				"installedPython": "Python {{version}}",
+				"installedTorch": "torch {{version}}",
+				"phase": {
+					"Idle": "Not installed",
+					"AcquiringUv": "Downloading uv",
+					"ProvisioningPython": "Provisioning Python",
+					"InstallingPackages": "Installing packages",
+					"Verifying": "Verifying",
+					"Ready": "Ready",
+					"Failed": "Failed",
+					"Removing": "Removing"
+				}
+			},
+			"baseArtifacts": {
+				"title": "Base checkpoints",
+				"description": "Fine-tuning needs the original safetensors checkpoint, not a quantized copy. Enter the Hugging Face repository to download.",
+				"repoId": "Repository",
+				"revision": "Revision (optional)",
+				"download": "Download",
+				"status": "Status",
+				"license": "License",
+				"noLicense": "Not declared",
+				"gated": "Gated",
+				"size": "Size",
+				"empty": "No base checkpoints yet. Download one to make it available to training runs.",
+				"error": "Could not start the download.",
+				"progress": "File {{index}} of {{count}} — {{done}}",
+				"cancel": "Cancel download",
+				"delete": "Delete checkpoint",
+				"statusValue": {
+					"Downloading": "Downloading",
+					"Ready": "Ready",
+					"Failed": "Failed"
+				}
+			},
+			"datasets": {
+				"title": "Training datasets",
+				"subtitle": "Generate tool-calling datasets from a definition, review every sample, and export them for a training run."
+			}
 		}
 	},
 	"components": {
@@ -4450,5 +4505,57 @@
 	},
 	"notifications": {
 		"emptyMessage": "Done."
+	},
+	"training": {
+		"tabs": {
+			"definitions": "Definitions",
+			"datasets": "Datasets",
+			"mocks": "Tool mocks"
+		},
+		"generation": {
+			"title": "Generation in progress",
+			"counts": "{{completed}} of {{total}} samples · {{rejected}} rejected"
+		},
+		"definitions": {
+			"title": "Dataset definitions",
+			"empty": "No dataset definitions yet.",
+			"generate": "Generate",
+			"holdout": "{{percent}}% hold-out"
+		},
+		"datasets": {
+			"title": "Datasets",
+			"empty": "No datasets yet. Generate one from a definition.",
+			"revision": "Revision {{revision}}",
+			"counts": "{{total}} samples · {{good}} good · {{bad}} bad · {{rejected}} rejected · {{duplicate}} duplicate",
+			"delete": "Delete"
+		},
+		"samples": {
+			"title": "Samples — {{name}}",
+			"empty": "No samples match this filter.",
+			"approve": "Approve",
+			"reject": "Reject",
+			"relabel": "Mark as {{label}}",
+			"layerFailed": "failed",
+			"filter": {
+				"label": "Review state",
+				"all": "All",
+				"pending": "Pending",
+				"approved": "Approved",
+				"rejected": "Rejected"
+			}
+		},
+		"mocks": {
+			"title": "Tool mocks",
+			"empty": "No tool mocks yet. A generated call to anything but an approval-free read-only tool needs one.",
+			"rules": "{{count}} rules",
+			"verify": "Verify",
+			"enabled": "Enabled"
+		},
+		"export": {
+			"title": "Export ({{format}})"
+		},
+		"errors": {
+			"request": "The training request failed."
+		}
 	}
 }

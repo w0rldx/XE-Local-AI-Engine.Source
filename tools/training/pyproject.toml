@@ -1,0 +1,61 @@
+# Training runtime dependency closure (ADR 0005 decision 1).
+#
+# This file plus uv.lock ARE the runtime: `uv sync --locked` provisions the venv the
+# training subprocesses run in. Nothing here floats — an upgrade is a deliberate bump
+# re-verified against the live GPU gate, never a resolver's choice.
+#
+# Two pins that look arbitrary and are not:
+#
+#   * torch AND torchvision both come from the cu128 index. Pinning only torch leaves
+#     torchvision resolving from PyPI, which ships a cu130 build; the mismatch is not
+#     caught by the resolver and surfaces only at import time as
+#     "PyTorch and torchvision were compiled with different CUDA major versions",
+#     which breaks unsloth. cu130 is excluded anyway for the bitsandbytes ABI.
+#
+#   * tool.uv.environments narrows resolution to linux/x86_64. Without it uv also
+#     solves for darwin-arm64, where unsloth_zoo pulls mlx-lm, which requires
+#     transformers>=5, which contradicts the convert scripts' transformers==4.57.6 —
+#     an unsatisfiable split for a platform this runtime is gated off anyway
+#     (ITrainingRuntimeService is Linux-only).
+#
+# numpy is deliberately NOT the ~=1.26.4 that llama.cpp's own convert requirements
+# name: that pin has no cp313 wheel and cannot build on Python 3.13. The vendored
+# gguf-py declares numpy>=1.17 with no upper bound, so the convert tooling shares the
+# training stack's numpy 2.x rather than needing a second venv.
+#
+# The `gguf` PyPI package is intentionally absent — Slice 4 vendors gguf-py from the
+# pinned llama.cpp commit and puts it on PYTHONPATH; resolving it from PyPI would
+# silently substitute an unpinned upstream for the commit-verified copy.
+#
+# xformers is not a direct dependency: unsloth pulls a prebuilt wheel transitively and
+# PyTorch SDPA is the documented fallback, so nothing here needs a CUDA build step.
+
+[project]
+name = "xe-training-runtime"
+version = "0.1.0"
+description = "Pinned Python runtime for XE Local AI Engine fine-tuning and GGUF conversion."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "torch==2.11.0",
+    "torchvision==0.26.0",
+    "unsloth==2026.8.18",
+    "bitsandbytes==0.50.1",
+    "triton>=3.3.1",
+    # Convert-script closure (llama.cpp requirements-convert_legacy_llama.txt at the inference pin).
+    "transformers==4.57.6",
+    "numpy>=1.17",
+    "sentencepiece>=0.1.98,<0.3.0",
+    "protobuf>=4.21.0,<5.0.0",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
