@@ -30,7 +30,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Harvest_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(Guid.NewGuid()))
@@ -47,7 +47,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Harvest_WhenAgentUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(Guid.NewGuid()))
@@ -65,7 +65,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Harvest_WhenAgentExists_ReturnsOkWithCountsBody()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -96,7 +96,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(Guid.NewGuid(), Guid.NewGuid()))
@@ -113,7 +113,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenGoldenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -133,7 +133,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenManualCase_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -155,7 +155,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenCrossAgent_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -178,7 +178,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     [Test]
     public async Task Approve_WhenHarvestedDisabledAndOwned_ReturnsOkWithEnabledTrue()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
@@ -204,7 +204,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
         AssertEx.Equal("harvested", root.GetProperty("source").GetString());
     }
 
-    private static async Task<Guid> SeedGoldenAsync(TestingWebAppFactory factory, Guid agentId, GoldenConversationSource source, bool enabled)
+    private static async Task<Guid> SeedGoldenAsync(TestServerWebAppFactory factory, Guid agentId, GoldenConversationSource source, bool enabled)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IGoldenConversationStore>();
@@ -220,7 +220,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
         return added.Id;
     }
 
-    private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
+    private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
