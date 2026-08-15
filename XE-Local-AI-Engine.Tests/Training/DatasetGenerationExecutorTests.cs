@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -46,7 +47,7 @@ public sealed class DatasetGenerationExecutorTests
 
         var requestedModels = new List<string>();
         var executor = new DatasetGenerationExecutor(store, runner, pipeline, Resolver(requestedModels), Events(),
-            NullLogger<DatasetGenerationExecutor>.Instance);
+            new TrainingRunCancellationRegistry(), NullLogger<DatasetGenerationExecutor>.Instance);
 
         await executor.ExecuteAsync(Work(Dataset(Body("pinned-teacher.gguf", "PINNED INSTRUCTIONS", "pinned_tool"))), CancellationToken.None);
 
@@ -74,7 +75,7 @@ public sealed class DatasetGenerationExecutorTests
         var runner = Substitute.For<IStructuredAgentRunner>();
 
         var executor = new DatasetGenerationExecutor(store, runner, Substitute.For<ISampleValidationPipeline>(), Resolver([]), Events(),
-            NullLogger<DatasetGenerationExecutor>.Instance);
+            new TrainingRunCancellationRegistry(), NullLogger<DatasetGenerationExecutor>.Instance);
 
         await executor.ExecuteAsync(Work(Dataset(pinnedBody: null)), CancellationToken.None);
 

@@ -321,7 +321,7 @@ public sealed class TrainingExclusivityTests
         new(1,
             Guid.NewGuid(),
             1,
-            new TrainingDatasetRecord(Guid.NewGuid(), Guid.NewGuid(), 1, "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
+            new TrainingDatasetRecord(Guid.NewGuid(), Guid.NewGuid(), 1, null, "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
                 DatasetGenerationWorkStatus.Running, null));
 
     private static BenchmarkQueueHostedService BuildBenchmarkQueue(IBenchmarkStore store, IBenchmarkQueueSignal signal, IGpuWorkGate gate)

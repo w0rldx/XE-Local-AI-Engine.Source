@@ -48,6 +48,13 @@ public sealed class EvaluationResponse
     public required string ModelName { get; init; }
     public string? ModelContentFingerprint { get; init; }
     public required Guid DatasetId { get; init; }
+
+    /// <summary>
+    ///     The dataset content fingerprint the evaluation's hold-out membership was frozen against. Differs from the
+    ///     dataset's current fingerprint once the dataset was edited after the freeze.
+    /// </summary>
+    public required string DatasetContentFingerprint { get; init; }
+
     public required string Status { get; init; }
     public string? WorkStatus { get; init; }
     public required int TotalCount { get; init; }

@@ -32,7 +32,6 @@ public sealed class DatasetGenerationCancelTests
         var cancellations = new TrainingRunCancellationRegistry();
         var store = Substitute.For<ITrainingDatasetStore>();
         _ = store.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = store.GetDefinitionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Definition());
 
         var claims = 0;
         var polledAgain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -103,7 +102,8 @@ public sealed class DatasetGenerationCancelTests
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
-    private static TrainingDefinitionRecord Definition()
+    /// <summary>The definition body the dataset pinned at creation — generation reads it from the dataset, never the live row.</summary>
+    private static ReadOnlyMemory<byte> PinnedDefinition()
     {
         var body = new DatasetDefinitionBodyV1
         {
@@ -111,20 +111,13 @@ public sealed class DatasetGenerationCancelTests
             SystemInstructions = "produce examples",
             SampleKinds = [new DatasetSampleKindTargetV1("tool-call", 1, TrainingSampleLabel.Good)]
         };
-        return new TrainingDefinitionRecord(Guid.NewGuid(),
-            "definition",
-            TrainingDatasetKind.ToolCalling,
-            JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options),
-            DefinitionVersion: 1,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options);
     }
 
     private static DatasetGenerationClaimedWork Work(Guid datasetId) =>
         new(1,
             datasetId,
             1,
-            new TrainingDatasetRecord(datasetId, Guid.NewGuid(), 1, "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
+            new TrainingDatasetRecord(datasetId, Guid.NewGuid(), 1, PinnedDefinition(), "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
                 DatasetGenerationWorkStatus.Running, null));
 }
