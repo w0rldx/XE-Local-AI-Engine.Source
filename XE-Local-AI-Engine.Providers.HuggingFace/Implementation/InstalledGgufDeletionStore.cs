@@ -169,7 +169,15 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
             ProjectorSha256 = value.ProjectorSha256,
             SourceDisplayName = value.SourceDisplayName,
             MetadataSchemaVersion = value.MetadataSchemaVersion,
-            ModelContentFingerprint = value.ModelContentFingerprint
+            ModelContentFingerprint = value.ModelContentFingerprint,
+            DerivedFromRepoId = value.DerivedFromRepoId,
+            DerivedFromRevision = value.DerivedFromRevision,
+            DerivedFromContentFingerprint = value.DerivedFromContentFingerprint,
+            AdapterFileName = value.AdapterFileName,
+            AdapterSha256 = value.AdapterSha256,
+            AdapterSizeBytes = value.AdapterSizeBytes,
+            AdapterMemberFingerprint = value.AdapterMemberFingerprint,
+            BaseModelName = value.BaseModelName
         };
     }
 

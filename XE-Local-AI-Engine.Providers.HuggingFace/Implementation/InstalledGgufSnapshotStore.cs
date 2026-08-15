@@ -204,7 +204,15 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
             entry.Origin,
             entry.SourceDisplayName,
             entry.MetadataSchemaVersion,
-            entry.ModelContentFingerprint);
+            entry.ModelContentFingerprint,
+            entry.DerivedFromRepoId,
+            entry.DerivedFromRevision,
+            entry.DerivedFromContentFingerprint,
+            entry.AdapterFileName,
+            entry.AdapterSha256,
+            entry.AdapterSizeBytes,
+            entry.AdapterMemberFingerprint,
+            entry.BaseModelName);
         return new InstalledModelRegistryAliasSnapshot(entry.ModelName, registryValue, revision, weight, projector, sidecar);
     }
 
