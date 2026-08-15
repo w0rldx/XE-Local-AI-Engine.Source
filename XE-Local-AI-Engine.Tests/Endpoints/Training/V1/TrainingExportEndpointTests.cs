@@ -124,11 +124,15 @@ public sealed class TrainingExportEndpointTests
         AssertEx.False(body.Contains("/var/lib/xe", StringComparison.Ordinal), "The absolute staged path must stay server-side.");
     }
 
+    /// <summary>
+    ///     Delete goes through the export service, not the store: the store only removes the row, and the staged
+    ///     bytes have to go with it. The conflict still surfaces as a 409 from wherever it is raised.
+    /// </summary>
     [Test]
     public async Task DeleteArtifact_OncePromoted_ReturnsConflict()
     {
         await using var context = new Context();
-        _ = context.Store.DeleteArtifactAsync(ArtifactId, 2, Arg.Any<CancellationToken>())
+        _ = context.Exports.DeleteArtifactAsync(ArtifactId, 2, Arg.Any<CancellationToken>())
                    .Returns<Task>(_ => throw new TrainingConflictException("ArtifactPromoted"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, $"{Api}/artifacts/{ArtifactId}?expectedVersion=2");
