@@ -10,7 +10,6 @@ import re
 import sys
 from pathlib import Path
 
-
 CHECKSUM_NAME = "CHECKSUMS.sha256"
 MANIFEST_NAME = "RELEASE-MANIFEST.json"
 SPDX_NAME = "RELEASE.spdx.json"

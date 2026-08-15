@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 MODULE_PATH = Path(__file__).resolve().parents[1] / "release" / "verify-release-envelope.py"
 SPEC = importlib.util.spec_from_file_location("verify_release_envelope", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -52,10 +51,7 @@ class ReleaseEnvelopeTests(unittest.TestCase):
             "selfExclusions": ["RELEASE-MANIFEST.json", "CHECKSUMS.sha256"],
         }
         (root / "RELEASE-MANIFEST.json").write_text(json.dumps(manifest), encoding="utf-8")
-        checksums = [
-            f"{self.sha256(path)}  {path.name}"
-            for path in sorted(root.iterdir())
-        ]
+        checksums = [f"{self.sha256(path)}  {path.name}" for path in sorted(root.iterdir())]
         (root / "CHECKSUMS.sha256").write_text("\n".join(checksums) + "\n", encoding="utf-8")
         return root
 
@@ -115,9 +111,7 @@ class ReleaseEnvelopeTests(unittest.TestCase):
         ]
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         checksums = [
-            f"{self.sha256(path)}  {path.name}"
-            for path in sorted(root.iterdir())
-            if path.name != "CHECKSUMS.sha256"
+            f"{self.sha256(path)}  {path.name}" for path in sorted(root.iterdir()) if path.name != "CHECKSUMS.sha256"
         ]
         (root / "CHECKSUMS.sha256").write_text("\n".join(checksums) + "\n", encoding="utf-8")
 

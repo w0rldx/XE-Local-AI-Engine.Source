@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
-
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "verify_release_artifacts.py"
 REPOSITORY_ROOT = MODULE_PATH.parents[2]
@@ -278,8 +277,12 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
                 Path(temporary_directory),
                 {
                     **self.windows_compliance_files(),
-                    "current/wwwroot/component-manifest.json": b'{"components":[{"purl":"pkg:npm/react@19.2.7"},{"purl":"pkg:npm/zod@4.4.3"}]}',
-                    "current/wwwroot/licenses/frontend/FRONTEND-COMPONENTS.json": b'{"components":[{"purl":"pkg:npm/react@19.2.7"}]}',
+                    "current/wwwroot/component-manifest.json": (
+                        b'{"components":[{"purl":"pkg:npm/react@19.2.7"},{"purl":"pkg:npm/zod@4.4.3"}]}'
+                    ),
+                    "current/wwwroot/licenses/frontend/FRONTEND-COMPONENTS.json": (
+                        b'{"components":[{"purl":"pkg:npm/react@19.2.7"}]}'
+                    ),
                 },
             )
             with self.assertRaisesRegex(ValueError, "does not match detected components"):

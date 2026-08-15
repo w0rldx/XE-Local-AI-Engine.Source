@@ -13,6 +13,7 @@ Exit code 1 is reserved for "could not even emit the handshake".
 import json
 import platform
 import sys
+from typing import Any
 
 # Bumped whenever the handshake shape changes. The C# side refuses a runtime whose
 # probe reports a different major contract than it was built against.
@@ -40,7 +41,7 @@ def _probe_version(report, key, module_name):
 
 
 def main():
-    report = {
+    report: dict[str, Any] = {
         "contractVersion": CONTRACT_VERSION,
         "python": platform.python_version(),
         "platform": sys.platform,

@@ -7,7 +7,6 @@ import argparse
 import os
 import sys
 
-
 ProcessRecord = tuple[int, int, int, str, str]
 
 
@@ -27,14 +26,16 @@ def parse_snapshot(lines: list[str]) -> dict[int, ProcessRecord]:
 
 def read_proc_record(proc_root: str, pid: int) -> ProcessRecord | None:
     try:
-        stat = open(os.path.join(proc_root, str(pid), "stat"), encoding="utf-8").read()
+        with open(os.path.join(proc_root, str(pid), "stat"), encoding="utf-8") as stat_file:
+            stat = stat_file.read()
         end = stat.rfind(")")
         if end < 0:
             return None
         comm = stat[stat.find("(") + 1 : end]
         fields = stat[end + 2 :].split()
         ppid, sid, starttime = int(fields[1]), int(fields[3]), int(fields[19])
-        raw_args = open(os.path.join(proc_root, str(pid), "cmdline"), "rb").read()
+        with open(os.path.join(proc_root, str(pid), "cmdline"), "rb") as cmdline_file:
+            raw_args = cmdline_file.read()
         command = raw_args.replace(b"\0", b" ").decode("utf-8", errors="replace").strip()
         return ppid, sid, starttime, comm, command
     except (FileNotFoundError, PermissionError, ProcessLookupError, ValueError, IndexError):
@@ -63,14 +64,11 @@ def select(
     def monitors_apphost(command: str) -> bool:
         tokens = command.split()
         return any(
-            tokens[index] == "--monitor" and tokens[index + 1] == str(apphost_pid)
-            for index in range(len(tokens) - 1)
+            tokens[index] == "--monitor" and tokens[index + 1] == str(apphost_pid) for index in range(len(tokens) - 1)
         )
 
     anchors = {
-        pid
-        for pid, (_, _, _, comm, command) in processes.items()
-        if comm == "dcp" and monitors_apphost(command)
+        pid for pid, (_, _, _, comm, command) in processes.items() if comm == "dcp" and monitors_apphost(command)
     }
 
     app = processes.get(apphost_pid)

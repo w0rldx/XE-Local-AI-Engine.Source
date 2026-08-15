@@ -12,8 +12,7 @@ import datetime as dt
 import json
 import sys
 from pathlib import Path
-from typing import Any
-
+from typing import Any, TypeGuard
 
 REQUIRED_CATEGORIES = {
     "project-rights-holder-apache-authority",
@@ -28,7 +27,7 @@ REQUIRED_CATEGORIES = {
 }
 
 
-def nonblank(value: Any) -> bool:
+def nonblank(value: Any) -> TypeGuard[str]:
     return isinstance(value, str) and bool(value.strip())
 
 
@@ -43,9 +42,7 @@ def parse_date(value: Any, field: str, errors: list[str]) -> dt.date | None:
         return None
 
 
-def validate_evidence_path(
-    repository_root: Path, category_id: str, value: Any, errors: list[str]
-) -> None:
+def validate_evidence_path(repository_root: Path, category_id: str, value: Any, errors: list[str]) -> None:
     if value is None:
         return
     if not nonblank(value):
@@ -57,9 +54,7 @@ def validate_evidence_path(
         resolved = candidate.resolve(strict=True)
         resolved.relative_to(repository_root.resolve(strict=True))
     except (FileNotFoundError, ValueError):
-        errors.append(
-            f"{category_id}: evidence repository_path is missing or escapes the repository: {value}"
-        )
+        errors.append(f"{category_id}: evidence repository_path is missing or escapes the repository: {value}")
         return
 
     if not resolved.is_file():
@@ -80,9 +75,7 @@ def validate(register: Any, repository_root: Path, today: dt.date) -> list[str]:
     if not isinstance(confirmation, dict):
         errors.append("owner_confirmation_input must be an object")
     elif confirmation.get("status") not in {"pending_durable_evidence", "superseded_by_register"}:
-        errors.append(
-            "owner_confirmation_input.status must be pending_durable_evidence or superseded_by_register"
-        )
+        errors.append("owner_confirmation_input.status must be pending_durable_evidence or superseded_by_register")
 
     decisions = register.get("decisions")
     if not isinstance(decisions, list):
@@ -154,9 +147,7 @@ def validate(register: Any, repository_root: Path, today: dt.date) -> list[str]:
                 continue
             if not nonblank(item.get("reference")):
                 errors.append(f"{category_id}: evidence[{evidence_index}].reference must be non-blank")
-            validate_evidence_path(
-                repository_root, category_id, item.get("repository_path"), errors
-            )
+            validate_evidence_path(repository_root, category_id, item.get("repository_path"), errors)
 
     return errors
 

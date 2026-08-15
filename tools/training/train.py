@@ -98,7 +98,7 @@ class _Heartbeat:
 
 
 def read_config(path):
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         config = json.load(handle)
     if config.get("contractVersion") != CONTRACT_VERSION:
         fail("contract", "The job configuration contract version is not supported by this trainer.")
@@ -179,7 +179,10 @@ def derive_delimiters(tokenizer):
     # Gemma names the assistant turn "model"; every other family in scope names it "assistant".
     response = delimiter_before(rendered, assistant_marker, ("assistant", "model"))
     if not instruction or not response:
-        fail("template", "The base model's chat template has no recognisable turn delimiters, so loss masking cannot be applied.")
+        fail(
+            "template",
+            "The base model's chat template has no recognisable turn delimiters, so loss masking cannot be applied.",
+        )
     return instruction, response
 
 
@@ -310,7 +313,8 @@ def main():
                 report_to="none",
                 # Live-found: `datasets` defaults num_proc from the CPU count and forks a multiprocessing Manager for
                 # tokenization; inside this sandboxed, CUDA-initialized process the forked child dies (EOFError on the
-                # manager pipe). One process is correct here - the datasets are small and the model is already on the GPU.
+                # manager pipe). One process is correct here - the datasets are small and the model is
+                # already on the GPU.
                 dataset_num_proc=1,
             ),
             callbacks=[ProgressCallback()],

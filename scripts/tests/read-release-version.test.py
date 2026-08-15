@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 MODULE_PATH = Path(__file__).resolve().parents[1] / "read-release-version.py"
 SPEC = importlib.util.spec_from_file_location("read_release_version", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -35,8 +34,7 @@ class ReleaseVersionReaderTests(unittest.TestCase):
 
     def test_stable_version_allows_empty_suffix(self) -> None:
         path = self.manifest(
-            "<Project><PropertyGroup><VersionPrefix>1.2.3</VersionPrefix>"
-            "<VersionSuffix /></PropertyGroup></Project>"
+            "<Project><PropertyGroup><VersionPrefix>1.2.3</VersionPrefix><VersionSuffix /></PropertyGroup></Project>"
         )
         self.assertEqual("1.2.3", MODULE.read_version(path))
 

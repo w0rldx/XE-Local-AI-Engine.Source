@@ -15,10 +15,9 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable
-
 
 CONFIGS = [
     ("baseline", 1, 512, 512, 2048, False),
@@ -46,12 +45,14 @@ def post(port: int, route: str, payload: dict, timeout: float = 120) -> dict:
         data=json.dumps(payload, separators=(",", ":")).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    # Fixed http://127.0.0.1 prefix built directly above; no caller-supplied scheme reaches here.
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
         return json.load(response)
 
 
 def get(port: int, route: str, timeout: float = 2) -> str:
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=timeout) as response:
+    # Fixed http://127.0.0.1 prefix; no caller-supplied scheme reaches here.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=timeout) as response:  # nosec B310
         return response.read().decode()
 
 
@@ -145,11 +146,7 @@ class Sampler:
         while not self._stop.wait(0.05):
             try:
                 fields = Path(f"/proc/{self.pid}/status").read_text().splitlines()
-                rss = next(
-                    int(line.split()[1]) * 1024
-                    for line in fields
-                    if line.startswith("VmRSS:")
-                )
+                rss = next(int(line.split()[1]) * 1024 for line in fields if line.startswith("VmRSS:"))
                 self.peak_rss_bytes = max(self.peak_rss_bytes, rss)
             except (OSError, StopIteration):
                 pass
@@ -168,9 +165,7 @@ class Sampler:
 
 def percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
-    return ordered[
-        max(0, min(len(ordered) - 1, int((len(ordered) * fraction + 0.999999)) - 1))
-    ]
+    return ordered[max(0, min(len(ordered) - 1, int(len(ordered) * fraction + 0.999999) - 1))]
 
 
 def tokenize(port: int, content: str) -> int:
@@ -183,10 +178,7 @@ def tokenize(port: int, content: str) -> int:
 
 
 def distinct_inputs(prefix: str, text: str, count: int, label: str) -> list[str]:
-    return [
-        f"{prefix}{text} Deterministic {label} input {index:02d}."
-        for index in range(count)
-    ]
+    return [f"{prefix}{text} Deterministic {label} input {index:02d}." for index in range(count)]
 
 
 def embedding(port: int, inputs: list[str]) -> dict:
@@ -252,17 +244,11 @@ def build_corpus(port: int, role: str) -> dict:
     fn = role_request(role)
     prefix = "search_document: " if role == "embedding" else ""
     short_text = "A concise local inference note."
-    median_text = (
-        "Scheduling affects independent request occupancy and physical batch capacity. "
-        * 18
-    ).strip()
+    median_text = ("Scheduling affects independent request occupancy and physical batch capacity. " * 18).strip()
     short = distinct_inputs(prefix, short_text, 16, "short")
     median = distinct_inputs(prefix, median_text, 8, "median")
     large = distinct_inputs(prefix, median_text, 16, "large")
-    concurrent = [
-        distinct_inputs(prefix, short_text, 2, f"concurrent-{batch:02d}")
-        for batch in range(8)
-    ]
+    concurrent = [distinct_inputs(prefix, short_text, 2, f"concurrent-{batch:02d}") for batch in range(8)]
 
     low, high, chosen = 1, 700, ""
     while low <= high:
@@ -289,9 +275,7 @@ def build_corpus(port: int, role: str) -> dict:
         },
         "maximum_construction": {
             "role": role,
-            "actual_request_route": (
-                "/v1/embeddings" if role == "embedding" else "/v1/rerank"
-            ),
+            "actual_request_route": ("/v1/embeddings" if role == "embedding" else "/v1/rerank"),
             "includes_role_template_overhead": True,
         },
     }
@@ -299,11 +283,7 @@ def build_corpus(port: int, role: str) -> dict:
 
 def canonicalize_output(value):
     if isinstance(value, dict):
-        return {
-            key: canonicalize_output(item)
-            for key, item in value.items()
-            if key not in IGNORED_OUTPUT_KEYS
-        }
+        return {key: canonicalize_output(item) for key, item in value.items() if key not in IGNORED_OUTPUT_KEYS}
     if isinstance(value, list):
         return [canonicalize_output(item) for item in value]
     return value
@@ -329,16 +309,12 @@ def outputs_equivalent(left, right, tolerance: float = 1e-5) -> bool:
         return abs(float(left) - float(right)) <= tolerance
     if isinstance(left, list) and isinstance(right, list):
         return len(left) == len(right) and all(
-            outputs_equivalent(a, b, tolerance)
-            for a, b in zip(left, right, strict=True)
+            outputs_equivalent(a, b, tolerance) for a, b in zip(left, right, strict=True)
         )
     if isinstance(left, dict) and isinstance(right, dict):
         keys = (set(left) | set(right)) - IGNORED_OUTPUT_KEYS
         return all(
-            key in left
-            and key in right
-            and outputs_equivalent(left[key], right[key], tolerance)
-            for key in keys
+            key in left and key in right and outputs_equivalent(left[key], right[key], tolerance) for key in keys
         )
     return left == right
 
@@ -377,9 +353,7 @@ def scenario(fn, port: int, items, repeats: int, concurrent: bool = False) -> di
         "median_seconds": statistics.median(elapsed),
         "p95_seconds": percentile(elapsed, 0.95),
         "median_items_per_second": item_count / statistics.median(elapsed),
-        "repeat_deterministic": all(
-            outputs_equivalent(canonical, item) for item in outputs[1:]
-        ),
+        "repeat_deterministic": all(outputs_equivalent(canonical, item) for item in outputs[1:]),
         "canonical_output_sha256": canonical_output_digest(canonical),
         "_canonical_output": canonical,
     }
@@ -395,10 +369,7 @@ def rejected_scenario(error: urllib.error.HTTPError) -> dict:
 
 
 def parse_context_readback(log_text: str) -> dict:
-    slots = [
-        int(value)
-        for value in re.findall(r"new slot, n_ctx = (\d+)", log_text)
-    ]
+    slots = [int(value) for value in re.findall(r"new slot, n_ctx = (\d+)", log_text)]
     if not slots:
         return {
             "status": "missing",
@@ -417,10 +388,7 @@ def wait_ready(process: subprocess.Popen, port: int, log_path: Path):
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise RuntimeError(
-                f"server exited {process.returncode}: "
-                f"{log_path.read_text(errors='replace')[-4000:]}"
-            )
+            raise RuntimeError(f"server exited {process.returncode}: {log_path.read_text(errors='replace')[-4000:]}")
         try:
             if "ok" in get(port, "/health").lower():
                 return
@@ -464,11 +432,7 @@ def run_config(
         str(args.cpu_threads),
     ]
     argv += ["--kv-unified" if unified else "--no-kv-unified"]
-    argv += (
-        ["--embeddings", "--pooling", "mean"]
-        if role == "embedding"
-        else ["--rerank", "--pooling", "rank"]
-    )
+    argv += ["--embeddings", "--pooling", "mean"] if role == "embedding" else ["--rerank", "--pooling", "rank"]
     log_path = Path(args.raw_dir) / f"{backend}-{role}-{name}.log"
     with log_path.open("w+") as log:
         process = subprocess.Popen(
@@ -484,21 +448,14 @@ def run_config(
             fn = role_request(role)
             preflight = actual_request_preflight(fn, port, corpus["max"], role)
             log.flush()
-            context_readback = parse_context_readback(
-                log_path.read_text(errors="replace")
-            )
-            gate = (
-                preflight["status"] == "accepted"
-                and context_readback["status"] == "measured"
-            )
+            context_readback = parse_context_readback(log_path.read_text(errors="replace"))
+            gate = preflight["status"] == "accepted" and context_readback["status"] == "measured"
             result = {
                 "name": name,
                 "role": role,
                 "backend": backend,
                 "argv": argv,
-                "argv_sha256": hashlib.sha256(
-                    b"\0".join(item.encode() for item in argv)
-                ).hexdigest(),
+                "argv_sha256": hashlib.sha256(b"\0".join(item.encode() for item in argv)).hexdigest(),
                 "parallel": parallel,
                 "n_batch": batch,
                 "n_ubatch": ubatch,
@@ -527,12 +484,9 @@ def run_config(
                 result["peak_rss_bytes"] = sampler.peak_rss_bytes
                 result["process_gpu_residency"] = sampler.gpu_residency
                 result["repeat_determinism_passed"] = all(
-                    item["repeat_deterministic"]
-                    for item in result["scenarios"].values()
+                    item["repeat_deterministic"] for item in result["scenarios"].values()
                 )
-                if any(
-                    item.get("rejected") for item in result["scenarios"].values()
-                ):
+                if any(item.get("rejected") for item in result["scenarios"].values()):
                     result["token_gate"]["passed"] = False
             return result, corpus
         finally:
@@ -601,11 +555,7 @@ def evaluate(results: list[dict]) -> dict:
     comparisons = []
     for backend in ("cuda", "cpu"):
         for role in ("embedding", "reranker"):
-            group = [
-                item
-                for item in results
-                if item["backend"] == backend and item["role"] == role
-            ]
+            group = [item for item in results if item["backend"] == backend and item["role"] == role]
             baseline = next(item for item in group if item["name"] == "baseline")
             eligible, baseline_reason = baseline_eligible(baseline)
             for scenario_name in SCENARIOS:
@@ -648,29 +598,19 @@ def evaluate(results: list[dict]) -> dict:
                         deltas[scenario_name] = None
                     else:
                         deltas[scenario_name] = (
-                            new["median_items_per_second"]
-                            / old["median_items_per_second"]
-                            - 1
+                            new["median_items_per_second"] / old["median_items_per_second"] - 1
                         ) * 100
                 old_rss = baseline.get("peak_rss_bytes", 0)
                 new_rss = candidate.get("peak_rss_bytes", 0)
-                rss_delta = (
-                    (new_rss / old_rss - 1) * 100
-                    if old_rss > 0 and new_rss > 0
-                    else None
-                )
+                rss_delta = (new_rss / old_rss - 1) * 100 if old_rss > 0 and new_rss > 0 else None
                 gpu_delta = gpu_memory_delta(baseline, candidate, backend)
                 qualifies = (
                     comparable
-                    and candidate.get("context_readback", {}).get("status")
-                    == "measured"
+                    and candidate.get("context_readback", {}).get("status") == "measured"
                     and candidate.get("token_gate", {}).get("passed") is True
                     and candidate.get("repeat_determinism_passed") is True
                     and all(semantic_equivalence.values())
-                    and all(
-                        value is not None and value >= 20
-                        for value in deltas.values()
-                    )
+                    and all(value is not None and value >= 20 for value in deltas.values())
                     and rss_delta is not None
                     and rss_delta <= 5
                     and gpu_delta["passed"] is True
@@ -712,9 +652,7 @@ def extract_baseline_outputs(results: list[dict]) -> dict:
         role = item["role"]
         if item["name"] == "baseline":
             outputs.setdefault(backend, {})[role] = {
-                scenario_name: item["scenarios"][scenario_name].get(
-                    "_canonical_output"
-                )
+                scenario_name: item["scenarios"][scenario_name].get("_canonical_output")
                 for scenario_name in SCENARIOS
                 if scenario_name in item.get("scenarios", {})
             }
@@ -744,7 +682,7 @@ def main():
         }.items()
     }
     results: list[dict] = []
-    corpora: dict[str, dict[str, dict]] = {}
+    corpora: dict[str, dict[str, dict | None]] = {}
     port = 19300
     for backend in ("cuda", "cpu"):
         corpora[backend] = {}
@@ -787,10 +725,7 @@ def main():
                 "and no production launch-policy edit is made."
             ),
             "supervisor_sha256": digest(
-                Path(
-                    "XE-Local-AI-Engine.Providers.LlamaServer/"
-                    "Implementation/LlamaServerProcessSupervisor.cs"
-                )
+                Path("XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerProcessSupervisor.cs")
             ),
         },
         "gaps": [
@@ -802,9 +737,7 @@ def main():
         "decision": decision,
     }
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.output).write_text(
-        json.dumps(artifact, indent=2, sort_keys=True) + "\n"
-    )
+    Path(args.output).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
     print(f"Wrote {args.output}")
 
 

@@ -10,6 +10,7 @@ JSON artifact that can later be compared without reconstructing operator state.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import math
@@ -26,12 +27,11 @@ import tempfile
 import threading
 import time
 import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
-
+from typing import Any, TypeGuard
 
 SCHEMA_VERSION = "1.0"
 MAX_CAPTURE_STREAM_BYTES = 256 * 1024
@@ -42,13 +42,21 @@ GPU_UUID_PATTERN = re.compile(
     re.IGNORECASE,
 )
 FIT_FLAGS_WITH_VALUE = (
-    "-c", "--ctx-size",
-    "-ngl", "--gpu-layers", "--n-gpu-layers",
-    "-ts", "--tensor-split",
-    "-ot", "--override-tensor",
-    "-ctk", "--cache-type-k",
-    "-ctv", "--cache-type-v",
-    "-fa", "--flash-attn",
+    "-c",
+    "--ctx-size",
+    "-ngl",
+    "--gpu-layers",
+    "--n-gpu-layers",
+    "-ts",
+    "--tensor-split",
+    "-ot",
+    "--override-tensor",
+    "-ctk",
+    "--cache-type-k",
+    "-ctv",
+    "--cache-type-v",
+    "-fa",
+    "--flash-attn",
 )
 FIT_FLAG_CANONICAL = {
     "--ctx-size": "-c",
@@ -61,20 +69,34 @@ FIT_FLAG_CANONICAL = {
     "--flash-attn": "-fa",
 }
 FIT_HELPER_ARGS_WITH_VALUE = {
-    "-m", "--model",
-    "-c", "--ctx-size",
-    "-b", "--batch-size",
-    "-ub", "--ubatch-size",
-    "-np", "--parallel",
-    "-fa", "--flash-attn",
-    "-ctk", "--cache-type-k",
-    "-ctv", "--cache-type-v",
-    "-dev", "--device",
-    "-sm", "--split-mode",
-    "-mg", "--main-gpu",
-    "-fit", "--fit",
-    "-fitt", "--fit-target",
-    "-fitc", "--fit-ctx",
+    "-m",
+    "--model",
+    "-c",
+    "--ctx-size",
+    "-b",
+    "--batch-size",
+    "-ub",
+    "--ubatch-size",
+    "-np",
+    "--parallel",
+    "-fa",
+    "--flash-attn",
+    "-ctk",
+    "--cache-type-k",
+    "-ctv",
+    "--cache-type-v",
+    "-dev",
+    "--device",
+    "-sm",
+    "--split-mode",
+    "-mg",
+    "--main-gpu",
+    "-fit",
+    "--fit",
+    "-fitt",
+    "--fit-target",
+    "-fitc",
+    "--fit-ctx",
 }
 FIT_HELPER_VALUELESS_ARGS = {"--mlock", "--mmap", "--no-mmap", "--no-host", "--no-op-offload"}
 FRAMEWORK_COMMAND_PARTITIONS = {"framework-contract", "application-harness", "provider-contract"}
@@ -100,7 +122,7 @@ class CaptureError(RuntimeError):
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -144,10 +166,8 @@ def write_json_atomic(path: Path, value: Any) -> None:
         raise CaptureError("Could not write gate verdict to the requested destination") from exc
     finally:
         if temporary_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def sha256_file(path: Path) -> str:
@@ -182,7 +202,7 @@ def require_string(obj: dict[str, Any], key: str, context: str) -> str:
     return value
 
 
-def is_finite_number(value: Any) -> bool:
+def is_finite_number(value: Any) -> TypeGuard[int | float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
     try:
@@ -192,14 +212,10 @@ def is_finite_number(value: Any) -> bool:
 
 
 def is_sha256(value: Any) -> bool:
-    return (
-        isinstance(value, str)
-        and len(value) == 64
-        and all(character in "0123456789abcdef" for character in value)
-    )
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
-def is_safe_policy_token(value: Any) -> bool:
+def is_safe_policy_token(value: Any) -> TypeGuard[str]:
     return (
         isinstance(value, str)
         and len(value) <= POLICY_SAFE_TOKEN_MAX_LENGTH
@@ -219,7 +235,9 @@ def verify_identity(label: str, entry: dict[str, Any]) -> dict[str, Any]:
         **entry,
         "path": str(raw_path),
         "sha256_verified": True,
-        "runtime_local_dependencies": runtime_local_dependencies(raw_path) if raw_path.is_file() and os.access(raw_path, os.X_OK) else None,
+        "runtime_local_dependencies": runtime_local_dependencies(raw_path)
+        if raw_path.is_file() and os.access(raw_path, os.X_OK)
+        else None,
     }
 
 
@@ -229,14 +247,18 @@ def runtime_local_dependencies(binary: Path) -> dict[str, Any]:
     if probe["exit_code"] == 0:
         binary_directory = binary.parent.resolve()
         for line in probe["stdout"].splitlines():
-            candidate = line.partition("=>")[2].strip().split(" ", 1)[0] if "=>" in line else line.strip().split(" ", 1)[0]
+            candidate = (
+                line.partition("=>")[2].strip().split(" ", 1)[0] if "=>" in line else line.strip().split(" ", 1)[0]
+            )
             if not candidate.startswith("/"):
                 continue
             path = Path(candidate).resolve()
             if path.is_file() and path.parent == binary_directory:
                 dependencies.append({"name": path.name, "sha256": sha256_file(path)})
     dependencies.sort(key=lambda item: item["name"])
-    manifest_digest = hashlib.sha256(json.dumps(dependencies, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+    manifest_digest = hashlib.sha256(
+        json.dumps(dependencies, separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
     return {"ldd": probe, "files": dependencies, "manifest_sha256": manifest_digest}
 
 
@@ -314,7 +336,9 @@ def verify_framework_identity(framework: dict[str, Any], commands: list[dict[str
 
     package_pins = framework.get("central_package_pins")
     if not isinstance(package_pins, dict):
-        raise CaptureError("spec.framework.central_package_pins must be an identity object for framework/application commands")
+        raise CaptureError(
+            "spec.framework.central_package_pins must be an identity object for framework/application commands"
+        )
     package_pins_path = Path(require_string(package_pins, "path", "spec.framework.central_package_pins"))
     if package_pins_path.is_absolute():
         raise CaptureError("spec.framework.central_package_pins.path must be relative to each command Git root")
@@ -373,26 +397,26 @@ def verify_framework_identity(framework: dict[str, Any], commands: list[dict[str
                 raise CaptureError(f"{assembly_context}.path must identify a built assembly under the command Git root")
             if not assembly_path.is_file():
                 raise CaptureError(f"{assembly_context}.path must identify an existing assembly file")
-            verified_assemblies.append(
-                verify_identity(assembly_context, {**assembly, "path": str(assembly_path)})
-            )
-        command_trees.append({
-            "command": require_string(command, "name", context),
-            "partition": command.get("partition"),
-            "cwd": str(cwd),
-            "git_root": str(git_root),
-            "git_head": head,
-            "git_head_verified": True,
-            "git_clean": True,
-            "central_package_pins": verified_pins,
-            "resolved_package_versions": {
-                package_name: resolved_versions.get(package_name)
-                for field, package_name in FRAMEWORK_PACKAGE_NAMES.items()
-                if field in framework
-            },
-            "declared_versions_verified": True,
-            "assemblies": verified_assemblies,
-        })
+            verified_assemblies.append(verify_identity(assembly_context, {**assembly, "path": str(assembly_path)}))
+        command_trees.append(
+            {
+                "command": require_string(command, "name", context),
+                "partition": command.get("partition"),
+                "cwd": str(cwd),
+                "git_root": str(git_root),
+                "git_head": head,
+                "git_head_verified": True,
+                "git_clean": True,
+                "central_package_pins": verified_pins,
+                "resolved_package_versions": {
+                    package_name: resolved_versions.get(package_name)
+                    for field, package_name in FRAMEWORK_PACKAGE_NAMES.items()
+                    if field in framework
+                },
+                "declared_versions_verified": True,
+                "assemblies": verified_assemblies,
+            }
+        )
     return {
         "required": True,
         "verified": True,
@@ -410,11 +434,13 @@ def capture_ambient() -> dict[str, Any]:
             key, separator, value = line.partition(":")
             if separator and key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
                 memory[key + "KiB"] = int(value.strip().split()[0])
-    gpu = capture_text([
-        "nvidia-smi",
-        "--query-gpu=index,name,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
-        "--format=csv,noheader,nounits",
-    ])
+    gpu = capture_text(
+        [
+            "nvidia-smi",
+            "--query-gpu=index,name,driver_version,memory.total,memory.free,memory.used,utilization.gpu",
+            "--format=csv,noheader,nounits",
+        ]
+    )
     return {"captured_at_utc": utc_now(), "load_average_1m_5m_15m": load_average, "memory": memory, "nvidia_smi": gpu}
 
 
@@ -483,7 +509,9 @@ def capture_host(runtime_binary: Path) -> dict[str, Any]:
         "python": platform.python_version(),
         "runtime_version": capture_text([str(runtime_binary), "--version"]),
         "runtime_devices": capture_text([str(runtime_binary), "--list-devices"]),
-        "nvidia_smi_driver": capture_text(["nvidia-smi", "--query-gpu=index,name,driver_version", "--format=csv,noheader"]),
+        "nvidia_smi_driver": capture_text(
+            ["nvidia-smi", "--query-gpu=index,name,driver_version", "--format=csv,noheader"]
+        ),
         "repository_head": capture_text(["git", "rev-parse", "HEAD"]),
         "repository_status": capture_text(["git", "status", "--short"]),
     }
@@ -565,14 +593,14 @@ class BoundedStreamCapture:
                 self._complete = combined
                 return
             self._truncated = True
-            self._prefix = bytes(combined[:self._prefix_capacity])
-            self._suffix = bytearray(combined[-self._suffix_capacity:])
+            self._prefix = bytes(combined[: self._prefix_capacity])
+            self._suffix = bytearray(combined[-self._suffix_capacity :])
             self._complete.clear()
             return
 
         self._suffix.extend(encoded)
         if len(self._suffix) > self._suffix_capacity:
-            del self._suffix[:-self._suffix_capacity]
+            del self._suffix[: -self._suffix_capacity]
 
     def finish(self) -> tuple[str, dict[str, Any]]:
         digest = self._digest.hexdigest()
@@ -580,11 +608,7 @@ class BoundedStreamCapture:
         if not self._truncated:
             return self._complete.decode("utf-8", errors="ignore"), metadata
         marker = f"\n... <truncated; full sha256={digest}> ...\n"
-        bounded = (
-            self._prefix.decode("utf-8", errors="ignore")
-            + marker
-            + self._suffix.decode("utf-8", errors="ignore")
-        )
+        bounded = self._prefix.decode("utf-8", errors="ignore") + marker + self._suffix.decode("utf-8", errors="ignore")
         return bounded, metadata
 
 
@@ -598,34 +622,40 @@ def drain_capture_stream(stream: Any, capture: BoundedStreamCapture, errors: lis
         stream.close()
 
 
-def cleanup_process_group(process: subprocess.Popen[str],
-        readers: tuple[threading.Thread, threading.Thread],
-        executable: str) -> None:
+def cleanup_process_group(
+    process: subprocess.Popen[str], readers: tuple[threading.Thread, threading.Thread], executable: str
+) -> None:
     deadline = time.monotonic() + PROCESS_CLEANUP_TIMEOUT_SECONDS
     signal_process_group(process, signal.SIGKILL)
     try:
         process.wait(timeout=max(0.001, deadline - time.monotonic()))
     except subprocess.TimeoutExpired as exc:
-        raise CaptureError(
-            f"Cleanup failed: process group for {executable!r} did not exit after SIGKILL"
-        ) from exc
+        raise CaptureError(f"Cleanup failed: process group for {executable!r} did not exit after SIGKILL") from exc
     for reader in readers:
         reader.join(timeout=max(0.0, deadline - time.monotonic()))
     if any(reader.is_alive() for reader in readers):
         raise CaptureError(f"Cleanup failed: output readers for {executable!r} did not finish")
 
 
-def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cwd: str | None, env: dict[str, str]) -> dict[str, Any]:
+def run_once(
+    argv: list[str], timeout_seconds: float, expected_timeout: bool, cwd: str | None, env: dict[str, str]
+) -> dict[str, Any]:
     start = time.monotonic()
     try:
-        process = subprocess.Popen(argv, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        process = subprocess.Popen(
+            argv, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+        )
     except OSError as exc:
         raise CaptureError(f"Could not start {argv[0]!r}: {exc}") from exc
     stdout_capture = BoundedStreamCapture()
     stderr_capture = BoundedStreamCapture()
     reader_errors: list[BaseException] = []
-    stdout_reader = threading.Thread(target=drain_capture_stream, args=(process.stdout, stdout_capture, reader_errors), daemon=True)
-    stderr_reader = threading.Thread(target=drain_capture_stream, args=(process.stderr, stderr_capture, reader_errors), daemon=True)
+    stdout_reader = threading.Thread(
+        target=drain_capture_stream, args=(process.stdout, stdout_capture, reader_errors), daemon=True
+    )
+    stderr_reader = threading.Thread(
+        target=drain_capture_stream, args=(process.stderr, stderr_capture, reader_errors), daemon=True
+    )
     stdout_reader.start()
     stderr_reader.start()
     cleanup_finished = False
@@ -646,10 +676,8 @@ def run_once(argv: list[str], timeout_seconds: float, expected_timeout: bool, cw
         timed_out = process.poll() is None
         if timed_out:
             signal_process_group(process, signal.SIGTERM)
-            try:
+            with contextlib.suppress(subprocess.TimeoutExpired):
                 process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
-            except subprocess.TimeoutExpired:
-                pass
         cleanup_process_group(process, (stdout_reader, stderr_reader), argv[0])
         cleanup_finished = True
         if reader_errors:
@@ -730,7 +758,12 @@ def run_command(command: dict[str, Any], context: str) -> dict[str, Any]:
     for name in metric_names:
         values = [run["metrics"][name] for run in runs if name in run["metrics"]]
         if len(values) == repeats:
-            aggregates[name] = {"median": statistics.median(values), "p95": percentile95(values), "minimum": min(values), "maximum": max(values)}
+            aggregates[name] = {
+                "median": statistics.median(values),
+                "p95": percentile95(values),
+                "minimum": min(values),
+                "maximum": max(values),
+            }
     return {
         "name": require_string(command, "name", context),
         "partition": command.get("partition", "native-performance"),
@@ -775,8 +808,7 @@ def capture_baseline(spec_path: Path, output_path: Path) -> None:
     if not isinstance(auxiliaries, list) or not all(isinstance(item, dict) for item in auxiliaries):
         raise CaptureError("spec.runtime.auxiliary_binaries must be an array of identity objects")
     verified_auxiliaries = [
-        verify_identity(f"spec.runtime.auxiliary_binaries[{index}]", item)
-        for index, item in enumerate(auxiliaries)
+        verify_identity(f"spec.runtime.auxiliary_binaries[{index}]", item) for index, item in enumerate(auxiliaries)
     ]
     verified_runtime["auxiliary_binaries"] = verified_auxiliaries
     commands = spec.get("commands")
@@ -794,7 +826,11 @@ def capture_baseline(spec_path: Path, output_path: Path) -> None:
     for key in ("cache_state", "acceptance_rule"):
         require_string(benchmark, key, "spec.benchmark")
     gaps = coverage.get("unvalidated")
-    if not isinstance(gaps, list) or not gaps or not all(isinstance(item, dict) and item.get("target") and item.get("reason") for item in gaps):
+    if (
+        not isinstance(gaps, list)
+        or not gaps
+        or not all(isinstance(item, dict) and item.get("target") and item.get("reason") for item in gaps)
+    ):
         raise CaptureError("spec.coverage.unvalidated must explicitly list target/reason objects")
 
     framework_identity = verify_framework_identity(framework, commands)
@@ -894,11 +930,8 @@ def validate_kv_flash_equivalence(explore_flags: dict[str, list[str]], replay_fl
     kv_k = explore_flags.get("-ctk", [])
     kv_v = explore_flags.get("-ctv", [])
     flash = explore_flags.get("-fa", [])
-    if kv_k or kv_v or flash:
-        if len(kv_k) != 1 or kv_k != kv_v or flash != ["on"]:
-            raise CaptureError(
-                "Optimized Explore/replay must use matching -ctk/-ctv values with flash attention set to on"
-            )
+    if (kv_k or kv_v or flash) and (len(kv_k) != 1 or kv_k != kv_v or flash != ["on"]):
+        raise CaptureError("Optimized Explore/replay must use matching -ctk/-ctv values with flash attention set to on")
 
 
 def validate_concrete_fit_flags(fitted_flags: dict[str, list[str]]) -> None:
@@ -978,11 +1011,15 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         raise CaptureError("spec.commands and spec.launch_vectors must be objects")
     required = ("default_verbosity", "verbose", "fit_params", "explore", "replay")
     if any(not isinstance(commands.get(name), dict) for name in required):
-        raise CaptureError("spec.commands must contain default_verbosity, verbose, fit_params, explore, and replay objects")
+        raise CaptureError(
+            "spec.commands must contain default_verbosity, verbose, fit_params, explore, and replay objects"
+        )
     default_argv = command_argv(commands["default_verbosity"], "spec.commands.default_verbosity")
     verbose_argv = command_argv(commands["verbose"], "spec.commands.verbose")
     fit_argv = command_argv(commands["fit_params"], "spec.commands.fit_params")
-    if Path(default_argv[0]).resolve() != Path(server["path"]) or Path(verbose_argv[0]).resolve() != Path(server["path"]):
+    if Path(default_argv[0]).resolve() != Path(server["path"]) or Path(verbose_argv[0]).resolve() != Path(
+        server["path"]
+    ):
         raise CaptureError("default_verbosity and verbose must invoke the verified server binary")
     if Path(fit_argv[0]).resolve() != Path(helper["path"]):
         raise CaptureError("fit_params must invoke the verified fit-helper binary")
@@ -992,12 +1029,18 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         raise CaptureError("verbose argv must equal default_verbosity argv plus exactly one -v/--verbose flag")
     explore = vectors.get("explore")
     replay = vectors.get("replay")
-    if not isinstance(explore, list) or not isinstance(replay, list) or not all(isinstance(item, str) for item in explore + replay):
+    if (
+        not isinstance(explore, list)
+        or not isinstance(replay, list)
+        or not all(isinstance(item, str) for item in explore + replay)
+    ):
         raise CaptureError("launch_vectors.explore and replay must be string arrays")
     if option_values(explore, "--fit") != ["on"] or "--fit" in replay:
         raise CaptureError("explore must contain exactly one '--fit on' pair and replay must not contain --fit")
     if explore.count("--metrics") != 1 or replay.count("--metrics") != 1:
-        raise CaptureError("production Explore and replay profiling vectors must each contain exactly one --metrics flag")
+        raise CaptureError(
+            "production Explore and replay profiling vectors must each contain exactly one --metrics flag"
+        )
     verbose_count = sum(explore.count(flag) for flag in ("-v", "--verbose"))
     if verbose_count != 1:
         raise CaptureError("production Explore must contain exactly one -v/--verbose flag")
@@ -1005,7 +1048,9 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         raise CaptureError("replay must not contain the profiling-only -v/--verbose flag")
     explore_argv = command_argv(commands["explore"], "spec.commands.explore")
     replay_argv = command_argv(commands["replay"], "spec.commands.replay")
-    if Path(explore_argv[0]).resolve() != Path(server["path"]) or Path(replay_argv[0]).resolve() != Path(server["path"]):
+    if Path(explore_argv[0]).resolve() != Path(server["path"]) or Path(replay_argv[0]).resolve() != Path(
+        server["path"]
+    ):
         raise CaptureError("explore and replay must invoke the verified server binary")
     if explore_argv[1:] != explore or replay_argv[1:] != replay:
         raise CaptureError("launch_vectors must exactly equal the explore/replay command argv after the binary path")
@@ -1073,7 +1118,9 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         gpu_delta_percent = abs(replay_gpu_used - explore_gpu_used) / explore_gpu_used * 100
         gpu_within_tolerance = gpu_delta_percent <= tolerance
         if not gpu_within_tolerance:
-            raise CaptureError(f"Explore/replay global GPU-used delta {gpu_delta_percent:.2f}% exceeds {tolerance:.2f}%")
+            raise CaptureError(
+                f"Explore/replay global GPU-used delta {gpu_delta_percent:.2f}% exceeds {tolerance:.2f}%"
+            )
     host = capture_host(Path(server["path"]))
     process_free = process_budget_free_mib(host["runtime_devices"])
     explore_global_free = global_gpu_free_mib(explore_result["runs"][-1]["ambient_during"])
@@ -1098,10 +1145,7 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
         "equivalence": {
             "fitted_flags": fitted_flags,
             "normalized_fitted_flags": normalized_fitted_flags,
-            "explore_policy_flags": {
-                key: explore_flags.get(key, [])
-                for key in ("-ctk", "-ctv", "-fa")
-            },
+            "explore_policy_flags": {key: explore_flags.get(key, []) for key in ("-ctk", "-ctv", "-fa")},
             "replay_flags": replay_flags,
             "non_fit_vector_equal": True,
             "placement_equal": True,
@@ -1120,10 +1164,17 @@ def capture_fit(spec_path: Path, output_path: Path) -> None:
                 "global_free_mib": {"explore": explore_global_free, "replay": replay_global_free},
                 "process_budget_free_mib": process_free,
                 "process_minus_global_free_mib": {
-                    "explore": None if process_free is None or explore_global_free is None else process_free - explore_global_free,
-                    "replay": None if process_free is None or replay_global_free is None else process_free - replay_global_free,
+                    "explore": None
+                    if process_free is None or explore_global_free is None
+                    else process_free - explore_global_free,
+                    "replay": None
+                    if process_free is None or replay_global_free is None
+                    else process_free - replay_global_free,
                 },
-                "interpretation": "Global free VRAM governs contention/invalidation; process-budget VRAM describes this process's WDDM/CUDA fit budget. Divergence is reported, never averaged.",
+                "interpretation": (
+                    "Global free VRAM governs contention/invalidation; process-budget VRAM describes "
+                    "this process's WDDM/CUDA fit budget. Divergence is reported, never averaged."
+                ),
             },
             "verbosity_evidence": {
                 "default_fit_detail_lines": default_text.count("common_params_fit_impl"),
@@ -1140,11 +1191,15 @@ def identity_projection(artifact: dict[str, Any]) -> dict[str, Any]:
     identity = artifact.get("verified_identity", {})
     host = artifact.get("host", {})
     return {
-        "models": [{key: item.get(key) for key in ("name", "role", "quant", "sha256")} for item in identity.get("models", [])],
+        "models": [
+            {key: item.get(key) for key in ("name", "role", "quant", "sha256")} for item in identity.get("models", [])
+        ],
         "corpus": {key: identity.get("corpus", {}).get(key) for key in ("name", "sha256")},
         "runtime": {
             **{key: identity.get("runtime", {}).get(key) for key in ("tag", "provenance", "backend", "sha256")},
-            "dependency_manifest_sha256": (identity.get("runtime", {}).get("runtime_local_dependencies") or {}).get("manifest_sha256"),
+            "dependency_manifest_sha256": (identity.get("runtime", {}).get("runtime_local_dependencies") or {}).get(
+                "manifest_sha256"
+            ),
             "auxiliary_binaries": [
                 {
                     **{key: item.get(key) for key in ("name", "sha256")},
@@ -1197,8 +1252,7 @@ def verified_runtime_identity_projection(artifact: dict[str, Any]) -> dict[str, 
     if not isinstance(runtime, dict) or runtime.get("sha256_verified") is not True:
         raise CaptureError("Artifact lacks verified runtime identity")
     if any(
-        not isinstance(runtime.get(key), str) or not runtime[key].strip()
-        for key in ("tag", "provenance", "backend")
+        not isinstance(runtime.get(key), str) or not runtime[key].strip() for key in ("tag", "provenance", "backend")
     ) or not is_sha256(runtime.get("sha256")):
         raise CaptureError("Artifact lacks verified runtime identity")
     dependencies = runtime.get("runtime_local_dependencies")
@@ -1218,15 +1272,15 @@ def verified_runtime_identity_projection(artifact: dict[str, Any]) -> dict[str, 
         ):
             raise CaptureError("Artifact has invalid verified auxiliary runtime identities")
         auxiliary_dependencies = auxiliary.get("runtime_local_dependencies")
-        if not isinstance(auxiliary_dependencies, dict) or not is_sha256(
-            auxiliary_dependencies.get("manifest_sha256")
-        ):
+        if not isinstance(auxiliary_dependencies, dict) or not is_sha256(auxiliary_dependencies.get("manifest_sha256")):
             raise CaptureError("Artifact lacks verified auxiliary runtime dependency identity")
-        projected_auxiliaries.append({
-            "name": auxiliary["name"],
-            "sha256": auxiliary["sha256"],
-            "dependency_manifest_sha256": auxiliary_dependencies["manifest_sha256"],
-        })
+        projected_auxiliaries.append(
+            {
+                "name": auxiliary["name"],
+                "sha256": auxiliary["sha256"],
+                "dependency_manifest_sha256": auxiliary_dependencies["manifest_sha256"],
+            }
+        )
     return {
         "tag": runtime["tag"],
         "provenance": runtime["provenance"],
@@ -1306,10 +1360,7 @@ def immutable_gate_identity_projection(artifact: dict[str, Any]) -> dict[str, An
         or not all(
             isinstance(model, dict)
             and model.get("sha256_verified") is True
-            and all(
-                isinstance(model.get(key), str) and bool(model[key].strip())
-                for key in ("name", "role", "quant")
-            )
+            and all(isinstance(model.get(key), str) and bool(model[key].strip()) for key in ("name", "role", "quant"))
             and is_sha256(model.get("sha256"))
             for model in models
         )
@@ -1322,14 +1373,11 @@ def immutable_gate_identity_projection(artifact: dict[str, Any]) -> dict[str, An
         raise CaptureError("Artifact lacks verified model or corpus identity")
     for optional_key in ("repository", "revision"):
         if any(
-            optional_key in model
-            and (not isinstance(model[optional_key], str) or not model[optional_key].strip())
+            optional_key in model and (not isinstance(model[optional_key], str) or not model[optional_key].strip())
             for model in models
         ):
             raise CaptureError("Artifact contains an incomplete model identity")
-    if "revision" in corpus and (
-        not isinstance(corpus["revision"], str) or not corpus["revision"].strip()
-    ):
+    if "revision" in corpus and (not isinstance(corpus["revision"], str) or not corpus["revision"].strip()):
         raise CaptureError("Artifact contains an incomplete corpus identity")
     if (
         any(
@@ -1350,10 +1398,7 @@ def immutable_gate_identity_projection(artifact: dict[str, Any]) -> dict[str, An
         or not isinstance(runtime_devices.get("available"), bool)
         or (
             runtime_devices.get("exit_code") is not None
-            and (
-                isinstance(runtime_devices["exit_code"], bool)
-                or not isinstance(runtime_devices["exit_code"], int)
-            )
+            and (isinstance(runtime_devices["exit_code"], bool) or not isinstance(runtime_devices["exit_code"], int))
         )
         or not isinstance(runtime_devices.get("stdout"), str)
         or not isinstance(runtime_devices.get("stderr"), str)
@@ -1368,15 +1413,8 @@ def immutable_gate_identity_projection(artifact: dict[str, Any]) -> dict[str, An
             }
             for model in models
         ],
-        "corpus": {
-            key: corpus.get(key)
-            for key in ("name", "revision", "sha256")
-            if key in corpus
-        },
-        "machine": {
-            key: host.get(key)
-            for key in ("os", "kernel", "architecture", "cpu", "logical_cpu_count")
-        },
+        "corpus": {key: corpus.get(key) for key in ("name", "revision", "sha256") if key in corpus},
+        "machine": {key: host.get(key) for key in ("os", "kernel", "architecture", "cpu", "logical_cpu_count")},
         "devices": runtime_devices,
     }
 
@@ -1559,11 +1597,7 @@ def evaluate_policy_rule(
         else boundary_left <= boundary_right
     )
     try:
-        delta: int | float = (
-            delta_fraction.numerator
-            if delta_fraction.denominator == 1
-            else float(delta_fraction)
-        )
+        delta: int | float = delta_fraction.numerator if delta_fraction.denominator == 1 else float(delta_fraction)
         json.dumps(delta, allow_nan=False)
     except (OverflowError, TypeError, ValueError):
         return unevaluable_rule(rule, "rule.value_non_finite")
@@ -1591,7 +1625,11 @@ def gate_artifacts(
     output_path: Path,
 ) -> int:
     hashes: dict[str, str] = {}
-    for name, path in (("baseline_sha256", baseline_path), ("candidate_sha256", candidate_path), ("policy_sha256", policy_path)):
+    for name, path in (
+        ("baseline_sha256", baseline_path),
+        ("candidate_sha256", candidate_path),
+        ("policy_sha256", policy_path),
+    ):
         try:
             hashes[name] = sha256_file(path)
         except OSError as exc:
@@ -1659,20 +1697,17 @@ def gate_artifacts(
                     "allowed_changes": allowed_changes,
                     "changed_dimensions": [],
                 }
-                rule_results = [
-                    unevaluable_rule(rule, artifact_error["reason"])
-                    for rule in rules
-                ]
+                rule_results = [unevaluable_rule(rule, artifact_error["reason"]) for rule in rules]
             else:
-                assert baseline_command_list is not None and candidate_command_list is not None
+                if baseline_command_list is None or candidate_command_list is None:
+                    raise CaptureError("Gate command lists went missing without an artifact error")
                 baseline_commands = {item["name"]: item for item in baseline_command_list}
                 candidate_commands = {item["name"]: item for item in candidate_command_list}
                 baseline_names = set(baseline_commands)
                 candidate_names = set(candidate_commands)
                 command_names_differ = baseline_names != candidate_names
                 command_argv_differ = not command_names_differ and any(
-                    baseline_commands[name]["argv_sha256"]
-                    != candidate_commands[name]["argv_sha256"]
+                    baseline_commands[name]["argv_sha256"] != candidate_commands[name]["argv_sha256"]
                     for name in baseline_names
                 )
                 if command_names_differ or command_argv_differ:
@@ -1680,15 +1715,12 @@ def gate_artifacts(
                         "status": "unevaluable",
                         "reason": "identity.undeclared_mismatch",
                         "allowed_changes": allowed_changes,
-                        "changed_dimensions": [
-                            "command_names" if command_names_differ else "command_argv"
-                        ],
+                        "changed_dimensions": ["command_names" if command_names_differ else "command_argv"],
                     }
                     rule_results = []
                     for rule in rules:
                         referenced_command_missing = (
-                            rule["command"] not in baseline_commands
-                            or rule["command"] not in candidate_commands
+                            rule["command"] not in baseline_commands or rule["command"] not in candidate_commands
                         )
                         rule_results.append(
                             unevaluable_rule(
@@ -1701,14 +1733,10 @@ def gate_artifacts(
                 else:
                     identity = gate_identity(baseline, candidate, allowed_changes)
                     if identity["status"] != "passed":
-                        rule_results = [
-                            unevaluable_rule(rule, identity["reason"])
-                            for rule in rules
-                        ]
+                        rule_results = [unevaluable_rule(rule, identity["reason"]) for rule in rules]
                     else:
                         rule_results = [
-                            evaluate_policy_rule(rule, baseline_commands, candidate_commands)
-                            for rule in rules
+                            evaluate_policy_rule(rule, baseline_commands, candidate_commands) for rule in rules
                         ]
                         if any(
                             result["reason"] not in {"rule.passed", "rule.threshold_rejected"}
@@ -1738,7 +1766,10 @@ def gate_artifacts(
 def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Path) -> None:
     baseline = load_json(baseline_path)
     candidate = load_json(candidate_path)
-    if baseline.get("kind") != "inference-benchmark-evidence" or candidate.get("kind") != "inference-benchmark-evidence":
+    if (
+        baseline.get("kind") != "inference-benchmark-evidence"
+        or candidate.get("kind") != "inference-benchmark-evidence"
+    ):
         raise CaptureError("compare requires two inference-benchmark-evidence artifacts")
     baseline_identity = identity_projection(baseline)
     candidate_identity = identity_projection(candidate)
@@ -1761,22 +1792,29 @@ def compare_artifacts(baseline_path: Path, candidate_path: Path, output_path: Pa
         for metric in sorted(set(base_metrics) & set(candidate_metrics)):
             old = base_metrics[metric]["median"]
             new = candidate_metrics[metric]["median"]
-            metrics[metric] = {"baseline_median": old, "candidate_median": new, "delta_percent": None if old == 0 else ((new - old) / old) * 100}
+            metrics[metric] = {
+                "baseline_median": old,
+                "candidate_median": new,
+                "delta_percent": None if old == 0 else ((new - old) / old) * 100,
+            }
         comparison[name] = metrics
-    write_json(output_path, {
-        "schema_version": SCHEMA_VERSION,
-        "kind": "inference-benchmark-comparison",
-        "baseline": str(baseline_path.resolve()),
-        "candidate": str(candidate_path.resolve()),
-        "identity_equal": True,
-        "framework_identity_equal": baseline_framework_identity == candidate_framework_identity,
-        "framework_identity": {
-            "baseline": baseline_framework_identity,
-            "candidate": candidate_framework_identity,
+    write_json(
+        output_path,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "inference-benchmark-comparison",
+            "baseline": str(baseline_path.resolve()),
+            "candidate": str(candidate_path.resolve()),
+            "identity_equal": True,
+            "framework_identity_equal": baseline_framework_identity == candidate_framework_identity,
+            "framework_identity": {
+                "baseline": baseline_framework_identity,
+                "candidate": candidate_framework_identity,
+            },
+            "commands": comparison,
+            "generated_at_utc": utc_now(),
         },
-        "commands": comparison,
-        "generated_at_utc": utc_now(),
-    })
+    )
 
 
 def sanitize_artifact(input_path: Path, output_path: Path, replacements: list[str]) -> None:
@@ -1807,12 +1845,17 @@ def sanitize_artifact(input_path: Path, output_path: Path, replacements: list[st
     serialized = json.dumps(sanitized, sort_keys=True)
     leaked = re.search(r"(?:/home/[^/\s]+|[A-Za-z]:\\\\Users\\\\[^\\\\\\s]+)", serialized)
     if leaked:
-        raise CaptureError(f"Sanitized artifact still contains a user-home path near {leaked.group(0)!r}; add --replace")
+        raise CaptureError(
+            f"Sanitized artifact still contains a user-home path near {leaked.group(0)!r}; add --replace"
+        )
     leaked_gpu_uuid = GPU_UUID_PATTERN.search(serialized)
     if leaked_gpu_uuid:
         raise CaptureError("Sanitized artifact still contains a GPU UUID")
     sanitized["sanitized"] = True
-    sanitized["sanitization"] = {"replacements": [{"label": label} for _, label in parsed], "source_sha256": sha256_file(input_path)}
+    sanitized["sanitization"] = {
+        "replacements": [{"label": label} for _, label in parsed],
+        "source_sha256": sha256_file(input_path),
+    }
     write_json(output_path, sanitized)
 
 

@@ -52,7 +52,7 @@ def merged_directory(output_dir):
 
 
 def read_config(path):
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return json.load(handle)
 
 

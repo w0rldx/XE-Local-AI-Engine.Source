@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
+from typing import Any
 
 
 def load(name: str):
     path = Path(__file__).parents[1] / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
 
@@ -46,7 +47,9 @@ class BundleInputEvidenceTests(unittest.TestCase):
             self.assertFalse(document["publishSingleFile"])
             self.assertFalse(document["selfContained"])
             packages = EVIDENCE.load_bundle_packages(output, "win-x64")
-            self.assertEqual(["loose"], [entry["disposition"] for entry in packages[("example.package", "1.0.0")]["inputs"]])
+            self.assertEqual(
+                ["loose"], [entry["disposition"] for entry in packages[("example.package", "1.0.0")]["inputs"]]
+            )
 
     def test_collapses_only_byte_identical_duplicate_capture_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -72,8 +75,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
             other_asset.parent.mkdir()
             other_asset.write_bytes(b"different")
             raw.write_text(
-                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\n"
-                f"{row}loose||||wwwroot/asset.js|{other_asset}\n",
+                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\n{row}loose||||wwwroot/asset.js|{other_asset}\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "duplicate relative input"):
@@ -113,8 +115,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
 
             missing_identity = root / "missing-identity.txt"
             missing_identity.write_text(
-                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\n"
-                f"loose||||content/devui.json|{loose}\n",
+                f"XE-BUNDLE-INPUTS-V2|linux-x64|true|true|{nuget_root}\nloose||||content/devui.json|{loose}\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "NuGet-root bundle input lacks package identity"):
@@ -124,7 +125,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             evidence = root / "evidence.json"
-            baseline = {
+            baseline: dict[str, Any] = {
                 "schemaVersion": 2,
                 "runtimeIdentifier": "linux-x64",
                 "publishSingleFile": True,
@@ -157,7 +158,7 @@ class BundleInputEvidenceTests(unittest.TestCase):
     def test_rejects_publish_mode_that_does_not_match_the_rid_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             evidence = Path(temporary_directory) / "evidence.json"
-            baseline = {
+            baseline: dict[str, Any] = {
                 "schemaVersion": 2,
                 "runtimeIdentifier": "win-x64",
                 "publishSingleFile": True,

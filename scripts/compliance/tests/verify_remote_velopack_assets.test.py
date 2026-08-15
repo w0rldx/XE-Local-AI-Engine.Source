@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 MODULE_PATH = Path(__file__).resolve().parents[1] / "verify_remote_velopack_assets.py"
 SPEC = importlib.util.spec_from_file_location("verify_remote_velopack_assets", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -101,7 +100,8 @@ class RemoteVelopackAssetTests(unittest.TestCase):
             MODULE.verify(self.VERSION, local_roots, remote)
 
     def test_only_the_win_legacy_feed_is_published_remotely(self) -> None:
-        # Baseline passes with the linux legacy feed retained locally but absent from the release (vpk never uploads it).
+        # Baseline passes with the linux legacy feed retained locally but absent from the release
+        # (vpk never uploads it).
         _, local_roots, remote = self.make_fixture()
         MODULE.verify(self.VERSION, local_roots, remote)
         # A linux legacy feed appearing in the release would be an unexpected remote asset.
@@ -117,12 +117,13 @@ class RemoteVelopackAssetTests(unittest.TestCase):
     def test_pinned_velopack_1_2_fixture_excludes_internal_manifest_and_prior_full_package(self) -> None:
         fixture = json.loads(PINNED_FIXTURE.read_text(encoding="utf-8"))
         self.assertEqual("1.2.0", fixture["toolVersion"])
-        self.assertNotIn("assets.linux.json", {
-            entry["RelativeFileName"] for entry in fixture["firstPackUploadManifest"]
-        })
-        self.assertNotIn("XE-Local-AI-Engine-1.2.3-rc.1-linux-full.nupkg", {
-            entry["RelativeFileName"] for entry in fixture["deltaPackUploadManifest"]
-        })
+        self.assertNotIn(
+            "assets.linux.json", {entry["RelativeFileName"] for entry in fixture["firstPackUploadManifest"]}
+        )
+        self.assertNotIn(
+            "XE-Local-AI-Engine-1.2.3-rc.1-linux-full.nupkg",
+            {entry["RelativeFileName"] for entry in fixture["deltaPackUploadManifest"]},
+        )
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             output = Path(temporary_directory)

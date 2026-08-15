@@ -30,6 +30,7 @@ a SignalR StreamInvocation (message type 4) and the events arrive as StreamItems
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import ssl
 import sys
@@ -106,14 +107,19 @@ class NodeClient:
         allowed_status: tuple[int, ...] = (),
     ) -> tuple[int, object]:
         url = path if path.startswith("http") else self.base_url + path
+        if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+            raise DriverError(f"{method} {path} -> refusing a URL that is not http(s)")
         data = body.encode("utf-8") if isinstance(body, str) else body
-        request = urllib.request.Request(url, data=data, method=method)
+        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310  # scheme pinned above
         if self.token:
             request.add_header("Authorization", "Bearer " + self.token)
         if data is not None:
             request.add_header("Content-Type", content_type)
         try:
-            with urllib.request.urlopen(request, context=self.ssl_context, timeout=self.timeout) as response:
+            # Scheme pinned to http(s) above; file:/custom schemes are unreachable here.
+            with urllib.request.urlopen(  # noqa: S310  # nosec B310
+                request, context=self.ssl_context, timeout=self.timeout
+            ) as response:
                 raw = response.read()
                 status = response.status
         except urllib.error.HTTPError as error:
@@ -162,9 +168,7 @@ def command_auth(args: argparse.Namespace) -> int:
 
     credentials = json.dumps({"email": args.email, "password": args.password})
     if setup_required:
-        code, _ = client.request(
-            "POST", f"{API}/auth/setup", credentials, allowed_status=(409,)
-        )
+        code, _ = client.request("POST", f"{API}/auth/setup", credentials, allowed_status=(409,))
         emit("setupPerformed", code != 409)
     else:
         emit("setupPerformed", False)
@@ -187,9 +191,7 @@ def command_auth(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 def command_runtime(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
-    payload = require_mapping(
-        client.get_json(f"{API}/model-fit/llamacpp/runtime"), "llamacpp/runtime"
-    )
+    payload = require_mapping(client.get_json(f"{API}/model-fit/llamacpp/runtime"), "llamacpp/runtime")
     installed = payload.get("installed")
     emit("installed", isinstance(installed, dict))
     if isinstance(installed, dict):
@@ -210,9 +212,7 @@ def command_audit(args: argparse.Namespace) -> int:
     determinate result would otherwise outlive the condition that produced it.
     """
     client = NodeClient(args.base_url, args.token, args.timeout)
-    payload = require_mapping(
-        client.get_json(f"{API}/model-fit/hardware-profile?refresh=true"), "hardware-profile"
-    )
+    payload = require_mapping(client.get_json(f"{API}/model-fit/hardware-profile?refresh=true"), "hardware-profile")
     for key in (
         "inferenceBackend",
         "gpuExpected",
@@ -325,16 +325,14 @@ class HubStream:
         self.hub_path = hub_path
         self.connection_url: str | None = None
 
-    def __enter__(self) -> "HubStream":
+    def __enter__(self) -> HubStream:
         _, payload = self.client.request("POST", f"{self.hub_path}/negotiate?negotiateVersion=1", b"")
         negotiate = require_mapping(payload, "hub negotiate")
         token = negotiate.get("connectionToken") or negotiate.get("connectionId")
         if not token:
             raise DriverError("hub negotiate returned neither connectionToken nor connectionId")
         transports = {
-            entry.get("transport")
-            for entry in negotiate.get("availableTransports", [])
-            if isinstance(entry, dict)
+            entry.get("transport") for entry in negotiate.get("availableTransports", []) if isinstance(entry, dict)
         }
         if "LongPolling" not in transports:
             raise DriverError(
@@ -354,13 +352,11 @@ class HubStream:
 
     def __exit__(self, *_exc: object) -> None:
         if self.connection_url:
-            try:
+            # A best-effort close. The server reaps abandoned long-polling connections on
+            # its own, and failing the smoke over the teardown of an already-finished
+            # stream would be a false red.
+            with contextlib.suppress(DriverError):
                 self.client.request("DELETE", self.connection_url)
-            except DriverError:
-                # A best-effort close. The server reaps abandoned long-polling connections on
-                # its own, and failing the smoke over the teardown of an already-finished
-                # stream would be a false red.
-                pass
 
     def invoke_stream(self, target: str, arguments: list[object], timeout_seconds: float):
         """Send a StreamInvocation and yield each ChatStreamEvent until completion.
@@ -373,21 +369,25 @@ class HubStream:
         """
         import time
 
-        assert self.connection_url is not None
-        frame = json.dumps(
-            {
-                "type": MSG_STREAM_INVOCATION,
-                "invocationId": str(uuid.uuid4()),
-                "target": target,
-                "arguments": arguments,
-            }
-        ) + RECORD_SEPARATOR
+        if self.connection_url is None:
+            raise DriverError("stream invoked before the SignalR connection was negotiated")
+        frame = (
+            json.dumps(
+                {
+                    "type": MSG_STREAM_INVOCATION,
+                    "invocationId": str(uuid.uuid4()),
+                    "target": target,
+                    "arguments": arguments,
+                }
+            )
+            + RECORD_SEPARATOR
+        )
         self.client.request("POST", self.connection_url, frame, "text/plain")
 
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             _, raw = self.client.request("GET", self.connection_url, expect_binary=True)
-            if not raw:
+            if not isinstance(raw, bytes) or not raw:
                 continue
             for record in raw.decode("utf-8", "replace").split(RECORD_SEPARATOR):
                 if not record.strip():
@@ -415,9 +415,7 @@ class HubStream:
 
 def command_chat(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
-    _, payload = client.request(
-        "POST", f"{API}/chat/conversations", json.dumps({"title": args.title})
-    )
+    _, payload = client.request("POST", f"{API}/chat/conversations", json.dumps({"title": args.title}))
     conversation = require_mapping(payload, "chat/conversations")
     conversation_id = conversation.get("conversationId")
     if not conversation_id:
@@ -495,8 +493,9 @@ def command_image(args: argparse.Namespace) -> int:
             "seed": str(args.seed),
         }
     )
-    _, payload = client.request("POST", f"{API}/images/jobs", body)
-    job = require_mapping(payload, "images/jobs")
+    _, submitted = client.request("POST", f"{API}/images/jobs", body)
+    job = require_mapping(submitted, "images/jobs")
+    payload = job
     job_id = job.get("id")
     if not job_id:
         raise DriverError("images/jobs returned no job id")
@@ -526,9 +525,7 @@ def command_image(args: argparse.Namespace) -> int:
         emit("png", False)
         return 0
 
-    _, raw = client.request(
-        "GET", f"{API}/images/{urllib.parse.quote(str(image_id))}", expect_binary=True
-    )
+    _, raw = client.request("GET", f"{API}/images/{urllib.parse.quote(str(image_id))}", expect_binary=True)
     data = raw if isinstance(raw, bytes) else b""
     emit("bytes", len(data))
     emit("png", data[:8] == b"\x89PNG\r\n\x1a\n")

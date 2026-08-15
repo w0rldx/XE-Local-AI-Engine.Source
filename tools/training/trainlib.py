@@ -9,6 +9,7 @@ Run the checks with ``python3 tools/training/test_trainlib.py``.
 """
 
 import json
+from typing import Any
 
 CONTRACT_VERSION = 1
 CANCELLED_EXIT_CODE = 3
@@ -16,7 +17,7 @@ CANCELLED_EXIT_CODE = 3
 
 def load_samples(dataset_path, holdout_sequences):
     """Reads the canonical JSONL, dropping the frozen holdout and every sample labelled as behaviour to avoid."""
-    with open(dataset_path, "r", encoding="utf-8") as handle:
+    with open(dataset_path, encoding="utf-8") as handle:
         return filter_samples((json.loads(line) for line in handle if line.strip()), holdout_sequences)
 
 
@@ -35,9 +36,9 @@ def filter_samples(records, holdout_sequences):
     return kept
 
 
-def to_messages(record):
+def to_messages(record) -> list[dict[str, Any]]:
     """Maps one canonical sample's parts[] onto the chat-template message shape."""
-    messages = []
+    messages: list[dict[str, Any]] = []
     system = record.get("systemInstructions") or ""
     if system:
         messages.append({"role": "system", "content": system})
@@ -49,12 +50,18 @@ def to_messages(record):
         elif kind == "tool":
             # Arguments travel as a dict, not as a JSON string: a template expecting a mapping renders an escaped
             # string as literal text, which is the silent version of this going wrong.
-            assistant = {"role": "assistant", "tool_calls": [
-                {
-                    "type": "function",
-                    "function": {"name": part.get("toolName") or "", "arguments": _parse_json(part.get("arguments"))},
-                }
-            ]}
+            assistant = {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": part.get("toolName") or "",
+                            "arguments": _parse_json(part.get("arguments")),
+                        },
+                    }
+                ],
+            }
             if part.get("content"):
                 assistant["content"] = part["content"]
             messages.append(assistant)
@@ -116,7 +123,7 @@ def delimiter_before(rendered, marker, role_words):
     if role_at < 0:
         return None
     start = prefix.rfind("<", 0, role_at)
-    return prefix[start if start >= 0 else role_at:]
+    return prefix[start if start >= 0 else role_at :]
 
 
 def _parse_json(raw):
