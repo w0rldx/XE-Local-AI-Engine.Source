@@ -327,6 +327,74 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Training dataset definitions are node-scoped, so the AAD binds the empty conversation id to the definition's
+        // own id plus the column name — same layout as benchmark projects.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetDefinition>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.DefinitionJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_definition_json",
+                trackedProperties);
+        }
+
+        // Dataset samples take the skill-resource treatment rather than the flat one: the owning dataset id goes in the
+        // conversation slot so a database WRITER cannot re-parent a sample row onto another dataset and have its content
+        // and verdicts fed into a different training run. Moving a row now fails the tag check.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetSample>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.ContentJson),
+                entry.Entity.DatasetId,
+                entry.Entity.Id,
+                "training_sample_content_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ValidationJson),
+                entry.Entity.DatasetId,
+                entry.Entity.Id,
+                "training_sample_validation_json",
+                trackedProperties);
+        }
+
+        // Tool mocks are node-scoped. The mock body and the verifier's verdict carry distinct AAD column names so a mock
+        // blob can never be substituted for a verdict blob — the same separation custom tools draw between their
+        // description and their config.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ToolMockDefinition>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.MockJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "tool_mock_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.VerificationJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "tool_mock_verification_json",
+                trackedProperties);
+        }
+
+        // Base artifacts are node-scoped. The file manifest carries host paths and per-file digests; the license blob is
+        // what the mandatory gate presents, so a writer must not be able to swap one for the other.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingBaseArtifact>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.FilesJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_base_files_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LicenseJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_base_license_json",
+                trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;
