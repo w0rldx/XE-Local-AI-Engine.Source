@@ -131,7 +131,8 @@ internal static class GgufAcquisitionSidecar
             || entry.Sha256 is not { } weightSha256
             || entry.SourceDisplayName is not { } sourceDisplayName
             || entry.ModelContentFingerprint is not { } modelContentFingerprint
-            || entry.MetadataSchemaVersion != GgufAcquisitionMetadata.CurrentSchemaVersion)
+            || entry.MetadataSchemaVersion is not (>= GgufAcquisitionMetadata.MinimumSupportedSchemaVersion
+                and <= GgufAcquisitionMetadata.CurrentSchemaVersion))
         {
             return null;
         }
@@ -159,7 +160,9 @@ internal static class GgufAcquisitionSidecar
 
         var metadata = new GgufAcquisitionMetadata
         {
-            SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            // The entry's OWN recorded version, not the current one: the round-trip through ToRegistryEntry must
+            // reproduce the entry's verified RegistryRevision, which commits to MetadataSchemaVersion.
+            SchemaVersion = entry.MetadataSchemaVersion.Value,
             RegistryRevision = registryRevision,
             ModelName = entry.ModelName,
             Origin = origin,
@@ -180,7 +183,15 @@ internal static class GgufAcquisitionSidecar
             ProjectorContentSha256 = entry.ProjectorSha256,
             ProjectorContentSizeBytes = entry.ProjectorSizeBytes,
             ProjectorMemberFingerprint = projectorFingerprint,
-            ModelContentFingerprint = modelContentFingerprint
+            ModelContentFingerprint = modelContentFingerprint,
+            DerivedFromRepoId = entry.DerivedFromRepoId,
+            DerivedFromRevision = entry.DerivedFromRevision,
+            DerivedFromContentFingerprint = entry.DerivedFromContentFingerprint,
+            AdapterFileName = entry.AdapterFileName,
+            AdapterSha256 = entry.AdapterSha256,
+            AdapterSizeBytes = entry.AdapterSizeBytes,
+            AdapterMemberFingerprint = entry.AdapterMemberFingerprint,
+            BaseModelName = entry.BaseModelName
         };
         return ValidateShape(metadata, entry.LocalPath, modelsDirectory) ? metadata : null;
     }
@@ -209,7 +220,15 @@ internal static class GgufAcquisitionSidecar
             Origin = metadata.Origin,
             SourceDisplayName = metadata.SourceDisplayName,
             MetadataSchemaVersion = metadata.SchemaVersion,
-            ModelContentFingerprint = metadata.ModelContentFingerprint
+            ModelContentFingerprint = metadata.ModelContentFingerprint,
+            DerivedFromRepoId = metadata.DerivedFromRepoId,
+            DerivedFromRevision = metadata.DerivedFromRevision,
+            DerivedFromContentFingerprint = metadata.DerivedFromContentFingerprint,
+            AdapterFileName = metadata.AdapterFileName,
+            AdapterSha256 = metadata.AdapterSha256,
+            AdapterSizeBytes = metadata.AdapterSizeBytes,
+            AdapterMemberFingerprint = metadata.AdapterMemberFingerprint,
+            BaseModelName = metadata.BaseModelName
         };
         return entry with
         {
@@ -224,9 +243,51 @@ internal static class GgufAcquisitionSidecar
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
     }
 
+    /// <summary>
+    ///     Trained-model lineage rules. Lineage of any kind belongs only to a <see cref="LocalModelOrigin.Trained" />
+    ///     acquisition. An adapter sidecar describes the adapter file itself — its bytes ARE the weight member — so the
+    ///     adapter fields must agree with the weight fields, and it must name the installed base model it launches against.
+    /// </summary>
+    private static bool IsValidAdapterShape(GgufAcquisitionMetadata metadata)
+    {
+        var hasLineage = metadata.DerivedFromRepoId is not null
+                         || metadata.DerivedFromRevision is not null
+                         || metadata.DerivedFromContentFingerprint is not null
+                         || metadata.AdapterFileName is not null
+                         || metadata.AdapterSha256 is not null
+                         || metadata.AdapterSizeBytes is not null
+                         || metadata.AdapterMemberFingerprint is not null
+                         || metadata.BaseModelName is not null;
+        if (!hasLineage)
+        {
+            return true;
+        }
+
+        if (metadata.Origin != LocalModelOrigin.Trained)
+        {
+            return false;
+        }
+
+        if (metadata.AdapterFileName is null)
+        {
+            return metadata.AdapterSha256 is null
+                   && metadata.AdapterSizeBytes is null
+                   && metadata.AdapterMemberFingerprint is null
+                   && metadata.BaseModelName is null;
+        }
+
+        return string.Equals(metadata.AdapterFileName, metadata.LocalFileName, StringComparison.Ordinal)
+               && string.Equals(metadata.AdapterSha256, metadata.WeightContentSha256, StringComparison.Ordinal)
+               && metadata.AdapterSizeBytes == metadata.WeightSizeBytes
+               && string.Equals(metadata.AdapterMemberFingerprint, metadata.WeightMemberFingerprint, StringComparison.Ordinal)
+               && !string.IsNullOrWhiteSpace(metadata.BaseModelName);
+    }
+
     private static bool ValidateShape(GgufAcquisitionMetadata metadata, string weightPath, string modelsDirectory)
     {
-        if (metadata.SchemaVersion != GgufAcquisitionMetadata.CurrentSchemaVersion
+        if (metadata.SchemaVersion is not (>= GgufAcquisitionMetadata.MinimumSupportedSchemaVersion
+                and <= GgufAcquisitionMetadata.CurrentSchemaVersion)
+            || !IsValidAdapterShape(metadata)
             || !GgufRegistryRevision.IsCanonical(metadata.RegistryRevision)
             || string.IsNullOrWhiteSpace(metadata.ModelName)
             || Path.GetFileName(metadata.LocalFileName) != metadata.LocalFileName
