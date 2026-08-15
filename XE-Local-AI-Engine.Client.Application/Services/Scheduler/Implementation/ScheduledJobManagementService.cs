@@ -155,13 +155,15 @@ public sealed class ScheduledJobManagementService(
             {
                 await ScheduleAsync(scheduler, updated, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is SchedulerException or ScheduledJobValidationException
-                                                  or TimeZoneNotFoundException or InvalidTimeZoneException)
+            catch (Exception)
             {
+                // Any scheduling failure (Quartz SchedulerException, a cron/time-zone parse error, cancellation) leaves the
+                // same wrong state, so the compensation is unconditional and runs on CancellationToken.None: an aborted
+                // request must not skip the flip-back and strand the durable flag.
                 // Nothing re-schedules an enabled-but-unscheduled job later: ReconcileDurableJobsAsync only refreshes
                 // JobDetail rows that already exist and never (re)creates a trigger. Flip the durable flag back so the
                 // stored state matches reality and the operator can retry, then surface the original failure.
-                _ = await _definitionStore.SetEnabledAsync(id, enabled: false, cancellationToken).ConfigureAwait(false);
+                _ = await _definitionStore.SetEnabledAsync(id, enabled: false, CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
         }
