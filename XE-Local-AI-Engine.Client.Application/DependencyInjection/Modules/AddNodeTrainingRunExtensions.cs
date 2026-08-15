@@ -40,6 +40,7 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddScoped<ILicenseGateService, LicenseGateService>();
         builder.Services.AddScoped<ITrainingCapacityGate, TrainingCapacityGate>();
         builder.Services.AddScoped<ITrainingRunService, TrainingRunService>();
+        builder.Services.AddScoped<IInstalledBaseModelLinker, InstalledBaseModelLinker>();
         builder.Services.AddScoped<ITrainingRunExecutor, TrainingRunExecutor>();
 
         // The evaluation half rides the same queue and the same cancellation registry; only the executor differs.

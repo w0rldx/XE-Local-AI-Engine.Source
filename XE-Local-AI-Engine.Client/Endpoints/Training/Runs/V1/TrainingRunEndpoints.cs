@@ -34,7 +34,8 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
                                       req.ExpectedDatasetVersion,
                                       req.BaseArtifactId,
                                       req.LicenseConfirmed,
-                                      req.Options?.ToDomain()),
+                                      req.Options?.ToDomain(),
+                                      req.LinkedModelName),
                                   ct)
                               .ConfigureAwait(false);
             await Send.OkAsync(run.ToResponse(), ct).ConfigureAwait(false);
@@ -142,11 +143,12 @@ public sealed class CancelTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
 ///     The wizard's computed starting point: options sized to this box, the VRAM estimate behind them, and the exact
 ///     licensing text the operator has to confirm. Read-only — it creates nothing.
 /// </summary>
-public sealed class GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalculator defaults, ILicenseGateService licenseGate)
+public sealed class GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalculator defaults, ILicenseGateService licenseGate, IInstalledBaseModelLinker linker)
     : Endpoint<TrainingRunDefaultsRequest, TrainingRunDefaultsResponse>
 {
     private readonly ITrainingOptionDefaultsCalculator _defaults = defaults ?? throw new ArgumentNullException(nameof(defaults));
     private readonly ILicenseGateService _licenseGate = licenseGate ?? throw new ArgumentNullException(nameof(licenseGate));
+    private readonly IInstalledBaseModelLinker _linker = linker ?? throw new ArgumentNullException(nameof(linker));
 
     public override void Configure()
     {
@@ -163,7 +165,10 @@ public sealed class GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalcul
         {
             var computed = await _defaults.ComputeAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
             var license = await _licenseGate.GetAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
-            await Send.OkAsync(computed.ToResponse(license), ct).ConfigureAwait(false);
+            var suggestions = license is null
+                ? []
+                : await _linker.SuggestAsync(license.RepoId, ct).ConfigureAwait(false);
+            await Send.OkAsync(computed.ToResponse(license, suggestions), ct).ConfigureAwait(false);
         }
         catch (TrainingRunRejectedException exception)
         {

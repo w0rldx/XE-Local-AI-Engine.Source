@@ -29,6 +29,12 @@ public sealed class CreateTrainingRunRequest
     public required bool LicenseConfirmed { get; init; }
 
     public TrainingRunOptionsPayload? Options { get; init; }
+
+    /// <summary>
+    ///     The installed GGUF to link as the base's counterpart (adapters are served against it; comparisons use it as
+    ///     the base side). Omitted: the first suggestion from the defaults endpoint, if any.
+    /// </summary>
+    public string? LinkedModelName { get; init; }
 }
 
 public sealed class TrainingRunByIdRequest
@@ -121,6 +127,16 @@ public sealed class TrainingRunDefaultsResponse
     public required bool Fits { get; init; }
     public string? RejectionReason { get; init; }
     public TrainingRunLicenseResponse? License { get; init; }
+
+    /// <summary>Installed GGUFs that can stand in for the base checkpoint, best match first; empty when none is installed.</summary>
+    public required IReadOnlyList<TrainingRunLinkedModelResponse> LinkedModelSuggestions { get; init; }
+}
+
+public sealed class TrainingRunLinkedModelResponse
+{
+    public required string ModelName { get; init; }
+    public required string RepoId { get; init; }
+    public string? ContentFingerprint { get; init; }
 }
 
 public sealed class TrainingRunBlockedResponse

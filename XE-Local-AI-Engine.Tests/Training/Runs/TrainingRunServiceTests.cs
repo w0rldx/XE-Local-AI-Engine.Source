@@ -192,7 +192,8 @@ public sealed class TrainingRunServiceTests : IDisposable
             new LicenseGateService(artifactStore, TimeProvider.System),
             BuildWorkspace(),
             new TrainingRunCancellationRegistry(),
-            Substitute.For<ITrainingRunQueueSignal>());
+            Substitute.For<ITrainingRunQueueSignal>(),
+            Substitute.For<IInstalledBaseModelLinker>());
     }
 
     private TrainingRunWorkspace BuildWorkspace() =>
