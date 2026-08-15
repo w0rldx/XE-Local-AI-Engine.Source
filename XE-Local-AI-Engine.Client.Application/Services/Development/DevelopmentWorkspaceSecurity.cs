@@ -141,7 +141,12 @@ internal readonly record struct DevelopmentConfinedPath(bool IsAccepted, string 
         new(false, string.Empty, string.Empty, reason);
 }
 
-public sealed class DevelopmentWorkspaceSecurityException : InvalidOperationException
+/// <summary>
+///     A Development workspace security/validation guard rejected the supplied value. Endpoints whose request carries
+///     the rejected value map this to 400; endpoints that act purely on persisted project state map it to 409. The
+///     state-conflict half of the family has its own type — see <see cref="DevelopmentRepositoryStateConflictException" />.
+/// </summary>
+public class DevelopmentWorkspaceSecurityException : InvalidOperationException
 {
     public DevelopmentWorkspaceSecurityException(string message) : base(message) { }
 }
