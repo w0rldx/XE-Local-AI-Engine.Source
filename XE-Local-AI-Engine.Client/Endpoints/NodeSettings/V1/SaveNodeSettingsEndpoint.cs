@@ -29,59 +29,47 @@ public sealed class SaveNodeSettingsEndpoint(
         var currentSettings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false) ?? new StoredNodeSettings();
         var settings = req.ToStoredSettings(currentSettings);
 
-        // Cross-field guard on the MERGED result (the boundary validator only sees the request, not the current stored
-        // state): a draft-* speculative mode with no draft model must never persist — it would pass every field-level
-        // check and then fail chat-server start on the next spawn. This also covers the partial update that clears the
-        // draft model while leaving a previously-stored draft-* mode in place.
-        if (StoredNodeSettings.SpeculativeModeRequiresDraftModel(settings.SpeculativeMode)
-            && string.IsNullOrWhiteSpace(settings.SpeculativeDraftModelName))
+        // Cross-field guards run on the MERGED result in NodeSettingsPolicy — the boundary validator only sees the
+        // request, not the current stored state, and some rules need the EFFECTIVE runtime value (stored > appsettings
+        // seed > default) for a knob the request omitted. The policy stops at the first violation, matching the
+        // one-error-at-a-time response this endpoint has always sent.
+        var policyErrors = await NodeSettingsPolicy.ValidateMergedAsync(settings, _nodeRuntimeSettings, ct).ConfigureAwait(false);
+        if (policyErrors.Count > 0)
         {
-            AddError(r => r.SpeculativeDraftModelName, "Speculative decoding is set to a draft model mode, but no draft model was selected.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
+            foreach (var policyError in policyErrors)
+            {
+                AddPolicyError(policyError);
+            }
 
-        // Like the speculative-mode guard above, validate the MERGED result so a partial request may enable the feature
-        // while keeping an already-stored model, but can never persist an enabled state with no selected model.
-        if (settings.KeepModelWarmEnabled is true
-            && string.IsNullOrWhiteSpace(settings.KeepModelWarmModelName))
-        {
-            AddError(r => r.KeepModelWarmModelName, "Keep model warm is enabled, but no model was selected.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
-
-        if (settings.KeepModelWarmEnabled is not true)
-        {
-            await SaveAsync(settings, ct).ConfigureAwait(false);
-            return;
-        }
-
-        var effectiveMaxLoadedProcesses = settings.LlamaMaxLoadedProcesses
-                                          ?? await _nodeRuntimeSettings.GetLlamaMaxLoadedProcessesAsync(ct).ConfigureAwait(false);
-        if (effectiveMaxLoadedProcesses < 2)
-        {
-            AddError(r => r.LlamaMaxLoadedProcesses,
-                "Keep model warm requires at least two loaded-process slots so another local model can still be admitted.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
-
-        var effectiveKeepWarmInterval = settings.KeepModelWarmIntervalSeconds is { } intervalSeconds
-            ? TimeSpan.FromSeconds(intervalSeconds)
-            : await _nodeRuntimeSettings.GetKeepModelWarmIntervalAsync(ct).ConfigureAwait(false);
-        var effectiveIdleTimeToLive = settings.LlamaIdleTimeToLiveSeconds is { } idleTimeToLiveSeconds
-            ? TimeSpan.FromSeconds(idleTimeToLiveSeconds)
-            : await _nodeRuntimeSettings.GetLlamaIdleTimeToLiveAsync(ct).ConfigureAwait(false);
-        if (effectiveKeepWarmInterval >= effectiveIdleTimeToLive)
-        {
-            AddError(r => r.KeepModelWarmIntervalSeconds,
-                "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }
 
         await SaveAsync(settings, ct).ConfigureAwait(false);
+    }
+
+    // Maps a policy violation back onto the request property it belongs to, so the 400 body keeps naming the same
+    // field it always has.
+    private void AddPolicyError(NodeSettingsValidationError error)
+    {
+        switch (error.Field)
+        {
+            case NodeSettingsField.SpeculativeDraftModelName:
+                AddError(r => r.SpeculativeDraftModelName, error.Message);
+                break;
+            case NodeSettingsField.KeepModelWarmModelName:
+                AddError(r => r.KeepModelWarmModelName, error.Message);
+                break;
+            case NodeSettingsField.LlamaMaxLoadedProcesses:
+                AddError(r => r.LlamaMaxLoadedProcesses, error.Message);
+                break;
+            case NodeSettingsField.KeepModelWarmIntervalSeconds:
+                AddError(r => r.KeepModelWarmIntervalSeconds, error.Message);
+                break;
+            default:
+                AddError(error.Message);
+                break;
+        }
     }
 
     private async Task SaveAsync(StoredNodeSettings settings, CancellationToken ct)

@@ -53,6 +53,26 @@ internal static class CloudSettingsEndpointDtoMapper
     }
 
     /// <summary>
+    ///     Maps the request's header rows onto the stored header shape so <see cref="CloudSettingsPolicy" /> (which
+    ///     lives in the service layer and cannot see the request DTO) can validate them. A null name becomes empty —
+    ///     the policy treats it as the blank-name row, exactly as the request shape did.
+    /// </summary>
+    public static IReadOnlyList<StoredAzureFoundryHeader> ToPolicyHeaders(this IReadOnlyList<SaveAzureFoundryHeaderRequest> headers)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+
+        return
+        [
+            .. headers.Select(static header => new StoredAzureFoundryHeader
+            {
+                Name = header.Name ?? string.Empty,
+                Value = header.Value,
+                IsSecret = header.IsSecret
+            })
+        ];
+    }
+
+    /// <summary>
     ///     Maps a save request to the stored config. Pure: the secret merges that need prior state run in the
     ///     endpoint and are passed in via <paramref name="mergedHeaders" /> and <paramref name="mergedEntraClientSecret" />
     ///     (Locked #12 pattern).

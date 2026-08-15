@@ -58,6 +58,10 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<NodeIdentityInitializationService>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
 
+        // One place that answers "is this model id a cloud model?" from the stored config, including the best-effort
+        // catch — the local-model list/details/select endpoints each used to carry their own copy.
+        builder.Services.AddSingleton<ICloudModelResolver, CloudModelResolver>();
+
         // Node settings: the file store stays the canonical inner store (semaphore + 0600 perms); a single-entry
         // IMemoryCache decorator fronts it as INodeSettingsStore, and INodeRuntimeSettings is the read surface migrated
         // consumers use (precedence stored > appsettings seed > hardcoded default).
