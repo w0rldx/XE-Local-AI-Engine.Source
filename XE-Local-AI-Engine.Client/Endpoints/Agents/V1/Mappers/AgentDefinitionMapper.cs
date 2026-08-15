@@ -1,11 +1,17 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal static class AgentDefinitionMapper
 {
-    public static AgentDefinitionResponse ToResponse(this AgentDefinitionRecord record)
+    /// <summary>
+    ///     Projects a definition onto the wire. Agents have no separate list DTO, so
+    ///     <paramref name="includeGenerationMetadata" /> is what keeps the list lean: the list endpoint passes
+    ///     <c>false</c>, every single-item read leaves the default.
+    /// </summary>
+    public static AgentDefinitionResponse ToResponse(this AgentDefinitionRecord record, bool includeGenerationMetadata = true)
     {
         ArgumentNullException.ThrowIfNull(record);
 
@@ -28,11 +34,14 @@ internal static class AgentDefinitionMapper
             AllowedSkillIds = record.AllowedSkillIds ?? [],
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
-            UpdatedAtUtc = record.UpdatedAtUtc
+            UpdatedAtUtc = record.UpdatedAtUtc,
+            GenerationMetadata = includeGenerationMetadata
+                ? GenerationProvenance.FromPersistedJson(record.GenerationMetadataJson)
+                : null
         };
     }
 
-    public static AgentDefinitionInput ToInput(this CreateAgentDefinitionRequest request)
+    public static AgentDefinitionInput ToInput(this CreateAgentDefinitionRequest request, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -49,10 +58,11 @@ internal static class AgentDefinitionMapper
             request.AllowedSkillIds ?? [],
             request.DefaultTemporaryChat,
             request.MemoryExtractionEnabled,
-            request.DisableBaseScaffold);
+            request.DisableBaseScaffold,
+            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now));
     }
 
-    public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request)
+    public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -69,6 +79,7 @@ internal static class AgentDefinitionMapper
             request.AllowedSkillIds ?? [],
             request.DefaultTemporaryChat,
             request.MemoryExtractionEnabled,
-            request.DisableBaseScaffold);
+            request.DisableBaseScaffold,
+            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now));
     }
 }

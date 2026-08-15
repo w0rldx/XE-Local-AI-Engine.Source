@@ -38,6 +38,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             DisableBaseScaffold = input.DisableBaseScaffold,
             DefaultTemporaryChat = input.DefaultTemporaryChat,
             MemoryExtractionEnabled = input.MemoryExtractionEnabled,
+            GenerationMetadataJson = EncodeOptional(input.GenerationMetadataJson),
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -146,6 +147,10 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         // MemoryExtractionEnabled gates post-run extraction only (retrieval/injection stays gated on PlaybookEnabled),
         // so like PlaybookEnabled it is excluded from configChanged and never bumps Version.
         entity.MemoryExtractionEnabled = input.MemoryExtractionEnabled;
+        // Set-if-present: the AI provenance block only travels with a save that came out of the assist dialog, so an
+        // ordinary edit omitting it must leave the stored record intact rather than clear it. Not config-affecting —
+        // deliberately absent from configChanged above, so it never bumps Version.
+        entity.GenerationMetadataJson = EncodeOptional(input.GenerationMetadataJson) ?? entity.GenerationMetadataJson;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (configChanged)
@@ -243,7 +248,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             DeserializeSkillIds(entity.AllowedSkillIdsJson),
             entity.DefaultTemporaryChat,
             entity.MemoryExtractionEnabled,
-            entity.DisableBaseScaffold);
+            entity.DisableBaseScaffold,
+            entity.GenerationMetadataJson is null ? null : Decode(entity.GenerationMetadataJson));
     }
 
     private static byte[]? EncodeOptional(string? value)

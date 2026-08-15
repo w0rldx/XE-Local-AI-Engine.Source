@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>Create request for an agent definition. The editable fields mirror <see cref="AgentDefinitionInput" />.</summary>
@@ -48,6 +49,9 @@ public sealed class CreateAgentDefinitionRequest
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
+
+    /// <summary>The draft response's provenance block, echoed back unchanged. Optional; informational (see the type).</summary>
+    public GenerationMetadata? GenerationMetadata { get; init; }
 }
 
 /// <summary>Update request for an agent definition. The id travels in the route; the body carries the new field values.</summary>
@@ -98,6 +102,13 @@ public sealed class UpdateAgentDefinitionRequest
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
+
+    /// <summary>
+    ///     The draft response's provenance block, echoed back unchanged. Optional, and <b>set-if-present</b>: omitting
+    ///     it leaves any stored provenance alone rather than clearing it, so an ordinary edit cannot erase the record of
+    ///     how the definition was originally drafted.
+    /// </summary>
+    public GenerationMetadata? GenerationMetadata { get; init; }
 }
 
 public sealed class GetAgentDefinitionRequest
@@ -155,6 +166,14 @@ public sealed class AgentDefinitionResponse
     public required long CreatedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
+
+    /// <summary>
+    ///     AI-drafting provenance when this definition came from a draft, otherwise null. Agents share one response
+    ///     type between the single-item and list surfaces, so this is populated by the single-item reads (get, create,
+    ///     update) and left null by <see cref="ListAgentDefinitionsResponse" /> — the list would otherwise carry a
+    ///     rationale and brief per row for no reader.
+    /// </summary>
+    public GenerationMetadataResponse? GenerationMetadata { get; init; }
 }
 
 public sealed class ListAgentDefinitionsResponse

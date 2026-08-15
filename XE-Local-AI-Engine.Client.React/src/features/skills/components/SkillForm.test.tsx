@@ -20,6 +20,10 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
+// The basic-fields section now embeds the AI-draft affordance, which is server-state backed (installed models +
+// running set). Stub it out: this file covers the form's own fields, and the affordance has its own test.
+vi.mock("@/features/assist/components/AssistActions", () => ({ AssistActions: () => null }));
+
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
 import type { SkillFormValues } from "@/features/skills/models/SkillModels";
 
@@ -29,6 +33,8 @@ const baseValues: SkillFormValues = {
 	compatibility: "",
 	description: "",
 	enabled: true,
+	generated: false,
+	generationMetadata: null,
 	license: "",
 	metadata: null,
 	name: "",

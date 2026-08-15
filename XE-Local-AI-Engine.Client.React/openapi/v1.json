@@ -467,6 +467,73 @@
         ]
       }
     },
+    "/api/local/v1/skills/draft": {
+      "post": {
+        "tags": [
+          "Skills"
+        ],
+        "operationId": "draftSkill",
+        "requestBody": {
+          "x-name": "DraftSkillRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1DraftSkillRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillDraftResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/skills/{skillId}/resources/{resourceName}": {
       "get": {
         "tags": [
@@ -11088,6 +11155,73 @@
         ]
       }
     },
+    "/api/local/v1/agents/draft": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "draftAgentDefinition",
+        "requestBody": {
+          "x-name": "DraftAgentDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1DraftAgentDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentDraftResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/agents/{agentDefinitionId}/feedback-insights": {
       "get": {
         "tags": [
@@ -12016,6 +12150,14 @@
             "type": "integer",
             "nullable": true
           },
+          "generationMetadata": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadataResponse"
+              }
+            ]
+          },
           "resourceCount": {
             "type": "integer",
             "format": "int32"
@@ -12032,6 +12174,63 @@
         "enum": [
           "Local",
           "Imported"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsCommonGenerationMetadataResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesDraftingDraftMode"
+          },
+          "userBrief": {
+            "type": "string",
+            "nullable": true
+          },
+          "rationale": {
+            "type": "string",
+            "nullable": true
+          },
+          "assumptions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "generatedAtUtc": {
+            "type": "integer"
+          },
+          "draftContentHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "acceptedAtUtc": {
+            "type": "integer"
+          },
+          "wasEdited": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesDraftingDraftMode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Create",
+          "Improve"
+        ],
+        "enum": [
+          "Create",
+          "Improve"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsSkillsV1CreateSkillRequest": {
@@ -12068,12 +12267,143 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "generated": {
+            "type": "boolean"
+          },
+          "generationMetadata": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesDraftingDraftMode"
+          },
+          "userBrief": {
+            "type": "string",
+            "nullable": true
+          },
+          "rationale": {
+            "type": "string",
+            "nullable": true
+          },
+          "assumptions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "generatedAtUtc": {
+            "type": "integer"
+          },
+          "draftContentHash": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
       "XE_Local_AI_EngineClientEndpointsSkillsV1DeleteSkillRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1SkillDraftResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "body",
+          "generationMetadata"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "generationMetadata": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCommonDraftErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonDraftErrorCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCommonDraftErrorCode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "NodeBusy",
+          "Unparseable"
+        ],
+        "enum": [
+          "NodeBusy",
+          "Unparseable"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1DraftSkillRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesDraftingDraftMode"
+          },
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "brief": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingName": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingContent": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsSkillsV1GetSkillRequest": {
         "type": "object",
@@ -12426,6 +12756,17 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "generated": {
+            "type": "boolean"
+          },
+          "generationMetadata": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
+              }
+            ]
           }
         }
       },
@@ -21900,6 +22241,14 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "generationMetadata": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadataResponse"
+              }
+            ]
           }
         }
       },
@@ -21979,6 +22328,14 @@
               "type": "string",
               "format": "guid"
             }
+          },
+          "generationMetadata": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
+              }
+            ]
           }
         }
       },
@@ -22052,6 +22409,59 @@
       "XE_Local_AI_EngineClientEndpointsAgentsV1DeletePlaybookActionRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentDraftResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "instructions",
+          "generationMetadata"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "generationMetadata": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1DraftAgentDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesDraftingDraftMode"
+          },
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "brief": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingName": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingContent": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentDefinitionRequest": {
         "type": "object",
@@ -22909,6 +23319,14 @@
               "type": "string",
               "format": "guid"
             }
+          },
+          "generationMetadata": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCommonGenerationMetadata"
+              }
+            ]
           }
         }
       },
