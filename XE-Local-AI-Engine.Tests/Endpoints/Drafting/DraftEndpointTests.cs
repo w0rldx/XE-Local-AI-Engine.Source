@@ -48,9 +48,9 @@ public sealed class DraftEndpointTests
             "0123456789abcdef");
     }
 
-    private static TestingWebAppFactory CreateFactory(StubConfigDraftService stub)
+    private static TestServerWebAppFactory CreateFactory(StubConfigDraftService stub)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -60,7 +60,7 @@ public sealed class DraftEndpointTests
         };
     }
 
-    private static async Task<HttpResponseMessage> PostAsync(TestingWebAppFactory factory,
+    private static async Task<HttpResponseMessage> PostAsync(TestServerWebAppFactory factory,
         HttpClient client,
         string route,
         object body,
@@ -216,7 +216,7 @@ public sealed class DraftEndpointTests
         // The REAL service, with the prompt budget lowered below the per-field caps so the aggregate check is reachable.
         // With production values (60000 vs. a 22120-character worst case) the per-field caps subsume it, which is the
         // point: the budget is the belt behind the endpoint's brace, and it rejects before the gate or any model work.
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = static services =>
                 services.Configure<DraftingOptions>(static options => options.MaxPromptChars = 10)
@@ -314,7 +314,7 @@ public sealed class DraftEndpointTests
         AssertEx.Equal(expected: 1, stub.SkillCallCount);
     }
 
-    private static async Task<(long Agents, long Skills)> CountRowsAsync(TestingWebAppFactory factory)
+    private static async Task<(long Agents, long Skills)> CountRowsAsync(TestServerWebAppFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
