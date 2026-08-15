@@ -593,8 +593,11 @@ describe("ModelManagement", () => {
 					phase: "Failed",
 					errorCode: "SourceNotFound",
 					sanitizedMessage: "/private/models/secret.gguf was not found",
-					startedAtUtc: "2026-08-14T10:00:00Z",
-					updatedAtUtc: "2026-08-14T10:00:01Z",
+					// Relative to now on purpose: a TERMINAL status is swept once it falls out of the retention window,
+					// which is measured against the real clock — a fixed date makes this row vanish a day after it was
+					// written. The Copying row above is never swept, so its fixed dates are harmless.
+					startedAtUtc: new Date(Date.now() - 2_000).toISOString(),
+					updatedAtUtc: new Date(Date.now() - 1_000).toISOString(),
 				},
 			],
 		});
