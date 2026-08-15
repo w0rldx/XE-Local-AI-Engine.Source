@@ -38,6 +38,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
             SourceUri = input.SourceUri,
             ImportedAtUtc = input.ImportedAtUtc,
             ContentSha256 = input.ContentSha256,
+            GenerationMetadataJson = Encode(input.GenerationMetadataJson),
             Enabled = input.Enabled,
             Version = 1,
             CreatedAtUtc = now,
@@ -93,6 +94,10 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         entity.SourceUri = input.SourceUri ?? entity.SourceUri;
         entity.ImportedAtUtc = input.ImportedAtUtc ?? entity.ImportedAtUtc;
         entity.ContentSha256 = input.ContentSha256 ?? entity.ContentSha256;
+        // Same set-if-present rule, and for the same reason: the AI provenance block only travels with a save that came
+        // out of the assist dialog, so an ordinary edit omitting it must leave the stored record intact. Not content —
+        // it is deliberately absent from configChanged above and never bumps Version.
+        entity.GenerationMetadataJson = Encode(input.GenerationMetadataJson) ?? entity.GenerationMetadataJson;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (configChanged)
@@ -340,7 +345,8 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
             entity.SourceUri,
             entity.ImportedAtUtc,
             entity.ContentSha256,
-            resources);
+            resources,
+            DecodeIfPresent(entity.GenerationMetadataJson));
     }
 
     private static AgentSkillResourceRecord ToRecord(AgentSkillResource entity)
