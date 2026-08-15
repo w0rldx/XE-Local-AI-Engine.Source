@@ -144,13 +144,31 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         return new TrainingRunPage(items, total);
     }
 
-    public async Task<TrainingWorkClaim?> ClaimNextAsync(CancellationToken cancellationToken = default)
+    public async Task<TrainingWorkKind?> PeekNextKindAsync(CancellationToken cancellationToken = default)
+    {
+        var head = await _dbContext.TrainingWorkItems.AsNoTracking()
+                                   .Where(item => item.Status == TrainingWorkStatus.Queued)
+                                   .OrderBy(item => item.QueueSequence)
+                                   .Select(item => (TrainingWorkKind?)item.Kind)
+                                   .FirstOrDefaultAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+        return head;
+    }
+
+    public Task<TrainingWorkClaim?> ClaimNextAsync(CancellationToken cancellationToken = default) =>
+        ClaimAsync(onlyKind: null, cancellationToken);
+
+    public Task<TrainingWorkClaim?> ClaimNextAsync(TrainingWorkKind onlyKind, CancellationToken cancellationToken = default) =>
+        ClaimAsync(onlyKind, cancellationToken);
+
+    private async Task<TrainingWorkClaim?> ClaimAsync(TrainingWorkKind? onlyKind, CancellationToken cancellationToken)
     {
         while (true)
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             var candidate = await _dbContext.TrainingWorkItems.AsNoTracking()
-                                            .Where(item => item.Status == TrainingWorkStatus.Queued)
+                                            .Where(item => item.Status == TrainingWorkStatus.Queued
+                                                           && (onlyKind == null || item.Kind == onlyKind))
                                             .OrderBy(item => item.QueueSequence)
                                             .Select(item => new
                                             {
@@ -218,6 +236,23 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                     run.LaunchReceiptJson = null;
                     run.Version++;
                     run.UpdatedAtUtc = now;
+                }
+            }
+            else if (work.Kind == TrainingWorkKind.EvaluationRun)
+            {
+                // Evaluations recover the same way — the work item is failed, never retried in place. What they keep
+                // that a run cannot is their scored prefix, so an operator can resume from the next unscored sample
+                // (ITrainingEvaluationStore.ResumeAsync) instead of paying for the whole hold-out set again.
+                var evaluation = await _dbContext.TrainingEvaluationRuns
+                                                 .FirstOrDefaultAsync(item => item.Id == work.TargetId, cancellationToken)
+                                                 .ConfigureAwait(false);
+                if (evaluation is not null && evaluation.Status is not (TrainingEvaluationStatus.Succeeded or TrainingEvaluationStatus.Failed
+                        or TrainingEvaluationStatus.Cancelled))
+                {
+                    evaluation.Status = TrainingEvaluationStatus.Failed;
+                    evaluation.ErrorMessage = "The evaluation run was interrupted by a host restart.";
+                    evaluation.Version++;
+                    evaluation.UpdatedAtUtc = now;
                 }
             }
 
@@ -351,6 +386,13 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         {
             // A promoted artifact is a registry entry with its own lifecycle; deleting the run would orphan its lineage.
             throw new TrainingConflictException("ArtifactPromoted");
+        }
+
+        if (await _dbContext.TrainingEvaluationRuns.AnyAsync(item => item.TrainingRunId == runId, cancellationToken).ConfigureAwait(false))
+        {
+            // An evaluation borrowed this run's frozen membership; deleting the run would leave it describing a freeze
+            // nothing can point at. Nothing cascades on this connection, so the guard has to be explicit.
+            throw new TrainingConflictException("RunEvaluated");
         }
 
         // Explicit ordered deletes: the node connection never sets PRAGMA foreign_keys=ON, so the declared restrict on

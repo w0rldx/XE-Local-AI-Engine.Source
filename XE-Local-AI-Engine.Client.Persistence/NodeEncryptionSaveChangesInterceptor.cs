@@ -438,6 +438,35 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Evaluations and comparison reports are node-scoped, same flat layout as runs. The membership and the verdicts
+        // carry distinct AAD column names so a writer cannot present one as the other: the membership is what makes a
+        // comparison's two sides comparable, and the verdicts are what the deltas are computed from.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingEvaluationRun>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.MembershipJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_evaluation_membership_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ResultsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_evaluation_results_json",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingComparisonReport>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.DeltasJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_comparison_deltas_json",
+                trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;
