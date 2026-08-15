@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     static layout and the empty-state text rather than live invocation data.
 /// </summary>
 [Category("Page")]
-public sealed class InvocationsPageE2ETests : XEE2ETestBase
+public sealed class InvocationsPageE2ETests : XESerialE2ETestBase
 {
     [Test]
     public async Task Invocations_Page_Renders_Heading_And_Cards()

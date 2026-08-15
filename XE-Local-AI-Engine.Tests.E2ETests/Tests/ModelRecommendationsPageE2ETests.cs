@@ -26,6 +26,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         a <c>model-recommendation-check</c> job in an earlier test, flipping the button to enabled. The test
 ///         branches on the rendered enabled-state and asserts the corresponding invariant, so it is correct in
 ///         either ordering (the gap analysis explicitly asks the test to "handle both present/absent").
+///         The branch is only safe because the state cannot MOVE underneath it: <c>SchedulerPageE2ETests</c> is
+///         deliberately kept in the serial group, and TUnit never overlaps the serial and pooled phases, so the
+///         job either already exists for the whole of this test or does not appear at all during it.
 ///     </para>
 ///     <para>
 ///         FakeOllama is NOT needed: the recommend path is cache/registry-driven and the refresh merely triggers
@@ -34,7 +37,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class ModelRecommendationsPageE2ETests : XEE2ETestBase
+public sealed class ModelRecommendationsPageE2ETests : XEPooledE2ETestBase
 {
     private async Task NavigateAndWaitForRecommendationsPageAsync()
     {

@@ -37,7 +37,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class ModelsManagementE2ETests : XEE2ETestBase
+public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
 {
     // Name prefix this suite owns. Matching on it lets the cleanup hook drop a seeded model without tracking
     // instance state (TUnit0018 forbids a test method assigning instance data).

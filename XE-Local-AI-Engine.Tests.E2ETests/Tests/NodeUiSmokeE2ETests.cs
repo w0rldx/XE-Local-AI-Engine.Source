@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     First browser-driven smoke tests for the XE node React client, ordered by risk.
 ///     Both navigate to the root-hosted SPA shell.
 /// </summary>
-public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
+public sealed class NodeUiSmokeE2ETests : XEPooledE2ETestBase
 {
     [Test]
     [Category("Smoke")]
