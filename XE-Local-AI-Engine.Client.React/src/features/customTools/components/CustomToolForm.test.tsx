@@ -87,6 +87,26 @@ describe("CustomToolForm", () => {
 		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ name: "fetch_status", kind: "HttpFetch" });
 	});
 
+	// Regression guard: the empty create form starts with BOTH kind blocks blank, and requiring the inactive one made
+	// Save fail with the issue on an off-screen field — no visible error, no save. Filling only the ACTIVE kind's
+	// field must be enough. Driven entirely through the UI from CustomToolsPage's real empty values.
+	it("submits an HTTP tool with only the active kind's field filled", () => {
+		const { ref, onSubmit } = renderForm();
+
+		fireEvent.change(screen.getByTestId("custom-tool-form-name"), { target: { value: "fetch_status" } });
+		fireEvent.change(screen.getByTestId("custom-tool-form-description"), { target: { value: "Fetches a status page." } });
+		fireEvent.change(screen.getByTestId("custom-tool-form-http-url"), { target: { value: "https://example.test/status" } });
+		fireEvent.click(screen.getByRole("checkbox", { name: /I understand these tools can run code/ }));
+		act(() => ref.current?.submit());
+
+		expect(onSubmit).toHaveBeenCalledOnce();
+		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+			name: "fetch_status",
+			kind: "HttpFetch",
+			command: expect.objectContaining({ executable: "" }),
+		});
+	});
+
 	// The host dialog gates its Save button on this callback, and the server enforces the same acknowledgement.
 	it("reports the acknowledgement state to the host", () => {
 		const onAcknowledgedChange = vi.fn();

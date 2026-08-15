@@ -12,11 +12,10 @@ import {
 // sides. The backend stays authoritative — these cases pin the rules the client is allowed to pre-empt, and in
 // particular the safety-relevant ones: the mandatory danger acknowledgement and "Fixed declares no parameters".
 //
-// !! SUSPECTED DEFECT, pinned rather than endorsed — see "requires BOTH kind blocks" below. The base object marks
-// `http.urlTemplate` and `command.executable` as required unconditionally, so a form can only pass validation with
-// both blocks filled even though only the active kind is ever submitted. The superRefine that re-checks the active
-// kind ("urlRequired" / "executableRequired") is dead under that rule, which is the tell that the base fields were
-// meant to be lenient. Fixing it will turn the pinned case red — update it, do not re-loosen the assertions above it.
+// The per-kind block requirements live in superRefine, NOT on the base object: only the active kind's block is
+// submitted (toDefinition) and only its editor is rendered (CustomToolForm), so an unconditional requirement made
+// the empty create form unsavable for either kind with the error attached to an off-screen field. See
+// "ignores the inactive kind's empty block" below.
 
 function values(overrides: Partial<CustomToolFormValues> = {}): CustomToolFormValues {
 	return {
@@ -123,22 +122,30 @@ describe("customToolFormSchema", () => {
 		expect(customToolFormSchema.safeParse(input).success).toBe(valid);
 	});
 
-	// !! SUSPECTED DEFECT — this pins current behaviour, it does not endorse it.
-	//
-	// Only the ACTIVE kind's block is submitted (see toDefinition) and only the active kind's editor is rendered (see
-	// CustomToolForm) — yet the base object requires `http.urlTemplate` and `command.executable` unconditionally. So
-	// the empty create form (CustomToolsPage `emptyFormValues`, both blocks blank) cannot validate for EITHER kind,
-	// and the resulting issue lands on a path whose editor is not on screen: pressing Save renders no error and
-	// appears to do nothing. The redundant "urlRequired"/"executableRequired" superRefine checks show the base fields
-	// were meant to be lenient.
-	it("requires BOTH kind blocks to be complete, including the inactive one", () => {
+	// The empty create form (CustomToolsPage `emptyFormValues`) starts with BOTH blocks blank. Requiring the inactive
+	// one made Save fail with the issue on a field whose editor is not on screen — no visible error, no save.
+	it("ignores the inactive kind's empty block", () => {
 		const httpToolWithBlankCommand = values({ command: { ...values().command, executable: "" } });
-		const commandToolWithBlankUrl = values({ kind: "Command", http: { ...values().http, urlTemplate: "" } });
+		const commandToolWithBlankUrl = values({
+			kind: "Command",
+			http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [] },
+		});
 
-		expect(customToolFormSchema.safeParse(httpToolWithBlankCommand).success).toBe(false);
-		expect(issuePaths(httpToolWithBlankCommand)).toContain("command.executable");
-		expect(customToolFormSchema.safeParse(commandToolWithBlankUrl).success).toBe(false);
-		expect(issuePaths(commandToolWithBlankUrl)).toContain("http.urlTemplate");
+		expect(customToolFormSchema.safeParse(httpToolWithBlankCommand).success).toBe(true);
+		expect(customToolFormSchema.safeParse(commandToolWithBlankUrl).success).toBe(true);
+	});
+
+	// The flip side: each kind still has to supply its OWN field, and the issue lands on the path whose editor is
+	// on screen so the form can surface it.
+	it.each([
+		["HttpFetch", { http: { method: "GET", urlTemplate: "  ", headers: [], bodyTemplate: "", allowedHosts: [] } }, "urlRequired", "http.urlTemplate"],
+		["Command", { kind: "Command" as const, command: { executable: "  ", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] } }, "executableRequired", "command.executable"],
+	])("still requires the %s block's own field", (_kind, overrides, message, path) => {
+		const input = values(overrides as Partial<CustomToolFormValues>);
+
+		expect(customToolFormSchema.safeParse(input).success).toBe(false);
+		expect(issues(input)).toContain(message);
+		expect(issuePaths(input)).toContain(path);
 	});
 });
 
