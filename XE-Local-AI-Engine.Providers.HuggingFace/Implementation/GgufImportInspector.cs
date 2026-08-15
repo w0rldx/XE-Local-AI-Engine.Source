@@ -33,14 +33,20 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         "internlm2"
     };
 
-    public async Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken) =>
+        InspectAsync(source, GgufImportInspectionMode.PublicImport, cancellationToken);
+
+    public async Task<GgufImportInspection> InspectAsync(GgufImportSource source,
+        GgufImportInspectionMode mode,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
         var displayName = Path.GetFileName(source.AbsolutePath) ?? string.Empty;
         try
         {
             await using var opened = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
-            return await InspectOpenedAsync(opened, cancellationToken).ConfigureAwait(false);
+            return await InspectOpenedAsync(opened, mode, cancellationToken).ConfigureAwait(false);
         }
         catch (GgufImportException)
         {
@@ -53,18 +59,23 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
     }
 
     internal static async Task<GgufImportInspection> InspectOpenedAsync(ValidatedGgufImportSource source,
+        GgufImportInspectionMode mode,
         CancellationToken cancellationToken)
     {
         var header = await GgufStrictHeaderParser.ReadAsync(source.Stream, cancellationToken).ConfigureAwait(false);
         source.Rewind();
-        return Classify(source.DisplayName, source.Length, header) with
+        return Classify(source.DisplayName, source.Length, header, mode) with
         {
             SourceIdentityToken = source.SourceIdentityToken
         };
     }
 
-    internal static GgufImportInspection Classify(string displayName, long size, GgufStrictHeaderParser.StrictHeader header)
+    internal static GgufImportInspection Classify(string displayName,
+        long size,
+        GgufStrictHeaderParser.StrictHeader header,
+        GgufImportInspectionMode mode = GgufImportInspectionMode.PublicImport)
     {
+        var inProcess = mode == GgufImportInspectionMode.InProcessTrainedCommit;
         var rejections = new List<GgufImportRejectionCode>();
         if (header.Version is null || !header.IsComplete)
         {
@@ -82,15 +93,22 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             rejections.Add(GgufImportRejectionCode.SplitModel);
         }
 
+        // "adapter" is a first-class type on the in-process path — that is what a LoRA export produces — and stays a
+        // rejection on the public one, where an operator has no legitimate reason to upload a bare adapter.
         var type = header.GetString("general.type");
-        if (type is not null && !string.Equals(type, "model", StringComparison.Ordinal))
+        var isAdapter = inProcess && string.Equals(type, "adapter", StringComparison.Ordinal);
+        if (type is not null && !isAdapter && !string.Equals(type, "model", StringComparison.Ordinal))
         {
             rejections.Add(GgufImportRejectionCode.UnsupportedModelType);
         }
 
+        // The display-name substring checks are a public-surface heuristic against a mislabelled upload. An in-process
+        // commit is a file the engine just wrote and whose type it read directly, so the name carries no evidence —
+        // notably, a merged fine-tune of a model whose own name contains "adapter" must not be rejected for it.
         var architecture = NormalizeArchitecture(header.GetString("general.architecture"));
         if (architecture is null || !CausalArchitectures.Contains(architecture)
-                                 || IsRejectedArchitecture(architecture, displayName))
+                                 || !inProcess && IsRejectedArchitecture(architecture, displayName)
+                                 || inProcess && architecture.Contains("bert", StringComparison.Ordinal))
         {
             rejections.Add(GgufImportRejectionCode.UnsupportedArchitecture);
         }
@@ -105,10 +123,11 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
 
         var workloadRejected = rejections.Any(static rejection => rejection is not GgufImportRejectionCode.QuantizationRequired
             and not GgufImportRejectionCode.UnsupportedQuantization);
+        var workload = isAdapter ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;
         return new GgufImportInspection(size,
             header.Version,
             architecture,
-            workloadRejected ? null : GgufImportWorkload.CausalChat,
+            workloadRejected ? null : workload,
             quant,
             displayName,
             rejections.Distinct().ToArray(),
