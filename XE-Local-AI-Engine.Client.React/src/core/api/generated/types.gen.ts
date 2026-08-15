@@ -7807,6 +7807,10 @@ export type DeleteImageModelData = {
 
 export type DeleteImageModelErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
