@@ -25,6 +25,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeSchedulingStores(configuration);
         builder.AddNodeModelFit(configuration);
         builder.AddNodeBenchmarks();
+        builder.AddNodeTrainingDatasets();
         builder.AddNodeCapacity(configuration);
         builder.AddNodeMcpAgentRuns(configuration);
         builder.AddNodePlaybookRetrievalAndMonitoring(configuration);
