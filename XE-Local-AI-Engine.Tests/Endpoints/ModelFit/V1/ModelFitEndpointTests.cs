@@ -181,7 +181,7 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
         {
-            // A random id resolves to no definition → the template guard throws → AddError + Send.ErrorsAsync → 400.
+            // A random id resolves to no definition → the template guard throws ScheduledJobValidationException → global DomainValidationExceptionHandler → 400.
             Content = JsonContent.Create(new
             {
                 scheduledJobId = Guid.NewGuid()

@@ -19,6 +19,9 @@ public sealed class ExecuteUnsavedPreviewWorkflowEndpoint(IPreviewWorkflowExecut
     {
         Post(LocalApiRoutes.Preview.RunExecute);
         Policies(NodeAuthorizationPolicies.Operator);
+        // 409 = a run-cap rejection written by the global ConflictExceptionHandler (conflictType =
+        // PreviewWorkflowCapReached / PreviewWorkflowModelCapExceeded).
+        Description(static x => x.ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(ExecuteUnsavedPreviewWorkflowRequest req, CancellationToken ct)
@@ -38,14 +41,6 @@ public sealed class ExecuteUnsavedPreviewWorkflowEndpoint(IPreviewWorkflowExecut
             }
 
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
-        catch (PreviewWorkflowCapReachedException exception)
-        {
-            await Send.ResultAsync(PreviewExecuteHelper.CapReached(exception)).ConfigureAwait(false);
-        }
-        catch (PreviewWorkflowModelCapExceededException exception)
-        {
-            await Send.ResultAsync(PreviewExecuteHelper.ModelCapExceeded(exception)).ConfigureAwait(false);
         }
     }
 }

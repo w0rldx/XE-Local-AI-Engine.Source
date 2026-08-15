@@ -36,7 +36,6 @@ public class DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IH
             exception.GetType().Name);
 
         httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        httpContext.Response.ContentType = "application/problem+json";
 
         var problemDetails = new ProblemDetails
         {
@@ -46,7 +45,9 @@ public class DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IH
             Detail = detail
         }.WithTraceId(httpContext);
 
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken).ConfigureAwait(false);
+        // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with application/json,
+        // so setting the property beforehand is dead (the same trap ConflictExceptionHandler had).
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, "application/problem+json; charset=utf-8", cancellationToken).ConfigureAwait(false);
 
         return true;
     }

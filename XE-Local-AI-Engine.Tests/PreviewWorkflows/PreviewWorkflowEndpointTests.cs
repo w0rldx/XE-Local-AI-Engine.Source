@@ -56,6 +56,52 @@ public sealed class PreviewWorkflowEndpointTests
     }
 
     [Test]
+    public async Task UpdateWorkflow_WithStaleVersion_ReturnsProblemDetailsConflict()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        var graph = PreviewGraphBuilder.Linear();
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/preview/workflows")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Concurrency probe",
+                graph
+            })
+        };
+        factory.AddNodeBearerToken(createRequest);
+        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var workflowId = created.GetProperty("id").GetGuid();
+        var version = created.GetProperty("version").GetInt32();
+
+        // A version behind the stored one is exactly the stale-writer case the endpoint answers with 409.
+        using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"{ApiPrefix}/preview/workflows/{workflowId}")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Concurrency probe (edited)",
+                graph,
+                version = version - 1
+            })
+        };
+        factory.AddNodeBearerToken(updateRequest);
+        using var updateResponse = await client.SendAsync(updateRequest).ConfigureAwait(false);
+        var body = await updateResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, updateResponse.StatusCode);
+        AssertEx.Equal("application/problem+json", updateResponse.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 409, document.RootElement.GetProperty("status").GetInt32());
+        AssertEx.Equal("The workflow was modified by another writer; reload and retry.",
+            document.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Test]
     public async Task PreviewEndpoints_ExecuteUnsaved_RunsWithoutPersisting()
     {
         // Substitute the runner with a scripted session so the inline run never touches Ollama.

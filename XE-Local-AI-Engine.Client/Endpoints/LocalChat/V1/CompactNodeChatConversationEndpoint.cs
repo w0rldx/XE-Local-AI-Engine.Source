@@ -26,20 +26,15 @@ public sealed class CompactNodeChatConversationEndpoint(
         // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
         // FastEndpoints answers with 415 when the header is absent. Overriding Accepts lets the body-less request
         // through (the id still binds from the route). Mirrors CancelPreviewRunEndpoint.
-        Description(x => x.Accepts<CompactNodeChatConversationRequest>());
+        // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
+        // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
+        Description(x => x.Accepts<CompactNodeChatConversationRequest>()
+                          .ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(CompactNodeChatConversationRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
-        }
-        catch (NodeChatReadOnlyConversationException)
-        {
-            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
-            return;
-        }
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         var result = await _compactionService.CompactAsync(req.ConversationId, req.Model, ct).ConfigureAwait(false);
 
