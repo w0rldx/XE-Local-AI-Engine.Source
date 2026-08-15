@@ -192,7 +192,7 @@ public sealed class McpServerInboundAuthTests
         return new StringContent("{}", Encoding.UTF8, "application/json");
     }
 
-    private static TestingWebAppFactory CreateFactory(string? storedKey)
+    private static TestServerWebAppFactory CreateFactory(string? storedKey)
     {
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
@@ -203,7 +203,7 @@ public sealed class McpServerInboundAuthTests
                          ? (McpServerApiKeyView?)null
                          : new McpServerApiKeyView("xemcp_valid", DateTimeOffset.UnixEpoch, LastUsedAt: null));
 
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

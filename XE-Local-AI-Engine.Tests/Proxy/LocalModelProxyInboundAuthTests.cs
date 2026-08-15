@@ -134,7 +134,7 @@ public sealed class LocalModelProxyInboundAuthTests
             $"The advertised base URL must point at the OpenAI proxy base inside the loopback-gated prefix; got '{body.EndpointUrl}'.");
     }
 
-    private static TestingWebAppFactory CreateFactory(string? storedKey)
+    private static TestServerWebAppFactory CreateFactory(string? storedKey)
     {
         var apiKeyService = Substitute.For<ILocalModelProxyApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
@@ -144,7 +144,7 @@ public sealed class LocalModelProxyInboundAuthTests
                          ? (LocalModelProxyApiKeyView?)null
                          : new LocalModelProxyApiKeyView("xeprx_valid", DateTimeOffset.UnixEpoch, LastUsedAt: null));
 
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

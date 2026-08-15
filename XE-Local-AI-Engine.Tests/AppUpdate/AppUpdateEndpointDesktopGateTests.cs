@@ -25,7 +25,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
     [Test]
     public async Task PostUpdateEndpoints_WhenNotDesktop_AreUnmapped()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         foreach (var (method, route) in PostRoutes)
@@ -46,7 +46,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
     [Test]
     public async Task GetUpdateEndpoints_WhenNotDesktop_FallThroughToSpa_NotJsonEndpoint()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         foreach (var route in GetRoutes)

@@ -53,7 +53,7 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         var serverSha256 = await HashFileAsync(serverPath).ConfigureAwait(false);
         var store = new FixedGgufModelStore(modelPath, modelFile.Length, modelSha256);
 
-        await using var factory = new TestingWebAppFactory
+        await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {

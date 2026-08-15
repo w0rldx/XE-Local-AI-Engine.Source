@@ -203,7 +203,7 @@ public sealed class SlashCommandEndpointTests
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    private static TestingWebAppFactory CreateFactory(ISlashCommandService service) =>
+    private static TestServerWebAppFactory CreateFactory(ISlashCommandService service) =>
         new()
         {
             ConfigureAdditionalTestServices = services =>
@@ -213,7 +213,7 @@ public sealed class SlashCommandEndpointTests
             }
         };
 
-    private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
+    private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
         factory.AddNodeBearerToken(request);

@@ -172,7 +172,7 @@ public sealed class WorkspaceEndpointTests
         AssertEx.True(!string.IsNullOrWhiteSpace(body.Message), "The stable conflict response should include an operator-facing message.");
     }
 
-    private static TestingWebAppFactory CreateFactory(out IWorkspaceRevocationPreparation preparation,
+    private static TestServerWebAppFactory CreateFactory(out IWorkspaceRevocationPreparation preparation,
         IWorkspaceRevocationService? revocationService = null)
     {
         preparation = Substitute.For<IWorkspaceRevocationPreparation>();
@@ -183,7 +183,7 @@ public sealed class WorkspaceEndpointTests
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(call => string.Equals(call.Arg<string?>(), McpKey, StringComparison.Ordinal));
 
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
@@ -200,7 +200,7 @@ public sealed class WorkspaceEndpointTests
         };
     }
 
-    private static HttpRequestMessage OperatorRequest(TestingWebAppFactory factory, HttpMethod method, string route, object? body = null)
+    private static HttpRequestMessage OperatorRequest(TestServerWebAppFactory factory, HttpMethod method, string route, object? body = null)
     {
         var request = new HttpRequestMessage(method, route);
         if (body is not null)

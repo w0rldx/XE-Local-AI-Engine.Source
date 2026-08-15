@@ -10,7 +10,7 @@ public sealed class FastEndpointsProblemDetailsTests
     [Test]
     public async Task ValidationFailure_ReturnsProblemDetails()
     {
-        await using var factory = new TestingWebAppFactory();
+        await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")

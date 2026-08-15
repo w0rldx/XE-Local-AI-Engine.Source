@@ -270,13 +270,13 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         AssertEx.Equal("The image runtime is changing; try again shortly.", body.RootElement.GetProperty("message").GetString());
     }
 
-    private static TestingWebAppFactory CreateFactory(IStableDiffusionCppSourceBuildService service,
+    private static TestServerWebAppFactory CreateFactory(IStableDiffusionCppSourceBuildService service,
         IImageRuntimeActivityGate gate,
         IImageServerSupervisor? supervisor = null,
         IStableDiffusionInstalledRuntimeStore? store = null,
         IImageJobCoordinator? coordinator = null)
     {
-        return new TestingWebAppFactory
+        return new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true,
             ConfigureAdditionalTestServices = services =>
