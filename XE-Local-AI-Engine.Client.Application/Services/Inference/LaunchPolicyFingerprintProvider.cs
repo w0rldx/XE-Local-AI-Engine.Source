@@ -33,7 +33,9 @@ public sealed class LaunchPolicyFingerprintProvider(
     LlamaServerSupervisorOptions supervisorOptions,
     LlamaServerLaunchPolicyOptions launchPolicyOptions) : ILaunchPolicyFingerprintProvider, IDisposable
 {
-    public const int CurrentVersion = 4;
+    // 5: the LoRA adapter member joined the model identity — a frozen replay captured before adapters existed cannot
+    // prove whether an adapter was applied, so every v4 fingerprint is hard-rejected and re-fitted once.
+    public const int CurrentVersion = 5;
 
     private const char FingerprintSeparator = '.';
     private const int ParallelSlots = 1;
@@ -220,7 +222,8 @@ public sealed class LaunchPolicyFingerprintProvider(
                 contentIdentity = modelIdentity.ContentIdentity,
                 guardSha256 = modelIdentity.GuardSha256,
                 fileLengthBytes = file.Length,
-                fileLastWriteUtcTicks = file.LastWriteTimeUtc.Ticks
+                fileLastWriteUtcTicks = file.LastWriteTimeUtc.Ticks,
+                adapter = await ResolveAdapterIdentityAsync(input.ModelName, ct).ConfigureAwait(false)
             },
             launch = new
             {
@@ -292,6 +295,29 @@ public sealed class LaunchPolicyFingerprintProvider(
     public void Dispose()
     {
         _fileHashCache.Dispose();
+    }
+
+    /// <summary>
+    ///     The adapter member of a LoRA model's identity — <see langword="null" /> for an ordinary model, so an entry
+    ///     without an adapter contributes a stable absent marker rather than a shifting shape. Uses the registry's
+    ///     recorded member fingerprint (not a file read): it already commits to the adapter's bytes and size, and the
+    ///     entry's own RegistryRevision commits to it in turn.
+    /// </summary>
+    private async Task<object?> ResolveAdapterIdentityAsync(string modelName, CancellationToken ct)
+    {
+        var entry = await _modelRegistry.FindAsync(modelName, ct).ConfigureAwait(false);
+        if (entry?.AdapterFileName is null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            fileName = entry.AdapterFileName,
+            memberFingerprint = entry.AdapterMemberFingerprint,
+            sizeBytes = entry.AdapterSizeBytes,
+            baseModelName = entry.BaseModelName
+        };
     }
 
     private async Task<object?> ResolveChatLaunchIdentityAsync(ModelRole? role,
