@@ -150,6 +150,11 @@ public sealed class EvaluationRunExecutor(
                 "The hold-out sample's frozen trajectory could not be read.");
         }
 
+        if (EvaluationScorer.RejectMultiCall(sampleId, sample.Kind, content) is { } unsupported)
+        {
+            return unsupported;
+        }
+
         var prompt = EvaluationScorer.ReadUserPrompt(content);
         if (string.IsNullOrWhiteSpace(prompt))
         {

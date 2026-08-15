@@ -69,16 +69,29 @@ internal static class EvaluationScorer
     }
 
     /// <summary>
+    ///     The deterministic refusal for a sample no scorer can grade, or <see langword="null" /> when the sample is
+    ///     single-call. An expectation is ONE call, so a multi-call trajectory used to be scored by its first tool part
+    ///     with the rest silently dropped — a failure that read as a verdict.
+    /// </summary>
+    public static TrainingEvaluationResultEntry? RejectMultiCall(Guid sampleId, string kind, TrainingSampleContentV1 content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return TrainingSampleParts.IsMultiCall(content.Parts)
+            ? Fail(sampleId, kind, TrainingSampleParts.MultiCallUnsupportedReason)
+            : null;
+    }
+
+    /// <summary>
     ///     Reads what a frozen sample expects. The trajectory mirrors the chat <c>parts[]</c> shape, so the expectation
-    ///     is the first tool part; a sample without one expects no call at all.
+    ///     is its single tool part; a sample without one expects no call at all. A multi-call trajectory never reaches
+    ///     here — <see cref="RejectMultiCall" /> is the gate ahead of it.
     /// </summary>
     public static EvaluationExpectation ReadExpectation(TrainingSampleContentV1 content, IReadOnlyList<DatasetToolSnapshotV1> tools)
     {
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(tools);
-        var toolPart = content.Parts.FirstOrDefault(part => string.Equals(part.Kind, "tool", StringComparison.Ordinal)
-                                                            && !string.IsNullOrWhiteSpace(part.ToolName));
-        if (toolPart?.ToolName is not { Length: > 0 } toolName)
+        var toolParts = TrainingSampleParts.ToolCalls(content.Parts);
+        if (toolParts is not [{ ToolName: { Length: > 0 } toolName } toolPart, ..])
         {
             return new EvaluationExpectation(ToolName: null, ArgumentsJson: null, ParameterSchema: null);
         }
