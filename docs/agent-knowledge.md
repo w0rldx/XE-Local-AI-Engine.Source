@@ -951,6 +951,11 @@ A failed assistant turn shows **exactly one** red Alert, driven purely by `hasTe
 
 Global handling already exists: `ConflictExceptionHandler` (→ 409) + `DefaultExceptionHandler` (→ 500) in `Client/ExceptionHandling/`, plus FastEndpoints `UseProblemDetails`. There are **40+ custom domain exceptions** and **zero** `throw new Exception(` solution-wide. So a "clean up redundant endpoint try/catch" refactor is mostly wrong: most catches are **load-bearing** — they map a domain exception to a specific status, or degrade gracefully on a polled endpoint (`catch (OperationCanceledException) when (ct.IsCancellationRequested) → throw` guards). Do **not** mass-remove them. When you *do* narrow one, wire the mapping first: a catch converted to a custom exception with no handler still 500s, just more verbosely — which is churn, not a fix. And a 401 is not a free substitute for 409: a 401 on the operator's *own* request can trip the client auth-interceptor into logging them out, which is why `ConnectConnectionEndpoint` maps an expired **worker** token to 409, not 401.
 
+### Seven validation exceptions are mapped globally to 400 — don't re-add per-endpoint catches
+
+`DomainValidationExceptionHandler` (`Client/ExceptionHandling/`, registered after `ConflictExceptionHandler` and before `DefaultExceptionHandler`) maps `ScheduledJob`, `CustomTool`, `McpServer`, `SlashCommand`, `PlaybookAction`, `AgentDefinition` and `AgentSkill` `…ValidationException` to a 400 carrying FastEndpoints' own `ProblemDetails` shape — `errors: [{name: "generalErrors", reason: message}]`, `detail` = that reason, `instance` = request path, `traceId` = `HttpContext.TraceIdentifier` — byte-identical to the `AddError(message) + Send.ErrorsAsync()` pair it replaced (pinned by `ApiFoundation/DomainValidationExceptionHandlerTests`).
+A **new single-message** validation exception belongs in that handler's type switch, not in a per-endpoint `catch`. Deliberately **not** in it: `PreviewWorkflowValidationException` (carries a *list* of errors — one failure per entry, needs explicit multi-error handling) and `SelectedFolderValidationException` (an aggregate of 400/404/409 faults — split the type first). `SlashCommandConflictException` stays a local 409 catch.
+
 ### Client conventions
 
 - Modals go through the shared **`DialogShell`** primitive — don't hand-roll a Mantine `Modal`.

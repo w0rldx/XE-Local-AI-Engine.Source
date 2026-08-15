@@ -19,21 +19,13 @@ public sealed class UpdateMcpServerEndpoint(IMcpServerService mcpServerService)
 
     public override async Task HandleAsync(UpdateMcpServerRequest req, CancellationToken ct)
     {
-        try
+        var record = await _mcpServerService.UpdateAsync(req.McpServerId, req.ToInput(), ct).ConfigureAwait(false);
+        if (record is null)
         {
-            var record = await _mcpServerService.UpdateAsync(req.McpServerId, req.ToInput(), ct).ConfigureAwait(false);
-            if (record is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (McpServerValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

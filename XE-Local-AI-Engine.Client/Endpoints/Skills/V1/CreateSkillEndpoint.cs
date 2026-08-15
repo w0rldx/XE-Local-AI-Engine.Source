@@ -30,20 +30,12 @@ public sealed class CreateSkillEndpoint(IAgentSkillService agentSkillService, Ti
             return;
         }
 
-        try
-        {
-            var record = await _agentSkillService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetSkillEndpoint>(new
-                {
-                    skillId = record.Id
-                },
-                record.ToResponse(),
-                cancellation: ct).ConfigureAwait(false);
-        }
-        catch (AgentSkillValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var record = await _agentSkillService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetSkillEndpoint>(new
+            {
+                skillId = record.Id
+            },
+            record.ToResponse(),
+            cancellation: ct).ConfigureAwait(false);
     }
 }
