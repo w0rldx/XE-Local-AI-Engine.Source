@@ -4556,6 +4556,52 @@
 		},
 		"errors": {
 			"request": "Die Trainings-Anfrage ist fehlgeschlagen."
+		},
+		"runs": {
+			"wizard": {
+				"title": "Trainingslauf starten",
+				"description": "Ein Lauf trainiert einen LoRA-Adapter aus einem Datensatz und einem Basis-Checkpoint. Er belegt währenddessen die gesamte GPU.",
+				"dataset": "Datensatz",
+				"datasetPlaceholder": "Fertigen Datensatz auswählen",
+				"baseCheckpoint": "Basis-Checkpoint",
+				"baseCheckpointPlaceholder": "Heruntergeladenen Checkpoint auswählen",
+				"checkpointUnreadable": "Für diesen Checkpoint lässt sich der Trainingsbedarf nicht bestimmen.",
+				"doesNotFit": "Dieser Lauf passt nicht",
+				"estimate": "Etwa {{estimate}} VRAM von {{available}} frei",
+				"vramUnknown": "unbekannt",
+				"experimental": "Experimentelle Größe",
+				"noLicenseMetadata": "Für dieses Repository wurden keine Lizenzangaben gefunden. Die Bestätigung hält genau das fest.",
+				"confirmLicense": "Ich bestätige, dass ich diese Gewichte feinabstimmen darf",
+				"maxSeqLength": "Sequenzlänge",
+				"batchSize": "Batch-Größe",
+				"loraR": "LoRA-Rang",
+				"epochs": "Epochen",
+				"startFailed": "Der Lauf konnte nicht gestartet werden. Prüfe die Optionen und versuche es erneut.",
+				"start": "Lauf starten"
+			},
+			"list": {
+				"title": "Trainingsläufe",
+				"empty": "Noch keine Trainingsläufe. Starte oben einen.",
+				"cancel": "Abbrechen",
+				"loss": "Loss {{loss}}",
+				"steps": "Schritt {{step}} von {{total}}"
+			},
+			"status": {
+				"Queued": "In Warteschlange",
+				"Preparing": "Wird vorbereitet",
+				"Training": "Training läuft",
+				"Exporting": "Wird exportiert",
+				"Smoke": "Rauchtest",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"phase": {
+				"loading": "Modell wird geladen",
+				"tokenizing": "Datensatz wird vorbereitet",
+				"training": "Training",
+				"saving": "Adapter wird gespeichert"
+			}
 		}
 	}
 }
