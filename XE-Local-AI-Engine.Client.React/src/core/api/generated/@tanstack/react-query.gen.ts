@@ -285,10 +285,12 @@ import type {
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationResponse,
 	ArchiveNodeChatConversationData,
+	ArchiveNodeChatConversationError,
 	ArchiveNodeChatConversationResponse,
 	BenchmarkInferenceProfileData,
 	BenchmarkInferenceProfileResponse,
 	BranchNodeChatConversationData,
+	BranchNodeChatConversationError,
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesResponse,
@@ -334,6 +336,7 @@ import type {
 	CommitSkillImportData,
 	CommitSkillImportResponse,
 	CompactNodeChatConversationData,
+	CompactNodeChatConversationError,
 	CompactNodeChatConversationResponse,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
@@ -364,6 +367,7 @@ import type {
 	CreateNodeChatConversationError,
 	CreateNodeChatConversationResponse,
 	CreateNodeChatMessageRevisionData,
+	CreateNodeChatMessageRevisionError,
 	CreateNodeChatMessageRevisionResponse,
 	CreatePlaybookActionData,
 	CreatePlaybookActionResponse,
@@ -462,8 +466,10 @@ import type {
 	EntraDeviceCodeStatusData,
 	EntraDeviceCodeStatusResponse,
 	ExecuteSavedPreviewWorkflowData,
+	ExecuteSavedPreviewWorkflowError,
 	ExecuteSavedPreviewWorkflowResponse,
 	ExecuteUnsavedPreviewWorkflowData,
+	ExecuteUnsavedPreviewWorkflowError,
 	ExecuteUnsavedPreviewWorkflowResponse,
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileResponse,
@@ -695,6 +701,7 @@ import type {
 	NodeSetupError,
 	NodeSetupResponse,
 	PinNodeChatConversationData,
+	PinNodeChatConversationError,
 	PinNodeChatConversationResponse,
 	PollNodeBindingData,
 	PollNodeBindingResponse,
@@ -740,6 +747,7 @@ import type {
 	RemoveStableDiffusionCppSourceBuildError,
 	RemoveStableDiffusionCppSourceBuildResponse,
 	RenameNodeChatConversationData,
+	RenameNodeChatConversationError,
 	RenameNodeChatConversationResponse,
 	ResolveToolApprovalData,
 	ResolveToolApprovalError,
@@ -775,8 +783,10 @@ import type {
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledResponse,
 	SetNodeChatConversationMemoryExcludedData,
+	SetNodeChatConversationMemoryExcludedError,
 	SetNodeChatConversationMemoryExcludedResponse,
 	SetNodeChatMessageFeedbackData,
+	SetNodeChatMessageFeedbackError,
 	SetNodeChatMessageFeedbackResponse,
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
@@ -1648,12 +1658,12 @@ export const executeSavedPreviewWorkflowMutation = (
 	options?: Partial<Options<ExecuteSavedPreviewWorkflowData>>,
 ): UseMutationOptions<
 	ExecuteSavedPreviewWorkflowResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ExecuteSavedPreviewWorkflowError>,
 	Options<ExecuteSavedPreviewWorkflowData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ExecuteSavedPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ExecuteSavedPreviewWorkflowError>,
 		Options<ExecuteSavedPreviewWorkflowData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -1672,12 +1682,12 @@ export const executeUnsavedPreviewWorkflowMutation = (
 	options?: Partial<Options<ExecuteUnsavedPreviewWorkflowData>>,
 ): UseMutationOptions<
 	ExecuteUnsavedPreviewWorkflowResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ExecuteUnsavedPreviewWorkflowError>,
 	Options<ExecuteUnsavedPreviewWorkflowData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ExecuteUnsavedPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ExecuteUnsavedPreviewWorkflowError>,
 		Options<ExecuteUnsavedPreviewWorkflowData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3124,12 +3134,12 @@ export const compactNodeChatConversationMutation = (
 	options?: Partial<Options<CompactNodeChatConversationData>>,
 ): UseMutationOptions<
 	CompactNodeChatConversationResponse,
-	AxiosError<DefaultError>,
+	AxiosError<CompactNodeChatConversationError>,
 	Options<CompactNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		CompactNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CompactNodeChatConversationError>,
 		Options<CompactNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3300,10 +3310,14 @@ export const uploadConversationFileMutation = (
 
 export const renameNodeChatConversationMutation = (
 	options?: Partial<Options<RenameNodeChatConversationData>>,
-): UseMutationOptions<RenameNodeChatConversationResponse, AxiosError<DefaultError>, Options<RenameNodeChatConversationData>> => {
+): UseMutationOptions<
+	RenameNodeChatConversationResponse,
+	AxiosError<RenameNodeChatConversationError>,
+	Options<RenameNodeChatConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		RenameNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<RenameNodeChatConversationError>,
 		Options<RenameNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3320,10 +3334,14 @@ export const renameNodeChatConversationMutation = (
 
 export const pinNodeChatConversationMutation = (
 	options?: Partial<Options<PinNodeChatConversationData>>,
-): UseMutationOptions<PinNodeChatConversationResponse, AxiosError<DefaultError>, Options<PinNodeChatConversationData>> => {
+): UseMutationOptions<
+	PinNodeChatConversationResponse,
+	AxiosError<PinNodeChatConversationError>,
+	Options<PinNodeChatConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		PinNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<PinNodeChatConversationError>,
 		Options<PinNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3342,12 +3360,12 @@ export const archiveNodeChatConversationMutation = (
 	options?: Partial<Options<ArchiveNodeChatConversationData>>,
 ): UseMutationOptions<
 	ArchiveNodeChatConversationResponse,
-	AxiosError<DefaultError>,
+	AxiosError<ArchiveNodeChatConversationError>,
 	Options<ArchiveNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		ArchiveNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ArchiveNodeChatConversationError>,
 		Options<ArchiveNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3366,12 +3384,12 @@ export const setNodeChatConversationMemoryExcludedMutation = (
 	options?: Partial<Options<SetNodeChatConversationMemoryExcludedData>>,
 ): UseMutationOptions<
 	SetNodeChatConversationMemoryExcludedResponse,
-	AxiosError<DefaultError>,
+	AxiosError<SetNodeChatConversationMemoryExcludedError>,
 	Options<SetNodeChatConversationMemoryExcludedData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		SetNodeChatConversationMemoryExcludedResponse,
-		AxiosError<DefaultError>,
+		AxiosError<SetNodeChatConversationMemoryExcludedError>,
 		Options<SetNodeChatConversationMemoryExcludedData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3388,10 +3406,14 @@ export const setNodeChatConversationMemoryExcludedMutation = (
 
 export const branchNodeChatConversationMutation = (
 	options?: Partial<Options<BranchNodeChatConversationData>>,
-): UseMutationOptions<BranchNodeChatConversationResponse, AxiosError<DefaultError>, Options<BranchNodeChatConversationData>> => {
+): UseMutationOptions<
+	BranchNodeChatConversationResponse,
+	AxiosError<BranchNodeChatConversationError>,
+	Options<BranchNodeChatConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		BranchNodeChatConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<BranchNodeChatConversationError>,
 		Options<BranchNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3432,12 +3454,12 @@ export const createNodeChatMessageRevisionMutation = (
 	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
 ): UseMutationOptions<
 	CreateNodeChatMessageRevisionResponse,
-	AxiosError<DefaultError>,
+	AxiosError<CreateNodeChatMessageRevisionError>,
 	Options<CreateNodeChatMessageRevisionData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		CreateNodeChatMessageRevisionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateNodeChatMessageRevisionError>,
 		Options<CreateNodeChatMessageRevisionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3476,10 +3498,14 @@ export const getNodeChatMessageFeedbackOptions = (options: Options<GetNodeChatMe
 
 export const setNodeChatMessageFeedbackMutation = (
 	options?: Partial<Options<SetNodeChatMessageFeedbackData>>,
-): UseMutationOptions<SetNodeChatMessageFeedbackResponse, AxiosError<DefaultError>, Options<SetNodeChatMessageFeedbackData>> => {
+): UseMutationOptions<
+	SetNodeChatMessageFeedbackResponse,
+	AxiosError<SetNodeChatMessageFeedbackError>,
+	Options<SetNodeChatMessageFeedbackData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		SetNodeChatMessageFeedbackResponse,
-		AxiosError<DefaultError>,
+		AxiosError<SetNodeChatMessageFeedbackError>,
 		Options<SetNodeChatMessageFeedbackData>
 	> = {
 		mutationFn: async (fnOptions) => {
