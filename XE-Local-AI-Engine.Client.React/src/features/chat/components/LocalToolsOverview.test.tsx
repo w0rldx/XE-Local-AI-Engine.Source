@@ -39,6 +39,7 @@ const builtinTools: ToolCatalogEntry[] = [
 		source: { kind: "builtin", serverSlug: null },
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
+		sessionScopeEligible: false,
 	},
 	{
 		name: "Calculate",
@@ -47,6 +48,7 @@ const builtinTools: ToolCatalogEntry[] = [
 		source: { kind: "builtin", serverSlug: null },
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
+		sessionScopeEligible: false,
 	},
 ];
 
@@ -57,6 +59,7 @@ const mcpTool: ToolCatalogEntry = {
 	source: { kind: "mcp", serverSlug: "filesystem-tools" },
 	category: "Network",
 	effectiveRequiresApproval: true,
+	sessionScopeEligible: false,
 };
 
 function renderWithProviders(ui: ReactElement) {

@@ -280,9 +280,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // A concrete-type test rather than a widened IToolApprovalPolicy: the interface is the cross-project AI.Agent
         // contract for one call's yes/no verdict, and the node-only session-scope knob has no place on it. Any other
-        // implementation leaves session scope available (today's behaviour).
+        // implementation leaves session scope available (today's behaviour). Read through the SHARED predicate the node
+        // tool-catalog response also uses, so the runner and the chat card can never disagree about the switch.
         ArgumentNullException.ThrowIfNull(approvalPolicy);
-        _skillSessionScopeDisabled = approvalPolicy is NodeToolApprovalPolicy { SkillSessionScopeDisabled: true };
+        _skillSessionScopeDisabled = SessionApprovalEligibility.IsSessionScopeDisabled(approvalPolicy);
 
         // Subscribe for the process lifetime; both are singletons, so there is no unsubscribe path (mirrors
         // InvocationResumeRegistry's subscription to the same dispatcher).
@@ -1690,7 +1691,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // bound to the tool's Version (mapped onto ApprovalMemoKey.SkillVersion) so a mid-conversation edit that bumps the
         // version invalidates the grant and re-prompts — mirroring the skill-version binding. ResourceName is null (a
         // custom tool has no sub-resource). A tool the package does not carry (a mid-turn delete) is not remembered.
-        if (toolName.StartsWith(CustomToolValidation.ToolNamePrefix, StringComparison.Ordinal))
+        if (SessionApprovalEligibility.IsCustomToolName(toolName))
         {
             if (package.CustomTools is not { Count: > 0 } customTools)
             {
@@ -1698,7 +1699,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             var customTool = customTools.FirstOrDefault(candidate => string.Equals(candidate.Name, toolName, StringComparison.Ordinal));
-            if (customTool is null || !customTool.IsFixed)
+            if (customTool is null || !SessionApprovalEligibility.IsToolEligible(toolName, customTool.IsFixed))
             {
                 return null;
             }
@@ -1711,12 +1712,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             return null;
         }
 
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
-        var isResourceRead = string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
-        if (!isResourceRead && !string.Equals(toolName, AgentSkillsProvider.LoadSkillToolName, StringComparison.Ordinal))
+        if (!SessionApprovalEligibility.IsToolEligible(toolName, isFixedCustomTool: false))
         {
             return null;
         }
+
+#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
+        var isResourceRead = string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
 #pragma warning restore MAAI001
 
         var call = approvalRequest.ToolCall as FunctionCallContent;

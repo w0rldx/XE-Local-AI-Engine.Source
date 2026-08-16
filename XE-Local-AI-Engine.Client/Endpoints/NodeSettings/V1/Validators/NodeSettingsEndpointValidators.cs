@@ -111,12 +111,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds)
             .When(static request => request.DetachedGraceSeconds is not null);
 
-        // The default-sampling seed rides the wire as a string (precision-safe); reject a non-integer value with a 400.
-        RuleFor(static request => request.SamplingDefaults!.Seed)
-            .Must(static seed => SeedValue.IsValid(seed))
-            .When(static request => request.SamplingDefaults is not null)
-            .WithMessage(SeedValue.ValidationMessage);
-
         // ── Usage cost rates ──
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one
         // shared predicate with the store's Normalize). Reject junk with an immediate 400; Normalize remains the

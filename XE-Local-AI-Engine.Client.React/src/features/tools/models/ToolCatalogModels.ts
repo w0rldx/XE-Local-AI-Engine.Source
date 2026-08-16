@@ -61,6 +61,10 @@ export function parseToolCategory(raw: string): ToolCategory {
 // (MCP tools are namespaced mcp__{server}__{tool}) so they can be referenced directly by a definition.
 // category is the tool's risk class; effectiveRequiresApproval is whether the CURRENT node policy gates it (the
 // agent-independent floor an operator sees — a bound agent may tighten further, never loosen it).
+// sessionScopeEligible is whether the node can actually REMEMBER an "approve for this session" decision on this tool
+// (only the skill tools and Fixed custom tools can, and an operator switch turns it off node-wide). The chat approval
+// card withholds its session button when this is false, so it never offers a durable decision the node downgrades to a
+// one-shot approval. It is an upper bound: the node applies further per-CALL narrowings it cannot see here.
 export interface ToolCatalogEntry {
 	readonly name: string;
 	readonly description: string;
@@ -68,6 +72,7 @@ export interface ToolCatalogEntry {
 	readonly source: ToolCatalogSource;
 	readonly category: ToolCategory;
 	readonly effectiveRequiresApproval: boolean;
+	readonly sessionScopeEligible: boolean;
 }
 
 const MCP_NAME_PREFIX = "mcp__";
