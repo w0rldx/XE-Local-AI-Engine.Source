@@ -92,6 +92,18 @@ public sealed class LlamaServerSupervisorOptionsTests
     }
 
     [Test]
+    public void HttpNetworkTimeoutDefault_IsNotShorterThanTheNodeMessageTimeoutCeiling()
+    {
+        // G9: this is the OUTERMOST floor against a wedged socket, not the per-turn bound. When it was 600s an operator
+        // who raised the node "Maximum message request timeout" above 600s got a socket abort from the inner HTTP
+        // timeout first, so the setting silently had no effect for local models. It must never be shorter than the node
+        // setting's own ceiling (StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds = 3600; that constant lives in
+        // Client.Application, which this provider project cannot reference — see the comment on the default).
+        AssertEx.True(new LlamaServerSupervisorOptions().HttpNetworkTimeout >= TimeSpan.FromSeconds(3600),
+            "the llama-server HTTP network timeout must not pre-empt the operator's maximum message request timeout.");
+    }
+
+    [Test]
     public async Task Validate_NonPositiveEjectDrainTimeout_Throws()
     {
         var options = new LlamaServerSupervisorOptions

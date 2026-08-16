@@ -186,7 +186,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 throw new ScheduledJobExecutionException("The scheduled agent could not be found. It may have been deleted.");
             }
 
-            var package = BuildPackage(packageBuilder, resolved, effectiveModel, parameters, supportsThinking);
+            var package = BuildPackage(packageBuilder, resolved, effectiveModel, parameters, supportsThinking, nodeSettings.MaxMessageRequestTimeoutSeconds);
 
             // 6. Run headless through the shared invocation runner, serialized against in-flight chat/platform turns via
             //    the shared invocation slot, capturing a content-safe terminal summary.
@@ -207,13 +207,16 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     ///     approval-required by default) would surface a tool-approval request nobody can answer and hang the run until
     ///     its max-runtime interrupt — the same no-HITL rationale by which a spawned sub-agent drops approval-required
     ///     tools. The effective model is bound as a concrete <c>ModelProfile</c> so the runner never
-    ///     silently falls back to the node default.
+    ///     silently falls back to the node default. The whole-turn deadline is the operator's node-level "Maximum
+    ///     message request timeout" — the same knob that bounds a local chat send/regenerate — so an unattended run and
+    ///     an interactive turn agree on the ceiling instead of the builder's own <see cref="TimeoutSettings" /> default.
     /// </summary>
     private RuntimePackage BuildPackage(ILocalChatRuntimePackageBuilder packageBuilder,
         ResolvedAgentRuntime resolved,
         string effectiveModel,
         RunSavedAgentParameters parameters,
-        bool supportsThinking)
+        bool supportsThinking,
+        int maxMessageRequestTimeoutSeconds)
     {
         var offeredTools = resolved.AllowedTools.Where(static tool => !tool.RequiresApproval).ToArray();
 
@@ -251,6 +254,13 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             LocalChatLoopbackDefaults.ClientNodeId,
             offeredTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            // Only the invocation timeout is operator-controlled; tool-call and stream-idle keep their defaults. When the
+            // setting equals the TimeoutSettings default the package — and its config hash — is byte-identical to one
+            // built without an explicit Timeouts.
+            Timeouts: new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = maxMessageRequestTimeoutSeconds
+            },
             ReasoningEffort: reasoningEffort,
             SupportsThinking: supportsThinking,
             Skills: resolved.Skills,
