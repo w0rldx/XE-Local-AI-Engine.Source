@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { ApiError } from "@/core/api/errors/ApiError";
-import { isResponseValidationError } from "@/core/api/ResponseValidation";
 
 import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } from "@/core/api/generated";
 import type { ChatMessagePart, ToolCallState } from "@/features/chat/models/ChatModels";
@@ -82,11 +81,14 @@ export interface BenchmarkOutputPart {
 }
 
 /**
- * True when the node itself refused the requested KV cache type. Local hey-api response validation reuses 422 as its
- * status, so the status alone would attach the "pick f16" hint to a failure that has nothing to do with the pick.
+ * True when the node refused the requested KV cache type specifically, read off the ProblemDetails `code` extension.
+ * The status alone is not enough: an ineligible model or agent answers 422 too, and local hey-api response validation
+ * reuses 422 as its own status — neither is fixed by picking f16.
  */
 export const isUnsupportedKvCacheTypeError = (error: unknown): boolean =>
-	error instanceof ApiError && error.statusCode === 422 && !isResponseValidationError(error);
+	error instanceof ApiError &&
+	error.statusCode === 422 &&
+	(error.apiProblemDetails as unknown as Record<string, unknown> | undefined)?.["code"] === "UnsupportedKvCacheType";
 
 export const benchmarkKvCacheTypes = ["f16", "q8_0", "q4_0"] as const;
 export type BenchmarkKvCacheType = (typeof benchmarkKvCacheTypes)[number];

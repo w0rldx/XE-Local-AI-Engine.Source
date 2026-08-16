@@ -39,24 +39,29 @@ describe("benchmark output mapping", () => {
 	});
 });
 
-const problem = (title: string, detail: string): ProblemDetails => ({ type: "about:blank", title, status: 422, detail });
+const problem = (title: string, detail: string, code?: string): ProblemDetails =>
+	({ type: "about:blank", title, status: 422, detail, ...(code === undefined ? {} : { code }) }) as ProblemDetails;
 
 describe("isUnsupportedKvCacheTypeError", () => {
-	// 422 is ALSO the status the local hey-api response validator reports a contract mismatch under, and telling the
-	// operator to "pick f16 explicitly" for a malformed response would send them chasing the wrong thing.
-	it("accepts the node's refusal and rejects a local response-validation failure", () => {
-		const refusal = new ApiError(422, problem("Unprocessable Entity", "q4_0 is not supported."));
+	// The node answers 422 for the KV refusal AND for an ineligible model/agent, and the local hey-api response
+	// validator reports a contract mismatch under 422 as well. Only the first is fixed by picking f16, so the code
+	// extension — not the status — decides.
+	it("accepts only the KV refusal among the 422s", () => {
+		const refusal = new ApiError(422, problem("Unprocessable Entity", "q4_0 is not supported.", "UnsupportedKvCacheType"));
+		const ineligible = new ApiError(422, problem("Unprocessable Entity", "The model is not eligible.", "IneligibleModel"));
 		const validation = new ApiError(
 			422,
 			problem(RESPONSE_VALIDATION_PROBLEM_TITLE, "The server returned a response in an unexpected shape."),
 		);
 
 		expect(isUnsupportedKvCacheTypeError(refusal)).toBe(true);
+		expect(isUnsupportedKvCacheTypeError(ineligible)).toBe(false);
 		expect(isUnsupportedKvCacheTypeError(validation)).toBe(false);
 	});
 
 	it("rejects any other failure", () => {
-		expect(isUnsupportedKvCacheTypeError(new ApiError(409, problem("Conflict", "The run changed.")))).toBe(false);
+		const conflict = problem("Conflict", "The run changed.", "VersionConflict");
+		expect(isUnsupportedKvCacheTypeError(new ApiError(409, conflict))).toBe(false);
 		expect(isUnsupportedKvCacheTypeError(new Error("offline"))).toBe(false);
 		expect(isUnsupportedKvCacheTypeError(null)).toBe(false);
 	});
