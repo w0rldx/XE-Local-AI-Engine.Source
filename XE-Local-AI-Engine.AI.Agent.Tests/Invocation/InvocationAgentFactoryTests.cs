@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -58,6 +59,46 @@ public sealed class InvocationAgentFactoryTests
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
         AssertEx.Equal(expected: true, thinkValue);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithAResponseJsonSchema_ConstrainsTheTurnToIt()
+    {
+        // Constrained decoding for a caller whose reply is parsed strictly (the benchmark judge). The MEAI OpenAI
+        // adapter maps ChatOptions.ResponseFormat onto response_format.json_schema.schema, which is the only path
+        // llama-server reads before compiling the schema into a grammar.
+        using var schema = JsonDocument.Parse("""{"type":"object","properties":{"score":{"type":"integer"}}}""");
+        var definition = new InvocationAgentDefinition("llama3.2:3b",
+            "Be helpful.",
+            [],
+            [],
+            ResponseJsonSchema: schema.RootElement.Clone());
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var responseFormat = AssertEx.NotNull(chatOptions.ResponseFormat as ChatResponseFormatJson);
+        var wireSchema = responseFormat.Schema ?? throw new AssertionException("Expected the response format to carry a schema.");
+        AssertEx.True(wireSchema.GetProperty("properties").TryGetProperty("score", out _),
+            "The caller's schema must survive onto the response format unchanged.");
+    }
+
+    [Test]
+    public async Task CreateAsync_WithNoResponseJsonSchema_LeavesTheTurnUnconstrained()
+    {
+        // The no-override guarantee: every path but the judge leaves this null, and null must send no response_format
+        // at all rather than a permissive one.
+        var definition = new InvocationAgentDefinition("llama3.2:3b", "Be helpful.", [], []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        AssertEx.Null(((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!.ResponseFormat);
     }
 
     [Test]

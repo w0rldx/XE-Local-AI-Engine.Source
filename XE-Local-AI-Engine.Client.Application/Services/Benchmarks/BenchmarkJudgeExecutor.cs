@@ -203,7 +203,23 @@ public sealed class BenchmarkJudgeExecutor(
             Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(snapshot.Judge.Sampling ?? throw new BenchmarkExecutionException("The frozen judge sampling policy is unavailable."),
                 snapshot.Judge.RequestedContextTokens!.Value),
-            IsUnattended: true));
+            IsUnattended: true,
+            // The prompt ASKS for this shape and ParseResult refuses anything else, which cost one judge invocation in
+            // three against a 3B model. Constraining the decode makes the two agree instead of hoping they do; the
+            // response-format schema drops the string-length bounds ParseResult still enforces (see the constant).
+            ResponseJsonSchema: JudgeResponseFormatSchema));
+    }
+
+    /// <summary>
+    ///     The judge turn's constrained-decoding schema, parsed once. Cloned out of its document because a
+    ///     <see cref="JsonElement" /> does not outlive the <see cref="JsonDocument" /> it was read from.
+    /// </summary>
+    private static readonly JsonElement JudgeResponseFormatSchema = ParseJudgeResponseFormatSchema();
+
+    private static JsonElement ParseJudgeResponseFormatSchema()
+    {
+        using var document = JsonDocument.Parse(BenchmarkFrozenPolicies.JudgeResponseFormatSchemaJson);
+        return document.RootElement.Clone();
     }
 
     internal static BenchmarkJudgeResultV1 ParseResult(string content,

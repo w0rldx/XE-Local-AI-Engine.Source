@@ -84,6 +84,13 @@ public sealed class BenchmarkJudgeExecutorTests
                 promptPayload.RootElement.GetProperty("outputSchema").GetString());
         }
 
+        // The judge's reply is parsed strictly, so the decode is CONSTRAINED to the same shape rather than merely asked
+        // for in prose — one judge invocation in three failed "invalid result" against a 3B model without this.
+        var responseSchema = package.ResponseJsonSchema ?? throw new AssertionException("Expected the judge package to carry a response schema.");
+        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeResponseFormatSchemaJson,
+            JsonSerializer.Serialize(responseSchema),
+            "The judge turn must carry the bound-free response-format schema, not the frozen bounded one.");
+
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
         AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);

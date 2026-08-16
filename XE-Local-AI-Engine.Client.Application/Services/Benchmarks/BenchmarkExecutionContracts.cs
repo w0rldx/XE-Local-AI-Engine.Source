@@ -337,7 +337,14 @@ internal static class BenchmarkSnapshotModelComparer
         string.Join('\u001f', path, role, size, sha256, string.Join('\u001e', owners.Order(StringComparer.Ordinal)), required, schema, fingerprint);
 }
 
-internal static class BenchmarkExecutionSerialization
+/// <summary>
+///     The ONLY serializer for the benchmark run's stored payload blobs. Public because the endpoint mapper reads the
+///     same blobs it writes: <see cref="JsonSerializerDefaults.Web" /> is camelCase, so a reader that deserializes with
+///     default options binds every property to its default and hands the API a zeroed judge result instead of failing.
+///     Route every read of <c>output_parts_json</c>/<c>judge_result_json</c> through here rather than re-deriving the
+///     options at the call site.
+/// </summary>
+public static class BenchmarkExecutionSerialization
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -350,4 +357,22 @@ internal static class BenchmarkExecutionSerialization
 
     public static byte[] SerializeJudge(BenchmarkJudgeResultV1 result) =>
         JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
+
+    /// <summary>The stored judge result, or <see langword="null" /> when the payload is absent or unreadable.</summary>
+    public static BenchmarkJudgeResultV1? DeserializeJudge(ReadOnlyMemory<byte>? payload)
+    {
+        if (payload is not { } value || value.IsEmpty)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<BenchmarkJudgeResultV1>(value.Span, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }

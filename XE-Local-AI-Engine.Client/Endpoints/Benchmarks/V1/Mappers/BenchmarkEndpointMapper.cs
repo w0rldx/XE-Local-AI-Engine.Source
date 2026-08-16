@@ -194,20 +194,9 @@ internal static class BenchmarkEndpointMapper
         return document.RootElement.Clone();
     }
 
-    private static BenchmarkJudgeResultV1? ParseJudgeResult(ReadOnlyMemory<byte>? payload)
-    {
-        if (payload is not { } value || value.IsEmpty)
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<BenchmarkJudgeResultV1>(value.Span);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+    // Reads through the writer's own serializer. Deserializing this blob with default (PascalCase) options bound every
+    // property to its default and returned a zeroed judge result — a null rationale the frontend's schema rejects,
+    // taking the whole run detail down with it.
+    private static BenchmarkJudgeResultV1? ParseJudgeResult(ReadOnlyMemory<byte>? payload) =>
+        BenchmarkExecutionSerialization.DeserializeJudge(payload);
 }
