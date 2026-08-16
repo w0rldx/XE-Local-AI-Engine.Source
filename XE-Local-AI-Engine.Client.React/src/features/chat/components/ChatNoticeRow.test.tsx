@@ -60,6 +60,25 @@ describe("ChatNoticeRow", () => {
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("HistoryTruncated");
 	});
 
+	it("renders the orchestration-degraded notice with its own kind tag and server text", () => {
+		// G16: an orchestrator that ran as a single agent must be visible in the turn, not just in a server log.
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "OrchestrationDegraded",
+					text: "Orchestration was not used for this turn: the model for this turn cannot call tools. The agent ran as a single agent instead.",
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("OrchestrationDegraded");
+		expect(
+			screen.getByText(
+				"Orchestration was not used for this turn: the model for this turn cannot call tools. The agent ran as a single agent instead.",
+			),
+		).toBeTruthy();
+	});
+
 	it("falls back gracefully for an unknown/forward-compat notice kind", () => {
 		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "SomethingNew", text: "A new kind of notice." })} />);
 
