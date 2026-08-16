@@ -19,8 +19,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	resolveToolApprovalMutation: () => ({ mutationFn: resolveApprovalSpy }),
 }));
 
-// The card resolves the tool's risk class from the shared catalog; mock it so the category badge is deterministic and
-// no real fetch fires. get_time is a ReadLocal auto-executing built-in; anything else falls back to fail-closed Unknown.
+// The card resolves the tool's risk class AND its session-scope eligibility from the shared catalog; mock it so both
+// are deterministic and no real fetch fires. get_time is a ReadLocal auto-executing built-in and stands in for a
+// session-scope-eligible tool (the flag is what the card branches on, not the tool's identity); mcp__files__write_file
+// is the ineligible case; anything absent falls back to fail-closed Unknown + the pre-catalog session-button fallback.
 const { useToolCatalogMock } = vi.hoisted(() => ({ useToolCatalogMock: vi.fn() }));
 vi.mock("@/features/tools/queries/useToolCatalog", () => ({ useToolCatalog: useToolCatalogMock }));
 
@@ -32,6 +34,16 @@ const chatCatalog: ToolCatalogEntry[] = [
 		source: { kind: "builtin", serverSlug: null },
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
+		sessionScopeEligible: true,
+	},
+	{
+		name: "mcp__files__write_file",
+		description: "Writes a file.",
+		requiresApproval: true,
+		source: { kind: "mcp", serverSlug: "files" },
+		category: "WriteExecute",
+		effectiveRequiresApproval: true,
+		sessionScopeEligible: false,
 	},
 ];
 
@@ -148,6 +160,32 @@ describe("ToolCallCard", () => {
 		expect(screen.getByTestId("chat-tool-call-approve-get_time")).toBeTruthy();
 		expect(screen.getByTestId("chat-tool-call-approve-session-get_time")).toBeTruthy();
 		expect(screen.getByTestId("chat-tool-call-deny-get_time")).toBeTruthy();
+	});
+
+	it("withholds the session button for a tool the node cannot remember a session decision for", () => {
+		// The honesty fix: an MCP tool (like run_in_agent_home, a Parameterized custom tool, or anything at all while the
+		// operator's always-prompt switch is on) can never carry a session memo, so offering the button meant the click
+		// silently degraded to a plain "Once". Approve/Deny stay — only the promise the node cannot keep is removed.
+		renderWithProviders(
+			<ToolCallCard
+				part={toolPart({ name: "mcp__files__write_file", state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-tool-call-approve-mcp__files__write_file")).toBeTruthy();
+		expect(screen.getByTestId("chat-tool-call-deny-mcp__files__write_file")).toBeTruthy();
+		expect(screen.queryByTestId("chat-tool-call-approve-session-mcp__files__write_file")).toBeNull();
+	});
+
+	it("keeps the session button for a tool absent from the catalog", () => {
+		// The MAF skill tools (load_skill / read_skill_resource) are per-agent, not node-level, so they never appear in
+		// the node tool catalog — and they ARE the original session-scope case. An unknown entry must therefore keep the
+		// pre-catalog fallback of offering the button rather than fail closed and remove a control that works.
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ name: "load_skill", state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,
+		);
+
+		expect(screen.getByTestId("chat-tool-call-approve-session-load_skill")).toBeTruthy();
 	});
 
 	it("does not render approval controls when there is no pending approval request id", () => {

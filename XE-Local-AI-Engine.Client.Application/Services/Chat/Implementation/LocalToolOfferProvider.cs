@@ -408,7 +408,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
                 Source = CustomSource,
-                Category = descriptor.Category
+                Category = descriptor.Category,
+                IsFixedCustomTool = descriptor.IsFixedCustomTool
             })
         ];
     }
