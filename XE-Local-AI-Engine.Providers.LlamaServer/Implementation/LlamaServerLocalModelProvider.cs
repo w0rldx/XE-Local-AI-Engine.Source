@@ -31,15 +31,17 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 {
     private readonly IGgufModelStore _modelStore;
-    private readonly TimeSpan _networkTimeout;
+    private readonly TimeSpan _chatNetworkTimeout;
+    private readonly TimeSpan _embeddingNetworkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
     private readonly ILlamaServerEndpointBinding? _endpointBinding;
 
     /// <summary>
     ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
-    ///     explicit per-call HTTP network timeout (AUD4-18) the deferred chat/embedding clients pin on the built OpenAI
-    ///     client; a null options bag falls back to the default policy.
+    ///     explicit per-call HTTP network timeouts (AUD4-18) the deferred chat/embedding clients pin on the built OpenAI
+    ///     client; a null options bag falls back to the default policy. Chat and embedding take SEPARATE values on
+    ///     purpose — a chat call also carries the invocation deadline, an embedding call has no other bound.
     /// </summary>
     public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
         IGgufModelStore modelStore,
@@ -49,7 +51,9 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-        _networkTimeout = (options ?? new LlamaServerSupervisorOptions()).HttpNetworkTimeout;
+        var resolvedOptions = options ?? new LlamaServerSupervisorOptions();
+        _chatNetworkTimeout = resolvedOptions.HttpNetworkTimeout;
+        _embeddingNetworkTimeout = resolvedOptions.EmbeddingHttpNetworkTimeout;
         _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
         _endpointBinding = endpointBinding;
     }
@@ -166,14 +170,14 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout, _calibrationScheduler, _endpointBinding);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _chatNetworkTimeout, _calibrationScheduler, _endpointBinding);
     }
 
     /// <inheritdoc />
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerEmbeddingGenerator(_supervisor, selection.ModelName, _networkTimeout);
+        return new DeferredLlamaServerEmbeddingGenerator(_supervisor, selection.ModelName, _embeddingNetworkTimeout);
     }
 
     private void ValidateSelection(LocalModelSelection selection)
