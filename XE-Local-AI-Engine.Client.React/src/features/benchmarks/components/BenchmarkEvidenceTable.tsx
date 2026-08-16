@@ -5,9 +5,9 @@ import { useTranslation } from "react-i18next";
 import type { BenchmarkEvidenceDiffRow, BenchmarkEvidenceEntry } from "@/features/benchmarks/models/BenchmarkLaunchEvidence";
 import { formatEvidenceValue, isEvidenceHashKey } from "@/features/benchmarks/models/BenchmarkLaunchEvidence";
 
-function EvidenceValue({ entryKey, value }: { entryKey: string; value: unknown }) {
+function EvidenceValue({ entryKey, value, truncate = true }: { entryKey: string; value: unknown; truncate?: boolean }) {
 	const { t } = useTranslation();
-	const rendered = formatEvidenceValue(entryKey, value);
+	const rendered = formatEvidenceValue(entryKey, value, truncate);
 	const copyable = isEvidenceHashKey(entryKey) && typeof value === "string" && value.length > 0;
 	return (
 		<Text component="span" size="xs" title={typeof value === "string" ? value : undefined}>
@@ -102,10 +102,10 @@ export function BenchmarkEvidenceDiffTable({
 						>
 							<Table.Td>{fieldCell(row.key)}</Table.Td>
 							<Table.Td>
-								<EvidenceValue entryKey={row.key} value={row.left} />
+								<EvidenceValue entryKey={row.key} value={row.left} truncate={!row.differs} />
 							</Table.Td>
 							<Table.Td>
-								<EvidenceValue entryKey={row.key} value={row.right} />
+								<EvidenceValue entryKey={row.key} value={row.right} truncate={!row.differs} />
 							</Table.Td>
 						</Table.Tr>
 					))}
