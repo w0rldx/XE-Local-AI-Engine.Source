@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Two runs of the same task are only worth reading side by side if the operator can see how their launches differed.
@@ -19,26 +20,9 @@ const leftId = "aaaaaaaa-0000-4000-8000-000000000001";
 const rightId = "bbbbbbbb-0000-4000-8000-000000000002";
 
 function detail(id: string, overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
-	return {
+	return benchmarkRunDetailFixture({
 		id,
-		projectId: "project-1",
 		primaryModelName: `model-${id.slice(0, 1)}.gguf`,
-		primaryModelOrigin: null,
-		modelContentFingerprint: "v1:test",
-		agentName: "agent",
-		agentVersion: 1,
-		requestedContextTokens: 4096,
-		primaryStatus: "Succeeded",
-		judgeStatus: "Succeeded",
-		effectiveContextTokens: 4096,
-		durationMs: 1000,
-		totalTokens: 10,
-		tokensPerSecond: 10,
-		userScore: null,
-		lastStreamSequence: 1,
-		version: 1,
-		createdAtUtc: 1,
-		updatedAtUtc: 2,
 		primaryLaunch: {
 			...noBenchmarkLaunchFacts,
 			kvCacheType: "q8_0",
@@ -51,21 +35,10 @@ function detail(id: string, overrides: Partial<BenchmarkRunDetail> = {}): Benchm
 			receiptHash: "receipt-1",
 			environmentFactsHash: "env-1",
 		},
-		judgeLaunch: { ...noBenchmarkLaunchFacts, kvCacheType: "f16", receiptHash: "judge-1", environmentFactsHash: "judge-env-1" },
 		primaryLaunchReceipt: { placement: { outcome: "Full", offloadedLayers: 32, totalLayers: 32 } },
-		judgeLaunchReceipt: { effectiveContextTokens: 4096 },
 		primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" } },
-		judgeEnvironmentFacts: { llamaRuntime: { version: "b10201" } },
-		outputParts: [],
-		judgeResult: null,
-		primaryErrorMessage: null,
-		judgeErrorMessage: null,
-		startedAtUtc: 1,
-		primaryCompletedAtUtc: 2,
-		judgeStartedAtUtc: null,
-		judgeCompletedAtUtc: null,
 		...overrides,
-	};
+	});
 }
 
 // The two runs are already in the pane's cache by the time the compare block renders, so the test seeds that cache and
@@ -86,7 +59,6 @@ describe("BenchmarkLaunchCompare", () => {
 		expect(screen.getAllByText("KV q8_0 (auto)")).toHaveLength(2);
 		expect(screen.getAllByText("CUDA 32/32 layers")).toHaveLength(2);
 		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
-		expect(screen.queryByTestId("benchmark-judge-launch-differs")).toBeNull();
 	});
 
 	it("reports a differing primary launch with the differing fields and a per-field table", () => {
@@ -111,24 +83,6 @@ describe("BenchmarkLaunchCompare", () => {
 		expect(differingKeys.some((row) => row.includes("launch.executableSha256"))).toBe(true);
 		expect(differingKeys.some((row) => row.includes("environment.llamaRuntime.version"))).toBe(true);
 		expect(differingKeys.some((row) => row.includes("receipt.placement.outcome"))).toBe(false);
-	});
-
-	it("warns when only the judge launch differs", () => {
-		const right = detail(rightId, {
-			judgeLaunch: {
-				...noBenchmarkLaunchFacts,
-				kvCacheType: "f16",
-				receiptHash: "judge-2",
-				environmentFactsHash: "judge-env-1",
-			},
-			judgeEnvironmentFacts: { llamaRuntime: { version: "b10300" } },
-		});
-		renderCompare(detail(leftId), right);
-
-		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
-		const alert = screen.getByTestId("benchmark-judge-launch-differs");
-		expect(alert.textContent).toContain("Judge launch/environment differs");
-		expect(alert.textContent).toContain("environment.llamaRuntime.version");
 	});
 
 	it("renders a dash for evidence a legacy run never recorded", () => {
@@ -157,17 +111,6 @@ describe("BenchmarkLaunchCompare", () => {
 		expect(alert.textContent).toContain("environment.llamaRuntime.version");
 	});
 
-	it("warns when only the judge environment-facts hash differs", () => {
-		const right = detail(rightId, {
-			judgeLaunch: { ...detail(rightId).judgeLaunch, environmentFactsHash: "judge-env-2" },
-			judgeEnvironmentFacts: { llamaRuntime: { version: "b10300" } },
-		});
-		renderCompare(detail(leftId), right);
-
-		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
-		expect(screen.getByTestId("benchmark-judge-launch-differs").textContent).toContain("launch.environmentFactsHash");
-	});
-
 	// Neither hash covers the freeze-side facts, so a KV source that changed between the two runs would leave a
 	// hash-driven check silent while the table below it already shows the difference.
 	it("reports a difference neither hash covers", () => {
@@ -183,17 +126,14 @@ describe("BenchmarkLaunchCompare", () => {
 	it("raises no banner when the runs differ only by their environment capture time", () => {
 		const right = detail(rightId, {
 			primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 222 },
-			judgeEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 222 },
 		});
 		renderCompare(
 			detail(leftId, {
 				primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 111 },
-				judgeEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 111 },
 			}),
 			right,
 		);
 
 		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
-		expect(screen.queryByTestId("benchmark-judge-launch-differs")).toBeNull();
 	});
 });

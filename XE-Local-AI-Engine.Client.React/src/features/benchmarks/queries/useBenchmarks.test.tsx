@@ -5,12 +5,16 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
 	useBenchmarkRuns,
+	useClearBenchmarkRunScore,
 	useEligibleBenchmarkModels,
+	useRejudgeBenchmarkProject,
 	useStartBenchmarkRun,
+	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
@@ -66,7 +70,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-const draft = {
+const draft: BenchmarkProjectDraft = {
 	name: "Summarisation",
 	coreTask: "Summarise the attached text.",
 	contextTokens: 4096,
@@ -74,8 +78,8 @@ const draft = {
 	judgeEnabled: false,
 	judgeModelName: null,
 	judgeContextTokens: null,
-	judgePromptVersion: 1,
-	judgeOutputSchemaVersion: 1,
+	rubric: null,
+	referenceAnswer: null,
 };
 
 describe("benchmark queries over the real client", () => {
@@ -128,7 +132,8 @@ describe("benchmark queries over the real client", () => {
 		await waitFor(() => expect(result.current.project.isSuccess).toBe(true));
 		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
 		expect(result.current.project.data?.coreTask).toBe("Summarise the attached text.");
-		expect(result.current.runs.data?.[0]).toMatchObject({ id: runId, primaryStatus: "Succeeded", judgeStatus: "Disabled" });
+		expect(result.current.runs.data?.items[0]).toMatchObject({ id: runId, primaryStatus: "Succeeded" });
+		expect(result.current.runs.data?.items[0]?.judge.state).toBe("none");
 	});
 
 	// The run list is paged on the wire even though the UI shows one page.
@@ -278,5 +283,94 @@ describe("benchmark queries over the real client", () => {
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect((result.current.error as ApiError).statusCode).toBe(422);
 		expect((result.current.error as ApiError).message).toBe("q4_0 is not supported by the selected runtime.");
+	});
+	// The cohort line rides alongside the rows: the UI cannot say "n of m ranked" from the rows alone, because runs the
+	// node excluded are still in the list.
+	it("returns the rank cohort alongside the mapped rows", async () => {
+		server.use(
+			jsonRoute("get", `benchmarks/projects/${projectId}/runs`, {
+				items: [runRow({ rank: 1, qualityScore: 80, qualityScoreSource: "judge" })],
+				rankCohort: { policyRevision: 2, executionKey: "key", cohortGeneration: 1, rankedCount: 1, totalScored: 3 },
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.data?.cohort).toMatchObject({ policyRevision: 2, rankedCount: 1, totalScored: 3 });
+		expect(result.current.data?.items[0]).toMatchObject({ rank: 1, qualityScore: 80 });
+	});
+
+	// Clearing an override is a DELETE with the run version, never a PUT of 0.
+	it("clears an operator score through DELETE with the expected version", async () => {
+		let observedBody: unknown;
+		server.use(
+			http.delete(localApiPath(`benchmarks/runs/${runId}/score`), async ({ request }) => {
+				observedBody = await request.json();
+				return HttpResponse.json(runRow({ userScore: null, version: 4 }));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useClearBenchmarkRunScore(), { wrapper });
+
+		result.current.mutate({ id: runId, projectId, version: 3 });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(observedBody).toEqual({ expectedVersion: 3 });
+	});
+
+	// The judge policy is its own write with its own confirmation flag, and the 409 that asks for that confirmation has
+	// to reach the caller with the node's `code` so the UI can raise the right dialog rather than a generic toast.
+	it("sends the judge policy with its confirmation flag and surfaces the RejudgeRequired 409", async () => {
+		const bodies: unknown[] = [];
+		server.use(
+			http.put(localApiPath(`benchmarks/projects/${projectId}/judge`), async ({ request }) => {
+				bodies.push(await request.json());
+				if (bodies.length === 1) {
+					return HttpResponse.json(
+						{ type: "about:blank", title: "Conflict", status: 409, detail: "Confirm the re-judge.", code: "RejudgeRequired" },
+						{ status: 409, headers: { "content-type": "application/problem+json" } },
+					);
+				}
+				return HttpResponse.json({ project: projectDetail({ version: 3 }), enqueuedRunIds: [runId] });
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useUpdateBenchmarkJudgePolicy(), { wrapper });
+		const policy = { modelName: "judge.gguf", contextTokens: 8192, rubric: null, referenceAnswer: null };
+
+		result.current.mutate({ projectId, expectedVersion: 2, policy, confirmRejudge: false });
+		await waitFor(() => expect(result.current.isError).toBe(true));
+		expect((result.current.error as ApiError).statusCode).toBe(409);
+		expect((result.current.error as ApiError).apiProblemDetails).toMatchObject({ code: "RejudgeRequired" });
+
+		result.current.mutate({ projectId, expectedVersion: 2, policy, confirmRejudge: true });
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		expect(bodies[0]).toEqual({ policy, expectedVersion: 2, confirmRejudge: false });
+		expect(bodies[1]).toEqual({ policy, expectedVersion: 2, confirmRejudge: true });
+		expect(result.current.data?.enqueuedRunCount).toBe(1);
+	});
+
+	it("re-judges a whole project and reports how many runs were enqueued", async () => {
+		let observedBody: unknown;
+		server.use(
+			http.post(localApiPath(`benchmarks/projects/${projectId}/rejudge`), async ({ request }) => {
+				observedBody = await request.json();
+				return HttpResponse.json({ project: projectDetail({ version: 3 }), enqueuedRunIds: [runId, "dddddddd-0000-4000-8000-000000000004"] });
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useRejudgeBenchmarkProject(), { wrapper });
+
+		result.current.mutate({ projectId, expectedVersion: 2 });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(observedBody).toEqual({ expectedVersion: 2 });
+		expect(result.current.data?.enqueuedRunCount).toBe(2);
 	});
 });

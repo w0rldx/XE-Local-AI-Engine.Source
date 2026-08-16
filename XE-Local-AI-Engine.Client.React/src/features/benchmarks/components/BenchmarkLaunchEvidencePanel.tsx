@@ -55,8 +55,10 @@ function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAl
 	);
 }
 
-// The durable launch evidence of one run: what the freeze intended, what the provider reported after readiness, and the
-// environment captured just before the spawn. Nothing here is a judgement — differences are shown, not interpreted.
+// The durable launch evidence of one run's PRIMARY side: what the freeze intended, what the provider reported after
+// readiness, and
+// the environment captured just before the spawn. The judge's own evidence belongs to its attempt and is not
+// projected onto the run. Nothing here is a judgement — differences are shown, not interpreted.
 // The evidence objects sit behind a collapsed accordion because a runtime-bundle listing runs to hundreds of rows.
 export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail }) {
 	const { t } = useTranslation();
@@ -74,18 +76,6 @@ export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail 
 			evidence: run.primaryEnvironmentFacts,
 			prefix: "environment",
 		},
-		{
-			value: "judge-receipt",
-			title: t("pages.benchmarks.launch.judgeReceipt", "Judge launch receipt"),
-			evidence: run.judgeLaunchReceipt,
-			prefix: "receipt",
-		},
-		{
-			value: "judge-environment",
-			title: t("pages.benchmarks.launch.judgeEnvironment", "Judge environment"),
-			evidence: run.judgeEnvironmentFacts,
-			prefix: "environment",
-		},
 	];
 	const present = blocks.filter((block) => block.evidence !== null);
 
@@ -95,14 +85,6 @@ export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail 
 				launch={run.primaryLaunch}
 				message={t("pages.benchmarks.launch.intendedDiffers", "The intended launch and the effective launch differ.")}
 				testId="benchmark-intended-effective-differs"
-			/>
-			<IntendedEffectiveAlert
-				launch={run.judgeLaunch}
-				message={t(
-					"pages.benchmarks.launch.judgeIntendedDiffers",
-					"The intended judge launch and the effective judge launch differ.",
-				)}
-				testId="benchmark-judge-intended-effective-differs"
 			/>
 			{present.length > 0 ? (
 				<Accordion multiple={true} variant="contained" value={opened} onChange={setOpened}>

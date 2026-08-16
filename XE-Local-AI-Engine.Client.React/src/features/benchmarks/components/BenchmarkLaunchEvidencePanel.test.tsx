@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // "What we meant to launch" vs "what launched" is the one comparison a single run can make on its own, and both halves
@@ -14,42 +15,7 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 afterEach(cleanup);
 
 function detail(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
-	return {
-		id: "run-1",
-		projectId: "project-1",
-		primaryModelName: "model.gguf",
-		primaryModelOrigin: null,
-		modelContentFingerprint: "v1:test",
-		agentName: "agent",
-		agentVersion: 1,
-		requestedContextTokens: 4096,
-		primaryStatus: "Succeeded",
-		judgeStatus: "Succeeded",
-		effectiveContextTokens: 4096,
-		durationMs: 1,
-		totalTokens: 1,
-		tokensPerSecond: 1,
-		userScore: null,
-		lastStreamSequence: 1,
-		version: 1,
-		createdAtUtc: 1,
-		updatedAtUtc: 2,
-		primaryLaunch: { ...noBenchmarkLaunchFacts },
-		judgeLaunch: { ...noBenchmarkLaunchFacts },
-		primaryLaunchReceipt: null,
-		judgeLaunchReceipt: null,
-		primaryEnvironmentFacts: null,
-		judgeEnvironmentFacts: null,
-		outputParts: [],
-		judgeResult: null,
-		primaryErrorMessage: null,
-		judgeErrorMessage: null,
-		startedAtUtc: 1,
-		primaryCompletedAtUtc: 2,
-		judgeStartedAtUtc: null,
-		judgeCompletedAtUtc: null,
-		...overrides,
-	};
+	return benchmarkRunDetailFixture({ primaryLaunch: { ...noBenchmarkLaunchFacts }, ...overrides });
 }
 
 describe("BenchmarkLaunchEvidencePanel", () => {
@@ -86,22 +52,6 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		expect(screen.queryByTestId("benchmark-intended-effective-differs")).toBeNull();
 	});
 
-	it("reports the judge side independently of the primary side", () => {
-		renderWithProviders(
-			<BenchmarkLaunchEvidencePanel
-				run={detail({
-					judgeLaunch: {
-						...noBenchmarkLaunchFacts,
-						intendedLaunchIdentity: "identity-1",
-						effectiveLaunchIdentity: "identity-2",
-					},
-				})}
-			/>,
-		);
-
-		expect(screen.queryByTestId("benchmark-intended-effective-differs")).toBeNull();
-		expect(screen.getByTestId("benchmark-judge-intended-effective-differs")).toBeTruthy();
-	});
 
 	// A runtime-bundle listing runs to hundreds of rows; none of them are built until the operator asks for them.
 	it("keeps the evidence tables out of the DOM until their section is opened", () => {
