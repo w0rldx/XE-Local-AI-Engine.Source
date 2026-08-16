@@ -44,6 +44,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public sealed partial class InvocationRunner : IInvocationRunner
 {
     private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
+
+    // A tool call that ran out of time waiting for its RESULT (TurnPolicy.ToolResultTimeout, i.e. the package's
+    // ToolCallTimeoutSeconds or the node-global pending-tool-call age). Split out of AgentToolCallFailureMessage so a
+    // tool-side timeout is attributable rather than reading like an ordinary tool error. Carries no tool name, so it
+    // stays as path-free as the constant it replaces on this arm.
+    private const string ToolCallTimedOutMessage = "A tool call timed out waiting for its result.";
     private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
     private const string ProviderUnavailableMessage = "Provider unreachable.";
 
@@ -522,14 +528,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
             CancelPendingToolCalls(package.InvocationId);
             var cancellationOrigin = ResolveCancellationOrigin();
             var failureCategory = ClassifyCancellation(cancellationOrigin);
+            // The breadcrumb: one fixed, path-free sentence per cancellation cause. Every cause used to share the single
+            // string "Invocation timed out or was cancelled", so a turn that ended at the node's message-request ceiling,
+            // one the operator stopped, and one the detached-run reaper collected were indistinguishable in the persisted
+            // failure — which is exactly why a live turn reported "Cancelled" at ~550s could not be attributed to anything.
+            var cancellationMessage = DescribeCancellation(cancellationOrigin, turnPolicy.InvocationTimeout);
             // AUD4-19: count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory(cancellationOrigin)));
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
-                await TrySendFailureAsync(sender, context, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
+                await TrySendFailureAsync(sender, context, cancellationMessage, failureCategory).ConfigureAwait(false);
             }
         }
         catch (Exception exception)
@@ -2167,6 +2178,31 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private static FailureCategory ClassifyCancellation(CancellationOrigin origin)
     {
         return origin == CancellationOrigin.Watchdog ? FailureCategory.Timeout : FailureCategory.Cancelled;
+    }
+
+    /// <summary>
+    ///     The fixed, path-free sentence surfaced (and persisted) for a cancelled turn, naming WHICH bound ended it.
+    ///     <see cref="FailureCategory" /> alone cannot carry this: it collapses the invocation watchdog, the stream-idle
+    ///     watchdog and an HTTP timeout into one <see cref="FailureCategory.Timeout" /> value, and adding a category
+    ///     would drift the generated OpenAPI/zod client — so the message is the breadcrumb channel, exactly as it already
+    ///     is for <c>StreamIdleTimeoutException</c> (whose own message names the stream-idle bound and its seconds).
+    ///     Only the resolved origin and the turn's own configured ceiling are interpolated; nothing here can carry a
+    ///     host, path, or model name.
+    /// </summary>
+    private static string DescribeCancellation(CancellationOrigin origin, TimeSpan invocationTimeout)
+    {
+        return origin switch
+        {
+            CancellationOrigin.User => "Stopped by user.",
+            CancellationOrigin.Watchdog =>
+                $"Timed out: the response exceeded the node maximum message request timeout ({invocationTimeout.TotalSeconds:0}s).",
+            CancellationOrigin.DetachedGraceExpired =>
+                "Stopped: no client was attached to this run and the disconnect grace period expired.",
+            // Shutdown (and the unreachable Unknown): the host token, the caller's token, or a disconnect-driven
+            // CancelAll. The metric collapses all three under "shutdown" too, so the sentence names both plausible
+            // causes rather than asserting a shutdown that may not have happened.
+            _ => "Stopped externally (node shutdown or client disconnect)."
+        };
     }
 
     // The cancellation cause for the invocation_cancelled_total metric (AUD4-19): an explicit user cancel, the

@@ -929,7 +929,9 @@
 			"error": {
 				"title": "Antwort fehlgeschlagen",
 				"modelNotInstalled": "Kein Chat-Modell installiert. Lade ein GGUF-Modell herunter, um zu chatten.",
-				"goToModels": "Zu Modelle"
+				"goToModels": "Zu Modelle",
+				"clientWatchdogNoFirstChunk": "Verbindungsüberwachung: In diesem Browser ist nie eine Antwort eingetroffen.",
+				"clientWatchdogStall": "Verbindungsüberwachung: In diesem Browser treffen keine Antwortdaten mehr ein."
 			},
 			"reasoning": {
 				"label": "Denken: {{effort}}",
