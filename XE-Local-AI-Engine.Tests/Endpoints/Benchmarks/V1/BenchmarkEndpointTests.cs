@@ -178,6 +178,8 @@ public sealed class BenchmarkEndpointTests
                        "cuda",
                        33,
                        33,
+                       "exe-sha",
+                       true,
                        BenchmarkKvCacheType.SourceAuto)));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");

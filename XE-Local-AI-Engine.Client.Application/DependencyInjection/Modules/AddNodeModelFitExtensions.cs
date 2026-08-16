@@ -53,6 +53,9 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddSingleton<IInferenceChatClientFactory, OpenAiInferenceChatClientFactory>();
         builder.Services.Configure<InferenceBenchmarkVramAdmissionOptions>(configuration.GetSection(InferenceBenchmarkVramAdmissionOptions.SectionName));
         builder.Services.AddSingleton<IInferenceBenchmarkHarness, InferenceBenchmarkHarness>();
+        // One cache, one set of file-system watchers: the fingerprint provider and the benchmark environment capture
+        // hash the same runtime directory and would otherwise watch it twice.
+        builder.Services.AddSingleton<LaunchPolicyFileHashCache>();
         builder.Services.AddSingleton<ILaunchPolicyFingerprintProvider, LaunchPolicyFingerprintProvider>();
         builder.Services.AddScoped<IInferenceProfileService, InferenceProfileService>();
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.

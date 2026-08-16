@@ -29,7 +29,8 @@ public sealed class LaunchPolicyFingerprintProvider(
     IGgufModelStore modelStore,
     IGgufModelRegistry modelRegistry,
     LlamaServerSupervisorOptions supervisorOptions,
-    LlamaServerLaunchPolicyOptions launchPolicyOptions) : ILaunchPolicyFingerprintProvider, IDisposable
+    LlamaServerLaunchPolicyOptions launchPolicyOptions,
+    LaunchPolicyFileHashCache fileHashCache) : ILaunchPolicyFingerprintProvider
 {
     // 5: the LoRA adapter member joined the model identity — a frozen replay captured before adapters existed cannot
     // prove whether an adapter was applied, so every v4 fingerprint is hard-rejected and re-fitted once.
@@ -51,7 +52,7 @@ public sealed class LaunchPolicyFingerprintProvider(
     private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
         launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
 
-    private readonly LaunchPolicyFileHashCache _fileHashCache = new();
+    private readonly LaunchPolicyFileHashCache _fileHashCache = fileHashCache ?? throw new ArgumentNullException(nameof(fileHashCache));
     private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
 
     private readonly IGgufModelRegistry _modelRegistry =
@@ -293,11 +294,6 @@ public sealed class LaunchPolicyFingerprintProvider(
 
         var json = JsonSerializer.Serialize(canonical, SerializerOptions);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
-    }
-
-    public void Dispose()
-    {
-        _fileHashCache.Dispose();
     }
 
     /// <summary>

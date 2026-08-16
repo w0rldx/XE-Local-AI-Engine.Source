@@ -9,7 +9,11 @@ using System.Security.Cryptography;
 ///     by stable file metadata plus small samples from the beginning, middle, and end of the file; file-system change
 ///     notifications evict entries even when a writer restores the original length and last-write timestamp.
 /// </summary>
-internal sealed class LaunchPolicyFileHashCache : IDisposable
+/// <remarks>
+///     Registered as a container-owned singleton and injected: every consumer shares one instance, because each holds
+///     a file-system watcher per directory and a second instance watches the same runtime directory twice.
+/// </remarks>
+public sealed class LaunchPolicyFileHashCache : IDisposable
 {
     private const int GuardBlockSize = 16 * 1024;
 

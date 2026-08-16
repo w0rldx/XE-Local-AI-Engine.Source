@@ -79,6 +79,8 @@ internal sealed record class BenchmarkRun
     public string? PrimaryEffectiveBackend { get; set; }
     public int? PrimaryPlacementOffloaded { get; set; }
     public int? PrimaryPlacementTotal { get; set; }
+    public string? PrimaryLaunchExecutableSha256 { get; set; }
+    public bool? PrimaryLaunchHasAuxAssets { get; set; }
     public string? PrimaryLaunchKvCacheTypeSource { get; set; }
 
     /// <summary>
@@ -99,6 +101,8 @@ internal sealed record class BenchmarkRun
     public string? JudgeEffectiveBackend { get; set; }
     public int? JudgePlacementOffloaded { get; set; }
     public int? JudgePlacementTotal { get; set; }
+    public string? JudgeLaunchExecutableSha256 { get; set; }
+    public bool? JudgeLaunchHasAuxAssets { get; set; }
     public string? JudgeLaunchKvCacheTypeSource { get; set; }
 
     public string? PrimaryErrorMessage { get; set; }

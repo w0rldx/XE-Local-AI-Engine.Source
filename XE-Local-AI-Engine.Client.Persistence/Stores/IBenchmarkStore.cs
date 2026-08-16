@@ -222,6 +222,8 @@ public sealed record BenchmarkRunLaunchEvidence(
     string? EffectiveBackend,
     int? PlacementOffloaded,
     int? PlacementTotal,
+    string? ExecutableSha256,
+    bool? HasAuxAssets,
     string? KvCacheTypeSource);
 
 /// <summary>
@@ -230,7 +232,8 @@ public sealed record BenchmarkRunLaunchEvidence(
 ///     hashes, and the flat columns the list/compare views read without decrypting a payload.
 /// </summary>
 /// <remarks>
-///     Deliberately strings and integers only. The receipt is assembled in the llama-server provider and serialized
+///     Deliberately strings, integers and flags only — the list view reads every column here without decrypting or
+///     parsing the receipt payload. The receipt is assembled in the llama-server provider and serialized
 ///     before it reaches the store, so persisting it never drags a provider type through the store contract. Every
 ///     receipt-derived member is null together when the spawn failed before readiness.
 /// </remarks>
@@ -243,6 +246,8 @@ public sealed record BenchmarkLaunchReceiptCommand(
     string? EffectiveBackend,
     int? PlacementOffloaded,
     int? PlacementTotal,
+    string? ExecutableSha256,
+    bool? HasAuxAssets,
     string KvCacheTypeSource);
 
 public sealed record BenchmarkClaimedWork(

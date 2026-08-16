@@ -80,6 +80,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
+                name: "judge_launch_executable_sha256",
+                table: "benchmark_runs",
+                type: "TEXT",
+                maxLength: 64,
+                nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "judge_launch_has_aux_assets",
+                table: "benchmark_runs",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
                 name: "judge_launch_kv_cache_type_source",
                 table: "benchmark_runs",
                 type: "TEXT",
@@ -185,6 +198,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                 table: "benchmark_runs",
                 type: "TEXT",
                 maxLength: 16,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "primary_launch_executable_sha256",
+                table: "benchmark_runs",
+                type: "TEXT",
+                maxLength: 64,
+                nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "primary_launch_has_aux_assets",
+                table: "benchmark_runs",
+                type: "INTEGER",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
@@ -280,6 +306,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                 table: "benchmark_runs");
 
             migrationBuilder.DropColumn(
+                name: "judge_launch_executable_sha256",
+                table: "benchmark_runs");
+
+            migrationBuilder.DropColumn(
+                name: "judge_launch_has_aux_assets",
+                table: "benchmark_runs");
+
+            migrationBuilder.DropColumn(
                 name: "judge_launch_kv_cache_type_source",
                 table: "benchmark_runs");
 
@@ -341,6 +375,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
             migrationBuilder.DropColumn(
                 name: "primary_kv_cache_type_source",
+                table: "benchmark_runs");
+
+            migrationBuilder.DropColumn(
+                name: "primary_launch_executable_sha256",
+                table: "benchmark_runs");
+
+            migrationBuilder.DropColumn(
+                name: "primary_launch_has_aux_assets",
                 table: "benchmark_runs");
 
             migrationBuilder.DropColumn(

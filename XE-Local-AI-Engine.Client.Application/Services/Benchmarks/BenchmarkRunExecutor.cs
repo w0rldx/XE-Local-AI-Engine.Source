@@ -219,8 +219,17 @@ public sealed class BenchmarkRunExecutor(
             return;
         }
 
-        _ = await store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None)
-                       .ConfigureAwait(false);
+        try
+        {
+            _ = await store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None)
+                           .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Evidence is not worth a measurement. A version race with an operator cancel, or a busy database, must
+            // not turn a healthy run into a failed one — and the token here is None, so nothing caught is a shutdown.
+            logger.LogWarning(exception, "Benchmark run {RunId}: the launch-evidence checkpoint could not be recorded.", work.RunId);
+        }
     }
 
     private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work, RuntimeEnvironmentFactsV1? environment)

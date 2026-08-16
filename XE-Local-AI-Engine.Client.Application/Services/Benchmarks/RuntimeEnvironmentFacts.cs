@@ -14,9 +14,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </param>
 public sealed record BenchmarkGpuFactsV1(string Name, long? TotalBytes, string? DriverVersion);
 
+/// <param name="OsDescription">
+///     The host OS as the runtime describes it ("Linux 6.18.33.2-microsoft-standard-WSL2 ..."). Deliberately NOT named
+///     <c>os</c>: the receipt already carries a bounded <c>os</c> token, and two same-named fields of different shapes
+///     read as a contradiction in a field-by-field diff.
+/// </param>
 /// <param name="DeviceAuditBackend">What the selected runtime actually enumerated: <c>cuda|vulkan|cpu|unknown</c>.</param>
 public sealed record BenchmarkHardwareFactsV1(
-    string Os,
+    string OsDescription,
     string Arch,
     string? CpuModel,
     int LogicalCores,
@@ -61,16 +66,17 @@ public interface IRuntimeEnvironmentFactsProvider
 /// <remarks>
 ///     Bounded by construction: one directory enumerate plus a guard-sample read per bundle file (the fingerprint's
 ///     cheap identity mode — no whole-file hashing), the memoized hardware profile and the memoized device audit, and
-///     one installed-runtime file read. Registered as a singleton because it owns a file-hash cache with file-system
-///     watchers.
+///     one installed-runtime file read. Registered as a singleton, sharing the launch-policy file-hash cache rather
+///     than starting a second set of file-system watchers over the same directory.
 /// </remarks>
 public sealed class RuntimeEnvironmentFactsProvider(
     ILlamaCppBinaryManager binaryManager,
     IInstalledRuntimeStore installedRuntimeStore,
     IHardwareProfiler hardwareProfiler,
     IRuntimeDeviceAudit deviceAudit,
+    LaunchPolicyFileHashCache fileHashCache,
     TimeProvider timeProvider,
-    ILogger<RuntimeEnvironmentFactsProvider> logger) : IRuntimeEnvironmentFactsProvider, IDisposable
+    ILogger<RuntimeEnvironmentFactsProvider> logger) : IRuntimeEnvironmentFactsProvider
 {
     public const int SchemaVersion = 1;
 
@@ -87,7 +93,10 @@ public sealed class RuntimeEnvironmentFactsProvider(
     private readonly IRuntimeDeviceAudit _deviceAudit = deviceAudit ?? throw new ArgumentNullException(nameof(deviceAudit));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly ILogger<RuntimeEnvironmentFactsProvider> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly LaunchPolicyFileHashCache _fileHashCache = new();
+
+    // Shared with the launch-policy fingerprint: the cache owns a file-system watcher per directory, and a second
+    // instance would watch the same runtime directory twice for the same answers. Disposed by the container.
+    private readonly LaunchPolicyFileHashCache _fileHashCache = fileHashCache ?? throw new ArgumentNullException(nameof(fileHashCache));
 
     public async Task<RuntimeEnvironmentFactsV1> CaptureAsync(GpuVariant variant, CancellationToken ct)
     {
@@ -137,11 +146,6 @@ public sealed class RuntimeEnvironmentFactsProvider(
             missing);
     }
 
-    public void Dispose()
-    {
-        _fileHashCache.Dispose();
-    }
-
     private static BenchmarkLlamaRuntimeFactsV1? ToLlamaRuntimeFacts(InstalledRuntimeState? runtime, LlamaBinary? binary)
     {
         if (runtime is null && binary is null)
@@ -161,8 +165,9 @@ public sealed class RuntimeEnvironmentFactsProvider(
             provenance = "managed-source-build";
         }
 
+        var variant = binary?.Variant ?? runtime?.Variant;
         return new BenchmarkLlamaRuntimeFactsV1(binary?.Version ?? runtime?.Tag ?? "unavailable",
-            (binary?.Variant ?? runtime?.Variant)?.ToString() ?? "unavailable",
+            variant is null ? "unavailable" : BenchmarkLaunchBackend.VariantName(variant.Value),
             provenance,
             isManagedSourceBuild ? runtime?.SourceCommit : null);
     }

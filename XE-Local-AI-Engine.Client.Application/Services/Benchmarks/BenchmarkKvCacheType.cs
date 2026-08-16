@@ -33,7 +33,8 @@ public static class BenchmarkKvCacheType
     private static readonly string[] SupportedTypes = [F16, Q8_0, Q4_0];
 
     /// <summary><see langword="true" /> when the canonical <paramref name="type" /> needs <c>-ctk/-ctv</c> + <c>-fa on</c>.</summary>
-    public static bool IsQuantized(string type) => !string.Equals(type, F16, StringComparison.Ordinal);
+    public static bool IsQuantized(string type) =>
+        string.Equals(type, Q8_0, StringComparison.Ordinal) || string.Equals(type, Q4_0, StringComparison.Ordinal);
 
     /// <summary>
     ///     Canonicalizes a requested type: trimmed and lowercased. A missing/blank request is Auto

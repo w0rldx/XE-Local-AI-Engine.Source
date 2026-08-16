@@ -13,15 +13,20 @@ using System.Text.Json.Serialization;
 /// <remarks>
 ///     Canonical means: object members emitted in ordinal name order (so a later reordering of a record's properties
 ///     cannot change a stored hash), nothing omitted (<see cref="JsonIgnoreCondition.Never" />, so a member that turns
-///     <see langword="null" /> is a visible difference rather than an absence), no indentation, and invariant
-///     formatting throughout.
+///     <see langword="null" /> is a visible difference rather than an absence), no indentation, invariant formatting
+///     throughout, and enums written as camel-case NAMES — an ordinal would silently re-label every stored receipt the
+///     day a member is inserted, and it reaches the UI as a number nobody can read.
 /// </remarks>
 public static class BenchmarkCanonicalJson
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
-        WriteIndented = false
+        WriteIndented = false,
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
     };
 
     /// <summary>The canonical JSON text for <paramref name="value" />.</summary>

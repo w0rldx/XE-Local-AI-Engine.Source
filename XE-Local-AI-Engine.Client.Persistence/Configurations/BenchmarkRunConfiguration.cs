@@ -53,6 +53,8 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.PrimaryEffectiveBackend).HasColumnName("primary_effective_backend").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryPlacementOffloaded).HasColumnName("primary_placement_offloaded");
         builder.Property(entity => entity.PrimaryPlacementTotal).HasColumnName("primary_placement_total");
+        builder.Property(entity => entity.PrimaryLaunchExecutableSha256).HasColumnName("primary_launch_executable_sha256").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryLaunchHasAuxAssets).HasColumnName("primary_launch_has_aux_assets");
         builder.Property(entity => entity.PrimaryLaunchKvCacheTypeSource).HasColumnName("primary_launch_kv_cache_type_source").HasMaxLength(16);
         builder.Property(entity => entity.JudgeVariant).HasColumnName("judge_variant").HasMaxLength(32);
         builder.Property(entity => entity.JudgeKvCacheType).HasColumnName("judge_kv_cache_type").HasMaxLength(32);
@@ -69,6 +71,8 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.JudgeEffectiveBackend).HasColumnName("judge_effective_backend").HasMaxLength(32);
         builder.Property(entity => entity.JudgePlacementOffloaded).HasColumnName("judge_placement_offloaded");
         builder.Property(entity => entity.JudgePlacementTotal).HasColumnName("judge_placement_total");
+        builder.Property(entity => entity.JudgeLaunchExecutableSha256).HasColumnName("judge_launch_executable_sha256").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeLaunchHasAuxAssets).HasColumnName("judge_launch_has_aux_assets");
         builder.Property(entity => entity.JudgeLaunchKvCacheTypeSource).HasColumnName("judge_launch_kv_cache_type_source").HasMaxLength(16);
         builder.Property(entity => entity.PrimaryErrorMessage).HasColumnName("primary_error_message").HasMaxLength(1024);
         builder.Property(entity => entity.JudgeErrorMessage).HasColumnName("judge_error_message").HasMaxLength(1024);

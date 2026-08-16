@@ -88,6 +88,8 @@ internal static class BenchmarkLaunchEvidence
                 EffectiveBackend: null,
                 PlacementOffloaded: null,
                 PlacementTotal: null,
+                ExecutableSha256: null,
+                HasAuxAssets: null,
                 kvCacheTypeSource);
         }
 
@@ -100,6 +102,8 @@ internal static class BenchmarkLaunchEvidence
             BenchmarkLaunchBackend.From(receipt),
             receipt.Placement.OffloadedLayers,
             receipt.Placement.TotalLayers,
+            receipt.ExecutableSha256,
+            receipt.AuxAssets.HasLora || receipt.AuxAssets.HasMmproj || receipt.AuxAssets.HasDraft,
             kvCacheTypeSource);
     }
 }

@@ -704,6 +704,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.PrimaryEffectiveBackend = command.EffectiveBackend;
             run.PrimaryPlacementOffloaded = command.PlacementOffloaded;
             run.PrimaryPlacementTotal = command.PlacementTotal;
+            run.PrimaryLaunchExecutableSha256 = command.ExecutableSha256;
+            run.PrimaryLaunchHasAuxAssets = command.HasAuxAssets;
             run.PrimaryLaunchKvCacheTypeSource = command.KvCacheTypeSource;
         }
         else
@@ -721,6 +723,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.JudgeEffectiveBackend = command.EffectiveBackend;
             run.JudgePlacementOffloaded = command.PlacementOffloaded;
             run.JudgePlacementTotal = command.PlacementTotal;
+            run.JudgeLaunchExecutableSha256 = command.ExecutableSha256;
+            run.JudgeLaunchHasAuxAssets = command.HasAuxAssets;
             run.JudgeLaunchKvCacheTypeSource = command.KvCacheTypeSource;
         }
 
@@ -902,10 +906,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 entity.JudgeFlashAttentionMode, entity.JudgeIntendedLaunchIdentity, entity.JudgeIntendedExecutableSha256),
             ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
                 entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
-                entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchKvCacheTypeSource),
+                entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
+                entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource),
             ToEvidence(entity.JudgeLaunchReceiptJson, entity.JudgeEnvironmentFactsJson, entity.JudgeReceiptHash,
                 entity.JudgeEnvironmentFactsHash, entity.JudgeEffectiveLaunchIdentity, entity.JudgeEffectiveBackend,
-                entity.JudgePlacementOffloaded, entity.JudgePlacementTotal, entity.JudgeLaunchKvCacheTypeSource));
+                entity.JudgePlacementOffloaded, entity.JudgePlacementTotal, entity.JudgeLaunchExecutableSha256,
+                entity.JudgeLaunchHasAuxAssets, entity.JudgeLaunchKvCacheTypeSource));
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,
@@ -927,11 +933,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         string? effectiveBackend,
         int? placementOffloaded,
         int? placementTotal,
+        string? executableSha256,
+        bool? hasAuxAssets,
         string? kvCacheTypeSource) =>
         receiptJson is null && environmentFactsJson is null
             ? null
             : new BenchmarkRunLaunchEvidence(CopyOptional(receiptJson), CopyOptional(environmentFactsJson), receiptHash,
-                environmentFactsHash, effectiveLaunchIdentity, effectiveBackend, placementOffloaded, placementTotal, kvCacheTypeSource);
+                environmentFactsHash, effectiveLaunchIdentity, effectiveBackend, placementOffloaded, placementTotal,
+                executableSha256, hasAuxAssets, kvCacheTypeSource);
 
     private static ReadOnlyMemory<byte>? CopyOptional(byte[]? value)
     {

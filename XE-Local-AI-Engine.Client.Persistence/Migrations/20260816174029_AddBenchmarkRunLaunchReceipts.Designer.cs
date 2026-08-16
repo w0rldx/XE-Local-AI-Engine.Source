@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    [Migration("20260816163751_AddBenchmarkRunLaunchReceipts")]
+    [Migration("20260816174029_AddBenchmarkRunLaunchReceipts")]
     partial class AddBenchmarkRunLaunchReceipts
     {
         /// <inheritdoc />
@@ -537,6 +537,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("judge_kv_cache_type_source");
 
+                    b.Property<string>("JudgeLaunchExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_launch_executable_sha256");
+
+                    b.Property<bool?>("JudgeLaunchHasAuxAssets")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_launch_has_aux_assets");
+
                     b.Property<string>("JudgeLaunchKvCacheTypeSource")
                         .HasMaxLength(16)
                         .HasColumnType("TEXT")
@@ -649,6 +658,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasMaxLength(16)
                         .HasColumnType("TEXT")
                         .HasColumnName("primary_kv_cache_type_source");
+
+                    b.Property<string>("PrimaryLaunchExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_launch_executable_sha256");
+
+                    b.Property<bool?>("PrimaryLaunchHasAuxAssets")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_launch_has_aux_assets");
 
                     b.Property<string>("PrimaryLaunchKvCacheTypeSource")
                         .HasMaxLength(16)
