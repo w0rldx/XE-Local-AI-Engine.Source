@@ -21,6 +21,12 @@ public sealed class DraftingOptions
     /// <summary>
     ///     Wall-clock budget for one generation. Generous because a cold local model pays load time on first use; the
     ///     operator sees elapsed time and can cancel. Elapsing yields a typed failure with the gate released.
+    ///     <para>
+    ///         <see langword="null" /> (the default) means "follow the node-level <em>Maximum message request
+    ///         timeout</em>": drafting is a model request like any other, and the operator's knob is read LIVE per
+    ///         generation, so a Save takes effect without a node restart. Set an explicit value only to impose a
+    ///         drafting-specific ceiling — the previous hardcoded 300 s silently pre-empted a raised node setting.
+    ///     </para>
     /// </summary>
-    public TimeSpan GenerationTimeout { get; set; } = TimeSpan.FromSeconds(300);
+    public TimeSpan? GenerationTimeout { get; set; }
 }
