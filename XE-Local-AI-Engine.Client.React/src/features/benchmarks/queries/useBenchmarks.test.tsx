@@ -43,7 +43,7 @@ function projectRow(overrides: Record<string, unknown> = {}) {
 }
 
 function projectDetail(overrides: Record<string, unknown> = {}) {
-	return { ...projectRow(), coreTask: "Summarise the attached text.", ...overrides };
+	return { ...projectRow(), coreTask: "Summarise the attached text.", judge: { enabled: false }, ...overrides };
 }
 
 function runRow(overrides: Record<string, unknown> = {}) {
@@ -56,7 +56,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
 		agentVersion: 1,
 		requestedContextTokens: 4096,
 		primaryStatus: "Succeeded",
-		judgeStatus: "Skipped",
+		judge: { state: "none", policyCurrent: false, executionCurrent: false },
+		qualityScoreSource: "none",
+		modelGroupKey: "v1:test",
 		version: 3,
 		createdAtUtc: 1,
 		updatedAtUtc: 2,
@@ -107,7 +109,7 @@ describe("benchmark queries over the real client", () => {
 			}),
 			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
 				reads += 1;
-				return HttpResponse.json({ items: [runRow()] });
+				return HttpResponse.json({ items: [runRow()], rankCohort: { rankedCount: 0, totalScored: 0 } });
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();
@@ -126,7 +128,7 @@ describe("benchmark queries over the real client", () => {
 		await waitFor(() => expect(result.current.project.isSuccess).toBe(true));
 		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
 		expect(result.current.project.data?.coreTask).toBe("Summarise the attached text.");
-		expect(result.current.runs.data?.[0]).toMatchObject({ id: runId, primaryStatus: "Succeeded", judgeStatus: "Skipped" });
+		expect(result.current.runs.data?.[0]).toMatchObject({ id: runId, primaryStatus: "Succeeded", judgeStatus: "Disabled" });
 	});
 
 	// The run list is paged on the wire even though the UI shows one page.
@@ -135,7 +137,7 @@ describe("benchmark queries over the real client", () => {
 		server.use(
 			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), ({ request }) => {
 				observedUrl = request.url;
-				return HttpResponse.json({ items: [] });
+				return HttpResponse.json({ items: [], rankCohort: { rankedCount: 0, totalScored: 0 } });
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();
@@ -203,7 +205,7 @@ describe("benchmark queries over the real client", () => {
 		server.use(
 			http.post(localApiPath(`benchmarks/projects/${projectId}/runs`), async ({ request }) => {
 				observedBody = await request.json();
-				return HttpResponse.json(runRow({ primaryStatus: "Queued", judgeStatus: "Pending" }));
+				return HttpResponse.json(runRow({ primaryStatus: "Queued" }));
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();

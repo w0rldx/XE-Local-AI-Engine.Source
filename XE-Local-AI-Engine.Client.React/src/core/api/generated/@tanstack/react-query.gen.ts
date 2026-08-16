@@ -38,6 +38,7 @@ import {
 	cancelStableDiffusionCppSourceBuild,
 	cancelTrainingDataset,
 	cancelTrainingRun,
+	clearBenchmarkRunScore,
 	clearCloudSettings,
 	codexLogin,
 	codexLogout,
@@ -128,6 +129,7 @@ import {
 	getBaseArtifact,
 	getBaseArtifactLicense,
 	getBenchmarkProject,
+	getBenchmarkRubricPresets,
 	getBenchmarkRun,
 	getCloudSettings,
 	getComparison,
@@ -265,6 +267,8 @@ import {
 	reindexCorpus,
 	reindexKnowledgeDocument,
 	rejectSuggestedPlaybookAction,
+	rejudgeBenchmarkProject,
+	rejudgeBenchmarkRun,
 	removeCudaBuild,
 	removeDevelopmentTemplate,
 	removeLlamaCppSourceBuild,
@@ -307,6 +311,7 @@ import {
 	unhandledExceptionProbe,
 	unloadLocalModel,
 	updateAgentDefinition,
+	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 	updateCustomTool,
 	updateLlamaCppRuntime,
@@ -387,6 +392,9 @@ import type {
 	CancelTrainingDatasetResponse,
 	CancelTrainingRunData,
 	CancelTrainingRunResponse,
+	ClearBenchmarkRunScoreData,
+	ClearBenchmarkRunScoreError,
+	ClearBenchmarkRunScoreResponse,
 	ClearCloudSettingsData,
 	ClearCloudSettingsResponse,
 	CodexLoginData,
@@ -603,6 +611,8 @@ import type {
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectError,
 	GetBenchmarkProjectResponse,
+	GetBenchmarkRubricPresetsData,
+	GetBenchmarkRubricPresetsResponse,
 	GetBenchmarkRunData,
 	GetBenchmarkRunError,
 	GetBenchmarkRunResponse,
@@ -894,6 +904,12 @@ import type {
 	ReindexKnowledgeDocumentResponse,
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionResponse,
+	RejudgeBenchmarkProjectData,
+	RejudgeBenchmarkProjectError,
+	RejudgeBenchmarkProjectResponse,
+	RejudgeBenchmarkRunData,
+	RejudgeBenchmarkRunError,
+	RejudgeBenchmarkRunResponse,
 	RemoveCudaBuildData,
 	RemoveCudaBuildError,
 	RemoveCudaBuildResponse,
@@ -1003,6 +1019,9 @@ import type {
 	UnloadLocalModelResponse,
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
+	UpdateBenchmarkJudgePolicyData,
+	UpdateBenchmarkJudgePolicyError,
+	UpdateBenchmarkJudgePolicyResponse,
 	UpdateBenchmarkProjectData,
 	UpdateBenchmarkProjectError,
 	UpdateBenchmarkProjectResponse,
@@ -6604,6 +6623,76 @@ export const updateBenchmarkProjectMutation = (
 	return mutationOptions;
 };
 
+export const updateBenchmarkJudgePolicyMutation = (
+	options?: Partial<Options<UpdateBenchmarkJudgePolicyData>>,
+): UseMutationOptions<
+	UpdateBenchmarkJudgePolicyResponse,
+	AxiosError<UpdateBenchmarkJudgePolicyError>,
+	Options<UpdateBenchmarkJudgePolicyData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateBenchmarkJudgePolicyResponse,
+		AxiosError<UpdateBenchmarkJudgePolicyError>,
+		Options<UpdateBenchmarkJudgePolicyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateBenchmarkJudgePolicy({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const rejudgeBenchmarkProjectMutation = (
+	options?: Partial<Options<RejudgeBenchmarkProjectData>>,
+): UseMutationOptions<
+	RejudgeBenchmarkProjectResponse,
+	AxiosError<RejudgeBenchmarkProjectError>,
+	Options<RejudgeBenchmarkProjectData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RejudgeBenchmarkProjectResponse,
+		AxiosError<RejudgeBenchmarkProjectError>,
+		Options<RejudgeBenchmarkProjectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await rejudgeBenchmarkProject({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getBenchmarkRubricPresetsQueryKey = (options?: Options<GetBenchmarkRubricPresetsData>) =>
+	createQueryKey("getBenchmarkRubricPresets", options);
+
+export const getBenchmarkRubricPresetsOptions = (options?: Options<GetBenchmarkRubricPresetsData>) =>
+	queryOptions<
+		GetBenchmarkRubricPresetsResponse,
+		AxiosError<DefaultError>,
+		GetBenchmarkRubricPresetsResponse,
+		ReturnType<typeof getBenchmarkRubricPresetsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkRubricPresets({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkRubricPresetsQueryKey(options),
+	});
+
 export const listBenchmarkRunsQueryKey = (options: Options<ListBenchmarkRunsData>) =>
 	createQueryKey("listBenchmarkRuns", options);
 
@@ -6744,6 +6833,30 @@ export const cancelBenchmarkRunMutation = (
 	return mutationOptions;
 };
 
+export const clearBenchmarkRunScoreMutation = (
+	options?: Partial<Options<ClearBenchmarkRunScoreData>>,
+): UseMutationOptions<
+	ClearBenchmarkRunScoreResponse,
+	AxiosError<ClearBenchmarkRunScoreError>,
+	Options<ClearBenchmarkRunScoreData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ClearBenchmarkRunScoreResponse,
+		AxiosError<ClearBenchmarkRunScoreError>,
+		Options<ClearBenchmarkRunScoreData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await clearBenchmarkRunScore({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const scoreBenchmarkRunMutation = (
 	options?: Partial<Options<ScoreBenchmarkRunData>>,
 ): UseMutationOptions<ScoreBenchmarkRunResponse, AxiosError<ScoreBenchmarkRunError>, Options<ScoreBenchmarkRunData>> => {
@@ -6754,6 +6867,26 @@ export const scoreBenchmarkRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await scoreBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const rejudgeBenchmarkRunMutation = (
+	options?: Partial<Options<RejudgeBenchmarkRunData>>,
+): UseMutationOptions<RejudgeBenchmarkRunResponse, AxiosError<RejudgeBenchmarkRunError>, Options<RejudgeBenchmarkRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		RejudgeBenchmarkRunResponse,
+		AxiosError<RejudgeBenchmarkRunError>,
+		Options<RejudgeBenchmarkRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await rejudgeBenchmarkRun({
 				...options,
 				...fnOptions,
 				throwOnError: true,

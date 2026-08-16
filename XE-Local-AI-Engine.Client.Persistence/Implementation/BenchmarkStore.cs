@@ -159,18 +159,38 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         var views = await LoadJudgeViewsAsync([runId], cancellationToken).ConfigureAwait(false);
+        var judge = JudgeViewFor(views, runId, entity.UserScore);
+        var (qualityScore, qualityScoreSource) = ComputeQuality(entity.UserScore, judge);
         return ToRecord(entity) with
         {
-            Judge = JudgeViewFor(views, runId, entity.UserScore)
+            Judge = judge,
+            QualityScore = qualityScore,
+            QualityScoreSource = qualityScoreSource
         };
     }
 
     public async Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
         int skip,
         int take,
+        string? modelGroupKey = null,
+        bool includeUnscored = true,
         CancellationToken cancellationToken = default)
     {
+        // Rank is computed over the WHOLE project, never the page: a run's position is a property of the project, and
+        // paging must not renumber it. Filters narrow which rows come back, not what they are ranked against.
+        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
         var runs = _dbContext.BenchmarkRuns.AsNoTracking().Where(entity => entity.ProjectId == projectId);
+        if (modelGroupKey is { Length: > 0 })
+        {
+            runs = runs.Where(entity => entity.ModelContentFingerprint == modelGroupKey);
+        }
+
+        if (!includeUnscored)
+        {
+            var scoredIds = ranking.Runs.Where(static entry => entry.Value.QualityScore is not null).Select(static entry => entry.Key).ToArray();
+            runs = runs.Where(entity => scoredIds.Contains(entity.Id));
+        }
+
         var totalCount = await runs.CountAsync(cancellationToken).ConfigureAwait(false);
 
         // Column projection, not entity materialization: the four encrypted payload columns are never read, so the
@@ -233,11 +253,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         // One extra query for the page rather than a join inside the no-payload projection: the judge view is derived
         // from three more tables, and folding it in would make that projection unreadable.
-        var views = await LoadJudgeViewsAsync([.. items.Select(static item => item.Id)], cancellationToken).ConfigureAwait(false);
-        return new BenchmarkRunPage([.. items.Select(item => item with
-        {
-            Judge = JudgeViewFor(views, item.Id, item.UserScore)
-        })], totalCount);
+        return new BenchmarkRunPage([.. items.Select(item => WithRanking(item, ranking))], totalCount, ranking.Cohort);
     }
 
     public Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
@@ -1225,11 +1241,109 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
         var views = await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false);
+        var judge = JudgeViewFor(views, run.Id, run.UserScore);
+        var (qualityScore, qualityScoreSource) = ComputeQuality(run.UserScore, judge);
         return ToRecord(run) with
         {
-            Judge = JudgeViewFor(views, run.Id, run.UserScore)
+            Judge = judge,
+            QualityScore = qualityScore,
+            QualityScoreSource = qualityScoreSource
         };
     }
+
+    /// <summary>
+    ///     The project's ranking, computed once per request from flat columns only. Dense rank, descending, ties
+    ///     sharing a rank. The plan's accepted ceiling: recompute per request rather than maintain a rollup — a
+    ///     project is one hard-fixed task and its run count stays small.
+    /// </summary>
+    private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        var userScores = await _dbContext.BenchmarkRuns.AsNoTracking()
+                                         .Where(entity => entity.ProjectId == projectId)
+                                         .Select(entity => new
+                                         {
+                                             entity.Id,
+                                             entity.UserScore
+                                         })
+                                         .ToArrayAsync(cancellationToken)
+                                         .ConfigureAwait(false);
+        var views = await LoadJudgeViewsAsync([.. userScores.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
+
+        var runs = new Dictionary<Guid, BenchmarkRunRanking>(userScores.Length);
+        var totalScored = 0;
+        foreach (var run in userScores)
+        {
+            var judge = JudgeViewFor(views, run.Id, run.UserScore);
+            var (qualityScore, source) = ComputeQuality(run.UserScore, judge);
+            if (run.UserScore is not null || judge.Score is not null)
+            {
+                totalScored++;
+            }
+
+            runs[run.Id] = new BenchmarkRunRanking(judge, qualityScore, source, Rank: null);
+        }
+
+        // Dense rank: equal scores share a position and the next distinct score is the next integer, so "rank 2" is
+        // always "the second-best score in this project", however many runs tie above it.
+        var ordered = runs.Values.Where(static entry => entry.QualityScore is not null)
+                          .Select(static entry => entry.QualityScore!.Value)
+                          .Distinct()
+                          .OrderByDescending(static score => score)
+                          .ToArray();
+        foreach (var (runId, entry) in runs.ToArray())
+        {
+            if (entry.QualityScore is { } score)
+            {
+                runs[runId] = entry with
+                {
+                    Rank = Array.IndexOf(ordered, score) + 1
+                };
+            }
+        }
+
+        var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        return new BenchmarkProjectRanking(runs,
+            new BenchmarkRankCohort(current?.Revision,
+                current?.ReferenceExecutionKey,
+                current?.CohortGeneration,
+                runs.Values.Count(static entry => entry.Rank is not null),
+                totalScored));
+    }
+
+    private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>
+        ranking.Runs.TryGetValue(run.Id, out var entry)
+            ? run with
+            {
+                Judge = entry.Judge,
+                QualityScore = entry.QualityScore,
+                QualityScoreSource = entry.Source,
+                Rank = entry.Rank
+            }
+            : run;
+
+    /// <summary>
+    ///     The run's ranking value: the operator's override when set, otherwise the judge score — but only while that
+    ///     judging is in the project's current cohort. A score from an outdated policy or a different judge runtime is
+    ///     still shown, it just does not rank.
+    /// </summary>
+    private static (int? QualityScore, string Source) ComputeQuality(int? userScore, BenchmarkRunJudgeView judge)
+    {
+        if (userScore is { } operatorScore)
+        {
+            return (operatorScore, BenchmarkQualityScoreSources.User);
+        }
+
+        var judgeScore = judge is { State: BenchmarkRunJudgeStates.Succeeded, PolicyCurrent: true, ExecutionCurrent: true }
+            ? judge.Score
+            : null;
+        return judgeScore is { } score
+            ? (score, BenchmarkQualityScoreSources.Judge)
+            : (null, BenchmarkQualityScoreSources.None);
+    }
+
+    private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank);
+
+    private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs, BenchmarkRankCohort Cohort);
 
     private static BenchmarkRunJudgeView JudgeViewFor(IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views, Guid runId, int? userScore)
     {
@@ -1240,7 +1354,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         // No attempt: there is nothing to derive a judging from, so the run is unranked unless the operator scored it.
         var reason = userScore is null ? BenchmarkRunJudgeStates.ReasonNoScore : null;
-        return new BenchmarkRunJudgeView(BenchmarkRunJudgeStates.None, Score: null, PolicyRevision: null, PolicyRevisionId: null,
+        return new BenchmarkRunJudgeView(BenchmarkRunJudgeStates.None, AttemptId: null, Score: null, PolicyRevision: null, PolicyRevisionId: null,
             AttemptSequence: null, CohortGeneration: null, ExecutionKey: null, ErrorMessage: null, PolicyCurrent: false,
             ExecutionCurrent: false, reason);
     }
@@ -1263,6 +1377,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                           join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
                           where runIds.Contains(run.Id)
                           select new JudgeViewRow(run.Id,
+                              attempt.Id,
                               run.UserScore,
                               attempt.Status,
                               attempt.Score,
@@ -1298,6 +1413,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                && row.ExecutionKey is not null
                                && string.Equals(row.ExecutionKey, row.ReferenceExecutionKey, StringComparison.Ordinal);
         return new BenchmarkRunJudgeView(state,
+            row.AttemptId,
             row.Score,
             row.RevisionNumber,
             row.PolicyRevisionId,
@@ -1333,6 +1449,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// <summary>The flat columns the derived judge view is computed from. Never leaves this class.</summary>
     private sealed record JudgeViewRow(
         Guid RunId,
+        Guid AttemptId,
         int? UserScore,
         BenchmarkJudgeAttemptStatus Status,
         int? Score,

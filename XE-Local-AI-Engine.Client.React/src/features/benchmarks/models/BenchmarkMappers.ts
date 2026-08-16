@@ -48,15 +48,52 @@ export function toBenchmarkProjectDetail(value: ProjectDetailResponse): Benchmar
 	return {
 		...toBenchmarkProjectSummary(value),
 		coreTask: value.coreTask,
-		judgeModelName: value.judgeModelName ?? null,
-		judgeContextTokens: value.judgeContextTokens ?? null,
-		judgePromptVersion: numberValue(value.judgePromptVersion, 1),
-		judgeOutputSchemaVersion: numberValue(value.judgeOutputSchemaVersion, 1),
+		judgeModelName: value.judge?.modelName ?? null,
+		judgeContextTokens: value.judge?.requestedContextTokens ?? null,
+		judgePromptVersion: 2,
+		judgeOutputSchemaVersion: 2,
 	};
 }
 
 const primaryStatus = (value: RunSummaryResponse["primaryStatus"]): BenchmarkPrimaryStatus => value ?? "Failed";
-const judgeStatus = (value: RunSummaryResponse["judgeStatus"]): BenchmarkJudgeStatus => value ?? "Failed";
+// The wire says the judging's own state in lowercase; the UI's vocabulary still carries the run-level words it has
+// always rendered. S3 replaces the UI shape; until then this is the one place the two vocabularies meet.
+const judgeStatus = (value: RunSummaryResponse["judge"]): BenchmarkJudgeStatus => {
+	switch (value?.state) {
+		case "queued":
+			return "Queued";
+		case "running":
+			return "Running";
+		case "succeeded":
+			return "Succeeded";
+		case "failed":
+			return "Failed";
+		case "cancelled":
+			return "Cancelled";
+		default:
+			return "Disabled";
+	}
+};
+
+// The judge's launch evidence moved onto its attempt and is not on the run's wire shape any more. Every member is
+// nullable by contract, so an all-null block renders as "—" exactly like a run frozen before receipts existed.
+const emptyLaunchFacts = (): BenchmarkLaunchFacts => ({
+	variant: null,
+	kvCacheType: null,
+	kvCacheTypeSource: null,
+	kvAutoReason: null,
+	flashAttentionMode: null,
+	intendedLaunchIdentity: null,
+	intendedExecutableSha256: null,
+	effectiveLaunchIdentity: null,
+	effectiveBackend: null,
+	placementOffloaded: null,
+	placementTotal: null,
+	executableSha256: null,
+	hasAuxAssets: null,
+	receiptHash: null,
+	environmentFactsHash: null,
+});
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
 const count = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
@@ -69,7 +106,7 @@ const evidenceObject = (value: unknown): BenchmarkEvidenceObject | null =>
 
 // The two launch sides carry the identical column set under a `primary…`/`judge…` prefix, so one prefix-driven reader
 // covers both. Every member is nullable by contract (D7: legacy rows predate the receipt and stay NULL).
-function launchFacts(value: RunSummaryResponse, prefix: "primary" | "judge"): BenchmarkLaunchFacts {
+function launchFacts(value: RunSummaryResponse, prefix: "primary"): BenchmarkLaunchFacts {
 	const at = (suffix: string): unknown => (value as Record<string, unknown>)[`${prefix}${suffix}`];
 	return {
 		variant: text(at("Variant")),
@@ -93,7 +130,7 @@ function launchFacts(value: RunSummaryResponse, prefix: "primary" | "judge"): Be
 export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSummary {
 	return {
 		primaryLaunch: launchFacts(value, "primary"),
-		judgeLaunch: launchFacts(value, "judge"),
+		judgeLaunch: emptyLaunchFacts(),
 		id: value.id ?? "",
 		projectId: value.projectId ?? "",
 		primaryModelName: value.primaryModelName,
@@ -103,7 +140,7 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 		agentVersion: numberValue(value.agentVersion),
 		requestedContextTokens: numberValue(value.requestedContextTokens),
 		primaryStatus: primaryStatus(value.primaryStatus),
-		judgeStatus: judgeStatus(value.judgeStatus),
+		judgeStatus: judgeStatus(value.judge),
 		effectiveContextTokens: value.effectiveContextTokens ?? null,
 		durationMs: value.durationMs ?? null,
 		totalTokens: value.totalTokens ?? null,
@@ -122,16 +159,18 @@ function outputParts(value: unknown): BenchmarkOutputPart[] {
 	}
 	return value.filter((part): part is BenchmarkOutputPart => typeof part === "object" && part !== null && "kind" in part);
 }
-function judgeResult(value: RunDetailResponse["judgeResult"]): BenchmarkJudgeResult | null {
-	if (!value) {
+// The rubric verdict flattened into the shape the current panel renders: the summary is the rationale until S3 shows
+// the per-criterion breakdown the wire already carries.
+function judgeResult(value: RunDetailResponse["judge"]): BenchmarkJudgeResult | null {
+	if (value?.state !== "succeeded") {
 		return null;
 	}
 	return {
-		schemaVersion: numberValue(value.schemaVersion, 1),
-		score: numberValue(value.score),
-		rationale: value.rationale ?? "",
-		judgeModelContentFingerprint: value.judgeModelContentFingerprint ?? "",
-		promptVersion: numberValue(value.promptVersion, 1),
+		schemaVersion: 2,
+		score: numberValue(value.score ?? undefined),
+		rationale: value.summary ?? "",
+		judgeModelContentFingerprint: "",
+		promptVersion: 2,
 	};
 }
 
@@ -139,17 +178,17 @@ export function toBenchmarkRunDetail(value: RunDetailResponse): BenchmarkRunDeta
 	return {
 		...toBenchmarkRunSummary(value),
 		primaryLaunchReceipt: evidenceObject(value.primaryLaunchReceipt),
-		judgeLaunchReceipt: evidenceObject(value.judgeLaunchReceipt),
+		judgeLaunchReceipt: null,
 		primaryEnvironmentFacts: evidenceObject(value.primaryEnvironmentFacts),
-		judgeEnvironmentFacts: evidenceObject(value.judgeEnvironmentFacts),
+		judgeEnvironmentFacts: null,
 		outputParts: outputParts(value.outputParts),
-		judgeResult: judgeResult(value.judgeResult),
+		judgeResult: judgeResult(value.judge),
 		primaryErrorMessage: value.primaryErrorMessage ?? null,
-		judgeErrorMessage: value.judgeErrorMessage ?? null,
+		judgeErrorMessage: value.judge?.errorMessage ?? null,
 		startedAtUtc: value.startedAtUtc ?? null,
 		primaryCompletedAtUtc: value.primaryCompletedAtUtc ?? null,
-		judgeStartedAtUtc: value.judgeStartedAtUtc ?? null,
-		judgeCompletedAtUtc: value.judgeCompletedAtUtc ?? null,
+		judgeStartedAtUtc: null,
+		judgeCompletedAtUtc: null,
 	};
 }
 
