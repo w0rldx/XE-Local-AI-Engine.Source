@@ -2251,6 +2251,62 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessage_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
+    {
+        // The operator raised the node-level "Maximum message request timeout" to 900s. The send path must thread it
+        // onto the runtime package as the invocation timeout — before the fix the package carried a null timeout block
+        // and the builder's own default cut long turns off with FailureCategory=Timeout. 900 is deliberately NOT the
+        // default, so this still fails if the wiring is dropped. Tool-call/stream-idle are not operator-controlled.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(),
+                CreateLocalModelProviderResolver(), CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(maxMessageRequestTimeoutSeconds: 900),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.NotNull(runner.LastTimeouts);
+        AssertEx.Equal(expected: 900, runner.LastTimeouts!.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, runner.LastTimeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, runner.LastTimeouts.StreamIdleTimeoutSeconds);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenConversationUnbound_StreamsWithDefaultPromptAndVersion()
     {
         // Regression guard: an unbound conversation must use today's literals — the embedded prompt and version 1 —
@@ -3405,12 +3461,14 @@ public sealed class NodeChatStreamServiceTests
 
     // The default node-settings store: no operator-selected node default, so model resolution falls through to the
     // request model (or the static config fallback). The capability-gate test supplies a tool-capable default.
-    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null)
+    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null,
+        int maxMessageRequestTimeoutSeconds = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds)
     {
         var store = Substitute.For<INodeSettingsStore>();
         store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
         {
-            DefaultModelName = defaultModelName
+            DefaultModelName = defaultModelName,
+            MaxMessageRequestTimeoutSeconds = maxMessageRequestTimeoutSeconds
         });
         return store;
     }
@@ -4237,6 +4295,10 @@ public sealed class NodeChatStreamServiceTests
         public string? LastModelProfile { get; private set; }
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
         public OrchestrationSpec? LastOrchestrationSpec { get; private set; }
+
+        // The timeout block carried on the runtime package; the node-settings test asserts the operator's
+        // "Maximum message request timeout" reaches the invocation instead of the TimeoutSettings default.
+        public TimeoutSettings? LastTimeouts { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
@@ -4247,6 +4309,7 @@ public sealed class NodeChatStreamServiceTests
             LastModelProfile = context.Package.ModelProfile;
             LastAllowedTools = context.Package.AllowedTools;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
+            LastTimeouts = context.Package.Timeouts;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }

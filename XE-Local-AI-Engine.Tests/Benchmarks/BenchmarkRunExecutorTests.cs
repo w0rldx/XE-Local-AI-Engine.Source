@@ -135,6 +135,9 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
         AssertEx.Equal("0", package.SamplingOptions!.Seed);
         AssertEx.Equal(8192, package.SamplingOptions.NumCtx);
+        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("model.gguf"),
             ModelRole.Chat,
             Arg.Is<ResolvedLaunchArguments>(arguments => !arguments.ExploreMode && arguments.CtxSize == 8192),

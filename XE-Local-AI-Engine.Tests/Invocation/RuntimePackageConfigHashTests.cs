@@ -12,7 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class RuntimePackageConfigHashTests
 {
     // Frozen golden: the digest of the no-playbook / empty-playbook config (version 7, prompt "You are the bound
-    // persona.", no tools, default timeouts). Pinned as a literal so any canonical-serialization drift fails loudly.
+    // persona.", no tools, the legacy 300/30/60 timeout vector — pinned explicitly in the test, NOT the current
+    // TimeoutSettings defaults). Pinned as a literal so any canonical-serialization drift fails loudly.
     private const string EmptyPlaybookDigest = "0727fbe875f076fbdb61c855b1f6ec2d11c06a692f82155b44a9a0b02e9a7df9";
 
 
@@ -430,8 +431,18 @@ public sealed class RuntimePackageConfigHashTests
         const string basePrompt = "You are the bound persona.";
         var composedEmpty = PlaybookPromptComposer.Compose(basePrompt, []);
 
-        var baseDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, basePrompt, [], modelProfile: null, new TimeoutSettings());
-        var composedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, composedEmpty, [], modelProfile: null, new TimeoutSettings());
+        // The timeouts are pinned EXPLICITLY (not `new TimeoutSettings()`) to the values the frozen digest below was
+        // computed against. This test guards the playbook composer's effect on the prompt, not the timeout defaults, so
+        // it must not re-break every time an operator-facing default moves.
+        var pinnedTimeouts = new TimeoutSettings
+        {
+            InvocationTimeoutSeconds = 300,
+            ToolCallTimeoutSeconds = 30,
+            StreamIdleTimeoutSeconds = 60
+        };
+
+        var baseDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, basePrompt, [], modelProfile: null, pinnedTimeouts);
+        var composedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, composedEmpty, [], modelProfile: null, pinnedTimeouts);
 
         AssertEx.Equal(baseDigest, composedDigest);
 
