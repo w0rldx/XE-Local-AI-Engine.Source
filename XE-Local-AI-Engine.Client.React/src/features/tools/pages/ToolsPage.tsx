@@ -19,7 +19,7 @@ export function ToolsPage() {
 				icon={<IconTool size={24} />}
 				subtitle={t(
 					"pages.tools.subtitle",
-					"Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers.",
+					"Tools installed on this node: built-in in-process tools plus tools from enabled MCP servers. A chat turn is offered a subset of these.",
 				)}
 			/>
 			<LocalToolsOverview />

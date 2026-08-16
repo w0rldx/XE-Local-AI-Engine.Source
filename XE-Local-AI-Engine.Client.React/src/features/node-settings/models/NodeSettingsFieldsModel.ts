@@ -455,6 +455,50 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 	};
 }
 
+// The fields whose runtime consumer reads them exactly ONCE — at DI composition / singleton construction — so a Save
+// persists immediately but the running node keeps its old value until it restarts. This is the single source of truth
+// for both the per-field hint in NodeSettingsFieldsCard and the post-save "restart required" notice; verify the named
+// backend consumer before adding or removing an entry (every one below confirmed against the composition root):
+//   defaultModelName                — AddNodeModelRuntimeExtensions.ResolveChatConnectionSettings (GetDefaultModelName)
+//                                     + InvocationRunner ctor. PARTIAL: the scheduler (RunSavedAgentHandler) reads live.
+//   ollamaEndpoint                  — AddNodeModelRuntimeExtensions.ResolveChatConnectionSettings (GetOllamaEndpoint)
+//   huggingFaceDefaultQuant         — AddNodeModelRuntimeExtensions.BuildSeededHuggingFaceOptions
+//   llamaMaxLoadedProcesses         — AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions
+//   llamaIdleTimeToLiveSeconds      — same seed method
+//   chatCacheReuse                  — same seed method (LlamaServerSupervisorOptions.ChatCacheReuse)
+//   speculativeMode                 — same seed method
+//   speculativeDraftModelName       — same seed method
+//   speculativeDraftMaxTokens       — same seed method
+//   rerankerModelName               — AddNodeKnowledgeBaseExtensions PostConfigure<KnowledgeBaseOptions>
+//   maxResponseSizeMb               — InvocationRunner ctor (GetMaxResponseSizeMb)
+//   orchestrationIdleTimeoutSeconds — AddNodeModelRuntimeExtensions Configure<OrchestrationAgentOptions>
+//   maxPendingToolCallAgeMinutes    — InvocationRunner ctor. PARTIAL: ToolCallCleanupService sweeps with a live read,
+//                                     but a running invocation's own approval-wait timer was fixed at process start.
+// Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
+// toolCapableModels, enableTools, customToolsEnabled, detachedGraceSeconds, usageRates, recommendedLlamaCppTag, and the
+// message-request timeout.
+export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
+	"defaultModelName",
+	"ollamaEndpoint",
+	"huggingFaceDefaultQuant",
+	"llamaMaxLoadedProcesses",
+	"llamaIdleTimeToLiveSeconds",
+	"chatCacheReuse",
+	"speculativeMode",
+	"speculativeDraftModelName",
+	"speculativeDraftMaxTokens",
+	"rerankerModelName",
+	"maxResponseSizeMb",
+	"orchestrationIdleTimeoutSeconds",
+	"maxPendingToolCallAgeMinutes",
+]);
+
+// True when a built save body carries at least one restart-gated field, so the page can tell the operator a restart is
+// needed. The request keys mirror the form keys 1:1, and the body only ever holds CHANGED fields.
+export function touchesRestartGatedField(body: SaveNodeSettingsRequest): boolean {
+	return Object.keys(body).some((key) => restartGatedNodeSettingsFields.has(key as keyof NodeSettingsFieldsForm));
+}
+
 // The outcome of validating the whole form: the request body containing ONLY changed fields, plus a per-field error
 // map. When `errors` is non-empty the caller must not save.
 export interface NodeSettingsValidationResult {
