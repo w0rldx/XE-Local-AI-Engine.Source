@@ -54,7 +54,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
-        context.Store.ListRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([Run()]);
+        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(1);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
         using var response = await client.SendAsync(request).ConfigureAwait(false);

@@ -173,13 +173,103 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             ? ToRecord(entity)
             : null;
 
-    public async Task<IReadOnlyList<BenchmarkRunRecord>> ListRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
-        (await _dbContext.BenchmarkRuns.AsNoTracking()
-                         .Where(entity => entity.ProjectId == projectId)
-                         .OrderByDescending(entity => entity.CreatedAtUtc)
-                         .ThenByDescending(entity => entity.Id)
-                         .ToListAsync(cancellationToken)
-                         .ConfigureAwait(false)).Select(ToRecord).ToArray();
+    public async Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        var runs = _dbContext.BenchmarkRuns.AsNoTracking().Where(entity => entity.ProjectId == projectId);
+        var totalCount = await runs.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        // Column projection, not entity materialization: the four encrypted payload columns are never read, so the
+        // materialization interceptor has nothing to decrypt and a 200-row page costs no crypto at all. Everything a
+        // summary shows is a flat column. The nested records are rebuilt from their own flat columns — presence is
+        // decided by a non-payload member of each block, since both blocks are always written whole.
+        // A local, not `default` inline: EF rejects a ReadOnlyMemory<byte> constant in a client projection.
+        var noPayload = default(ReadOnlyMemory<byte>);
+        var items = await runs.OrderByDescending(entity => entity.CreatedAtUtc)
+                              .ThenByDescending(entity => entity.Id)
+                              .Skip(skip)
+                              .Take(take)
+                              .Select(entity => new BenchmarkRunRecord(entity.Id,
+                                  entity.ProjectId,
+                                  noPayload,
+                                  entity.PrimaryModelName,
+                                  entity.PrimaryModelOrigin,
+                                  entity.ModelContentFingerprint,
+                                  entity.AgentName,
+                                  entity.AgentVersion,
+                                  entity.RequestedContextTokens,
+                                  entity.PrimaryStatus,
+                                  entity.EffectiveContextTokens,
+                                  entity.DurationMs,
+                                  entity.TotalTokens,
+                                  entity.TokensPerSecond,
+                                  null,
+                                  entity.LastStreamSequence,
+                                  entity.UserScore,
+                                  entity.JudgeStatus,
+                                  null,
+                                  entity.PrimaryErrorMessage,
+                                  entity.JudgeErrorMessage,
+                                  entity.Version,
+                                  entity.CreatedAtUtc,
+                                  entity.StartedAtUtc,
+                                  entity.PrimaryCompletedAtUtc,
+                                  entity.JudgeStartedAtUtc,
+                                  entity.JudgeCompletedAtUtc,
+                                  entity.UpdatedAtUtc,
+                                  entity.PrimaryVariant == null
+                                      ? null
+                                      : new BenchmarkRunLaunchIntent(entity.PrimaryVariant,
+                                          entity.PrimaryKvCacheType!,
+                                          entity.PrimaryKvCacheTypeSource!,
+                                          entity.PrimaryKvAutoReason,
+                                          entity.PrimaryFlashAttentionMode!,
+                                          entity.PrimaryIntendedLaunchIdentity!,
+                                          entity.PrimaryIntendedExecutableSha256),
+                                  entity.JudgeVariant == null
+                                      ? null
+                                      : new BenchmarkRunLaunchIntent(entity.JudgeVariant,
+                                          entity.JudgeKvCacheType!,
+                                          entity.JudgeKvCacheTypeSource!,
+                                          entity.JudgeKvAutoReason,
+                                          entity.JudgeFlashAttentionMode!,
+                                          entity.JudgeIntendedLaunchIdentity!,
+                                          entity.JudgeIntendedExecutableSha256),
+                                  entity.PrimaryEnvironmentFactsHash == null
+                                      ? null
+                                      : new BenchmarkRunLaunchEvidence(null,
+                                          null,
+                                          entity.PrimaryReceiptHash,
+                                          entity.PrimaryEnvironmentFactsHash,
+                                          entity.PrimaryEffectiveLaunchIdentity,
+                                          entity.PrimaryEffectiveBackend,
+                                          entity.PrimaryPlacementOffloaded,
+                                          entity.PrimaryPlacementTotal,
+                                          entity.PrimaryLaunchExecutableSha256,
+                                          entity.PrimaryLaunchHasAuxAssets,
+                                          entity.PrimaryLaunchKvCacheTypeSource),
+                                  entity.JudgeEnvironmentFactsHash == null
+                                      ? null
+                                      : new BenchmarkRunLaunchEvidence(null,
+                                          null,
+                                          entity.JudgeReceiptHash,
+                                          entity.JudgeEnvironmentFactsHash,
+                                          entity.JudgeEffectiveLaunchIdentity,
+                                          entity.JudgeEffectiveBackend,
+                                          entity.JudgePlacementOffloaded,
+                                          entity.JudgePlacementTotal,
+                                          entity.JudgeLaunchExecutableSha256,
+                                          entity.JudgeLaunchHasAuxAssets,
+                                          entity.JudgeLaunchKvCacheTypeSource)))
+                              .ToArrayAsync(cancellationToken)
+                              .ConfigureAwait(false);
+        return new BenchmarkRunPage(items, totalCount);
+    }
+
+    public Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        _dbContext.BenchmarkRuns.AsNoTracking().CountAsync(entity => entity.ProjectId == projectId, cancellationToken);
 
     public async Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {

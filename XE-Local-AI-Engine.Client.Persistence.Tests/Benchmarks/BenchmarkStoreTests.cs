@@ -115,17 +115,17 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         await using var verifyContext = CreateContext(databasePath);
         var verifyStore = new BenchmarkStore(verifyContext, TimeProvider.System);
-        var runs = await verifyStore.ListRunsAsync(project.Id);
+        var runCount = await verifyStore.CountRunsAsync(project.Id);
         var finalProject = AssertEx.NotNull(await verifyStore.GetProjectAsync(project.Id));
         if (startWon)
         {
-            AssertEx.Equal(expected: 1, runs.Count);
+            AssertEx.Equal(expected: 1, runCount);
             AssertEx.NotNull(await verifyStore.ClaimNextAsync(), "The winning StartRun must leave claimable primary work.");
             AssertEx.Equal("Benchmark", finalProject.Name, "A losing project update must not persist.");
         }
         else
         {
-            AssertEx.Equal(expected: 0, runs.Count);
+            AssertEx.Equal(expected: 0, runCount);
             AssertEx.Null(await verifyStore.ClaimNextAsync(), "A losing StartRun must not insert a claimable work item.");
             AssertEx.Equal("Updated", finalProject.Name);
         }
@@ -356,7 +356,7 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         AssertEx.Equal("FreezeDependencyChanged", exception.Code);
         AssertEx.True(guard.WasCalled, "The dependency guard must execute before persistence mutation.");
-        AssertEx.Equal(expected: 0, (await store.ListRunsAsync(project.Id)).Count);
+        AssertEx.Equal(expected: 0, await store.CountRunsAsync(project.Id));
         AssertEx.Null(await store.ClaimNextAsync(), "A rejected freeze must not leave primary work behind.");
     }
 
@@ -413,6 +413,45 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertBytes(snapshot, reloaded.RuntimeSnapshotJson.Span);
         AssertBytes(output, reloaded.OutputPartsJson!.Value.Span);
         AssertBytes(judge, reloaded.JudgeResultJson!.Value.Span);
+    }
+
+    [Test]
+    public async Task ListRuns_PagesInTheDatabaseAndReturnsNoEncryptedPayloads()
+    {
+        var databasePath = GetDatabasePath("list-runs-paging.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var created = new List<Guid>();
+        for (var index = 0; index < 5; index++)
+        {
+            project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+            created.Add((await store.StartRunAsync(CreateRun(project) with
+            {
+                PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "auto", null, "on", "intended", "manifest-sha")
+            })).Id);
+        }
+
+        var firstPage = await store.ListRunsAsync(project.Id, skip: 0, take: 2);
+        var secondPage = await store.ListRunsAsync(project.Id, skip: 2, take: 2);
+        var lastPage = await store.ListRunsAsync(project.Id, skip: 4, take: 2);
+
+        AssertEx.Equal(expected: 5, firstPage.TotalCount, "TotalCount counts the project, not the page.");
+        AssertEx.Equal(expected: 2, firstPage.Items.Count);
+        AssertEx.Equal(expected: 1, lastPage.Items.Count);
+        AssertEx.Equal(expected: 5, await store.CountRunsAsync(project.Id));
+        AssertEx.Empty(firstPage.Items.Select(static run => run.Id).Intersect(secondPage.Items.Select(static run => run.Id)));
+
+        var row = firstPage.Items[0];
+        AssertEx.True(row.RuntimeSnapshotJson.IsEmpty, "The list path must not read the encrypted snapshot column.");
+        AssertEx.Null(row.OutputPartsJson);
+        AssertEx.Null(row.JudgeResultJson);
+        // The summary still carries everything the list view renders — the flat columns, not the payloads.
+        AssertEx.Equal("q8_0", AssertEx.NotNull(row.PrimaryLaunchIntent).KvCacheType);
+        AssertEx.Equal("model.gguf", row.PrimaryModelName);
+        AssertEx.Null(row.PrimaryLaunchEvidence, "A run that never launched carries no evidence block.");
     }
 
     [Test]
@@ -581,6 +620,7 @@ public sealed class BenchmarkStoreTests : IDisposable
     public async Task EncryptedField_CiphertextSubstitutionFailsAad()
     {
         var databasePath = GetDatabasePath("aad.sqlite");
+        Guid substitutedRunId;
         await using (var context = CreateContext(databasePath))
         {
             await context.Database.EnsureDeletedAsync();
@@ -592,11 +632,12 @@ public sealed class BenchmarkStoreTests : IDisposable
             var second = await store.StartRunAsync(CreateRun(project));
             await context.Database.ExecuteSqlInterpolatedAsync(
                 $"UPDATE benchmark_runs SET runtime_snapshot_json = (SELECT runtime_snapshot_json FROM benchmark_runs WHERE id = {first.Id}) WHERE id = {second.Id}");
+            substitutedRunId = second.Id;
         }
 
         await using var fresh = CreateContext(databasePath);
         _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() =>
-            new BenchmarkStore(fresh, TimeProvider.System).ListRunsAsync(fresh.BenchmarkProjects.Select(static item => item.Id).Single()));
+            new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(substitutedRunId));
     }
 
     [Test]
