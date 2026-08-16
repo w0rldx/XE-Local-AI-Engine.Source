@@ -138,6 +138,37 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task ReportApprovalLifecycleAsync_RecordsSessionScopeEligibilityOnThePendingApproval()
+    {
+        // The reconnect replay rebuilds the approval from this slot. ApprovalRequestPayload (the platform-hub contract
+        // that seeds it) carries no session-scope field, so the runner's answer has to be folded on from the lifecycle
+        // event — otherwise a reload drops it and the card falls back to the tool catalog.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        var lease = await dispatcher.ReportInvocationAssignedAsync(package);
+
+        await dispatcher.ReportApprovalRequestedAsync(new ApprovalRequestPayload
+        {
+            InvocationId = package.InvocationId,
+            RequestId = "approval-1",
+            Description = "A tool call requires approval before it runs."
+        });
+        await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+        {
+            InvocationId = package.InvocationId,
+            RequestId = "approval-1",
+            CallId = "call-7",
+            ToolName = "run_skill_script",
+            Description = "A tool call requires approval before it runs.",
+            SessionScopeEligible = false
+        });
+
+        var pending = AssertEx.NotNull(dispatcher.CurrentInvocation?.PendingApproval);
+        AssertEx.Equal(expected: false, pending.SessionScopeEligible);
+        await lease.DisposeAsync();
+    }
+
+    [Test]
     public async Task ReportInvocationAssignedAsync_WhenRemoteRunning_QueuesUntilRemoteSlotReleased()
     {
         var runner = Substitute.For<IInvocationRunner>();

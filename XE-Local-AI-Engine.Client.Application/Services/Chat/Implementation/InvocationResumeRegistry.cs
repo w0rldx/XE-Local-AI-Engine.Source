@@ -409,7 +409,11 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     RequestId = approval.RequestId,
                     CallId = approval.CallId ?? string.Empty,
                     ToolName = approval.ToolName ?? string.Empty,
-                    Description = approval.Description
+                    Description = approval.Description,
+                    // Fail CLOSED on a slot that never recorded the runner's answer: a replayed card that offers
+                    // "Approve for this session" the node cannot honor is the bug this flag exists to end, and the
+                    // operator can still approve once.
+                    SessionScopeEligible = approval.SessionScopeEligible ?? false
                 },
                 timestampMs,
                 sequence + events.Count));
