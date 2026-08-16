@@ -316,3 +316,38 @@ describe("NodeSettingsFieldsCard — usage rate editor", () => {
 		expect(screen.getByTestId("node-settings-usage-rates-error").textContent).toBe("Invalid value.");
 	});
 });
+
+describe("NodeSettingsFieldsCard — restart-required hint", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("marks a restart-gated field so the operator knows a Save is not live", () => {
+		renderCard();
+
+		// chatCacheReuse is seeded once into LlamaServerSupervisorOptions at composition — a save needs a node restart.
+		const hint = screen.getByTestId("node-settings-restart-hint-chatCacheReuse");
+		expect(hint.textContent?.trim()).toBe("Takes effect after the node restarts.");
+		expect(screen.getByTestId("node-settings-restart-hint-defaultModelName")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-hint-rerankerModelName")).toBeTruthy();
+	});
+
+	it("does not mark a field that is read live on every call", () => {
+		renderCard();
+
+		// toolCapableModels is re-read per invocation (OrchestrationResolver) — labelling it would be a lie.
+		expect(screen.queryByTestId("node-settings-restart-hint-toolCapableModels")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-hint-enableTools")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-hint-keepModelWarmIntervalSeconds")).toBeNull();
+	});
+
+	it("hints the draft-model fields only once the mode that uses them is selected", () => {
+		renderCard({ form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: "draft-simple" } });
+
+		expect(screen.getByTestId("node-settings-restart-hint-speculativeDraftModelName")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-hint-speculativeDraftMaxTokens")).toBeTruthy();
+	});
+});

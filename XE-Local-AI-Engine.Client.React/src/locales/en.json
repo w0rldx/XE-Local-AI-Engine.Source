@@ -1678,10 +1678,12 @@
 				"clearError": "Could not clear the token."
 			},
 			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
+			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			"fields": {
 				"save": "Save node settings",
 				"validationError": "Some settings are invalid. Fix the highlighted fields.",
 				"allowedRange": "Allowed range",
+				"restartRequired": "Takes effect after the node restarts.",
 				"seconds": "seconds",
 				"minutes": "minutes",
 				"bytesPositive": "A positive number of bytes. Changes take effect without restarting the node.",
@@ -1704,7 +1706,7 @@
 				},
 				"defaultModelName": {
 					"label": "Default model",
-					"description": "The model used for local chat when none is selected. Leave blank to use the configured default. Applies after the node restarts."
+					"description": "The model used for local chat when none is selected. Leave blank to use the configured default."
 				},
 				"enableTools": {
 					"label": "Enable tools",
@@ -1723,12 +1725,10 @@
 					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max loaded llama-server processes",
-					"description": "Applies after the node restarts."
+					"label": "Max loaded llama-server processes"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Idle process time-to-live",
-					"description": "Applies after the node restarts."
+					"label": "Idle process time-to-live"
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Keep a model warm",
@@ -1743,30 +1743,28 @@
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama endpoint",
-					"description": "The Ollama API base URL. Applies after a restart."
+					"description": "The Ollama API base URL."
 				},
 				"huggingFace": {
 					"title": "Hugging Face"
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Default quantization",
-					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M). Applies after the node restarts."
+					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M)."
 				},
 				"worker": {
 					"title": "Worker limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Max response size",
-					"description": "Applies after the node restarts."
+					"label": "Max response size"
 				},
 				"advanced": {
 					"title": "Advanced (developer)",
-					"description": "Low-level orchestration and AgentHome limits. The orchestration idle timeout and pending tool-call age apply after a restart; the AgentHome limits apply immediately.",
+					"description": "Low-level orchestration and AgentHome limits.",
 					"samplingNote": "Sampling defaults are configured per message during a chat."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestration idle timeout",
-					"description": "Applies after the node restarts."
+					"label": "Orchestration idle timeout"
 				},
 				"agentHomePrepareTimeoutSeconds": {
 					"label": "AgentHome prepare timeout",
@@ -1783,12 +1781,11 @@
 					"label": "AgentHome max patch size"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max pending tool-call age",
-					"description": "Applies after the node restarts."
+					"label": "Max pending tool-call age"
 				},
 				"speculativeMode": {
 					"label": "Speculative decoding",
-					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. Applies after the node restarts.",
+					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks.",
 					"options": {
 						"off": "Off",
 						"ngram-mod": "n-gram (no draft model)",
@@ -1800,21 +1797,20 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Draft model",
-					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
+					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
 					"placeholder": "Select a draft model",
 					"empty": "No installed chat models"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Draft tokens per step",
-					"description": "Applies after the node restarts."
+					"label": "Draft tokens per step"
 				},
 				"chatCacheReuse": {
 					"label": "Prompt cache reuse",
-					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables. Applies after the node restarts."
+					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables."
 				},
 				"rerankerModel": {
 					"label": "Reranker model",
-					"description": "Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Applies after the node restarts. Uses additional VRAM not counted by capacity checks.",
+					"description": "Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Uses additional VRAM not counted by capacity checks.",
 					"off": "Off",
 					"empty": "No installed models",
 					"downloadRecommended": "Download recommended reranker",
@@ -3919,7 +3915,18 @@
 		},
 		"tools": {
 			"title": "Local tools",
-			"subtitle": "Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers."
+			"subtitle": "Tools installed on this node: built-in in-process tools plus tools from enabled MCP servers. A chat turn is offered a subset of these.",
+			"overview": {
+				"title": "Tools installed on this node",
+				"installedCount": "{{total}} installed",
+				"scopeNotice": "The full node catalog. Which of these a chat turn can actually use is narrower: it depends on the selected model's tool support, the node's tool-capable model list, and the allowed tools of the agent handling the turn.",
+				"loading": "Loading tools…",
+				"error": "Could not load the tool catalog.",
+				"empty": "No tools installed.",
+				"footer": "Built-in tools run in-process on this node. MCP tools run from their registered servers.",
+				"requiresApproval": "requires approval",
+				"autoExecute": "auto-execute"
+			}
 		},
 		"benchmarks": {
 			"title": "Local model benchmarks",
