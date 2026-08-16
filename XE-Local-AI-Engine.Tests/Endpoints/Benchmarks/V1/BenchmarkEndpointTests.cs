@@ -84,6 +84,30 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetRun_ForASucceededJudge_ReturnsTheStoredScoreAndRationale()
+    {
+        // Round-tripped through the REAL writer: the stored blob is camelCase, and a reader using default options bound
+        // every property to its default — so the API answered score 0 with a null rationale and the frontend rejected
+        // the whole run detail as an unexpected shape. Nothing about the run itself had failed.
+        await using var context = CreateContext();
+        var stored = BenchmarkExecutionSerialization.SerializeJudge(new BenchmarkJudgeResultV1(1, 4, "clear and correct", "v1:aggregate", 1));
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkJudgeStatus.Succeeded, judgeResult: stored));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var judgeResult = document.RootElement.GetProperty("judgeResult");
+        AssertEx.Equal(4, judgeResult.GetProperty("score").GetInt32());
+        AssertEx.Equal("clear and correct", judgeResult.GetProperty("rationale").GetString());
+        AssertEx.Equal(1, judgeResult.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(1, judgeResult.GetProperty("promptVersion").GetInt32());
+    }
+
+    [Test]
     public async Task StartRun_ReturnsAcceptedWithSafeRunDetail()
     {
         await using var context = CreateContext();
@@ -350,7 +374,8 @@ public sealed class BenchmarkEndpointTests
         BenchmarkJudgeStatus judge = BenchmarkJudgeStatus.Disabled,
         string? output = null,
         BenchmarkRunLaunchIntent? intent = null,
-        BenchmarkRunLaunchEvidence? evidence = null) =>
+        BenchmarkRunLaunchEvidence? evidence = null,
+        byte[]? judgeResult = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -369,7 +394,7 @@ public sealed class BenchmarkEndpointTests
             0,
             null,
             judge,
-            null,
+            judgeResult,
             null,
             null,
             3,

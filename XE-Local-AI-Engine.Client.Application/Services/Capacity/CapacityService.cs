@@ -141,7 +141,9 @@ public sealed class CapacityService : ICapacityService
         // Vulkan runtime enumerates no devices, admission sizes against system RAM instead of pretending 16 GB of VRAM
         // exists. The audit was warmed above, so this call only re-probes the raw hardware profile under the gate.
         var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct).ConfigureAwait(false);
-        var footprint = await _footprintProvider.ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, ct).ConfigureAwait(false);
+        var footprint = await _footprintProvider
+                              .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct)
+                              .ConfigureAwait(false);
         if (!footprint.IsKnown)
         {
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectFootprintUnknown, ollamaWarning);

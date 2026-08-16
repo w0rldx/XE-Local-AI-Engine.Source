@@ -60,6 +60,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // config hash (their schema/name/approval already ride AllowedTools, which IS hashed). Empty → null so the
             // no-custom-tool package stays byte-identical to before this feature.
             CustomTools = request.CustomTools is { Count: > 0 } resolvedCustomTools ? resolvedCustomTools : null,
+            // Per-send decoding constraint (benchmark judge only). Same posture as SamplingOptions above: NOT fed into
+            // the config hash, so the null path stays byte-identical and the cross-repo digest is unmoved.
+            ResponseJsonSchema = request.ResponseJsonSchema,
             // UNLIKE SupportsThinking/Sampling above, the resolved skill set IS fed into the config hash: skill bodies
             // ride MAF progressive disclosure (NOT in ResolvedSystemPrompt), so a body edit/rename/picklist change would
             // not move the prompt — folding the set (body HASHED, WhenWritingNull) is what invalidates resume.

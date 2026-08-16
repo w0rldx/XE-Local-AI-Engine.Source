@@ -51,7 +51,13 @@ public readonly record struct LlamaServerLaunchPlacement(
 ///     The digest the capability probe recorded for the executable it inspected. A mismatch against
 ///     <see cref="ExecutableSha256" /> means the binary changed between capability probe and launch.
 /// </param>
-/// <param name="LaunchProjection">The allow-listed launch shape this spawn emitted.</param>
+/// <param name="LaunchProjection">
+///     The allow-listed launch shape this spawn EMITTED, read back from the final argument vector the process was
+///     started with (<see cref="LlamaServerLaunchProjection.TryFromArguments" />), falling back to the intended
+///     projection only when that vector could not be parsed. The intended shape is the
+///     <see cref="LlamaServerLaunchProjection.From" /> identity a caller computes before the spawn; when the two
+///     identities differ, <see cref="OmittedOptions" /> usually says why.
+/// </param>
 /// <param name="AuxAssets">Whether anything beyond the base weights was loaded.</param>
 /// <param name="Placement">Measured layer placement plus its raw counts.</param>
 /// <param name="EffectiveContextTokens">
@@ -74,4 +80,13 @@ public sealed record LlamaServerLaunchReceipt(
 {
     /// <summary>The schema version every receipt this build produces carries.</summary>
     public const int CurrentVersion = 1;
+
+    /// <summary>
+    ///     The optional launch options the capability gate REMOVED because the selected runtime does not advertise them
+    ///     — <c>--cache-reuse</c>, <c>--metrics</c>, <c>-lv</c>. A missing KV-cache or flash-attention option is never in
+    ///     here: the gate refuses that launch outright rather than dropping the flag. Empty when nothing was omitted,
+    ///     which is the ordinary case; a non-empty list is the fact that explains an intended-versus-emitted difference
+    ///     instead of leaving it unexplained.
+    /// </summary>
+    public IReadOnlyList<string> OmittedOptions { get; init; } = [];
 }
