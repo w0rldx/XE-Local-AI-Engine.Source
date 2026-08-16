@@ -141,7 +141,8 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
             tool.Description,
             schema,
             RequiresApproval: true,
-            CategoryFor(tool.Kind));
+            CategoryFor(tool.Kind),
+            tool.Mode == CustomToolMode.Fixed);
     }
 
     private AITool BuildExecutable(CustomToolRecord tool, string schema, ICustomToolExecutor executor)

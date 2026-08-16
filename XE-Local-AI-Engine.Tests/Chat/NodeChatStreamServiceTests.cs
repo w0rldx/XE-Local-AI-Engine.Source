@@ -2290,20 +2290,35 @@ public sealed class NodeChatStreamServiceTests
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+        var streamed = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId)).ConfigureAwait(false))
         {
-            drained++;
+            streamed.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(streamed.Count > 0, "Expected the send to stream events.");
         AssertEx.NotNull(runner.LastTimeouts);
         AssertEx.Equal(expected: 900, runner.LastTimeouts!.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, runner.LastTimeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, runner.LastTimeouts.StreamIdleTimeoutSeconds);
+
+        // The same ceiling rides the queued + streaming events so the browser's own stream watchdog can derive its
+        // deadline from the node's ceiling instead of a fixed constant that would pre-empt it. Queued carries it too
+        // (not just streaming) because the collision-queue wait ahead of the streaming transition is the first stretch
+        // of the turn where nothing at all reaches the client.
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued && streamEvent.InvocationTimeoutSeconds == 900);
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming && streamEvent.InvocationTimeoutSeconds == 900);
+        // Every other event type keeps a null ceiling — the field is a targeted hint, not a per-frame tax.
+        AssertEx.True(
+            streamed.TrueForAll(streamEvent => streamEvent.InvocationTimeoutSeconds is null
+                                               || streamEvent.Type == ChatStreamEventTypes.AssistantQueued
+                                               || streamEvent.Type == ChatStreamEventTypes.AssistantStreaming),
+            "Expected only the queued/streaming events to carry the invocation timeout.");
     }
 
     [Test]
@@ -3732,12 +3747,69 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.SelectionPersisted, "A request-supplied selection must be persisted via SetSelectedPathAsync.");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenCompacted_SendsTheSynopsisInPlaceOfTheCoveredHistory()
+    {
+        // Pins the send path's compaction splice, which now runs through CompactionContextResolver — the same helper
+        // the regenerate path uses, so a regression here would silently desync both context builders.
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            persistedSelection: null,
+            requestSelection: null,
+            compactionSummary: "SYNOPSIS",
+            compactionCoversToSequence: 2).ConfigureAwait(false);
+
+        // ONE synthetic synopsis leads the context, followed only by the new user turn (sequence 3) the synopsis
+        // does not cover.
+        AssertEx.Equal(expected: 2, runner.CapturedContext.Count);
+        AssertEx.True(runner.CapturedContext[0].Content.Contains("SYNOPSIS", StringComparison.Ordinal), "The synopsis must lead the context.");
+        AssertEx.Equal(MessageRole.User, runner.CapturedContext[0].Role);
+        AssertEx.Equal("follow up", runner.CapturedContext[1].Content);
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains("answer", StringComparison.Ordinal)),
+            "Messages the synopsis covers must not be re-sent verbatim.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WithASelectionSwitch_DoesNotSendTheSynopsisTheSwitchCleared()
+    {
+        // Sibling of the regenerate case: persisting the request's selection clears the synopsis, so a conversation
+        // read BEFORE that write still carried it — and the turn was built from a synopsis the database no longer had,
+        // on top of history whose covered messages the turn-scoped read had skipped.
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+        var olderVariantId = Guid.NewGuid();
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            olderVariantId,
+            Guid.NewGuid(),
+            persistedSelection: null,
+            requestSelection: new Dictionary<Guid, Guid>
+            {
+                [variantGroupId] = olderVariantId
+            },
+            compactionSummary: "SYNOPSIS",
+            compactionCoversToSequence: 2).ConfigureAwait(false);
+
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains("SYNOPSIS", StringComparison.Ordinal)),
+            "The selection switch cleared the synopsis, so the turn must not send it.");
+        AssertEx.Contains(runner.CapturedContext.Select(message => message.Content).ToList(), "original question");
+        AssertEx.Contains(runner.CapturedContext.Select(message => message.Content).ToList(), "older answer");
+    }
+
     private static async Task<ContextCapturingInvocationRunner> RunWithVariantConversationAsync(Guid conversationId,
         Guid variantGroupId,
         Guid olderVariantId,
         Guid newerVariantId,
         IReadOnlyDictionary<Guid, Guid>? persistedSelection,
-        IReadOnlyDictionary<Guid, Guid>? requestSelection)
+        IReadOnlyDictionary<Guid, Guid>? requestSelection,
+        string? compactionSummary = null,
+        int? compactionCoversToSequence = null)
     {
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -3747,7 +3819,9 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            persistedSelection);
+            persistedSelection,
+            compactionSummary,
+            compactionCoversToSequence);
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
@@ -3799,7 +3873,9 @@ public sealed class NodeChatStreamServiceTests
         Guid variantGroupId,
         Guid olderVariantId,
         Guid newerVariantId,
-        IReadOnlyDictionary<Guid, Guid>? persistedSelection)
+        IReadOnlyDictionary<Guid, Guid>? persistedSelection,
+        string? compactionSummary = null,
+        int? compactionCoversToSequence = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
 
@@ -3852,7 +3928,9 @@ public sealed class NodeChatStreamServiceTests
             LastSeenUtc: 1,
             Purged: false,
             [userTurn, olderVariant, newerVariant],
-            SelectedPath: persistedSelection);
+            SelectedPath: persistedSelection,
+            CompactionSummary: compactionSummary,
+            CompactionSummaryCoversToSequence: compactionCoversToSequence);
         var newUserMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
             RequestId: null,
@@ -3869,11 +3947,26 @@ public sealed class NodeChatStreamServiceTests
         var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, reasoning: null);
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        // Persisting a selection CLEARS the stored compaction synopsis (NodeChatConversationCommands.SetSelectedPathAsync
+        // writes literal NULLs), so the stub models that write: a read after the switch must not still see the synopsis.
+        // Without it the fixed DTO would hide whether the service reads before or after persisting.
+        var selectionPersisted = false;
+        persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo =>
+                   {
+                       selectionPersisted = true;
+                       return callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>();
+                   });
         // The send path reads through GetConversationForTurnAsync. An unstubbed substitute returns null there, and the
         // service then throws "conversation was not found" before any behaviour under test runs.
-        persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(callInfo => callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>());
+        persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
+                   .Returns(_ => selectionPersisted
+                       ? conversation with
+                       {
+                           CompactionSummary = null,
+                           CompactionSummaryCoversToSequence = null
+                       }
+                       : conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(newUserMessage);
         persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>()).Returns(assistantPending);
         persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())

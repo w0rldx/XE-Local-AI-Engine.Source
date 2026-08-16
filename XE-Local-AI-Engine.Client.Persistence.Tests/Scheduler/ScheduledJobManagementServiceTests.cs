@@ -17,7 +17,9 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
 ///     Integration tests for <see cref="ScheduledJobManagementService" />.
@@ -838,6 +840,104 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task CreateJobAsync_ForRunAgentWithoutMaxRuntime_DerivesTheCeilingFromTheNodeMessageTimeout()
+    {
+        var dbPath = GetDatabasePath("create-runagent-derived-maxruntime.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue)).ConfigureAwait(false);
+
+        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
+        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        // (600 s node timeout × 2 turn budgets) + 300 s slack → 1 500 000 ms. Without this the job fell back to the
+        // global 5-minute default and the auto-interrupt killed an unattended run long before its own invocation
+        // deadline — which does not even start until the run holds the shared invocation slot.
+        AssertEx.Equal("1500000",
+            jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            "A run-agent schedule with no operator ceiling must derive one from the node message timeout.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateJobAsync_ForRunAgent_RaisedNodeTimeoutRaisesTheCeiling_AndAnOperatorValueStillWins()
+    {
+        var dbPath = GetDatabasePath("create-runagent-raised-maxruntime.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath, maxMessageRequestTimeoutSeconds: 1800);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var derived = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
+                                        displayName: "Derived ceiling"))
+                                   .ConfigureAwait(false);
+        var explicitCeiling = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
+                                               displayName: "Operator ceiling",
+                                               maxRuntimeSeconds: 90))
+                                          .ConfigureAwait(false);
+
+        var derivedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(derived.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
+                                                            .ConfigureAwait(false));
+        AssertEx.Equal("3900000",
+            derivedDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            "Raising the node message timeout must raise the run-agent ceiling with it ((1800 s × 2) + 300 s slack).");
+
+        var explicitDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(explicitCeiling.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
+                                                             .ConfigureAwait(false));
+        AssertEx.Equal("90000",
+            explicitDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            "An operator-set per-schedule ceiling is authoritative and is never widened by the node setting.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateJobAsync_ForRunAgentWithTheRemovedTemplateDefault_TreatsItAsUnsetAndDerivesTheCeiling()
+    {
+        // Every run-agent schedule created before the template default was removed stored exactly 600 s from the form
+        // pre-fill, which is indistinguishable from an operator typing 600. Honoring it would leave precisely the
+        // schedules this fix exists for still capped below the node timeout, so 600 on THIS template reads as unset.
+        var dbPath = GetDatabasePath("create-runagent-legacy-maxruntime.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var legacy = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
+                                       displayName: "Legacy ceiling",
+                                       maxRuntimeSeconds: 600))
+                                  .ConfigureAwait(false);
+        // The same 600 on ANOTHER template is a plain operator value and must survive untouched.
+        var otherTemplate = await service.CreateJobAsync(ValidCronInput(displayName: "Echo ceiling", maxRuntimeSeconds: 600)).ConfigureAwait(false);
+
+        var legacyDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(legacy.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
+                                                           .ConfigureAwait(false));
+        AssertEx.Equal("1500000",
+            legacyDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            "A stored 600 on run-agent is the removed template default and must be re-derived from the node timeout.");
+
+        var otherDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(otherTemplate.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
+                                                          .ConfigureAwait(false));
+        AssertEx.Equal("600000",
+            otherDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            "The legacy-default carve-out belongs to the run-agent template alone.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // CancelRunAsync — best-effort cancellation outcomes
     // ──────────────────────────────────────────────────────────────────────
@@ -973,7 +1073,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     private static ServiceProvider BuildEnabledProvider(string dbPath,
         IScheduledJobHandler? extraHandler = null,
         ISchedulerEventPublisher? eventPublisher = null,
-        TestEchoScheduledJobHandler? echoHandler = null)
+        TestEchoScheduledJobHandler? echoHandler = null,
+        int maxMessageRequestTimeoutSeconds = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds)
     {
         var services = new ServiceCollection();
         // Use NullLoggerFactory (static singleton) so Quartz's static LogProvider does not cache a reference to a
@@ -1017,6 +1118,17 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         // TimeProvider is required by ScheduledJobManagementService.
         services.AddSingleton(TimeProvider.System);
+
+        // The management service reads the node "Maximum message request timeout" to derive the run-agent template's
+        // implicit Quartz ceiling; AddNodeScheduler does not own that store, so the tests supply it.
+        var storedNodeSettings = new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = maxMessageRequestTimeoutSeconds
+        };
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(storedNodeSettings);
+        nodeSettingsStore.Load(Arg.Any<CancellationToken>()).Returns(storedNodeSettings);
+        services.AddSingleton(nodeSettingsStore);
 
         var config = BuildConfig($"Data Source={dbPath}");
         services.AddSingleton(config);

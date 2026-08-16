@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -73,6 +74,10 @@ public sealed class LocalChatHub(
     ///     assistant-queued/streaming/delta/completed. Mints the variant placeholder, drives it through the shared
     ///     runner/pump, and persists INTO that placeholder — never overwriting the original. Throws for an
     ///     Origin=Remote (view-only) conversation or an unknown conversation/message.
+    ///     <para>
+    ///         <paramref name="samplingOptions" /> is the LAST wire argument on purpose: the client passes the same
+    ///         developer-gated overrides a send carries, and appending keeps the existing positional order intact.
+    ///     </para>
     /// </summary>
     public IAsyncEnumerable<ChatStreamEvent> RegenerateMessage(Guid conversationId,
         Guid originalMessageId,
@@ -80,9 +85,11 @@ public sealed class LocalChatHub(
         bool useLocalTools,
         bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
+        SamplingOptions? samplingOptions,
         CancellationToken cancellationToken)
     {
-        return TrackAttachment(regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken),
+        return TrackAttachment(
+            regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken),
             cancellationToken);
     }
 

@@ -17,7 +17,7 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict, stripSignalRHubErrorPrefix } from "@/features/chat/api/NodeChatConflict";
-import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
+import { clientWatchdogFailureCategory, StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
 import {
 	accumulateToolTimelineEntry,
 	appendOptimisticNodeChatSend,
@@ -914,10 +914,21 @@ export function Chat() {
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					// A send against a remote-origin conversation is rejected by the server-side mutation guard; over
 					// SignalR that arrives as a HubException leading with the ReadOnlyConversation token, not a 409.
-					const message = isNodeChatReadOnlyConflict(error)
-						? t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")
-						: errorMessage(error);
-					const failureCategory = error instanceof StreamWatchdogError ? error.category : undefined;
+					// The client watchdog is the ONE failure the browser itself raises, so it must say so: its raw
+					// message ("Local chat stream timed out (inter-chunk-stall).") reads like a node timeout and is what
+					// made a premature client-side give-up indistinguishable from the node's own ceiling. It gets a
+					// translated sentence plus its own reason code; every other error keeps the backend's text, which
+					// now names which node-side bound fired.
+					const watchdogNotice = error instanceof StreamWatchdogError ? streamWatchdogNotice(error.category) : undefined;
+					let message: string;
+					if (isNodeChatReadOnlyConflict(error)) {
+						message = t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.");
+					} else if (watchdogNotice) {
+						message = t(watchdogNotice.key, watchdogNotice.fallback);
+					} else {
+						message = errorMessage(error);
+					}
+					const failureCategory = watchdogNotice ? clientWatchdogFailureCategory : undefined;
 					// Prefer the running reduced state (which includes any delta whose frame we just cancelled) over the
 					// query cache so a failed turn keeps every received partial token, not the last flushed frame.
 					const currentConversation =
@@ -1014,6 +1025,9 @@ export function Chat() {
 					// Send the active conversation-tree path so the regenerated turn's context follows the selected
 					// branch only. Omit when nothing was navigated so the server keeps the stored map.
 					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
+					// Same developer-mode gate the send path applies: overrides ride only when developer mode is on and
+					// at least one field is set, so a plain regenerate stays byte-identical to today.
+					developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
 					abortController.signal,
 				)) {
 					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache so
@@ -1084,11 +1098,13 @@ export function Chat() {
 		},
 		[
 			activeRevisionByGroup,
+			developerMode,
 			displayConversations,
 			knowledgeBaseEnabled,
 			queryClient,
 			reasoningEffort,
 			refreshConversation,
+			samplingOptions,
 			selectedConversationId,
 			streamScheduler,
 			t,

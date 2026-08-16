@@ -19935,24 +19935,9 @@
             "type": "integer",
             "format": "int32"
           },
-          "samplingDefaults": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsSamplingOptions"
-              }
-            ]
-          },
           "voiceFeatureEnabled": {
             "type": "boolean",
             "nullable": true
-          },
-          "allowedVoiceModels": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "type": "string"
-            }
           },
           "defaultVoiceProfile": {
             "type": "string",
@@ -19964,73 +19949,6 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
             }
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientModelsSamplingOptions": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "temperature": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
-          },
-          "topP": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
-          },
-          "topK": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "minP": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
-          },
-          "maxOutputTokens": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "repeatPenalty": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
-          },
-          "repeatLastN": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "presencePenalty": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
-          },
-          "frequencyPenalty": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
-          },
-          "seed": {
-            "type": "string",
-            "nullable": true
-          },
-          "stop": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "type": "string"
-            }
-          },
-          "numCtx": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
           }
         }
       },
@@ -20180,24 +20098,9 @@
             "format": "int32",
             "nullable": true
           },
-          "samplingDefaults": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsSamplingOptions"
-              }
-            ]
-          },
           "voiceFeatureEnabled": {
             "type": "boolean",
             "nullable": true
-          },
-          "allowedVoiceModels": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "type": "string"
-            }
           },
           "defaultVoiceProfile": {
             "type": "string",
@@ -22432,7 +22335,8 @@
           "requiresApproval",
           "source",
           "category",
-          "effectiveRequiresApproval"
+          "effectiveRequiresApproval",
+          "sessionScopeEligible"
         ],
         "properties": {
           "name": {
@@ -22451,6 +22355,9 @@
             "type": "string"
           },
           "effectiveRequiresApproval": {
+            "type": "boolean"
+          },
+          "sessionScopeEligible": {
             "type": "boolean"
           }
         }

@@ -33,6 +33,9 @@ export interface ToolEntryInput {
 	// Set while the tool waits on the operator's approval decision; the approval request id the resolve
 	// endpoint keys on. Cleared once the tool completes/rejects.
 	pendingApprovalRequestId?: string;
+	// The backend's per-request answer to "can a session-scoped approval be remembered for this call?". Undefined when
+	// the backend did not resolve it; cleared with the prompt.
+	pendingApprovalSessionScopeEligible?: boolean;
 	// Set while an `ask_user` call waits on the operator's answer; the question payload the inline card renders and
 	// posts back. Cleared on the same terms as the approval prompt above.
 	pendingQuestion?: PendingUserQuestion;
@@ -68,6 +71,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		result: entry.result,
 		requiresApproval: entry.requiresApproval,
 		pendingApprovalRequestId: entry.pendingApprovalRequestId,
+		pendingApprovalSessionScopeEligible: entry.pendingApprovalSessionScopeEligible,
 		pendingQuestion: entry.pendingQuestion,
 	};
 }

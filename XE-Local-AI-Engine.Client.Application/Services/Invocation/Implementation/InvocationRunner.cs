@@ -44,6 +44,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public sealed partial class InvocationRunner : IInvocationRunner
 {
     private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
+
+    // A tool call that ran out of time waiting for its RESULT (TurnPolicy.ToolResultTimeout, i.e. the package's
+    // ToolCallTimeoutSeconds or the node-global pending-tool-call age). Split out of AgentToolCallFailureMessage so a
+    // tool-side timeout is attributable rather than reading like an ordinary tool error. Carries no tool name, so it
+    // stays as path-free as the constant it replaces on this arm.
+    private const string ToolCallTimedOutMessage = "A tool call timed out waiting for its result.";
     private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
     private const string ProviderUnavailableMessage = "Provider unreachable.";
 
@@ -280,9 +286,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // A concrete-type test rather than a widened IToolApprovalPolicy: the interface is the cross-project AI.Agent
         // contract for one call's yes/no verdict, and the node-only session-scope knob has no place on it. Any other
-        // implementation leaves session scope available (today's behaviour).
+        // implementation leaves session scope available (today's behaviour). Read through the SHARED predicate the node
+        // tool-catalog response also uses, so the runner and the chat card can never disagree about the switch.
         ArgumentNullException.ThrowIfNull(approvalPolicy);
-        _skillSessionScopeDisabled = approvalPolicy is NodeToolApprovalPolicy { SkillSessionScopeDisabled: true };
+        _skillSessionScopeDisabled = SessionApprovalEligibility.IsSessionScopeDisabled(approvalPolicy);
 
         // Subscribe for the process lifetime; both are singletons, so there is no unsubscribe path (mirrors
         // InvocationResumeRegistry's subscription to the same dispatcher).
@@ -521,14 +528,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
             CancelPendingToolCalls(package.InvocationId);
             var cancellationOrigin = ResolveCancellationOrigin();
             var failureCategory = ClassifyCancellation(cancellationOrigin);
+            // The breadcrumb: one fixed, path-free sentence per cancellation cause. Every cause used to share the single
+            // string "Invocation timed out or was cancelled", so a turn that ended at the node's message-request ceiling,
+            // one the operator stopped, and one the detached-run reaper collected were indistinguishable in the persisted
+            // failure — which is exactly why a live turn reported "Cancelled" at ~550s could not be attributed to anything.
+            var cancellationMessage = DescribeCancellation(cancellationOrigin, turnPolicy.InvocationTimeout);
             // AUD4-19: count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory(cancellationOrigin)));
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
-                await TrySendFailureAsync(sender, context, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
+                await TrySendFailureAsync(sender, context, cancellationMessage, failureCategory).ConfigureAwait(false);
             }
         }
         catch (Exception exception)
@@ -1591,7 +1603,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 RequestId = requestId,
                 CallId = approvalCallId,
                 ToolName = string.IsNullOrEmpty(approvalToolName) ? approvalCallId : approvalToolName,
-                Description = approvalPayload.Description
+                Description = approvalPayload.Description,
+                // The runner already resolved whether this exact call can be memoized (sessionApprovalKey above), so it
+                // is the authority on whether the card may offer "Approve for this session". Without it the card fell
+                // back to the node tool catalog, which does not carry the MAF skill tools at all and therefore offered
+                // the button for run_skill_script and imported skills, where the click silently degraded to "Once".
+                SessionScopeEligible = sessionApprovalKey is not null
             }).ConfigureAwait(false);
 
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -1690,7 +1707,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // bound to the tool's Version (mapped onto ApprovalMemoKey.SkillVersion) so a mid-conversation edit that bumps the
         // version invalidates the grant and re-prompts — mirroring the skill-version binding. ResourceName is null (a
         // custom tool has no sub-resource). A tool the package does not carry (a mid-turn delete) is not remembered.
-        if (toolName.StartsWith(CustomToolValidation.ToolNamePrefix, StringComparison.Ordinal))
+        if (SessionApprovalEligibility.IsCustomToolName(toolName))
         {
             if (package.CustomTools is not { Count: > 0 } customTools)
             {
@@ -1698,7 +1715,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             var customTool = customTools.FirstOrDefault(candidate => string.Equals(candidate.Name, toolName, StringComparison.Ordinal));
-            if (customTool is null || !customTool.IsFixed)
+            if (customTool is null || !SessionApprovalEligibility.IsToolEligible(toolName, customTool.IsFixed))
             {
                 return null;
             }
@@ -1711,12 +1728,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             return null;
         }
 
-#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
-        var isResourceRead = string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
-        if (!isResourceRead && !string.Equals(toolName, AgentSkillsProvider.LoadSkillToolName, StringComparison.Ordinal))
+        if (!SessionApprovalEligibility.IsToolEligible(toolName, isFixedCustomTool: false))
         {
             return null;
         }
+
+#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
+        var isResourceRead = string.Equals(toolName, AgentSkillsProvider.ReadSkillResourceToolName, StringComparison.Ordinal);
 #pragma warning restore MAAI001
 
         var call = approvalRequest.ToolCall as FunctionCallContent;
@@ -2154,17 +2172,49 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             // Nobody asked and the caller's token is still live, so a cancelled invocation source can only be its own
-            // CancelAfter watchdog. An OperationCanceledException arriving with nothing cancelled is not attributable
-            // to this node's timeout and stays a plain cancellation.
+            // CancelAfter watchdog. With NOTHING of ours cancelled the OperationCanceledException came from below us —
+            // an HTTP client timeout surfaces as a TaskCanceledException on a token nobody here owns (the same shape
+            // ProviderStreamResilience.IsTransient treats as a provider timeout). Calling that "stopped externally" was
+            // wrong twice over: it blamed a shutdown/disconnect that never happened and hid a real timeout behind the
+            // Cancelled category.
             return _invocationCancellationTokenSource?.IsCancellationRequested == true
                 ? CancellationOrigin.Watchdog
-                : CancellationOrigin.Shutdown;
+                : CancellationOrigin.ProviderTimeout;
         }
     }
 
     private static FailureCategory ClassifyCancellation(CancellationOrigin origin)
     {
-        return origin == CancellationOrigin.Watchdog ? FailureCategory.Timeout : FailureCategory.Cancelled;
+        return origin is CancellationOrigin.Watchdog or CancellationOrigin.ProviderTimeout
+            ? FailureCategory.Timeout
+            : FailureCategory.Cancelled;
+    }
+
+    /// <summary>
+    ///     The fixed, path-free sentence surfaced (and persisted) for a cancelled turn, naming WHICH bound ended it.
+    ///     <see cref="FailureCategory" /> alone cannot carry this: it collapses the invocation watchdog, the stream-idle
+    ///     watchdog and an HTTP timeout into one <see cref="FailureCategory.Timeout" /> value, and adding a category
+    ///     would drift the generated OpenAPI/zod client — so the message is the breadcrumb channel, exactly as it already
+    ///     is for <c>StreamIdleTimeoutException</c> (whose own message names the stream-idle bound and its seconds).
+    ///     Only the resolved origin and the turn's own configured ceiling are interpolated; nothing here can carry a
+    ///     host, path, or model name.
+    /// </summary>
+    private static string DescribeCancellation(CancellationOrigin origin, TimeSpan invocationTimeout)
+    {
+        return origin switch
+        {
+            CancellationOrigin.User => "Stopped by user.",
+            CancellationOrigin.Watchdog =>
+                $"Timed out: the response exceeded the node maximum message request timeout ({invocationTimeout.TotalSeconds:0}s).",
+            CancellationOrigin.DetachedGraceExpired =>
+                "Stopped: no client was attached to this run and the disconnect grace period expired.",
+            CancellationOrigin.ProviderTimeout =>
+                "Timed out: the model provider stopped responding before the node's own ceiling was reached.",
+            // Shutdown (and the unreachable Unknown): the host token, the caller's token, or a disconnect-driven
+            // CancelAll. The metric collapses all three under "shutdown" too, so the sentence names both plausible
+            // causes rather than asserting a shutdown that may not have happened.
+            _ => "Stopped externally (node shutdown or client disconnect)."
+        };
     }
 
     // The cancellation cause for the invocation_cancelled_total metric (AUD4-19): an explicit user cancel, the
@@ -2177,6 +2227,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             CancellationOrigin.User => "user",
             CancellationOrigin.Watchdog => "watchdog",
             CancellationOrigin.DetachedGraceExpired => "detached_grace",
+            CancellationOrigin.ProviderTimeout => "provider_timeout",
             _ => "shutdown"
         };
     }
@@ -2291,6 +2342,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ///     plain cancellation like a user stop — the turn was abandoned, not timed out — but kept distinct so the
         ///     logs and the cancellation metric can tell an abandoned turn from one the operator stopped.
         /// </summary>
-        DetachedGraceExpired = 4
+        DetachedGraceExpired = 4,
+
+        /// <summary>
+        ///     No token of ours fired: the cancellation came from below the runner, which in practice is the provider's
+        ///     own HTTP timeout (a <see cref="TaskCanceledException" /> on a token this node does not own). Classified
+        ///     as a <see cref="FailureCategory.Timeout" />, not a cancellation — nothing stopped this turn on purpose.
+        /// </summary>
+        ProviderTimeout = 5
     }
 }

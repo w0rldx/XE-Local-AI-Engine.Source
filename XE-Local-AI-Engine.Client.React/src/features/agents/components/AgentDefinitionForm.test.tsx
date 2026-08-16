@@ -77,6 +77,7 @@ const catalogTools: ToolCatalogEntry[] = [
 		source: { kind: "builtin", serverSlug: null },
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
+		sessionScopeEligible: false,
 	},
 	{
 		name: "Calculate",
@@ -85,6 +86,7 @@ const catalogTools: ToolCatalogEntry[] = [
 		source: { kind: "builtin", serverSlug: null },
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
+		sessionScopeEligible: false,
 	},
 ];
 

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 // Aliased (not a blanket `using OpenAI.Chat`) so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this
@@ -78,7 +79,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplyThinkingSwitch(options));
+        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyThinkingSwitch(options)));
         var healed = false;
         while (true)
         {
@@ -134,7 +135,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplyThinkingSwitch(options));
+        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyThinkingSwitch(options)));
         var healed = false;
         while (true)
         {
@@ -272,6 +273,93 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return baseOptions;
         };
         return patched;
+    }
+
+    /// <summary>
+    ///     When the turn sets any sampling knob the MEAI OpenAI adapter does not map — <see cref="ChatOptions.TopK" />,
+    ///     or <see cref="SamplingOptionKeys.MinP" /> / <see cref="SamplingOptionKeys.RepeatPenalty" /> /
+    ///     <see cref="SamplingOptionKeys.RepeatLastN" /> on <see cref="ChatOptions.AdditionalProperties" /> — returns a
+    ///     clone of <paramref name="options" /> whose <see cref="ChatOptions.RawRepresentationFactory" /> yields a
+    ///     <see cref="ChatCompletionOptions" /> with those knobs patched in as top-level body fields, so they reach
+    ///     llama-server on the wire. With none of them set the options are returned unchanged, so every other request is
+    ///     byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above
+    ///     sets one) is composed rather than dropped.
+    ///     <para>
+    ///         Why this must exist: <c>Microsoft.Extensions.AI.OpenAI</c>'s <c>ToOpenAIOptions</c> maps only
+    ///         Temperature/TopP/FrequencyPenalty/PresencePenalty/MaxOutputTokens/Seed/StopSequences — <c>TopK</c> has no
+    ///         OpenAI counterpart and unrecognised <c>AdditionalProperties</c> are dropped — so without this the
+    ///         developer-gated per-send sampling overrides silently did nothing on the default (llama.cpp) runtime while
+    ///         appearing to apply.
+    ///     </para>
+    ///     <para>
+    ///         Why the four names are safe: llama-server's OpenAI-compatible handler copies every unrecognised body
+    ///         property straight onto its own request params (verified in the pinned build b10201,
+    ///         <c>tools/server/server-common.cpp</c> <c>oaicompat_chat_params_parse</c> "Copy remaining properties to
+    ///         llama_params"), where <c>tools/server/server-schema.cpp</c> declares <c>top_k</c>, <c>min_p</c>,
+    ///         <c>repeat_penalty</c> and <c>repeat_last_n</c> as first-class sampling fields. <c>num_ctx</c> is
+    ///         deliberately excluded: llama-server's context window is fixed by the <c>--ctx-size</c> it was launched
+    ///         with, so a per-request value is not honoured — that knob stays a client-side history budget.
+    ///     </para>
+    /// </summary>
+    internal static ChatOptions? ApplySamplingPassthrough(ChatOptions? options)
+    {
+        if (options is null)
+        {
+            return null;
+        }
+
+        var topK = options.TopK;
+        var properties = options.AdditionalProperties;
+        var minP = TryReadSingle(properties, SamplingOptionKeys.MinP);
+        var repeatPenalty = TryReadSingle(properties, SamplingOptionKeys.RepeatPenalty);
+        var repeatLastN = TryReadInt32(properties, SamplingOptionKeys.RepeatLastN);
+
+        if (topK is null && minP is null && repeatPenalty is null && repeatLastN is null)
+        {
+            return options;
+        }
+
+        var priorFactory = options.RawRepresentationFactory;
+        var patched = options.Clone();
+        patched.RawRepresentationFactory = client =>
+        {
+            var baseOptions = priorFactory?.Invoke(client) as ChatCompletionOptions ?? new ChatCompletionOptions();
+            // SCME0001: same scoped suppression as ApplyThinkingSwitch above — ChatCompletionOptions.Patch is the only
+            // seam that serializes a body field the typed OpenAI chat schema does not model.
+#pragma warning disable SCME0001
+            if (topK is { } resolvedTopK)
+            {
+                baseOptions.Patch.Set("$.top_k"u8, resolvedTopK);
+            }
+
+            if (minP is { } resolvedMinP)
+            {
+                baseOptions.Patch.Set("$.min_p"u8, resolvedMinP);
+            }
+
+            if (repeatPenalty is { } resolvedRepeatPenalty)
+            {
+                baseOptions.Patch.Set("$.repeat_penalty"u8, resolvedRepeatPenalty);
+            }
+
+            if (repeatLastN is { } resolvedRepeatLastN)
+            {
+                baseOptions.Patch.Set("$.repeat_last_n"u8, resolvedRepeatLastN);
+            }
+#pragma warning restore SCME0001
+            return baseOptions;
+        };
+        return patched;
+    }
+
+    private static float? TryReadSingle(AdditionalPropertiesDictionary? properties, string key)
+    {
+        return properties is not null && properties.TryGetValue<float>(key, out var value) && !float.IsNaN(value) ? value : null;
+    }
+
+    private static int? TryReadInt32(AdditionalPropertiesDictionary? properties, string key)
+    {
+        return properties is not null && properties.TryGetValue<int>(key, out var value) ? value : null;
     }
 
     /// <summary>
