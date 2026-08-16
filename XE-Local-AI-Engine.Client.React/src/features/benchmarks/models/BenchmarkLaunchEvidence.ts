@@ -80,7 +80,11 @@ const hashSegment = /(sha256|hash|identity|fingerprint)$/i;
 /** Hash-like fields are truncated for display; the untruncated value stays available to copy. */
 export const isEvidenceHashKey = (key: string): boolean => hashSegment.test(lastSegment(key));
 
-export function formatEvidenceValue(key: string, value: unknown): string {
+/**
+ * @param truncateHashes Pass false where two values are shown side by side and known to differ: two different hashes
+ * sharing a 12-character prefix render as the SAME truncated string, which reads as a table flagging identical values.
+ */
+export function formatEvidenceValue(key: string, value: unknown, truncateHashes = true): string {
 	if (value === null || value === undefined || value === "") {
 		return "—";
 	}
@@ -93,5 +97,5 @@ export function formatEvidenceValue(key: string, value: unknown): string {
 		return value >= 1024 ** 2 ? `${(value / 1024 ** 2).toFixed(1)} MB` : `${value} B`;
 	}
 	const rendered = String(value);
-	return isEvidenceHashKey(key) && rendered.length > 20 ? `${rendered.slice(0, 12)}…` : rendered;
+	return truncateHashes && isEvidenceHashKey(key) && rendered.length > 20 ? `${rendered.slice(0, 12)}…` : rendered;
 }

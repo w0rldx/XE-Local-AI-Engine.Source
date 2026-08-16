@@ -116,4 +116,50 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		expect(screen.getByTestId("benchmark-primary-receipt")).toBeTruthy();
 		expect(screen.getByText("receipt.variant")).toBeTruthy();
 	});
+
+	// Each row stands on its own: a digest drift says nothing about the projection identity, which hashed the same.
+	// (What made this look broken live was the display, not the flag — see the truncation case below.)
+	it("marks only the row that actually differs", () => {
+		renderWithProviders(
+			<BenchmarkLaunchEvidencePanel
+				run={detail({
+					primaryLaunch: {
+						...noBenchmarkLaunchFacts,
+						intendedLaunchIdentity: "identity-1",
+						effectiveLaunchIdentity: "identity-1",
+						intendedExecutableSha256: "a".repeat(64),
+						executableSha256: "b".repeat(64),
+					},
+				})}
+			/>,
+		);
+
+		const rows = [...screen.getByTestId("benchmark-intended-effective-differs-table").querySelectorAll("tbody tr")];
+		const marked = rows.filter((row) => row.getAttribute("data-differs") === "true").map((row) => row.textContent ?? "");
+
+		expect(marked).toHaveLength(1);
+		expect(marked[0]).toContain("launch.executableSha256");
+	});
+
+	// Two different hashes sharing a 12-character prefix rendered as the same truncated string, so a correctly flagged
+	// row read as "these are identical, why is it highlighted?". A differing row shows both values whole.
+	it("shows a differing hash pair in full instead of a shared truncated prefix", () => {
+		const intended = `${"c".repeat(12)}${"1".repeat(52)}`;
+		const effective = `${"c".repeat(12)}${"2".repeat(52)}`;
+		renderWithProviders(
+			<BenchmarkLaunchEvidencePanel
+				run={detail({
+					primaryLaunch: {
+						...noBenchmarkLaunchFacts,
+						intendedLaunchIdentity: intended,
+						effectiveLaunchIdentity: effective,
+					},
+				})}
+			/>,
+		);
+
+		const table = screen.getByTestId("benchmark-intended-effective-differs-table");
+		expect(table.textContent).toContain(intended);
+		expect(table.textContent).toContain(effective);
+	});
 });
