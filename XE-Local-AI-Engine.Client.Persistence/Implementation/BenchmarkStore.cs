@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -131,6 +132,20 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             RequestedContextTokens = command.RequestedContextTokens,
             PrimaryStatus = BenchmarkPrimaryStatus.Queued,
             JudgeStatus = command.JudgeEnabled ? BenchmarkJudgeStatus.Pending : BenchmarkJudgeStatus.Disabled,
+            PrimaryVariant = command.PrimaryLaunchIntent?.Variant,
+            PrimaryKvCacheType = command.PrimaryLaunchIntent?.KvCacheType,
+            PrimaryKvCacheTypeSource = command.PrimaryLaunchIntent?.KvCacheTypeSource,
+            PrimaryKvAutoReason = command.PrimaryLaunchIntent?.KvAutoReason,
+            PrimaryFlashAttentionMode = command.PrimaryLaunchIntent?.FlashAttentionMode,
+            PrimaryIntendedLaunchIdentity = command.PrimaryLaunchIntent?.IntendedLaunchIdentity,
+            PrimaryIntendedExecutableSha256 = command.PrimaryLaunchIntent?.IntendedExecutableSha256,
+            JudgeVariant = command.JudgeLaunchIntent?.Variant,
+            JudgeKvCacheType = command.JudgeLaunchIntent?.KvCacheType,
+            JudgeKvCacheTypeSource = command.JudgeLaunchIntent?.KvCacheTypeSource,
+            JudgeKvAutoReason = command.JudgeLaunchIntent?.KvAutoReason,
+            JudgeFlashAttentionMode = command.JudgeLaunchIntent?.FlashAttentionMode,
+            JudgeIntendedLaunchIdentity = command.JudgeLaunchIntent?.IntendedLaunchIdentity,
+            JudgeIntendedExecutableSha256 = command.JudgeLaunchIntent?.IntendedExecutableSha256,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -433,6 +448,20 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return ToRecord(run);
     }
 
+    public Task<bool> MarkPrimaryLaunchReadyAsync(Guid runId,
+        long workItemId,
+        long claimedWorkVersion,
+        BenchmarkLaunchReceiptCommand command,
+        CancellationToken cancellationToken = default) =>
+        MarkLaunchReadyAsync(runId, BenchmarkWorkKind.Primary, workItemId, claimedWorkVersion, command, cancellationToken);
+
+    public Task<bool> MarkJudgeLaunchReadyAsync(Guid runId,
+        long workItemId,
+        long claimedWorkVersion,
+        BenchmarkLaunchReceiptCommand command,
+        CancellationToken cancellationToken = default) =>
+        MarkLaunchReadyAsync(runId, BenchmarkWorkKind.Judge, workItemId, claimedWorkVersion, command, cancellationToken);
+
     public async Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -629,6 +658,79 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return ToRecord(run);
     }
 
+    /// <summary>
+    ///     Insert-if-null write of one phase's launch evidence. Keyed by the immutable work item, so a run version
+    ///     that moved on (a score, a cancellation request) cannot invalidate the checkpoint, and no status is touched.
+    /// </summary>
+    private async Task<bool> MarkLaunchReadyAsync(Guid runId,
+        BenchmarkWorkKind kind,
+        long workItemId,
+        long claimedWorkVersion,
+        BenchmarkLaunchReceiptCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
+                                   .ConfigureAwait(false);
+
+        // Running at the claimed version is the ordinary case; Cancelled at its successor is the proven cancel-first
+        // ordering, where the work item was terminalized (Version + 1) while this launch was still coming up.
+        if (work is null
+            || work.RunId != runId
+            || work.Kind != kind
+            || !((work.Status == BenchmarkWorkStatus.Running && work.Version == claimedWorkVersion)
+                 || (work.Status == BenchmarkWorkStatus.Cancelled && work.Version == claimedWorkVersion + 1)))
+        {
+            return false;
+        }
+
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var receiptJson = command.ReceiptJson is null ? null : Encoding.UTF8.GetBytes(command.ReceiptJson);
+        var environmentFactsJson = Encoding.UTF8.GetBytes(command.EnvironmentFactsJson);
+        if (kind == BenchmarkWorkKind.Primary)
+        {
+            if (run.PrimaryLaunchReceiptJson is not null || run.PrimaryEnvironmentFactsJson is not null)
+            {
+                return false;
+            }
+
+            run.PrimaryLaunchReceiptJson = receiptJson;
+            run.PrimaryEnvironmentFactsJson = environmentFactsJson;
+            run.PrimaryReceiptHash = command.ReceiptHash;
+            run.PrimaryEnvironmentFactsHash = command.EnvironmentFactsHash;
+            run.PrimaryEffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
+            run.PrimaryEffectiveBackend = command.EffectiveBackend;
+            run.PrimaryPlacementOffloaded = command.PlacementOffloaded;
+            run.PrimaryPlacementTotal = command.PlacementTotal;
+            run.PrimaryLaunchKvCacheTypeSource = command.KvCacheTypeSource;
+        }
+        else
+        {
+            if (run.JudgeLaunchReceiptJson is not null || run.JudgeEnvironmentFactsJson is not null)
+            {
+                return false;
+            }
+
+            run.JudgeLaunchReceiptJson = receiptJson;
+            run.JudgeEnvironmentFactsJson = environmentFactsJson;
+            run.JudgeReceiptHash = command.ReceiptHash;
+            run.JudgeEnvironmentFactsHash = command.EnvironmentFactsHash;
+            run.JudgeEffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
+            run.JudgeEffectiveBackend = command.EffectiveBackend;
+            run.JudgePlacementOffloaded = command.PlacementOffloaded;
+            run.JudgePlacementTotal = command.PlacementTotal;
+            run.JudgeLaunchKvCacheTypeSource = command.KvCacheTypeSource;
+        }
+
+        // The run's own version is deliberately left alone: the checkpoint is evidence, not a lifecycle transition,
+        // and bumping it would 409 an operator cancellation that is holding the version it just read.
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
     private static void TerminalizeWork(BenchmarkWorkItem work,
         BenchmarkWorkStatus status,
         string? errorMessage,
@@ -793,7 +895,43 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             entity.EffectiveContextTokens, entity.DurationMs, entity.TotalTokens, entity.TokensPerSecond, CopyOptional(entity.OutputPartsJson),
             entity.LastStreamSequence, entity.UserScore, entity.JudgeStatus, CopyOptional(entity.JudgeResultJson), entity.PrimaryErrorMessage,
             entity.JudgeErrorMessage, entity.Version, entity.CreatedAtUtc, entity.StartedAtUtc, entity.PrimaryCompletedAtUtc,
-            entity.JudgeStartedAtUtc, entity.JudgeCompletedAtUtc, entity.UpdatedAtUtc);
+            entity.JudgeStartedAtUtc, entity.JudgeCompletedAtUtc, entity.UpdatedAtUtc,
+            ToIntent(entity.PrimaryVariant, entity.PrimaryKvCacheType, entity.PrimaryKvCacheTypeSource, entity.PrimaryKvAutoReason,
+                entity.PrimaryFlashAttentionMode, entity.PrimaryIntendedLaunchIdentity, entity.PrimaryIntendedExecutableSha256),
+            ToIntent(entity.JudgeVariant, entity.JudgeKvCacheType, entity.JudgeKvCacheTypeSource, entity.JudgeKvAutoReason,
+                entity.JudgeFlashAttentionMode, entity.JudgeIntendedLaunchIdentity, entity.JudgeIntendedExecutableSha256),
+            ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
+                entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
+                entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchKvCacheTypeSource),
+            ToEvidence(entity.JudgeLaunchReceiptJson, entity.JudgeEnvironmentFactsJson, entity.JudgeReceiptHash,
+                entity.JudgeEnvironmentFactsHash, entity.JudgeEffectiveLaunchIdentity, entity.JudgeEffectiveBackend,
+                entity.JudgePlacementOffloaded, entity.JudgePlacementTotal, entity.JudgeLaunchKvCacheTypeSource));
+
+    private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
+        string? kvCacheType,
+        string? kvCacheTypeSource,
+        string? kvAutoReason,
+        string? flashAttentionMode,
+        string? intendedLaunchIdentity,
+        string? intendedExecutableSha256) =>
+        variant is null || kvCacheType is null || kvCacheTypeSource is null || flashAttentionMode is null || intendedLaunchIdentity is null
+            ? null
+            : new BenchmarkRunLaunchIntent(variant, kvCacheType, kvCacheTypeSource, kvAutoReason, flashAttentionMode,
+                intendedLaunchIdentity, intendedExecutableSha256);
+
+    private static BenchmarkRunLaunchEvidence? ToEvidence(byte[]? receiptJson,
+        byte[]? environmentFactsJson,
+        string? receiptHash,
+        string? environmentFactsHash,
+        string? effectiveLaunchIdentity,
+        string? effectiveBackend,
+        int? placementOffloaded,
+        int? placementTotal,
+        string? kvCacheTypeSource) =>
+        receiptJson is null && environmentFactsJson is null
+            ? null
+            : new BenchmarkRunLaunchEvidence(CopyOptional(receiptJson), CopyOptional(environmentFactsJson), receiptHash,
+                environmentFactsHash, effectiveLaunchIdentity, effectiveBackend, placementOffloaded, placementTotal, kvCacheTypeSource);
 
     private static ReadOnlyMemory<byte>? CopyOptional(byte[]? value)
     {

@@ -171,6 +171,7 @@ public sealed class BenchmarkJudgeExecutorTests
             EndpointBinding(),
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations,
+            new StubEnvironmentFacts(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, workVersion, run), CancellationToken.None);
@@ -179,13 +180,60 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.False(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
     }
 
+    [Test]
+    public async Task Execute_CheckpointsTheJudgeLaunchKeyedByTheClaimedWorkItemBeforeInference()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 4) with
+        {
+            JudgeLaunchIntent = new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto,
+                "cpu-variant", LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null)
+        };
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        BenchmarkLaunchReceiptCommand? checkpoint = null;
+        store.MarkJudgeLaunchReadyAsync(run.Id, 2, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
+             .Returns(true);
+        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 JudgeStatus = BenchmarkJudgeStatus.Succeeded,
+                 Version = 5
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        var checkpointedBeforeInference = false;
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  checkpointedBeforeInference = checkpoint is not null;
+                  var invocationId = call.Arg<InvocationExecutionContext>().Package.InvocationId;
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, "{\"schemaVersion\":1,\"score\":4,\"rationale\":\"fine\"}")));
+                  return Task.CompletedTask;
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+
+        AssertEx.True(checkpointedBeforeInference, "The judge launch evidence must be durable before the first token is generated.");
+        AssertEx.Equal(BenchmarkKvCacheType.SourceAuto, AssertEx.NotNull(checkpoint).KvCacheTypeSource);
+        AssertEx.NotNullOrEmpty(checkpoint!.EnvironmentFactsHash);
+        _ = store.Received(1).MarkJudgeLaunchReadyAsync(run.Id, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<CancellationToken>());
+    }
+
     private static BenchmarkJudgeExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,
         FakeLease lease,
         ICapacityService capacity,
         IWorkerEventDispatcher dispatcher,
         IInvocationRunner runner,
-        ILlamaServerProcessSupervisor? supervisor = null) =>
+        ILlamaServerProcessSupervisor? supervisor = null,
+        IBenchmarkCancellationRegistry? cancellations = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -197,8 +245,15 @@ public sealed class BenchmarkJudgeExecutorTests
             FixedVariantSelector(),
             EndpointBinding(),
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
-            new BenchmarkCancellationRegistry(),
+            cancellations ?? new BenchmarkCancellationRegistry(),
+            new StubEnvironmentFacts(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
+
+    private sealed class StubEnvironmentFacts : IRuntimeEnvironmentFactsProvider
+    {
+        public Task<RuntimeEnvironmentFactsV1> CaptureAsync(GpuVariant variant, CancellationToken ct) =>
+            Task.FromResult(new RuntimeEnvironmentFactsV1(1, null, null, null, 42, ["hardware"]));
+    }
 
     private static InvocationState State(Guid invocationId, string content) =>
         new()
