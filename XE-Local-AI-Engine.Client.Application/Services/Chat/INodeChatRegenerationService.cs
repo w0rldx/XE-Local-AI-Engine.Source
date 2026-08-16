@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Models;
+
 /// <summary>
 ///     Regenerates an assistant turn as a SIBLING VARIANT, driving the run through the SAME shared
 ///     runner/pump as a normal local turn. Symmetric with <see cref="INodeChatStreamService" />: one call mints the
@@ -20,11 +22,17 @@ public interface INodeChatRegenerationService
     ///     Origin=Remote conversation and <see cref="InvalidOperationException" /> when the conversation or original
     ///     message is not found.
     /// </summary>
+    /// <param name="samplingOptions">
+    ///     Developer-gated per-turn sampling overrides, the same ones the send path carries on
+    ///     <c>NodeChatStreamRequest.SamplingOptions</c>. Null — the default — leaves the runtime package byte-identical
+    ///     to a regenerate built without overrides.
+    /// </param>
     IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort = null,
         bool useLocalTools = false,
         bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
+        SamplingOptions? samplingOptions = null,
         CancellationToken cancellationToken = default);
 }

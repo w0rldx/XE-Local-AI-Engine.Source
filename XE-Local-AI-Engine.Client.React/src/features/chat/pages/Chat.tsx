@@ -1014,6 +1014,9 @@ export function Chat() {
 					// Send the active conversation-tree path so the regenerated turn's context follows the selected
 					// branch only. Omit when nothing was navigated so the server keeps the stored map.
 					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
+					// Same developer-mode gate the send path applies: overrides ride only when developer mode is on and
+					// at least one field is set, so a plain regenerate stays byte-identical to today.
+					developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
 					abortController.signal,
 				)) {
 					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache so
@@ -1084,11 +1087,13 @@ export function Chat() {
 		},
 		[
 			activeRevisionByGroup,
+			developerMode,
 			displayConversations,
 			knowledgeBaseEnabled,
 			queryClient,
 			reasoningEffort,
 			refreshConversation,
+			samplingOptions,
 			selectedConversationId,
 			streamScheduler,
 			t,
