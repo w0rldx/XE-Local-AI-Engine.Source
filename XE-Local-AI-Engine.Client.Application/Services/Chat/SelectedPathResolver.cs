@@ -133,8 +133,11 @@ public static class SelectedPathResolver
     ///         what the user sees.
     ///     </para>
     ///     <para>
-    ///         Backward compatible: a conversation with no variants has anchor == raw sequence for every message, so
-    ///         previously persisted values in this space (notably <c>CompactionSummaryCoversToSequence</c>) stay valid.
+    ///         Backward compatibility: a conversation with no variants has anchor == raw sequence for every message, so
+    ///         a previously persisted <c>CompactionSummaryCoversToSequence</c> is unchanged there. A conversation that
+    ///         already had variant groups AND a synopsis written under the old raw semantics may read that value one or
+    ///         more slots too high once, so the first post-upgrade send folds an extra early turn into the synopsis; the
+    ///         next compaction re-derives and persists the anchor, so it self-heals and no migration is performed.
     ///     </para>
     /// </summary>
     /// <typeparam name="TMessage">The caller's message type, adapted to <see cref="ISelectedPathMessage" />.</typeparam>
