@@ -4045,7 +4045,10 @@
 				"primaryDiffers": "Launch differs: {{fields}}",
 				"judgeDiffers": "Judge launch/environment differs: {{fields}}",
 				"copy": "Copy",
-				"copied": "Copied"
+				"copied": "Copied",
+				"kvExplicit": "KV {{type}} (explicit)",
+				"value": "Value",
+				"judgeIntendedDiffers": "The intended judge launch and the effective judge launch differ."
 			}
 		},
 		"customTools": {

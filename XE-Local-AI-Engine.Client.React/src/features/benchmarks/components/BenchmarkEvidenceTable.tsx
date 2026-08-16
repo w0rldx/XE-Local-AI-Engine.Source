@@ -45,9 +45,16 @@ export function BenchmarkEvidenceTable({
 	entries: readonly BenchmarkEvidenceEntry[];
 	"data-testid"?: string;
 }) {
+	const { t } = useTranslation();
 	return (
 		<ScrollArea.Autosize mah={320}>
 			<Table striped={true} withTableBorder={true} data-testid={testId}>
+				<Table.Thead>
+					<Table.Tr>
+						<Table.Th>{t("pages.benchmarks.launch.field", "Field")}</Table.Th>
+						<Table.Th>{t("pages.benchmarks.launch.value", "Value")}</Table.Th>
+					</Table.Tr>
+				</Table.Thead>
 				<Table.Tbody>
 					{entries.map((entry) => (
 						<Table.Tr key={entry.key}>
