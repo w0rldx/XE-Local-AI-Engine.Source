@@ -974,10 +974,11 @@
 				"seed": "Seed",
 				"seedDescription": "Random seed for reproducibility. -1 uses a random seed.",
 				"numCtx": "Context length (num_ctx)",
-				"numCtxDescription": "Size of the context window in tokens used to generate the next token.",
+				"numCtxDescription": "Size of the context window in tokens used to generate the next token. On the local llama.cpp runtime the server window is fixed when the model is loaded, so this only limits how much conversation history is sent.",
 				"stop": "Stop sequences",
 				"stopDescription": "One stop sequence per line. The model halts when it emits any of these strings.",
 				"modelDefault": "Model default",
+				"cloudUnsupported": "Not supported by cloud providers",
 				"reset": "Reset to defaults",
 				"close": "Close",
 				"resetField": "Reset {{field}}"
