@@ -412,6 +412,9 @@ tmp/
 *worker-credentials.enc
 codex-oauth-tokens.enc
 cloud-credentials.enc
+# Plaintext dev-API JWT caches dropped by ad-hoc live-test helpers (e.g. xe.sh); never commit.
+.token
+*.token
 
 # Local runtime artifacts (machine-specific, not for version control)
 .claude/scheduled_tasks.lock
