@@ -40,7 +40,7 @@ public sealed record ClientCapabilities
 
     public DateTimeOffset? ActiveModelExpiresAt { get; init; }
 
-    public int MaxMessageRequestTimeoutSeconds { get; init; } = 300;
+    public int MaxMessageRequestTimeoutSeconds { get; init; } = 600;
 }
 
 public sealed record ClientModelMetadata

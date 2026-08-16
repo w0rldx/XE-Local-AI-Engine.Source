@@ -1903,7 +1903,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///         each wait keeps its own linked <c>CancelAfter(_maxPendingToolCallAge)</c>, which was previously dead code
     ///         because the shorter invocation deadline always fired first. The net effect is that
     ///         <c>MaxPendingToolCallAge</c> (operator-configurable, 10 min by default) becomes the real cap on operator
-    ///         thinking time, instead of "whatever the model left over from its 300 s".
+    ///         thinking time, instead of "whatever the model left over from its InvocationTimeout".
     ///     </para>
     ///     <para>
     ///         The park extension applies only while a client is ATTACHED. A park whose watcher has gone away is

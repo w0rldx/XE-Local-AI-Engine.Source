@@ -84,6 +84,9 @@ public sealed class BenchmarkJudgeExecutorTests
         }
 
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
+        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("judge.gguf"),
             ModelRole.Chat,
             Arg.Is<ResolvedLaunchArguments>(arguments => !arguments.ExploreMode && arguments.CtxSize == 4096),

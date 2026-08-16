@@ -5,7 +5,7 @@ export const nodeSettingsDefaults: {
 	minMessageRequestTimeoutSeconds: number;
 	maxAllowedMessageRequestTimeoutSeconds: number;
 } = {
-	maxMessageRequestTimeoutSeconds: 300,
+	maxMessageRequestTimeoutSeconds: 600,
 	minMessageRequestTimeoutSeconds: 5,
 	maxAllowedMessageRequestTimeoutSeconds: 3600,
 };

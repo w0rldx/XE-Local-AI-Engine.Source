@@ -32,7 +32,7 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.Empty(package.AllowedTools);
         AssertEx.Null(package.ToolPolicies);
         AssertEx.Null(package.RequestedCapabilities);
-        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 600, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         AssertEx.False(string.IsNullOrWhiteSpace(package.ConfigHash));
