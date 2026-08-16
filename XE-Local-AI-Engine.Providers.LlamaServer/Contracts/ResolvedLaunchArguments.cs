@@ -15,8 +15,9 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     </para>
 ///     <para>
 ///         Replay invariants (enforced by <see cref="Replay" />): the KV cache types are both set or both null
-///         (the fused flash-attention path requires matching K/V types), and <see cref="FlashAttn" /> must be enabled
-///         whenever the KV cache types are set (quantized/explicit KV requires flash attention).
+///         <strong>and identical</strong> (the fused flash-attention path requires matching K/V types), and
+///         <see cref="FlashAttn" /> must be enabled whenever the KV cache types are set (quantized/explicit KV
+///         requires flash attention).
 ///     </para>
 /// </remarks>
 public sealed record ResolvedLaunchArguments
@@ -86,6 +87,11 @@ public sealed record ResolvedLaunchArguments
         {
             throw new ArgumentException("KV cache types must be both set or both null (the fused flash-attention path requires matching K/V types).",
                 kvKeySet ? nameof(kvTypeV) : nameof(kvTypeK));
+        }
+
+        if (kvKeySet && !string.Equals(kvTypeK, kvTypeV, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("KV cache types must match (the fused flash-attention path requires identical K/V types).", nameof(kvTypeV));
         }
 
         if (kvKeySet && !flashAttn)

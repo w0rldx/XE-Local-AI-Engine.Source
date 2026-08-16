@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -1246,8 +1248,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // true. Each spawn is a fresh process, so each gets a fresh reading. The sink cost is paid back by
                 // demoting this child's request chatter to Debug once it is serving (see servingWindow).
                 //
-                // The operator-profiling path is skipped because it already raises verbosity to maximum below.
-                if (fitParamsCapture is null
+                // The operator-profiling EXPLORE path is skipped because it already raises verbosity to maximum below.
+                // A benchmark spawn is the exception among profiling spawns: it takes a fit-params capture like every
+                // other profiling spawn, but it never reaches the explore `-v` branch (its args are a replay), so
+                // without this it was the one measurement that could not say where its own layers landed — exactly the
+                // spawn whose placement a later reader most needs. It pays the same servingWindow demotion.
+                if ((fitParamsCapture is null || benchmarkPolicy is not null)
                     && placementSniffer is not null
                     && variant != GpuVariant.Cpu
                     && !HasVerbosityArgument(spec.Arguments))
@@ -1350,7 +1356,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     capabilityManifest.ExecutableSha256,
                     readinessDuration,
                     LlamaServerReadinessOutcome.Ready,
-                    placement,
+                    placement.Outcome,
                     candidate.AttemptKind,
                     speculative);
                 readinessRecorded = true;
@@ -1376,12 +1382,35 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
                 var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
 
+                // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is
+                // genuinely serving. Assembly is non-throwing by construction (every unreadable fact becomes null), so
+                // a receipt can never turn a healthy measurement into a failed run.
+                var launchReceipt = benchmarkPolicy is null
+                    ? null
+                    : BuildBenchmarkLaunchReceipt(variant,
+                        capabilityManifest.Version ?? binary.Version,
+                        capabilityManifest.ExecutableSha256,
+                        LlamaServerLaunchProjection.From(variant,
+                            candidate.Resolved,
+                            candidate.Plan,
+                            key.Role,
+                            launchTuning.ChatCacheReuse,
+                            launchTuning.ChatCacheRamMiB),
+                        new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(adapterFilePath),
+                            !string.IsNullOrWhiteSpace(projectorFilePath),
+                            !string.IsNullOrWhiteSpace(speculative.DraftModelPath)),
+                        placement,
+                        effectiveContext,
+                        benchmarkPolicy,
+                        handle.ProcessId);
+
                 var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
                     EffectiveContextTokens = effectiveContext,
                     SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
-                    LoadObservation = loadObservation
+                    LoadObservation = loadObservation,
+                    LaunchReceipt = launchReceipt
                 };
                 _processes[key] = running;
 
@@ -1507,7 +1536,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         if (!applyLaunchPolicy)
         {
-            return new LaunchPlanSet(null, [new(resolved, null, LlamaServerLoadAttemptKind.Primary)]);
+            // A GPU spawn built with no policy replays its own -c/-ngl/-ts/-ot, so a null plan reproduces it verbatim.
+            // A CPU spawn emits none of those, so a null plan left it with NO context window and NO thread counts at
+            // all — it ran at llama.cpp's own defaults while every other CPU spawn got the policy's. The CPU replay
+            // plan supplies exactly the two args a CPU build can honour, and nothing else, so the GPU vector is
+            // untouched.
+            LlamaServerLaunchPlan? cpuReplayPlan = variant == GpuVariant.Cpu && !resolved.ExploreMode
+                ? _launchPolicy.ResolveCpuReplayPlan(resolved)
+                : null;
+            return new LaunchPlanSet(null, [new(resolved, cpuReplayPlan, LlamaServerLoadAttemptKind.Primary)]);
         }
 
         ProcessContextAllocation allocation;
@@ -1588,29 +1625,128 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>
     ///     Publishes a sniffed layer-placement observation once the process is genuinely serving. Recording only after
     ///     readiness keeps a candidate that printed a banner and then failed to start out of the operator-facing report.
-    ///     A partial offload is logged as a warning: the model serves, but a share of its layers run from system RAM.
+    ///     A partial or zero offload is logged as a warning: the model serves, but a share of its layers — or all of
+    ///     them — run from system RAM. The raw counts travel with the class so a reader sees 38/49 rather than only
+    ///     "partial".
     /// </summary>
-    private LlamaServerPlacementOutcome RecordObservedLayerPlacement(ProcessKey key,
+    private LlamaServerLaunchPlacement RecordObservedLayerPlacement(ProcessKey key,
         GpuVariant variant,
         LayerPlacementSniffer? sniffer)
     {
         if (sniffer is null || !sniffer.TryGetObservation(out var offloaded, out var total))
         {
-            return variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown;
+            return new LlamaServerLaunchPlacement(variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
+                OffloadedLayers: null,
+                TotalLayers: null);
         }
 
         _layerPlacementReport.Record(key.Role, variant, key.ModelName, offloaded, total);
+
+        // 0/N is its own outcome, not the extreme end of a partial offload: a GPU build serving entirely from system RAM
+        // is a different fact about a measurement than one that placed most of its layers.
+        if (offloaded <= 0)
+        {
+            _logger.LogWarning("llama-server placed NONE of model {ModelName} role {Role}'s {Total} layers on the GPU; the whole model runs from system RAM, which is substantially slower.",
+                key.ModelName, key.Role, total);
+            return new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.None, offloaded, total);
+        }
 
         if (offloaded < total)
         {
             _logger.LogWarning("llama-server placed {Offloaded}/{Total} of model {ModelName} role {Role} layers on the GPU; the remainder runs from system RAM, which is substantially slower.",
                 offloaded, total, key.ModelName, key.Role);
-            return LlamaServerPlacementOutcome.Partial;
+            return new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Partial, offloaded, total);
         }
 
         _logger.LogInformation("llama-server placed all {Total} layers of model {ModelName} role {Role} on the GPU.",
             total, key.ModelName, key.Role);
-        return LlamaServerPlacementOutcome.Full;
+        return new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Full, offloaded, total);
+    }
+
+    /// <summary>
+    ///     Assembles the benchmark launch receipt. Non-throwing by construction: the only fact that can fail to be read
+    ///     is the running image digest, and <see cref="TryComputeRunningImageSha256" /> reports that failure as
+    ///     <see langword="null" /> rather than as an exception, so a receipt never costs a run its measurement.
+    /// </summary>
+    internal static LlamaServerLaunchReceipt BuildBenchmarkLaunchReceipt(GpuVariant variant,
+        string? executableVersion,
+        string? manifestSha256,
+        LlamaServerLaunchProjection launchProjection,
+        LlamaServerLaunchAuxAssets auxAssets,
+        LlamaServerLaunchPlacement placement,
+        int? effectiveContextTokens,
+        LlamaServerBenchmarkLaunchPolicy benchmarkLaunchPolicy,
+        int processId)
+    {
+        return new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion,
+            variant,
+            DescribeOperatingSystem(),
+            executableVersion,
+            TryComputeRunningImageSha256(processId),
+            manifestSha256,
+            launchProjection,
+            auxAssets,
+            placement,
+            effectiveContextTokens,
+            benchmarkLaunchPolicy);
+    }
+
+    /// <summary>
+    ///     Hashes the image the LIVE process is running, rather than the executable path the launch resolved — those two
+    ///     disagree exactly when it matters, because a runtime can be replaced on disk between launch and readiness.
+    ///     Returns <see langword="null" /> whenever the running image cannot be read; an unreadable digest is a fact
+    ///     worth recording as absent, never a reason to fail a benchmark.
+    /// </summary>
+    internal static string? TryComputeRunningImageSha256(int processId)
+    {
+        if (processId <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            string? imagePath;
+            if (OperatingSystem.IsLinux())
+            {
+                // /proc/<pid>/exe resolves through the kernel to the mapped image even when the file was replaced or
+                // unlinked after launch, which is the whole point of reading it instead of the resolved path.
+                imagePath = $"/proc/{processId.ToString(CultureInfo.InvariantCulture)}/exe";
+            }
+            else
+            {
+                using var process = Process.GetProcessById(processId);
+                imagePath = process.MainModule?.FileName;
+            }
+
+            if (string.IsNullOrWhiteSpace(imagePath))
+            {
+                return null;
+            }
+
+            using var stream = File.OpenRead(imagePath);
+            return Convert.ToHexStringLower(SHA256.HashData(stream));
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The host OS as a stable, bounded token — enough to tell a Metal host from a CUDA one, and nothing more.</summary>
+    private static string DescribeOperatingSystem()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "windows";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "macos";
+        }
+
+        return OperatingSystem.IsLinux() ? "linux" : "unknown";
     }
 
     private LlamaServerLoadObservation RecordLoadTelemetry(ProcessKey key,
@@ -2025,7 +2161,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                             {
                                 PreSpawnVram = preSpawnVram,
                                 SuccessfulLaunchArguments = running.SuccessfulLaunchArguments,
-                                LoadObservation = running.LoadObservation
+                                LoadObservation = running.LoadObservation,
+                                LaunchReceipt = running.LaunchReceipt
                             };
                             return await body(context, ct).ConfigureAwait(false);
                         }
@@ -2149,7 +2286,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
         //    KV stays f16 and flash-attention stays auto.
         // A null plan (replay profiling) reproduces the supplied replay vector byte-for-byte.
-        AppendContextPlacementAndThreadArgs(args, variant, resolved, plan);
+        //
+        // Everything below is emitted from ONE projection of this spawn's launch shape, so the vector that goes to the
+        // process and the shape a receipt records can never drift apart into two independent derivations.
+        var projection = LlamaServerLaunchProjection.From(variant, resolved, plan, key.Role, chatCacheReuse, chatCacheRamMiB);
+        AppendContextPlacementAndThreadArgs(args, projection);
 
         // LoRA adapter. `-m` above is the BASE model this adapter was trained against (resolved by the caller); the
         // adapter is applied on top at load. Role-agnostic on purpose: an adapter changes the weights, not the serving
@@ -2202,7 +2343,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add("--embeddings");
             args.Add("--pooling");
             args.Add("mean");
-            AppendPooledForwardPassBatchArgs(args, resolved, plan);
+            AppendPooledForwardPassBatchArgs(args, projection);
 
             // One-shot forward passes have no prompt state worth caching — disable the host prompt cache instead of
             // inheriting the upstream 8192 MiB default (see the chat branch).
@@ -2220,7 +2361,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add("--rerank");
             args.Add("--pooling");
             args.Add("rank");
-            AppendPooledForwardPassBatchArgs(args, resolved, plan);
+            AppendPooledForwardPassBatchArgs(args, projection);
 
             // One-shot scoring passes have no prompt state worth caching — disable the host prompt cache instead of
             // inheriting the upstream 8192 MiB default (see the chat branch).
@@ -2241,46 +2382,95 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Appends the context (<c>-c</c>), placement, KV-cache/flash-attention, and CPU-thread args for a spawn, per the
-    ///     variant + explore/replay mode + policy <paramref name="plan" />. See the call-site comment for the matrix.
+    ///     Emits the context (<c>-c</c>), placement, KV-cache/flash-attention, and CPU-thread args for a spawn from its
+    ///     <see cref="LlamaServerLaunchProjection" />. The projection already encodes the variant + explore/replay
+    ///     matrix, so the vector below is a straight rendering of it rather than a second copy of the precedence rules.
     /// </summary>
-    private static void AppendContextPlacementAndThreadArgs(List<string> args,
-        GpuVariant variant,
-        ResolvedLaunchArguments resolved,
-        LlamaServerLaunchPlan? plan)
+    /// <remarks>
+    ///     Two spellings of the same KV vector exist upstream and both are kept: an auto-fit spawn writes
+    ///     <c>-fa on -ctk T -ctv T</c>, a replay writes <c>-ctk K -ctv V --flash-attn on</c>.
+    ///     <see cref="LlamaServerLaunchProjection.AutoFit" /> is what tells them apart. CPU carries no
+    ///     <c>--metrics</c>/<c>--fit</c>/placement/KV args at all — a frozen GPU profile does not transfer to a CPU
+    ///     spawn — and is the only shape that carries thread counts.
+    /// </remarks>
+    private static void AppendContextPlacementAndThreadArgs(List<string> args, LlamaServerLaunchProjection projection)
     {
-        if (variant != GpuVariant.Cpu)
+        // --metrics on BOTH GPU modes. The /metrics gauges (KV bytes, slot state, cache-reused tokens) are the only
+        // in-app view of what a spawn actually did, and a frozen-profile replay — the steady state on a machine that
+        // has been tuned once — was previously the one GPU path that exposed none of them.
+        if (projection.Metrics)
         {
-            // --metrics on BOTH GPU modes. The /metrics gauges (KV bytes, slot state, cache-reused tokens) are the only
-            // in-app view of what a spawn actually did, and a frozen-profile replay — the steady state on a machine
-            // that has been tuned once — was previously the one GPU path that exposed none of them.
             args.Add("--metrics");
+        }
 
-            if (resolved.ExploreMode)
+        if (projection.AutoFit)
+        {
+            // Let llama.cpp auto-fit choose + print placement. The explicit -c is RESPECTED by --fit, which fits
+            // ngl/batch around it, and the KV/FA flags are not placement flags, so auto-fit stays active. Verified
+            // against b9692; the pinned b10201 --help confirms --fit adjusts only UNSET arguments.
+            args.Add("--fit");
+            args.Add("on");
+        }
+
+        if (projection.ContextTokens is { } contextTokens)
+        {
+            args.Add("-c");
+            args.Add(contextTokens.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (projection.GpuLayers is { } gpuLayers)
+        {
+            args.Add("--n-gpu-layers");
+            args.Add(gpuLayers.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (projection.TensorSplit is { } tensorSplit)
+        {
+            args.Add("-ts");
+            args.Add(tensorSplit);
+        }
+
+        if (projection.OverrideTensor is { } overrideTensor)
+        {
+            args.Add("-ot");
+            args.Add(overrideTensor);
+        }
+
+        // Matching-type rule + flash-attention invariant (enforced upstream in ResolvedLaunchArguments.Replay and in the
+        // launch policy): the fused FA path needs equal K/V types and flash attention on.
+        if (projection.KvCacheTypeK is { } kvCacheTypeK && projection.KvCacheTypeV is { } kvCacheTypeV)
+        {
+            if (projection.AutoFit)
             {
-                // Let llama.cpp auto-fit choose + print placement. The explicit -c is RESPECTED by --fit (it fits
-                // ngl/batch around it) and the KV/FA flags are not placement flags, so auto-fit stays active (verified
-                // against b9692; b10201 --help confirms --fit adjusts only UNSET arguments, so the explicit -c is
-                // respected).
-                args.Add("--fit");
+                args.Add("-fa");
                 args.Add("on");
-                AppendPolicyContextArgs(args, plan);
-                AppendPolicyKvCacheAndFlashAttentionArgs(args, plan);
+                args.Add("-ctk");
+                args.Add(kvCacheTypeK);
+                args.Add("-ctv");
+                args.Add(kvCacheTypeV);
             }
             else
             {
-                AppendReplayArgs(args, resolved);
+                args.Add("-ctk");
+                args.Add(kvCacheTypeK);
+                args.Add("-ctv");
+                args.Add(kvCacheTypeV);
+                args.Add("--flash-attn");
+                args.Add("on");
             }
-
-            return;
         }
 
-        // CPU build: NO GPU placement/replay args (-ngl/-ts/-ot/-ctk) and NO --fit/--metrics — a frozen GPU profile does
-        // not transfer to a CPU spawn. It gets ONLY the deterministic policy context (-c) and the CPU thread policy; KV
-        // stays f16 and flash-attention stays auto. A null plan (operator profiling) emits neither, matching the old
-        // "CPU emits no gpu/fit args" behavior byte-for-byte.
-        AppendPolicyContextArgs(args, plan);
-        AppendCpuThreadArgs(args, plan);
+        if (projection.Threads is { } threads)
+        {
+            args.Add("-t");
+            args.Add(threads.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (projection.ThreadsBatch is { } threadsBatch)
+        {
+            args.Add("-tb");
+            args.Add(threadsBatch.ToString(CultureInfo.InvariantCulture));
+        }
     }
 
     /// <summary>
@@ -2315,106 +2505,20 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///         is a memory/throughput trade-off rather than a correctness fix, and <c>--fit</c> owns that decision.
     ///     </para>
     /// </remarks>
-    private static void AppendPooledForwardPassBatchArgs(List<string> args, ResolvedLaunchArguments resolved, LlamaServerLaunchPlan? plan)
+    private static void AppendPooledForwardPassBatchArgs(List<string> args, LlamaServerLaunchProjection projection)
     {
-        // Mirror whichever -c this spawn actually emitted: the policy context (explore/CPU) or the frozen replay's own
-        // context. A pooled role must be able to embed anything that fits the context it advertises.
-        var contextTokens = plan?.RequestedContextTokens ?? resolved.CtxSize;
-        if (contextTokens <= 0)
+        // The projection already mirrors whichever -c this spawn emits (the policy context, or the frozen replay's own)
+        // and leaves both sizes null for a non-pooled role. A pooled role must be able to embed anything that fits the
+        // context it advertises. -b (logical) must be >= -ub (physical); the projection pins both to the same context.
+        if (projection.BatchSize is not { } batchSize || projection.UbatchSize is not { } ubatchSize)
         {
             return;
         }
 
-        var value = contextTokens.ToString(CultureInfo.InvariantCulture);
-
-        // -b (logical) must be >= -ub (physical); pinning both to the context satisfies that for any context size.
         args.Add("-b");
-        args.Add(value);
+        args.Add(batchSize.ToString(CultureInfo.InvariantCulture));
         args.Add("-ub");
-        args.Add(value);
-    }
-
-    /// <summary>Appends the policy's requested context (<c>-c</c>) when set (a frozen replay owns its own -c instead).</summary>
-    private static void AppendPolicyContextArgs(List<string> args, LlamaServerLaunchPlan? plan)
-    {
-        if (plan is { RequestedContextTokens: { } contextTokens })
-        {
-            args.Add("-c");
-            args.Add(contextTokens.ToString(CultureInfo.InvariantCulture));
-        }
-    }
-
-    /// <summary>Appends the GPU KV-cache quantization + fused flash-attention args (<c>-fa on -ctk/-ctv &lt;type&gt;</c>) when the plan enables them.</summary>
-    private static void AppendPolicyKvCacheAndFlashAttentionArgs(List<string> args, LlamaServerLaunchPlan? plan)
-    {
-        if (plan is { UseKvCacheQuantization: true } resolvedPlan && !string.IsNullOrWhiteSpace(resolvedPlan.KvCacheType))
-        {
-            // Quantized/explicit KV requires the fused flash-attention path with matching K/V types (b9692; unchanged
-            // in the pinned b10201).
-            args.Add("-fa");
-            args.Add("on");
-            args.Add("-ctk");
-            args.Add(resolvedPlan.KvCacheType);
-            args.Add("-ctv");
-            args.Add(resolvedPlan.KvCacheType);
-        }
-    }
-
-    /// <summary>Appends the CPU thread policy (<c>-t</c>/<c>-tb</c>) when the plan carries thread counts (CPU build only).</summary>
-    private static void AppendCpuThreadArgs(List<string> args, LlamaServerLaunchPlan? plan)
-    {
-        if (plan is { CpuThreads: { } threads })
-        {
-            args.Add("-t");
-            args.Add(threads.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (plan is { CpuThreadsBatch: { } threadsBatch })
-        {
-            args.Add("-tb");
-            args.Add(threadsBatch.ToString(CultureInfo.InvariantCulture));
-        }
-    }
-
-    /// <summary>
-    ///     Replays a frozen/explored profile verbatim (<c>-c/-ngl/-ts/-ot</c> + matched <c>-ctk/-ctv</c> with
-    ///     <c>--flash-attn on</c>). <c>--fit</c> is intentionally absent — any explicit fit-arg disables auto-fit, so
-    ///     replay and explore are mutually exclusive per run. The launch policy never overrides these (highest precedence).
-    /// </summary>
-    private static void AppendReplayArgs(List<string> args, ResolvedLaunchArguments resolved)
-    {
-        args.Add("-c");
-        args.Add(resolved.CtxSize.ToString(CultureInfo.InvariantCulture));
-
-        if (resolved.NGpuLayers is { } gpuLayers)
-        {
-            args.Add("--n-gpu-layers");
-            args.Add(gpuLayers.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (!string.IsNullOrWhiteSpace(resolved.TensorSplit))
-        {
-            args.Add("-ts");
-            args.Add(resolved.TensorSplit);
-        }
-
-        if (!string.IsNullOrWhiteSpace(resolved.OverrideTensor))
-        {
-            args.Add("-ot");
-            args.Add(resolved.OverrideTensor);
-        }
-
-        if (!string.IsNullOrWhiteSpace(resolved.KvTypeK) && !string.IsNullOrWhiteSpace(resolved.KvTypeV))
-        {
-            // Matching-type rule + flash-attention invariant (enforced upstream in ResolvedLaunchArguments.Replay):
-            // the fused FA path needs equal K/V types and --flash-attn on.
-            args.Add("-ctk");
-            args.Add(resolved.KvTypeK);
-            args.Add("-ctv");
-            args.Add(resolved.KvTypeV);
-            args.Add("--flash-attn");
-            args.Add("on");
-        }
+        args.Add(ubatchSize.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>
@@ -2899,6 +3003,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         /// <summary>Content-free load/readiness observation for operator profiling correlation.</summary>
         public LlamaServerLoadObservation? LoadObservation { get; init; }
+
+        /// <summary>What this spawn actually launched. Benchmark spawns only; null for every other spawn.</summary>
+        public LlamaServerLaunchReceipt? LaunchReceipt { get; init; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 

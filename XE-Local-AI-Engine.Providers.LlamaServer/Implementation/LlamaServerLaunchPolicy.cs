@@ -73,6 +73,26 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     }
 
     /// <inheritdoc />
+    public LlamaServerLaunchPlan ResolveCpuReplayPlan(ResolvedLaunchArguments resolved)
+    {
+        ArgumentNullException.ThrowIfNull(resolved);
+
+        var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(GpuVariant.Cpu);
+
+        // Explore mode pins no context of its own, so there is nothing to carry over; a replay's frozen -c is the only
+        // context a policy-free CPU spawn can honour.
+        var requestedContextTokens = resolved.ExploreMode || resolved.CtxSize <= 0
+            ? (int?)null
+            : resolved.CtxSize;
+
+        return new LlamaServerLaunchPlan(requestedContextTokens,
+            UseKvCacheQuantization: false,
+            _options.KvCacheType,
+            cpuThreads,
+            cpuThreadsBatch);
+    }
+
+    /// <inheritdoc />
     public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, CancellationToken ct)
     {
         _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant}; future spawns will use the safe config.", variant);
