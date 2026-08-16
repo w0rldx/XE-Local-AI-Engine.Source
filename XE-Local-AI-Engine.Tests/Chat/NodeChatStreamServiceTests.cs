@@ -3732,12 +3732,41 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.SelectionPersisted, "A request-supplied selection must be persisted via SetSelectedPathAsync.");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenCompacted_SendsTheSynopsisInPlaceOfTheCoveredHistory()
+    {
+        // Pins the send path's compaction splice, which now runs through CompactionContextResolver — the same helper
+        // the regenerate path uses, so a regression here would silently desync both context builders.
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            persistedSelection: null,
+            requestSelection: null,
+            compactionSummary: "SYNOPSIS",
+            compactionCoversToSequence: 2).ConfigureAwait(false);
+
+        // ONE synthetic synopsis leads the context, followed only by the new user turn (sequence 3) the synopsis
+        // does not cover.
+        AssertEx.Equal(expected: 2, runner.CapturedContext.Count);
+        AssertEx.True(runner.CapturedContext[0].Content.Contains("SYNOPSIS", StringComparison.Ordinal), "The synopsis must lead the context.");
+        AssertEx.Equal(MessageRole.User, runner.CapturedContext[0].Role);
+        AssertEx.Equal("follow up", runner.CapturedContext[1].Content);
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains("answer", StringComparison.Ordinal)),
+            "Messages the synopsis covers must not be re-sent verbatim.");
+    }
+
     private static async Task<ContextCapturingInvocationRunner> RunWithVariantConversationAsync(Guid conversationId,
         Guid variantGroupId,
         Guid olderVariantId,
         Guid newerVariantId,
         IReadOnlyDictionary<Guid, Guid>? persistedSelection,
-        IReadOnlyDictionary<Guid, Guid>? requestSelection)
+        IReadOnlyDictionary<Guid, Guid>? requestSelection,
+        string? compactionSummary = null,
+        int? compactionCoversToSequence = null)
     {
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -3747,7 +3776,9 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            persistedSelection);
+            persistedSelection,
+            compactionSummary,
+            compactionCoversToSequence);
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
@@ -3799,7 +3830,9 @@ public sealed class NodeChatStreamServiceTests
         Guid variantGroupId,
         Guid olderVariantId,
         Guid newerVariantId,
-        IReadOnlyDictionary<Guid, Guid>? persistedSelection)
+        IReadOnlyDictionary<Guid, Guid>? persistedSelection,
+        string? compactionSummary = null,
+        int? compactionCoversToSequence = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
 
@@ -3852,7 +3885,9 @@ public sealed class NodeChatStreamServiceTests
             LastSeenUtc: 1,
             Purged: false,
             [userTurn, olderVariant, newerVariant],
-            SelectedPath: persistedSelection);
+            SelectedPath: persistedSelection,
+            CompactionSummary: compactionSummary,
+            CompactionSummaryCoversToSequence: compactionCoversToSequence);
         var newUserMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
             RequestId: null,

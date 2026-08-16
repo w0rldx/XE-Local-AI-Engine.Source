@@ -6,6 +6,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -54,6 +55,7 @@ public sealed class LocalChatHubReadOnlyConversationTests
                                Arg.Any<bool>(),
                                Arg.Any<bool>(),
                                Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
+                               Arg.Any<SamplingOptions?>(),
                                Arg.Any<CancellationToken>())
                            .Returns(_ => ThrowsReadOnly(conversationId));
 
@@ -67,6 +69,7 @@ public sealed class LocalChatHubReadOnlyConversationTests
                                           useLocalTools: false,
                                           useKnowledgeBase: false,
                                           selectedPath: null,
+                                          samplingOptions: null,
                                           CancellationToken.None)
                                       .ConfigureAwait(false))
             {
