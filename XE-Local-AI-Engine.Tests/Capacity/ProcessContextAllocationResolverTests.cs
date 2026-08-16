@@ -204,6 +204,67 @@ public sealed class ProcessContextAllocationResolverTests
     }
 
     [Test]
+    public async Task Resolve_WithAQuantizedKvType_ReservesStrictlyFewerBytesAtTheSameWindow()
+    {
+        // A benchmark run frozen at q8_0/q4_0 holds a smaller KV cache than the fp16 figure the ledger used to book,
+        // and the two quantized sizes are themselves ordered. The window is identical in all three cases: only the KV
+        // term moves.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var frozen = ResolvedLaunchArguments.Replay(ctxSize: 32768);
+
+        var fp16 = AssertEx.NotNull(await Resolve(resolver, frozen, kvCacheType: null));
+        var q8 = AssertEx.NotNull(await Resolve(resolver, frozen, "q8_0"));
+        var q4 = AssertEx.NotNull(await Resolve(resolver, frozen, "q4_0"));
+
+        AssertEx.True(q8.Footprint.GpuBytes < fp16.Footprint.GpuBytes,
+            $"q8_0 must reserve less than fp16 ({q8.Footprint.GpuBytes} vs {fp16.Footprint.GpuBytes}).");
+        AssertEx.True(q4.Footprint.GpuBytes < q8.Footprint.GpuBytes,
+            $"q4_0 must reserve less than q8_0 ({q4.Footprint.GpuBytes} vs {q8.Footprint.GpuBytes}).");
+        AssertEx.Equal(fp16.ProcessContextTokens, q8.ProcessContextTokens);
+        AssertEx.Equal(fp16.ProcessContextTokens, q4.ProcessContextTokens);
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("f16")]
+    [Arguments("not-a-cache-type")]
+    public async Task Resolve_WithNoOrUnrecognizedKvType_IsTheAllocationEveryOtherCallerAlreadyGot(string? kvCacheType)
+    {
+        // The default has to stay byte-identical — same allocation AND the same cache entry — or every chat spawn on
+        // the box quietly re-resolves against a second key. Anything the estimator cannot read is fp16, conservatively.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var frozen = ResolvedLaunchArguments.Replay(ctxSize: 32768);
+
+        var baseline = AssertEx.NotNull(await Resolve(resolver, frozen, kvCacheType: null));
+        var candidate = AssertEx.NotNull(await Resolve(resolver, frozen, kvCacheType));
+
+        AssertEx.Equal(baseline.CacheKey, candidate.CacheKey);
+        AssertEx.Equal(baseline.Footprint, candidate.Footprint);
+        AssertEx.Equal(baseline.ProcessContextTokens, candidate.ProcessContextTokens);
+    }
+
+    [Test]
+    public async Task Resolve_HardwareTierWithAQuantizedKvType_KeepsTheFp16WindowAndOnlyShrinksTheBytes()
+    {
+        // The guard the whole option rests on: a quantized request may never reserve MORE than fp16. It could, if the
+        // tier walk scored against the smaller estimate and so selected a LARGER window — so the tier is still chosen
+        // against fp16 and only the resulting allocation is re-sized.
+        var resolver = BuildResolver(Profile(64 * Gb, 16 * Gb, vramKnown: true), processBudget: 16 * Gb);
+
+        var fp16 = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+        var q4 = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), "q4_0"));
+
+        AssertEx.Equal(fp16.ProcessContextTokens, q4.ProcessContextTokens);
+        AssertEx.True(q4.Footprint.GpuBytes < fp16.Footprint.GpuBytes);
+        AssertEx.True(q4.Footprint.RamBytes <= fp16.Footprint.RamBytes);
+    }
+
+    private static Task<ProcessContextAllocation?> Resolve(ProcessContextAllocationResolver resolver,
+        ResolvedLaunchArguments resolved,
+        string? kvCacheType) =>
+        resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, resolved, kvCacheType, CancellationToken.None);
+
+    [Test]
     public async Task Resolve_FrozenProfileWinsOverDeterministicOverride()
     {
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),

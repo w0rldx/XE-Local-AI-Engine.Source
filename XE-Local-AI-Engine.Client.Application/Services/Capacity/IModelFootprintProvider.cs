@@ -22,13 +22,16 @@ public interface IModelFootprintProvider
     Task<ModelFootprint> ResolveFootprintAsync(string modelName, ModelRole role, HardwareProfile profile, CancellationToken ct);
 
     /// <summary>
-    ///     Resolves a footprint that can satisfy <paramref name="requiredContextTokens" />. The default preserves
-    ///     source compatibility for providers that do not need a context-specific path.
+    ///     Resolves a footprint that can satisfy <paramref name="requiredContextTokens" />, with the KV-cache term sized
+    ///     for <paramref name="kvCacheType" /> (<see langword="null" />/f16/unrecognized ⇒ the conservative fp16 sizing
+    ///     every other caller gets). The default preserves source compatibility for providers that do not need a
+    ///     context-specific path.
     /// </summary>
     Task<ModelFootprint> ResolveFootprintAsync(string modelName,
         ModelRole role,
         HardwareProfile profile,
         int? requiredContextTokens,
+        string? kvCacheType,
         CancellationToken ct) =>
         ResolveFootprintAsync(modelName, role, profile, ct);
 

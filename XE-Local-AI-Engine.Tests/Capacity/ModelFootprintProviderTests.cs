@@ -33,6 +33,7 @@ public sealed class ModelFootprintProviderTests
             ModelRole.Chat,
             GpuVariant.Cuda,
             Arg.Is<ResolvedLaunchArguments>(static args => args.ExploreMode),
+            Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -66,6 +67,7 @@ public sealed class ModelFootprintProviderTests
             ModelRole.Reranker,
             GpuVariant.Vulkan,
             frozen,
+            Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -154,10 +156,13 @@ public sealed class ModelFootprintProviderTests
                        .Returns(Task.FromResult(resolved ?? ResolvedLaunchArguments.Explore()));
 
         var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        // The provider calls the KV-aware overload. A substituted interface intercepts a default-implemented member
+        // rather than running its body, so stubbing only the four-argument one would hand the provider a null.
         allocationResolver.ResolveAsync(Arg.Any<string>(),
                               Arg.Any<ModelRole>(),
                               Arg.Any<GpuVariant>(),
                               Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<string?>(),
                               Arg.Any<CancellationToken>())
                           .Returns(Task.FromResult(allocation));
 

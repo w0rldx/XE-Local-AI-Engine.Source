@@ -1385,12 +1385,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is
                 // genuinely serving. Assembly is non-throwing by construction (every unreadable fact becomes null), so
                 // a receipt can never turn a healthy measurement into a failed run.
+                //
+                // The projection is read back out of the FINAL argv rather than recomputed from (variant, resolved,
+                // plan, role, tuning): the capability gate above can drop an optional flag the intended projection
+                // still claims, and the operator's extra arguments were appended after it. An unparseable vector falls
+                // back to the intended shape — a describable launch is worth more than no receipt at all.
                 var launchReceipt = benchmarkPolicy is null
                     ? null
                     : BuildBenchmarkLaunchReceipt(variant,
                         capabilityManifest.Version ?? binary.Version,
                         capabilityManifest.ExecutableSha256,
-                        LlamaServerLaunchProjection.From(variant,
+                        LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
+                        ?? LlamaServerLaunchProjection.From(variant,
                             candidate.Resolved,
                             candidate.Plan,
                             key.Role,
@@ -1402,7 +1408,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                         placement,
                         effectiveContext,
                         benchmarkPolicy,
-                        handle.ProcessId);
+                        handle.ProcessId,
+                        capabilityDecision.OmittedOptions);
 
                 var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
@@ -1676,7 +1683,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         LlamaServerLaunchPlacement placement,
         int? effectiveContextTokens,
         LlamaServerBenchmarkLaunchPolicy benchmarkLaunchPolicy,
-        int processId)
+        int processId,
+        IReadOnlyList<string>? omittedOptions = null)
     {
         return new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion,
             variant,
@@ -1688,7 +1696,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             auxAssets,
             placement,
             effectiveContextTokens,
-            benchmarkLaunchPolicy);
+            benchmarkLaunchPolicy)
+        {
+            OmittedOptions = omittedOptions ?? []
+        };
     }
 
     /// <summary>
