@@ -104,6 +104,35 @@ public sealed class LlamaServerSupervisorOptionsTests
     }
 
     [Test]
+    public void EmbeddingHttpNetworkTimeoutDefault_StaysAtThePreviousSixHundredSecondFloor()
+    {
+        // The embedding split: raising HttpNetworkTimeout to 3600s was safe ONLY for chat, which also carries the
+        // invocation deadline's token. An embedding call (knowledge ingestion, memory extraction) has no such
+        // per-request bound, so this value is its only one and must stay at the pre-split 600s — a wedged embedding
+        // request has to fail in minutes, not an hour.
+        var options = new LlamaServerSupervisorOptions();
+
+        AssertEx.Equal(TimeSpan.FromSeconds(600), options.EmbeddingHttpNetworkTimeout);
+        AssertEx.True(options.EmbeddingHttpNetworkTimeout < options.HttpNetworkTimeout,
+            "the embedding timeout must stay strictly shorter than the chat one; a single shared value is the bug this split fixed.");
+    }
+
+    [Test]
+    public async Task Validate_NonPositiveEmbeddingHttpNetworkTimeout_Throws()
+    {
+        var options = new LlamaServerSupervisorOptions
+        {
+            EmbeddingHttpNetworkTimeout = TimeSpan.Zero
+        };
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        {
+            options.Validate();
+            return Task.CompletedTask;
+        });
+    }
+
+    [Test]
     public async Task Validate_NonPositiveEjectDrainTimeout_Throws()
     {
         var options = new LlamaServerSupervisorOptions

@@ -180,7 +180,7 @@ public sealed class LlamaServerSupervisorOptions
     public TimeSpan EjectDrainTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEjectDrainTimeoutSeconds);
 
     /// <summary>
-    ///     Network timeout for a single local-inference HTTP call to the llama-server OpenAI-compatible surface (AUD4-18).
+    ///     Network timeout for a single <em>chat</em> call to the llama-server OpenAI-compatible surface (AUD4-18).
     ///     Set EXPLICITLY on the built OpenAI client so it never inherits System.ClientModel's 100 s
     ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS:
     ///     streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and a non-streaming
@@ -190,6 +190,16 @@ public sealed class LlamaServerSupervisorOptions
     ///     positive.
     /// </summary>
     public TimeSpan HttpNetworkTimeout { get; init; } = TimeSpan.FromSeconds(DefaultHttpNetworkTimeoutSeconds);
+
+    /// <summary>
+    ///     Network timeout for a single <em>embedding</em> call to the same surface. Deliberately SHORTER than
+    ///     <see cref="HttpNetworkTimeout" /> (600 s vs 3600 s) because the two have different inner bounds: a chat call
+    ///     carries the invocation deadline's cancellation token, so its HTTP timeout is only a last-resort wedged-socket
+    ///     floor and may be generous. An embedding call (knowledge ingestion, memory extraction) carries no such
+    ///     per-request deadline — this value IS its only bound, so a wedged embedding request must fail in minutes, not
+    ///     an hour. Must be positive.
+    /// </summary>
+    public TimeSpan EmbeddingHttpNetworkTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEmbeddingHttpNetworkTimeoutSeconds);
 
     private const double DefaultReadinessBaseTimeoutSeconds = 120d;
     private const double DefaultReadinessSizeThresholdGiB = 4d;
@@ -204,6 +214,10 @@ public sealed class LlamaServerSupervisorOptions
     // this got a socket abort from the inner HTTP timeout first. The real per-turn bound is the invocation deadline's
     // cancellation token; this stays the outermost wedged-socket floor.
     private const double DefaultHttpNetworkTimeoutSeconds = 3600d;
+
+    // The pre-2026-08-16 value of DefaultHttpNetworkTimeoutSeconds, kept for the embedding path: only the chat path
+    // gained the invocation-deadline token that makes a 1 h floor safe.
+    private const double DefaultEmbeddingHttpNetworkTimeoutSeconds = 600d;
 
     /// <summary>
     ///     Computes the size-aware cold-start readiness deadline for a model of <paramref name="modelSizeBytes" /> on
@@ -270,6 +284,11 @@ public sealed class LlamaServerSupervisorOptions
         if (HttpNetworkTimeout <= TimeSpan.Zero)
         {
             throw new InvalidOperationException($"{nameof(HttpNetworkTimeout)} must be positive (was {HttpNetworkTimeout}).");
+        }
+
+        if (EmbeddingHttpNetworkTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(EmbeddingHttpNetworkTimeout)} must be positive (was {EmbeddingHttpNetworkTimeout}).");
         }
 
         if (ChatCacheRamMiB < 0)
