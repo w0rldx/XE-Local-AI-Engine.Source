@@ -10,8 +10,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
-public sealed class LaunchPolicyFingerprintProviderTests
+public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
 {
+    // One cache per provider: several tests assert an absolute full-hash count, so a provider must start cold.
+    private readonly List<LaunchPolicyFileHashCache> _fileHashCaches = [];
+
+    public void Dispose()
+    {
+        foreach (var cache in _fileHashCaches)
+        {
+            cache.Dispose();
+        }
+    }
+
     [Test]
     public async Task CaptureAsync_SameRuntimeModelRevisionAndLaunchSemantics_IsStable()
     {
@@ -19,7 +30,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            using var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
             var input = Input(path);
 
             var first = await provider.CaptureAsync(input, CancellationToken.None);
@@ -47,7 +58,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            using var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
             var captured = await provider.CaptureAsync(Input(path), CancellationToken.None);
 
             // A profile frozen under the PREVIOUS version is hard-rejected on version alone, whatever its value says —
@@ -87,8 +98,8 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 BaseModelName = "bartowski/Base-GGUF:Q4_K_M"
             };
 
-            using var plainProvider = BuildProvider(Runtime("runtime-sha"), binaryPath, registryEntry: plain);
-            using var adapterProvider = BuildProvider(Runtime("runtime-sha"), binaryPath, registryEntry: adapter);
+            var plainProvider = BuildProvider(Runtime("runtime-sha"), binaryPath, registryEntry: plain);
+            var adapterProvider = BuildProvider(Runtime("runtime-sha"), binaryPath, registryEntry: adapter);
 
             var withoutAdapter = await plainProvider.CaptureAsync(Input(path), CancellationToken.None);
             var withAdapter = await adapterProvider.CaptureAsync(Input(path), CancellationToken.None);
@@ -109,14 +120,11 @@ public sealed class LaunchPolicyFingerprintProviderTests
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            LaunchPolicyFingerprint captured;
-            using (var captureProvider = BuildProvider(Runtime("runtime-sha"), binaryPath))
-            {
-                captured = await captureProvider.CaptureAsync(Input(path), CancellationToken.None);
-                AssertEx.Equal(expected: 2L, captureProvider.FullFileHashComputationCount);
-            }
+            var captureProvider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var captured = await captureProvider.CaptureAsync(Input(path), CancellationToken.None);
+            AssertEx.Equal(expected: 2L, captureProvider.FullFileHashComputationCount);
 
-            using var coldValidationProvider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var coldValidationProvider = BuildProvider(Runtime("runtime-sha"), binaryPath);
             var matches = await coldValidationProvider.MatchesAsync(Profile(Input(path), captured),
                 path,
                 CancellationToken.None);
@@ -140,10 +148,10 @@ public sealed class LaunchPolicyFingerprintProviderTests
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            using var firstProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
+            var firstProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
             var first = await firstProvider.CaptureAsync(Input(path), CancellationToken.None);
 
-            using var secondProvider = BuildProvider(Runtime("runtime-b"), binaryPath);
+            var secondProvider = BuildProvider(Runtime("runtime-b"), binaryPath);
             var second = await secondProvider.CaptureAsync(Input(path), CancellationToken.None);
             var crossSpliced = new LaunchPolicyFingerprint(LaunchPolicyFingerprintProvider.CurrentVersion,
                 string.Concat(first.Value.AsSpan(0, 64), ".", second.Value.AsSpan(65)));
@@ -188,12 +196,12 @@ public sealed class LaunchPolicyFingerprintProviderTests
                                 return null;
                             });
 
-            using var mutatingProvider = BuildProvider(Runtime("runtime-sha"),
+            var mutatingProvider = BuildProvider(Runtime("runtime-sha"),
                 binaryPath,
                 modelRegistryOverride: mutatingRegistry);
             var captured = await mutatingProvider.CaptureAsync(Input(path), CancellationToken.None);
 
-            using var stableProvider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var stableProvider = BuildProvider(Runtime("runtime-sha"), binaryPath);
             var stable = await stableProvider.CaptureAsync(Input(path), CancellationToken.None);
 
             AssertEx.Equal(stable,
@@ -214,7 +222,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            using var provider = BuildProvider(Runtime("runtime-sha"),
+            var provider = BuildProvider(Runtime("runtime-sha"),
                 binaryPath,
                 registryEntry: RegistryEntry(path, new string('a', 64)));
 
@@ -239,18 +247,18 @@ public sealed class LaunchPolicyFingerprintProviderTests
         try
         {
             var input = Input(path);
-            using var firstProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
-            using var runtimeChangedProvider = BuildProvider(Runtime("runtime-b"), binaryPath);
+            var firstProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
+            var runtimeChangedProvider = BuildProvider(Runtime("runtime-b"), binaryPath);
             var first = await firstProvider.CaptureAsync(input, CancellationToken.None);
             var runtimeChanged = await runtimeChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             await File.AppendAllTextAsync(binaryPath, "binary-revision-2");
-            using var binaryChangedProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
+            var binaryChangedProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
             var binaryChanged = await binaryChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             await File.AppendAllTextAsync(path, "revision-2");
             File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(1));
-            using var modelChangedProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
+            var modelChangedProvider = BuildProvider(Runtime("runtime-a"), binaryPath);
             var modelChanged = await modelChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.NotEqual(first.Value, runtimeChanged.Value);
@@ -271,7 +279,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            using var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var provider = BuildProvider(Runtime("runtime-sha"), binaryPath);
             var input = Input(path);
             var originalTimestamp = File.GetLastWriteTimeUtc(path);
             var originalLength = new FileInfo(path).Length;
@@ -306,7 +314,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
             {
                 Role = (int)ModelRole.Chat
             };
-            using var baselineProvider = BuildProvider(Runtime("runtime-a"),
+            var baselineProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 supervisorOptions: new LlamaServerSupervisorOptions
                 {
@@ -314,7 +322,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                     SpeculativeMode = "ngram-simple"
                 });
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
-            using var cacheChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var cacheChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 supervisorOptions: new LlamaServerSupervisorOptions
                 {
@@ -322,7 +330,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                     SpeculativeMode = "ngram-simple"
                 });
             var cacheChanged = await cacheChangedProvider.CaptureAsync(input, CancellationToken.None);
-            using var modeChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var modeChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 supervisorOptions: new LlamaServerSupervisorOptions
                 {
@@ -360,7 +368,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 SpeculativeDraftMaxTokens = 3,
                 SpeculativeDraftGpuLayers = 12
             };
-            using var baselineProvider = BuildProvider(Runtime("runtime-a"),
+            var baselineProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 supervisorOptions: options,
                 resolvedDraftPath: draftPath);
@@ -369,12 +377,12 @@ public sealed class LaunchPolicyFingerprintProviderTests
 
             await File.WriteAllTextAsync(draftPath, "revision-2");
             File.SetLastWriteTimeUtc(draftPath, originalTimestamp);
-            using var draftChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var draftChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 supervisorOptions: options,
                 resolvedDraftPath: draftPath);
             var draftBytesChanged = await draftChangedProvider.CaptureAsync(input, CancellationToken.None);
-            using var flagsChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var flagsChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 supervisorOptions: new LlamaServerSupervisorOptions
                 {
@@ -408,7 +416,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
             {
                 Backend = "cpu"
             };
-            using var baselineProvider = BuildProvider(Runtime("runtime-a"),
+            var baselineProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -418,7 +426,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                     CpuThreadsBatchCount = 4
                 });
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
-            using var policyChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var policyChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -428,7 +436,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                     CpuThreadsBatchCount = 4
                 });
             var policyChanged = await policyChangedProvider.CaptureAsync(input, CancellationToken.None);
-            using var countsChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var countsChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -457,7 +465,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         try
         {
             var input = Input(path);
-            using var baselineProvider = BuildProvider(Runtime("runtime-a"),
+            var baselineProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -467,7 +475,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 });
             var baseline = await baselineProvider.CaptureAsync(input, CancellationToken.None);
 
-            using var embeddingChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var embeddingChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -477,7 +485,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
                 });
             var embeddingChanged = await embeddingChangedProvider.CaptureAsync(input, CancellationToken.None);
 
-            using var marginChangedProvider = BuildProvider(Runtime("runtime-a"),
+            var marginChangedProvider = BuildProvider(Runtime("runtime-a"),
                 binaryPath,
                 launchPolicyOptions: new LlamaServerLaunchPolicyOptions
                 {
@@ -505,13 +513,13 @@ public sealed class LaunchPolicyFingerprintProviderTests
         try
         {
             var input = Input(path);
-            using var firstProvider = BuildProvider(Runtime("runtime-a"), binaryPath, "override");
-            using var dormantRuntimeProvider = BuildProvider(Runtime("runtime-b"), binaryPath, "override");
+            var firstProvider = BuildProvider(Runtime("runtime-a"), binaryPath, "override");
+            var dormantRuntimeProvider = BuildProvider(Runtime("runtime-b"), binaryPath, "override");
             var first = await firstProvider.CaptureAsync(input, CancellationToken.None);
             var dormantRuntimeChanged = await dormantRuntimeProvider.CaptureAsync(input, CancellationToken.None);
 
             await File.AppendAllTextAsync(binaryPath, "override-revision-2");
-            using var executableChangedProvider = BuildProvider(Runtime("runtime-b"), binaryPath, "override");
+            var executableChangedProvider = BuildProvider(Runtime("runtime-b"), binaryPath, "override");
             var executableChanged = await executableChangedProvider.CaptureAsync(input, CancellationToken.None);
 
             AssertEx.Equal(first, dormantRuntimeChanged);
@@ -534,7 +542,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         {
             await File.WriteAllTextAsync(implementationPath, "implementation-revision-1");
             var input = Input(path);
-            using var provider = BuildProvider(Runtime("runtime-a"), binaryPath);
+            var provider = BuildProvider(Runtime("runtime-a"), binaryPath);
             var first = await provider.CaptureAsync(input, CancellationToken.None);
             var fullHashCountAfterFirstCapture = provider.FullFileHashComputationCount;
 
@@ -551,7 +559,7 @@ public sealed class LaunchPolicyFingerprintProviderTests
         }
     }
 
-    private static LaunchPolicyFingerprintProvider BuildProvider(InstalledRuntimeState runtime,
+    private LaunchPolicyFingerprintProvider BuildProvider(InstalledRuntimeState runtime,
         string binaryPath,
         string? binaryVersion = null,
         LlamaServerSupervisorOptions? supervisorOptions = null,
@@ -583,7 +591,15 @@ public sealed class LaunchPolicyFingerprintProviderTests
             modelStore,
             modelRegistry,
             supervisorOptions ?? new LlamaServerSupervisorOptions(),
-            launchPolicyOptions ?? new LlamaServerLaunchPolicyOptions());
+            launchPolicyOptions ?? new LlamaServerLaunchPolicyOptions(),
+            NewFileHashCache());
+    }
+
+    private LaunchPolicyFileHashCache NewFileHashCache()
+    {
+        var cache = new LaunchPolicyFileHashCache();
+        _fileHashCaches.Add(cache);
+        return cache;
     }
 
     private static InstalledRuntimeState Runtime(string sha)

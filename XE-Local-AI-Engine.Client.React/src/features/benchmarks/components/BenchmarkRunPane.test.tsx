@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import "@/i18n";
 
 Object.defineProperty(window, "matchMedia", {
@@ -41,6 +42,12 @@ function run(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
 		tokensPerSecond: 24,
 		userScore: null,
 		lastStreamSequence: 2,
+		primaryLaunch: noBenchmarkLaunchFacts,
+		judgeLaunch: noBenchmarkLaunchFacts,
+		primaryLaunchReceipt: null,
+		judgeLaunchReceipt: null,
+		primaryEnvironmentFacts: null,
+		judgeEnvironmentFacts: null,
 		version: 3,
 		createdAtUtc: 1,
 		updatedAtUtc: 2,

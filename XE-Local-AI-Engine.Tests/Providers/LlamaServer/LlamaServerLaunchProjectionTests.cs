@@ -1,0 +1,360 @@
+namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
+
+using System.Text.Json;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     Pins the single canonical <see cref="LlamaServerLaunchProjection" /> the launch-spec builder now emits from.
+///     Two things must hold and are asserted as whole argument vectors rather than spot-checks, because a projection
+///     that renders ALMOST the right flags is worse than none: every launch mode (GPU explore, GPU replay, CPU replay,
+///     pooled role) still produces byte-identical argv, and the projection's identity is stable for equal inputs and
+///     moves for any differing field.
+/// </summary>
+public sealed class LlamaServerLaunchProjectionTests
+{
+    private const string ExecutablePath = "/fake/bin/llama-server";
+    private const string ModelFilePath = "/fake/models/model.gguf";
+    private const int Port = 8080;
+
+    private static readonly LlamaServerProcessSupervisor.ProcessKey ChatKey = new("llama3", ModelRole.Chat);
+    private static readonly LlamaServerProcessSupervisor.ProcessKey EmbeddingKey = new("nomic-embed", ModelRole.Embedding);
+
+    [Test]
+    public void ArgumentVector_GpuExploreWithPolicyPlan_IsUnchanged()
+    {
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: true,
+            "q8_0",
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "16384", "-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+        ]);
+    }
+
+    [Test]
+    public void ArgumentVector_GpuReplayWithNoPlan_IsUnchanged()
+    {
+        // The benchmark/replay-profiling shape: policy bypassed entirely, frozen args emitted verbatim. This is the
+        // vector the CPU fix must NOT perturb.
+        var resolved = ResolvedLaunchArguments.Replay(ctxSize: 8192,
+            nGpuLayers: 24,
+            tensorSplit: "0.6,0.4",
+            overrideTensor: "exps=CPU",
+            kvTypeK: "q8_0",
+            kvTypeV: "q8_0",
+            flashAttn: true);
+
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            resolved,
+            chatCacheReuse: 0);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "-c", "8192", "--n-gpu-layers", "24", "-ts", "0.6,0.4", "-ot", "exps=CPU",
+            "-ctk", "q8_0", "-ctv", "q8_0", "--flash-attn", "on",
+            "--jinja", "--cache-ram", "0"
+        ]);
+    }
+
+    [Test]
+    public void ArgumentVector_CpuReplayWithCpuReplayPlan_CarriesContextAndThreads()
+    {
+        // The pre-existing gap this closes: a CPU spawn emits none of a GPU profile's replay args, so with no plan it
+        // previously emitted NO -c and NO thread counts and ran at llama.cpp's own defaults.
+        var policy = NewPolicy(cpuThreads: 6, cpuThreadsBatch: 8);
+        var resolved = ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24);
+
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cpu,
+            resolved,
+            chatCacheReuse: 0,
+            plan: policy.ResolveCpuReplayPlan(resolved));
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "-c", "4096", "-t", "6", "-tb", "8",
+            "--jinja", "--cache-ram", "0"
+        ]);
+
+        // A CPU build never inherits GPU placement, auto-fit or the KV vector from a frozen GPU profile.
+        AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "A CPU spawn must not replay GPU placement.");
+        AssertEx.False(spec.Arguments.Contains("--fit"), "A CPU spawn must not auto-fit.");
+        AssertEx.False(spec.Arguments.Contains("--metrics"), "A CPU spawn exposes no /metrics.");
+        AssertEx.False(spec.Arguments.Contains("-ctk"), "A CPU spawn keeps the f16 KV default.");
+    }
+
+    [Test]
+    public void ArgumentVector_PooledRole_StillSizesBatchToTheEmittedContext()
+    {
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 2048,
+            UseKvCacheQuantization: false,
+            "q8_0",
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "2048",
+            "--embeddings", "--pooling", "mean", "-b", "2048", "-ub", "2048", "--cache-ram", "0"
+        ]);
+    }
+
+    [Test]
+    public void ArgumentVector_PooledCpuReplayWithNoPlan_KeepsTheFrozenContextBatch()
+    {
+        // A pooled role sizes -b/-ub off whichever context the spawn emits, falling back to the frozen replay's own
+        // when no plan supplies one. That fallback is load-bearing for input length and must survive the refactor.
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Replay(ctxSize: 3072),
+            chatCacheReuse: 0);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--embeddings", "--pooling", "mean", "-b", "3072", "-ub", "3072", "--cache-ram", "0"
+        ]);
+    }
+
+    [Test]
+    public void From_GpuReplay_ProjectsTheFrozenVectorAndPinsFlashAttentionOn()
+    {
+        var resolved = ResolvedLaunchArguments.Replay(ctxSize: 8192,
+            nGpuLayers: 24,
+            tensorSplit: "0.6,0.4",
+            overrideTensor: "exps=CPU",
+            kvTypeK: "q4_0",
+            kvTypeV: "q4_0",
+            flashAttn: true);
+
+        var projection = LlamaServerLaunchProjection.From(GpuVariant.Cuda, resolved, plan: null);
+
+        AssertEx.False(projection.AutoFit);
+        AssertEx.True(projection.Metrics);
+        AssertEx.Equal<int?>(expected: 8192, projection.ContextTokens);
+        AssertEx.Equal<int?>(expected: 24, projection.GpuLayers);
+        AssertEx.Equal("0.6,0.4", projection.TensorSplit);
+        AssertEx.Equal("exps=CPU", projection.OverrideTensor);
+        AssertEx.Equal("q4_0", projection.KvCacheTypeK);
+        AssertEx.Equal("q4_0", projection.KvCacheTypeV);
+        AssertEx.Equal(LlamaServerLaunchProjection.FlashAttentionOn, projection.FlashAttentionMode);
+        AssertEx.Null(projection.Threads);
+        AssertEx.Equal(expected: 1, projection.Parallel);
+        AssertEx.True(projection.Jinja);
+        AssertEx.Null(projection.Pooling);
+    }
+
+    [Test]
+    public void From_WithoutExplicitKvTypes_RecordsFlashAttentionAsAuto()
+    {
+        // f16 KV emits no -ctk/-ctv and no -fa at all, so the honest record of the flash-attention decision is "auto"
+        // (llama.cpp chose), never "off" (which would claim a flag nobody passed).
+        var projection = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24),
+            plan: null);
+
+        AssertEx.Null(projection.KvCacheTypeK);
+        AssertEx.Null(projection.KvCacheTypeV);
+        AssertEx.Equal(LlamaServerLaunchProjection.FlashAttentionAuto, projection.FlashAttentionMode);
+    }
+
+    [Test]
+    public void ComputeIdentity_IsStableForEqualInputs_AndMovesWhenTheKvTypeChanges()
+    {
+        var f16 = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24);
+        var q8 = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true);
+        var q4 = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q4_0", kvTypeV: "q4_0", flashAttn: true);
+
+        var first = LlamaServerLaunchProjection.From(GpuVariant.Cuda, q8, plan: null).ComputeIdentity();
+        var second = LlamaServerLaunchProjection.From(GpuVariant.Cuda, q8, plan: null).ComputeIdentity();
+
+        AssertEx.Equal(first, second);
+        AssertEx.Equal(expected: 64, first.Length);
+        AssertEx.NotEqual(first, LlamaServerLaunchProjection.From(GpuVariant.Cuda, q4, plan: null).ComputeIdentity());
+        AssertEx.NotEqual(first, LlamaServerLaunchProjection.From(GpuVariant.Cuda, f16, plan: null).ComputeIdentity());
+    }
+
+    [Test]
+    public void ComputeIdentity_IsSensitiveToEveryProjectedField()
+    {
+        // The identity is only useful if it moves for anything that changes the launch. Walk one field at a time off a
+        // baseline and assert each mutation produces a distinct hash.
+        var baseline = FullyPopulatedProjection();
+
+        LlamaServerLaunchProjection[] mutations =
+        [
+            baseline with { AutoFit = true },
+            baseline with { Metrics = false },
+            baseline with { ContextTokens = 8193 },
+            baseline with { GpuLayers = 25 },
+            baseline with { TensorSplit = "0.5,0.5" },
+            baseline with { OverrideTensor = "exps=GPU" },
+            baseline with { KvCacheTypeK = "q4_0" },
+            baseline with { KvCacheTypeV = "q4_0" },
+            baseline with { FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionAuto },
+            baseline with { Threads = 7 },
+            baseline with { ThreadsBatch = 9 },
+            baseline with { BatchSize = 4096 },
+            baseline with { UbatchSize = 4096 },
+            baseline with { Parallel = 2 },
+            baseline with { CacheReuse = null },
+            baseline with { CacheRamMiB = 0 },
+            baseline with { Jinja = false },
+            baseline with { Pooling = "rank" }
+        ];
+
+        var identities = new HashSet<string>(StringComparer.Ordinal)
+        {
+            baseline.ComputeIdentity()
+        };
+
+        foreach (var mutation in mutations)
+        {
+            AssertEx.True(identities.Add(mutation.ComputeIdentity()),
+                $"A mutated projection reused an existing identity: {mutation}");
+        }
+
+        AssertEx.Equal(mutations.Length + 1, identities.Count);
+    }
+
+    [Test]
+    public void Projection_CarriesNoPathHostOrPort()
+    {
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: true,
+            "q8_0",
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+        var projection = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            plan,
+            ModelRole.Chat,
+            chatCacheReuse: 256,
+            chatCacheRamMiB: 512);
+
+        var serialized = JsonSerializer.Serialize(projection);
+
+        foreach (var forbidden in new[] { ModelFilePath, ExecutablePath, "/fake", "127.0.0.1", "8080" })
+        {
+            AssertEx.False(serialized.Contains(forbidden, StringComparison.Ordinal),
+                $"The launch projection leaked '{forbidden}': {serialized}");
+        }
+    }
+
+    [Test]
+    public void ResolveCpuReplayPlan_ForExploreArguments_RequestsNoContext()
+    {
+        // Explore pins no context of its own, so there is nothing for a policy-free CPU spawn to carry over — and a
+        // -c 0 would be a launch failure, not a default.
+        var plan = NewPolicy(cpuThreads: 6, cpuThreadsBatch: 8).ResolveCpuReplayPlan(ResolvedLaunchArguments.Explore());
+
+        AssertEx.Null(plan.RequestedContextTokens);
+        AssertEx.Equal<int?>(expected: 6, plan.CpuThreads);
+        AssertEx.Equal<int?>(expected: 8, plan.CpuThreadsBatch);
+        AssertEx.False(plan.UseKvCacheQuantization, "The CPU replay plan never touches the KV vector.");
+    }
+
+    [Test]
+    public void ResolveCpuReplayPlan_WithThreadPolicyDisabled_StillCarriesTheFrozenContext()
+    {
+        var policy = new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions
+            {
+                EnableCpuThreadPolicy = false
+            },
+            new FakeLaunchFallbackStore());
+
+        var plan = policy.ResolveCpuReplayPlan(ResolvedLaunchArguments.Replay(ctxSize: 4096));
+
+        AssertEx.Equal<int?>(expected: 4096, plan.RequestedContextTokens);
+        AssertEx.Null(plan.CpuThreads);
+        AssertEx.Null(plan.CpuThreadsBatch);
+    }
+
+    [Test]
+    public void ComputeIdentity_ForAFixedProjection_IsTheHashItHasAlwaysProduced()
+    {
+        // Identities are persisted alongside benchmark runs, so reordering, renaming or adding a projected member would
+        // silently invalidate every stored one while every other test here still passed. This literal is the tripwire.
+        AssertEx.Equal("f642c972396108f8129c6a01812775f43f15047eca05248886986f6c52b737b4",
+            FullyPopulatedProjection().ComputeIdentity());
+    }
+
+    private static LlamaServerLaunchProjection FullyPopulatedProjection()
+    {
+        return new LlamaServerLaunchProjection(AutoFit: false,
+            Metrics: true,
+            ContextTokens: 8192,
+            GpuLayers: 24,
+            TensorSplit: "0.6,0.4",
+            OverrideTensor: "exps=CPU",
+            KvCacheTypeK: "q8_0",
+            KvCacheTypeV: "q8_0",
+            LlamaServerLaunchProjection.FlashAttentionOn,
+            Threads: 6,
+            ThreadsBatch: 8,
+            BatchSize: 2048,
+            UbatchSize: 2048,
+            Parallel: 1,
+            CacheReuse: 256,
+            CacheRamMiB: 512,
+            Jinja: true,
+            Pooling: "mean");
+    }
+
+    private static LlamaServerLaunchPolicy NewPolicy(int cpuThreads, int cpuThreadsBatch)
+    {
+        // Pin the thread counts explicitly: the derived counts read Environment.ProcessorCount, which differs per box.
+        return new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions
+            {
+                CpuThreadCount = cpuThreads,
+                CpuThreadsBatchCount = cpuThreadsBatch
+            },
+            new FakeLaunchFallbackStore());
+    }
+
+    private static void AssertVector(LlamaServerLaunchSpec spec, IReadOnlyList<string> expected)
+    {
+        AssertEx.Equal(string.Join(' ', expected), string.Join(' ', spec.Arguments));
+    }
+}

@@ -7,8 +7,12 @@ import type {
 } from "@/core/api/generated";
 import type {
 	BenchmarkEligibleModel,
+	BenchmarkEvidenceObject,
+	BenchmarkFlashAttentionMode,
 	BenchmarkJudgeResult,
 	BenchmarkJudgeStatus,
+	BenchmarkKvCacheTypeSource,
+	BenchmarkLaunchFacts,
 	BenchmarkOrigin,
 	BenchmarkOutputPart,
 	BenchmarkPrimaryStatus,
@@ -54,8 +58,42 @@ export function toBenchmarkProjectDetail(value: ProjectDetailResponse): Benchmar
 const primaryStatus = (value: RunSummaryResponse["primaryStatus"]): BenchmarkPrimaryStatus => value ?? "Failed";
 const judgeStatus = (value: RunSummaryResponse["judgeStatus"]): BenchmarkJudgeStatus => value ?? "Failed";
 
+const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
+const count = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
+const flag = (value: unknown): boolean | null => (typeof value === "boolean" ? value : null);
+const kvSource = (value: unknown): BenchmarkKvCacheTypeSource | null => (value === "explicit" || value === "auto" ? value : null);
+const flashAttention = (value: unknown): BenchmarkFlashAttentionMode | null =>
+	value === "auto" || value === "on" ? value : null;
+const evidenceObject = (value: unknown): BenchmarkEvidenceObject | null =>
+	typeof value === "object" && value !== null && !Array.isArray(value) ? (value as BenchmarkEvidenceObject) : null;
+
+// The two launch sides carry the identical column set under a `primary…`/`judge…` prefix, so one prefix-driven reader
+// covers both. Every member is nullable by contract (D7: legacy rows predate the receipt and stay NULL).
+function launchFacts(value: RunSummaryResponse, prefix: "primary" | "judge"): BenchmarkLaunchFacts {
+	const at = (suffix: string): unknown => (value as Record<string, unknown>)[`${prefix}${suffix}`];
+	return {
+		variant: text(at("Variant")),
+		kvCacheType: text(at("KvCacheType")),
+		kvCacheTypeSource: kvSource(at("KvCacheTypeSource")),
+		kvAutoReason: text(at("KvAutoReason")),
+		flashAttentionMode: flashAttention(at("FlashAttentionMode")),
+		intendedLaunchIdentity: text(at("IntendedLaunchIdentity")),
+		intendedExecutableSha256: text(at("IntendedExecutableSha256")),
+		effectiveLaunchIdentity: text(at("EffectiveLaunchIdentity")),
+		effectiveBackend: text(at("EffectiveBackend")),
+		placementOffloaded: count(at("PlacementOffloaded")),
+		placementTotal: count(at("PlacementTotal")),
+		executableSha256: text(at("ExecutableSha256")),
+		hasAuxAssets: flag(at("HasAuxAssets")),
+		receiptHash: text(at("ReceiptHash")),
+		environmentFactsHash: text(at("EnvironmentFactsHash")),
+	};
+}
+
 export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSummary {
 	return {
+		primaryLaunch: launchFacts(value, "primary"),
+		judgeLaunch: launchFacts(value, "judge"),
 		id: value.id ?? "",
 		projectId: value.projectId ?? "",
 		primaryModelName: value.primaryModelName,
@@ -100,6 +138,10 @@ function judgeResult(value: RunDetailResponse["judgeResult"]): BenchmarkJudgeRes
 export function toBenchmarkRunDetail(value: RunDetailResponse): BenchmarkRunDetail {
 	return {
 		...toBenchmarkRunSummary(value),
+		primaryLaunchReceipt: evidenceObject(value.primaryLaunchReceipt),
+		judgeLaunchReceipt: evidenceObject(value.judgeLaunchReceipt),
+		primaryEnvironmentFacts: evidenceObject(value.primaryEnvironmentFacts),
+		judgeEnvironmentFacts: evidenceObject(value.judgeEnvironmentFacts),
 		outputParts: outputParts(value.outputParts),
 		judgeResult: judgeResult(value.judgeResult),
 		primaryErrorMessage: value.primaryErrorMessage ?? null,

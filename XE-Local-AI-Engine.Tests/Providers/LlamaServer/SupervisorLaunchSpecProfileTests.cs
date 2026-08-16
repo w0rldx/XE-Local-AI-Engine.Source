@@ -101,6 +101,14 @@ public sealed class SupervisorLaunchSpecProfileTests
             _ = ResolvedLaunchArguments.Replay(ctxSize: 4096, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: false);
             return Task.CompletedTask;
         });
+
+        // Matching-type rule, tightened: both-set is not enough — the fused path needs the SAME type on K and V, and an
+        // asymmetric pair otherwise reaches the launch line as two conflicting -ctk/-ctv values.
+        await AssertEx.ThrowsAsync<ArgumentException>(() =>
+        {
+            _ = ResolvedLaunchArguments.Replay(ctxSize: 4096, kvTypeK: "q8_0", kvTypeV: "q4_0", flashAttn: true);
+            return Task.CompletedTask;
+        });
     }
 
     [Test]

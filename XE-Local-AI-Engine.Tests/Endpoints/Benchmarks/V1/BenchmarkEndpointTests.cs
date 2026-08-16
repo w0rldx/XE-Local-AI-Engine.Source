@@ -54,7 +54,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
-        context.Store.ListRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([Run()]);
+        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(1);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -87,7 +87,7 @@ public sealed class BenchmarkEndpointTests
     public async Task StartRun_ReturnsAcceptedWithSafeRunDetail()
     {
         await using var context = CreateContext();
-        context.RunFreeze.StartAsync(ProjectId, "model", 4, Arg.Any<CancellationToken>()).Returns(Run());
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, null, Arg.Any<CancellationToken>()).Returns(Run());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
             new
@@ -101,6 +101,108 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
         AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task StartRun_CanonicalizesTheRequestedKvCacheTypeBeforeFreezing()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, Arg.Any<CancellationToken>()).Returns(Run());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4,
+                kvCacheType = "  Q8_0  "
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        _ = context.RunFreeze.Received(1).StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRun_UnknownKvCacheType_IsABadRequest()
+    {
+        await using var context = CreateContext();
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4,
+                kvCacheType = "q3_k"
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "The requested KV-cache type is not supported.");
+        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(Guid.Empty, default!, default, default, default);
+    }
+
+    [Test]
+    public async Task StartRun_UnsupportedKvCacheType_IsUnprocessable()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q4_0, Arg.Any<CancellationToken>())
+               .Returns<BenchmarkRunRecord>(_ => throw new BenchmarkUnsupportedKvCacheTypeException("A q4_0 KV cache needs a GPU llama.cpp build."));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4,
+                kvCacheType = "q4_0"
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
+            "A q4_0 KV cache needs a GPU llama.cpp build.");
+    }
+
+    [Test]
+    public async Task GetRun_ExposesTheIntendedAndEffectiveLaunchFieldsAndTheDecodedReceipt()
+    {
+        await using var context = CreateContext();
+        var receipt = "{\"executableSha256\":\"exe-sha\",\"auxAssets\":{\"hasLora\":true,\"hasMmproj\":false,\"hasDraft\":false}}";
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(intent: new BenchmarkRunLaunchIntent("cuda", BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto,
+                       null, "on", "intended-identity", "manifest-sha"),
+                   evidence: new BenchmarkRunLaunchEvidence(Encoding.UTF8.GetBytes(receipt),
+                       Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"),
+                       "receipt-hash",
+                       "environment-hash",
+                       "effective-identity",
+                       "cuda",
+                       33,
+                       33,
+                       "exe-sha",
+                       true,
+                       BenchmarkKvCacheType.SourceAuto)));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        AssertEx.Equal("q8_0", root.GetProperty("primaryKvCacheType").GetString());
+        AssertEx.Equal("auto", root.GetProperty("primaryKvCacheTypeSource").GetString());
+        AssertEx.Equal("intended-identity", root.GetProperty("primaryIntendedLaunchIdentity").GetString());
+        AssertEx.Equal("effective-identity", root.GetProperty("primaryEffectiveLaunchIdentity").GetString());
+        AssertEx.Equal("cuda", root.GetProperty("primaryEffectiveBackend").GetString());
+        AssertEx.Equal(expected: 33, root.GetProperty("primaryPlacementOffloaded").GetInt32());
+        AssertEx.Equal("exe-sha", root.GetProperty("primaryExecutableSha256").GetString());
+        AssertEx.True(root.GetProperty("primaryHasAuxAssets").GetBoolean(), "An adapter recorded in the receipt must surface as an aux-asset flag.");
+        AssertEx.Equal("receipt-hash", root.GetProperty("primaryReceiptHash").GetString());
+        AssertEx.Equal("environment-hash", root.GetProperty("primaryEnvironmentFactsHash").GetString());
+        AssertEx.Equal("exe-sha", root.GetProperty("primaryLaunchReceipt").GetProperty("executableSha256").GetString());
+        AssertEx.Equal(expected: 1, root.GetProperty("primaryEnvironmentFacts").GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeKvCacheType").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeLaunchReceipt").ValueKind);
     }
 
     [Test]
@@ -246,7 +348,9 @@ public sealed class BenchmarkEndpointTests
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
         BenchmarkJudgeStatus judge = BenchmarkJudgeStatus.Disabled,
-        string? output = null) =>
+        string? output = null,
+        BenchmarkRunLaunchIntent? intent = null,
+        BenchmarkRunLaunchEvidence? evidence = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -274,7 +378,10 @@ public sealed class BenchmarkEndpointTests
             null,
             null,
             null,
-            20);
+            20,
+            intent,
+            null,
+            evidence);
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.

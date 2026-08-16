@@ -38,6 +38,42 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");
         builder.Property(entity => entity.JudgeStatus).HasColumnName("judge_status").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.JudgeResultJson).HasColumnName("judge_result_json");
+        builder.Property(entity => entity.PrimaryVariant).HasColumnName("primary_variant").HasMaxLength(32);
+        builder.Property(entity => entity.PrimaryKvCacheType).HasColumnName("primary_kv_cache_type").HasMaxLength(32);
+        builder.Property(entity => entity.PrimaryKvCacheTypeSource).HasColumnName("primary_kv_cache_type_source").HasMaxLength(16);
+        builder.Property(entity => entity.PrimaryKvAutoReason).HasColumnName("primary_kv_auto_reason").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryFlashAttentionMode).HasColumnName("primary_flash_attention_mode").HasMaxLength(16);
+        builder.Property(entity => entity.PrimaryIntendedLaunchIdentity).HasColumnName("primary_intended_launch_identity").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryIntendedExecutableSha256).HasColumnName("primary_intended_executable_sha256").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryLaunchReceiptJson).HasColumnName("primary_launch_receipt_json");
+        builder.Property(entity => entity.PrimaryEnvironmentFactsJson).HasColumnName("primary_environment_facts_json");
+        builder.Property(entity => entity.PrimaryReceiptHash).HasColumnName("primary_receipt_hash").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryEnvironmentFactsHash).HasColumnName("primary_environment_facts_hash").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryEffectiveLaunchIdentity).HasColumnName("primary_effective_launch_identity").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryEffectiveBackend).HasColumnName("primary_effective_backend").HasMaxLength(32);
+        builder.Property(entity => entity.PrimaryPlacementOffloaded).HasColumnName("primary_placement_offloaded");
+        builder.Property(entity => entity.PrimaryPlacementTotal).HasColumnName("primary_placement_total");
+        builder.Property(entity => entity.PrimaryLaunchExecutableSha256).HasColumnName("primary_launch_executable_sha256").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryLaunchHasAuxAssets).HasColumnName("primary_launch_has_aux_assets");
+        builder.Property(entity => entity.PrimaryLaunchKvCacheTypeSource).HasColumnName("primary_launch_kv_cache_type_source").HasMaxLength(16);
+        builder.Property(entity => entity.JudgeVariant).HasColumnName("judge_variant").HasMaxLength(32);
+        builder.Property(entity => entity.JudgeKvCacheType).HasColumnName("judge_kv_cache_type").HasMaxLength(32);
+        builder.Property(entity => entity.JudgeKvCacheTypeSource).HasColumnName("judge_kv_cache_type_source").HasMaxLength(16);
+        builder.Property(entity => entity.JudgeKvAutoReason).HasColumnName("judge_kv_auto_reason").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeFlashAttentionMode).HasColumnName("judge_flash_attention_mode").HasMaxLength(16);
+        builder.Property(entity => entity.JudgeIntendedLaunchIdentity).HasColumnName("judge_intended_launch_identity").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeIntendedExecutableSha256).HasColumnName("judge_intended_executable_sha256").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeLaunchReceiptJson).HasColumnName("judge_launch_receipt_json");
+        builder.Property(entity => entity.JudgeEnvironmentFactsJson).HasColumnName("judge_environment_facts_json");
+        builder.Property(entity => entity.JudgeReceiptHash).HasColumnName("judge_receipt_hash").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeEnvironmentFactsHash).HasColumnName("judge_environment_facts_hash").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeEffectiveLaunchIdentity).HasColumnName("judge_effective_launch_identity").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeEffectiveBackend).HasColumnName("judge_effective_backend").HasMaxLength(32);
+        builder.Property(entity => entity.JudgePlacementOffloaded).HasColumnName("judge_placement_offloaded");
+        builder.Property(entity => entity.JudgePlacementTotal).HasColumnName("judge_placement_total");
+        builder.Property(entity => entity.JudgeLaunchExecutableSha256).HasColumnName("judge_launch_executable_sha256").HasMaxLength(64);
+        builder.Property(entity => entity.JudgeLaunchHasAuxAssets).HasColumnName("judge_launch_has_aux_assets");
+        builder.Property(entity => entity.JudgeLaunchKvCacheTypeSource).HasColumnName("judge_launch_kv_cache_type_source").HasMaxLength(16);
         builder.Property(entity => entity.PrimaryErrorMessage).HasColumnName("primary_error_message").HasMaxLength(1024);
         builder.Property(entity => entity.JudgeErrorMessage).HasColumnName("judge_error_message").HasMaxLength(1024);
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
@@ -53,6 +89,11 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             entity.ProjectId,
             entity.CreatedAtUtc
         }).HasDatabaseName("ix_benchmark_runs_project_created_at");
+        builder.HasIndex(entity => new
+        {
+            entity.ProjectId,
+            entity.PrimaryKvCacheType
+        }).HasDatabaseName("ix_benchmark_runs_project_primary_kv_cache_type");
     }
 
     private static string? ConvertOriginToStore(LocalModelOrigin? value) =>

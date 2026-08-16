@@ -115,17 +115,17 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         await using var verifyContext = CreateContext(databasePath);
         var verifyStore = new BenchmarkStore(verifyContext, TimeProvider.System);
-        var runs = await verifyStore.ListRunsAsync(project.Id);
+        var runCount = await verifyStore.CountRunsAsync(project.Id);
         var finalProject = AssertEx.NotNull(await verifyStore.GetProjectAsync(project.Id));
         if (startWon)
         {
-            AssertEx.Equal(expected: 1, runs.Count);
+            AssertEx.Equal(expected: 1, runCount);
             AssertEx.NotNull(await verifyStore.ClaimNextAsync(), "The winning StartRun must leave claimable primary work.");
             AssertEx.Equal("Benchmark", finalProject.Name, "A losing project update must not persist.");
         }
         else
         {
-            AssertEx.Equal(expected: 0, runs.Count);
+            AssertEx.Equal(expected: 0, runCount);
             AssertEx.Null(await verifyStore.ClaimNextAsync(), "A losing StartRun must not insert a claimable work item.");
             AssertEx.Equal("Updated", finalProject.Name);
         }
@@ -356,7 +356,7 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         AssertEx.Equal("FreezeDependencyChanged", exception.Code);
         AssertEx.True(guard.WasCalled, "The dependency guard must execute before persistence mutation.");
-        AssertEx.Equal(expected: 0, (await store.ListRunsAsync(project.Id)).Count);
+        AssertEx.Equal(expected: 0, await store.CountRunsAsync(project.Id));
         AssertEx.Null(await store.ClaimNextAsync(), "A rejected freeze must not leave primary work behind.");
     }
 
@@ -416,9 +416,211 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task ListRuns_PagesInTheDatabaseAndReturnsNoEncryptedPayloads()
+    {
+        var databasePath = GetDatabasePath("list-runs-paging.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var created = new List<Guid>();
+        for (var index = 0; index < 5; index++)
+        {
+            project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+            created.Add((await store.StartRunAsync(CreateRun(project) with
+            {
+                PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "auto", null, "on", "intended", "manifest-sha")
+            })).Id);
+        }
+
+        var firstPage = await store.ListRunsAsync(project.Id, skip: 0, take: 2);
+        var secondPage = await store.ListRunsAsync(project.Id, skip: 2, take: 2);
+        var lastPage = await store.ListRunsAsync(project.Id, skip: 4, take: 2);
+
+        AssertEx.Equal(expected: 5, firstPage.TotalCount, "TotalCount counts the project, not the page.");
+        AssertEx.Equal(expected: 2, firstPage.Items.Count);
+        AssertEx.Equal(expected: 1, lastPage.Items.Count);
+        AssertEx.Equal(expected: 5, await store.CountRunsAsync(project.Id));
+        AssertEx.Empty(firstPage.Items.Select(static run => run.Id).Intersect(secondPage.Items.Select(static run => run.Id)));
+
+        var row = firstPage.Items[0];
+        AssertEx.True(row.RuntimeSnapshotJson.IsEmpty, "The list path must not read the encrypted snapshot column.");
+        AssertEx.Null(row.OutputPartsJson);
+        AssertEx.Null(row.JudgeResultJson);
+        // The summary still carries everything the list view renders — the flat columns, not the payloads.
+        AssertEx.Equal("q8_0", AssertEx.NotNull(row.PrimaryLaunchIntent).KvCacheType);
+        AssertEx.Equal("model.gguf", row.PrimaryModelName);
+        AssertEx.Null(row.PrimaryLaunchEvidence, "A run that never launched carries no evidence block.");
+    }
+
+    [Test]
+    public async Task StartRun_PersistsTheFreezeLaunchIntentForBothPhases()
+    {
+        var databasePath = GetDatabasePath("launch-intent.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject() with
+        {
+            JudgeEnabled = true,
+            JudgeModelName = "judge.gguf",
+            JudgeContextTokens = 2048
+        });
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            JudgeEnabled = true,
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-primary", "manifest-sha"),
+            JudgeLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "f16", "auto", "manifest-unsupported", "auto", "intended-judge", "manifest-sha")
+        });
+
+        var reloaded = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        var primary = AssertEx.NotNull(reloaded.PrimaryLaunchIntent);
+        AssertEx.Equal("q8_0", primary.KvCacheType);
+        AssertEx.Equal("explicit", primary.KvCacheTypeSource);
+        AssertEx.Null(primary.KvAutoReason);
+        AssertEx.Equal("intended-primary", primary.IntendedLaunchIdentity);
+        var judge = AssertEx.NotNull(reloaded.JudgeLaunchIntent);
+        AssertEx.Equal("f16", judge.KvCacheType);
+        AssertEx.Equal("manifest-unsupported", judge.KvAutoReason);
+        AssertEx.Null(reloaded.PrimaryLaunchEvidence, "A run that has not launched carries no evidence.");
+    }
+
+    [Test]
+    public async Task StartRun_WithoutAFreezeIntent_LeavesTheLegacyColumnsNull()
+    {
+        var databasePath = GetDatabasePath("launch-intent-legacy.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+
+        var reloaded = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        AssertEx.Null(reloaded.PrimaryLaunchIntent);
+        AssertEx.Null(reloaded.JudgeLaunchIntent);
+        AssertEx.Null(reloaded.PrimaryLaunchEvidence);
+        AssertEx.Null(reloaded.JudgeLaunchEvidence);
+    }
+
+    [Test]
+    public async Task MarkPrimaryLaunchReady_WritesOnceEncryptsThePayloadsAndSurvivesTerminalizationAndRecovery()
+    {
+        var databasePath = GetDatabasePath("launch-ready.sqlite");
+        Guid runId;
+        var receipt = Encoding.UTF8.GetBytes("{\"receiptVersion\":1}");
+        var environment = Encoding.UTF8.GetBytes("{\"schemaVersion\":1}");
+        await using (var context = CreateContext(databasePath))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var store = new BenchmarkStore(context, TimeProvider.System);
+            var project = await store.CreateProjectAsync(CreateProject());
+            var run = await store.StartRunAsync(CreateRun(project));
+            runId = run.Id;
+            var work = AssertEx.NotNull(await store.ClaimNextAsync());
+            var versionBefore = AssertEx.NotNull(await store.GetRunAsync(runId)).Version;
+
+            AssertEx.True(await store.MarkPrimaryLaunchReadyAsync(runId, work.QueueSequence, work.Version, Receipt(receipt, environment)),
+                "The first checkpoint on a running work item must be accepted.");
+            AssertEx.False(await store.MarkPrimaryLaunchReadyAsync(runId, work.QueueSequence, work.Version, Receipt(receipt, environment, "other-hash")),
+                "The checkpoint is insert-if-null: a second call must not overwrite it.");
+
+            var afterCheckpoint = AssertEx.NotNull(await store.GetRunAsync(runId));
+            AssertEx.Equal(versionBefore, afterCheckpoint.Version, "Recording evidence must not move the run version.");
+            AssertEx.Equal(BenchmarkPrimaryStatus.Running, afterCheckpoint.PrimaryStatus);
+            var evidence = AssertEx.NotNull(afterCheckpoint.PrimaryLaunchEvidence);
+            AssertEx.Equal("receipt-hash", evidence.ReceiptHash);
+            AssertEx.Equal("cuda", evidence.EffectiveBackend);
+            AssertEx.Equal<int?>(33, evidence.PlacementOffloaded);
+            AssertEx.Equal("exe-sha", evidence.ExecutableSha256);
+            AssertEx.Equal<bool?>(true, evidence.HasAuxAssets);
+            AssertBytes(receipt, evidence.ReceiptJson!.Value.Span);
+            AssertBytes(environment, evidence.EnvironmentFactsJson!.Value.Span);
+
+            _ = await store.MarkPrimaryFailedAsync(runId, work.Version, "spawn failed", 5);
+            AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(runId)).PrimaryLaunchEvidence, "Terminalizing must not clear the evidence.");
+        }
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync();
+            AssertCiphertext(await ReadRunLaunchReceiptAsync(connection, runId), receipt);
+            AssertCiphertext(await ReadRunEnvironmentFactsAsync(connection, runId), environment);
+        }
+
+        await using var fresh = CreateContext(databasePath);
+        var freshStore = new BenchmarkStore(fresh, TimeProvider.System);
+        _ = await freshStore.RecoverRunsOnStartupAsync();
+        var recovered = AssertEx.NotNull(await freshStore.GetRunAsync(runId));
+        AssertBytes(receipt, AssertEx.NotNull(recovered.PrimaryLaunchEvidence).ReceiptJson!.Value.Span);
+    }
+
+    [Test]
+    public async Task MarkPrimaryLaunchReady_RefusesRecoveredWorkAndAnotherRunsWorkItem()
+    {
+        var databasePath = GetDatabasePath("launch-ready-negatives.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var first = await store.StartRunAsync(CreateRun(project));
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var second = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        AssertEx.Equal(first.Id, claimed.RunId);
+        var receipt = Receipt(Encoding.UTF8.GetBytes("{}"), Encoding.UTF8.GetBytes("{}"));
+
+        // A restart failed this work item ("Interrupted by application restart."), which is neither Running nor a
+        // cancellation successor — the process that comes back must not be able to backfill evidence onto it.
+        _ = await store.RecoverRunsOnStartupAsync();
+        AssertEx.False(await store.MarkPrimaryLaunchReadyAsync(claimed.RunId, claimed.QueueSequence, claimed.Version, receipt),
+            "Recovered (Failed) work must refuse a launch checkpoint.");
+
+        AssertEx.False(await store.MarkPrimaryLaunchReadyAsync(second.Id, claimed.QueueSequence, claimed.Version, receipt),
+            "A work item belonging to another run must never carry this run's evidence.");
+        AssertEx.Null(AssertEx.NotNull(await store.GetRunAsync(first.Id)).PrimaryLaunchEvidence);
+        AssertEx.Null(AssertEx.NotNull(await store.GetRunAsync(second.Id)).PrimaryLaunchEvidence);
+    }
+
+    [Test]
+    public async Task MarkJudgeLaunchReady_AcceptsTheCancellationSuccessorVersionAndRefusesEverythingElse()
+    {
+        var databasePath = GetDatabasePath("launch-ready-cas.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var judgeWork = await CreateRunningJudgeAsync(store);
+        var receipt = Receipt(Encoding.UTF8.GetBytes("{}"), Encoding.UTF8.GetBytes("{}"));
+        var run = AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId));
+
+        AssertEx.False(await store.MarkJudgeLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence + 100, judgeWork.Version, receipt),
+            "A checkpoint naming a work item that does not exist must be refused.");
+        AssertEx.False(await store.MarkJudgeLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence, judgeWork.Version + 2, receipt),
+            "Only the claimed version and its cancellation successor are accepted.");
+        AssertEx.False(await store.MarkPrimaryLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence, judgeWork.Version, receipt),
+            "A primary checkpoint must not land on the judge's work item.");
+        AssertEx.Null(AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId)).JudgeLaunchEvidence);
+
+        // An operator cancellation terminalizes the judge work item, bumping its version by exactly one; the launch
+        // that was already coming up must still be able to record what it did.
+        _ = await store.CancelAsync(judgeWork.RunId, run.Version);
+        AssertEx.True(await store.MarkJudgeLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence, judgeWork.Version, receipt),
+            "A cancelled work item at the successor version is the proven cancel-first ordering.");
+        var cancelled = AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId));
+        AssertEx.NotNull(cancelled.JudgeLaunchEvidence);
+        AssertEx.Equal(BenchmarkJudgeStatus.Cancelled, cancelled.JudgeStatus);
+    }
+
+    [Test]
     public async Task EncryptedField_CiphertextSubstitutionFailsAad()
     {
         var databasePath = GetDatabasePath("aad.sqlite");
+        Guid substitutedRunId;
         await using (var context = CreateContext(databasePath))
         {
             await context.Database.EnsureDeletedAsync();
@@ -430,11 +632,12 @@ public sealed class BenchmarkStoreTests : IDisposable
             var second = await store.StartRunAsync(CreateRun(project));
             await context.Database.ExecuteSqlInterpolatedAsync(
                 $"UPDATE benchmark_runs SET runtime_snapshot_json = (SELECT runtime_snapshot_json FROM benchmark_runs WHERE id = {first.Id}) WHERE id = {second.Id}");
+            substitutedRunId = second.Id;
         }
 
         await using var fresh = CreateContext(databasePath);
         _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() =>
-            new BenchmarkStore(fresh, TimeProvider.System).ListRunsAsync(fresh.BenchmarkProjects.Select(static item => item.Id).Single()));
+            new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(substitutedRunId));
     }
 
     [Test]
@@ -539,6 +742,35 @@ public sealed class BenchmarkStoreTests : IDisposable
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judge.Kind);
         return judge;
+    }
+
+    private static BenchmarkLaunchReceiptCommand Receipt(byte[] receiptJson, byte[] environmentJson, string receiptHash = "receipt-hash") =>
+        new(Encoding.UTF8.GetString(receiptJson),
+            Encoding.UTF8.GetString(environmentJson),
+            "environment-hash",
+            receiptHash,
+            "effective-identity",
+            "cuda",
+            33,
+            33,
+            "exe-sha",
+            true,
+            "auto");
+
+    private static async Task<byte[]> ReadRunLaunchReceiptAsync(SqliteConnection connection, Guid id)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT primary_launch_receipt_json FROM benchmark_runs WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        return (byte[])(await command.ExecuteScalarAsync())!;
+    }
+
+    private static async Task<byte[]> ReadRunEnvironmentFactsAsync(SqliteConnection connection, Guid id)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT primary_environment_facts_json FROM benchmark_runs WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        return (byte[])(await command.ExecuteScalarAsync())!;
     }
 
     private static async Task<byte[]> ReadProjectCoreTaskAsync(SqliteConnection connection, Guid id)

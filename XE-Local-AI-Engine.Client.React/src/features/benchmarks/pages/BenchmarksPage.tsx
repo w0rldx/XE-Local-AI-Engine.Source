@@ -24,9 +24,11 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
+import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
-import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkKvCacheType, BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkKvCacheTypes, isUnsupportedKvCacheTypeError } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
@@ -50,6 +52,8 @@ const emptyProject: BenchmarkProjectDraft = {
 };
 
 type EditorMode = "create" | "edit" | null;
+/** The picker's "Auto" entry is a UI-only value: it is sent as an omitted `kvCacheType`, which the node resolves. */
+const autoKvCacheType = "auto";
 
 interface BenchmarksPageProps {
 	/** Model names deep-linked from a training comparison report; the matching runs open selected. */
@@ -63,6 +67,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
+	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
 	const projectQuery = useBenchmarkProject(selectedProjectId);
 	const runsQuery = useBenchmarkRuns(selectedProjectId);
@@ -110,6 +115,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		});
 	}, [runsQuery.data, linkedRunIds]);
 
+	// The pick belongs to one prospective run; a different model or project is a different run, so it falls back to Auto
+	// rather than silently carrying a quantized type onto a model that may not support it.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: resetting is the effect, the pick itself is not an input.
+	useEffect(() => setSelectedKvCacheType(autoKvCacheType), [selectedModel, selectedProjectId]);
+
 	const detail = projectQuery.data;
 	const editDraft = useMemo<BenchmarkProjectDraft>(
 		() =>
@@ -149,6 +159,15 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			onError: (error) =>
 				toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."))),
 		});
+	};
+	// A 422 is the node refusing this KV type for this runtime (quantized KV on CPU, or a binary whose manifest does not
+	// support it). Its sanitized reason is the useful half; the hint says what actually gets the run started. A local
+	// response-validation failure reuses 422 as its status, and telling the operator to pick f16 would be nonsense there.
+	const startRunErrorMessage = (error: unknown): string => {
+		const message = apiErrorMessage(error, t("pages.benchmarks.errors.start", "Could not start the benchmark run."));
+		return isUnsupportedKvCacheTypeError(error)
+			? `${message} ${t("pages.benchmarks.errors.kvUnsupportedHint", "Pick f16 explicitly to run this model on this runtime.")}`
+			: message;
 	};
 	const toggleRun = (id: string): void => {
 		setSelectedRunIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current].slice(0, 2)));
@@ -264,6 +283,23 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 											label: `${model.modelName} · ${t(`pages.benchmarks.origin.${model.origin ?? "legacy"}`, model.origin ?? "Legacy / Unknown")}`,
 										}))}
 									/>
+									<Select
+										label={t("pages.benchmarks.run.kvCacheType", "KV cache type")}
+										description={t(
+											"pages.benchmarks.run.kvCacheTypeHelp",
+											"Quantized types launch with flash attention on. Auto uses q8_0 on GPU when the selected binary supports it, otherwise f16.",
+										)}
+										allowDeselect={false}
+										value={selectedKvCacheType}
+										onChange={(value) =>
+											setSelectedKvCacheType(benchmarkKvCacheTypes.find((type) => type === value) ?? autoKvCacheType)
+										}
+										data={[
+											{ value: autoKvCacheType, label: t("pages.benchmarks.run.kvCacheTypeAuto", "Auto") },
+											...benchmarkKvCacheTypes.map((type) => ({ value: type, label: type })),
+										]}
+										data-testid="benchmark-kv-cache-type"
+									/>
 									<Button
 										leftSection={<IconRocket size={16} />}
 										disabled={!selectedModel}
@@ -271,13 +307,15 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										onClick={() =>
 											selectedModel &&
 											startRun.mutate(
-												{ projectId: detail.id, modelName: selectedModel, expectedProjectVersion: detail.version },
+												{
+													projectId: detail.id,
+													modelName: selectedModel,
+													expectedProjectVersion: detail.version,
+													kvCacheType: selectedKvCacheType === autoKvCacheType ? null : selectedKvCacheType,
+												},
 												{
 													onSuccess: (run) => setSelectedRunIds((current) => [run.id, ...current].slice(0, 2)),
-													onError: (error) =>
-														toast.error(
-															apiErrorMessage(error, t("pages.benchmarks.errors.start", "Could not start the benchmark run.")),
-														),
+													onError: (error) => toast.error(startRunErrorMessage(error)),
 												},
 											)
 										}
@@ -307,6 +345,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 							</Button>
 						))}
 					</Group>
+					{selectedRunIds.length === 2 && selectedRunIds[0] && selectedRunIds[1] ? (
+						<BenchmarkLaunchCompare leftRunId={selectedRunIds[0]} rightRunId={selectedRunIds[1]} />
+					) : null}
 					<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>
 						{selectedRunIds.map((runId) => (
 							<BenchmarkRunLivePane key={runId} runId={runId} />

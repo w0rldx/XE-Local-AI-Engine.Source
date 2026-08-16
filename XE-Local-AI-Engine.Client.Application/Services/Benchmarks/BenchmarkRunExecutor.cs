@@ -23,6 +23,7 @@ public sealed class BenchmarkRunExecutor(
     ILlamaServerEndpointBinding endpointBinding,
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
+    IRuntimeEnvironmentFactsProvider environmentFacts,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
 {
     private const string FingerprintChangedMessage = "The installed model changed after the benchmark was created.";
@@ -39,6 +40,7 @@ public sealed class BenchmarkRunExecutor(
 
         using var registration = cancellations.Register(work.RunId, BenchmarkWorkKind.Primary, cancellationToken);
         var token = registration.Token;
+        RuntimeEnvironmentFactsV1? environment = null;
         try
         {
             var snapshot = snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
@@ -48,9 +50,18 @@ public sealed class BenchmarkRunExecutor(
                 throw new BenchmarkExecutionException(FingerprintChangedMessage);
             }
 
+            // The host facts this measurement was taken on, captured before anything is reserved or spawned so a
+            // failed launch still carries them. Non-throwing by contract.
+            environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
+
+            // Admission sizes against the context the FROZEN runtime will actually launch with, not the context the
+            // project requested: a profile replay can pin a larger window, and reserving the smaller one under-books.
+            // No launch admission: this run spawns its own exclusive process from the FROZEN replay arguments, so an
+            // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
             var decision = await capacity.DecideAsync(new CapacityRequest(snapshot.PrimaryModel.ModelName,
                                              ModelRole.Chat,
-                                             snapshot.RequestedContextTokens), token)
+                                             snapshot.PrimaryRuntime.ContextTokens,
+                                             PublishLaunchAdmission: false), token)
                                          .ConfigureAwait(false);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
@@ -77,6 +88,9 @@ public sealed class BenchmarkRunExecutor(
                                     snapshot.PrimaryRuntime.LaunchPolicy,
                                     async (profiling, profilingToken) =>
                                     {
+                                        // Durable BEFORE any token is generated: a run that reached readiness keeps
+                                        // its evidence no matter how the invocation ends.
+                                        await CheckpointAsync(work, profiling.LaunchReceipt, environment).ConfigureAwait(false);
                                         using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
                                         await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
                                         using var context = InvocationExecutionContext.CreatePlain(package,
@@ -136,12 +150,14 @@ public sealed class BenchmarkRunExecutor(
         }
         catch (OperationCanceledException)
         {
-            await TerminalizeCancelledAsync(work).ConfigureAwait(false);
+            await TerminalizeCancelledAsync(work, environment).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Benchmark primary work {RunId} failed.", work.RunId);
-            await TerminalizeFailedAsync(work, exception is BenchmarkExecutionException safe ? safe.Message : InvocationFailedMessage).ConfigureAwait(false);
+            await TerminalizeFailedAsync(work,
+                exception is BenchmarkExecutionException or LlamaRuntimeException ? exception.Message : InvocationFailedMessage,
+                environment).ConfigureAwait(false);
         }
     }
 
@@ -190,8 +206,38 @@ public sealed class BenchmarkRunExecutor(
             NumCtx = contextTokens
         };
 
-    private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work)
+    /// <summary>
+    ///     Writes the phase's launch evidence. Insert-if-null and keyed by the work item, so calling it at readiness
+    ///     and again while terminalizing records the first observation and ignores the second.
+    /// </summary>
+    private async Task CheckpointAsync(BenchmarkClaimedWork work,
+        LlamaServerLaunchReceipt? receipt,
+        RuntimeEnvironmentFactsV1? environment)
     {
+        var command = BenchmarkLaunchEvidence.TryBuild(receipt,
+            environment,
+            work.Run.PrimaryLaunchIntent?.KvCacheTypeSource ?? BenchmarkKvCacheType.SourceAuto);
+        if (command is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None)
+                           .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Evidence is not worth a measurement. A version race with an operator cancel, or a busy database, must
+            // not turn a healthy run into a failed one — and the token here is None, so nothing caught is a shutdown.
+            logger.LogWarning(exception, "Benchmark run {RunId}: the launch-evidence checkpoint could not be recorded.", work.RunId);
+        }
+    }
+
+    private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work, RuntimeEnvironmentFactsV1? environment)
+    {
+        await CheckpointAsync(work, receipt: null, environment).ConfigureAwait(false);
         var runId = work.RunId;
         var run = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
         if (run is null || run.PrimaryStatus == BenchmarkPrimaryStatus.Cancelled)
@@ -220,8 +266,9 @@ public sealed class BenchmarkRunExecutor(
         events.EvictPlaintext(runId);
     }
 
-    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work, string message)
+    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work, string message, RuntimeEnvironmentFactsV1? environment)
     {
+        await CheckpointAsync(work, receipt: null, environment).ConfigureAwait(false);
         var runId = work.RunId;
         var run = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
         if (run is null || run.PrimaryStatus is BenchmarkPrimaryStatus.Succeeded or BenchmarkPrimaryStatus.Failed or BenchmarkPrimaryStatus.Cancelled)
