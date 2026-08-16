@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// </summary>
 public sealed partial record StoredNodeSettings
 {
-    public const int DefaultMaxMessageRequestTimeoutSeconds = 300;
+    public const int DefaultMaxMessageRequestTimeoutSeconds = 600;
 
     public const int MinMaxMessageRequestTimeoutSeconds = 5;
 

@@ -346,7 +346,7 @@ public sealed class CapabilityReporterTests
         AssertEx.Equal(expected: 1, context.HubConnection.SendCapabilitiesCallCount);
         AssertEx.NotNull(context.HubConnection.LastCapabilities);
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
-        AssertEx.Equal(expected: 300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 600, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
         AssertEx.True(context.HubConnection.LastCapabilities.LastCapabilityReportAt.HasValue);
     }
 

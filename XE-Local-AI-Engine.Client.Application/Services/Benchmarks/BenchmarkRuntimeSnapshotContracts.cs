@@ -142,6 +142,20 @@ public static class BenchmarkFrozenPolicies
     public static BenchmarkSamplingSnapshotV1 DeterministicSampling() =>
         new(0, null, null, null, null, null, null, null, null, [], FixedSeedPolicy, "0");
 
+    /// <summary>
+    /// The timeout policy every V1 snapshot was executed with, pinned here because the node-level
+    /// <see cref="TimeoutSettings.InvocationTimeoutSeconds"/> default has since moved. A frozen run therefore replays
+    /// identically across app versions instead of silently inheriting whatever the package builder defaults to.
+    /// follow-up: fold timeouts into a versioned snapshot so a future change is visible in the configuration hash.
+    /// </summary>
+    public static TimeoutSettings FrozenTimeouts() =>
+        new()
+        {
+            InvocationTimeoutSeconds = 300,
+            ToolCallTimeoutSeconds = 30,
+            StreamIdleTimeoutSeconds = 60
+        };
+
     public static bool SupportsVersions(int promptVersion, int outputSchemaVersion) =>
         promptVersion == JudgePromptVersion && outputSchemaVersion == JudgeOutputSchemaVersion;
 }

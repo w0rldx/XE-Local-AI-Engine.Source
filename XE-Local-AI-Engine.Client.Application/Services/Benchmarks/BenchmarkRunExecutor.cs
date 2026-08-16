@@ -165,6 +165,7 @@ public sealed class BenchmarkRunExecutor(
             LocalChatLoopbackDefaults.ClientNodeId,
             runtime.AllowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
             ReasoningEffort: runtime.ReasoningEffort,
             SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
             Skills: runtime.Skills,
