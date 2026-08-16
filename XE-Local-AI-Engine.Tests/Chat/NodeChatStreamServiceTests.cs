@@ -3875,6 +3875,78 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Contains(runner.CapturedContext.Select(message => message.Content).ToList(), "older answer");
     }
 
+    /// <summary>
+    ///     Regenerating an EARLY turn AFTER later turns exist mints a sibling whose PHYSICAL sequence lands past those
+    ///     later turns. Selecting it and sending must still place its answer at the early turn it belongs to — ordering
+    ///     by the raw sequence instead splices it in after the last assistant turn, breaking user/assistant alternation
+    ///     and leaving the first question apparently unanswered.
+    /// </summary>
+    [Test]
+    public async Task SendMessageAsync_WhenALateMintedSiblingOfAnEarlyTurnIsSelected_SendsItAtTheEarlyPosition()
+    {
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+        var originalAnswerId = Guid.NewGuid();
+        var lateSiblingId = Guid.NewGuid();
+
+        // U1(1) A1(2,G) U2(3) A2(4) U3(5) A3(6), then regenerate A1 -> A1'(7,G) and select it.
+        IReadOnlyList<NodeChatPersistedMessageDto> messages =
+        [
+            AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 1, "user", "u-one"),
+            AnchorScenarioMessage(conversationId, originalAnswerId, sequence: 2, "assistant", "a-one", variantGroupId),
+            AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 3, "user", "u-two"),
+            AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 4, "assistant", "a-two"),
+            AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 5, "user", "u-three"),
+            AnchorScenarioMessage(conversationId, Guid.NewGuid(), sequence: 6, "assistant", "a-three"),
+            AnchorScenarioMessage(conversationId, lateSiblingId, sequence: 7, "assistant", "a-one-prime", variantGroupId)
+        ];
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            originalAnswerId,
+            lateSiblingId,
+            new Dictionary<Guid, Guid>
+            {
+                [variantGroupId] = lateSiblingId
+            },
+            requestSelection: null,
+            conversationMessages: messages).ConfigureAwait(false);
+
+        var contents = runner.CapturedContext.Select(message => message.Content).ToArray();
+        AssertEx.Equal(expected: 7, contents.Length);
+        AssertEx.Equal("u-one", contents[0]);
+        AssertEx.Equal("a-one-prime", contents[1]);
+        AssertEx.Equal("u-two", contents[2]);
+        AssertEx.Equal("a-two", contents[3]);
+        AssertEx.Equal("u-three", contents[4]);
+        AssertEx.Equal("a-three", contents[5]);
+        AssertEx.Equal("follow up", contents[6]);
+        AssertEx.False(contents.Contains("a-one"), "The deselected original sibling must stay out of context.");
+    }
+
+    private static NodeChatPersistedMessageDto AnchorScenarioMessage(Guid conversationId,
+        Guid messageId,
+        int sequence,
+        string role,
+        string content,
+        Guid? variantGroupId = null)
+    {
+        return new NodeChatPersistedMessageDto(messageId,
+            conversationId,
+            RequestId: null,
+            sequence,
+            role,
+            content,
+            Reasoning: null,
+            NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc: sequence,
+            UpdatedAtUtc: sequence,
+            Model: null,
+            Error: null,
+            MetadataJson: null,
+            VariantGroupId: variantGroupId);
+    }
+
     private static async Task<ContextCapturingInvocationRunner> RunWithVariantConversationAsync(Guid conversationId,
         Guid variantGroupId,
         Guid olderVariantId,
@@ -3882,7 +3954,8 @@ public sealed class NodeChatStreamServiceTests
         IReadOnlyDictionary<Guid, Guid>? persistedSelection,
         IReadOnlyDictionary<Guid, Guid>? requestSelection,
         string? compactionSummary = null,
-        int? compactionCoversToSequence = null)
+        int? compactionCoversToSequence = null,
+        IReadOnlyList<NodeChatPersistedMessageDto>? conversationMessages = null)
     {
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -3894,7 +3967,8 @@ public sealed class NodeChatStreamServiceTests
             newerVariantId,
             persistedSelection,
             compactionSummary,
-            compactionCoversToSequence);
+            compactionCoversToSequence,
+            conversationMessages);
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
@@ -3948,7 +4022,8 @@ public sealed class NodeChatStreamServiceTests
         Guid newerVariantId,
         IReadOnlyDictionary<Guid, Guid>? persistedSelection,
         string? compactionSummary = null,
-        int? compactionCoversToSequence = null)
+        int? compactionCoversToSequence = null,
+        IReadOnlyList<NodeChatPersistedMessageDto>? conversationMessages = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
 
@@ -4000,14 +4075,15 @@ public sealed class NodeChatStreamServiceTests
             CreatedAtUtc: 1,
             LastSeenUtc: 1,
             Purged: false,
-            [userTurn, olderVariant, newerVariant],
+            conversationMessages ?? [userTurn, olderVariant, newerVariant],
             SelectedPath: persistedSelection,
             CompactionSummary: compactionSummary,
             CompactionSummaryCoversToSequence: compactionCoversToSequence);
+        // The just-sent turn always takes the next free PHYSICAL sequence, exactly like NextSequenceAsync does.
         var newUserMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
             RequestId: null,
-            Sequence: 3,
+            Sequence: conversation.Messages.Max(message => message.Sequence) + 1,
             "user",
             "follow up",
             Reasoning: null,

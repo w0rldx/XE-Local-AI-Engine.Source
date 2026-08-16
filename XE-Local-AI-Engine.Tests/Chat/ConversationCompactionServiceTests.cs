@@ -262,6 +262,68 @@ public sealed class ConversationCompactionServiceTests
         await resolver.Received(1).ResolveAsync("persisted-default", Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     Regenerating an EARLY turn AFTER later turns exist mints a sibling whose PHYSICAL sequence lands past those
+    ///     later turns. Ordering by that raw sequence makes the stale answer look like the conversation's NEWEST message:
+    ///     it survives the keep-verbatim window while a genuinely recent exchange is folded away instead. Compaction must
+    ///     order and fold in anchor space, and persist the anchor as the covered sequence so the send/regenerate paths
+    ///     splice against the same value.
+    /// </summary>
+    [Test]
+    public async Task CompactAsync_WhenALateMintedSiblingOfAnEarlyTurnIsSelected_FoldsByLogicalOrderAndCoversTheAnchor()
+    {
+        var variantGroupId = Guid.NewGuid();
+        var messages = CompletedMessages(count: 12);
+        // Turn message-1 into a variant group and regenerate it: the sibling takes the next free sequence (12).
+        messages[1] = messages[1] with
+        {
+            VariantGroupId = variantGroupId
+        };
+        var lateSibling = messages[1] with
+        {
+            MessageId = Guid.NewGuid(),
+            Sequence = 12,
+            Content = "sibling-answer",
+            CreatedAtUtc = 12,
+            UpdatedAtUtc = 12
+        };
+        messages.Add(lateSibling);
+
+        var conversation = Conversation(messages) with
+        {
+            SelectedPath = new Dictionary<Guid, Guid>
+            {
+                [variantGroupId] = lateSibling.MessageId
+            }
+        };
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        var service = CreateService(persistence, summarizer, resolver);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
+        // The selected path has 12 entries and the keep window is 8, so the oldest 4 LOGICAL messages fold: the sibling
+        // is the second-oldest turn, not the newest, and message-4 stays verbatim.
+        AssertEx.Equal(expected: 4, result.MessagesFolded);
+        AssertEx.Equal(expected: 3, result.CoversToSequence, "The covered sequence is the ANCHOR of the newest folded message, not a raw sequence.");
+        await persistence.Received(1)
+                         .SetCompactionSummaryAsync(Arg.Is<NodeChatSetCompactionSummaryRequest>(request => request.CoversToSequence == 3), Arg.Any<CancellationToken>());
+
+        var capturedInput = (ConversationSummarizerInput)summarizer.ReceivedCalls().Single().GetArguments()[0]!;
+        var foldedContents = capturedInput.Messages.Select(message => message.Content).ToArray();
+        AssertEx.Equal(expected: 4, foldedContents.Length);
+        AssertEx.Equal("message-0", foldedContents[0]);
+        AssertEx.Equal("sibling-answer", foldedContents[1], "The late-minted sibling belongs to the SECOND turn and must fold there.");
+        AssertEx.Equal("message-2", foldedContents[2]);
+        AssertEx.Equal("message-3", foldedContents[3]);
+    }
+
     private static ConversationCompactionService CreateService(INodeChatPersistenceService persistence, IConversationSummarizer summarizer, ILocalDefaultChatModelResolver? resolver = null)
     {
         resolver ??= Substitute.For<ILocalDefaultChatModelResolver>();
