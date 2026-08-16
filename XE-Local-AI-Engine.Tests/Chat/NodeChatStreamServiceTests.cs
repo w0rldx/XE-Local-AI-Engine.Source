@@ -2094,8 +2094,8 @@ public sealed class NodeChatStreamServiceTests
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
-                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null));
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null)));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2136,6 +2136,75 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.NotNull(runner.LastOrchestrationSpec);
         AssertEx.Equal(spec.TriageParticipantKey, runner.LastOrchestrationSpec!.TriageParticipantKey);
         AssertEx.Equal(expected: 2, runner.LastOrchestrationSpec.Participants.Count);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenOrchestrationDegrades_EmitsOneNoticeNamingTheReason()
+    {
+        // G16: an orchestrator whose orchestration does not compile runs as a lone single agent. That used to be visible
+        // only in a server log, so the operator saw an ordinary answer and no hint the team never ran.
+        var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
+                               OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
+                                   "only 1 of its agents can call tools, and at least 2 are required"))
+                           .ConfigureAwait(false);
+
+        AssertEx.ContainsSingle(events,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded),
+            "a degraded orchestration must raise exactly one operator notice");
+        var notice = events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded));
+        AssertEx.Contains(notice.NoticeMessage, "only 1 of its agents can call tools");
+        AssertEx.Contains(notice.NoticeMessage, "ran as a single agent");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAgentIsSingleKind_EmitsNoOrchestrationDegradedNotice()
+    {
+        // A Single-kind agent never asked for orchestration, so it must stay silent even with an orchestration resolver
+        // primed to degrade — the chat-turn resolver short-circuits before it is ever consulted.
+        var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Single,
+                               OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"))
+                           .ConfigureAwait(false);
+
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded)),
+            "a single-agent definition must never raise the orchestration-degraded notice");
+    }
+
+    // Runs one bound-agent send whose orchestration resolver returns the given resolution, and returns the streamed events.
+    private static async Task<List<ChatStreamEvent>> RunOrchestrationDegradeAsync(AgentDefinitionKind kind, OrchestrationResolution resolution)
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Agent persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4, agentDefinitionId, "Agent", Kind: kind));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(resolution);
+
+        var service = CreateServiceWithScopeFactory(persistence,
+            runner,
+            dispatcher,
+            CreateScopeFactory(),
+            allowCloudModelAccess: false,
+            agentDefinitionResolver,
+            store,
+            orchestrationResolver);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId))
+                           .ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        return events;
     }
 
     [Test]
@@ -2203,9 +2272,9 @@ public sealed class NodeChatStreamServiceTests
                                    agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(new ResolvedOrchestration(CreateSampleSpec(), "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(CreateSampleSpec(), "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
                                  AnyParticipantIsCloud: anyParticipantIsCloud,
-                                 FirstCloudParticipantModel: anyParticipantIsCloud ? "azure-specialist-deploy" : null));
+                                 FirstCloudParticipantModel: anyParticipantIsCloud ? "azure-specialist-deploy" : null)));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -3387,11 +3456,15 @@ public sealed class NodeChatStreamServiceTests
         ContextCapturingInvocationRunner runner,
         RecordingWorkerEventDispatcher dispatcher,
         IServiceScopeFactory scopeFactory,
-        bool allowCloudModelAccess = false)
+        bool allowCloudModelAccess = false,
+        IAgentDefinitionResolver? agentDefinitionResolver = null,
+        IAgentDefinitionStore? agentDefinitionStore = null,
+        IOrchestrationResolver? orchestrationResolver = null)
     {
         return new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+            new ChatTurnResolver(agentDefinitionResolver ?? CreateAgentDefinitionResolver(), agentDefinitionStore ?? CreateAgentDefinitionStore(),
+                orchestrationResolver ?? CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -3594,7 +3667,7 @@ public sealed class NodeChatStreamServiceTests
     private static IOrchestrationResolver CreateOrchestrationResolver()
     {
         var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(OrchestrationResolution.NotOrchestrated);
         return resolver;
     }
 
