@@ -48,5 +48,14 @@ public enum TurnNoticeKind
     ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>) — the same egress gate as attachments. The turn still runs, just
     ///     without knowledge-base context. <see cref="TurnNoticePayload.Detail" /> names the effective model.
     /// </summary>
-    KnowledgeWithheld = 4
+    KnowledgeWithheld = 4,
+
+    /// <summary>
+    ///     The bound agent is an Orchestrator but its orchestration did not compile for this turn (invalid topology, a
+    ///     model that cannot call tools, a missing triage, or too few capable participants), so the turn ran as a single
+    ///     agent. Without this the degrade was visible only in a server log.
+    ///     <see cref="TurnNoticePayload.Detail" /> carries the
+    ///     <c>OrchestrationDegradationReason</c> name.
+    /// </summary>
+    OrchestrationDegraded = 5
 }

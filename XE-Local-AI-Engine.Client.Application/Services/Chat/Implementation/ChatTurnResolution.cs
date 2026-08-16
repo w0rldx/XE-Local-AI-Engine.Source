@@ -7,10 +7,18 @@ internal sealed record ChatTurnResolution(
     string? ActiveModel,
     string? EffectiveModel,
     ResolvedAgentRuntime? Resolved,
-    ResolvedOrchestration? Orchestration,
+    OrchestrationResolution OrchestrationOutcome,
     bool SupportsThinking,
     bool SupportsTools,
     bool SupportsVision,
     bool RequiresInstalledChatModel,
     bool ActiveModelIsCloud,
-    bool EffectiveModelIsCloud);
+    bool EffectiveModelIsCloud)
+{
+    /// <summary>
+    ///     The compiled orchestration spec, or <see langword="null" /> when the turn runs single-agent (the definition is
+    ///     not an orchestrator, or its orchestration degraded — see
+    ///     <see cref="OrchestrationResolution.Reason" />/<see cref="OrchestrationResolution.DegradationNotice" />).
+    /// </summary>
+    public ResolvedOrchestration? Orchestration => OrchestrationOutcome.Orchestration;
+}

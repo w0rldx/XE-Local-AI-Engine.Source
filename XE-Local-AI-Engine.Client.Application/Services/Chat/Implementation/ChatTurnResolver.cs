@@ -90,7 +90,7 @@ public sealed class ChatTurnResolver(
         // keeping the unbound/single-agent path byte-identical. The same retrieval query drives per-participant retrieval.
         // The already-resolved runtime is threaded in so its Kind gates the reload (AUD4-16).
         var orchestrationStart = Stopwatch.GetTimestamp();
-        ResolvedOrchestration? orchestration;
+        OrchestrationResolution orchestration;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_orchestration"))
         {
             orchestration = await ResolveOrchestrationAsync(effectiveAgentId, resolved, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
@@ -118,7 +118,7 @@ public sealed class ChatTurnResolver(
                 agentMs,
                 orchestrationMs,
                 effectiveAgentId is not null,
-                orchestration is not null);
+                orchestration.Orchestration is not null);
         }
 
         return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision, requiresInstalledChatModel, activeModelIsCloud,
@@ -226,11 +226,13 @@ public sealed class ChatTurnResolver(
     }
 
     /// <summary>
-    ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or <c>null</c> to
-    ///     run the turn single-agent. Only a bound conversation triggers the extra record fetch; an unbound conversation
-    ///     or a non-orchestrator definition returns <c>null</c> without resolving, so the single-agent path is byte-identical.
+    ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or a degraded
+    ///     resolution that runs the turn single-agent. Only a bound conversation triggers the extra record fetch; an
+    ///     unbound conversation or a non-orchestrator definition returns
+    ///     <see cref="OrchestrationResolution.NotOrchestrated" /> without resolving, so the single-agent path is
+    ///     byte-identical AND no degradation notice is raised for an agent that never asked for orchestration.
     /// </summary>
-    private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
+    private async Task<OrchestrationResolution> ResolveOrchestrationAsync(Guid? agentDefinitionId,
         ResolvedAgentRuntime? resolved,
         string? activeModel,
         string? retrievalQuery,
@@ -239,7 +241,7 @@ public sealed class ChatTurnResolver(
     {
         if (agentDefinitionId is not { } definitionId)
         {
-            return null;
+            return OrchestrationResolution.NotOrchestrated;
         }
 
         // AUD4-16: the resolver already loaded (and AES-GCM-decrypted) this definition on the line above; reuse its Kind
@@ -249,13 +251,13 @@ public sealed class ChatTurnResolver(
         // the reload to obtain the full definition the compiler needs.
         if (resolved is not { Kind: AgentDefinitionKind.Orchestrator })
         {
-            return null;
+            return OrchestrationResolution.NotOrchestrated;
         }
 
         var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
         if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
         {
-            return null;
+            return OrchestrationResolution.NotOrchestrated;
         }
 
         // Orchestration resolves each participant's knowledge-tool locality from its own effective model internally, so

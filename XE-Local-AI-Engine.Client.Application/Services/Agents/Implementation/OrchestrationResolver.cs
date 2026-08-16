@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// <summary>
 ///     Default <see cref="IOrchestrationResolver" />. Compiles a <c>Kind=Orchestrator</c> definition + its topology
 ///     into an <see cref="OrchestrationSpec" />, reusing the per-definition tool projection for every participant.
-///     Every rejection path returns <c>null</c> (degrade to single-agent) and logs WHY — orchestration never fails a
-///     turn, it falls back. Capability gating mirrors the single-agent path: a model is tool-capable iff it is in the
+///     Every rejection path returns a degraded <see cref="OrchestrationResolution" /> (no spec + the typed reason) and
+///     logs WHY — orchestration never fails a turn, it falls back, and the caller surfaces the reason as a turn notice. Capability gating mirrors the single-agent path: a model is tool-capable iff it is in the
 ///     migrated <c>AgentHome:ToolCapableModels</c> allow-list (read via <see cref="INodeRuntimeSettings" />, the same
 ///     allow-list <c>LocalToolOfferProvider</c> uses).
 /// </summary>
@@ -57,7 +57,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator,
+    public async Task<OrchestrationResolution> ResolveAsync(AgentDefinitionRecord orchestrator,
         string? activeModelId,
         string? retrievalQuery = null,
         bool supportsTools = true,
@@ -67,8 +67,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         if (orchestrator.Kind != AgentDefinitionKind.Orchestrator)
         {
-            // Single-agent definition: never an orchestration. The caller's single-agent resolver owns this case.
-            return null;
+            // Single-agent definition: never an orchestration. The caller's single-agent resolver owns this case, and
+            // this is NOT a degradation — a Single-kind agent must never produce an "orchestration was not used" notice.
+            return OrchestrationResolution.NotOrchestrated;
         }
 
         // Orchestration is inherently multi-hop function calling, so a model that does not advertise the Ollama "tools"
@@ -77,14 +78,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         if (!supportsTools)
         {
             _logger.LogInformation("Orchestrator {AgentDefinitionId} active model does not advertise the tools capability; degrading to single-agent.", orchestrator.Id);
-            return null;
+            return OrchestrationResolution.Degraded(OrchestrationDegradationReason.ModelNotToolCapable, "the model for this turn cannot call tools");
         }
 
         var topology = OrchestrationTopologyJson.TryParse(orchestrator.OrchestrationTopologyJson);
         if (topology is null)
         {
             _logger.LogInformation("Orchestrator {AgentDefinitionId} has no usable topology; running it as a single agent.", orchestrator.Id);
-            return null;
+            return OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid");
         }
 
         // Resolve the tool-capable allow-list once per resolve from the accessor (stored AgentHome:ToolCapableModels >
@@ -99,7 +100,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         if (!IsToolCapable(toolCapableModels, orchestratorEffectiveModel))
         {
             _logger.LogInformation("Orchestrator {AgentDefinitionId} effective model is not tool-capable; degrading to single-agent.", orchestrator.Id);
-            return null;
+            return OrchestrationResolution.Degraded(OrchestrationDegradationReason.ModelNotToolCapable, "the model for this turn cannot call tools");
         }
 
         var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, retrievalQuery, toolCapableModels, cancellationToken).ConfigureAwait(false);
@@ -108,7 +109,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             _logger.LogWarning("Orchestrator {AgentDefinitionId} triage participant {TriageId} is missing, deleted, or not tool-capable; degrading to single-agent.",
                 orchestrator.Id,
                 topology.TriageAgentDefinitionId);
-            return null;
+            return OrchestrationResolution.Degraded(OrchestrationDegradationReason.TriageMissing, "its triage agent is missing, deleted, or cannot call tools");
         }
 
         if (participants.Count < MinimumCapableParticipants)
@@ -117,7 +118,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                 orchestrator.Id,
                 participants.Count,
                 MinimumCapableParticipants);
-            return null;
+            return OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
+                $"only {participants.Count} of its agents can call tools, and at least {MinimumCapableParticipants} are required");
         }
 
         var edges = BuildEdges(orchestrator, topology, participants);
@@ -161,13 +163,13 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ? null
             : firstCloudParticipant.Definition.ModelProfile ?? activeModelId;
 
-        return new ResolvedOrchestration(spec,
+        return OrchestrationResolution.Compiled(new ResolvedOrchestration(spec,
             orchestrator.Instructions,
             orchestrator.ModelProfile,
             orchestrator.ReasoningEffort,
             orchestrator.Version,
             AnyParticipantIsCloud: firstCloudParticipant is not null,
-            firstCloudParticipantModel);
+            firstCloudParticipantModel));
     }
 
     /// <summary>
