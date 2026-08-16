@@ -399,6 +399,8 @@ public sealed class LlamaServerLaunchProjectionTests
             "A value that cannot be read must degrade to no projection, never to a fabricated one.");
         AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["--metrics", flag]),
             "A trailing flag with no value must degrade to no projection.");
+        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["-fa", "--jinja"]),
+            "A value flag followed by another flag must not swallow the flag as its value.");
     }
 
     [Test]

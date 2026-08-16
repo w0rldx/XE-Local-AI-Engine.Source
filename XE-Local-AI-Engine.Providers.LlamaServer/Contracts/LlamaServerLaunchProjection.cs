@@ -226,6 +226,12 @@ public sealed record LlamaServerLaunchProjection(
 
             var value = arguments[index];
             index++;
+            if (value.StartsWith('-') && !TryParseInt(value, out _))
+            {
+                // A value flag followed by another flag is a vector this method cannot describe truthfully.
+                return null;
+            }
+
             switch (argument)
             {
                 case "--fit":
