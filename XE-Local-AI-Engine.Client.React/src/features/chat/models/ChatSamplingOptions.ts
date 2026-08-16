@@ -34,6 +34,10 @@ export interface SamplingFieldMeta {
 	allowDecimal: boolean;
 	// When true the dialog renders a Slider paired with a NumberInput; false = number-only (e.g. seed).
 	slider: boolean;
+	// True for knobs only the local runtimes honour. llama.cpp gets them via DeferredLlamaServerChatClient's body
+	// patch and Ollama via its option map, but the OpenAI-shaped cloud paths (Codex/Azure) have no wire field for
+	// them, so the dialog disables these inputs while a cloud model is selected rather than pretending they apply.
+	localRuntimeOnly?: boolean;
 }
 
 export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[] }[] = [
@@ -71,6 +75,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 1,
 				allowDecimal: false,
 				slider: true,
+				localRuntimeOnly: true,
 			},
 			{
 				key: "minP",
@@ -82,6 +87,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				decimalScale: 2,
 				allowDecimal: true,
 				slider: true,
+				localRuntimeOnly: true,
 			},
 		],
 	},
@@ -98,6 +104,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				decimalScale: 2,
 				allowDecimal: true,
 				slider: true,
+				localRuntimeOnly: true,
 			},
 			{
 				key: "repeatLastN",
@@ -108,6 +115,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 1,
 				allowDecimal: false,
 				slider: true,
+				localRuntimeOnly: true,
 			},
 			{
 				key: "presencePenalty",

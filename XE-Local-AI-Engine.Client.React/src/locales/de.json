@@ -974,10 +974,11 @@
 				"seed": "Seed",
 				"seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
 				"numCtx": "Kontextlänge (num_ctx)",
-				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens.",
+				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens. Bei der lokalen llama.cpp-Laufzeit ist das Serverfenster beim Laden des Modells festgelegt, daher begrenzt dies nur, wie viel Gesprächsverlauf gesendet wird.",
 				"stop": "Stop-Sequenzen",
 				"stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
 				"modelDefault": "Modellstandard",
+				"cloudUnsupported": "Von Cloud-Anbietern nicht unterstützt",
 				"reset": "Auf Standard zurücksetzen",
 				"close": "Schließen",
 				"resetField": "{{field}} zurücksetzen"

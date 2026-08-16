@@ -6,17 +6,18 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 {
-    // Ollama option keys read from ChatOptions.AdditionalProperties by OllamaSharp 5.4.25
-    // (OllamaSharp.MicrosoftAi.AbstractionMapper → OllamaOption.*.Name; verified against the installed assembly
-    // 2026-06-05). The natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/
-    // seed/stop) ride the strongly-typed ChatOptions properties instead and so are not listed here.
-    private const string OllamaMinPKey = "min_p";
-    private const string OllamaRepeatPenaltyKey = "repeat_penalty";
-    private const string OllamaRepeatLastNKey = "repeat_last_n";
-    private const string OllamaNumCtxKey = "num_ctx";
+    // The option keys for the knobs with no strongly-typed ChatOptions property now live in the shared
+    // SamplingOptionKeys (Providers.Abstractions) because they reach TWO runtimes: Ollama reads them from
+    // ChatOptions.AdditionalProperties via OllamaSharp 5.4.25's AbstractionMapper (→ OllamaOption.*.Name; verified
+    // against the installed assembly 2026-06-05), and DeferredLlamaServerChatClient.ApplySamplingPassthrough patches
+    // min_p/repeat_penalty/repeat_last_n (plus the strongly-typed TopK, which the MEAI OpenAI adapter also drops) onto
+    // the outbound llama-server body. num_ctx stays Ollama-only — llama-server's window is fixed at launch. The
+    // natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/seed/stop) ride the
+    // strongly-typed ChatOptions properties.
 
     /// <summary>
     ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> that tells the llama.cpp chat client to
@@ -152,7 +153,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             }
 
             var clampedContext = Math.Min(requested, effectiveContext);
-            additionalProperties[OllamaNumCtxKey] = clampedContext;
+            additionalProperties[SamplingOptionKeys.NumCtx] = clampedContext;
             if (chatOptions.MaxOutputTokens is { } output)
             {
                 chatOptions.MaxOutputTokens = Math.Min(output, clampedContext);
@@ -307,11 +308,18 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
     /// <summary>
     ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />. Native
-    ///     knobs ride the strongly-typed properties (mapped by OllamaSharp's <c>AbstractionMapper</c>); the four Ollama
-    ///     knobs without a native property travel as <see cref="AdditionalPropertiesDictionary" /> entries keyed by the
-    ///     raw Ollama option name (the same channel the existing <c>think</c> property proves). Each field is applied only
-    ///     when set and only when it passes a defensive range guard (NaN/negative/out-of-range → skipped). When both
-    ///     <c>MaxOutputTokens</c> and <c>NumCtx</c> are set, the output cap is clamped to the context window.
+    ///     knobs ride the strongly-typed properties; the four knobs without a native property travel as
+    ///     <see cref="AdditionalPropertiesDictionary" /> entries keyed by <see cref="SamplingOptionKeys" /> (the same
+    ///     channel the existing <c>think</c> property proves). Each field is applied only when set and only when it
+    ///     passes a defensive range guard (NaN/negative/out-of-range → skipped). When both <c>MaxOutputTokens</c> and
+    ///     <c>NumCtx</c> are set, the output cap is clamped to the context window.
+    ///     <para>
+    ///         These entries reach BOTH runtimes: OllamaSharp's <c>AbstractionMapper</c> maps all four onto the Ollama
+    ///         wire, and <c>DeferredLlamaServerChatClient.ApplySamplingPassthrough</c> patches
+    ///         <c>min_p</c>/<c>repeat_penalty</c>/<c>repeat_last_n</c> — plus the strongly-typed <c>TopK</c>, which the
+    ///         MEAI OpenAI adapter drops — onto the llama-server body. <c>num_ctx</c> is deliberately NOT sent to
+    ///         llama-server (its window is fixed at process launch); there it only budgets client-side history.
+    ///     </para>
     /// </summary>
     private static void ApplySamplingOptions(ChatOptions chatOptions,
         AdditionalPropertiesDictionary additionalProperties,
@@ -368,7 +376,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         var numCtx = sampling.NumCtx is { } ctx && ctx > 0 ? ctx : (int?)null;
         if (numCtx is { } resolvedCtx)
         {
-            additionalProperties[OllamaNumCtxKey] = resolvedCtx;
+            additionalProperties[SamplingOptionKeys.NumCtx] = resolvedCtx;
         }
 
         if (sampling.MaxOutputTokens is { } maxOutputTokens && maxOutputTokens > 0)
@@ -380,17 +388,17 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         if (IsValidUnitFloat(sampling.MinP))
         {
-            additionalProperties[OllamaMinPKey] = sampling.MinP!.Value;
+            additionalProperties[SamplingOptionKeys.MinP] = sampling.MinP!.Value;
         }
 
         if (sampling.RepeatPenalty is { } repeatPenalty && !float.IsNaN(repeatPenalty) && repeatPenalty >= 0f)
         {
-            additionalProperties[OllamaRepeatPenaltyKey] = repeatPenalty;
+            additionalProperties[SamplingOptionKeys.RepeatPenalty] = repeatPenalty;
         }
 
         if (sampling.RepeatLastN is { } repeatLastN && repeatLastN >= -1)
         {
-            additionalProperties[OllamaRepeatLastNKey] = repeatLastN;
+            additionalProperties[SamplingOptionKeys.RepeatLastN] = repeatLastN;
         }
     }
 
