@@ -2162,7 +2162,6 @@ export type {
 	XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse,
 	XeLocalAiEngineClientModelsEnumsApprovalScope,
 	XeLocalAiEngineClientModelsEnumsFailureCategory,
-	XeLocalAiEngineClientModelsSamplingOptions,
 	XeLocalAiEngineClientPersistenceAgentDefinitionKind,
 	XeLocalAiEngineClientPersistenceAgentSkillOrigin,
 	XeLocalAiEngineClientPersistenceCustomToolKind,
