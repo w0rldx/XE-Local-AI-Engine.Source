@@ -55,7 +55,8 @@ internal static class ChatStreamEventMapper
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
-        int? reasoningTokens = null)
+        int? reasoningTokens = null,
+        int? invocationTimeoutSeconds = null)
     {
         return new ChatStreamEvent(type,
             correlation.ConversationId,
@@ -71,7 +72,8 @@ internal static class ChatStreamEventMapper
             InputTokens: inputTokens ?? message.InputCount,
             OutputTokens: outputTokens ?? message.OutputCount,
             TotalTokens: totalTokens ?? message.TotalCount,
-            ReasoningTokens: reasoningTokens ?? message.ReasoningCount);
+            ReasoningTokens: reasoningTokens ?? message.ReasoningCount,
+            InvocationTimeoutSeconds: invocationTimeoutSeconds);
     }
 
     /// <summary>

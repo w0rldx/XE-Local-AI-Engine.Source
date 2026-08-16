@@ -2290,20 +2290,35 @@ public sealed class NodeChatStreamServiceTests
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
-        var drained = 0;
-        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+        var streamed = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId)).ConfigureAwait(false))
         {
-            drained++;
+            streamed.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(streamed.Count > 0, "Expected the send to stream events.");
         AssertEx.NotNull(runner.LastTimeouts);
         AssertEx.Equal(expected: 900, runner.LastTimeouts!.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, runner.LastTimeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, runner.LastTimeouts.StreamIdleTimeoutSeconds);
+
+        // The same ceiling rides the queued + streaming events so the browser's own stream watchdog can derive its
+        // deadline from the node's ceiling instead of a fixed constant that would pre-empt it. Queued carries it too
+        // (not just streaming) because the collision-queue wait ahead of the streaming transition is the first stretch
+        // of the turn where nothing at all reaches the client.
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued && streamEvent.InvocationTimeoutSeconds == 900);
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming && streamEvent.InvocationTimeoutSeconds == 900);
+        // Every other event type keeps a null ceiling — the field is a targeted hint, not a per-frame tax.
+        AssertEx.True(
+            streamed.TrueForAll(streamEvent => streamEvent.InvocationTimeoutSeconds is null
+                                               || streamEvent.Type == ChatStreamEventTypes.AssistantQueued
+                                               || streamEvent.Type == ChatStreamEventTypes.AssistantStreaming),
+            "Expected only the queued/streaming events to carry the invocation timeout.");
     }
 
     [Test]
