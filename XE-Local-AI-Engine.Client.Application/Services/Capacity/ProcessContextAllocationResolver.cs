@@ -46,10 +46,20 @@ public sealed class ProcessContextAllocationResolver(
 
     private readonly IRuntimeDeviceAudit _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
 
+    public Task<ProcessContextAllocation?> ResolveAsync(string modelName,
+        ModelRole role,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        CancellationToken ct)
+    {
+        return ResolveAsync(modelName, role, variant, resolved, kvCacheType: null, ct);
+    }
+
     public async Task<ProcessContextAllocation?> ResolveAsync(string modelName,
         ModelRole role,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
+        string? kvCacheType,
         CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -61,9 +71,13 @@ public sealed class ProcessContextAllocationResolver(
             return null;
         }
 
+        // Normalized to null for fp16 (and for anything unrecognized) BEFORE the cache key, so a caller that names the
+        // default explicitly lands on the same cached allocation as one that names nothing at all.
+        var kvCacheQuant = NormalizeKvCacheQuant(kvCacheType);
         var contentIdentity = facts.ContentIdentity ?? $"{modelName}:{facts.FileSizeBytes}";
-        var key = BuildCacheKey(contentIdentity, role, variant, resolved);
-        var state = (Resolver: this, Key: key, ContentIdentity: contentIdentity, Role: role, Variant: variant, Resolved: resolved, Facts: facts);
+        var key = BuildCacheKey(contentIdentity, role, variant, resolved, kvCacheQuant);
+        var state = (Resolver: this, Key: key, ContentIdentity: contentIdentity, Role: role, Variant: variant, Resolved: resolved, Facts: facts,
+            KvCacheQuant: kvCacheQuant);
         var lazy = _cache.GetOrAdd(key,
             static (_, captured) => new Lazy<Task<ProcessContextAllocation?>>(() => captured.Resolver.ResolveCoreAsync(captured.Key,
                     captured.ContentIdentity,
@@ -71,6 +85,7 @@ public sealed class ProcessContextAllocationResolver(
                     captured.Variant,
                     captured.Resolved,
                     captured.Facts,
+                    captured.KvCacheQuant,
                     CancellationToken.None),
                 LazyThreadSafetyMode.ExecutionAndPublication),
             state);
@@ -119,7 +134,8 @@ public sealed class ProcessContextAllocationResolver(
             context.Variant,
             context.Profile,
             context.Facts,
-            context.ProcessGpuBudget);
+            context.ProcessGpuBudget,
+            context.KvCacheQuant);
         return true;
     }
 
@@ -213,7 +229,8 @@ public sealed class ProcessContextAllocationResolver(
                 context.Variant,
                 context.Profile,
                 context.Facts,
-                context.ProcessGpuBudget);
+                context.ProcessGpuBudget,
+                context.KvCacheQuant);
             downTiered = CommitAdjustedAllocation(candidate);
             return true;
         }
@@ -245,12 +262,28 @@ public sealed class ProcessContextAllocationResolver(
         return true;
     }
 
+    /// <summary>
+    ///     The estimator's KV element size for a llama.cpp cache-type token, or <see langword="null" /> for the fp16
+    ///     default. Conservative on uncertainty by construction: an unrecognized token reserves fp16 bytes.
+    /// </summary>
+    private static KvCacheQuant? NormalizeKvCacheQuant(string? kvCacheType)
+    {
+        var candidate = kvCacheType?.Trim();
+        if (string.Equals(candidate, "q8_0", StringComparison.OrdinalIgnoreCase))
+        {
+            return KvCacheQuant.Q8_0;
+        }
+
+        return string.Equals(candidate, "q4_0", StringComparison.OrdinalIgnoreCase) ? KvCacheQuant.Q4_0 : null;
+    }
+
     private async Task<ProcessContextAllocation?> ResolveCoreAsync(string key,
         string contentIdentity,
         ModelRole role,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         GgufModelFootprintFacts facts,
+        KvCacheQuant? kvCacheQuant,
         CancellationToken ct)
     {
         var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct).ConfigureAwait(false);
@@ -269,14 +302,14 @@ public sealed class ProcessContextAllocationResolver(
         {
             var frozenTokens = Math.Max(1, resolved.CtxSize);
             return BuildAllocation(key, contentIdentity, frozenTokens, trainCeiling, source, variant, profile, facts,
-                await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false));
+                await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false), kvCacheQuant);
         }
 
         if (source == ProcessContextAllocationSource.DeterministicOverride)
         {
             var overridden = CapAndAlign(_options.DeterministicContextTokensOverride!.Value, trainCeiling);
             return BuildAllocation(key, contentIdentity, overridden, trainCeiling, source, variant, profile, facts,
-                await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false));
+                await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false), kvCacheQuant);
         }
 
         var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false);
@@ -286,24 +319,31 @@ public sealed class ProcessContextAllocationResolver(
             profile,
             facts,
             processGpuBudget,
-            trainCeiling);
+            trainCeiling,
+            kvCacheQuant);
         var candidates = role == ModelRole.Chat
             ? LlamaServerLaunchPolicyOptions.ChatContextTiers
             : [_options.ContextTokensForRole(role)];
 
         foreach (var candidate in candidates)
         {
+            // The tier is chosen against the fp16 estimate even when the caller named a quantized KV type. That keeps
+            // the guarantee the whole option rests on — a quantized request can only ever reserve LESS — because a
+            // quantized tier walk could otherwise SELECT a larger window and end up booking more bytes than fp16 would.
             var context = CapAndAlign(candidate, trainCeiling);
             var allocation = BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
-                processGpuBudget);
+                processGpuBudget, kvCacheQuant: null);
             if (FitsStableBudgets(allocation.Footprint, variant, profile, processGpuBudget))
             {
-                return allocation;
+                return kvCacheQuant is null
+                    ? allocation
+                    : BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
+                        processGpuBudget, kvCacheQuant);
             }
         }
 
         var fallback = ResolveFallbackContextTokens(role, candidates, facts, trainCeiling, variant, profile, processGpuBudget);
-        return BuildAllocation(key, contentIdentity, fallback, trainCeiling, source, variant, profile, facts, processGpuBudget);
+        return BuildAllocation(key, contentIdentity, fallback, trainCeiling, source, variant, profile, facts, processGpuBudget, kvCacheQuant);
     }
 
     /// <summary>
@@ -340,7 +380,7 @@ public sealed class ProcessContextAllocationResolver(
         }
 
         var estimation = BuildEstimationContext(variant, profile, processGpuBudget);
-        var weightsOnlyBytes = Estimate(facts, contextTokens: 0, estimation.Profile).EstimatedBytes;
+        var weightsOnlyBytes = Estimate(facts, contextTokens: 0, estimation.Profile, kvCacheQuant: null).EstimatedBytes;
         var combinedBudget = estimation.GpuBudget + estimation.RamBudget;
 
         foreach (var candidate in LlamaServerLaunchPolicyOptions.ChatContextTiers)
@@ -351,7 +391,7 @@ public sealed class ProcessContextAllocationResolver(
             }
 
             var context = CapAndAlign(candidate, trainCeiling);
-            var windowBytes = Estimate(facts, context, estimation.Profile).EstimatedBytes - weightsOnlyBytes;
+            var windowBytes = Estimate(facts, context, estimation.Profile, kvCacheQuant: null).EstimatedBytes - weightsOnlyBytes;
             if (windowBytes <= combinedBudget)
             {
                 return context;
@@ -369,13 +409,14 @@ public sealed class ProcessContextAllocationResolver(
         GpuVariant variant,
         HardwareProfile profile,
         GgufModelFootprintFacts facts,
-        long? processGpuBudget)
+        long? processGpuBudget,
+        KvCacheQuant? kvCacheQuant)
     {
         var estimation = BuildEstimationContext(variant, profile, processGpuBudget);
         var useGpu = estimation.UseGpu;
         var gpuBudget = estimation.GpuBudget;
 
-        var estimate = Estimate(facts, contextTokens, estimation.Profile);
+        var estimate = Estimate(facts, contextTokens, estimation.Profile, kvCacheQuant);
         ResourceFootprint footprint;
         ProcessPlacementMode placement;
         if (!useGpu)
@@ -434,7 +475,7 @@ public sealed class ProcessContextAllocationResolver(
             });
     }
 
-    private MemoryFitEstimate Estimate(GgufModelFootprintFacts facts, int contextTokens, HardwareProfile profile)
+    private MemoryFitEstimate Estimate(GgufModelFootprintFacts facts, int contextTokens, HardwareProfile profile, KvCacheQuant? kvCacheQuant)
     {
         var quant = GgufQuantParser.StripDynamicPrefix(facts.Quant);
         return _estimator.Estimate(quant,
@@ -447,6 +488,7 @@ public sealed class ProcessContextAllocationResolver(
             contextTokens,
             profile,
             kvCacheQuantized: false,
+            kvCacheQuant: kvCacheQuant,
             moeFacts: new MoeFacts(ActiveParamCount: null, facts.ExpertCount, facts.ExpertUsedCount),
             attention: new GgufAttentionShape(facts.AttentionKeyLength,
                 facts.AttentionValueLength,
@@ -517,7 +559,7 @@ public sealed class ProcessContextAllocationResolver(
                * LlamaServerLaunchPolicyOptions.ContextAlignmentTokens;
     }
 
-    private string BuildCacheKey(string contentIdentity, ModelRole role, GpuVariant variant, ResolvedLaunchArguments resolved)
+    private string BuildCacheKey(string contentIdentity, ModelRole role, GpuVariant variant, ResolvedLaunchArguments resolved, KvCacheQuant? kvCacheQuant)
     {
         var canonical = string.Join('|',
             contentIdentity,
@@ -535,6 +577,14 @@ public sealed class ProcessContextAllocationResolver(
             _options.DeterministicContextTokensOverride,
             _options.ContextTokensForRole(role),
             _options.ContextSafetyMarginTokens);
+
+        // Appended only when a quantized KV term was asked for, so the default (fp16) key stays byte-identical to the
+        // one every non-benchmark caller has always produced — same string, same cache entry, same allocation.
+        if (kvCacheQuant is not null)
+        {
+            canonical = $"{canonical}|kv:{kvCacheQuant}";
+        }
+
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
@@ -547,5 +597,6 @@ public sealed class ProcessContextAllocationResolver(
         HardwareProfile Profile,
         GgufModelFootprintFacts Facts,
         long? ProcessGpuBudget,
-        int? TrainCeiling);
+        int? TrainCeiling,
+        KvCacheQuant? KvCacheQuant);
 }
