@@ -733,21 +733,12 @@ public sealed class NodeChatStreamService(
 
         // Non-destructive compaction: when a synopsis covers messages up to a sequence, send it in their place and drop
         // those older messages from the verbatim history. The originals remain persisted — this only shapes what is sent,
-        // and the newest turns beyond the covered sequence are always kept verbatim.
-        int? compactionCoversToSequence = conversation.CompactionSummary is { Length: > 0 } && conversation.CompactionSummaryCoversToSequence is { } cover
-            ? cover
-            : null;
-        if (compactionCoversToSequence is { } coveredSequence)
+        // and the newest turns beyond the covered sequence are always kept verbatim. The synopsis message itself is
+        // minted by the shared CompactionContextResolver so the regenerate path splices an identical one.
+        if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
-            leadingContext.Add(new ConversationMessageDto
-            {
-                Id = Guid.NewGuid(),
-                Role = MessageRole.User,
-                Content = $"[Summary of the earlier conversation, condensed to fit the context window]\n{conversation.CompactionSummary}",
-                SortOrder = leadingContext.Count
-            });
-
-            selected = [.. selected.Where(message => message.Sequence > coveredSequence)];
+            leadingContext.Add(compaction.Summary);
+            selected = [.. selected.Where(message => message.Sequence > compaction.CoveredSequence)];
         }
 
         var history = selected
