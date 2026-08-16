@@ -114,7 +114,8 @@ internal sealed class BenchmarkCatalogService(
             }
             catch (BenchmarkEligibilityException)
             {
-                // Non-chat, multimodal, or non-llama.cpp entries are not benchmark candidates.
+                // Non-chat or non-llama.cpp entries are not benchmark candidates. A chat model that carries an
+                // optional mmproj projector companion IS a candidate — the benchmark is text-only either way.
             }
             catch (BenchmarkNotFoundException)
             {
