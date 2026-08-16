@@ -170,6 +170,7 @@ public sealed class BenchmarkJudgeExecutor(
             ClientNodeId: LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: [],
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(snapshot.Judge.Sampling ?? throw new BenchmarkExecutionException("The frozen judge sampling policy is unavailable."),
                 snapshot.Judge.RequestedContextTokens!.Value),
             IsUnattended: true));

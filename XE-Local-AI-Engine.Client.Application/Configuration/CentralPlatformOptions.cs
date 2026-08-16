@@ -40,5 +40,5 @@ public sealed class CentralPlatformOptions
     public int ToolCallTimeoutSeconds { get; set; } = 30;
 
     [Range(minimum: 10, maximum: 3600)]
-    public int InvocationTimeoutSeconds { get; set; } = 300;
+    public int InvocationTimeoutSeconds { get; set; } = 600;
 }

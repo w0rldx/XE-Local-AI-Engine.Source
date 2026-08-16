@@ -329,6 +329,14 @@ public sealed class NodeChatRegenerationService(
                 }
             }
 
+            // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local
+            // chat turn — regenerate is a turn too, so it honors the same setting as the send path. Without this the
+            // package fell back to TimeoutSettings' own default and a raised setting was silently ignored. Only the
+            // invocation timeout is operator-controlled; the tool-call and stream-idle timeouts keep their defaults.
+            // When the setting equals the TimeoutSettings default the package — and therefore its config hash — is
+            // byte-identical to a package built without an explicit Timeouts.
+            var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,
                 resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
@@ -338,6 +346,10 @@ public sealed class NodeChatRegenerationService(
                 LocalChatLoopbackDefaults.ClientNodeId,
                 allowedTools,
                 RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+                Timeouts: new TimeoutSettings
+                {
+                    InvocationTimeoutSeconds = runtimeNodeSettings.MaxMessageRequestTimeoutSeconds
+                },
                 ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
                 OrchestrationSpec: orchestration?.Spec,
                 SupportsThinking: resolution.SupportsThinking,
