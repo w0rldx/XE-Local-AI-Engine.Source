@@ -45,6 +45,10 @@ public sealed class NodeChatRegenerationService(
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
     private const int AgentDefinitionVersion = 1;
+
+    // Mirrors the send path (NodeChatStreamService.PreRunCancelledMessage): a cancel that lands while the turn is still
+    // waiting for the shared collision-queue lease, before the invocation — and therefore its own timeout — ever starts.
+    private const string PreRunCancelledMessage = "Stopped before the response started (cancelled while queued).";
     private const string AssistantRole = "assistant";
     private const string UserRole = "user";
 
@@ -139,6 +143,18 @@ public sealed class NodeChatRegenerationService(
 
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, placeholder, sequence.Next());
 
+        // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local
+        // chat turn — regenerate is a turn too, so it honors the same setting as the send path. Without this the
+        // package fell back to TimeoutSettings' own default and a raised setting was silently ignored. Only the
+        // invocation timeout is operator-controlled; the tool-call and stream-idle timeouts keep their defaults.
+        // When the setting equals the TimeoutSettings default the package — and therefore its config hash — is
+        // byte-identical to a package built without an explicit Timeouts.
+        //
+        // Loaded HERE rather than next to the package build below because the same ceiling is stamped on the queued and
+        // streaming events: the browser's stream watchdog must know it before the collision-queue wait, which is the
+        // first stretch of the turn where nothing at all arrives on the wire.
+        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
         // Queued until the collision-queue lease is acquired in RunInvocationAsync; transitions to Streaming only
         // when the invocation actually starts, so a turn waiting behind another invocation reads "queued".
         var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
@@ -150,7 +166,8 @@ public sealed class NodeChatRegenerationService(
             yield break;
         }
 
-        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
+        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next(),
+            invocationTimeoutSeconds: runtimeNodeSettings.MaxMessageRequestTimeoutSeconds);
 
         // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection (mirrors the send
         // path, NodeChatStreamService): when the client cancellationToken fires on disconnect we must only stop
@@ -339,14 +356,6 @@ public sealed class NodeChatRegenerationService(
                 }
             }
 
-            // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local
-            // chat turn — regenerate is a turn too, so it honors the same setting as the send path. Without this the
-            // package fell back to TimeoutSettings' own default and a raised setting was silently ignored. Only the
-            // invocation timeout is operator-controlled; the tool-call and stream-idle timeouts keep their defaults.
-            // When the setting equals the TimeoutSettings default the package — and therefore its config hash — is
-            // byte-identical to a package built without an explicit Timeouts.
-            var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,
                 resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
@@ -502,7 +511,11 @@ public sealed class NodeChatRegenerationService(
                 return;
             }
 
-            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
+            await eventSink.WriteAsync(
+                    ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
+                        invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
             // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.
@@ -517,7 +530,7 @@ public sealed class NodeChatRegenerationService(
         catch (OperationCanceledException)
         {
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
-                "Invocation timed out or was cancelled",
+                PreRunCancelledMessage,
                 FailureCategory.Cancelled).ConfigureAwait(false);
         }
         catch (NoChatModelInstalledException exception)
@@ -840,9 +853,11 @@ public sealed class NodeChatRegenerationService(
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
-        int? reasoningTokens = null)
+        int? reasoningTokens = null,
+        int? invocationTimeoutSeconds = null)
     {
-        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens,
+            invocationTimeoutSeconds);
     }
 
     private long NowUnixMilliseconds()

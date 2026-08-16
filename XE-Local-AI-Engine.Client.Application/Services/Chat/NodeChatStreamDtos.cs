@@ -164,4 +164,10 @@ public sealed record ChatStreamEvent(
     //
     // Trailing optional so every existing event type's wire shape is unchanged.
     long? ContentOffset = null,
-    long? ReasoningOffset = null);
+    long? ReasoningOffset = null,
+    // The effective whole-turn ceiling for THIS turn in seconds — the operator's node "Maximum message request
+    // timeout" as it was resolved into the runtime package's TimeoutSettings.InvocationTimeoutSeconds. Stamped on
+    // AssistantQueued and AssistantStreaming only (null everywhere else) so the browser's own stream watchdog can
+    // derive its deadline from the node's ceiling instead of a fixed constant that pre-empts it. Trailing optional so
+    // every existing event type's wire shape is unchanged.
+    int? InvocationTimeoutSeconds = null);

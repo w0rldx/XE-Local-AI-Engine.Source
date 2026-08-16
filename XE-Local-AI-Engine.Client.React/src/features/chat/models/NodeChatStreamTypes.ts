@@ -99,6 +99,11 @@ export interface NodeChatStreamEventDto {
 	// the ONE place this wire shape is read.
 	questionRequestId?: string | null;
 	questions?: string | null;
+	// The effective whole-turn ceiling for THIS turn in seconds — the operator's node "Maximum message request
+	// timeout" as the backend resolved it into the run's TimeoutSettings.InvocationTimeoutSeconds. Present on
+	// `assistant-queued` and `assistant-streaming` only. `NodeChatStreamGuard` is the only reader: it derives its own
+	// watchdog deadlines from it so the browser never pre-empts the node's own ceiling.
+	invocationTimeoutSeconds?: number | null;
 }
 
 export const nodeChatToolStreamEventTypes = {

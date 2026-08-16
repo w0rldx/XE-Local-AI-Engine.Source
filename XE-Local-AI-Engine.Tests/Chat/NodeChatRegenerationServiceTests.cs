@@ -905,17 +905,24 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
-        var drained = 0;
-        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        var streamed = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
         {
-            drained++;
+            streamed.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.True(streamed.Count > 0, "Expected the regenerate to stream events.");
         AssertEx.NotNull(capturingRunner.LastTimeouts);
         AssertEx.Equal(expected: 900, capturingRunner.LastTimeouts!.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, capturingRunner.LastTimeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, capturingRunner.LastTimeouts.StreamIdleTimeoutSeconds);
+
+        // Send-path parity for the browser's stream watchdog: the queued + streaming events carry the same ceiling the
+        // package runs under, so a regenerated turn's client-side deadline is derived, not a fixed constant.
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued && streamEvent.InvocationTimeoutSeconds == 900);
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming && streamEvent.InvocationTimeoutSeconds == 900);
     }
 
     [Test]
