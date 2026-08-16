@@ -3774,6 +3774,34 @@ public sealed class NodeChatStreamServiceTests
             "Messages the synopsis covers must not be re-sent verbatim.");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WithASelectionSwitch_DoesNotSendTheSynopsisTheSwitchCleared()
+    {
+        // Sibling of the regenerate case: persisting the request's selection clears the synopsis, so a conversation
+        // read BEFORE that write still carried it — and the turn was built from a synopsis the database no longer had,
+        // on top of history whose covered messages the turn-scoped read had skipped.
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+        var olderVariantId = Guid.NewGuid();
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            olderVariantId,
+            Guid.NewGuid(),
+            persistedSelection: null,
+            requestSelection: new Dictionary<Guid, Guid>
+            {
+                [variantGroupId] = olderVariantId
+            },
+            compactionSummary: "SYNOPSIS",
+            compactionCoversToSequence: 2).ConfigureAwait(false);
+
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains("SYNOPSIS", StringComparison.Ordinal)),
+            "The selection switch cleared the synopsis, so the turn must not send it.");
+        AssertEx.Contains(runner.CapturedContext.Select(message => message.Content).ToList(), "original question");
+        AssertEx.Contains(runner.CapturedContext.Select(message => message.Content).ToList(), "older answer");
+    }
+
     private static async Task<ContextCapturingInvocationRunner> RunWithVariantConversationAsync(Guid conversationId,
         Guid variantGroupId,
         Guid olderVariantId,
@@ -3919,11 +3947,26 @@ public sealed class NodeChatStreamServiceTests
         var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, reasoning: null);
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        // Persisting a selection CLEARS the stored compaction synopsis (NodeChatConversationCommands.SetSelectedPathAsync
+        // writes literal NULLs), so the stub models that write: a read after the switch must not still see the synopsis.
+        // Without it the fixed DTO would hide whether the service reads before or after persisting.
+        var selectionPersisted = false;
+        persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo =>
+                   {
+                       selectionPersisted = true;
+                       return callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>();
+                   });
         // The send path reads through GetConversationForTurnAsync. An unstubbed substitute returns null there, and the
         // service then throws "conversation was not found" before any behaviour under test runs.
-        persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(callInfo => callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>());
+        persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
+                   .Returns(_ => selectionPersisted
+                       ? conversation with
+                       {
+                           CompactionSummary = null,
+                           CompactionSummaryCoversToSequence = null
+                       }
+                       : conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(newUserMessage);
         persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>()).Returns(assistantPending);
         persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
