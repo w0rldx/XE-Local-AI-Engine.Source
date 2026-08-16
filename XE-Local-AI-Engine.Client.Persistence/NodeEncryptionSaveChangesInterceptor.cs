@@ -321,14 +321,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 entry.Entity.Id,
                 "benchmark_output_parts_json",
                 trackedProperties);
-            EncryptOptionalProperty(entry,
-                entry.Property(entity => entity.JudgeResultJson),
-                Guid.Empty,
-                entry.Entity.Id,
-                "benchmark_judge_result_json",
-                trackedProperties);
-            // The launch evidence blocks. A distinct AAD column name per phase so a writer cannot present the
-            // primary's receipt as the judge's (or an environment capture as a receipt).
+            // The primary launch-evidence block. A distinct AAD column name per column so a writer cannot present an
+            // environment capture as a receipt; the judge's own evidence lives on its attempt row.
             EncryptOptionalProperty(entry,
                 entry.Property(entity => entity.PrimaryLaunchReceiptJson),
                 Guid.Empty,
@@ -340,18 +334,6 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 Guid.Empty,
                 entry.Entity.Id,
                 "benchmark_primary_environment_facts_json",
-                trackedProperties);
-            EncryptOptionalProperty(entry,
-                entry.Property(entity => entity.JudgeLaunchReceiptJson),
-                Guid.Empty,
-                entry.Entity.Id,
-                "benchmark_judge_launch_receipt_json",
-                trackedProperties);
-            EncryptOptionalProperty(entry,
-                entry.Property(entity => entity.JudgeEnvironmentFactsJson),
-                Guid.Empty,
-                entry.Entity.Id,
-                "benchmark_judge_environment_facts_json",
                 trackedProperties);
         }
 

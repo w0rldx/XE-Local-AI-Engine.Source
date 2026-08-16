@@ -33,14 +33,6 @@ internal sealed record class BenchmarkRun
 
     public long LastStreamSequence { get; set; }
     public int? UserScore { get; set; }
-    public BenchmarkJudgeStatus JudgeStatus { get; set; }
-
-    /// <summary>
-    ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
-    ///     <c>benchmark_judge_result_json</c>.
-    /// </summary>
-    public byte[]? JudgeResultJson { get; set; }
-
     /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
     public Guid? CurrentJudgeAttemptId { get; set; }
 
@@ -56,13 +48,6 @@ internal sealed record class BenchmarkRun
     public string? PrimaryFlashAttentionMode { get; set; }
     public string? PrimaryIntendedLaunchIdentity { get; set; }
     public string? PrimaryIntendedExecutableSha256 { get; set; }
-    public string? JudgeVariant { get; set; }
-    public string? JudgeKvCacheType { get; set; }
-    public string? JudgeKvCacheTypeSource { get; set; }
-    public string? JudgeKvAutoReason { get; set; }
-    public string? JudgeFlashAttentionMode { get; set; }
-    public string? JudgeIntendedLaunchIdentity { get; set; }
-    public string? JudgeIntendedExecutableSha256 { get; set; }
 
     /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
@@ -86,35 +71,10 @@ internal sealed record class BenchmarkRun
     public bool? PrimaryLaunchHasAuxAssets { get; set; }
     public string? PrimaryLaunchKvCacheTypeSource { get; set; }
 
-    /// <summary>
-    ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
-    ///     <c>benchmark_judge_launch_receipt_json</c>.
-    /// </summary>
-    public byte[]? JudgeLaunchReceiptJson { get; set; }
-
-    /// <summary>
-    ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
-    ///     <c>benchmark_judge_environment_facts_json</c>.
-    /// </summary>
-    public byte[]? JudgeEnvironmentFactsJson { get; set; }
-
-    public string? JudgeReceiptHash { get; set; }
-    public string? JudgeEnvironmentFactsHash { get; set; }
-    public string? JudgeEffectiveLaunchIdentity { get; set; }
-    public string? JudgeEffectiveBackend { get; set; }
-    public int? JudgePlacementOffloaded { get; set; }
-    public int? JudgePlacementTotal { get; set; }
-    public string? JudgeLaunchExecutableSha256 { get; set; }
-    public bool? JudgeLaunchHasAuxAssets { get; set; }
-    public string? JudgeLaunchKvCacheTypeSource { get; set; }
-
     public string? PrimaryErrorMessage { get; set; }
-    public string? JudgeErrorMessage { get; set; }
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long? StartedAtUtc { get; set; }
     public long? PrimaryCompletedAtUtc { get; set; }
-    public long? JudgeStartedAtUtc { get; set; }
-    public long? JudgeCompletedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }
 }

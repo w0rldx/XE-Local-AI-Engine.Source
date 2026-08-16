@@ -170,16 +170,11 @@ public sealed class BenchmarkRunHubTests
             OutputPartsJson: null,
             lastStreamSequence,
             UserScore: null,
-            BenchmarkJudgeStatus.Disabled,
-            JudgeResultJson: null,
             PrimaryErrorMessage: null,
-            JudgeErrorMessage: null,
             Version: 4,
             CreatedAtUtc: 1,
             StartedAtUtc: 1,
             PrimaryCompletedAtUtc: 2,
-            JudgeStartedAtUtc: null,
-            JudgeCompletedAtUtc: null,
             UpdatedAtUtc: 2);
 
     private sealed class HubFixture(BenchmarkRunHub hub, IGroupManager groups, ISingleClientProxy caller) : IDisposable

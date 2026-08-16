@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class AddBenchmarkJudgePoliciesMigrationTests
 {
     private const string PreviousMigration = "20260816174029_AddBenchmarkRunLaunchReceipts";
+    private const string ThisMigration = "20260816200929_AddBenchmarkJudgePolicies";
     private static readonly Guid ProjectId = new("11111111-1111-1111-1111-111111111111");
     private static readonly Guid RunId = new("22222222-2222-2222-2222-222222222222");
 
@@ -92,7 +93,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
         await SeedLegacyBenchmarkRowsAsync(probe).ConfigureAwait(false);
         AssertEx.Equal(expected: 1L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_runs;").ConfigureAwait(false));
 
-        await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigration).ConfigureAwait(false);
 
         // Operator decision C4: the feature is unused, so the migration drops the rows rather than mapping them.
         AssertEx.Equal(expected: 0L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_work_items;").ConfigureAwait(false));
@@ -106,6 +107,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-down.sqlite").ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);
+
 
         AssertEx.False(await probe.TableExistsAsync("benchmark_judge_attempts").ConfigureAwait(false), "Down must drop the attempts table.");
         AssertEx.False(await probe.TableExistsAsync("benchmark_judge_policy_revisions").ConfigureAwait(false), "Down must drop the revisions table.");
@@ -197,7 +199,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
 
     private static async Task SeedLegacyBenchmarkRowsAsync(MigrationSchemaProbe probe)
     {
-        await SeedProjectAndRunAsync(probe).ConfigureAwait(false);
+        await SeedProjectAndRunAsync(probe, atHead: false).ConfigureAwait(false);
         await probe.ExecuteAsync("""
                                  INSERT INTO benchmark_work_items (run_id, kind, status, attempt, version, enqueued_at_utc)
                                  VALUES ($run, 'Primary', 'Succeeded', 1, 2, 1);
@@ -205,24 +207,40 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
             command => command.Parameters.AddWithValue("$run", RunId.ToString())).ConfigureAwait(false);
     }
 
-    private static async Task SeedProjectAndRunAsync(MigrationSchemaProbe probe)
+    /// <param name="atHead">
+    ///     False seeds the shape the chain had before the judge columns were dropped — the only shape the purge test can
+    ///     write, because it seeds at this migration's predecessor.
+    /// </param>
+    private static async Task SeedProjectAndRunAsync(MigrationSchemaProbe probe, bool atHead = true)
     {
-        await probe.ExecuteAsync("""
-                                 INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, judge_enabled,
-                                                                 judge_prompt_version, judge_output_schema_version, version, created_at_utc, updated_at_utc)
-                                 VALUES ($id, 'Legacy', X'00', 4096, $agent, 1, 1, 1, 1, 1, 1);
-                                 """,
+        await probe.ExecuteAsync(atHead
+                ? """
+                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
+                  VALUES ($id, 'Legacy', X'00', 4096, $agent, 1, 1, 1);
+                  """
+                : """
+                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, judge_enabled,
+                                                  judge_prompt_version, judge_output_schema_version, version, created_at_utc, updated_at_utc)
+                  VALUES ($id, 'Legacy', X'00', 4096, $agent, 1, 1, 1, 1, 1, 1);
+                  """,
             command =>
             {
                 command.Parameters.AddWithValue("$id", ProjectId.ToString());
                 command.Parameters.AddWithValue("$agent", Guid.NewGuid().ToString());
             }).ConfigureAwait(false);
-        await probe.ExecuteAsync("""
-                                 INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint, agent_name,
-                                                             agent_version, requested_context_tokens, primary_status, last_stream_sequence, judge_status,
-                                                             version, created_at_utc, updated_at_utc)
-                                 VALUES ($id, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, 4096, 'Succeeded', 0, 'Pending', 1, 1, 1);
-                                 """,
+        await probe.ExecuteAsync(atHead
+                ? """
+                  INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint, agent_name,
+                                              agent_version, requested_context_tokens, primary_status, last_stream_sequence,
+                                              version, created_at_utc, updated_at_utc)
+                  VALUES ($id, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, 4096, 'Succeeded', 0, 1, 1, 1);
+                  """
+                : """
+                  INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint, agent_name,
+                                              agent_version, requested_context_tokens, primary_status, last_stream_sequence, judge_status,
+                                              version, created_at_utc, updated_at_utc)
+                  VALUES ($id, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, 4096, 'Succeeded', 0, 'Pending', 1, 1, 1);
+                  """,
             command =>
             {
                 command.Parameters.AddWithValue("$id", RunId.ToString());

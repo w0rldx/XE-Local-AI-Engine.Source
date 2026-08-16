@@ -6,17 +6,17 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 internal static class BenchmarkEndpointMapper
 {
+    // The rubric and reference answer are not on the wire yet (S2 owns the judge-policy DTO); an enabled judge takes
+    // the default rubric, and an incomplete one still fails validation exactly as it did before.
     public static BenchmarkProjectDraft ToDraft(this BenchmarkProjectMutationRequest request, Guid id) =>
         new(id,
             request.Name,
             request.CoreTask,
             request.ContextTokens,
             request.AgentDefinitionId,
-            request.JudgeEnabled,
-            request.JudgeModelName,
-            request.JudgeContextTokens,
-            request.JudgePromptVersion,
-            request.JudgeOutputSchemaVersion);
+            request.JudgeEnabled
+                ? new BenchmarkJudgePolicyDraft(request.JudgeModelName ?? string.Empty, request.JudgeContextTokens ?? 0)
+                : null);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -43,10 +43,7 @@ internal static class BenchmarkEndpointMapper
             ContextTokens = project.ContextTokens,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
-            JudgeModelName = project.JudgeModelName,
-            JudgeContextTokens = project.JudgeContextTokens,
-            JudgePromptVersion = project.JudgePromptVersion,
-            JudgeOutputSchemaVersion = project.JudgeOutputSchemaVersion,
+            CurrentJudgePolicyRevisionId = project.CurrentJudgePolicyRevisionId,
             RunCount = runCount,
             IsFrozen = project.IsFrozen,
             Version = project.Version,
@@ -67,7 +64,9 @@ internal static class BenchmarkEndpointMapper
             AgentVersion = run.AgentVersion,
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
-            JudgeStatus = run.JudgeStatus,
+            JudgeStatus = run.Judge?.State ?? BenchmarkRunJudgeStates.None,
+            JudgeScore = run.Judge?.Score,
+            RankExclusionReason = run.Judge?.RankExclusionReason,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
@@ -95,28 +94,26 @@ internal static class BenchmarkEndpointMapper
             AgentVersion = run.AgentVersion,
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
-            JudgeStatus = run.JudgeStatus,
+            JudgeStatus = run.Judge?.State ?? BenchmarkRunJudgeStates.None,
+            JudgeScore = run.Judge?.Score,
+            RankExclusionReason = run.Judge?.RankExclusionReason,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
             TokensPerSecond = run.TokensPerSecond,
             OutputParts = ParseJson(run.OutputPartsJson),
-            JudgeResult = ParseJudgeResult(run.JudgeResultJson),
+
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             PrimaryErrorMessage = run.PrimaryErrorMessage,
-            JudgeErrorMessage = run.JudgeErrorMessage,
+            JudgeErrorMessage = run.Judge?.ErrorMessage,
             Version = run.Version,
             CreatedAtUtc = run.CreatedAtUtc,
             StartedAtUtc = run.StartedAtUtc,
             PrimaryCompletedAtUtc = run.PrimaryCompletedAtUtc,
-            JudgeStartedAtUtc = run.JudgeStartedAtUtc,
-            JudgeCompletedAtUtc = run.JudgeCompletedAtUtc,
             UpdatedAtUtc = run.UpdatedAtUtc,
             PrimaryLaunchReceipt = ParseJson(run.PrimaryLaunchEvidence?.ReceiptJson),
-            PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson),
-            JudgeLaunchReceipt = ParseJson(run.JudgeLaunchEvidence?.ReceiptJson),
-            JudgeEnvironmentFacts = ParseJson(run.JudgeLaunchEvidence?.EnvironmentFactsJson)
+            PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson)
         };
         ApplyLaunchEvidence(detail, run);
         return detail;
@@ -148,9 +145,7 @@ internal static class BenchmarkEndpointMapper
     private static void ApplyLaunchEvidence(BenchmarkRunSummaryResponse response, BenchmarkRunRecord run)
     {
         var primaryIntent = run.PrimaryLaunchIntent;
-        var judgeIntent = run.JudgeLaunchIntent;
         var primary = run.PrimaryLaunchEvidence;
-        var judge = run.JudgeLaunchEvidence;
         response.PrimaryVariant = primaryIntent?.Variant;
         response.PrimaryKvCacheType = primaryIntent?.KvCacheType;
         response.PrimaryKvCacheTypeSource = primaryIntent?.KvCacheTypeSource;
@@ -166,21 +161,6 @@ internal static class BenchmarkEndpointMapper
         response.PrimaryHasAuxAssets = primary?.HasAuxAssets;
         response.PrimaryReceiptHash = primary?.ReceiptHash;
         response.PrimaryEnvironmentFactsHash = primary?.EnvironmentFactsHash;
-        response.JudgeVariant = judgeIntent?.Variant;
-        response.JudgeKvCacheType = judgeIntent?.KvCacheType;
-        response.JudgeKvCacheTypeSource = judgeIntent?.KvCacheTypeSource;
-        response.JudgeKvAutoReason = judgeIntent?.KvAutoReason;
-        response.JudgeFlashAttentionMode = judgeIntent?.FlashAttentionMode;
-        response.JudgeIntendedLaunchIdentity = judgeIntent?.IntendedLaunchIdentity;
-        response.JudgeIntendedExecutableSha256 = judgeIntent?.IntendedExecutableSha256;
-        response.JudgeEffectiveLaunchIdentity = judge?.EffectiveLaunchIdentity;
-        response.JudgeEffectiveBackend = judge?.EffectiveBackend;
-        response.JudgePlacementOffloaded = judge?.PlacementOffloaded;
-        response.JudgePlacementTotal = judge?.PlacementTotal;
-        response.JudgeExecutableSha256 = judge?.ExecutableSha256;
-        response.JudgeHasAuxAssets = judge?.HasAuxAssets;
-        response.JudgeReceiptHash = judge?.ReceiptHash;
-        response.JudgeEnvironmentFactsHash = judge?.EnvironmentFactsHash;
     }
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
@@ -194,20 +174,4 @@ internal static class BenchmarkEndpointMapper
         return document.RootElement.Clone();
     }
 
-    private static BenchmarkJudgeResultV1? ParseJudgeResult(ReadOnlyMemory<byte>? payload)
-    {
-        if (payload is not { } value || value.IsEmpty)
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<BenchmarkJudgeResultV1>(value.Span);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 }

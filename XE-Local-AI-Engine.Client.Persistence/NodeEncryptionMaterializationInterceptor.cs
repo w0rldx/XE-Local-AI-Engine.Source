@@ -156,11 +156,6 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     Guid.Empty,
                     benchmarkRun.Id,
                     "benchmark_output_parts_json");
-                benchmarkRun.JudgeResultJson = DecryptIfPresent(benchmarkRun.JudgeResultJson,
-                    context.NodeEncryptionKey.Span,
-                    Guid.Empty,
-                    benchmarkRun.Id,
-                    "benchmark_judge_result_json");
                 benchmarkRun.PrimaryLaunchReceiptJson = DecryptIfPresent(benchmarkRun.PrimaryLaunchReceiptJson,
                     context.NodeEncryptionKey.Span,
                     Guid.Empty,
@@ -171,16 +166,6 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     Guid.Empty,
                     benchmarkRun.Id,
                     "benchmark_primary_environment_facts_json");
-                benchmarkRun.JudgeLaunchReceiptJson = DecryptIfPresent(benchmarkRun.JudgeLaunchReceiptJson,
-                    context.NodeEncryptionKey.Span,
-                    Guid.Empty,
-                    benchmarkRun.Id,
-                    "benchmark_judge_launch_receipt_json");
-                benchmarkRun.JudgeEnvironmentFactsJson = DecryptIfPresent(benchmarkRun.JudgeEnvironmentFactsJson,
-                    context.NodeEncryptionKey.Span,
-                    Guid.Empty,
-                    benchmarkRun.Id,
-                    "benchmark_judge_environment_facts_json");
                 break;
             case BenchmarkJudgePolicyRevision policyRevision:
                 policyRevision.PolicyJson = NodePayloadProtector.Decrypt(policyRevision.PolicyJson,

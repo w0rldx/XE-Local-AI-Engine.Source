@@ -23,18 +23,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class BenchmarkJudgeExecutorTests
 {
+    private static readonly Guid AttemptId = new("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid RevisionId = new("44444444-4444-4444-4444-444444444444");
+    private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// <summary>A one-criterion rubric, so a judge reply in the test stays readable.</summary>
+    private const string JudgeReply =
+        "{\"schemaVersion\":2,\"criteria\":[{\"id\":\"correctness\",\"score\":5,\"rationale\":\"excellent\"}],\"summary\":\"good enough\"}";
+
     [Test]
     public async Task Execute_SuccessUsesFrozenJudgeContextPersistsStrictResultAndDisposesOwnership()
     {
         var installed = Installed();
         var snapshot = Snapshot(installed);
-        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 4);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
         var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
         BenchmarkJudgeSuccessCommand? command = null;
         store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
-                 JudgeStatus = BenchmarkJudgeStatus.Succeeded,
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
                  LastStreamSequence = call.Arg<BenchmarkJudgeSuccessCommand>().LastStreamSequence,
                  Version = 5
              });
@@ -60,13 +69,13 @@ public sealed class BenchmarkJudgeExecutorTests
                   });
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
                       new InvocationStateChangedEventArgs(State(invocationId,
-                          "{\"schemaVersion\":1,\"score\":5,\"rationale\":\"excellent\"}")));
+                          JudgeReply)));
               });
         await using var lease = new FakeLease(installed);
         var supervisor = PassthroughSupervisor();
         var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal<int?>(4096, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
@@ -76,12 +85,15 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.True(capacity.Reservation.Disposed);
         AssertEx.True(lease.Disposed);
         var package = AssertEx.NotNull(assignedPackage);
-        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeSystemPrompt, package.ResolvedSystemPrompt);
+        AssertEx.Equal(BenchmarkJudgePromptV2.SystemPrompt, package.ResolvedSystemPrompt);
         using (var promptPayload = JsonDocument.Parse(package.ConversationContext[0].Content))
         {
-            AssertEx.Equal(BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
-                promptPayload.RootElement.GetProperty("outputSchema").GetString());
+            AssertEx.Equal(BenchmarkJudgeOutputSchemaV2.Json, promptPayload.RootElement.GetProperty("outputSchema").GetRawText());
+            AssertEx.Equal(expected: 1, promptPayload.RootElement.GetProperty("rubric").GetProperty("criteria").GetArrayLength());
         }
+
+        // The server computes the 0..100 score from the criterion scores; the judge never emits an overall.
+        AssertEx.Equal<int?>(50, persisted.Score);
 
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
         AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
@@ -100,8 +112,9 @@ public sealed class BenchmarkJudgeExecutorTests
     {
         var installed = Installed();
         var snapshot = Snapshot(installed);
-        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 4);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
         var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkRunRecord? failed = null;
         store.MarkJudgeFailedAsync(run.Id,
@@ -111,8 +124,7 @@ public sealed class BenchmarkJudgeExecutorTests
                  Arg.Any<CancellationToken>())
              .Returns(call => failed = run with
              {
-                 JudgeStatus = BenchmarkJudgeStatus.Failed,
-                 JudgeErrorMessage = call.ArgAt<string>(2),
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
                  LastStreamSequence = call.ArgAt<long>(3),
                  Version = 5
              });
@@ -122,11 +134,11 @@ public sealed class BenchmarkJudgeExecutorTests
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
 
         var terminal = AssertEx.NotNull(failed);
         AssertEx.Equal(BenchmarkPrimaryStatus.Succeeded, terminal.PrimaryStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Failed, terminal.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Failed, terminal.Judge?.State);
         AssertEx.True(terminal.LastStreamSequence > run.LastStreamSequence);
         _ = dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationAssignedAsync(default!, default);
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
@@ -138,14 +150,15 @@ public sealed class BenchmarkJudgeExecutorTests
     {
         var installed = Installed();
         var snapshot = Snapshot(installed);
-        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 7);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 7);
         const int workVersion = 2;
         var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         store.MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>())
              .Returns(call => run with
              {
-                 JudgeStatus = BenchmarkJudgeStatus.Cancelled,
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Cancelled),
                  Version = run.Version + 1
              });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -174,7 +187,7 @@ public sealed class BenchmarkJudgeExecutorTests
             new StubEnvironmentFacts(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, workVersion, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, workVersion, run, AttemptId), CancellationToken.None);
 
         _ = store.Received(1).MarkJudgeCancelledAsync(run.Id, workVersion, Arg.Any<long>(), Arg.Any<CancellationToken>());
         AssertEx.False(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Judge));
@@ -185,20 +198,18 @@ public sealed class BenchmarkJudgeExecutorTests
     {
         var installed = Installed();
         var snapshot = Snapshot(installed);
-        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 4) with
-        {
-            JudgeLaunchIntent = new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto,
-                "cpu-variant", LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null)
-        };
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
         var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         BenchmarkLaunchReceiptCommand? checkpoint = null;
-        store.MarkJudgeLaunchReadyAsync(run.Id, 2, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
+        store.MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<string?>(),
+                 Arg.Any<CancellationToken>())
              .Returns(true);
         store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
-                 JudgeStatus = BenchmarkJudgeStatus.Succeeded,
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
                  Version = 5
              });
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -212,18 +223,19 @@ public sealed class BenchmarkJudgeExecutorTests
                   checkpointedBeforeInference = checkpoint is not null;
                   var invocationId = call.Arg<InvocationExecutionContext>().Package.InvocationId;
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
-                      new InvocationStateChangedEventArgs(State(invocationId, "{\"schemaVersion\":1,\"score\":4,\"rationale\":\"fine\"}")));
+                      new InvocationStateChangedEventArgs(State(invocationId, JudgeReply)));
                   return Task.CompletedTask;
               });
         await using var lease = new FakeLease(installed);
         var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
 
         AssertEx.True(checkpointedBeforeInference, "The judge launch evidence must be durable before the first token is generated.");
         AssertEx.Equal(BenchmarkKvCacheType.SourceAuto, AssertEx.NotNull(checkpoint).KvCacheTypeSource);
         AssertEx.NotNullOrEmpty(checkpoint!.EnvironmentFactsHash);
-        _ = store.Received(1).MarkJudgeLaunchReadyAsync(run.Id, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<CancellationToken>());
+        _ = store.Received(1)
+                 .MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     private static BenchmarkJudgeExecutor Executor(IBenchmarkStore store,
@@ -249,6 +261,54 @@ public sealed class BenchmarkJudgeExecutorTests
             new StubEnvironmentFacts(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
+    /// <summary>
+    ///     Wires the reads the executor makes before it spawns: the attempt it was handed and the policy revision that
+    ///     attempt was enqueued under. Both carry the payloads the executor deserializes.
+    /// </summary>
+    private static void StubJudgeAttempt(IBenchmarkStore store, InstalledModelSnapshot installed)
+    {
+        store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed));
+        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision());
+    }
+
+    private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed) =>
+        new(AttemptId,
+            Guid.NewGuid(),
+            1,
+            RevisionId,
+            1,
+            BenchmarkJudgeSerialization.SerializeRuntime(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
+                BenchmarkInstalledModelSnapshotMapper.ToSnapshot(installed),
+                4096,
+                Runtime(4096),
+                BenchmarkFrozenPolicies.DeterministicSampling())),
+            null,
+            BenchmarkJudgeAttemptStatus.Running,
+            null,
+            null,
+            null,
+            1,
+            null,
+            null,
+            1,
+            new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, "cpu-variant",
+                LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null));
+
+    private static BenchmarkJudgePolicyRevisionRecord Revision() =>
+        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy()), PolicyHash, null, 1, 1);
+
+    private static BenchmarkJudgePolicyV1 Policy() =>
+        new(new BenchmarkJudgePolicyModelV1("judge.gguf", V1('c'), [new string('b', 64)]),
+            4096,
+            BenchmarkJudgePolicyVersions.PromptVersion,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+            [
+                new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is the answer right?", 40)
+            ]),
+            ReferenceAnswer: null);
+
     private sealed class StubEnvironmentFacts : IRuntimeEnvironmentFactsProvider
     {
         public Task<RuntimeEnvironmentFactsV1> CaptureAsync(GpuVariant variant, CancellationToken ct) =>
@@ -266,7 +326,10 @@ public sealed class BenchmarkJudgeExecutorTests
             LastUpdatedAt = DateTimeOffset.UnixEpoch
         };
 
-    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, BenchmarkJudgeStatus judgeStatus, long version) =>
+    private static BenchmarkRunJudgeView JudgeView(string state, string? errorMessage = null) =>
+        new(state, null, 1, RevisionId, 1, 1, null, errorMessage, PolicyCurrent: true, ExecutionCurrent: false, null);
+
+    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version) =>
         new(Guid.NewGuid(),
             snapshot.ProjectId,
             new byte[]
@@ -287,9 +350,6 @@ public sealed class BenchmarkJudgeExecutorTests
             BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "answer")]),
             1,
             null,
-            judgeStatus,
-            null,
-            null,
             null,
             version,
             1,
@@ -297,7 +357,8 @@ public sealed class BenchmarkJudgeExecutorTests
             1,
             1,
             null,
-            1);
+            null,
+            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
 
     private static InstalledModelSnapshot Installed()
     {
@@ -362,16 +423,6 @@ public sealed class BenchmarkJudgeExecutorTests
             Runtime(8192),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             model,
-            new BenchmarkJudgeSnapshotV1(true,
-                model,
-                1,
-                1,
-                4096,
-                BenchmarkFrozenPolicies.JudgeSystemPrompt,
-                BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
-                Runtime(4096),
-                BenchmarkFrozenPolicies.DeterministicSampling(),
-                "judge-hash"),
             new BenchmarkFreezeDependencySetV1("a", "b", "c", "d", "e", "f"),
             "test",
             1,

@@ -201,8 +201,10 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal("environment-hash", root.GetProperty("primaryEnvironmentFactsHash").GetString());
         AssertEx.Equal("exe-sha", root.GetProperty("primaryLaunchReceipt").GetProperty("executableSha256").GetString());
         AssertEx.Equal(expected: 1, root.GetProperty("primaryEnvironmentFacts").GetProperty("schemaVersion").GetInt32());
-        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeKvCacheType").ValueKind);
-        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeLaunchReceipt").ValueKind);
+
+        // Primary-only: the judge's own launch evidence belongs to its attempt, and the run projects a derived state.
+        AssertEx.Equal("none", root.GetProperty("judgeStatus").GetString());
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeScore").ValueKind);
     }
 
     [Test]
@@ -343,11 +345,11 @@ public sealed class BenchmarkEndpointTests
         };
 
     private static BenchmarkProjectRecord Project(bool isFrozen) =>
-        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, false, null, null, 1, 1,
-            isFrozen, 4, 10, 20);
+        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
+            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
-        BenchmarkJudgeStatus judge = BenchmarkJudgeStatus.Disabled,
+        string judgeState = BenchmarkRunJudgeStates.None,
         string? output = null,
         BenchmarkRunLaunchIntent? intent = null,
         BenchmarkRunLaunchEvidence? evidence = null) =>
@@ -368,20 +370,15 @@ public sealed class BenchmarkEndpointTests
             output is null ? null : Encoding.UTF8.GetBytes(output),
             0,
             null,
-            judge,
-            null,
-            null,
             null,
             3,
             10,
             null,
             null,
-            null,
-            null,
             20,
             intent,
-            null,
-            evidence);
+            evidence,
+            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.

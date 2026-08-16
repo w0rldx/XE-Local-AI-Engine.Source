@@ -146,10 +146,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var primaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
 
         var (projectB, revisionB) = await CreateJudgeProjectAsync(store);
-        var judgeRun = await store.StartRunAsync(CreateRun(projectB) with
-        {
-            JudgeEnabled = true
-        });
+        var judgeRun = await store.StartRunAsync(CreateRun(projectB));
         var judgePrimaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         var primarySucceeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(judgeRun.Id, judgePrimaryClaim.Run.Version,
             Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null, JudgeSeed(revisionB)));
@@ -162,11 +159,11 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal(expected: 2, recovered.Count);
         var primaryAfter = AssertEx.NotNull(await store.GetRunAsync(primaryRun.Id));
         AssertEx.Equal(BenchmarkPrimaryStatus.Failed, primaryAfter.PrimaryStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Disabled, primaryAfter.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.None, primaryAfter.Judge?.State);
         AssertEx.Equal(primaryRun.LastStreamSequence + 1, primaryAfter.LastStreamSequence);
         var judgeAfter = AssertEx.NotNull(await store.GetRunAsync(judgeRun.Id));
         AssertEx.Equal(BenchmarkPrimaryStatus.Succeeded, judgeAfter.PrimaryStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Failed, judgeAfter.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Failed, judgeAfter.Judge?.State);
         AssertEx.Equal(primarySucceeded.LastStreamSequence + 1, judgeAfter.LastStreamSequence);
         AssertBytes(primarySucceeded.OutputPartsJson!.Value.Span, judgeAfter.OutputPartsJson!.Value.Span);
         AssertEx.Empty(await store.RecoverRunsOnStartupAsync());
@@ -183,16 +180,8 @@ public sealed class BenchmarkStoreTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(CreateProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        });
-        var run = await store.StartRunAsync(CreateRun(project) with
-        {
-            JudgeEnabled = true
-        });
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
         var claim = AssertEx.NotNull(await store.ClaimNextAsync());
         var requested = await store.CancelAsync(run.Id, claim.Run.Version);
 
@@ -201,7 +190,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal(1, recovered.Count);
         var after = AssertEx.NotNull(await store.GetRunAsync(run.Id));
         AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, after.PrimaryStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Skipped, after.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.None, after.Judge?.State);
         AssertEx.Equal(requested.LastStreamSequence + 1, after.LastStreamSequence);
         AssertEx.Null(after.PrimaryErrorMessage);
         AssertEx.Null(await store.ClaimNextAsync());
@@ -215,21 +204,13 @@ public sealed class BenchmarkStoreTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(CreateProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        });
-        var run = await store.StartRunAsync(CreateRun(project) with
-        {
-            JudgeEnabled = true
-        });
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
 
         var cancelled = await store.CancelAsync(run.Id, run.Version);
 
         AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, cancelled.PrimaryStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Skipped, cancelled.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.None, cancelled.Judge?.State);
         AssertEx.Null(await store.ClaimNextAsync(), "Cancelled primary work must not remain claimable and no judge work may be inserted.");
     }
 
@@ -246,7 +227,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var cancelled = await store.CancelAsync(judge.RunId, judge.Run.Version);
         var repeated = await store.CancelAsync(judge.RunId, judge.Run.Version);
 
-        AssertEx.Equal(BenchmarkJudgeStatus.Cancelled, repeated.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Cancelled, repeated.Judge?.State);
         AssertEx.Equal(cancelled.Version, repeated.Version);
     }
 
@@ -272,9 +253,9 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal(12L, success.LastStreamSequence);
         AssertEx.Equal(22L, failure.LastStreamSequence);
         AssertEx.Equal(32L, cancelled.LastStreamSequence);
-        AssertEx.Equal(BenchmarkJudgeStatus.Succeeded, success.JudgeStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Failed, failure.JudgeStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Cancelled, cancelled.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Succeeded, success.Judge?.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Failed, failure.Judge?.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Cancelled, cancelled.Judge?.State);
     }
 
     [Test]
@@ -294,7 +275,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             LastStreamSequence: 41));
 
         AssertEx.Equal(expected: 5, completed.UserScore);
-        AssertEx.Equal(BenchmarkJudgeStatus.Succeeded, completed.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Succeeded, completed.Judge?.State);
         AssertEx.True(completed.Version > scored.Version);
     }
 
@@ -306,16 +287,8 @@ public sealed class BenchmarkStoreTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(CreateProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        });
-        var run = await store.StartRunAsync(CreateRun(project) with
-        {
-            JudgeEnabled = true
-        });
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
 
         _ = await store.CancelAsync(run.Id, primary.Run.Version);
@@ -329,7 +302,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             null));
 
         AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, completed.PrimaryStatus);
-        AssertEx.Equal(BenchmarkJudgeStatus.Skipped, completed.JudgeStatus);
+        AssertEx.Equal(BenchmarkRunJudgeStates.None, completed.Judge?.State);
         AssertEx.Null(completed.OutputPartsJson);
         AssertEx.Null(await store.ClaimNextAsync(), "Cancellation must not leave primary or judge work claimable.");
     }
@@ -367,6 +340,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var judge = Encoding.UTF8.GetBytes("secret-judge-result");
         Guid projectId;
         Guid runId;
+        Guid attemptId;
         await using (var context = CreateContext(databasePath))
         {
             await context.Database.EnsureDeletedAsync();
@@ -374,23 +348,20 @@ public sealed class BenchmarkStoreTests : IDisposable
             var store = new BenchmarkStore(context, TimeProvider.System);
             var project = await store.CreateProjectAsync(CreateProject() with
             {
-                CoreTaskJson = task,
-                JudgeEnabled = true,
-                JudgeModelName = "judge.gguf",
-                JudgeContextTokens = 2048
+                CoreTaskJson = task
             });
             var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyBytes, PolicyHash);
             project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
             var run = await store.StartRunAsync(CreateRun(project) with
             {
-                RuntimeSnapshotJson = snapshot,
-                JudgeEnabled = true
+                RuntimeSnapshotJson = snapshot
             });
             var primary = AssertEx.NotNull(await store.ClaimNextAsync());
             var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version, output, 1, 4096, 4, 1, 250,
                 JudgeSeed(activation.Revision)));
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
-            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Version, judge));
+            attemptId = judgeWork.JudgeAttemptId!.Value;
+            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Version, judge, 5, 61));
             projectId = project.Id;
             runId = run.Id;
             _ = primaryDone;
@@ -402,7 +373,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             AssertCiphertext(await ReadProjectCoreTaskAsync(connection, projectId), task);
             AssertCiphertext(await ReadRunRuntimeSnapshotAsync(connection, runId), snapshot);
             AssertCiphertext(await ReadRunOutputAsync(connection, runId), output);
-            AssertCiphertext(await ReadRunJudgeResultAsync(connection, runId), judge);
+            AssertCiphertext(await ReadAttemptResultAsync(connection, attemptId), judge);
         }
 
         await using var fresh = CreateContext(databasePath);
@@ -412,7 +383,9 @@ public sealed class BenchmarkStoreTests : IDisposable
         var reloaded = AssertEx.NotNull(await freshStore.GetRunAsync(runId));
         AssertBytes(snapshot, reloaded.RuntimeSnapshotJson.Span);
         AssertBytes(output, reloaded.OutputPartsJson!.Value.Span);
-        AssertBytes(judge, reloaded.JudgeResultJson!.Value.Span);
+        var attempt = AssertEx.NotNull(await freshStore.GetJudgeAttemptAsync(attemptId));
+        AssertBytes(judge, attempt.ResultJson!.Value.Span);
+        AssertEx.Equal<int?>(61, AssertEx.NotNull(reloaded.Judge).Score, "The run's judge view reads the attempt's score.");
     }
 
     [Test]
@@ -447,7 +420,6 @@ public sealed class BenchmarkStoreTests : IDisposable
         var row = firstPage.Items[0];
         AssertEx.True(row.RuntimeSnapshotJson.IsEmpty, "The list path must not read the encrypted snapshot column.");
         AssertEx.Null(row.OutputPartsJson);
-        AssertEx.Null(row.JudgeResultJson);
         // The summary still carries everything the list view renders — the flat columns, not the payloads.
         AssertEx.Equal("q8_0", AssertEx.NotNull(row.PrimaryLaunchIntent).KvCacheType);
         AssertEx.Equal("model.gguf", row.PrimaryModelName);
@@ -462,17 +434,10 @@ public sealed class BenchmarkStoreTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(CreateProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        });
+        var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project) with
         {
-            JudgeEnabled = true,
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-primary", "manifest-sha"),
-            JudgeLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "f16", "auto", "manifest-unsupported", "auto", "intended-judge", "manifest-sha")
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-primary", "manifest-sha")
         });
 
         var reloaded = AssertEx.NotNull(await store.GetRunAsync(run.Id));
@@ -481,9 +446,6 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal("explicit", primary.KvCacheTypeSource);
         AssertEx.Null(primary.KvAutoReason);
         AssertEx.Equal("intended-primary", primary.IntendedLaunchIdentity);
-        var judge = AssertEx.NotNull(reloaded.JudgeLaunchIntent);
-        AssertEx.Equal("f16", judge.KvCacheType);
-        AssertEx.Equal("manifest-unsupported", judge.KvAutoReason);
         AssertEx.Null(reloaded.PrimaryLaunchEvidence, "A run that has not launched carries no evidence.");
     }
 
@@ -500,9 +462,7 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         var reloaded = AssertEx.NotNull(await store.GetRunAsync(run.Id));
         AssertEx.Null(reloaded.PrimaryLaunchIntent);
-        AssertEx.Null(reloaded.JudgeLaunchIntent);
         AssertEx.Null(reloaded.PrimaryLaunchEvidence);
-        AssertEx.Null(reloaded.JudgeLaunchEvidence);
     }
 
     [Test]
@@ -598,22 +558,25 @@ public sealed class BenchmarkStoreTests : IDisposable
         var receipt = Receipt(Encoding.UTF8.GetBytes("{}"), Encoding.UTF8.GetBytes("{}"));
         var run = AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId));
 
-        AssertEx.False(await store.MarkJudgeLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence + 100, judgeWork.Version, receipt),
+        var attemptId = judgeWork.JudgeAttemptId!.Value;
+
+        AssertEx.False(await store.MarkJudgeLaunchReadyAsync(attemptId, judgeWork.QueueSequence + 100, judgeWork.Version, receipt, "cohort-key"),
             "A checkpoint naming a work item that does not exist must be refused.");
-        AssertEx.False(await store.MarkJudgeLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence, judgeWork.Version + 2, receipt),
+        AssertEx.False(await store.MarkJudgeLaunchReadyAsync(attemptId, judgeWork.QueueSequence, judgeWork.Version + 2, receipt, "cohort-key"),
             "Only the claimed version and its cancellation successor are accepted.");
         AssertEx.False(await store.MarkPrimaryLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence, judgeWork.Version, receipt),
             "A primary checkpoint must not land on the judge's work item.");
-        AssertEx.Null(AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId)).JudgeLaunchEvidence);
+        AssertEx.Null(AssertEx.NotNull(await store.GetJudgeAttemptAsync(attemptId)).LaunchEvidence);
 
         // An operator cancellation terminalizes the judge work item, bumping its version by exactly one; the launch
         // that was already coming up must still be able to record what it did.
         _ = await store.CancelAsync(judgeWork.RunId, run.Version);
-        AssertEx.True(await store.MarkJudgeLaunchReadyAsync(judgeWork.RunId, judgeWork.QueueSequence, judgeWork.Version, receipt),
+        AssertEx.True(await store.MarkJudgeLaunchReadyAsync(attemptId, judgeWork.QueueSequence, judgeWork.Version, receipt, "cohort-key"),
             "A cancelled work item at the successor version is the proven cancel-first ordering.");
-        var cancelled = AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId));
-        AssertEx.NotNull(cancelled.JudgeLaunchEvidence);
-        AssertEx.Equal(BenchmarkJudgeStatus.Cancelled, cancelled.JudgeStatus);
+        var persistedAttempt = AssertEx.NotNull(await store.GetJudgeAttemptAsync(attemptId));
+        AssertEx.NotNull(persistedAttempt.LaunchEvidence);
+        AssertEx.Equal("cohort-key", persistedAttempt.JudgeExecutionKey, "The cohort key is written in the same insert-if-null checkpoint.");
+        AssertEx.Equal(BenchmarkRunJudgeStates.Cancelled, AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(judgeWork.RunId)).Judge).State);
     }
 
     [Test]
@@ -716,12 +679,7 @@ public sealed class BenchmarkStoreTests : IDisposable
     /// </summary>
     private static async Task<(BenchmarkProjectRecord Project, BenchmarkJudgePolicyRevisionRecord Revision)> CreateJudgeProjectAsync(BenchmarkStore store)
     {
-        var project = await store.CreateProjectAsync(CreateProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        });
+        var project = await store.CreateProjectAsync(CreateProject());
         var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyBytes, PolicyHash);
         return (AssertEx.NotNull(await store.GetProjectAsync(project.Id)), activation.Revision);
     }
@@ -730,20 +688,16 @@ public sealed class BenchmarkStoreTests : IDisposable
         new(revision.Id, new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"judgeRuntime\":1}")));
 
     private static BenchmarkProjectInput CreateProject(Guid? id = null) =>
-        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"),
-            4096, Guid.NewGuid(), false, null, null);
+        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), 4096, Guid.NewGuid());
 
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
         new(Guid.NewGuid(), project.Id, project.Version,
-            Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096, project.JudgeEnabled);
+            Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096);
 
     private static async Task<BenchmarkClaimedWork> CreateRunningJudgeAsync(BenchmarkStore store)
     {
         var (project, revision) = await CreateJudgeProjectAsync(store);
-        var run = await store.StartRunAsync(CreateRun(project) with
-        {
-            JudgeEnabled = true
-        });
+        var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id,
             primary.Run.Version,
@@ -813,10 +767,10 @@ public sealed class BenchmarkStoreTests : IDisposable
         return (byte[])(await command.ExecuteScalarAsync())!;
     }
 
-    private static async Task<byte[]> ReadRunJudgeResultAsync(SqliteConnection connection, Guid id)
+    private static async Task<byte[]> ReadAttemptResultAsync(SqliteConnection connection, Guid id)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT judge_result_json FROM benchmark_runs WHERE id = $id;";
+        command.CommandText = "SELECT result_json FROM benchmark_judge_attempts WHERE id = $id;";
         command.Parameters.AddWithValue("$id", id);
         return (byte[])(await command.ExecuteScalarAsync())!;
     }
