@@ -92,6 +92,15 @@ public sealed class NodeChatStreamService(
         // authoritative; throwing here propagates to the hub caller.
         await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
 
+        // A selection map on the request is the authoritative, just-clicked path: persist it BEFORE reading the
+        // conversation. The write also CLEARS the stored compaction synopsis (a synopsis built on the previous path can
+        // misrepresent the newly selected branch), and the turn-scoped read below skips exactly the blobs that synopsis
+        // covers — so reading first would build the turn from a synopsis the database no longer has, on top of history
+        // whose covered messages were never decrypted.
+        var persistedSelectedPath = request.SelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : null;
+
         // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
         // conversation's compaction synopsis has already replaced — BuildConversationContext drops them by sequence and
         // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
@@ -99,12 +108,8 @@ public sealed class NodeChatStreamService(
         var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
 
-        // A selection map on the request is the authoritative, just-clicked path: persist it before building
-        // context so the stored selection and the context agree. With no map on the request, fall back to the
-        // selection already persisted on the conversation (loaded into the DTO).
-        var selectedPath = request.SelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
-            : conversation.SelectedPath;
+        // With no map on the request, fall back to the selection already persisted on the conversation (loaded above).
+        var selectedPath = persistedSelectedPath ?? conversation.SelectedPath;
 
         var trimmedContent = request.Content.Trim();
         var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());

@@ -6,7 +6,6 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class McpAgentRunExecutorTests
@@ -139,69 +138,11 @@ public sealed class McpAgentRunExecutorTests
         AssertEx.Equal(workspaceId, capturedWorkspaceId!.Value);
     }
 
-    [Test]
-    public async Task ExecuteAsync_WhenNodeMessageTimeoutElapses_FailsWithTimedOutCode()
+    private static McpAgentRunExecutor CreateExecutor(IMcpAgentExecutionService execution, SpawnOptions? spawnOptions = null)
     {
-        // G5: an inbound MCP run had no whole-turn deadline — only the dispatcher's coarse watchdog and the transport's
-        // own timeout bounded it. It now honours the SAME operator knob as a local chat send/regenerate. The stub hangs
-        // until its token trips, so this fails if the linked deadline is dropped; the outcome must be a distinguishable
-        // typed failure, not the dispatcher's generic "ended before producing a result".
-        var execution = Substitute.For<IMcpAgentExecutionService>();
-        execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                     Arg.Any<string>(),
-                     Arg.Any<string?>(),
-                     Arg.Any<CancellationToken>(),
-                     Arg.Any<Guid?>())
-                 .Returns(async callInfo =>
-                 {
-                     await Task.Delay(Timeout.Infinite, callInfo.ArgAt<CancellationToken>(3)).ConfigureAwait(false);
-                     return SpawnOutcome.Success("unreachable");
-                 });
-
-        // The stored setting's own minimum is 5s, but the executor takes the loaded value verbatim; 0 keeps this instant.
-        var outcome = await CreateExecutor(execution, maxMessageRequestTimeoutSeconds: 0)
-                          .ExecuteAsync(CreateRun(), CancellationToken.None)
-                          .ConfigureAwait(false);
-
-        AssertEx.Equal(SpawnOutcomeKind.Failed, outcome.Kind);
-        AssertEx.Equal(McpExecutionFailureCodes.TimedOut, outcome.FailureCode!);
-    }
-
-    [Test]
-    public async Task ExecuteAsync_WhenCallerCancels_DoesNotMasqueradeAsATimeout()
-    {
-        // The caller's own cancellation (operator cancel / watchdog / host shutdown) must still escape so the
-        // dispatcher's durable stop marker chooses the terminal outcome — the timeout catch must not swallow it.
-        var execution = Substitute.For<IMcpAgentExecutionService>();
-        execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
-                     Arg.Any<string>(),
-                     Arg.Any<string?>(),
-                     Arg.Any<CancellationToken>(),
-                     Arg.Any<Guid?>())
-                 .Returns(async callInfo =>
-                 {
-                     await Task.Delay(Timeout.Infinite, callInfo.ArgAt<CancellationToken>(3)).ConfigureAwait(false);
-                     return SpawnOutcome.Success("unreachable");
-                 });
-        using var caller = new CancellationTokenSource();
-        var executor = CreateExecutor(execution, maxMessageRequestTimeoutSeconds: 3600);
-
-        var pending = executor.ExecuteAsync(CreateRun(), caller.Token);
-        await caller.CancelAsync().ConfigureAwait(false);
-
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending).ConfigureAwait(false);
-    }
-
-    private static McpAgentRunExecutor CreateExecutor(IMcpAgentExecutionService execution,
-        SpawnOptions? spawnOptions = null,
-        int maxMessageRequestTimeoutSeconds = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds)
-    {
-        var nodeSettings = Substitute.For<INodeSettingsStore>();
-        nodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
-        {
-            MaxMessageRequestTimeoutSeconds = maxMessageRequestTimeoutSeconds
-        });
-        return new McpAgentRunExecutor(execution, nodeSettings, Options.Create(spawnOptions ?? new SpawnOptions()));
+        // No node-settings store here on purpose: the whole-turn deadline lives inside SpawnForMcpAsync so both inbound
+        // MCP front doors are bounded once (SubAgentSpawnServiceTests covers it).
+        return new McpAgentRunExecutor(execution, Options.Create(spawnOptions ?? new SpawnOptions()));
     }
 
     private static McpAgentRunRecord CreateRun() =>

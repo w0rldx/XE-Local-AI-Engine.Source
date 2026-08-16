@@ -170,4 +170,9 @@ public sealed record ChatStreamEvent(
     // AssistantQueued and AssistantStreaming only (null everywhere else) so the browser's own stream watchdog can
     // derive its deadline from the node's ceiling instead of a fixed constant that pre-empts it. Trailing optional so
     // every existing event type's wire shape is unchanged.
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    // Whether the node can REMEMBER an "approve for this session" decision for this exact request (ApprovalRequested
+    // events only; null everywhere else, and null on a reconnect replay that cannot resolve it). The browser prefers
+    // this per-request answer over the tool catalog's tool-identity flag when deciding whether to offer the session
+    // button. Trailing optional so every existing event type's wire shape is unchanged.
+    bool? SessionScopeEligible = null);

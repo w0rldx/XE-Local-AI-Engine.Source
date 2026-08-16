@@ -86,14 +86,20 @@ public sealed class NodeChatRegenerationService(
         // guard; throwing here propagates to the hub caller, same as the send path.
         await mutationGuard.EnsureMutableAsync(conversationId, cancellationToken).ConfigureAwait(false);
 
+        // Persist a request-supplied selection BEFORE reading the conversation. The write also CLEARS the stored
+        // compaction synopsis (a synopsis built on the previous path can misrepresent the newly selected branch), so a
+        // DTO read first would still carry a synopsis the database no longer has — and BuildRegenerationContext would
+        // splice that stale summary in AND drop the verbatim messages it claims to cover.
+        var persistedSelectedPath = requestedSelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : null;
+
         var conversation = await persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
 
         // Same precedence as the send path: a request-supplied selection is persisted and used; otherwise the
         // already-persisted conversation selection drives the pre-cutoff context.
-        var selectedPath = requestedSelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
-            : conversation.SelectedPath;
+        var selectedPath = persistedSelectedPath ?? conversation.SelectedPath;
 
         var original = conversation.Messages.FirstOrDefault(message => message.MessageId == originalMessageId)
                        ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");

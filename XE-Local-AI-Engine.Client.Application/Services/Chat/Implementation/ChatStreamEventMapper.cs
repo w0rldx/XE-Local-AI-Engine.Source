@@ -289,7 +289,8 @@ internal static class ChatStreamEventMapper
             timestampMs,
             ToolCallId: NullIfBlank(payload.CallId),
             ToolName: NullIfBlank(payload.ToolName),
-            ApprovalRequestId: payload.RequestId);
+            ApprovalRequestId: payload.RequestId,
+            SessionScopeEligible: payload.SessionScopeEligible);
     }
 
     /// <summary>

@@ -97,7 +97,13 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // supported for a one-off or an operator-triggered "Run now".
         ScheduleKind.Cron,
         SchedulerMisfirePolicy.SkipMissed,
-        DefaultMaxRuntimeSeconds: 600,
+        // No template default. A value here becomes the form's pre-filled per-schedule ceiling, and a fixed 600 s
+        // silently capped every unattended run below a raised node "Maximum message request timeout": Quartz's
+        // auto-interrupt fired before the run's own invocation deadline could. Left blank, the schedule carries no
+        // explicit ceiling and the management service derives one from that node setting instead (see
+        // ScheduledJobManagementService.ResolveImplicitMaxRuntimeSecondsAsync). An operator who types a value still
+        // gets exactly that value.
+        DefaultMaxRuntimeSeconds: null,
         AllowManualTrigger: true,
         // This is the whole point of the run-agent template: the AI agent is permitted to schedule saved-agent runs.
         AllowAgentCreation: true,

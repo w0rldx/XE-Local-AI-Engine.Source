@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -665,6 +666,64 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task SpawnForMcp_WhenNodeMessageTimeoutElapses_FailsWithTimedOutCode()
+    {
+        // G5: an inbound MCP run had no whole-turn deadline — only the dispatcher's coarse watchdog and the transport's
+        // own timeout bounded it. The deadline lives at THIS boundary so both front doors (synchronous run_agent and the
+        // detached executor) are bounded once, by the same operator knob as a local send. The chat client hangs on its
+        // token, so this fails if the deadline is dropped; the outcome must be a distinguishable typed failure.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(BareBinding());
+        harness.WithMaxMessageRequestTimeoutSeconds(seconds: 0);
+        var inferenceGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.ChatClient.HoldUntil(inferenceGate.Task);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                ModelId = Model
+            },
+            "inspect",
+            expectedBindingFingerprint: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Failed, outcome.Kind);
+        AssertEx.Equal(McpExecutionFailureCodes.TimedOut, outcome.FailureCode!);
+        inferenceGate.SetResult();
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenCallerCancels_DoesNotMasqueradeAsATimeout()
+    {
+        // The caller's own cancellation (operator cancel / dispatcher watchdog / host shutdown) must still escape so the
+        // durable stop marker chooses the terminal outcome — the timeout catch must not swallow it.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.ResolveMcpBinding(BareBinding());
+        harness.WithMaxMessageRequestTimeoutSeconds(seconds: 3600);
+        var inferenceGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.ChatClient.HoldUntil(inferenceGate.Task);
+        var service = harness.Build();
+        using var caller = new CancellationTokenSource();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var pending = service.SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                ModelId = Model
+            },
+            "inspect",
+            expectedBindingFingerprint: null,
+            caller.Token);
+        await harness.ChatClient.WaitUntilRunningAsync().ConfigureAwait(false);
+        await caller.CancelAsync().ConfigureAwait(false);
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending).ConfigureAwait(false);
+        inferenceGate.SetResult();
+    }
+
+    [Test]
     public async Task Spawn_WhenModelIdOnlyWithNoCustomInstructions_ComposesScaffoldAheadOfDefaultPersona()
     {
         // A model-id-only child has no persisted definition to opt out with, so it always gets the same scaffold
@@ -890,6 +949,18 @@ public sealed class SubAgentSpawnServiceTests
         };
     }
 
+    // A bare model binding: no agent definition, no tools, no workspace — the shortest path from SpawnForMcpAsync to
+    // the inner run, used by the deadline tests that only care about how the run ends.
+    private static McpExecutionBinding BareBinding() =>
+        new("fingerprint",
+            Model,
+            "bare instructions",
+            AgentDefinitionId: null,
+            AgentDefinitionVersion: null,
+            AllowedTools: [],
+            ReasoningEffort: null,
+            SupportsThinking: false);
+
     private static McpExecutionBinding WorkspaceCoderBinding() =>
         new("fingerprint",
             Model,
@@ -913,6 +984,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver = Substitute.For<IMcpExecutionBindingResolver>();
         private readonly FakeMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory = new();
         private readonly CapturingLogger<SubAgentSpawnService> _logger = new();
+        private readonly INodeSettingsStore _nodeSettingsStore = Substitute.For<INodeSettingsStore>();
         private bool _reservationDisposed;
 
         public Harness(TimeSpan? delayBeforeResponse = null, bool includeSearchText = true)
@@ -923,6 +995,17 @@ public sealed class SubAgentSpawnServiceTests
             // the Ollama think key. A test can flip this to prove a non-thinking model omits the field.
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                                     .Returns((SupportsThinking: true, SupportsTools: true, IsCloud: false));
+            WithMaxMessageRequestTimeoutSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds);
+        }
+
+        // The node "Maximum message request timeout" that bounds an inbound MCP run inside SpawnForMcpAsync.
+        public void WithMaxMessageRequestTimeoutSeconds(int seconds)
+        {
+            _nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                              .Returns(new StoredNodeSettings
+                              {
+                                  MaxMessageRequestTimeoutSeconds = seconds
+                              });
         }
 
         // Overrides the child model's advertised thinking capability (default true), gating whether a resolved reasoning
@@ -1156,6 +1239,7 @@ public sealed class SubAgentSpawnServiceTests
                 _modelCapabilityResolver,
                 _mcpExecutionBindingResolver,
                 _mcpWorkspaceSessionFactory,
+                _nodeSettingsStore,
                 NullLoggerFactory.Instance,
                 _logger);
         }

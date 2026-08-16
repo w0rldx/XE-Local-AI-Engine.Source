@@ -1603,7 +1603,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 RequestId = requestId,
                 CallId = approvalCallId,
                 ToolName = string.IsNullOrEmpty(approvalToolName) ? approvalCallId : approvalToolName,
-                Description = approvalPayload.Description
+                Description = approvalPayload.Description,
+                // The runner already resolved whether this exact call can be memoized (sessionApprovalKey above), so it
+                // is the authority on whether the card may offer "Approve for this session". Without it the card fell
+                // back to the node tool catalog, which does not carry the MAF skill tools at all and therefore offered
+                // the button for run_skill_script and imported skills, where the click silently degraded to "Once".
+                SessionScopeEligible = sessionApprovalKey is not null
             }).ConfigureAwait(false);
 
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -2167,17 +2172,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             // Nobody asked and the caller's token is still live, so a cancelled invocation source can only be its own
-            // CancelAfter watchdog. An OperationCanceledException arriving with nothing cancelled is not attributable
-            // to this node's timeout and stays a plain cancellation.
+            // CancelAfter watchdog. With NOTHING of ours cancelled the OperationCanceledException came from below us —
+            // an HTTP client timeout surfaces as a TaskCanceledException on a token nobody here owns (the same shape
+            // ProviderStreamResilience.IsTransient treats as a provider timeout). Calling that "stopped externally" was
+            // wrong twice over: it blamed a shutdown/disconnect that never happened and hid a real timeout behind the
+            // Cancelled category.
             return _invocationCancellationTokenSource?.IsCancellationRequested == true
                 ? CancellationOrigin.Watchdog
-                : CancellationOrigin.Shutdown;
+                : CancellationOrigin.ProviderTimeout;
         }
     }
 
     private static FailureCategory ClassifyCancellation(CancellationOrigin origin)
     {
-        return origin == CancellationOrigin.Watchdog ? FailureCategory.Timeout : FailureCategory.Cancelled;
+        return origin is CancellationOrigin.Watchdog or CancellationOrigin.ProviderTimeout
+            ? FailureCategory.Timeout
+            : FailureCategory.Cancelled;
     }
 
     /// <summary>
@@ -2198,6 +2208,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 $"Timed out: the response exceeded the node maximum message request timeout ({invocationTimeout.TotalSeconds:0}s).",
             CancellationOrigin.DetachedGraceExpired =>
                 "Stopped: no client was attached to this run and the disconnect grace period expired.",
+            CancellationOrigin.ProviderTimeout =>
+                "Timed out: the model provider stopped responding before the node's own ceiling was reached.",
             // Shutdown (and the unreachable Unknown): the host token, the caller's token, or a disconnect-driven
             // CancelAll. The metric collapses all three under "shutdown" too, so the sentence names both plausible
             // causes rather than asserting a shutdown that may not have happened.
@@ -2215,6 +2227,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             CancellationOrigin.User => "user",
             CancellationOrigin.Watchdog => "watchdog",
             CancellationOrigin.DetachedGraceExpired => "detached_grace",
+            CancellationOrigin.ProviderTimeout => "provider_timeout",
             _ => "shutdown"
         };
     }
@@ -2329,6 +2342,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ///     plain cancellation like a user stop — the turn was abandoned, not timed out — but kept distinct so the
         ///     logs and the cancellation metric can tell an abandoned turn from one the operator stopped.
         /// </summary>
-        DetachedGraceExpired = 4
+        DetachedGraceExpired = 4,
+
+        /// <summary>
+        ///     No token of ours fired: the cancellation came from below the runner, which in practice is the provider's
+        ///     own HTTP timeout (a <see cref="TaskCanceledException" /> on a token this node does not own). Classified
+        ///     as a <see cref="FailureCategory.Timeout" />, not a cancellation — nothing stopped this turn on purpose.
+        /// </summary>
+        ProviderTimeout = 5
     }
 }
