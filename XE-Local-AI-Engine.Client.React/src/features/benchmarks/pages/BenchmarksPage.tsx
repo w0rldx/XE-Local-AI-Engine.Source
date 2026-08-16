@@ -13,11 +13,21 @@ import {
 	Title,
 	UnstyledButton,
 } from "@mantine/core";
-import { IconAlertTriangle, IconFlask, IconLock, IconPlus, IconRefresh, IconRocket, IconSettings } from "@tabler/icons-react";
+import {
+	IconAlertTriangle,
+	IconFlask,
+	IconLock,
+	IconPlus,
+	IconRefresh,
+	IconRocket,
+	IconScale,
+	IconSettings,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import type { XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft } from "@/core/api/generated";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -27,15 +37,26 @@ import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitio
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
-import type { BenchmarkKvCacheType, BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkKvCacheTypes, isUnsupportedKvCacheTypeError } from "@/features/benchmarks/models/BenchmarkModels";
+import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
+import type { BenchmarkKvCacheType, BenchmarkProjectDraft, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	benchmarkErrorCode,
+	benchmarkKvCacheTypes,
+	isUnsupportedKvCacheTypeError,
+} from "@/features/benchmarks/models/BenchmarkModels";
+import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
+	useBenchmarkRubricPresets,
 	useBenchmarkRuns,
 	useCreateBenchmarkProject,
+	useDeleteBenchmarkRun,
 	useEligibleBenchmarkModels,
+	useRejudgeBenchmarkProject,
+	useRejudgeBenchmarkRun,
 	useStartBenchmarkRun,
+	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
 
@@ -47,11 +68,13 @@ const emptyProject: BenchmarkProjectDraft = {
 	judgeEnabled: false,
 	judgeModelName: null,
 	judgeContextTokens: null,
-	judgePromptVersion: 1,
-	judgeOutputSchemaVersion: 1,
+	rubric: null,
+	referenceAnswer: null,
 };
 
 type EditorMode = "create" | "edit" | null;
+/** Which confirmation the operator is being asked for; both re-score every succeeded run of the project. */
+type ConfirmMode = "judgePolicy" | "rejudgeAll" | null;
 /** The picker's "Auto" entry is a UI-only value: it is sent as an omitted `kvCacheType`, which the node resolves. */
 const autoKvCacheType = "auto";
 
@@ -66,6 +89,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const projectsQuery = useBenchmarkProjects();
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
+	const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
+	const [pendingPolicy, setPendingPolicy] = useState<JudgePolicyDraft | null>(null);
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
 	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
@@ -74,9 +99,15 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const modelsQuery = useEligibleBenchmarkModels(projectQuery.data?.contextTokens);
 	const allModelsQuery = useEligibleBenchmarkModels();
 	const agentsQuery = useAgentDefinitions();
+	const presetsQuery = useBenchmarkRubricPresets(editorMode !== null);
 	const createProject = useCreateBenchmarkProject();
 	const updateProject = useUpdateBenchmarkProject();
+	const updateJudge = useUpdateBenchmarkJudgePolicy();
+	const rejudgeProject = useRejudgeBenchmarkProject();
+	const rejudgeRun = useRejudgeBenchmarkRun();
+	const deleteRun = useDeleteBenchmarkRun();
 	const startRun = useStartBenchmarkRun();
+	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
 
 	useEffect(() => {
 		if (!selectedProjectId && projectsQuery.data?.[0]) {
@@ -89,11 +120,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const linkedRunsApplied = useRef(false);
 	// Runs the deep link asks for, newest first per model name. Empty unless the search carries names that match.
 	const linkedRunIds = useMemo(() => {
-		const runs = runsQuery.data ?? [];
 		return [baseModelName, tunedModelName]
 			.map((name) => (name == null ? undefined : runs.find((run) => run.primaryModelName === name)?.id))
 			.filter((id): id is string => id != null);
-	}, [runsQuery.data, baseModelName, tunedModelName]);
+	}, [runs, baseModelName, tunedModelName]);
 
 	useEffect(() => {
 		// A deep link is an explicit request for two specific runs, applied once. It also suspends the "always keep the
@@ -105,15 +135,15 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			}
 			return;
 		}
-		const latest = runsQuery.data?.slice(0, 2).map((run) => run.id) ?? [];
+		const latest = runs.slice(0, 2).map((run) => run.id);
 		setSelectedRunIds((current) => {
-			const valid = current.filter((id) => runsQuery.data?.some((run) => run.id === id));
+			const valid = current.filter((id) => runs.some((run) => run.id === id));
 			if (latest[0] && !valid.includes(latest[0])) {
 				return [latest[0], ...valid].slice(0, 2);
 			}
 			return valid.length > 0 ? valid.slice(0, 2) : latest;
 		});
-	}, [runsQuery.data, linkedRunIds]);
+	}, [runs, linkedRunIds]);
 
 	// The pick belongs to one prospective run; a different model or project is a different run, so it falls back to Auto
 	// rather than silently carrying a quantized type onto a model that may not support it.
@@ -129,17 +159,70 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						coreTask: detail.coreTask,
 						contextTokens: detail.contextTokens,
 						agentDefinitionId: detail.agentDefinitionId,
-						judgeEnabled: detail.judgeEnabled,
-						judgeModelName: detail.judgeModelName,
-						judgeContextTokens: detail.judgeContextTokens,
-						judgePromptVersion: detail.judgePromptVersion,
-						judgeOutputSchemaVersion: detail.judgeOutputSchemaVersion,
+						judgeEnabled: detail.judge.enabled,
+						judgeModelName: detail.judge.modelName,
+						judgeContextTokens: detail.judge.requestedContextTokens,
+						rubric: detail.judge.rubric,
+						referenceAnswer: detail.judge.referenceAnswer,
 					}
 				: emptyProject,
 		[detail],
 	);
 	const editorDraft = editorMode === "edit" ? editDraft : emptyProject;
+	const judgeAttemptsActive = hasActiveJudgeAttempt(runs);
+	const affectedRunCount = succeededRunCount(runs);
+
+	// A judge change on a frozen project is refused until the operator confirms the re-judge it implies, and while any
+	// judging of the project is still running. Both come back as ProblemDetails 409s with their own code.
+	const saveJudgePolicy = (policy: JudgePolicyDraft | null, confirmRejudge: boolean): void => {
+		if (!detail) {
+			return;
+		}
+		updateJudge.mutate(
+			{ projectId: detail.id, expectedVersion: detail.version, policy, confirmRejudge },
+			{
+				onSuccess: () => {
+					setEditorMode(null);
+					setConfirmMode(null);
+					setPendingPolicy(null);
+				},
+				onError: (error) => {
+					const code = benchmarkErrorCode(error);
+					if (code === "RejudgeRequired") {
+						setPendingPolicy(policy);
+						setConfirmMode("judgePolicy");
+						return;
+					}
+					if (code === "JudgeAttemptsActive") {
+						toast.error(
+							t(
+								"pages.benchmarks.errors.judgeAttemptsActive",
+								"A judging of this project is still running. Wait for it or cancel it first.",
+							),
+						);
+						return;
+					}
+					toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project.")));
+				},
+			},
+		);
+	};
+
 	const saveProject = (draft: BenchmarkProjectDraft): void => {
+		if (editorMode === "edit" && detail?.isFrozen) {
+			saveJudgePolicy(
+				draft.judgeEnabled
+					? {
+							modelName: draft.judgeModelName ?? "",
+							contextTokens: draft.judgeContextTokens ?? 0,
+							rubric: draft.rubric,
+							referenceAnswer: draft.referenceAnswer,
+						}
+					: null,
+				false,
+			);
+			return;
+		}
 		if (editorMode === "edit" && detail) {
 			updateProject.mutate(
 				{ projectId: detail.id, expectedVersion: detail.version, draft },
@@ -171,6 +254,43 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	};
 	const toggleRun = (id: string): void => {
 		setSelectedRunIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current].slice(0, 2)));
+	};
+	const rejudgeAll = (): void => {
+		if (!detail) {
+			return;
+		}
+		rejudgeProject.mutate(
+			{ projectId: detail.id, expectedVersion: detail.version },
+			{
+				onSuccess: () => setConfirmMode(null),
+				onError: (error) => {
+					setConfirmMode(null);
+					toast.error(
+						benchmarkErrorCode(error) === "JudgeAttemptsActive"
+							? t(
+									"pages.benchmarks.errors.judgeAttemptsActive",
+									"A judging of this project is still running. Wait for it or cancel it first.",
+								)
+							: apiErrorMessage(error, t("pages.benchmarks.errors.rejudgeProject", "Could not re-judge this project.")),
+					);
+				},
+			},
+		);
+	};
+	const rejudgeOne = (run: BenchmarkRunSummary): void => {
+		rejudgeRun.mutate(
+			{ run, force: true },
+			{
+				onError: (error) =>
+					toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.rejudgeRun", "Could not re-judge this run."))),
+			},
+		);
+	};
+	const removeRun = (run: BenchmarkRunSummary): void => {
+		deleteRun.mutate(run, {
+			onError: (error) =>
+				toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.delete", "Could not delete this terminal run."))),
+		});
 	};
 
 	return (
@@ -260,9 +380,23 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										<Title order={3}>{detail.name}</Title>
 										<Text c="dimmed">{detail.coreTask}</Text>
 									</Stack>
-									<Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setEditorMode("edit")}>
-										{detail.isFrozen ? t("common.view", "View") : t("common.edit", "Edit")}
-									</Button>
+									<Group gap="xs">
+										{detail.judge.enabled ? (
+											<Button
+												variant="default"
+												leftSection={<IconScale size={16} />}
+												disabled={judgeAttemptsActive || affectedRunCount === 0}
+												loading={rejudgeProject.isPending}
+												onClick={() => setConfirmMode("rejudgeAll")}
+												data-testid="benchmark-rejudge-all"
+											>
+												{t("pages.benchmarks.project.rejudgeAll", "Re-judge all runs")}
+											</Button>
+										) : null}
+										<Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setEditorMode("edit")}>
+											{detail.isFrozen ? t("pages.benchmarks.project.editJudge", "Edit judge") : t("common.edit", "Edit")}
+										</Button>
+									</Group>
 								</Group>
 								{detail.isFrozen ? (
 									<Alert color="blue" icon={<IconLock size={16} />}>
@@ -331,20 +465,17 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				</Grid.Col>
 			</Grid>
 
-			{runsQuery.data && runsQuery.data.length > 0 ? (
+			{runsQuery.data && runs.length > 0 ? (
 				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
-					<Group gap="xs" role="group" aria-label={t("pages.benchmarks.run.compareSelection", "Runs to compare")}>
-						{runsQuery.data.map((run) => (
-							<Button
-								key={run.id}
-								size="xs"
-								variant={selectedRunIds.includes(run.id) ? "filled" : "default"}
-								onClick={() => toggleRun(run.id)}
-							>
-								{run.primaryModelName}
-							</Button>
-						))}
-					</Group>
+					<BenchmarkRunsTable
+						runs={runs}
+						cohort={runsQuery.data.cohort}
+						selectedRunIds={selectedRunIds}
+						isActionPending={rejudgeRun.isPending || deleteRun.isPending}
+						onToggleRun={toggleRun}
+						onRejudgeRun={rejudgeOne}
+						onDeleteRun={removeRun}
+					/>
 					{selectedRunIds.length === 2 && selectedRunIds[0] && selectedRunIds[1] ? (
 						<BenchmarkLaunchCompare leftRunId={selectedRunIds[0]} rightRunId={selectedRunIds[1]} />
 					) : null}
@@ -379,11 +510,48 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					initialValues={editorDraft}
 					agents={(agentsQuery.data ?? []).filter((agent) => agent.kind === "Single")}
 					models={allModelsQuery.data ?? []}
-					disabled={editorMode === "edit" && detail?.isFrozen}
-					isSaving={createProject.isPending || updateProject.isPending}
+					presets={presetsQuery.data}
+					frozen={editorMode === "edit" && detail?.isFrozen}
+					isSaving={createProject.isPending || updateProject.isPending || updateJudge.isPending}
 					onSubmit={saveProject}
 					onCancel={() => setEditorMode(null)}
 				/>
+			</DialogShell>
+
+			<DialogShell
+				opened={confirmMode !== null}
+				onClose={() => setConfirmMode(null)}
+				title={t("pages.benchmarks.project.rejudgeConfirmTitle", "Re-judge this project?")}
+				size="md"
+				data-testid="benchmark-rejudge-confirm"
+			>
+				<Stack gap="md">
+					<Text>
+						{confirmMode === "judgePolicy"
+							? t(
+									"pages.benchmarks.project.rejudgeConfirmPolicy",
+									"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
+									{ count: affectedRunCount },
+								)
+							: t(
+									"pages.benchmarks.project.rejudgeConfirmAll",
+									"All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
+									{ count: affectedRunCount },
+								)}
+					</Text>
+					<Group justify="flex-end">
+						<Button variant="default" onClick={() => setConfirmMode(null)}>
+							{t("common.cancel", "Cancel")}
+						</Button>
+						<Button
+							loading={updateJudge.isPending || rejudgeProject.isPending}
+							onClick={() => (confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll())}
+							data-testid="benchmark-rejudge-confirm-accept"
+						>
+							{t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
+						</Button>
+					</Group>
+				</Stack>
 			</DialogShell>
 		</PageShell>
 	);

@@ -3932,10 +3932,7 @@
 				"CancelRequested": "Cancellation requested",
 				"Succeeded": "Succeeded",
 				"Failed": "Failed",
-				"Cancelled": "Cancelled",
-				"Disabled": "Disabled",
-				"Pending": "Pending",
-				"Skipped": "Skipped"
+				"Cancelled": "Cancelled"
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -3956,7 +3953,18 @@
 				"frozenExplanation": "This project is frozen while runs exist. Delete its terminal runs to edit it again.",
 				"runCount": "{{count}} runs",
 				"empty": "Create a project to freeze one task and compare models.",
-				"select": "Select a benchmark project."
+				"select": "Select a benchmark project.",
+				"judgeSection": "Automated judge",
+				"judgeEditableWhenFrozen": "The judge stays editable on a frozen project. Saving a change re-scores every succeeded run.",
+				"saveJudge": "Save judge",
+				"editJudge": "Edit judge",
+				"referenceAnswer": "Reference answer (optional)",
+				"referenceAnswerHelp": "An ideal answer the judge may compare against. Leave empty to judge on the rubric alone.",
+				"rejudgeAll": "Re-judge all runs",
+				"rejudgeConfirmTitle": "Re-judge this project?",
+				"rejudgeConfirmPolicy": "Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
+				"rejudgeConfirmAll": "All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
+				"rejudgeConfirmAccept": "Re-judge"
 			},
 			"run": {
 				"model": "Primary model",
@@ -3964,10 +3972,11 @@
 				"cancel": "Cancel run",
 				"delete": "Delete terminal run",
 				"waiting": "Waiting for model output…",
-				"compareSelection": "Runs to compare",
 				"kvCacheType": "KV cache type",
 				"kvCacheTypeAuto": "Auto",
-				"kvCacheTypeHelp": "Quantized types launch with flash attention on. Auto uses q8_0 on GPU when the selected binary supports it, otherwise f16."
+				"kvCacheTypeHelp": "Quantized types launch with flash attention on. Auto uses q8_0 on GPU when the selected binary supports it, otherwise f16.",
+				"select": "Show {{model}} in the detail view",
+				"actions": "Run actions"
 			},
 			"metrics": {
 				"duration": "Duration",
@@ -3981,21 +3990,31 @@
 			},
 			"score": {
 				"label": "Operator score",
-				"value": "Score {{score}} of 5"
+				"unset": "No override — the judge score is used",
+				"current": "Override: {{score}} / 100",
+				"input": "Operator score, 0 to 100",
+				"slider": "Operator score slider",
+				"save": "Save score",
+				"clear": "Clear override"
 			},
 			"judge": {
 				"title": "Automated judge",
-				"score": "Judge score: {{score}}",
+				"score": "Judge score: {{score}} / 100",
 				"cancel": "Cancel judge",
+				"rejudge": "Re-judge run",
+				"policyCurrent": "policy r{{revision}}",
+				"policyOutdated": "policy r{{revision}} — outdated",
+				"runtimeDiffers": "judge runtime differs",
+				"runtimeDiffersHint": "Re-judge the project to move the cohort.",
+				"attempt": "attempt #{{sequence}}",
+				"criterionScore": "{{score}} / 10",
 				"explanations": {
-					"Disabled": "Automated judging was not requested for this project.",
-					"Pending": "The judge will be queued only after the primary run succeeds.",
-					"Skipped": "Judging was requested but skipped because the primary run did not succeed.",
-					"Queued": "The judge is waiting in the durable queue.",
-					"Running": "The judge is evaluating the successful primary result.",
-					"Succeeded": "The judge completed independently of the primary run.",
-					"Failed": "The judge failed; the successful primary result remains unchanged.",
-					"Cancelled": "The judge was cancelled."
+					"none": "This run has not been judged under the current judge policy.",
+					"queued": "The judge is waiting in the durable queue.",
+					"running": "The judge is evaluating the successful primary result.",
+					"succeeded": "The judge completed independently of the primary run.",
+					"failed": "The judge failed; the successful primary result remains unchanged.",
+					"cancelled": "The judge was cancelled."
 				}
 			},
 			"validation": {
@@ -4003,7 +4022,9 @@
 				"task": "Core task is required.",
 				"context": "Context must be positive.",
 				"agent": "Select an agent.",
-				"judgeModel": "Select a judge model."
+				"judgeModel": "Select a judge model.",
+				"judgeContext": "Judge context must be positive.",
+				"referenceAnswer": "The reference answer is too long."
 			},
 			"errors": {
 				"projectsLoad": "Could not load benchmark projects.",
@@ -4017,7 +4038,10 @@
 				"fingerprintChanged": "The installed model changed after this run was frozen.",
 				"restartInterrupted": "This running phase was interrupted by a node restart.",
 				"judgeFailed": "The automated judge failed; the primary result is still available.",
-				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime."
+				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime.",
+				"rejudgeRun": "Could not re-judge this run.",
+				"rejudgeProject": "Could not re-judge this project.",
+				"judgeAttemptsActive": "A judging of this project is still running. Wait for it or cancel it first."
 			},
 			"loading": {
 				"projects": "Loading benchmark projects…",
@@ -4037,18 +4061,92 @@
 				"field": "Field",
 				"receipt": "Launch receipt",
 				"environment": "Environment",
-				"judgeReceipt": "Judge launch receipt",
-				"judgeEnvironment": "Judge environment",
 				"intended": "Intended",
 				"effective": "Effective",
 				"intendedDiffers": "The intended launch and the effective launch differ.",
 				"primaryDiffers": "Launch differs: {{fields}}",
-				"judgeDiffers": "Judge launch/environment differs: {{fields}}",
 				"copy": "Copy",
 				"copied": "Copied",
 				"kvExplicit": "KV {{type}} (explicit)",
-				"value": "Value",
-				"judgeIntendedDiffers": "The intended judge launch and the effective judge launch differ."
+				"value": "Value"
+			},
+			"judgeState": {
+				"none": "Not judged",
+				"queued": "Judge queued",
+				"running": "Judging",
+				"succeeded": "Judged",
+				"failed": "Judge failed",
+				"cancelled": "Judge cancelled"
+			},
+			"rank": {
+				"rank": "Rank",
+				"model": "Model",
+				"quality": "Quality",
+				"judgeScore": "Judge",
+				"userScore": "Operator",
+				"launch": "KV / context",
+				"created": "Created",
+				"status": "Status",
+				"actions": "Actions",
+				"compare": "Compare",
+				"context": "ctx {{tokens}}",
+				"cohort": "{{ranked}} of {{scored}} ranked",
+				"cohortPolicy": "judge policy r{{revision}}",
+				"cohortGeneration": "gen {{generation}}",
+				"groupByModel": "Group by model",
+				"groupCount": "{{count}} runs of this model",
+				"expandGroup": "Show this model's other runs",
+				"empty": "No runs yet. Start one to populate the ranking.",
+				"source": {
+					"user": "operator",
+					"judge": "judge",
+					"none": "—"
+				},
+				"exclusion": {
+					"no-score": "No score yet — set an operator score or wait for the judge.",
+					"judge-pending": "The judge has not finished this run yet.",
+					"judge-failed": "The judge failed on this run.",
+					"policy-outdated": "Judged under an older judge policy.",
+					"generation-stale": "Judged before the current cohort was reset.",
+					"execution-key-mismatch": "Judged under a different judge runtime than the ranked cohort.",
+					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete."
+				},
+				"exclusionShort": {
+					"no-score": "unscored",
+					"judge-pending": "judging",
+					"judge-failed": "judge failed",
+					"policy-outdated": "policy outdated",
+					"generation-stale": "stale cohort",
+					"execution-key-mismatch": "runtime differs",
+					"execution-identity-incomplete": "identity incomplete"
+				},
+				"action": {
+					"score": "Set an operator score.",
+					"rejudge": "Re-judge to bring it back into the cohort.",
+					"wait": "Wait for the judging to finish."
+				}
+			},
+			"rubric": {
+				"title": "Rubric",
+				"presets": "Presets",
+				"presetDefault": "Default",
+				"presetProgramming": "Programming",
+				"presetReasoning": "Reasoning",
+				"criterionTitle": "Title",
+				"criterionId": "Id",
+				"criterionWeight": "Weight",
+				"criterionDescription": "What the judge should look for",
+				"remove": "Remove criterion",
+				"add": "Add criterion",
+				"count": "{{count}} of {{max}} criteria",
+				"issues": {
+					"count": "A rubric needs between 1 and 8 criteria.",
+					"id": "An id may only contain lowercase letters, digits, - and _ (32 characters max).",
+					"duplicateId": "This id is already used by another criterion.",
+					"title": "A title is required (64 characters max).",
+					"description": "A description is required (1024 characters max).",
+					"weight": "The weight must be between 1 and 100."
+				}
 			}
 		},
 		"customTools": {

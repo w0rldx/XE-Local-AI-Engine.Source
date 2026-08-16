@@ -4,6 +4,7 @@ import {
 	toBenchmarkEligibleModel,
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
+	toBenchmarkRankCohort,
 	toBenchmarkRunDetail,
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
@@ -43,43 +44,146 @@ describe("toBenchmarkProjectSummary", () => {
 });
 
 describe("toBenchmarkProjectDetail", () => {
-	it("extends the summary and reads no judge model from a project that does not judge", () => {
+	it("extends the summary and reports a disabled judge for a project that does not judge", () => {
 		const mapped = toBenchmarkProjectDetail(partial({ name: "X", coreTask: "Summarise the text." }));
 
-		expect(mapped).toMatchObject({
-			name: "X",
-			coreTask: "Summarise the text.",
-			judgeModelName: null,
-			judgeContextTokens: null,
-			judgePromptVersion: 2,
-			judgeOutputSchemaVersion: 2,
+		expect(mapped).toMatchObject({ name: "X", coreTask: "Summarise the text." });
+		expect(mapped.judge).toEqual({
+			enabled: false,
+			policyRevision: null,
+			policyHash: null,
+			modelName: null,
+			requestedContextTokens: null,
+			rubric: null,
+			referenceAnswer: null,
+			cohortGeneration: null,
+			referenceExecutionKey: null,
 		});
 	});
 
-	it("reads the judge model and context from the project's policy", () => {
-		const mapped = toBenchmarkProjectDetail(
-			partial({ name: "X", coreTask: "T", judge: { enabled: true, modelName: "judge.gguf", requestedContextTokens: 8192 } }),
+	// A rubric the node did not send means "the default", which is not the same as a rubric with no criteria.
+	it("reads the whole judge policy, keeping an absent rubric absent", () => {
+		const withRubric = toBenchmarkProjectDetail(
+			partial({
+				name: "X",
+				coreTask: "T",
+				judge: {
+					enabled: true,
+					policyRevision: 2,
+					modelName: "judge.gguf",
+					requestedContextTokens: 8192,
+					referenceAnswer: "ideal",
+					cohortGeneration: 3,
+					rubric: { version: 1, criteria: [{ id: "accuracy", title: "Accuracy", description: "Facts", weight: 50 }] },
+				},
+			}),
 		);
 
-		expect(mapped).toMatchObject({ judgeModelName: "judge.gguf", judgeContextTokens: 8192, judgePromptVersion: 2 });
+		expect(withRubric.judge).toMatchObject({
+			enabled: true,
+			policyRevision: 2,
+			modelName: "judge.gguf",
+			requestedContextTokens: 8192,
+			referenceAnswer: "ideal",
+			cohortGeneration: 3,
+		});
+		expect(withRubric.judge.rubric).toEqual({
+			version: 1,
+			criteria: [{ id: "accuracy", title: "Accuracy", description: "Facts", weight: 50 }],
+		});
+
+		const withoutRubric = toBenchmarkProjectDetail(partial({ name: "X", coreTask: "T", judge: { enabled: true } }));
+
+		expect(withoutRubric.judge.rubric).toBeNull();
 	});
 });
 
 describe("toBenchmarkRunSummary", () => {
 	// Fail-closed: a run whose status did not survive the round-trip must not read as Succeeded.
-	it("defaults a missing primary status to Failed and an absent judging to Disabled", () => {
+	it("defaults a missing primary status to Failed and an absent judging to none", () => {
 		const mapped = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));
 
 		expect(mapped.primaryStatus).toBe("Failed");
-		expect(mapped.judgeStatus).toBe("Disabled");
+		expect(mapped.judge.state).toBe("none");
 	});
 
-	it("maps the judging's own state onto the run's judge status", () => {
-		const mapped = toBenchmarkRunSummary(
-			partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a", judge: { state: "running" } }),
+	// Fail-closed both ways: an unknown state is not a verdict, and absent currency flags are not "rankable".
+	it("carries the judging through and refuses an unknown state", () => {
+		const running = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				judge: { state: "running", policyRevision: 2, attemptSequence: 3, cohortGeneration: 1, policyCurrent: true },
+			}),
 		);
 
-		expect(mapped.judgeStatus).toBe("Running");
+		expect(running.judge).toMatchObject({
+			state: "running",
+			policyRevision: 2,
+			attemptSequence: 3,
+			cohortGeneration: 1,
+			policyCurrent: true,
+			executionCurrent: false,
+		});
+
+		const unknown = toBenchmarkRunSummary(
+			partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a", judge: { state: "pending" } }),
+		);
+
+		expect(unknown.judge.state).toBe("none");
+	});
+
+	// The quality score, its source, the rank and the exclusion reason are one story: a rank the node withheld must
+	// arrive with the node's reason, and an unrecognised reason must not be invented into the UI's vocabulary.
+	it("maps the ranking projection and rejects an unknown exclusion reason", () => {
+		const ranked = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				qualityScore: 72,
+				qualityScoreSource: "judge",
+				rank: 1,
+				modelGroupKey: "v1:group",
+			}),
+		);
+
+		expect(ranked).toMatchObject({
+			qualityScore: 72,
+			qualityScoreSource: "judge",
+			rank: 1,
+			rankExclusionReason: null,
+			modelGroupKey: "v1:group",
+		});
+
+		const excluded = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				qualityScoreSource: "weird",
+				rankExclusionReason: "policy-outdated",
+			}),
+		);
+		const unknownReason = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				rankExclusionReason: "something-new",
+			}),
+		);
+
+		expect(excluded).toMatchObject({ qualityScore: null, qualityScoreSource: "none", rankExclusionReason: "policy-outdated" });
+		expect(unknownReason.rankExclusionReason).toBeNull();
+	});
+
+	// Grouping must never collapse two different models into one row because the key was missing.
+	it("falls back to the content fingerprint when the group key is absent", () => {
+		const mapped = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1:abc", agentName: "a" }));
+
+		expect(mapped.modelGroupKey).toBe("v1:abc");
 	});
 
 	// "Not measured" and "measured as zero" are different facts; the nullable metrics must not collapse into 0.
@@ -119,13 +223,13 @@ describe("toBenchmarkRunSummary", () => {
 });
 
 describe("toBenchmarkRunDetail", () => {
-	it("defaults the detail-only fields and returns no judge result", () => {
+	it("defaults the detail-only fields", () => {
 		const mapped = toBenchmarkRunDetail(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));
 
 		expect(mapped.outputParts).toEqual([]);
-		expect(mapped.judgeResult).toBeNull();
 		expect(mapped.primaryErrorMessage).toBeNull();
-		expect(mapped.judgeErrorMessage).toBeNull();
+		expect(mapped.judge.errorMessage).toBeNull();
+		expect(mapped.judge.criteria).toEqual([]);
 		expect(mapped.startedAtUtc).toBeNull();
 	});
 
@@ -151,32 +255,45 @@ describe("toBenchmarkRunDetail", () => {
 		expect(mapped.outputParts).toEqual([]);
 	});
 
-	it("maps a succeeded judging's verdict, defaulting its rationale to empty", () => {
+	// The detail projection is the only one carrying the per-criterion breakdown, and a criterion scored 0 is a real
+	// verdict rather than a missing one.
+	it("maps the judging's summary and every criterion score", () => {
 		const mapped = toBenchmarkRunDetail(
 			partial({
 				primaryModelName: "m",
 				modelContentFingerprint: "v1",
 				agentName: "a",
-				judge: { state: "succeeded", score: 73 },
+				judge: {
+					state: "succeeded",
+					score: 73,
+					summary: "Accurate but terse.",
+					criteria: [
+						{ id: "accuracy", score: 8, rationale: "Facts check out." },
+						{ id: "clarity", score: 0, rationale: "Unreadable." },
+					],
+				},
 			}),
 		);
 
-		expect(mapped.judgeResult).toEqual({
-			schemaVersion: 2,
-			score: 73,
-			rationale: "",
-			judgeModelContentFingerprint: "",
-			promptVersion: 2,
-		});
+		expect(mapped.judge).toMatchObject({ state: "succeeded", score: 73, summary: "Accurate but terse." });
+		expect(mapped.judge.criteria).toEqual([
+			{ id: "accuracy", score: 8, rationale: "Facts check out." },
+			{ id: "clarity", score: 0, rationale: "Unreadable." },
+		]);
 	});
 
-	// A judging that has not succeeded has no verdict to render, whatever else the row carries.
-	it("returns no verdict for a judging that did not succeed", () => {
+	// A failed judging still carries its error; nothing about it touches the primary result.
+	it("keeps a failed judging's error message", () => {
 		const mapped = toBenchmarkRunDetail(
-			partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a", judge: { state: "failed", score: 10 } }),
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				judge: { state: "failed", errorMessage: "Judge output was invalid." },
+			}),
 		);
 
-		expect(mapped.judgeResult).toBeNull();
+		expect(mapped.judge).toMatchObject({ state: "failed", score: null, errorMessage: "Judge output was invalid." });
 	});
 });
 
@@ -204,8 +321,8 @@ describe("toBenchmarkEligibleModel", () => {
 });
 
 // Launch evidence is optional by contract: a run frozen before the receipt existed carries NULL in every column, and
-// the UI must be able to tell that apart from a recorded value. The columns arrive per side under a primary…/judge…
-// prefix, so the mapper is asserted to keep the two sides separate rather than reading one into both.
+// the UI must be able to tell that apart from a recorded value. Only the PRIMARY side is projected onto the run — the
+// judge's evidence belongs to its attempt.
 describe("launch evidence mapping", () => {
 	it("maps every launch column of a run that recorded one", () => {
 		const mapped = toBenchmarkRunSummary(
@@ -248,15 +365,12 @@ describe("launch evidence mapping", () => {
 			receiptHash: "receipt-1",
 			environmentFactsHash: "env-1",
 		});
-		// The judge's launch evidence belongs to its attempt now, so the run's judge block is uniformly absent.
-		expect(mapped.judgeLaunch).toEqual(noBenchmarkLaunchFacts);
 	});
 
 	it("keeps a legacy run's launch facts null instead of inventing defaults", () => {
 		const mapped = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));
 
 		expect(mapped.primaryLaunch).toEqual(noBenchmarkLaunchFacts);
-		expect(mapped.judgeLaunch).toEqual(noBenchmarkLaunchFacts);
 	});
 
 	// A placement of zero offloaded layers is a fact (the GPU took nothing), not an absent measurement.
@@ -287,13 +401,34 @@ describe("launch evidence mapping", () => {
 				agentName: "a",
 				primaryLaunchReceipt: { variant: "cuda", placement: { outcome: "Full" } },
 				primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" } },
-				judgeLaunchReceipt: "not-an-object",
 			}),
 		);
 
 		expect(mapped.primaryLaunchReceipt).toEqual({ variant: "cuda", placement: { outcome: "Full" } });
 		expect(mapped.primaryEnvironmentFacts).toEqual({ llamaRuntime: { version: "b10201" } });
-		expect(mapped.judgeLaunchReceipt).toBeNull();
-		expect(mapped.judgeEnvironmentFacts).toBeNull();
+	});
+});
+
+// The cohort line is the honest half of "n of m ranked": absent counters are zero, but an absent policy revision is
+// "no judge policy at all", which must not read as revision 0.
+describe("toBenchmarkRankCohort", () => {
+	it("defaults the counters and keeps an absent cohort identity absent", () => {
+		expect(toBenchmarkRankCohort(undefined)).toEqual({
+			policyRevision: null,
+			executionKey: null,
+			cohortGeneration: null,
+			rankedCount: 0,
+			totalScored: 0,
+		});
+	});
+
+	it("carries the cohort identity and counts through", () => {
+		expect(toBenchmarkRankCohort({ policyRevision: 2, executionKey: "key", cohortGeneration: 3, rankedCount: 2, totalScored: 5 })).toEqual({
+			policyRevision: 2,
+			executionKey: "key",
+			cohortGeneration: 3,
+			rankedCount: 2,
+			totalScored: 5,
+		});
 	});
 });

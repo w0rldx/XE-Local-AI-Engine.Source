@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { benchmarkHubEvents, useBenchmarkRunHub } from "@/features/benchmarks/hooks/useBenchmarkRunHub";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 
 const handlers = new Map<string, (payload: unknown) => void>();
 const invoke = vi.fn(() => Promise.resolve());
@@ -52,42 +52,19 @@ vi.mock("@microsoft/signalr", () => {
 vi.mock("@/core/auth/stores/NodeAuthStore", () => ({ useNodeAuthStore: { getState: () => ({ accessToken: "token" }) } }));
 
 function run(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
-	return {
-		id: "run-1",
-		projectId: "project-1",
-		primaryModelName: "model",
+	return benchmarkRunDetailFixture({
 		primaryModelOrigin: "imported",
-		modelContentFingerprint: "v1:abc",
-		agentName: "agent",
-		agentVersion: 1,
-		requestedContextTokens: 4096,
 		primaryStatus: "Running",
-		judgeStatus: "Pending",
 		effectiveContextTokens: null,
 		durationMs: null,
 		totalTokens: null,
 		tokensPerSecond: null,
-		userScore: null,
 		lastStreamSequence: 0,
-		primaryLaunch: noBenchmarkLaunchFacts,
-		judgeLaunch: noBenchmarkLaunchFacts,
-		primaryLaunchReceipt: null,
-		judgeLaunchReceipt: null,
-		primaryEnvironmentFacts: null,
-		judgeEnvironmentFacts: null,
 		version: 1,
-		createdAtUtc: 1,
 		updatedAtUtc: 1,
-		outputParts: [],
-		judgeResult: null,
-		primaryErrorMessage: null,
-		judgeErrorMessage: null,
-		startedAtUtc: 1,
 		primaryCompletedAtUtc: null,
-		judgeStartedAtUtc: null,
-		judgeCompletedAtUtc: null,
 		...overrides,
-	};
+	});
 }
 
 describe("useBenchmarkRunHub", () => {
@@ -163,5 +140,47 @@ describe("useBenchmarkRunHub", () => {
 			}),
 		);
 		await waitFor(() => expect(refetch).toHaveBeenCalledTimes(3));
+	});
+	// JudgeState and Metrics carry no output, so they never touch `parts`; they correct what the pane renders until the
+	// next authoritative read, which is why they live in an overlay instead of in the query cache.
+	it("keeps judge-state and metric events as an overlay", async () => {
+		const refetch = vi.fn(async () => run());
+		const { result } = renderHook(() => useBenchmarkRunHub({ run: run(), refetch }));
+		await waitFor(() => expect(invoke).toHaveBeenCalledWith("Subscribe", "run-1", 0));
+
+		act(() => {
+			handlers.get(benchmarkHubEvents.event)?.({ runId: "run-1", sequence: 1, kind: "JudgeState", payload: { state: "running" } });
+			handlers.get(benchmarkHubEvents.event)?.({
+				runId: "run-1",
+				sequence: 2,
+				kind: "Metrics",
+				payload: { effectiveContextTokens: 4096, durationMs: 1200, totalTokens: 30, tokensPerSecond: 25 },
+			});
+		});
+
+		expect(result.current.overlay).toEqual({
+			judgeState: "running",
+			effectiveContextTokens: 4096,
+			durationMs: 1200,
+			totalTokens: 30,
+			tokensPerSecond: 25,
+		});
+		expect(result.current.parts).toEqual([]);
+		expect(result.current.lastSequence).toBe(2);
+	});
+
+	// The durable snapshot is the authority: once it is re-read, the streamed corrections are spent.
+	it("drops the overlay when the durable snapshot is re-read", async () => {
+		const refetch = vi.fn(async () => run({ lastStreamSequence: 5 }));
+		const { result } = renderHook(() => useBenchmarkRunHub({ run: run(), refetch }));
+		await waitFor(() => expect(invoke).toHaveBeenCalled());
+		act(() =>
+			handlers.get(benchmarkHubEvents.event)?.({ runId: "run-1", sequence: 1, kind: "JudgeState", payload: { state: "running" } }),
+		);
+		expect(result.current.overlay.judgeState).toBe("running");
+
+		act(() => handlers.get(benchmarkHubEvents.replayReset)?.({ runId: "run-1", latestSequence: 5, runVersion: 2 }));
+
+		await waitFor(() => expect(result.current.overlay.judgeState).toBeNull());
 	});
 });

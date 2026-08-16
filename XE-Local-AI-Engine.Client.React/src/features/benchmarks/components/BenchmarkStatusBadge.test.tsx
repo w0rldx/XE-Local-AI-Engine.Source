@@ -3,25 +3,16 @@
 import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { BenchmarkJudgeStatus, BenchmarkPrimaryStatus } from "@/features/benchmarks/models/BenchmarkModels";
-import { BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import type { BenchmarkJudgeState, BenchmarkPrimaryStatus } from "@/features/benchmarks/models/BenchmarkModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-// The badge is the only place a benchmark status colour is decided, and the primary and judge lifecycles are
-// independent unions rendered by the same component — so every value in either one must resolve to a colour and to a
+// The badges are the only place a benchmark status colour is decided, and the primary and judge lifecycles are
+// separate unions with separate vocabularies — so every value in either one must resolve to a colour and to a
 // non-empty accessible label, with no untranslated key leaking through.
 
 const primaryStatuses: BenchmarkPrimaryStatus[] = ["Queued", "Running", "CancelRequested", "Succeeded", "Failed", "Cancelled"];
-const judgeStatuses: BenchmarkJudgeStatus[] = [
-	"Disabled",
-	"Pending",
-	"Skipped",
-	"Queued",
-	"Running",
-	"Succeeded",
-	"Failed",
-	"Cancelled",
-];
+const judgeStates: BenchmarkJudgeState[] = ["none", "queued", "running", "succeeded", "failed", "cancelled"];
 
 /** The single rendered badge element. */
 function badge(container: HTMLElement): HTMLElement {
@@ -33,7 +24,7 @@ function badge(container: HTMLElement): HTMLElement {
 describe("BenchmarkStatusBadge", () => {
 	afterEach(cleanup);
 
-	it.each([...new Set([...primaryStatuses, ...judgeStatuses])])("labels the %s badge for assistive tech", (status) => {
+	it.each(primaryStatuses)("labels the %s badge for assistive tech", (status) => {
 		const { container } = renderWithProviders(<BenchmarkStatusBadge status={status} />);
 		const element = badge(container);
 
@@ -60,5 +51,29 @@ describe("BenchmarkStatusBadge", () => {
 		const failed = renderWithProviders(<BenchmarkStatusBadge status="Failed" />);
 
 		expect(badge(failed.container).getAttribute("style")).not.toBe(succeededStyle);
+	});
+});
+
+describe("BenchmarkJudgeStateBadge", () => {
+	afterEach(cleanup);
+
+	it.each(judgeStates)("labels the %s judging for assistive tech", (state) => {
+		const { container } = renderWithProviders(<BenchmarkJudgeStateBadge state={state} />);
+		const element = badge(container);
+
+		expect(element.textContent?.trim()).not.toBe("");
+		expect(element.getAttribute("aria-label")).toBe(element.textContent?.trim());
+		expect(element.textContent).not.toContain("pages.benchmarks.judgeState.");
+	});
+
+	// "never judged" and "judged, and it failed" are different facts and must not read the same.
+	it("distinguishes an unjudged run from a failed judging", () => {
+		const unjudged = renderWithProviders(<BenchmarkJudgeStateBadge state="none" />);
+		const unjudgedText = badge(unjudged.container).textContent;
+		unjudged.unmount();
+
+		const failed = renderWithProviders(<BenchmarkJudgeStateBadge state="failed" />);
+
+		expect(badge(failed.container).textContent).not.toBe(unjudgedText);
 	});
 });

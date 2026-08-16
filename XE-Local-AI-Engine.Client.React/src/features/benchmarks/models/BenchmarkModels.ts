@@ -7,18 +7,90 @@ import type { ChatMessagePart, ToolCallState } from "@/features/chat/models/Chat
 
 const benchmarkPrimaryStatuses = ["Queued", "Running", "CancelRequested", "Succeeded", "Failed", "Cancelled"] as const;
 export type BenchmarkPrimaryStatus = (typeof benchmarkPrimaryStatuses)[number];
-const benchmarkJudgeStatuses = [
-	"Disabled",
-	"Pending",
-	"Skipped",
-	"Queued",
-	"Running",
-	"Succeeded",
-	"Failed",
-	"Cancelled",
+
+/**
+ * The judging's own lifecycle, verbatim from the wire (lowercase). It belongs to the current judge ATTEMPT, not to the
+ * run: `none` means this run has no attempt at all, and every other value is that attempt's state. A judging that
+ * failed never downgrades the primary result.
+ */
+const benchmarkJudgeStates = ["none", "queued", "running", "succeeded", "failed", "cancelled"] as const;
+export type BenchmarkJudgeState = (typeof benchmarkJudgeStates)[number];
+/** Fail-closed: an unknown state reads as "no judging", never as a verdict. */
+export const toBenchmarkJudgeState = (value: unknown): BenchmarkJudgeState =>
+	benchmarkJudgeStates.find((state) => state === value) ?? "none";
+
+/**
+ * Why the node left a run out of the ranked cohort. Server-derived and exhaustive: `null` means the run IS ranked.
+ * Every member maps to an operator hint and an action in the runs table — a rank that is simply missing, with no
+ * reason, would be unactionable.
+ */
+export const benchmarkRankExclusionReasons = [
+	"no-score",
+	"judge-pending",
+	"judge-failed",
+	"policy-outdated",
+	"generation-stale",
+	"execution-key-mismatch",
+	"execution-identity-incomplete",
 ] as const;
-export type BenchmarkJudgeStatus = (typeof benchmarkJudgeStatuses)[number];
+export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
+export const toBenchmarkRankExclusionReason = (value: unknown): BenchmarkRankExclusionReason | null =>
+	benchmarkRankExclusionReasons.find((reason) => reason === value) ?? null;
+
+/** Which side produced `qualityScore`: the operator's override wins over the judge, and `none` means unscored. */
+export type BenchmarkQualityScoreSource = "user" | "judge" | "none";
+export const toBenchmarkQualityScoreSource = (value: unknown): BenchmarkQualityScoreSource =>
+	value === "user" || value === "judge" ? value : "none";
+
 export type BenchmarkOrigin = XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
+
+/** Mirrors the node's `BenchmarkJudgePolicyVersions` so the editor refuses what the server would reject anyway. */
+export const benchmarkRubricLimits = {
+	version: 1,
+	minCriteria: 1,
+	maxCriteria: 8,
+	minWeight: 1,
+	maxWeight: 100,
+	maxIdLength: 32,
+	maxTitleLength: 64,
+	maxDescriptionLength: 1024,
+	maxReferenceAnswerLength: 32768,
+} as const;
+
+export interface BenchmarkRubricCriterion {
+	id: string;
+	title: string;
+	description: string;
+	weight: number;
+}
+
+export interface BenchmarkRubric {
+	version: number;
+	criteria: BenchmarkRubricCriterion[];
+}
+
+/** Server-side criterion ids are `[a-z0-9-_]{1,32}`; the editor derives one from the title until the operator edits it. */
+export function toBenchmarkCriterionId(title: string): string {
+	return title
+		.toLowerCase()
+		.replace(/[^a-z0-9\-_]+/g, "-")
+		.replace(/-{2,}/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, benchmarkRubricLimits.maxIdLength);
+}
+
+/** The project's current judge policy revision, or a disabled judge. Read-only: it is edited through a draft. */
+export interface BenchmarkJudgePolicy {
+	enabled: boolean;
+	policyRevision: number | null;
+	policyHash: string | null;
+	modelName: string | null;
+	requestedContextTokens: number | null;
+	rubric: BenchmarkRubric | null;
+	referenceAnswer: string | null;
+	cohortGeneration: number | null;
+	referenceExecutionKey: string | null;
+}
 
 export interface BenchmarkProjectSummary {
 	id: string;
@@ -35,12 +107,10 @@ export interface BenchmarkProjectSummary {
 
 export interface BenchmarkProjectDetail extends BenchmarkProjectSummary {
 	coreTask: string;
-	judgeModelName: string | null;
-	judgeContextTokens: number | null;
-	judgePromptVersion: number;
-	judgeOutputSchemaVersion: number;
+	judge: BenchmarkJudgePolicy;
 }
 
+/** What the project form edits. A null `rubric` means "use the node's default rubric", never "no rubric". */
 export interface BenchmarkProjectDraft {
 	name: string;
 	coreTask: string;
@@ -49,8 +119,8 @@ export interface BenchmarkProjectDraft {
 	judgeEnabled: boolean;
 	judgeModelName: string | null;
 	judgeContextTokens: number | null;
-	judgePromptVersion: number;
-	judgeOutputSchemaVersion: number;
+	rubric: BenchmarkRubric | null;
+	referenceAnswer: string | null;
 }
 
 export interface BenchmarkEligibleModel {
@@ -62,12 +132,54 @@ export interface BenchmarkEligibleModel {
 	supportsTools: boolean;
 }
 
-export interface BenchmarkJudgeResult {
-	schemaVersion: number;
+export interface BenchmarkJudgeCriterionScore {
+	id: string;
+	/** 0..10 per criterion; the weighted roll-up is the 0..100 `score` on the judging itself. */
 	score: number;
 	rationale: string;
-	judgeModelContentFingerprint: string;
-	promptVersion: number;
+}
+
+/**
+ * The judging of one run as the node reports it. `policyCurrent`/`executionCurrent` are the two halves of "may this
+ * score be ranked": a score produced under an older policy revision, or under a judge runtime other than the cohort's
+ * reference, stays visible but unranked.
+ */
+export interface BenchmarkRunJudge {
+	state: BenchmarkJudgeState;
+	score: number | null;
+	policyRevision: number | null;
+	attemptSequence: number | null;
+	cohortGeneration: number | null;
+	executionKey: string | null;
+	policyCurrent: boolean;
+	executionCurrent: boolean;
+	errorMessage: string | null;
+	summary: string | null;
+	/** Detail-only; the list projection omits it. */
+	criteria: BenchmarkJudgeCriterionScore[];
+}
+
+export const noBenchmarkRunJudge: BenchmarkRunJudge = {
+	state: "none",
+	score: null,
+	policyRevision: null,
+	attemptSequence: null,
+	cohortGeneration: null,
+	executionKey: null,
+	policyCurrent: false,
+	executionCurrent: false,
+	errorMessage: null,
+	summary: null,
+	criteria: [],
+};
+
+/** What the project's ranking is computed against, so the table can say "n of m ranked" honestly. */
+export interface BenchmarkRankCohort {
+	policyRevision: number | null;
+	executionKey: string | null;
+	cohortGeneration: number | null;
+	rankedCount: number;
+	totalScored: number;
 }
 
 export interface BenchmarkOutputPart {
@@ -80,15 +192,22 @@ export interface BenchmarkOutputPart {
 	isError?: boolean | null;
 }
 
+/** The machine-readable `code` extension of a benchmark ProblemDetails body, or null for any other failure. */
+export function benchmarkErrorCode(error: unknown): string | null {
+	if (!(error instanceof ApiError)) {
+		return null;
+	}
+	const code = (error.apiProblemDetails as unknown as Record<string, unknown> | undefined)?.["code"];
+	return typeof code === "string" ? code : null;
+}
+
 /**
  * True when the node refused the requested KV cache type specifically, read off the ProblemDetails `code` extension.
  * The status alone is not enough: an ineligible model or agent answers 422 too, and local hey-api response validation
  * reuses 422 as its own status — neither is fixed by picking f16.
  */
 export const isUnsupportedKvCacheTypeError = (error: unknown): boolean =>
-	error instanceof ApiError &&
-	error.statusCode === 422 &&
-	(error.apiProblemDetails as unknown as Record<string, unknown> | undefined)?.["code"] === "UnsupportedKvCacheType";
+	error instanceof ApiError && error.statusCode === 422 && benchmarkErrorCode(error) === "UnsupportedKvCacheType";
 
 export const benchmarkKvCacheTypes = ["f16", "q8_0", "q4_0"] as const;
 export type BenchmarkKvCacheType = (typeof benchmarkKvCacheTypes)[number];
@@ -98,7 +217,8 @@ export type BenchmarkFlashAttentionMode = "auto" | "on";
 
 /**
  * What a run intended to launch and what actually launched, as flat facts — never a verdict. Legacy rows carry null in
- * every member and render "—". Present on both the primary and the judge side of every run summary.
+ * every member and render "—". Present on the primary side of every run summary; the judge's own launch evidence lives
+ * on its attempt and is not projected onto the run.
  */
 export interface BenchmarkLaunchFacts {
 	variant: string | null;
@@ -150,11 +270,18 @@ export interface BenchmarkRunSummary {
 	primaryModelName: string;
 	primaryModelOrigin: BenchmarkOrigin;
 	modelContentFingerprint: string;
+	/** Groups the same model's runs together in the "group by model" view. */
+	modelGroupKey: string;
 	agentName: string;
 	agentVersion: number;
 	requestedContextTokens: number;
 	primaryStatus: BenchmarkPrimaryStatus;
-	judgeStatus: BenchmarkJudgeStatus;
+	judge: BenchmarkRunJudge;
+	/** 0..100, the operator override when there is one, otherwise the current judging's score. */
+	qualityScore: number | null;
+	qualityScoreSource: BenchmarkQualityScoreSource;
+	rank: number | null;
+	rankExclusionReason: BenchmarkRankExclusionReason | null;
 	effectiveContextTokens: number | null;
 	durationMs: number | null;
 	totalTokens: number | null;
@@ -165,23 +292,19 @@ export interface BenchmarkRunSummary {
 	createdAtUtc: number;
 	updatedAtUtc: number;
 	primaryLaunch: BenchmarkLaunchFacts;
-	judgeLaunch: BenchmarkLaunchFacts;
 }
 
 export interface BenchmarkRunDetail extends BenchmarkRunSummary {
 	primaryLaunchReceipt: BenchmarkEvidenceObject | null;
-	judgeLaunchReceipt: BenchmarkEvidenceObject | null;
 	primaryEnvironmentFacts: BenchmarkEvidenceObject | null;
-	judgeEnvironmentFacts: BenchmarkEvidenceObject | null;
 	outputParts: BenchmarkOutputPart[];
-	judgeResult: BenchmarkJudgeResult | null;
 	primaryErrorMessage: string | null;
-	judgeErrorMessage: string | null;
 	startedAtUtc: number | null;
 	primaryCompletedAtUtc: number | null;
-	judgeStartedAtUtc: number | null;
-	judgeCompletedAtUtc: number | null;
 }
+
+/** Everything a write needs to address one run under optimistic concurrency. A detail or a summary row satisfies it. */
+export type BenchmarkRunRef = Pick<BenchmarkRunSummary, "id" | "projectId" | "version">;
 
 const benchmarkRunEventKinds = [
 	"OutputDelta",
@@ -221,6 +344,55 @@ export const benchmarkReplayResetSchema = z.object({
 	runVersion: z.number().int().nonnegative(),
 });
 export type BenchmarkReplayReset = z.infer<typeof benchmarkReplayResetSchema>;
+
+/**
+ * The live corrections the hub has streamed since the last authoritative read. Kept as an overlay rather than written
+ * into the query cache: the durable HTTP snapshot stays the authority, and a `TerminalSnapshotAvailable` refetch drops
+ * the overlay again.
+ */
+export interface BenchmarkRunLiveOverlay {
+	judgeState: BenchmarkJudgeState | null;
+	effectiveContextTokens: number | null;
+	durationMs: number | null;
+	totalTokens: number | null;
+	tokensPerSecond: number | null;
+}
+
+export const noBenchmarkRunLiveOverlay: BenchmarkRunLiveOverlay = {
+	judgeState: null,
+	effectiveContextTokens: null,
+	durationMs: null,
+	totalTokens: null,
+	tokensPerSecond: null,
+};
+
+/** Applies the streamed corrections on top of the durable snapshot. Absent members leave the snapshot untouched. */
+export function applyBenchmarkLiveOverlay<T extends BenchmarkRunSummary>(run: T, overlay: BenchmarkRunLiveOverlay): T {
+	return {
+		...run,
+		judge: overlay.judgeState === null ? run.judge : { ...run.judge, state: overlay.judgeState },
+		effectiveContextTokens: overlay.effectiveContextTokens ?? run.effectiveContextTokens,
+		durationMs: overlay.durationMs ?? run.durationMs,
+		totalTokens: overlay.totalTokens ?? run.totalTokens,
+		tokensPerSecond: overlay.tokensPerSecond ?? run.tokensPerSecond,
+	};
+}
+
+/** The live corrections one hub event carries, or null when it carries none. */
+export function benchmarkLiveOverlayPatch(event: BenchmarkRunEvent): Partial<BenchmarkRunLiveOverlay> | null {
+	if (event.kind === "JudgeState") {
+		return { judgeState: toBenchmarkJudgeState(event.payload.state) };
+	}
+	if (event.kind === "Metrics") {
+		return {
+			effectiveContextTokens: event.payload.effectiveContextTokens ?? null,
+			durationMs: event.payload.durationMs ?? null,
+			totalTokens: event.payload.totalTokens ?? null,
+			tokensPerSecond: event.payload.tokensPerSecond ?? null,
+		};
+	}
+	return null;
+}
 
 function mergeTextPart(parts: BenchmarkOutputPart[], kind: "output" | "reasoning", content: string): BenchmarkOutputPart[] {
 	if (!content) {
@@ -329,7 +501,48 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 
 export const isPrimaryActive = (status: BenchmarkPrimaryStatus): boolean =>
 	status === "Queued" || status === "Running" || status === "CancelRequested";
-export const isJudgeActive = (status: BenchmarkJudgeStatus): boolean => status === "Queued" || status === "Running";
+export const isJudgeActive = (state: BenchmarkJudgeState): boolean => state === "queued" || state === "running";
 const isPrimaryTerminal = (status: BenchmarkPrimaryStatus): boolean => !isPrimaryActive(status);
 export const isRunTerminal = (run: BenchmarkRunSummary): boolean =>
-	isPrimaryTerminal(run.primaryStatus) && !isJudgeActive(run.judgeStatus) && run.judgeStatus !== "Pending";
+	isPrimaryTerminal(run.primaryStatus) && !isJudgeActive(run.judge.state);
+
+/**
+ * The first thing the node's `BenchmarkJudgePolicyValidator` would reject, mirrored client-side so the operator is not
+ * told about a bad criterion by a round-trip. `index` names the offending criterion, or -1 for a rubric-level issue.
+ */
+export interface BenchmarkRubricIssue {
+	code: "count" | "id" | "duplicateId" | "title" | "description" | "weight";
+	index: number;
+}
+
+const criterionId = /^[a-z0-9\-_]+$/;
+
+export function benchmarkRubricIssue(rubric: BenchmarkRubric): BenchmarkRubricIssue | null {
+	const { criteria } = rubric;
+	if (criteria.length < benchmarkRubricLimits.minCriteria || criteria.length > benchmarkRubricLimits.maxCriteria) {
+		return { code: "count", index: -1 };
+	}
+	const seen = new Set<string>();
+	for (const [index, criterion] of criteria.entries()) {
+		if (criterion.id.length === 0 || criterion.id.length > benchmarkRubricLimits.maxIdLength || !criterionId.test(criterion.id)) {
+			return { code: "id", index };
+		}
+		if (seen.has(criterion.id)) {
+			return { code: "duplicateId", index };
+		}
+		seen.add(criterion.id);
+		if (criterion.title.trim().length === 0 || criterion.title.length > benchmarkRubricLimits.maxTitleLength) {
+			return { code: "title", index };
+		}
+		if (
+			criterion.description.trim().length === 0 ||
+			criterion.description.length > benchmarkRubricLimits.maxDescriptionLength
+		) {
+			return { code: "description", index };
+		}
+		if (criterion.weight < benchmarkRubricLimits.minWeight || criterion.weight > benchmarkRubricLimits.maxWeight) {
+			return { code: "weight", index };
+		}
+	}
+	return null;
+}

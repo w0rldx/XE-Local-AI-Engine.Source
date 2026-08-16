@@ -2,23 +2,33 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelBenchmarkRun,
+	clearBenchmarkRunScore,
 	createBenchmarkProject,
 	deleteBenchmarkRun,
 	getBenchmarkProject,
+	getBenchmarkRubricPresets,
 	getBenchmarkRun,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listEligibleBenchmarkModels,
+	rejudgeBenchmarkProject,
+	rejudgeBenchmarkRun,
 	scoreBenchmarkRun,
 	startBenchmarkRun,
+	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 } from "@/core/api/generated";
-import type { XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest } from "@/core/api/generated";
+import type {
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
+	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
+} from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toBenchmarkEligibleModel,
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
+	toBenchmarkRankCohort,
+	toBenchmarkRubric,
 	toBenchmarkRunDetail,
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
@@ -28,9 +38,13 @@ import type {
 	BenchmarkProjectDetail,
 	BenchmarkProjectDraft,
 	BenchmarkProjectSummary,
+	BenchmarkRankCohort,
+	BenchmarkRubric,
 	BenchmarkRunDetail,
+	BenchmarkRunRef,
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
+import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 
 // Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY through the shared
 // `callWithResponseValidation` bridge (the same imperative pattern as useLoadedModels / the chat adapter) rather than
@@ -43,26 +57,29 @@ const benchmarkQueryKeys = {
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
+	rubricPresets: ["benchmarks", "rubric-presets"] as const,
 };
 
 const activeRunPollIntervalMs = 2_000;
 
-function hasActiveRun(runs: BenchmarkRunSummary[] | undefined): boolean {
-	return (
-		runs?.some(
-			(run) =>
-				["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
-				["Pending", "Queued", "Running"].includes(run.judgeStatus),
-		) ?? false
-	);
+/** The ranked page of one project: the rows plus what the ranking was computed against. */
+export interface BenchmarkRunList {
+	items: BenchmarkRunSummary[];
+	cohort: BenchmarkRankCohort;
 }
 
-function isRunActive(run: BenchmarkRunDetail | undefined): boolean {
-	return Boolean(
-		run &&
-			(["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
-				["Pending", "Queued", "Running"].includes(run.judgeStatus)),
-	);
+/** The three rubrics the node offers as starting points. */
+export interface BenchmarkRubricPresets {
+	default: BenchmarkRubric | null;
+	programming: BenchmarkRubric | null;
+	reasoning: BenchmarkRubric | null;
+}
+
+const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge">): boolean =>
+	["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) || isJudgeActive(run.judge.state);
+
+function hasActiveRun(list: BenchmarkRunList | undefined): boolean {
+	return list?.items.some(isRunActive) ?? false;
 }
 
 export function useBenchmarkProjects() {
@@ -89,7 +106,7 @@ export function useBenchmarkProject(projectId: string | null) {
 }
 
 export function useBenchmarkRuns(projectId: string | null) {
-	return useQuery<BenchmarkRunSummary[]>({
+	return useQuery<BenchmarkRunList>({
 		queryKey: benchmarkQueryKeys.runs(projectId ?? ""),
 		enabled: Boolean(projectId),
 		refetchInterval: (query) => (hasActiveRun(query.state.data) ? activeRunPollIntervalMs : false),
@@ -102,7 +119,7 @@ export function useBenchmarkRuns(projectId: string | null) {
 					throwOnError: true,
 				}),
 			);
-			return (data.items ?? []).map(toBenchmarkRunSummary);
+			return { items: (data.items ?? []).map(toBenchmarkRunSummary), cohort: toBenchmarkRankCohort(data.rankCohort) };
 		},
 	});
 }
@@ -110,7 +127,7 @@ export function useBenchmarkRuns(projectId: string | null) {
 export function useBenchmarkRun(runId: string) {
 	return useQuery<BenchmarkRunDetail>({
 		queryKey: benchmarkQueryKeys.run(runId),
-		refetchInterval: (query) => (isRunActive(query.state.data) ? activeRunPollIntervalMs : false),
+		refetchInterval: (query) => (query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : false),
 		queryFn: async ({ signal }) => {
 			const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
 			return toBenchmarkRunDetail(data);
@@ -126,6 +143,23 @@ export function useEligibleBenchmarkModels(contextTokens?: number) {
 				listEligibleBenchmarkModels({ query: contextTokens ? { contextTokens } : undefined, signal, throwOnError: true }),
 			);
 			return (data.items ?? []).map(toBenchmarkEligibleModel);
+		},
+	});
+}
+
+/** The presets never change while the node runs, so they are read once and kept. */
+export function useBenchmarkRubricPresets(enabled: boolean) {
+	return useQuery<BenchmarkRubricPresets>({
+		queryKey: benchmarkQueryKeys.rubricPresets,
+		enabled,
+		staleTime: Number.POSITIVE_INFINITY,
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(getBenchmarkRubricPresets({ signal, throwOnError: true }));
+			return {
+				default: toBenchmarkRubric(data.default),
+				programming: toBenchmarkRubric(data.programming),
+				reasoning: toBenchmarkRubric(data.reasoning),
+			};
 		},
 	});
 }
@@ -146,11 +180,27 @@ function useBenchmarkInvalidation() {
 	};
 }
 
+// A null rubric/referenceAnswer is "the node decides" (default rubric, no reference answer): the member is omitted
+// rather than sent as null, so an unset field can never be mistaken for a deliberate blanking.
+const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
+	name: draft.name,
+	coreTask: draft.coreTask,
+	contextTokens: draft.contextTokens,
+	agentDefinitionId: draft.agentDefinitionId,
+	judgeEnabled: draft.judgeEnabled,
+	judgeModelName: draft.judgeModelName,
+	judgeContextTokens: draft.judgeContextTokens,
+	...(draft.rubric === null ? {} : { rubric: draft.rubric }),
+	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
+});
+
 export function useCreateBenchmarkProject() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
 		mutationFn: async (draft: BenchmarkProjectDraft) => {
-			const { data } = await callWithResponseValidation(createBenchmarkProject({ body: draft, throwOnError: true }));
+			const { data } = await callWithResponseValidation(
+				createBenchmarkProject({ body: projectMutationBody(draft), throwOnError: true }),
+			);
 			return toBenchmarkProjectDetail(data);
 		},
 		onSuccess: (project) => invalidate(project.id),
@@ -170,11 +220,63 @@ export function useUpdateBenchmarkProject() {
 			draft: BenchmarkProjectDraft;
 		}) => {
 			const { data } = await callWithResponseValidation(
-				updateBenchmarkProject({ path: { projectId }, body: { ...draft, expectedVersion }, throwOnError: true }),
+				updateBenchmarkProject({
+					path: { projectId },
+					body: { ...projectMutationBody(draft), expectedVersion },
+					throwOnError: true,
+				}),
 			);
 			return toBenchmarkProjectDetail(data);
 		},
 		onSuccess: (project) => invalidate(project.id),
+	});
+}
+
+/** What a judge change did: the refreshed project plus how many runs it enqueued for re-judging. */
+export interface BenchmarkJudgeChange {
+	project: BenchmarkProjectDetail;
+	enqueuedRunCount: number;
+}
+
+/**
+ * The judge policy of a project, editable even while the project is frozen (its task/agent/context are not). A change
+ * that would re-score existing runs is refused with 409 `RejudgeRequired` until `confirmRejudge` is set — the caller
+ * asks the operator and resends.
+ */
+export function useUpdateBenchmarkJudgePolicy() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({
+			projectId,
+			expectedVersion,
+			policy,
+			confirmRejudge,
+		}: {
+			projectId: string;
+			expectedVersion: number;
+			/** null disables judging; existing attempts and revisions stay as history. */
+			policy: JudgePolicyDraft | null;
+			confirmRejudge: boolean;
+		}) => {
+			const { data } = await callWithResponseValidation(
+				updateBenchmarkJudgePolicy({ path: { projectId }, body: { policy, expectedVersion, confirmRejudge }, throwOnError: true }),
+			);
+			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunCount: (data.enqueuedRunIds ?? []).length };
+		},
+		onSuccess: (change) => invalidate(change.project.id),
+	});
+}
+
+export function useRejudgeBenchmarkProject() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) => {
+			const { data } = await callWithResponseValidation(
+				rejudgeBenchmarkProject({ path: { projectId }, body: { expectedVersion }, throwOnError: true }),
+			);
+			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunCount: (data.enqueuedRunIds ?? []).length };
+		},
+		onSuccess: (change) => invalidate(change.project.id),
 	});
 }
 
@@ -208,7 +310,7 @@ export function useStartBenchmarkRun() {
 export function useCancelBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
-		mutationFn: async ({ run, target }: { run: BenchmarkRunDetail; target: "Primary" | "Judge" }) => {
+		mutationFn: async ({ run, target }: { run: BenchmarkRunRef; target: "Primary" | "Judge" }) => {
 			const { data } = await callWithResponseValidation(
 				cancelBenchmarkRun({ path: { runId: run.id }, body: { target, expectedVersion: run.version }, throwOnError: true }),
 			);
@@ -221,9 +323,36 @@ export function useCancelBenchmarkRun() {
 export function useScoreBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
-		mutationFn: async ({ run, score }: { run: BenchmarkRunDetail; score: number }) => {
+		mutationFn: async ({ run, score }: { run: BenchmarkRunRef; score: number }) => {
 			const { data } = await callWithResponseValidation(
 				scoreBenchmarkRun({ path: { runId: run.id }, body: { score, expectedVersion: run.version }, throwOnError: true }),
+			);
+			return toBenchmarkRunDetail(data);
+		},
+		onSuccess: (run) => invalidate(run.projectId, run.id),
+	});
+}
+
+/** Drops the operator override so the run falls back to its judge score (or to unscored). */
+export function useClearBenchmarkRunScore() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async (run: BenchmarkRunRef) => {
+			const { data } = await callWithResponseValidation(
+				clearBenchmarkRunScore({ path: { runId: run.id }, body: { expectedVersion: run.version }, throwOnError: true }),
+			);
+			return toBenchmarkRunDetail(data);
+		},
+		onSuccess: (run) => invalidate(run.projectId, run.id),
+	});
+}
+
+export function useRejudgeBenchmarkRun() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({ run, force }: { run: BenchmarkRunRef; force: boolean }) => {
+			const { data } = await callWithResponseValidation(
+				rejudgeBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version, force }, throwOnError: true }),
 			);
 			return toBenchmarkRunDetail(data);
 		},
@@ -234,7 +363,7 @@ export function useScoreBenchmarkRun() {
 export function useDeleteBenchmarkRun() {
 	const invalidate = useBenchmarkInvalidation();
 	return useMutation({
-		mutationFn: async (run: BenchmarkRunDetail) => {
+		mutationFn: async (run: BenchmarkRunRef) => {
 			await callWithResponseValidation(
 				deleteBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version }, throwOnError: true }),
 			);
