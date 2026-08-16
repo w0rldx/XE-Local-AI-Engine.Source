@@ -1121,6 +1121,100 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal(userMessageId, contextForVariant[0].Id);
     }
 
+    /// <summary>
+    ///     Regenerating an EARLY turn AFTER later turns exist mints a sibling whose PHYSICAL sequence lands past those
+    ///     later turns. Selecting it and then regenerating a LATER turn must keep that answer in context at the early
+    ///     position: the cutoff filter runs in anchor space, so a raw `Sequence &lt;= cutoff` comparison would drop the
+    ///     first exchange's answer from the rerun entirely.
+    /// </summary>
+    [Test]
+    public async Task RegenerateAsync_WhenALateMintedSiblingOfAnEarlyTurnIsSelected_KeepsItInContextAtTheEarlyPosition()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-late-sibling-anchor.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversationId = conversation.ConversationId;
+
+        // U1 A1 U2 A2 U3 A3.
+        var userOneId = await SeedUserTurnAsync(persistence, conversationId, "u-one", createdAtUtc: 11).ConfigureAwait(false);
+        var answerOneId = await SeedAssistantTurnAsync(persistence, conversationId, "a-one", createdAtUtc: 12).ConfigureAwait(false);
+        var userTwoId = await SeedUserTurnAsync(persistence, conversationId, "u-two", createdAtUtc: 13).ConfigureAwait(false);
+        var answerTwoId = await SeedAssistantTurnAsync(persistence, conversationId, "a-two", createdAtUtc: 14).ConfigureAwait(false);
+        var userThreeId = await SeedUserTurnAsync(persistence, conversationId, "u-three", createdAtUtc: 15).ConfigureAwait(false);
+        var answerThreeId = await SeedAssistantTurnAsync(persistence, conversationId, "a-three", createdAtUtc: 16).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        // Regenerate the FIRST answer: the sibling is minted with the next free sequence, i.e. past every later turn.
+        ChatStreamEvent? completed = null;
+        await foreach (var streamEvent in service.RegenerateAsync(conversationId, answerOneId).ConfigureAwait(false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantCompleted)
+            {
+                completed = streamEvent;
+            }
+        }
+
+        AssertEx.True(completed is not null, "Expected the first regenerate to complete.");
+        var lateSiblingId = completed!.MessageId;
+
+        var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversationId).ConfigureAwait(false));
+        var lateSibling = seeded.Messages.Single(message => message.MessageId == lateSiblingId);
+        var lastAnswerSequence = seeded.Messages.Single(message => message.MessageId == answerThreeId).Sequence;
+        AssertEx.True(lateSibling.Sequence > lastAnswerSequence,
+            "The regenerated sibling must take a physical sequence PAST the later turns — that is the trap under test.");
+        AssertEx.True(lateSibling.VariantGroupId is not null, "A regenerated answer must join its original's variant group.");
+
+        // Select the new sibling as the group's active revision, exactly as the UI does after a regenerate.
+        await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId,
+                             new Dictionary<Guid, Guid>
+                             {
+                                 [lateSibling.VariantGroupId!.Value] = lateSiblingId
+                             },
+                             UpdatedAtUtc: 20))
+                         .ConfigureAwait(false);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversationId, answerThreeId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the second regenerate to stream events.");
+
+        var context = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.Equal(expected: 5, context.Count);
+        AssertEx.Equal(userOneId, context[0].Id);
+        AssertEx.Equal(lateSiblingId, context[1].Id, "The selected late sibling must sit at its group's EARLY position, right after the question it answers.");
+        AssertEx.Equal(userTwoId, context[2].Id);
+        AssertEx.Equal(answerTwoId, context[3].Id);
+        AssertEx.Equal(userThreeId, context[4].Id);
+        AssertEx.True(context.All(message => message.Id != answerOneId && message.Id != answerThreeId),
+            "Neither the deselected sibling nor the answer being replaced may appear.");
+    }
+
+    private static async Task<Guid> SeedUserTurnAsync(NodeChatPersistenceService persistence, Guid conversationId, string content, long createdAtUtc)
+    {
+        var messageId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, messageId, content, createdAtUtc)).ConfigureAwait(false);
+        return messageId;
+    }
+
+    private static async Task<Guid> SeedAssistantTurnAsync(NodeChatPersistenceService persistence, Guid conversationId, string content, long createdAtUtc)
+    {
+        var messageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversationId, messageId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, correlation.RequestId, createdAtUtc, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, createdAtUtc, content, Model: "model-x"))
+                         .ConfigureAwait(false);
+        return messageId;
+    }
+
     [Test]
     public async Task RegenerateAsync_ThreadsSamplingOptionsIntoRuntimePackage()
     {

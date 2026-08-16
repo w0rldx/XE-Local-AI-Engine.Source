@@ -46,6 +46,9 @@ public interface ISelectedPathMessage
 ///         <item>Non-destructive: deselected siblings are simply omitted from the output, never mutated.</item>
 ///         <item>The output is ordered by <c>Sequence</c> ascending.</item>
 ///     </list>
+///     Ordering by the raw <c>Sequence</c> is only correct while no variant group holds a late-minted sibling; every
+///     caller that builds model context or folds history must re-order/filter through
+///     <see cref="CreateAnchorResolver{TMessage}" /> instead. See that method for why.
 /// </summary>
 public static class SelectedPathResolver
 {
@@ -115,6 +118,55 @@ public static class SelectedPathResolver
         });
 
         return selected;
+    }
+
+    /// <summary>
+    ///     Builds the ANCHOR lookup for <paramref name="messages" />: the logical position of each message, which is its
+    ///     variant group's EARLIEST member sequence (ungrouped messages anchor at their own sequence). Callers must order
+    ///     and filter the resolved path by this, never by the chosen sibling's own <c>Sequence</c>.
+    ///     <para>
+    ///         Why: <c>Sequence</c> is a physical insertion counter, so regenerating an EARLY turn AFTER later turns
+    ///         exist mints a sibling whose sequence lands PAST those later turns even though it still belongs to the
+    ///         early turn. Ordering by the raw sequence puts that sibling at the tail (breaking user/assistant
+    ///         alternation), and any <c>Sequence &lt;= cutoff</c> filter drops it outright. The frontend already anchors
+    ///         variant groups this way (<c>MessageRevisionGrouping.ts</c>), so this keeps the model's context matching
+    ///         what the user sees.
+    ///     </para>
+    ///     <para>
+    ///         Backward compatible: a conversation with no variants has anchor == raw sequence for every message, so
+    ///         previously persisted values in this space (notably <c>CompactionSummaryCoversToSequence</c>) stay valid.
+    ///     </para>
+    /// </summary>
+    /// <typeparam name="TMessage">The caller's message type, adapted to <see cref="ISelectedPathMessage" />.</typeparam>
+    /// <param name="messages">
+    ///     ALL conversation messages, including the siblings the selected path omits — the anchor is a property of the
+    ///     whole group, so passing only the resolved path would anchor each group at its chosen sibling instead.
+    /// </param>
+    /// <returns>
+    ///     A lookup from message to anchor sequence. A message whose group is absent from <paramref name="messages" />
+    ///     falls back to its own sequence.
+    /// </returns>
+    public static Func<TMessage, int> CreateAnchorResolver<TMessage>(IEnumerable<TMessage> messages)
+        where TMessage : ISelectedPathMessage
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+
+        var anchorByGroup = new Dictionary<Guid, int>();
+        foreach (var message in messages)
+        {
+            if (message.VariantGroupId is not { } groupId)
+            {
+                continue;
+            }
+
+            anchorByGroup[groupId] = anchorByGroup.TryGetValue(groupId, out var anchor)
+                ? Math.Min(anchor, message.Sequence)
+                : message.Sequence;
+        }
+
+        return message => message.VariantGroupId is { } groupId && anchorByGroup.TryGetValue(groupId, out var anchor)
+            ? anchor
+            : message.Sequence;
     }
 
     private static TMessage ChooseVariant<TMessage>(IReadOnlyList<TMessage> siblings,
