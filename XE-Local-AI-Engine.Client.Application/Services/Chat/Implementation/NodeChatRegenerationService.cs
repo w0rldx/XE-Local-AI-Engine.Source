@@ -54,9 +54,18 @@ public sealed class NodeChatRegenerationService(
         bool useLocalTools = false,
         bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
+        SamplingOptions? samplingOptions = null,
         CancellationToken cancellationToken = default)
     {
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken);
+        // Same up-front rejection the send path applies (NodeChatStreamService.SendMessageAsync): the sampling seed
+        // rides the wire as a string, so a malformed value is caught here rather than silently dropped deeper in the
+        // invocation mapping. A null sampling block always parses, keeping the no-override path unchanged.
+        if (!SeedValue.TryParse(samplingOptions?.Seed, out _, out var seedError))
+        {
+            throw new ArgumentException(seedError, nameof(samplingOptions));
+        }
+
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
@@ -65,6 +74,7 @@ public sealed class NodeChatRegenerationService(
         bool useLocalTools,
         bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
+        SamplingOptions? samplingOptions,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
@@ -353,6 +363,9 @@ public sealed class NodeChatRegenerationService(
                 ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
                 OrchestrationSpec: orchestration?.Spec,
                 SupportsThinking: resolution.SupportsThinking,
+                // Per-turn sampling overrides, carried exactly as the send path carries them so a regenerated turn
+                // reruns under the same knobs the original send used. Null keeps the package byte-identical to today.
+                SamplingOptions: samplingOptions,
                 Skills: resolved?.Skills,
                 CustomTools: resolved?.CustomTools));
 
@@ -542,10 +555,16 @@ public sealed class NodeChatRegenerationService(
     ///     original answer and all sibling variants) sorts at or after that user turn and is therefore excluded.
     ///     When no preceding user turn exists, falls back to everything strictly before the earliest group member.
     /// </summary>
+    /// <param name="applyCompaction">
+    ///     False only for the memory-extraction turn collection, which mines REAL user turns: it must keep the turns a
+    ///     synopsis covers and must never mine the synthetic synopsis message itself (the send path's own
+    ///     <c>CollectUserTurns</c> is likewise compaction-free).
+    /// </param>
     private static IReadOnlyList<ConversationMessageDto> BuildRegenerationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
-        ConversationMessageDto? knowledgeContext = null)
+        ConversationMessageDto? knowledgeContext = null,
+        bool applyCompaction = true)
     {
         var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original);
 
@@ -555,10 +574,28 @@ public sealed class NodeChatRegenerationService(
         // regardless of which member the resolver would otherwise pick.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
-        // The synthetic knowledge-base grounding message (plain-chat only) is prepended so the model reads its content
-        // before the conversation history — mirroring the send path (NodeChatStreamService.BuildConversationContext). It
-        // takes the first slot and the history shifts down by one; null on every non-grounded rerun.
-        var leadingOffset = knowledgeContext is not null ? 1 : 0;
+        // The synthetic context messages (knowledge-base grounding, then the compaction synopsis) are prepended so the
+        // model reads them before the conversation history — same order and rationale as the send path
+        // (NodeChatStreamService.BuildConversationContext). They take the first slots and the history shifts down by
+        // their count; empty on a plain, uncompacted rerun.
+        var leadingContext = new List<ConversationMessageDto>(capacity: 2);
+        if (knowledgeContext is not null)
+        {
+            leadingContext.Add(knowledgeContext with
+            {
+                SortOrder = 0
+            });
+        }
+
+        // Non-destructive compaction, spliced through the same resolver the send path uses: the synopsis replaces the
+        // messages it covers instead of re-sending them verbatim. Only when the covered sequence sits BELOW the cutoff —
+        // a synopsis that already covers the user turn being answered would leave the rerun with no question at all, so
+        // that (compact-then-regenerate-an-older-turn) case keeps the verbatim pre-cutoff history.
+        if (applyCompaction && CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction && compaction.CoveredSequence < cutoffSequence)
+        {
+            leadingContext.Add(compaction.Summary);
+            selected = [.. selected.Where(message => message.Sequence > compaction.CoveredSequence)];
+        }
 
         var messages = selected
                        .Where(message => message.Sequence <= cutoffSequence
@@ -572,20 +609,11 @@ public sealed class NodeChatRegenerationService(
                            Content = message.Content,
                            Thinking = message.Reasoning,
                            ModelUsed = message.Model,
-                           SortOrder = index + leadingOffset
+                           SortOrder = index + leadingContext.Count
                        })
                        .ToList();
 
-        return knowledgeContext is null
-            ? messages
-            :
-            [
-                knowledgeContext with
-                {
-                    SortOrder = 0
-                },
-                .. messages
-            ];
+        return leadingContext.Count == 0 ? messages : [.. leadingContext, .. messages];
     }
 
     /// <summary>
@@ -624,7 +652,7 @@ public sealed class NodeChatRegenerationService(
         NodeChatPersistedMessageDto original,
         IReadOnlyDictionary<Guid, Guid>? selectedPath)
     {
-        return BuildRegenerationContext(conversation, original, selectedPath)
+        return BuildRegenerationContext(conversation, original, selectedPath, knowledgeContext: null, applyCompaction: false)
                .Where(static message => message.Role == MessageRole.User && !string.IsNullOrWhiteSpace(message.Content))
                .Select(static message => new MemoryExtractionTurn(message.Content))
                .ToArray();

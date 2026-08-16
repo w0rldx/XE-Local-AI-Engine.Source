@@ -122,6 +122,9 @@ export interface NodeChatAdapter {
 		useLocalTools: boolean,
 		useKnowledgeBase: boolean,
 		selectedPath: Record<string, string> | undefined,
+		// Developer-mode per-turn sampling overrides, the same ones a send carries. Undefined when developer mode is
+		// off or nothing is set — the hub then receives null and the rerun keeps the model defaults.
+		samplingOptions: WireSamplingOptions | undefined,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
 	resumeConversation(conversationId: string, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
@@ -567,16 +570,25 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			),
 		);
 	},
-	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, signal) {
+	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, signal) {
 		// Server mints the sibling variant + drives the run (assistant revision flow); the variant messageId + requestId arrive
 		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
-		// current reasoning + local-tools + knowledge-base selection plus the active conversation-tree path via the hub
-		// args (RegenerateMessage(conversationId, messageId, effort, useLocalTools, useKnowledgeBase, selectedPath)).
+		// current reasoning + local-tools + knowledge-base selection, the active conversation-tree path, and the
+		// developer-mode sampling overrides via the hub args (RegenerateMessage(conversationId, messageId, effort,
+		// useLocalTools, useKnowledgeBase, selectedPath, samplingOptions)). Absent selection/overrides ride as null.
 		return guardNodeChatStream(
 			signalRStream(
 				{
 					method: "RegenerateMessage",
-					args: [conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath ?? null],
+					args: [
+						conversationId,
+						originalMessageId,
+						reasoningEffort,
+						useLocalTools,
+						useKnowledgeBase,
+						selectedPath ?? null,
+						samplingOptions ?? null,
+					],
 				},
 				signal,
 			),

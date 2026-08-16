@@ -185,7 +185,7 @@ The chat-side tap is `useVoicePlayback` (`features/voice/useVoicePlayback.ts`), 
 
 Developer-mode per-send sampling overrides ride the send request end-to-end. The React shape is `ChatSamplingOptions` (`src/features/chat/models/ChatSamplingOptions.ts`): `temperature`, `topP`, `topK`, `minP`, `maxOutputTokens`, `repeatPenalty`, `repeatLastN`, `presencePenalty`, `frequencyPenalty`, `seed`, `stop[]`, `numCtx`. The `samplingFieldGroups` metadata drives the `ChatSamplingOptionsDialog` inputs (ranges, sliders, decimal scale). `toWireSamplingOptions` normalizes finite numbers; the adapter forwards `samplingOptions` only when present (`NodeChatAdapter.ts`).
 
-On the backend the value flows straight onto the runtime package: `LocalChatRuntimePackageRequest(... SamplingOptions: request.SamplingOptions ...)` (`NodeChatStreamService.cs`). The wire JSON field (`samplingOptions`, camelCase) matches the backend `SamplingOptions` record. These overrides are intentionally **not** part of the config hash (per repo memory) so they don't invalidate caching.
+On the backend the value flows straight onto the runtime package: `LocalChatRuntimePackageRequest(... SamplingOptions: request.SamplingOptions ...)` (`NodeChatStreamService.cs`). The wire JSON field (`samplingOptions`, camelCase) matches the backend `SamplingOptions` record. These overrides are intentionally **not** part of the config hash (per repo memory) so they don't invalidate caching. Regenerate carries the same block: the client passes it as the trailing `RegenerateMessage` hub argument and `NodeChatRegenerationService` puts it on the package, so a rerun uses the knobs the original send used.
 
 ## Reasoning effort + cloud clamp
 

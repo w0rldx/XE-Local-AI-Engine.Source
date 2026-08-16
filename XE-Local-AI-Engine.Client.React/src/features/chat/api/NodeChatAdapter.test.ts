@@ -326,16 +326,17 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 	it("streams a regenerate over RegenerateMessage and yields the server-minted variant", async () => {
 		const iterator = nodeChatAdapter
-			.regenerateMessage("conversation-1", "assistant-1", "high", true, true, undefined, new AbortController().signal)
+			.regenerateMessage("conversation-1", "assistant-1", "high", true, true, undefined, undefined, new AbortController().signal)
 			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
 		expect(connectionMock.state.lastMethod).toBe("RegenerateMessage");
-		// Hub args are (conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath):
-		// the current reasoning, local-tools, knowledge-base, and conversation-tree selections all travel as positional
-		// args so regenerate honors them like a send. An absent selection map is sent as null.
-		expect(connectionMock.state.lastArgs).toEqual(["conversation-1", "assistant-1", "high", true, true, null]);
+		// Hub args are (conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath,
+		// samplingOptions): the current reasoning, local-tools, knowledge-base, conversation-tree, and developer-mode
+		// sampling selections all travel as positional args so regenerate honors them like a send. An absent selection
+		// map or sampling block is sent as null.
+		expect(connectionMock.state.lastArgs).toEqual(["conversation-1", "assistant-1", "high", true, true, null, null]);
 		expect(connectionMock.state.lastPayload).toBe("conversation-1");
 
 		// The server mints a fresh variant id + requestId; the adapter surfaces it unchanged on the fresh stream.
@@ -344,9 +345,43 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		await expect(first).resolves.toEqual({ value: variantEvent, done: false });
 	});
 
+	it("carries the developer-mode sampling overrides as the trailing regenerate hub arg", async () => {
+		// G2: the per-send sampling overrides were dropped on regenerate — the rerun silently ignored the knobs the
+		// original send used.
+		const iterator = nodeChatAdapter
+			.regenerateMessage(
+				"conversation-1",
+				"assistant-1",
+				"high",
+				false,
+				false,
+				{ "group-1": "variant-1" },
+				{ temperature: 0.7, seed: "1234" },
+				new AbortController().signal,
+			)
+			[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		expect(connectionMock.state.lastArgs).toEqual([
+			"conversation-1",
+			"assistant-1",
+			"high",
+			false,
+			false,
+			{ "group-1": "variant-1" },
+			{ temperature: 0.7, seed: "1234" },
+		]);
+
+		// Drain the opened stream so the test leaves no pending subscription behind.
+		const variantEvent = streamEvent({ messageId: "variant-9", requestId: "request-9" });
+		connectionMock.state.currentSubscriber?.next(variantEvent);
+		await expect(first).resolves.toEqual({ value: variantEvent, done: false });
+	});
+
 	it("resumes a regenerate via ResumeMessage using the invocation id latched from the first event", async () => {
 		const iterator = nodeChatAdapter
-			.regenerateMessage("conversation-1", "assistant-1", "medium", false, false, undefined, new AbortController().signal)
+			.regenerateMessage("conversation-1", "assistant-1", "medium", false, false, undefined, undefined, new AbortController().signal)
 			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
