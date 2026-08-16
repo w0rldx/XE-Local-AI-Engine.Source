@@ -407,8 +407,8 @@ export function NodeSettings() {
 
 			<SectionCard title="Local chat runtime" icon={<IconSettings size={22} />}>
 				<Text c="dimmed">
-					The maximum message request timeout is included in capability reports so the platform can respect this worker's local
-					runtime limit.
+					The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may
+					run before it is cancelled with a timeout. It is also reported to the platform via capability reports.
 				</Text>
 				<NumberInput
 					label="Maximum message request timeout"
