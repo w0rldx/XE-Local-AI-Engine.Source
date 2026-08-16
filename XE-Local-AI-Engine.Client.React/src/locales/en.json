@@ -2837,7 +2837,8 @@
 				},
 				"maxRuntimeSeconds": {
 					"label": "Max runtime (seconds)",
-					"description": "Leave blank for no runtime limit."
+					"description": "Leave blank to use the node default.",
+					"descriptionRunAgent": "Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes). A value of 600 is treated as blank."
 				},
 				"preventOverlap": {
 					"label": "Prevent overlapping runs"
