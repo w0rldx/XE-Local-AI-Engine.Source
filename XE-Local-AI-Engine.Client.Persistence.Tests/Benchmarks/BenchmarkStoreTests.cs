@@ -496,6 +496,8 @@ public sealed class BenchmarkStoreTests : IDisposable
             AssertEx.Equal("receipt-hash", evidence.ReceiptHash);
             AssertEx.Equal("cuda", evidence.EffectiveBackend);
             AssertEx.Equal<int?>(33, evidence.PlacementOffloaded);
+            AssertEx.Equal("exe-sha", evidence.ExecutableSha256);
+            AssertEx.Equal<bool?>(true, evidence.HasAuxAssets);
             AssertBytes(receipt, evidence.ReceiptJson!.Value.Span);
             AssertBytes(environment, evidence.EnvironmentFactsJson!.Value.Span);
 
@@ -710,6 +712,8 @@ public sealed class BenchmarkStoreTests : IDisposable
             "cuda",
             33,
             33,
+            "exe-sha",
+            true,
             "auto");
 
     private static async Task<byte[]> ReadRunLaunchReceiptAsync(SqliteConnection connection, Guid id)

@@ -122,76 +122,6 @@ internal static class BenchmarkEndpointMapper
         return detail;
     }
 
-    /// <summary>
-    ///     Fills the flat launch columns both responses carry. The executable digest and the aux-asset flag are the
-    ///     only two that are not stored flat — they are read back out of the receipt so the list view does not need a
-    ///     second column pair for facts the receipt already holds.
-    /// </summary>
-    private static void ApplyLaunchEvidence(BenchmarkRunSummaryResponse response, BenchmarkRunRecord run)
-    {
-        var primaryIntent = run.PrimaryLaunchIntent;
-        var judgeIntent = run.JudgeLaunchIntent;
-        var primary = run.PrimaryLaunchEvidence;
-        var judge = run.JudgeLaunchEvidence;
-        var (primaryExecutableSha256, primaryHasAuxAssets) = ReadReceiptFacts(primary?.ReceiptJson);
-        var (judgeExecutableSha256, judgeHasAuxAssets) = ReadReceiptFacts(judge?.ReceiptJson);
-        response.PrimaryVariant = primaryIntent?.Variant;
-        response.PrimaryKvCacheType = primaryIntent?.KvCacheType;
-        response.PrimaryKvCacheTypeSource = primaryIntent?.KvCacheTypeSource;
-        response.PrimaryKvAutoReason = primaryIntent?.KvAutoReason;
-        response.PrimaryFlashAttentionMode = primaryIntent?.FlashAttentionMode;
-        response.PrimaryIntendedLaunchIdentity = primaryIntent?.IntendedLaunchIdentity;
-        response.PrimaryIntendedExecutableSha256 = primaryIntent?.IntendedExecutableSha256;
-        response.PrimaryEffectiveLaunchIdentity = primary?.EffectiveLaunchIdentity;
-        response.PrimaryEffectiveBackend = primary?.EffectiveBackend;
-        response.PrimaryPlacementOffloaded = primary?.PlacementOffloaded;
-        response.PrimaryPlacementTotal = primary?.PlacementTotal;
-        response.PrimaryExecutableSha256 = primaryExecutableSha256;
-        response.PrimaryHasAuxAssets = primaryHasAuxAssets;
-        response.PrimaryReceiptHash = primary?.ReceiptHash;
-        response.PrimaryEnvironmentFactsHash = primary?.EnvironmentFactsHash;
-        response.JudgeVariant = judgeIntent?.Variant;
-        response.JudgeKvCacheType = judgeIntent?.KvCacheType;
-        response.JudgeKvCacheTypeSource = judgeIntent?.KvCacheTypeSource;
-        response.JudgeKvAutoReason = judgeIntent?.KvAutoReason;
-        response.JudgeFlashAttentionMode = judgeIntent?.FlashAttentionMode;
-        response.JudgeIntendedLaunchIdentity = judgeIntent?.IntendedLaunchIdentity;
-        response.JudgeIntendedExecutableSha256 = judgeIntent?.IntendedExecutableSha256;
-        response.JudgeEffectiveLaunchIdentity = judge?.EffectiveLaunchIdentity;
-        response.JudgeEffectiveBackend = judge?.EffectiveBackend;
-        response.JudgePlacementOffloaded = judge?.PlacementOffloaded;
-        response.JudgePlacementTotal = judge?.PlacementTotal;
-        response.JudgeExecutableSha256 = judgeExecutableSha256;
-        response.JudgeHasAuxAssets = judgeHasAuxAssets;
-        response.JudgeReceiptHash = judge?.ReceiptHash;
-        response.JudgeEnvironmentFactsHash = judge?.EnvironmentFactsHash;
-    }
-
-    private static (string? ExecutableSha256, bool? HasAuxAssets) ReadReceiptFacts(ReadOnlyMemory<byte>? receiptJson)
-    {
-        if (ParseJson(receiptJson) is not { } receipt || receipt.ValueKind != JsonValueKind.Object)
-        {
-            return (null, null);
-        }
-
-        string? sha = null;
-        if (receipt.TryGetProperty("executableSha256", out var shaElement) && shaElement.ValueKind == JsonValueKind.String)
-        {
-            sha = shaElement.GetString();
-        }
-
-        bool? hasAux = null;
-        if (receipt.TryGetProperty("auxAssets", out var aux) && aux.ValueKind == JsonValueKind.Object)
-        {
-            hasAux = IsTrue(aux, "hasLora") || IsTrue(aux, "hasMmproj") || IsTrue(aux, "hasDraft");
-        }
-
-        return (sha, hasAux);
-    }
-
-    private static bool IsTrue(JsonElement owner, string propertyName) =>
-        owner.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.True;
-
     public static EligibleBenchmarkAgentResponse ToResponse(this BenchmarkEligibleAgent agent) =>
         new()
         {
@@ -210,6 +140,48 @@ internal static class BenchmarkEndpointMapper
             ModelContentFingerprint = model.ModelContentFingerprint,
             SupportsTools = model.SupportsTools
         };
+
+    /// <summary>
+    ///     Fills the flat launch columns both responses carry. Every value is a stored column, so listing a project's
+    ///     runs never decrypts or parses a receipt payload.
+    /// </summary>
+    private static void ApplyLaunchEvidence(BenchmarkRunSummaryResponse response, BenchmarkRunRecord run)
+    {
+        var primaryIntent = run.PrimaryLaunchIntent;
+        var judgeIntent = run.JudgeLaunchIntent;
+        var primary = run.PrimaryLaunchEvidence;
+        var judge = run.JudgeLaunchEvidence;
+        response.PrimaryVariant = primaryIntent?.Variant;
+        response.PrimaryKvCacheType = primaryIntent?.KvCacheType;
+        response.PrimaryKvCacheTypeSource = primaryIntent?.KvCacheTypeSource;
+        response.PrimaryKvAutoReason = primaryIntent?.KvAutoReason;
+        response.PrimaryFlashAttentionMode = primaryIntent?.FlashAttentionMode;
+        response.PrimaryIntendedLaunchIdentity = primaryIntent?.IntendedLaunchIdentity;
+        response.PrimaryIntendedExecutableSha256 = primaryIntent?.IntendedExecutableSha256;
+        response.PrimaryEffectiveLaunchIdentity = primary?.EffectiveLaunchIdentity;
+        response.PrimaryEffectiveBackend = primary?.EffectiveBackend;
+        response.PrimaryPlacementOffloaded = primary?.PlacementOffloaded;
+        response.PrimaryPlacementTotal = primary?.PlacementTotal;
+        response.PrimaryExecutableSha256 = primary?.ExecutableSha256;
+        response.PrimaryHasAuxAssets = primary?.HasAuxAssets;
+        response.PrimaryReceiptHash = primary?.ReceiptHash;
+        response.PrimaryEnvironmentFactsHash = primary?.EnvironmentFactsHash;
+        response.JudgeVariant = judgeIntent?.Variant;
+        response.JudgeKvCacheType = judgeIntent?.KvCacheType;
+        response.JudgeKvCacheTypeSource = judgeIntent?.KvCacheTypeSource;
+        response.JudgeKvAutoReason = judgeIntent?.KvAutoReason;
+        response.JudgeFlashAttentionMode = judgeIntent?.FlashAttentionMode;
+        response.JudgeIntendedLaunchIdentity = judgeIntent?.IntendedLaunchIdentity;
+        response.JudgeIntendedExecutableSha256 = judgeIntent?.IntendedExecutableSha256;
+        response.JudgeEffectiveLaunchIdentity = judge?.EffectiveLaunchIdentity;
+        response.JudgeEffectiveBackend = judge?.EffectiveBackend;
+        response.JudgePlacementOffloaded = judge?.PlacementOffloaded;
+        response.JudgePlacementTotal = judge?.PlacementTotal;
+        response.JudgeExecutableSha256 = judge?.ExecutableSha256;
+        response.JudgeHasAuxAssets = judge?.HasAuxAssets;
+        response.JudgeReceiptHash = judge?.ReceiptHash;
+        response.JudgeEnvironmentFactsHash = judge?.EnvironmentFactsHash;
+    }
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
     {

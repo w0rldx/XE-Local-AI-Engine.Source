@@ -38,6 +38,8 @@ public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests
                     $"{phase}_effective_backend",
                     $"{phase}_placement_offloaded",
                     $"{phase}_placement_total",
+                    $"{phase}_launch_executable_sha256",
+                    $"{phase}_launch_has_aux_assets",
                     $"{phase}_launch_kv_cache_type_source"
                 }),
                 $"benchmark_runs must carry the full {phase} launch-evidence block.");

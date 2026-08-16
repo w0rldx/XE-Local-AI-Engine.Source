@@ -41,7 +41,7 @@ const receipt = (overrides: Record<string, unknown> = {}): BenchmarkEvidenceObje
 
 const environment = (overrides: Record<string, unknown> = {}): BenchmarkEvidenceObject => ({
 	runtimeBundle: { identity: "bundle-1", fileCount: 2, files: [{ name: "llama-server", sizeBytes: 10_485_760 }] },
-	hardware: { os: "linux", ramBytes: 68_719_476_736, gpus: [{ name: "RTX 5090", totalBytes: 34_359_738_368 }] },
+	hardware: { osDescription: "Linux 6.18 WSL2", ramBytes: 68_719_476_736, gpus: [{ name: "RTX 5090", totalBytes: 34_359_738_368 }] },
 	llamaRuntime: { version: "b10201", variant: "cuda" },
 	missing: [],
 	...overrides,

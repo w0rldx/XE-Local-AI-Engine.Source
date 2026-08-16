@@ -5,20 +5,32 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
-public sealed class RuntimeEnvironmentFactsProviderTests
+public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
 {
+    // One cache per provider, disposed with the test: production shares a single container-owned instance.
+    private readonly List<LaunchPolicyFileHashCache> _fileHashCaches = [];
+
+    public void Dispose()
+    {
+        foreach (var cache in _fileHashCaches)
+        {
+            cache.Dispose();
+        }
+    }
+
     [Test]
     public async Task CaptureAsync_EveryPartAvailable_RecordsBundleHardwareAndRuntimeWithNothingMissing()
     {
         var bundle = CreateBundle();
         try
         {
-            using var provider = BuildProvider(bundle);
+            var provider = BuildProvider(bundle);
 
             var facts = await provider.CaptureAsync(GpuVariant.Cuda, CancellationToken.None);
 
@@ -39,12 +51,12 @@ public sealed class RuntimeEnvironmentFactsProviderTests
             AssertEx.Equal("cuda", hardware.DeviceAuditBackend);
             AssertEx.Equal(expected: 1, hardware.Gpus.Count);
             AssertEx.Equal("NVIDIA GeForce RTX 5090", hardware.Gpus[0].Name);
-            AssertEx.NotEmpty(hardware.Os);
+            AssertEx.NotEmpty(hardware.OsDescription);
             AssertEx.NotEmpty(hardware.Arch);
 
             var llamaRuntime = AssertEx.NotNull(facts.LlamaRuntime);
             AssertEx.Equal("b10201", llamaRuntime.Version);
-            AssertEx.Equal("Cuda", llamaRuntime.Variant);
+            AssertEx.Equal("cuda", llamaRuntime.Variant, "The build token must be spelled the same everywhere it appears.");
             AssertEx.Equal("prebuilt-or-unavailable", llamaRuntime.Provenance);
         }
         finally
@@ -62,7 +74,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests
             var hardwareProfiler = Substitute.For<IHardwareProfiler>();
             hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
                             .ThrowsAsync(new InvalidOperationException("probe wedged"));
-            using var provider = BuildProvider(bundle, hardwareProfiler: hardwareProfiler);
+            var provider = BuildProvider(bundle, hardwareProfiler: hardwareProfiler);
 
             var facts = await provider.CaptureAsync(GpuVariant.Cuda, CancellationToken.None);
 
@@ -84,7 +96,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .ThrowsAsync(new InvalidOperationException("no prebuilt for this host"));
-        using var provider = BuildProvider(bundlePath: null, binaryManager: binaryManager);
+        var provider = BuildProvider(bundlePath: null, binaryManager: binaryManager);
 
         var facts = await provider.CaptureAsync(GpuVariant.Cuda, CancellationToken.None);
 
@@ -100,7 +112,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests
         var bundle = CreateBundle();
         try
         {
-            using var provider = BuildProvider(bundle,
+            var provider = BuildProvider(bundle,
                 runtime: Runtime() with
                 {
                     SourceBuildPath = "/opt/llama.cpp/build",
@@ -125,14 +137,14 @@ public sealed class RuntimeEnvironmentFactsProviderTests
         var bundle = CreateBundle();
         try
         {
-            using var provider = BuildProvider(bundle);
+            var provider = BuildProvider(bundle);
             var first = await provider.CaptureAsync(GpuVariant.Cuda, CancellationToken.None);
             var second = await provider.CaptureAsync(GpuVariant.Cuda, CancellationToken.None);
 
             AssertEx.Equal(BenchmarkCanonicalJson.HashOf(first), BenchmarkCanonicalJson.HashOf(second));
 
             await File.WriteAllTextAsync(Path.Combine(bundle, "libggml.so"), "ggml-revision-2");
-            using var afterUpgrade = BuildProvider(bundle);
+            var afterUpgrade = BuildProvider(bundle);
             var upgraded = await afterUpgrade.CaptureAsync(GpuVariant.Cuda, CancellationToken.None);
 
             AssertEx.NotEqual(BenchmarkCanonicalJson.HashOf(first), BenchmarkCanonicalJson.HashOf(upgraded));
@@ -143,7 +155,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests
         }
     }
 
-    private static RuntimeEnvironmentFactsProvider BuildProvider(string? bundlePath,
+    private RuntimeEnvironmentFactsProvider BuildProvider(string? bundlePath,
         ILlamaCppBinaryManager? binaryManager = null,
         IHardwareProfiler? hardwareProfiler = null,
         InstalledRuntimeState? runtime = null)
@@ -190,8 +202,16 @@ public sealed class RuntimeEnvironmentFactsProviderTests
             installedRuntimeStore,
             hardwareProfiler,
             deviceAudit,
+            NewFileHashCache(),
             new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1_700_000_000_000)),
             NullLogger<RuntimeEnvironmentFactsProvider>.Instance);
+    }
+
+    private LaunchPolicyFileHashCache NewFileHashCache()
+    {
+        var cache = new LaunchPolicyFileHashCache();
+        _fileHashCaches.Add(cache);
+        return cache;
     }
 
     private static InstalledRuntimeState Runtime() =>

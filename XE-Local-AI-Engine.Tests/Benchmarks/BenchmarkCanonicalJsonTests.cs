@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class BenchmarkCanonicalJsonTests
@@ -44,6 +46,27 @@ public sealed class BenchmarkCanonicalJsonTests
         var value = new Nested("q8_0", Layers: 32);
 
         AssertEx.Equal(BenchmarkCanonicalJson.Hash(BenchmarkCanonicalJson.Serialize(value)), BenchmarkCanonicalJson.HashOf(value));
+    }
+
+    [Test]
+    public void Serialize_Receipt_WritesEnumsAsNamesSoAnInsertedMemberCannotRelabelStoredEvidence()
+    {
+        var json = BenchmarkCanonicalJson.Serialize(new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion,
+            GpuVariant.Cuda,
+            "linux",
+            "b10201",
+            "exe-sha",
+            "manifest-sha",
+            LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(4096), plan: null),
+            new LlamaServerLaunchAuxAssets(false, false, false),
+            new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.None, 0, 33),
+            4096,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1));
+
+        AssertEx.Contains(json, "\"variant\":\"cuda\"");
+        AssertEx.Contains(json, "\"outcome\":\"none\"");
+        AssertEx.False(json.Contains("\"variant\":1", StringComparison.Ordinal),
+            "An enum written as its ordinal re-labels every stored receipt the day a member is inserted.");
     }
 
     private sealed record Nested(string? KvType, int Layers);
