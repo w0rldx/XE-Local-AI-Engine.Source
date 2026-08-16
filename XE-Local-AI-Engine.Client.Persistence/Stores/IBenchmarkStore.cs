@@ -85,7 +85,11 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
-    Task<BenchmarkRunRecord> SetUserScoreAsync(Guid runId, int score, long expectedRunVersion, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Sets or clears the operator's 0..100 override. <see langword="null" /> clears it; the judge score stays
+    ///     visible beside it either way.
+    /// </summary>
+    Task<BenchmarkRunRecord> SetUserScoreAsync(Guid runId, int? score, long expectedRunVersion, CancellationToken cancellationToken = default);
     Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default);
 
     async Task<IReadOnlyList<BenchmarkRunRecord>> RecoverRunsOnStartupAsync(CancellationToken cancellationToken = default)
@@ -95,6 +99,56 @@ public interface IBenchmarkStore
     }
 
     Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Points the project at the judge policy with this hash, creating the revision when the project has never
+    ///     seen it, and resets that revision's rank cohort (reference key cleared, generation bumped) so only attempts
+    ///     enqueued after this call can define it. Activating the hash the project is already on is a no-op that
+    ///     resets nothing. Refused while any attempt of the project is Queued or Running, so a reset always covers the
+    ///     complete eligible set.
+    /// </summary>
+    /// <returns>The active revision, whether this call created it, and the runs the caller should re-judge.</returns>
+    Task<BenchmarkJudgePolicyActivation> ActivateJudgePolicyAsync(Guid projectId,
+        long expectedProjectVersion,
+        ReadOnlyMemory<byte> policyJson,
+        string policyHash,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Turns judging off by clearing the project's revision pointer. Revisions and attempts stay as history.
+    ///     Refused while any attempt of the project is Queued or Running.
+    /// </summary>
+    Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>The revision the project judges under, payload included, or null when judging is off.</summary>
+    Task<BenchmarkJudgePolicyRevisionRecord?> GetCurrentJudgePolicyRevisionAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Every revision the project has ever activated, oldest first. The encrypted policy payload is deliberately
+    ///     NOT read: listing revisions must not decrypt one blob per row.
+    /// </summary>
+    Task<IReadOnlyList<BenchmarkJudgePolicyRevisionRecord>> ListJudgePolicyRevisionsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Queues one more judging of a succeeded run under the project's current policy revision, as a new attempt
+    ///     plus its work item, in one transaction.
+    /// </summary>
+    /// <exception cref="BenchmarkJudgePolicyChangedException">
+    ///     The revision named by the command is no longer the project's current one; the caller re-resolves and retries.
+    /// </exception>
+    Task<BenchmarkJudgeAttemptRecord> EnqueueJudgeAttemptAsync(BenchmarkEnqueueJudgeAttemptCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Claims the rank cohort for <paramref name="executionKey" />: an insert-if-null compare-and-swap that only
+    ///     succeeds while the revision still carries <paramref name="cohortGeneration" /> and no key yet. Called from
+    ///     inside the transaction that stores a successful attempt's result, never at launch readiness — a failed
+    ///     first attempt must not poison the cohort.
+    /// </summary>
+    /// <returns><see langword="true" /> when this call promoted the key.</returns>
+    Task<bool> TryPromoteReferenceExecutionKeyAsync(Guid revisionId,
+        int cohortGeneration,
+        string executionKey,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record BenchmarkProjectInput(
@@ -143,7 +197,76 @@ public sealed record BenchmarkPrimarySuccessCommand(
     int EffectiveContextTokens,
     long DurationMs,
     int? TotalTokens,
-    double? TokensPerSecond);
+    double? TokensPerSecond,
+    BenchmarkJudgeAttemptSeed? JudgeAttempt = null);
+
+/// <summary>
+///     What the run executor resolved for the automatic first judging, carried into the same transaction that commits
+///     primary success so a crash can never leave a succeeded run without its attempt.
+/// </summary>
+/// <param name="ExpectedJudgePolicyRevisionId">
+///     The revision <see cref="RuntimeJson" /> was resolved for. When the project has moved on the store rolls back and
+///     throws <see cref="BenchmarkJudgePolicyChangedException" />, so the caller can re-resolve and retry.
+/// </param>
+/// <param name="RuntimeJson">
+///     The judge's frozen launch configuration. <see langword="null" /> means resolution failed, and the attempt is
+///     inserted directly as Failed together with a terminal work item.
+/// </param>
+public sealed record BenchmarkJudgeAttemptSeed(
+    Guid? ExpectedJudgePolicyRevisionId = null,
+    ReadOnlyMemory<byte>? RuntimeJson = null,
+    string? RuntimeUnresolvedReason = null,
+    BenchmarkRunLaunchIntent? LaunchIntent = null);
+
+/// <inheritdoc cref="IBenchmarkStore.EnqueueJudgeAttemptAsync" />
+/// <param name="Force">Bypasses the already-applied guard for a deliberate operator re-judge.</param>
+public sealed record BenchmarkEnqueueJudgeAttemptCommand(
+    Guid RunId,
+    long ExpectedRunVersion,
+    Guid PolicyRevisionId,
+    ReadOnlyMemory<byte>? RuntimeJson = null,
+    string? RuntimeUnresolvedReason = null,
+    bool Force = false,
+    BenchmarkRunLaunchIntent? LaunchIntent = null);
+
+/// <param name="PolicyJson">Null on a listing, which never decrypts the payload.</param>
+public sealed record BenchmarkJudgePolicyRevisionRecord(
+    Guid Id,
+    Guid ProjectId,
+    int Revision,
+    ReadOnlyMemory<byte>? PolicyJson,
+    string PolicyHash,
+    string? ReferenceExecutionKey,
+    int CohortGeneration,
+    long CreatedAtUtc);
+
+/// <param name="SucceededRunIds">
+///     The project's succeeded runs with stored output, i.e. exactly what the caller should enqueue attempts for.
+///     Empty on a no-op activation.
+/// </param>
+public sealed record BenchmarkJudgePolicyActivation(
+    BenchmarkJudgePolicyRevisionRecord Revision,
+    bool WasCreated,
+    IReadOnlyList<Guid> SucceededRunIds);
+
+public sealed record BenchmarkJudgeAttemptRecord(
+    Guid Id,
+    Guid RunId,
+    int Sequence,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    ReadOnlyMemory<byte>? JudgeRuntimeJson,
+    string? JudgeExecutionKey,
+    BenchmarkJudgeAttemptStatus Status,
+    ReadOnlyMemory<byte>? ResultJson,
+    int? Score,
+    string? ErrorMessage,
+    long EnqueuedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    long Version,
+    BenchmarkRunLaunchIntent? LaunchIntent = null,
+    BenchmarkRunLaunchEvidence? LaunchEvidence = null);
 
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
@@ -267,7 +390,8 @@ public sealed record BenchmarkClaimedWork(
     BenchmarkWorkKind Kind,
     int Attempt,
     long Version,
-    BenchmarkRunRecord Run);
+    BenchmarkRunRecord Run,
+    Guid? JudgeAttemptId = null);
 
 public abstract class BenchmarkStoreException(string message) : InvalidOperationException(message);
 
@@ -279,3 +403,9 @@ public sealed class BenchmarkConflictException(string code) : BenchmarkStoreExce
 }
 
 public sealed class BenchmarkValidationException(string message) : BenchmarkStoreException(message);
+
+/// <summary>
+///     The project's judge policy moved while a judging was being prepared for the previous revision. Retryable: the
+///     caller re-reads the current revision, re-resolves the judge runtime and calls again.
+/// </summary>
+public sealed class BenchmarkJudgePolicyChangedException(string message) : BenchmarkStoreException(message);

@@ -24,6 +24,7 @@ internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<B
         builder.Property(entity => entity.JudgeContextTokens).HasColumnName("judge_context_tokens");
         builder.Property(entity => entity.JudgePromptVersion).HasColumnName("judge_prompt_version");
         builder.Property(entity => entity.JudgeOutputSchemaVersion).HasColumnName("judge_output_schema_version");
+        builder.Property(entity => entity.CurrentJudgePolicyRevisionId).HasColumnName("current_judge_policy_revision_id");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
