@@ -2837,7 +2837,8 @@
 				},
 				"maxRuntimeSeconds": {
 					"label": "Maximale Laufzeit (Sekunden)",
-					"description": "Leer lassen für keine Laufzeitbegrenzung."
+					"description": "Leer lassen, um den Standardwert des Knotens zu verwenden.",
+					"descriptionRunAgent": "Leer lassen, um das Limit aus dem maximalen Nachrichtenanfrage-Timeout des Knotens abzuleiten (2× das Timeout plus 5 Minuten). Der Wert 600 wird wie „leer“ behandelt."
 				},
 				"preventOverlap": {
 					"label": "Überlappende Ausführungen verhindern"
