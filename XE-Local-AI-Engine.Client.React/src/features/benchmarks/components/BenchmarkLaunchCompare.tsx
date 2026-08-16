@@ -11,10 +11,15 @@ import {
 	diffLaunchEvidence,
 	launchEvidenceEntries,
 } from "@/features/benchmarks/models/BenchmarkLaunchEvidence";
-import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkLaunchFacts, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { useBenchmarkRun } from "@/features/benchmarks/queries/useBenchmarks";
 
 const maxListedFields = 6;
+
+// The two hashes cover disjoint halves of the evidence — `ReceiptHash` the receipt alone, `EnvironmentFactsHash` the
+// pre-launch environment capture alone — so either one differing is a launch difference the operator has to see.
+const launchDiffers = (left: BenchmarkLaunchFacts, right: BenchmarkLaunchFacts): boolean =>
+	!Object.is(left.receiptHash, right.receiptHash) || !Object.is(left.environmentFactsHash, right.environmentFactsHash);
 
 const sideLabel = (run: BenchmarkRunDetail, other: BenchmarkRunDetail): string =>
 	run.primaryModelName === other.primaryModelName ? `${run.primaryModelName} · ${run.id.slice(0, 8)}` : run.primaryModelName;
@@ -59,8 +64,8 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 			? `${keys.slice(0, maxListedFields).join(", ")} (+${keys.length - maxListedFields})`
 			: keys.join(", ");
 	};
-	const primaryDiffers = !Object.is(left.primaryLaunch.receiptHash, right.primaryLaunch.receiptHash);
-	const judgeDiffers = !Object.is(left.judgeLaunch.receiptHash, right.judgeLaunch.receiptHash);
+	const primaryDiffers = launchDiffers(left.primaryLaunch, right.primaryLaunch);
+	const judgeDiffers = launchDiffers(left.judgeLaunch, right.judgeLaunch);
 
 	return (
 		<Stack gap="sm" data-testid="benchmark-launch-compare">

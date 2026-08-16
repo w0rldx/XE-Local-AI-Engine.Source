@@ -4192,6 +4192,52 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespo
 	version: z.int().optional(),
 	createdAtUtc: z.int().optional(),
 	updatedAtUtc: z.int().optional(),
+	primaryVariant: z.string().nullish(),
+	primaryKvCacheType: z.string().nullish(),
+	primaryKvCacheTypeSource: z.string().nullish(),
+	primaryKvAutoReason: z.string().nullish(),
+	primaryFlashAttentionMode: z.string().nullish(),
+	primaryIntendedLaunchIdentity: z.string().nullish(),
+	primaryIntendedExecutableSha256: z.string().nullish(),
+	primaryEffectiveLaunchIdentity: z.string().nullish(),
+	primaryEffectiveBackend: z.string().nullish(),
+	primaryPlacementOffloaded: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	primaryPlacementTotal: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	primaryExecutableSha256: z.string().nullish(),
+	primaryHasAuxAssets: z.boolean().nullish(),
+	primaryReceiptHash: z.string().nullish(),
+	primaryEnvironmentFactsHash: z.string().nullish(),
+	judgeVariant: z.string().nullish(),
+	judgeKvCacheType: z.string().nullish(),
+	judgeKvCacheTypeSource: z.string().nullish(),
+	judgeKvAutoReason: z.string().nullish(),
+	judgeFlashAttentionMode: z.string().nullish(),
+	judgeIntendedLaunchIdentity: z.string().nullish(),
+	judgeIntendedExecutableSha256: z.string().nullish(),
+	judgeEffectiveLaunchIdentity: z.string().nullish(),
+	judgeEffectiveBackend: z.string().nullish(),
+	judgePlacementOffloaded: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	judgePlacementTotal: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	judgeExecutableSha256: z.string().nullish(),
+	judgeHasAuxAssets: z.boolean().nullish(),
+	judgeReceiptHash: z.string().nullish(),
+	judgeEnvironmentFactsHash: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = z.object({
@@ -4246,12 +4292,17 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailRespon
 			primaryCompletedAtUtc: z.int().nullish(),
 			judgeStartedAtUtc: z.int().nullish(),
 			judgeCompletedAtUtc: z.int().nullish(),
+			primaryLaunchReceipt: z.unknown().optional(),
+			primaryEnvironmentFacts: z.unknown().optional(),
+			judgeLaunchReceipt: z.unknown().optional(),
+			judgeEnvironmentFacts: z.unknown().optional(),
 		}),
 	);
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest = z.object({
 	modelName: z.string().optional(),
 	expectedProjectVersion: z.int().optional(),
+	kvCacheType: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunRouteRequest = z.record(z.string(), z.never());

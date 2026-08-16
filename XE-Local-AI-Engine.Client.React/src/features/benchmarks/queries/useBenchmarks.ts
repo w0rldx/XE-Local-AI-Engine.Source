@@ -13,8 +13,8 @@ import {
 	startBenchmarkRun,
 	updateBenchmarkProject,
 } from "@/core/api/generated";
+import type { XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
-import type { StartBenchmarkRunBody } from "@/features/benchmarks/models/BenchmarkLaunchEvidenceWire";
 import {
 	toBenchmarkEligibleModel,
 	toBenchmarkProjectDetail,
@@ -193,8 +193,7 @@ export function useStartBenchmarkRun() {
 			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
 			kvCacheType: BenchmarkKvCacheType | null;
 		}) => {
-			// Swap seam: `StartBenchmarkRunBody` is the hand-written mirror; after the regen this is the generated body type.
-			const body: StartBenchmarkRunBody = {
+			const body: StartBenchmarkRunRequest = {
 				modelName,
 				expectedProjectVersion,
 				...(kvCacheType === null ? {} : { kvCacheType }),

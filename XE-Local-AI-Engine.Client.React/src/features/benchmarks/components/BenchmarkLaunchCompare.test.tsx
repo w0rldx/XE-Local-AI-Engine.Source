@@ -49,8 +49,9 @@ function detail(id: string, overrides: Partial<BenchmarkRunDetail> = {}): Benchm
 			placementTotal: 32,
 			executableSha256: "a".repeat(64),
 			receiptHash: "receipt-1",
+			environmentFactsHash: "env-1",
 		},
-		judgeLaunch: { ...noBenchmarkLaunchFacts, kvCacheType: "f16", receiptHash: "judge-1" },
+		judgeLaunch: { ...noBenchmarkLaunchFacts, kvCacheType: "f16", receiptHash: "judge-1", environmentFactsHash: "judge-env-1" },
 		primaryLaunchReceipt: { placement: { outcome: "Full", offloadedLayers: 32, totalLayers: 32 } },
 		judgeLaunchReceipt: { effectiveContextTokens: 4096 },
 		primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" } },
@@ -114,7 +115,12 @@ describe("BenchmarkLaunchCompare", () => {
 
 	it("warns when only the judge launch differs", () => {
 		const right = detail(rightId, {
-			judgeLaunch: { ...noBenchmarkLaunchFacts, kvCacheType: "f16", receiptHash: "judge-2" },
+			judgeLaunch: {
+				...noBenchmarkLaunchFacts,
+				kvCacheType: "f16",
+				receiptHash: "judge-2",
+				environmentFactsHash: "judge-env-1",
+			},
 			judgeEnvironmentFacts: { llamaRuntime: { version: "b10300" } },
 		});
 		renderCompare(detail(leftId), right);
@@ -136,5 +142,29 @@ describe("BenchmarkLaunchCompare", () => {
 		const table = screen.getByTestId("benchmark-primary-launch-diff");
 		const backendRow = [...table.querySelectorAll("tr")].find((row) => row.textContent?.startsWith("launch.effectiveBackend"));
 		expect(backendRow?.textContent).toContain("—");
+	});
+	// The two hashes cover disjoint halves of the evidence, so an environment-only capture change (a rebuilt runtime
+	// bundle, a driver update) must raise the same report as a receipt change — a receipt-only check would miss it.
+	it("reports a difference carried only by the environment-facts hash", () => {
+		const right = detail(rightId, {
+			primaryLaunch: { ...detail(rightId).primaryLaunch, environmentFactsHash: "env-2" },
+			primaryEnvironmentFacts: { llamaRuntime: { version: "b10300" } },
+		});
+		renderCompare(detail(leftId), right);
+
+		const alert = screen.getByTestId("benchmark-primary-launch-differs");
+		expect(alert.textContent).toContain("launch.environmentFactsHash");
+		expect(alert.textContent).toContain("environment.llamaRuntime.version");
+	});
+
+	it("warns when only the judge environment-facts hash differs", () => {
+		const right = detail(rightId, {
+			judgeLaunch: { ...detail(rightId).judgeLaunch, environmentFactsHash: "judge-env-2" },
+			judgeEnvironmentFacts: { llamaRuntime: { version: "b10300" } },
+		});
+		renderCompare(detail(leftId), right);
+
+		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
+		expect(screen.getByTestId("benchmark-judge-launch-differs").textContent).toContain("launch.environmentFactsHash");
 	});
 });
