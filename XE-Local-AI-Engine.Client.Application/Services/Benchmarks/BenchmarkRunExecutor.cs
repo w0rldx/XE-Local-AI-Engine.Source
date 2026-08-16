@@ -56,9 +56,12 @@ public sealed class BenchmarkRunExecutor(
 
             // Admission sizes against the context the FROZEN runtime will actually launch with, not the context the
             // project requested: a profile replay can pin a larger window, and reserving the smaller one under-books.
+            // No launch admission: this run spawns its own exclusive process from the FROZEN replay arguments, so an
+            // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
             var decision = await capacity.DecideAsync(new CapacityRequest(snapshot.PrimaryModel.ModelName,
                                              ModelRole.Chat,
-                                             snapshot.PrimaryRuntime.ContextTokens), token)
+                                             snapshot.PrimaryRuntime.ContextTokens,
+                                             PublishLaunchAdmission: false), token)
                                          .ConfigureAwait(false);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
