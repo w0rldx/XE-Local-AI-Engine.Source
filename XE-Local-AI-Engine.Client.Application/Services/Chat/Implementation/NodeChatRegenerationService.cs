@@ -324,6 +324,21 @@ public sealed class NodeChatRegenerationService(
                 ];
             }
 
+            // G16 parity with the send path: an Orchestrator whose orchestration did not compile reruns as a lone single
+            // agent, which used to be visible only in a server log. Emit ONE notice naming the typed reason; a Single-kind
+            // agent (NotOrchestrated) has no notice, so the common path stays silent.
+            if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
+            {
+                await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                                     {
+                                         InvocationId = requestId,
+                                         Kind = TurnNoticeKind.OrchestrationDegraded,
+                                         Message = orchestrationDegradedMessage,
+                                         Detail = resolution.OrchestrationOutcome.Reason.ToString()
+                                     })
+                                     .ConfigureAwait(false);
+            }
+
             // Knowledge-base grounding parity with the send path: a regenerated plain-chat turn honors
             // the same opt-in knowledge grounding + cloud-egress gate the send path applies, so a rerun does not silently
             // lose grounding + its sources strip. Agent mode reaches the KB through the gated search_knowledge_base tool

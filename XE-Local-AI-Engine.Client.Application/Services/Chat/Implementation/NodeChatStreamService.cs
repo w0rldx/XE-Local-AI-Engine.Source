@@ -329,6 +329,22 @@ public sealed class NodeChatStreamService(
             ];
         }
 
+        // G16: an Orchestrator agent whose orchestration did not compile runs as a lone single agent. That used to be
+        // visible only in a server log, so an operator saw an ordinary answer and no hint that the team never ran. Emit
+        // ONE notice naming the typed reason. NotOrchestrated (a Single-kind agent, or no bound agent) has no notice, so
+        // the overwhelmingly common path stays silent.
+        if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
+        {
+            await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                                 {
+                                     InvocationId = requestId,
+                                     Kind = TurnNoticeKind.OrchestrationDegraded,
+                                     Message = orchestrationDegradedMessage,
+                                     Detail = resolution.OrchestrationOutcome.Reason.ToString()
+                                 })
+                                 .ConfigureAwait(false);
+        }
+
         // Cloud-egress consent: node-local conversation attachments are private data. When a cloud model would receive
         // this turn's attachment context and the operator has NOT opted in (KnowledgeBase:AllowCloudModelAccess),
         // attachments are withheld — neither staged for the file tools nor inlined into the prompt — and the user gets a

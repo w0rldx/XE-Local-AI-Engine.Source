@@ -167,7 +167,8 @@
 		"notices": {
 			"modelSubstituted": "Model substituted",
 			"toolDisabled": "Tool disabled",
-			"historyTruncated": "History truncated"
+			"historyTruncated": "History truncated",
+			"orchestrationDegraded": "Orchestration not used"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},

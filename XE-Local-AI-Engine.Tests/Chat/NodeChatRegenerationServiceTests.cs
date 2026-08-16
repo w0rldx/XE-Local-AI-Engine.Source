@@ -690,8 +690,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
-                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null));
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null)));
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -726,6 +726,75 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.NotNull(runner.LastOrchestrationSpec);
         AssertEx.Equal(spec.TriageParticipantKey, runner.LastOrchestrationSpec!.TriageParticipantKey);
         AssertEx.Equal(expected: 2, runner.LastOrchestrationSpec.Participants.Count);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenOrchestrationDegrades_EmitsNoticeNamingTheReason()
+    {
+        // G16 send/regenerate parity: a rerun whose orchestration does not compile must tell the operator why, exactly as
+        // the send path does — otherwise the same silent degrade reappears on every regenerate.
+        await using var provider = await BuildProviderAsync("regeneration-orchestrator-degraded.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Degraded regen", "node", CreatedAtUtc: 10, AgentDefinitionId: agentDefinitionId))
+                                            .ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                             .Returns(OrchestrationResolution.Degraded(OrchestrationDegradationReason.ModelNotToolCapable, "the model for this turn cannot call tools"));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.True(runner.LastOrchestrationSpec is null, "a degraded resolution must leave the rerun single-agent.");
+        var notice = events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded));
+        AssertEx.Contains(notice.NoticeMessage, "the model for this turn cannot call tools");
+        AssertEx.Contains(notice.NoticeMessage, "ran as a single agent");
     }
 
     [Test]
@@ -1942,7 +2011,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static IOrchestrationResolver CreateOrchestrationResolver()
     {
         var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(OrchestrationResolution.NotOrchestrated);
         return resolver;
     }
 
