@@ -101,7 +101,7 @@ public sealed class BenchmarkJudgeExecutor(
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
                 BenchmarkRunStreamEventKind.JudgeState,
-                new BenchmarkRunStreamPayload(State: BenchmarkJudgeAttemptStatus.Running.ToString()));
+                new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running));
 
             var currentVariant = await variantSelector.SelectVariantAsync(token).ConfigureAwait(false);
             if (currentVariant != runtime.Runtime.Variant)
@@ -142,7 +142,7 @@ public sealed class BenchmarkJudgeExecutor(
             var parsed = BenchmarkJudgeResultParser.Parse(terminal.StreamedContent, policy.Rubric, runtime.Model.ModelContentFingerprint);
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-                new BenchmarkRunStreamPayload(State: BenchmarkJudgeAttemptStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
+                new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
             var persisted = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
                                            work.Version,
                                            BenchmarkJudgeSerialization.SerializeResult(parsed),
@@ -270,7 +270,7 @@ public sealed class BenchmarkJudgeExecutor(
 
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkJudgeAttemptStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
+            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Cancelled, RunVersion: run.Version + 1));
         try
         {
             var persisted = await store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
@@ -312,7 +312,7 @@ public sealed class BenchmarkJudgeExecutor(
 
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkJudgeAttemptStatus.Failed.ToString(), RunVersion: run.Version + 1));
+            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Failed, RunVersion: run.Version + 1));
         var persisted = await store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
         events.PublishReserved(terminal with
         {

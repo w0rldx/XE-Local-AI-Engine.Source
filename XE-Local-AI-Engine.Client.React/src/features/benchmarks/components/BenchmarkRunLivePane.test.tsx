@@ -35,7 +35,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
 		agentVersion: 1,
 		requestedContextTokens: 4096,
 		primaryStatus: "Succeeded",
-		judgeStatus: "Skipped",
+		judge: { state: "none", policyCurrent: false, executionCurrent: false },
+		qualityScoreSource: "none",
+		modelGroupKey: "v1:test",
 		effectiveContextTokens: 4096,
 		durationMs: 1250,
 		totalTokens: 30,
@@ -46,7 +48,6 @@ function runRow(overrides: Record<string, unknown> = {}) {
 		createdAtUtc: 1,
 		updatedAtUtc: 2,
 		outputParts: [{ kind: "output", content: "Persisted answer" }],
-		judgeResult: null,
 		...overrides,
 	};
 }

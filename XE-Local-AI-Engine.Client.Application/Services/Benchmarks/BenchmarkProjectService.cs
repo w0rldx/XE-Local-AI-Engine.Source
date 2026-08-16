@@ -34,7 +34,7 @@ public interface IBenchmarkProjectService
     ///     frozen. The same hash is a no-op; a different hash on a project that already has runs requires
     ///     <paramref name="confirmRejudge" /> and then re-judges every succeeded one.
     /// </summary>
-    Task<BenchmarkProjectRecord> UpdateJudgePolicyAsync(Guid projectId,
+    Task<BenchmarkJudgePolicyChange> UpdateJudgePolicyAsync(Guid projectId,
         long expectedVersion,
         BenchmarkJudgePolicyDraft? draft,
         bool confirmRejudge,
@@ -47,8 +47,14 @@ public interface IBenchmarkProjectService
     ///     Moves the whole project's rank cohort to the current judge runtime: resets the cohort and re-judges every
     ///     succeeded run, never a subset.
     /// </summary>
-    Task RejudgeProjectAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
+    Task<BenchmarkJudgePolicyChange> RejudgeProjectAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
 }
+
+/// <param name="EnqueuedRunIds">The runs a judging was queued for, in the order they were enqueued. Empty on a no-op.</param>
+public sealed record BenchmarkJudgePolicyChange(
+    BenchmarkProjectRecord Project,
+    IReadOnlyList<Guid> EnqueuedRunIds,
+    int? CohortGeneration);
 
 public sealed class BenchmarkProjectService(
     IBenchmarkStore benchmarkStore,
@@ -100,7 +106,7 @@ public sealed class BenchmarkProjectService(
         return await ApplyJudgePolicyAsync(project, policy, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<BenchmarkProjectRecord> UpdateJudgePolicyAsync(Guid projectId,
+    public async Task<BenchmarkJudgePolicyChange> UpdateJudgePolicyAsync(Guid projectId,
         long expectedVersion,
         BenchmarkJudgePolicyDraft? draft,
         bool confirmRejudge,
@@ -118,17 +124,17 @@ public sealed class BenchmarkProjectService(
         {
             if (current is null)
             {
-                return project;
+                return new BenchmarkJudgePolicyChange(project, [], null);
             }
 
             await _benchmarkStore.DisableJudgePolicyAsync(projectId, expectedVersion, cancellationToken).ConfigureAwait(false);
-            return await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+            return new BenchmarkJudgePolicyChange(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), [], null);
         }
 
         var hash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy);
         if (current is not null && string.Equals(current.PolicyHash, hash, StringComparison.Ordinal))
         {
-            return project;
+            return new BenchmarkJudgePolicyChange(project, [], current.CohortGeneration);
         }
 
         // Changing the judge invalidates every score already given under the old one. The operator confirms that
@@ -144,8 +150,10 @@ public sealed class BenchmarkProjectService(
                                                   hash,
                                                   cancellationToken)
                                               .ConfigureAwait(false);
-        await EnqueueAttemptsAsync(activation, policy, cancellationToken).ConfigureAwait(false);
-        return await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var enqueued = await EnqueueAttemptsAsync(activation, policy, cancellationToken).ConfigureAwait(false);
+        return new BenchmarkJudgePolicyChange(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false),
+            enqueued,
+            activation.Revision.CohortGeneration);
     }
 
     public async Task<BenchmarkJudgeAttemptRecord> RejudgeRunAsync(Guid runId,
@@ -171,11 +179,16 @@ public sealed class BenchmarkProjectService(
         return attempt;
     }
 
-    public async Task RejudgeProjectAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default)
+    public async Task<BenchmarkJudgePolicyChange> RejudgeProjectAsync(Guid projectId,
+        long expectedProjectVersion,
+        CancellationToken cancellationToken = default)
     {
         var activation = await _benchmarkStore.BeginProjectRejudgeAsync(projectId, expectedProjectVersion, cancellationToken).ConfigureAwait(false);
         var policy = BenchmarkJudgeSerialization.DeserializePolicy(activation.Revision.PolicyJson!.Value.Span);
-        await EnqueueAttemptsAsync(activation, policy, cancellationToken).ConfigureAwait(false);
+        var enqueued = await EnqueueAttemptsAsync(activation, policy, cancellationToken).ConfigureAwait(false);
+        return new BenchmarkJudgePolicyChange(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false),
+            enqueued,
+            activation.Revision.CohortGeneration);
     }
 
     internal static string DecodeCoreTask(ReadOnlySpan<byte> payload)
@@ -196,15 +209,16 @@ public sealed class BenchmarkProjectService(
     ///     depends only on the policy, so resolving it per run would repeat identical work and could straddle a runtime
     ///     swap mid-loop, splitting one re-judge across two cohorts.
     /// </summary>
-    private async Task EnqueueAttemptsAsync(BenchmarkJudgePolicyActivation activation,
+    private async Task<IReadOnlyList<Guid>> EnqueueAttemptsAsync(BenchmarkJudgePolicyActivation activation,
         BenchmarkJudgePolicyV1 policy,
         CancellationToken cancellationToken)
     {
         if (activation.SucceededRunIds.Count == 0)
         {
-            return;
+            return [];
         }
 
+        var enqueued = new List<Guid>(activation.SucceededRunIds.Count);
         var resolved = await TryResolveRuntimeAsync(policy, cancellationToken).ConfigureAwait(false);
         foreach (var runId in activation.SucceededRunIds)
         {
@@ -224,9 +238,11 @@ public sealed class BenchmarkProjectService(
                                          Force: true,
                                          resolved.Intent), cancellationToken)
                                      .ConfigureAwait(false);
+            enqueued.Add(runId);
         }
 
         _queueSignal?.Wake();
+        return enqueued;
     }
 
     /// <summary>

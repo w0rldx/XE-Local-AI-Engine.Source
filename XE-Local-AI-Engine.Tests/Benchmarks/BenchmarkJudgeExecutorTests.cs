@@ -327,7 +327,7 @@ public sealed class BenchmarkJudgeExecutorTests
         };
 
     private static BenchmarkRunJudgeView JudgeView(string state, string? errorMessage = null) =>
-        new(state, null, 1, RevisionId, 1, 1, null, errorMessage, PolicyCurrent: true, ExecutionCurrent: false, null);
+        new(state, AttemptId, null, 1, RevisionId, 1, 1, null, errorMessage, PolicyCurrent: true, ExecutionCurrent: false, null);
 
     private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version) =>
         new(Guid.NewGuid(),
@@ -358,7 +358,7 @@ public sealed class BenchmarkJudgeExecutorTests
             1,
             null,
             null,
-            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
+            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
 
     private static InstalledModelSnapshot Installed()
     {

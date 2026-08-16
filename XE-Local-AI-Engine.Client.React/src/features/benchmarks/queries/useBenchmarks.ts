@@ -97,7 +97,7 @@ export function useBenchmarkRuns(projectId: string | null) {
 			const { data } = await callWithResponseValidation(
 				listBenchmarkRuns({
 					path: { projectId: projectId as string },
-					query: { page: 1, pageSize: 100 },
+					query: { page: 1, pageSize: 100, includeUnscored: true },
 					signal,
 					throwOnError: true,
 				}),

@@ -6,8 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 internal static class BenchmarkEndpointMapper
 {
-    // The rubric and reference answer are not on the wire yet (S2 owns the judge-policy DTO); an enabled judge takes
-    // the default rubric, and an incomplete one still fails validation exactly as it did before.
+    // An omitted rubric takes the default; an incomplete judge still fails validation exactly as it did before.
     public static BenchmarkProjectDraft ToDraft(this BenchmarkProjectMutationRequest request, Guid id) =>
         new(id,
             request.Name,
@@ -15,7 +14,10 @@ internal static class BenchmarkEndpointMapper
             request.ContextTokens,
             request.AgentDefinitionId,
             request.JudgeEnabled
-                ? new BenchmarkJudgePolicyDraft(request.JudgeModelName ?? string.Empty, request.JudgeContextTokens ?? 0)
+                ? new BenchmarkJudgePolicyDraft(request.JudgeModelName ?? string.Empty,
+                    request.JudgeContextTokens ?? 0,
+                    request.Rubric.ToRubric(),
+                    request.ReferenceAnswer)
                 : null);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
@@ -33,7 +35,10 @@ internal static class BenchmarkEndpointMapper
             UpdatedAtUtc = project.UpdatedAtUtc
         };
 
-    public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project, int runCount) =>
+    /// <param name="judge">The decrypted current judge policy, or a disabled marker when the project does not judge.</param>
+    public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project,
+        int runCount,
+        BenchmarkJudgePolicyResponse? judge = null) =>
         new()
         {
             Id = project.Id,
@@ -43,7 +48,10 @@ internal static class BenchmarkEndpointMapper
             ContextTokens = project.ContextTokens,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
-            CurrentJudgePolicyRevisionId = project.CurrentJudgePolicyRevisionId,
+            Judge = judge ?? new BenchmarkJudgePolicyResponse
+            {
+                Enabled = project.JudgeEnabled
+            },
             RunCount = runCount,
             IsFrozen = project.IsFrozen,
             Version = project.Version,
@@ -64,9 +72,12 @@ internal static class BenchmarkEndpointMapper
             AgentVersion = run.AgentVersion,
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
-            JudgeStatus = run.Judge?.State ?? BenchmarkRunJudgeStates.None,
-            JudgeScore = run.Judge?.Score,
+            Judge = run.ToJudge(),
+            QualityScore = run.QualityScore,
+            QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
+            Rank = run.Rank,
             RankExclusionReason = run.Judge?.RankExclusionReason,
+            ModelGroupKey = run.ModelContentFingerprint,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
@@ -81,7 +92,8 @@ internal static class BenchmarkEndpointMapper
         return summary;
     }
 
-    public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run)
+    /// <param name="verdict">The decrypted rubric verdict of the run's current attempt, or null when it has none.</param>
+    public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run, BenchmarkJudgeResultV2? verdict = null)
     {
         var detail = new BenchmarkRunDetailResponse
         {
@@ -94,19 +106,20 @@ internal static class BenchmarkEndpointMapper
             AgentVersion = run.AgentVersion,
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
-            JudgeStatus = run.Judge?.State ?? BenchmarkRunJudgeStates.None,
-            JudgeScore = run.Judge?.Score,
+            Judge = run.ToJudge(verdict),
+            QualityScore = run.QualityScore,
+            QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
+            Rank = run.Rank,
             RankExclusionReason = run.Judge?.RankExclusionReason,
+            ModelGroupKey = run.ModelContentFingerprint,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
             TokensPerSecond = run.TokensPerSecond,
             OutputParts = ParseJson(run.OutputPartsJson),
-
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             PrimaryErrorMessage = run.PrimaryErrorMessage,
-            JudgeErrorMessage = run.Judge?.ErrorMessage,
             Version = run.Version,
             CreatedAtUtc = run.CreatedAtUtc,
             StartedAtUtc = run.StartedAtUtc,
@@ -162,6 +175,79 @@ internal static class BenchmarkEndpointMapper
         response.PrimaryReceiptHash = primary?.ReceiptHash;
         response.PrimaryEnvironmentFactsHash = primary?.EnvironmentFactsHash;
     }
+
+    private static BenchmarkRunJudgeResponse ToJudge(this BenchmarkRunRecord run, BenchmarkJudgeResultV2? verdict = null)
+    {
+        var judge = run.Judge;
+        return new BenchmarkRunJudgeResponse
+        {
+            State = judge?.State ?? BenchmarkRunJudgeStates.None,
+            Score = judge?.Score,
+            PolicyRevision = judge?.PolicyRevision,
+            AttemptSequence = judge?.AttemptSequence,
+            CohortGeneration = judge?.CohortGeneration,
+            ExecutionKey = judge?.ExecutionKey,
+            PolicyCurrent = judge?.PolicyCurrent ?? false,
+            ExecutionCurrent = judge?.ExecutionCurrent ?? false,
+            ErrorMessage = judge?.ErrorMessage,
+            Summary = verdict?.Summary,
+            Criteria = verdict?.Criteria.Select(static criterion => new BenchmarkJudgeCriterionScoreResponse
+                              {
+                                  Id = criterion.Id,
+                                  Score = criterion.Score,
+                                  Rationale = criterion.Rationale
+                              })
+                              .ToArray()
+        };
+    }
+
+    public static BenchmarkRubricDto ToDto(this BenchmarkJudgeRubricV1 rubric) =>
+        new()
+        {
+            Version = rubric.Version,
+            Criteria = rubric.Criteria.Select(static criterion => new BenchmarkRubricCriterionDto
+                             {
+                                 Id = criterion.Id,
+                                 Title = criterion.Title,
+                                 Description = criterion.Description,
+                                 Weight = criterion.Weight
+                             })
+                             .ToArray()
+        };
+
+    public static BenchmarkJudgeRubricV1? ToRubric(this BenchmarkRubricDto? dto) =>
+        dto is null
+            ? null
+            : new BenchmarkJudgeRubricV1(dto.Version,
+                dto.Criteria.Select(static criterion => new BenchmarkJudgeRubricCriterionV1(criterion.Id,
+                                criterion.Title,
+                                criterion.Description,
+                                criterion.Weight))
+                            .ToArray());
+
+    /// <summary>
+    ///     The project's judge configuration. <paramref name="policy" /> is the decrypted current revision, or null
+    ///     when judging is off — which is a state, not an absence, so the object is always present.
+    /// </summary>
+    public static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision, BenchmarkJudgePolicyV1? policy) =>
+        revision is null || policy is null
+            ? new BenchmarkJudgePolicyResponse
+            {
+                Enabled = false
+            }
+            : new BenchmarkJudgePolicyResponse
+            {
+                Enabled = true,
+                PolicyRevisionId = revision.Id,
+                PolicyRevision = revision.Revision,
+                PolicyHash = revision.PolicyHash,
+                ModelName = policy.Model.ModelName,
+                RequestedContextTokens = policy.RequestedContextTokens,
+                Rubric = policy.Rubric.ToDto(),
+                ReferenceAnswer = policy.ReferenceAnswer,
+                CohortGeneration = revision.CohortGeneration,
+                ReferenceExecutionKey = revision.ReferenceExecutionKey
+            };
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
     {

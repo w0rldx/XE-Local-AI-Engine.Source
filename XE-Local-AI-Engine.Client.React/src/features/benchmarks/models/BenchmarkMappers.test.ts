@@ -43,7 +43,7 @@ describe("toBenchmarkProjectSummary", () => {
 });
 
 describe("toBenchmarkProjectDetail", () => {
-	it("extends the summary and defaults the judge prompt/schema versions to 1", () => {
+	it("extends the summary and reads no judge model from a project that does not judge", () => {
 		const mapped = toBenchmarkProjectDetail(partial({ name: "X", coreTask: "Summarise the text." }));
 
 		expect(mapped).toMatchObject({
@@ -51,14 +51,14 @@ describe("toBenchmarkProjectDetail", () => {
 			coreTask: "Summarise the text.",
 			judgeModelName: null,
 			judgeContextTokens: null,
-			judgePromptVersion: 1,
-			judgeOutputSchemaVersion: 1,
+			judgePromptVersion: 2,
+			judgeOutputSchemaVersion: 2,
 		});
 	});
 
-	it("keeps an explicit judge model and context", () => {
+	it("reads the judge model and context from the project's policy", () => {
 		const mapped = toBenchmarkProjectDetail(
-			partial({ name: "X", coreTask: "T", judgeModelName: "judge.gguf", judgeContextTokens: 8192, judgePromptVersion: 2 }),
+			partial({ name: "X", coreTask: "T", judge: { enabled: true, modelName: "judge.gguf", requestedContextTokens: 8192 } }),
 		);
 
 		expect(mapped).toMatchObject({ judgeModelName: "judge.gguf", judgeContextTokens: 8192, judgePromptVersion: 2 });
@@ -67,11 +67,19 @@ describe("toBenchmarkProjectDetail", () => {
 
 describe("toBenchmarkRunSummary", () => {
 	// Fail-closed: a run whose status did not survive the round-trip must not read as Succeeded.
-	it("defaults a missing primary and judge status to Failed", () => {
+	it("defaults a missing primary status to Failed and an absent judging to Disabled", () => {
 		const mapped = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));
 
 		expect(mapped.primaryStatus).toBe("Failed");
-		expect(mapped.judgeStatus).toBe("Failed");
+		expect(mapped.judgeStatus).toBe("Disabled");
+	});
+
+	it("maps the judging's own state onto the run's judge status", () => {
+		const mapped = toBenchmarkRunSummary(
+			partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a", judge: { state: "running" } }),
+		);
+
+		expect(mapped.judgeStatus).toBe("Running");
 	});
 
 	// "Not measured" and "measured as zero" are different facts; the nullable metrics must not collapse into 0.
@@ -143,23 +151,32 @@ describe("toBenchmarkRunDetail", () => {
 		expect(mapped.outputParts).toEqual([]);
 	});
 
-	it("maps a judge result, defaulting its versions to 1 and its rationale to empty", () => {
+	it("maps a succeeded judging's verdict, defaulting its rationale to empty", () => {
 		const mapped = toBenchmarkRunDetail(
 			partial({
 				primaryModelName: "m",
 				modelContentFingerprint: "v1",
 				agentName: "a",
-				judgeResult: { score: 4 },
+				judge: { state: "succeeded", score: 73 },
 			}),
 		);
 
 		expect(mapped.judgeResult).toEqual({
-			schemaVersion: 1,
-			score: 4,
+			schemaVersion: 2,
+			score: 73,
 			rationale: "",
 			judgeModelContentFingerprint: "",
-			promptVersion: 1,
+			promptVersion: 2,
 		});
+	});
+
+	// A judging that has not succeeded has no verdict to render, whatever else the row carries.
+	it("returns no verdict for a judging that did not succeed", () => {
+		const mapped = toBenchmarkRunDetail(
+			partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a", judge: { state: "failed", score: 10 } }),
+		);
+
+		expect(mapped.judgeResult).toBeNull();
 	});
 });
 
@@ -211,9 +228,6 @@ describe("launch evidence mapping", () => {
 				primaryHasAuxAssets: false,
 				primaryReceiptHash: "receipt-1",
 				primaryEnvironmentFactsHash: "env-1",
-				judgeKvCacheType: "f16",
-				judgeKvCacheTypeSource: "auto",
-				judgeReceiptHash: "judge-receipt-1",
 			}),
 		);
 
@@ -234,7 +248,8 @@ describe("launch evidence mapping", () => {
 			receiptHash: "receipt-1",
 			environmentFactsHash: "env-1",
 		});
-		expect(mapped.judgeLaunch).toMatchObject({ kvCacheType: "f16", receiptHash: "judge-receipt-1", variant: null });
+		// The judge's launch evidence belongs to its attempt now, so the run's judge block is uniformly absent.
+		expect(mapped.judgeLaunch).toEqual(noBenchmarkLaunchFacts);
 	});
 
 	it("keeps a legacy run's launch facts null instead of inventing defaults", () => {

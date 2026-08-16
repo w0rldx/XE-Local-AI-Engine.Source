@@ -17,7 +17,14 @@ public interface IBenchmarkStore
     ///     columns are NOT read: a list of runs must not decrypt every snapshot, output and receipt on the way to
     ///     rendering a table.
     /// </summary>
-    Task<BenchmarkRunPage> ListRunsAsync(Guid projectId, int skip, int take, CancellationToken cancellationToken = default);
+    /// <param name="modelGroupKey">Only runs of this model content fingerprint (same-model history), or null for all.</param>
+    /// <param name="includeUnscored">False drops runs that carry no quality score at all.</param>
+    Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
+        int skip,
+        int take,
+        string? modelGroupKey = null,
+        bool includeUnscored = true,
+        CancellationToken cancellationToken = default);
 
     /// <summary>How many runs a project has, counted in the database.</summary>
     Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -335,7 +342,10 @@ public sealed record BenchmarkRunRecord(
     long UpdatedAtUtc,
     BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
     BenchmarkRunLaunchEvidence? PrimaryLaunchEvidence = null,
-    BenchmarkRunJudgeView? Judge = null);
+    BenchmarkRunJudgeView? Judge = null,
+    int? QualityScore = null,
+    string? QualityScoreSource = null,
+    int? Rank = null);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
@@ -406,6 +416,7 @@ public sealed record BenchmarkLaunchReceiptCommand(
 /// </param>
 public sealed record BenchmarkRunJudgeView(
     string State,
+    Guid? AttemptId,
     int? Score,
     int? PolicyRevision,
     Guid? PolicyRevisionId,
@@ -436,8 +447,27 @@ public static class BenchmarkRunJudgeStates
     public const string ReasonExecutionIdentityIncomplete = "execution-identity-incomplete";
 }
 
-/// <param name="TotalCount">Runs in the project, not in this page.</param>
-public sealed record BenchmarkRunPage(IReadOnlyList<BenchmarkRunRecord> Items, int TotalCount);
+/// <summary>
+///     What the project's ranking is currently computed against. The UI needs it to say "n of m ranked" honestly —
+///     a project mid-re-judge, or one whose judge runtime moved, shows fewer ranked rows on purpose.
+/// </summary>
+public sealed record BenchmarkRankCohort(
+    int? PolicyRevision,
+    string? ExecutionKey,
+    int? CohortGeneration,
+    int RankedCount,
+    int TotalScored);
+
+/// <param name="TotalCount">Runs matching the filter, not in this page.</param>
+public sealed record BenchmarkRunPage(IReadOnlyList<BenchmarkRunRecord> Items, int TotalCount, BenchmarkRankCohort? RankCohort = null);
+
+/// <summary>Where a run's ranking value came from.</summary>
+public static class BenchmarkQualityScoreSources
+{
+    public const string User = "user";
+    public const string Judge = "judge";
+    public const string None = "none";
+}
 
 public sealed record BenchmarkClaimedWork(
     long QueueSequence,

@@ -202,5 +202,5 @@ public sealed class BenchmarkExecutionPrimitivesTests
                 1
             }, "model.gguf", null, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
             primary, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1, null, null,
-            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
+            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
 }
