@@ -103,6 +103,53 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_WhenTheCallerLaunchesItsOwnProcess_ReservesBytesWithoutPublishingALaunchAdmission()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(4 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, PublishLaunchAdmission: false),
+            CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.NotNull(decision.Reservation);
+        // The bytes are still booked — only the admission the caller would never consume is withheld.
+        AssertEx.Equal(4 * Gb, harness.Ledger.Reserved.GpuBytes);
+        AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey,
+            "An admission nothing consumes is exactly what the supervisor refuses to launch against.");
+        decision.Reservation!.Dispose();
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_WhileABenchmarkReservationIsHeld_ASpawnOfTheSameModelCanStillBeginItsOwnLaunch()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(4 * Gb)
+        };
+        var service = harness.Build();
+
+        // The benchmark holds its reservation open for the whole exclusive spawn, which is when the supervisor asks
+        // the registry whether it may launch. An ordinary Allow leaves an admission there and that ask fails.
+        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, PublishLaunchAdmission: false),
+            CancellationToken.None);
+        using var reservation = decision.Reservation;
+
+        var began = harness.LaunchAdmissions.TryBeginLaunch(Model, ModelRole.Chat, out var admission, out var ticket);
+        using (ticket)
+        {
+            AssertEx.True(began, "The supervisor must be able to begin a launch while the benchmark reservation is held.");
+            AssertEx.Null(admission, "A frozen replay must launch from its own arguments, never from a published admission.");
+        }
+    }
+
+    [Test]
     public async Task Capacity_ContextAwareRequest_ForwardsRequiredContextToFootprintProbe()
     {
         var harness = new Harness

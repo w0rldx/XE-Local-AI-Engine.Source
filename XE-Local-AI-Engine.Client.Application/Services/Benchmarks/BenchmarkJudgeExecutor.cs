@@ -69,7 +69,11 @@ public sealed class BenchmarkJudgeExecutor(
             environment = await environmentFacts.CaptureAsync(runtime.Variant, token).ConfigureAwait(false);
 
             // Admission sizes against the frozen judge runtime's own context, not the project's request.
-            var decision = await capacity.DecideAsync(new CapacityRequest(judgeModel.ModelName, ModelRole.Chat, runtime.ContextTokens), token)
+            // No launch admission — see BenchmarkRunExecutor: the judge spawns its own process from frozen arguments.
+            var decision = await capacity.DecideAsync(new CapacityRequest(judgeModel.ModelName,
+                                             ModelRole.Chat,
+                                             runtime.ContextTokens,
+                                             PublishLaunchAdmission: false), token)
                                          .ConfigureAwait(false);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {

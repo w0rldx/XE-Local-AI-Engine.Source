@@ -33,4 +33,14 @@ public interface ICapacityService
 }
 
 /// <summary>Context-aware capacity request used by frozen benchmark execution.</summary>
-public sealed record CapacityRequest(string ModelName, ModelRole Role, int? RequiredContextTokens = null);
+/// <param name="PublishLaunchAdmission">
+///     Whether an llama.cpp Allow also publishes a launch admission the next spawn is expected to CONSUME. A caller
+///     that launches its own process from frozen arguments (a benchmark replay) must say <see langword="false" />:
+///     the admission it never consumes is exactly what the supervisor refuses to launch against. The ledger
+///     reservation is unaffected either way, so the bytes are still booked.
+/// </param>
+public sealed record CapacityRequest(
+    string ModelName,
+    ModelRole Role,
+    int? RequiredContextTokens = null,
+    bool PublishLaunchAdmission = true);

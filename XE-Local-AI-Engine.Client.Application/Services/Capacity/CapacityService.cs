@@ -173,7 +173,7 @@ public sealed class CapacityService : ICapacityService
         // Publish only after the exact footprint is reserved. Registry failure disposes the tentative reservation before
         // returning, preserving the ledger -> registry lock order and leaving neither half of the admission live.
         using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources));
-        if (!isLlamaServer)
+        if (!isLlamaServer || !request.PublishLaunchAdmission)
         {
             return reservation.TransferToDecision(ollamaWarning);
         }
