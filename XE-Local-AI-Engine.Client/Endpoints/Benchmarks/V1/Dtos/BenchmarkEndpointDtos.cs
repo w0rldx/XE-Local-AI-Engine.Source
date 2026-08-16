@@ -91,6 +91,9 @@ public sealed class StartBenchmarkRunRequest
     public Guid ProjectId { get; init; }
     public string ModelName { get; init; } = string.Empty;
     public long ExpectedProjectVersion { get; init; }
+
+    /// <summary><c>f16</c>, <c>q8_0</c>, <c>q4_0</c>, or <see langword="null" /> for Auto (the node picks).</summary>
+    public string? KvCacheType { get; init; }
 }
 
 public sealed class BenchmarkRunRouteRequest
@@ -139,6 +142,42 @@ public class BenchmarkRunSummaryResponse
     public long Version { get; init; }
     public long CreatedAtUtc { get; init; }
     public long UpdatedAtUtc { get; init; }
+
+    /// <summary>What freeze intended this run to launch. All null for runs frozen before launch evidence existed.</summary>
+    public string? PrimaryVariant { get; set; }
+
+    public string? PrimaryKvCacheType { get; set; }
+    public string? PrimaryKvCacheTypeSource { get; set; }
+    public string? PrimaryKvAutoReason { get; set; }
+    public string? PrimaryFlashAttentionMode { get; set; }
+    public string? PrimaryIntendedLaunchIdentity { get; set; }
+    public string? PrimaryIntendedExecutableSha256 { get; set; }
+
+    /// <summary>What the launch itself recorded. All null until the spawn reached readiness.</summary>
+    public string? PrimaryEffectiveLaunchIdentity { get; set; }
+
+    public string? PrimaryEffectiveBackend { get; set; }
+    public int? PrimaryPlacementOffloaded { get; set; }
+    public int? PrimaryPlacementTotal { get; set; }
+    public string? PrimaryExecutableSha256 { get; set; }
+    public bool? PrimaryHasAuxAssets { get; set; }
+    public string? PrimaryReceiptHash { get; set; }
+    public string? PrimaryEnvironmentFactsHash { get; set; }
+    public string? JudgeVariant { get; set; }
+    public string? JudgeKvCacheType { get; set; }
+    public string? JudgeKvCacheTypeSource { get; set; }
+    public string? JudgeKvAutoReason { get; set; }
+    public string? JudgeFlashAttentionMode { get; set; }
+    public string? JudgeIntendedLaunchIdentity { get; set; }
+    public string? JudgeIntendedExecutableSha256 { get; set; }
+    public string? JudgeEffectiveLaunchIdentity { get; set; }
+    public string? JudgeEffectiveBackend { get; set; }
+    public int? JudgePlacementOffloaded { get; set; }
+    public int? JudgePlacementTotal { get; set; }
+    public string? JudgeExecutableSha256 { get; set; }
+    public bool? JudgeHasAuxAssets { get; set; }
+    public string? JudgeReceiptHash { get; set; }
+    public string? JudgeEnvironmentFactsHash { get; set; }
 }
 
 public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
@@ -151,6 +190,15 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     public long? PrimaryCompletedAtUtc { get; init; }
     public long? JudgeStartedAtUtc { get; init; }
     public long? JudgeCompletedAtUtc { get; init; }
+
+    /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c> v1), or null when none was recorded.</summary>
+    public JsonElement? PrimaryLaunchReceipt { get; init; }
+
+    /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>
+    public JsonElement? PrimaryEnvironmentFacts { get; init; }
+
+    public JsonElement? JudgeLaunchReceipt { get; init; }
+    public JsonElement? JudgeEnvironmentFacts { get; init; }
 }
 
 public sealed class ListBenchmarkRunsResponse

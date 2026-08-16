@@ -73,9 +73,19 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
             return;
         }
 
+        // Absent/blank is Auto and stays null; anything outside the allow-list is the caller's mistake, not an
+        // unsupported runtime, so it is a 400 here rather than the 422 an unlaunchable-but-known type gets.
+        if (!BenchmarkKvCacheType.TryNormalize(req.KvCacheType, out var kvCacheType))
+        {
+            await Send.ResultAsync(BenchmarkEndpointSupport.Problem(StatusCodes.Status400BadRequest,
+                BenchmarkErrorCode.InvalidRequest,
+                "The requested KV-cache type is not supported.")).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
-            var run = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, ct).ConfigureAwait(false);
+            var run = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, kvCacheType, ct).ConfigureAwait(false);
             await Send.ResultAsync(Results.Accepted(value: run.ToDetail())).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception) || exception is KeyNotFoundException)

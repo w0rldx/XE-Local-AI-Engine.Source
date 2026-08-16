@@ -60,6 +60,7 @@ public sealed class BenchmarkRunExecutorTests
             EndpointBinding(),
             Buffer(),
             new BenchmarkCancellationRegistry(),
+            new RecordingEnvironmentFacts(),
             NullLogger<BenchmarkRunExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
@@ -229,6 +230,155 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.True(lease.Disposed);
     }
 
+    [Test]
+    public async Task Execute_CapturesEnvironmentFactsBeforeCapacityAndCheckpointsTheReceiptBeforeInference()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
+        {
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto,
+                null, LlamaServerLaunchProjection.FlashAttentionOn, "intended", "manifest-sha")
+        };
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkLaunchReceiptCommand? checkpoint = null;
+        store.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint ??= command), Arg.Any<CancellationToken>())
+             .Returns(true);
+        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 Version = 3
+             });
+        var environmentFacts = new RecordingEnvironmentFacts();
+        var capacity = new RecordingCapacityService(environmentFacts);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        var checkpointedBeforeInference = false;
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  checkpointedBeforeInference = checkpoint is not null;
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 8192,
+                      EffectiveContextTokens = 8192,
+                      ModelId = "model.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100)));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, new BenchmarkCancellationRegistry(),
+            PassthroughSupervisor(Receipt()), environmentFacts);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, environmentFacts.Captures);
+        AssertEx.Equal<GpuVariant?>(GpuVariant.Cpu, environmentFacts.Variant);
+        AssertEx.Equal(expected: 1, capacity.EnvironmentCapturesAtDecision, "Environment facts must be captured before capacity is reserved.");
+        AssertEx.True(checkpointedBeforeInference, "The launch receipt must be durable before the first token is generated.");
+        var command = AssertEx.NotNull(checkpoint);
+        AssertEx.Equal("cuda", command.EffectiveBackend);
+        AssertEx.Equal<int?>(33, command.PlacementOffloaded);
+        AssertEx.Equal<int?>(33, command.PlacementTotal);
+        AssertEx.Equal(BenchmarkKvCacheType.SourceAuto, command.KvCacheTypeSource);
+        AssertEx.Equal(Receipt().LaunchProjection.ComputeIdentity(), command.EffectiveLaunchIdentity);
+        AssertEx.NotNullOrEmpty(command.ReceiptHash);
+        AssertEx.NotNullOrEmpty(command.EnvironmentFactsHash);
+        AssertEx.NotNullOrEmpty(command.ReceiptJson);
+    }
+
+    [Test]
+    public async Task Execute_AdmissionSizesAgainstTheFrozenRuntimeContext()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var capacity = new RecordingCapacityService();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed, frozenContextTokens: 12288), lease, capacity, dispatcher, runner,
+            new BenchmarkCancellationRegistry());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal<int?>(12288, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
+    }
+
+    [Test]
+    public async Task Execute_WhenTheSpawnFailsBeforeReadiness_RecordsEnvironmentFactsWithNoReceiptAndKeepsTheSanitizedReason()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        BenchmarkLaunchReceiptCommand? checkpoint = null;
+        store.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
+             .Returns(true);
+        string? failure = null;
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+                      Arg.Any<ModelRole>(),
+                      Arg.Any<ResolvedLaunchArguments>(),
+                      Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                      Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                      Arg.Any<CancellationToken>())
+                  .Returns<bool>(_ => throw new LlamaRuntimeException("llama-server exited before it became ready."));
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        var command = AssertEx.NotNull(checkpoint);
+        AssertEx.Null(command.ReceiptJson, "A spawn that never reached readiness records no receipt.");
+        AssertEx.Null(command.ReceiptHash);
+        AssertEx.Null(command.EffectiveBackend);
+        AssertEx.NotNullOrEmpty(command.EnvironmentFactsJson);
+        AssertEx.Equal("llama-server exited before it became ready.", failure);
+        _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    private static LlamaServerLaunchReceipt Receipt() =>
+        new(LlamaServerLaunchReceipt.CurrentVersion,
+            GpuVariant.Cuda,
+            "linux",
+            "b10201",
+            "exe-sha",
+            "manifest-sha",
+            LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(8192, 33), plan: null, ModelRole.Chat),
+            new LlamaServerLaunchAuxAssets(false, false, false),
+            new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Full, 33, 33),
+            8192,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status, long version) =>
         new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
             {
@@ -244,7 +394,8 @@ public sealed class BenchmarkRunExecutorTests
         IWorkerEventDispatcher dispatcher,
         IInvocationRunner runner,
         IBenchmarkCancellationRegistry cancellations,
-        ILlamaServerProcessSupervisor? supervisor = null) =>
+        ILlamaServerProcessSupervisor? supervisor = null,
+        IRuntimeEnvironmentFactsProvider? environmentFacts = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -257,6 +408,7 @@ public sealed class BenchmarkRunExecutorTests
             EndpointBinding(),
             Buffer(),
             cancellations,
+            environmentFacts ?? new RecordingEnvironmentFacts(),
             NullLogger<BenchmarkRunExecutor>.Instance);
 
     private static InvocationState State(Guid invocationId,
@@ -305,7 +457,7 @@ public sealed class BenchmarkRunExecutorTests
             fingerprint);
     }
 
-    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot model)
+    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot model, int frozenContextTokens = 8192)
     {
         var frozen = new BenchmarkInstalledModelSnapshotV1(model.ModelName,
             model.RegistryRevision,
@@ -337,7 +489,7 @@ public sealed class BenchmarkRunExecutorTests
             "task",
             8192,
             new ResolvedAgentRuntime("prompt", [], null, null, 1, AgentName: "Agent"),
-            Runtime(),
+            Runtime(frozenContextTokens),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             frozen,
             new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, null, null, null, null, "hash"),
@@ -350,8 +502,8 @@ public sealed class BenchmarkRunExecutorTests
     private static string V1(char value) =>
         $"v1:{new string(value, 64)}";
 
-    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime() =>
-        new(GpuVariant.Cpu, 8192, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens) =>
+        new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
     private static IGpuVariantSelector FixedVariantSelector()
     {
@@ -360,7 +512,7 @@ public sealed class BenchmarkRunExecutorTests
         return selector;
     }
 
-    private static ILlamaServerProcessSupervisor PassthroughSupervisor()
+    private static ILlamaServerProcessSupervisor PassthroughSupervisor(LlamaServerLaunchReceipt? receipt = null)
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
@@ -372,7 +524,10 @@ public sealed class BenchmarkRunExecutorTests
                   .Returns(call =>
                   {
                       var modelName = call.ArgAt<string>(0);
-                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), []);
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), [])
+                      {
+                          LaunchReceipt = receipt
+                      };
                       return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
                   });
         return supervisor;
@@ -419,9 +574,10 @@ public sealed class BenchmarkRunExecutorTests
         }
     }
 
-    private sealed class RecordingCapacityService : ICapacityService
+    private sealed class RecordingCapacityService(RecordingEnvironmentFacts? environmentFacts = null) : ICapacityService
     {
         public int DecisionCount { get; private set; }
+        public int EnvironmentCapturesAtDecision { get; private set; }
         public CapacityRequest? LastRequest { get; private set; }
         public TrackingDisposable? Reservation { get; private set; }
 
@@ -434,9 +590,23 @@ public sealed class BenchmarkRunExecutorTests
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
         {
             DecisionCount++;
+            EnvironmentCapturesAtDecision = environmentFacts?.Captures ?? 0;
             LastRequest = request;
             Reservation = new TrackingDisposable();
             return Task.FromResult(new CapacityDecision(CapacityVerdict.Allow, "allowed", false, Reservation));
+        }
+    }
+
+    private sealed class RecordingEnvironmentFacts : IRuntimeEnvironmentFactsProvider
+    {
+        public int Captures { get; private set; }
+        public GpuVariant? Variant { get; private set; }
+
+        public Task<RuntimeEnvironmentFactsV1> CaptureAsync(GpuVariant variant, CancellationToken ct)
+        {
+            Captures++;
+            Variant = variant;
+            return Task.FromResult(new RuntimeEnvironmentFactsV1(1, null, null, null, 42, ["hardware"]));
         }
     }
 
