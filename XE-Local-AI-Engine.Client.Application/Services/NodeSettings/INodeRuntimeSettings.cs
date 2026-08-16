@@ -76,12 +76,6 @@ public interface INodeRuntimeSettings
     /// </summary>
     Task<int> GetDetachedGraceSecondsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     The node-level sampling defaults, or <see langword="null" /> when none are configured (today's behavior). There
-    ///     is no appsettings seed: this is a developer-only stored-or-nothing knob.
-    /// </summary>
-    Task<SamplingOptions?> GetSamplingDefaultsAsync(CancellationToken cancellationToken = default);
-
     /// <summary>The chat-role prompt-cache prefix-reuse window in tokens (stored &gt; seed 256; <c>0</c> disables).</summary>
     Task<int> GetChatCacheReuseAsync(CancellationToken cancellationToken = default);
 

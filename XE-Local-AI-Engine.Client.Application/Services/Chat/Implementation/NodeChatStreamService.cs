@@ -47,6 +47,11 @@ public sealed class NodeChatStreamService(
 {
     private const int AgentDefinitionVersion = 1;
 
+    // A cancel that lands BEFORE the invocation itself starts — while the turn is still waiting for the shared
+    // collision-queue lease, or between acquiring it and the Streaming transition. Distinct from the runner's own
+    // cancellation terminals so a turn stopped in the queue is never reported as a model/invocation timeout.
+    private const string PreRunCancelledMessage = "Stopped before the response started (cancelled while queued).";
+
     // The tools whose presence in a turn's offer means the selected agent can read files through the AgentHome sandbox
     // (the read-only coder tools plus the run_in_agent_home gateway). When any is offered AND the conversation has
     // uploaded attachments, the sandbox is re-staged with this conversation's attachments before the tool loop runs.
@@ -87,6 +92,15 @@ public sealed class NodeChatStreamService(
         // authoritative; throwing here propagates to the hub caller.
         await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
 
+        // A selection map on the request is the authoritative, just-clicked path: persist it BEFORE reading the
+        // conversation. The write also CLEARS the stored compaction synopsis (a synopsis built on the previous path can
+        // misrepresent the newly selected branch), and the turn-scoped read below skips exactly the blobs that synopsis
+        // covers — so reading first would build the turn from a synopsis the database no longer has, on top of history
+        // whose covered messages were never decrypted.
+        var persistedSelectedPath = request.SelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : null;
+
         // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
         // conversation's compaction synopsis has already replaced — BuildConversationContext drops them by sequence and
         // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
@@ -94,12 +108,8 @@ public sealed class NodeChatStreamService(
         var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
 
-        // A selection map on the request is the authoritative, just-clicked path: persist it before building
-        // context so the stored selection and the context agree. With no map on the request, fall back to the
-        // selection already persisted on the conversation (loaded into the DTO).
-        var selectedPath = request.SelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
-            : conversation.SelectedPath;
+        // With no map on the request, fall back to the selection already persisted on the conversation (loaded above).
+        var selectedPath = persistedSelectedPath ?? conversation.SelectedPath;
 
         var trimmedContent = request.Content.Trim();
         var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
@@ -143,6 +153,17 @@ public sealed class NodeChatStreamService(
         await using var preOwnershipGuard = new PreOwnershipTerminalizationGuard(persistence, correlation, timeProvider, logger);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
+        // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local chat
+        // turn — without threading it here the package fell back to TimeoutSettings' own default and a raised setting
+        // was silently ignored. Only the invocation timeout is operator-controlled; the tool-call and stream-idle
+        // timeouts keep their defaults. When the setting equals the TimeoutSettings default the package — and therefore
+        // its config hash — is byte-identical to a package built without an explicit Timeouts.
+        //
+        // Loaded HERE rather than next to the package build below because the same ceiling is stamped on the queued and
+        // streaming events: the browser's stream watchdog must know it before the collision-queue wait, which is the
+        // first stretch of the turn where nothing at all arrives on the wire.
+        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
         // The turn is Queued until the collision-queue lease is acquired in RunInvocationAsync; it transitions to
         // Streaming only when the invocation actually starts. This keeps a turn waiting behind another invocation
         // visibly "queued" rather than prematurely "streaming".
@@ -157,7 +178,8 @@ public sealed class NodeChatStreamService(
             yield break;
         }
 
-        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
+        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next(),
+            invocationTimeoutSeconds: runtimeNodeSettings.MaxMessageRequestTimeoutSeconds);
 
         // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection. When the
         // client cancellationToken fires on disconnect we must only stop forwarding SSE events to the browser;
@@ -432,13 +454,6 @@ public sealed class NodeChatStreamService(
             imageContext = await BuildImageAttachmentMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
         }
 
-        // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local chat
-        // turn — without threading it here the package fell back to TimeoutSettings' own default and a raised setting
-        // was silently ignored. Only the invocation timeout is operator-controlled; the tool-call and stream-idle
-        // timeouts keep their defaults. When the setting equals the TimeoutSettings default the package — and therefore
-        // its config hash — is byte-identical to a package built without an explicit Timeouts.
-        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
@@ -615,7 +630,11 @@ public sealed class NodeChatStreamService(
                 return;
             }
 
-            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
+            await eventSink.WriteAsync(
+                    ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
+                        invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider
             // invocation with a dedicated category, so the client sees an actionable "pull a model" terminal rather
@@ -635,7 +654,7 @@ public sealed class NodeChatStreamService(
         catch (OperationCanceledException)
         {
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
-                "Invocation timed out or was cancelled",
+                PreRunCancelledMessage,
                 FailureCategory.Cancelled).ConfigureAwait(false);
         }
         catch (NoChatModelInstalledException exception)
@@ -733,21 +752,12 @@ public sealed class NodeChatStreamService(
 
         // Non-destructive compaction: when a synopsis covers messages up to a sequence, send it in their place and drop
         // those older messages from the verbatim history. The originals remain persisted — this only shapes what is sent,
-        // and the newest turns beyond the covered sequence are always kept verbatim.
-        int? compactionCoversToSequence = conversation.CompactionSummary is { Length: > 0 } && conversation.CompactionSummaryCoversToSequence is { } cover
-            ? cover
-            : null;
-        if (compactionCoversToSequence is { } coveredSequence)
+        // and the newest turns beyond the covered sequence are always kept verbatim. The synopsis message itself is
+        // minted by the shared CompactionContextResolver so the regenerate path splices an identical one.
+        if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
-            leadingContext.Add(new ConversationMessageDto
-            {
-                Id = Guid.NewGuid(),
-                Role = MessageRole.User,
-                Content = $"[Summary of the earlier conversation, condensed to fit the context window]\n{conversation.CompactionSummary}",
-                SortOrder = leadingContext.Count
-            });
-
-            selected = [.. selected.Where(message => message.Sequence > coveredSequence)];
+            leadingContext.Add(compaction.Summary);
+            selected = [.. selected.Where(message => message.Sequence > compaction.CoveredSequence)];
         }
 
         var history = selected
@@ -1165,9 +1175,11 @@ public sealed class NodeChatStreamService(
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
-        int? reasoningTokens = null)
+        int? reasoningTokens = null,
+        int? invocationTimeoutSeconds = null)
     {
-        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens,
+            invocationTimeoutSeconds);
     }
 
     private long NowUnixMilliseconds()

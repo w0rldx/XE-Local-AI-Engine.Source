@@ -14,6 +14,10 @@ public static class McpExecutionFailureCodes
     public const string ModelOverrideNotAllowed = "model_override_not_allowed";
     public const string CapacityDeclined = "capacity_declined";
     public const string Cancelled = "cancelled";
+
+    /// <summary>The run exceeded the node's "Maximum message request timeout" — distinct from an operator cancel.</summary>
+    public const string TimedOut = "timed_out";
+
     public const string InternalFailure = "internal_failure";
     public const string WorkspaceNotAuthorized = "workspace_not_authorized";
     public const string WorkspaceBusy = "workspace_busy";

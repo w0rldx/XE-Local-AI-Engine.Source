@@ -5,7 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import type { SaveNodeSettingsResponse } from "@/core/api/generated";
+import type {
+	SaveNodeSettingsResponse,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest as SaveNodeSettingsRequest,
+} from "@/core/api/generated";
 import {
 	downloadRecommendedEmbeddingMutation,
 	downloadRecommendedRerankerMutation,
@@ -37,6 +40,7 @@ import {
 	type NodeSettingsFieldsForm,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
+	touchesRestartGatedField,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import {
 	type NodeSettingsTimeoutInput,
@@ -313,9 +317,16 @@ export function NodeSettings() {
 
 	const saveMutation = useMutation({
 		...withResponseValidation(saveNodeSettingsMutation()),
-		onSuccess: async (updatedSettings: SaveNodeSettingsResponse) => {
+		onSuccess: async (updatedSettings: SaveNodeSettingsResponse, variables: { body: SaveNodeSettingsRequest }) => {
+			// Restart-gated fields (see restartGatedNodeSettingsFields) persist immediately but the running node keeps its
+			// old value, so the save notice has to say so instead of implying the change is already live.
 			toast.success(
-				t("pages.nodeSettings.saved", "Node settings saved. Capability reporting was requested for the worker connection."),
+				touchesRestartGatedField(variables.body)
+					? t(
+							"pages.nodeSettings.savedRestartRequired",
+							"Node settings saved. Some of the changed settings only take effect after the node restarts.",
+						)
+					: t("pages.nodeSettings.saved", "Node settings saved. Capability reporting was requested for the worker connection."),
 			);
 			setTimeoutSeconds(updatedSettings.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds);
 			const loaded = toNodeSettingsFieldsForm(updatedSettings);

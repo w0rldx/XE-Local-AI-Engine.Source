@@ -39,14 +39,19 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Null(loaded.KeepModelWarmModelName);
         AssertEx.Null(loaded.KeepModelWarmIntervalSeconds);
         AssertEx.Null(loaded.RecommendedLlamaCppTag);
-        AssertEx.Null(loaded.SamplingDefaults);
     }
 
     [Test]
-    public async Task OldFileWithNeuralVoiceFields_LoadsAndPreservesLegacySelection()
+    public async Task OldFileWithRemovedKeys_LoadsWithoutThrowing_AndKeepsTheSurvivingFields()
     {
+        // samplingDefaults (never read at runtime) and allowedVoiceModels (a neural-voice leftover the Web Speech-only
+        // client never consumed) were deleted from StoredNodeSettings. A node-settings.json written before the removal
+        // still carries both keys, so loading MUST tolerate them: System.Text.Json ignores unknown members unless
+        // JsonUnmappedMemberHandling.Disallow is configured, and this pins that the store does not configure it. The
+        // fields around them still round-trip.
         await WriteSettingsJsonAsync("""
                                      {
+                                       "samplingDefaults": { "seed": "42", "temperature": 0.7 },
                                        "voiceFeatureEnabled": true,
                                        "allowedVoiceModels": ["onnx-community/Kokoro-82M-v1.0-ONNX"],
                                        "defaultVoiceProfile": "af_heart"
@@ -56,7 +61,6 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         var loaded = await LoadAsync();
 
         AssertEx.Equal(expected: true, loaded.VoiceFeatureEnabled);
-        AssertEx.ContainsSingle(loaded.AllowedVoiceModels!, model => model == "onnx-community/Kokoro-82M-v1.0-ONNX");
         AssertEx.Equal("af_heart", loaded.DefaultVoiceProfile);
     }
 

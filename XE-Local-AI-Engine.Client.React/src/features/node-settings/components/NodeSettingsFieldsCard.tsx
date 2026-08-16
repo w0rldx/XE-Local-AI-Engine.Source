@@ -13,7 +13,7 @@ import {
 	Title,
 } from "@mantine/core";
 import { IconCloudDownload, IconCoin, IconCpu, IconPlus, IconRobot, IconServer, IconTool, IconTrash } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -21,6 +21,7 @@ import {
 	type NodeSettingsFieldsForm,
 	newUsageRateRow,
 	requiresExternalDraftModel,
+	restartGatedNodeSettingsFields,
 	SPECULATIVE_DISABLED_MODE,
 	speculativeModeSelectValues,
 	type UsageRateRow,
@@ -67,6 +68,21 @@ export interface NodeSettingsFieldsCardProps {
 	// True while the recommended embedding model's GGUF download is running (duplicate-guards the button after the
 	// request returns, until the download reaches a terminal phase).
 	readonly isRecommendedEmbeddingInFlight: boolean;
+}
+
+// Trailing marker appended to the description of every restart-gated field (a Save persists it, but the running node
+// keeps the old value until it restarts). The gate is looked up in the model's single source of truth rather than
+// hardcoded per call site, so a field added/removed there changes this card without a second edit.
+function restartHint(t: ReturnType<typeof useTranslation>["t"], field: keyof NodeSettingsFieldsForm): ReactNode {
+	if (!restartGatedNodeSettingsFields.has(field)) {
+		return null;
+	}
+	return (
+		<Text component="span" size="xs" fw={600} data-testid={`node-settings-restart-hint-${field}`}>
+			{" "}
+			{t("pages.nodeSettings.fields.restartRequired", "Takes effect after the node restarts.")}
+		</Text>
+	);
 }
 
 function fieldError(
@@ -156,10 +172,15 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<TextInput
 						label={t("pages.nodeSettings.fields.defaultModelName.label", "Default model")}
-						description={t(
-							"pages.nodeSettings.fields.defaultModelName.description",
-							"The model used for local chat when none is selected. Leave blank to use the configured default. Applies after the node restarts.",
-						)}
+						description={
+							<>
+								{t(
+									"pages.nodeSettings.fields.defaultModelName.description",
+									"The model used for local chat when none is selected. Leave blank to use the configured default.",
+								)}
+								{restartHint(t, "defaultModelName")}
+							</>
+						}
 						value={form.defaultModelName}
 						onChange={(event) => onChange("defaultModelName", event.currentTarget.value)}
 						data-testid="node-settings-default-model"
@@ -207,7 +228,12 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<NumberInput
 						label={t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.label", "Max loaded llama-server processes")}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}. ${t("pages.nodeSettings.fields.llamaMaxLoadedProcesses.description", "Applies after the node restarts.")}`}
+						description={
+							<>
+								{`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}.`}
+								{restartHint(t, "llamaMaxLoadedProcesses")}
+							</>
+						}
 						min={bounds.llamaMaxLoadedProcesses.min}
 						max={bounds.llamaMaxLoadedProcesses.max}
 						allowDecimal={false}
@@ -218,7 +244,12 @@ export function NodeSettingsFieldsCard({
 					/>
 					<NumberInput
 						label={t("pages.nodeSettings.fields.llamaIdleTimeToLiveSeconds.label", "Idle process time-to-live")}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaIdleTimeToLiveSeconds.min}–${bounds.llamaIdleTimeToLiveSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.llamaIdleTimeToLiveSeconds.description", "Applies after the node restarts.")}`}
+						description={
+							<>
+								{`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaIdleTimeToLiveSeconds.min}–${bounds.llamaIdleTimeToLiveSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+								{restartHint(t, "llamaIdleTimeToLiveSeconds")}
+							</>
+						}
 						suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 						min={bounds.llamaIdleTimeToLiveSeconds.min}
 						max={bounds.llamaIdleTimeToLiveSeconds.max}
@@ -284,10 +315,12 @@ export function NodeSettingsFieldsCard({
 					</Text>
 					<TextInput
 						label={t("pages.nodeSettings.fields.ollamaEndpoint.label", "Ollama endpoint")}
-						description={t(
-							"pages.nodeSettings.fields.ollamaEndpoint.description",
-							"The Ollama API base URL. Applies after a restart.",
-						)}
+						description={
+							<>
+								{t("pages.nodeSettings.fields.ollamaEndpoint.description", "The Ollama API base URL.")}
+								{restartHint(t, "ollamaEndpoint")}
+							</>
+						}
 						placeholder="http://127.0.0.1:11434"
 						value={form.ollamaEndpoint}
 						onChange={(event) => onChange("ollamaEndpoint", event.currentTarget.value)}
@@ -302,10 +335,15 @@ export function NodeSettingsFieldsCard({
 					</Text>
 					<Select
 						label={t("pages.nodeSettings.fields.speculativeMode.label", "Speculative decoding")}
-						description={t(
-							"pages.nodeSettings.fields.speculativeMode.description",
-							"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. Applies after the node restarts.",
-						)}
+						description={
+							<>
+								{t(
+									"pages.nodeSettings.fields.speculativeMode.description",
+									"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks.",
+								)}
+								{restartHint(t, "speculativeMode")}
+							</>
+						}
 						data={speculativeModeOptions}
 						value={form.speculativeMode}
 						onChange={(value) => onChange("speculativeMode", value ?? SPECULATIVE_DISABLED_MODE)}
@@ -316,10 +354,15 @@ export function NodeSettingsFieldsCard({
 					{needsDraftModel ? (
 						<Select
 							label={t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model")}
-							description={t(
-								"pages.nodeSettings.fields.speculativeDraftModel.description",
-								"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
-							)}
+							description={
+								<>
+									{t(
+										"pages.nodeSettings.fields.speculativeDraftModel.description",
+										"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+									)}
+									{restartHint(t, "speculativeDraftModelName")}
+								</>
+							}
 							placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
 							data={[...draftModelOptions]}
 							value={form.speculativeDraftModelName === "" ? null : form.speculativeDraftModelName}
@@ -333,7 +376,12 @@ export function NodeSettingsFieldsCard({
 					{showsDraftTokensPerStep ? (
 						<NumberInput
 							label={t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}. ${t("pages.nodeSettings.fields.speculativeDraftMaxTokens.description", "Applies after the node restarts.")}`}
+							description={
+								<>
+									{`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}.`}
+									{restartHint(t, "speculativeDraftMaxTokens")}
+								</>
+							}
 							min={bounds.speculativeDraftMaxTokens.min}
 							max={bounds.speculativeDraftMaxTokens.max}
 							allowDecimal={false}
@@ -345,10 +393,15 @@ export function NodeSettingsFieldsCard({
 					) : null}
 					<NumberInput
 						label={t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse")}
-						description={t(
-							"pages.nodeSettings.fields.chatCacheReuse.description",
-							"Reuse an unchanged prompt prefix across turns (tokens). 0 disables. Applies after the node restarts.",
-						)}
+						description={
+							<>
+								{t(
+									"pages.nodeSettings.fields.chatCacheReuse.description",
+									"Reuse an unchanged prompt prefix across turns (tokens). 0 disables.",
+								)}
+								{restartHint(t, "chatCacheReuse")}
+							</>
+						}
 						min={bounds.chatCacheReuse.min}
 						max={bounds.chatCacheReuse.max}
 						allowDecimal={false}
@@ -378,10 +431,15 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<Select
 						label={t("pages.nodeSettings.fields.rerankerModel.label", "Reranker model")}
-						description={t(
-							"pages.nodeSettings.fields.rerankerModel.description",
-							"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Applies after the node restarts. Uses additional VRAM not counted by capacity checks.",
-						)}
+						description={
+							<>
+								{t(
+									"pages.nodeSettings.fields.rerankerModel.description",
+									"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Uses additional VRAM not counted by capacity checks.",
+								)}
+								{restartHint(t, "rerankerModelName")}
+							</>
+						}
 						data={rerankerOptions}
 						value={form.rerankerModelName}
 						onChange={(value) => onChange("rerankerModelName", value ?? "")}
@@ -421,10 +479,15 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<TextInput
 						label={t("pages.nodeSettings.fields.huggingFaceDefaultQuant.label", "Default quantization")}
-						description={t(
-							"pages.nodeSettings.fields.huggingFaceDefaultQuant.description",
-							"Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M). Applies after the node restarts.",
-						)}
+						description={
+							<>
+								{t(
+									"pages.nodeSettings.fields.huggingFaceDefaultQuant.description",
+									"Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M).",
+								)}
+								{restartHint(t, "huggingFaceDefaultQuant")}
+							</>
+						}
 						value={form.huggingFaceDefaultQuant}
 						onChange={(event) => onChange("huggingFaceDefaultQuant", event.currentTarget.value)}
 						data-testid="node-settings-hf-default-quant"
@@ -440,7 +503,12 @@ export function NodeSettingsFieldsCard({
 					</Group>
 					<NumberInput
 						label={t("pages.nodeSettings.fields.maxResponseSizeMb.label", "Max response size")}
-						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxResponseSizeMb.min}–${bounds.maxResponseSizeMb.max} MB. ${t("pages.nodeSettings.fields.maxResponseSizeMb.description", "Applies after the node restarts.")}`}
+						description={
+							<>
+								{`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxResponseSizeMb.min}–${bounds.maxResponseSizeMb.max} MB.`}
+								{restartHint(t, "maxResponseSizeMb")}
+							</>
+						}
 						suffix=" MB"
 						min={bounds.maxResponseSizeMb.min}
 						max={bounds.maxResponseSizeMb.max}
@@ -553,14 +621,16 @@ export function NodeSettingsFieldsCard({
 							<IconTool size={20} />
 						</Group>
 						<Text c="dimmed" size="sm">
-							{t(
-								"pages.nodeSettings.fields.advanced.description",
-								"Low-level orchestration and AgentHome limits. The orchestration idle timeout and pending tool-call age apply after a restart; the AgentHome limits apply immediately.",
-							)}
+							{t("pages.nodeSettings.fields.advanced.description", "Low-level orchestration and AgentHome limits.")}
 						</Text>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.orchestrationIdleTimeoutSeconds.label", "Orchestration idle timeout")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.orchestrationIdleTimeoutSeconds.min}–${bounds.orchestrationIdleTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}. ${t("pages.nodeSettings.fields.orchestrationIdleTimeoutSeconds.description", "Applies after the node restarts.")}`}
+							description={
+								<>
+									{`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.orchestrationIdleTimeoutSeconds.min}–${bounds.orchestrationIdleTimeoutSeconds.max} ${t("pages.nodeSettings.fields.seconds", "seconds")}.`}
+									{restartHint(t, "orchestrationIdleTimeoutSeconds")}
+								</>
+							}
 							suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 							min={bounds.orchestrationIdleTimeoutSeconds.min}
 							max={bounds.orchestrationIdleTimeoutSeconds.max}
@@ -624,7 +694,12 @@ export function NodeSettingsFieldsCard({
 						/>
 						<NumberInput
 							label={t("pages.nodeSettings.fields.maxPendingToolCallAgeMinutes.label", "Max pending tool-call age")}
-							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxPendingToolCallAgeMinutes.min}–${bounds.maxPendingToolCallAgeMinutes.max} ${t("pages.nodeSettings.fields.minutes", "minutes")}. ${t("pages.nodeSettings.fields.maxPendingToolCallAgeMinutes.description", "Applies after the node restarts.")}`}
+							description={
+								<>
+									{`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.maxPendingToolCallAgeMinutes.min}–${bounds.maxPendingToolCallAgeMinutes.max} ${t("pages.nodeSettings.fields.minutes", "minutes")}.`}
+									{restartHint(t, "maxPendingToolCallAgeMinutes")}
+								</>
+							}
 							suffix={` ${t("pages.nodeSettings.fields.minutes", "minutes")}`}
 							min={bounds.maxPendingToolCallAgeMinutes.min}
 							max={bounds.maxPendingToolCallAgeMinutes.max}

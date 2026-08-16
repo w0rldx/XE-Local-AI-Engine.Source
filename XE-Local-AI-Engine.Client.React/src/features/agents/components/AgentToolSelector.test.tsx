@@ -39,6 +39,7 @@ const catalog: ToolCatalogEntry[] = [
 		source: { kind: "builtin", serverSlug: null },
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
+		sessionScopeEligible: false,
 	},
 	{
 		name: "mcp__filesystem-tools__read",
@@ -47,6 +48,7 @@ const catalog: ToolCatalogEntry[] = [
 		source: { kind: "mcp", serverSlug: "filesystem-tools" },
 		category: "Network",
 		effectiveRequiresApproval: true,
+		sessionScopeEligible: false,
 	},
 ];
 

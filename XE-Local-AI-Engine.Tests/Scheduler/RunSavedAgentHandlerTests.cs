@@ -46,7 +46,10 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.True(harness.Handler.Descriptor.AllowAgentCreation, "OPP-02 lets the AI agent schedule saved-agent runs.");
         AssertEx.True(harness.Handler.Descriptor.AllowManualTrigger, "operators may run a scheduled agent on demand.");
         AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, harness.Handler.Descriptor.DefaultMisfirePolicy);
-        AssertEx.Equal(expected: 600, harness.Handler.Descriptor.DefaultMaxRuntimeSeconds ?? 0);
+        // No template default on purpose: the descriptor value pre-fills the per-schedule ceiling, and a fixed 600 s
+        // capped every unattended run below a raised node "Maximum message request timeout". With none, the management
+        // service derives the ceiling from that setting (ScheduledJobManagementServiceTests covers the derivation).
+        AssertEx.Null(harness.Handler.Descriptor.DefaultMaxRuntimeSeconds);
         AssertEx.Equal(HistoryDetailLevel.Detailed, harness.Handler.Descriptor.HistoryDetailLevel);
         AssertEx.NotNull(harness.Handler.Descriptor.ParameterSchema);
     }
@@ -222,6 +225,27 @@ public sealed class RunSavedAgentHandlerTests
         await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
 
         AssertEx.True(harness.CapturedPackage!.IsUnattended, "a scheduled run must be distinguishable from an interactive turn");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
+    {
+        // Send/regenerate parity (G1): the operator's node-level "Maximum message request timeout" (900s here) must
+        // bound a scheduled run too. Before the fix the package carried no timeout block and the builder's own 600s
+        // default cut long unattended runs off. 900 is deliberately NOT the default, so this still fails if the wiring
+        // is dropped. Tool-call/stream-idle are not operator-controlled and keep their defaults.
+        using var harness = new Harness();
+        harness.NodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 900
+        });
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.NotNull(harness.CapturedPackage);
+        AssertEx.Equal(expected: 900, harness.CapturedPackage!.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, harness.CapturedPackage.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, harness.CapturedPackage.Timeouts.StreamIdleTimeoutSeconds);
     }
 
     [Test]

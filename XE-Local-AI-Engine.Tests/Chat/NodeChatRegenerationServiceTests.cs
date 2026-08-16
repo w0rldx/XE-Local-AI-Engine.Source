@@ -905,17 +905,24 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
-        var drained = 0;
-        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        var streamed = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
         {
-            drained++;
+            streamed.Add(streamEvent);
         }
 
-        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.True(streamed.Count > 0, "Expected the regenerate to stream events.");
         AssertEx.NotNull(capturingRunner.LastTimeouts);
         AssertEx.Equal(expected: 900, capturingRunner.LastTimeouts!.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, capturingRunner.LastTimeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, capturingRunner.LastTimeouts.StreamIdleTimeoutSeconds);
+
+        // Send-path parity for the browser's stream watchdog: the queued + streaming events carry the same ceiling the
+        // package runs under, so a regenerated turn's client-side deadline is derived, not a fixed constant.
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued && streamEvent.InvocationTimeoutSeconds == 900);
+        AssertEx.ContainsSingle(streamed,
+            streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming && streamEvent.InvocationTimeoutSeconds == 900);
     }
 
     [Test]
@@ -1114,6 +1121,222 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal(userMessageId, contextForVariant[0].Id);
     }
 
+    [Test]
+    public async Task RegenerateAsync_ThreadsSamplingOptionsIntoRuntimePackage()
+    {
+        // Parity with the send path: the developer-gated per-turn sampling overrides were dropped on the floor by the
+        // regenerate hub path, so a rerun silently ignored the temperature/seed the original send used.
+        await using var provider = await BuildProviderAsync("regeneration-sampling.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var sampling = new SamplingOptions
+        {
+            Temperature = 0.25f,
+            Seed = "1234"
+        };
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversationId, originalId, samplingOptions: sampling).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        var carried = AssertEx.NotNull(capturingRunner.LastSamplingOptions);
+        AssertEx.Equal(expected: 0.25f, carried.Temperature);
+        AssertEx.Equal("1234", carried.Seed);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenNoSamplingOptionsSupplied_LeavesRuntimePackageSamplingNull()
+    {
+        // The no-override path must stay byte-identical to before the threading landed (the package's config hash
+        // feeds runtime reuse).
+        await using var provider = await BuildProviderAsync("regeneration-sampling-default.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.True(capturingRunner.LastSamplingOptions is null, "A regenerate with no overrides must carry no sampling block.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheConversationIsCompacted_SendsTheSynopsisInPlaceOfTheCoveredHistory()
+    {
+        // The regenerate path ignored the conversation's compaction synopsis entirely and re-sent every covered
+        // message verbatim — the exact context the synopsis exists to replace, and a context-window blow-up on a
+        // conversation that was compacted precisely because it no longer fit.
+        await using var provider = await BuildProviderAsync("regeneration-compaction.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var oldUserId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, oldUserId, "ancient question", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var oldAssistantId = Guid.NewGuid();
+        var oldCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, oldAssistantId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var recentUserId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, recentUserId, "what is 2+2?", CreatedAtUtc: 14)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 15,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 16, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        // Compact everything up to (and including) the older assistant answer — the sequence the persistence layer
+        // actually assigned it, so the test does not hard-code the numbering.
+        var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var coveredSequence = seeded.Messages.Single(message => message.MessageId == oldAssistantId).Sequence;
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "ancient synopsis", coveredSequence, UpdatedAtUtc: 17))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+
+        // ONE synthetic synopsis message stands in for the covered turns, followed only by the uncovered user turn
+        // the rerun is answering.
+        var context = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.Equal(expected: 2, context.Count);
+        AssertEx.Equal(MessageRole.User, context[0].Role);
+        AssertEx.True(context[0].Content.Contains("ancient synopsis", StringComparison.Ordinal), "The synopsis must be sent in place of the covered history.");
+        AssertEx.Equal(expected: 0, context[0].SortOrder);
+        AssertEx.Equal(recentUserId, context[1].Id);
+        AssertEx.True(context.All(message => message.Id != oldUserId && message.Id != oldAssistantId), "Covered messages must not be re-sent verbatim.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WithASelectedPathSwitch_DoesNotSendTheSynopsisTheSwitchCleared()
+    {
+        // Persisting a request-supplied selection CLEARS the conversation's compaction synopsis (the synopsis was built
+        // on the previously-selected path). The conversation DTO used to be read BEFORE that write, so the rerun still
+        // spliced the now-deleted synopsis in and dropped the very messages it claimed to cover — the branch switch
+        // silently rewrote the model's view of the conversation.
+        await using var provider = await BuildProviderAsync("regeneration-compaction-path-switch.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var oldUserId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, oldUserId, "ancient question", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var oldAssistantId = Guid.NewGuid();
+        var oldCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, oldAssistantId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var recentUserId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, recentUserId, "what is 2+2?", CreatedAtUtc: 14)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 15,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 16, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var coveredSequence = seeded.Messages.Single(message => message.MessageId == oldAssistantId).Sequence;
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "ancient synopsis", coveredSequence, UpdatedAtUtc: 17))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var drained = 0;
+        // Any request-supplied selection map takes the persist-then-clear branch; this map selects no variant itself.
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, selectedPath: new Dictionary<Guid, Guid>()).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+
+        var context = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.False(context.Any(message => message.Content.Contains("ancient synopsis", StringComparison.Ordinal)),
+            "The path switch cleared the synopsis, so the rerun must not send it.");
+        AssertEx.True(context.Any(message => message.Id == oldUserId), "The history the cleared synopsis covered must be sent verbatim again.");
+        AssertEx.True(context.Any(message => message.Id == recentUserId), "The answered user turn must still be sent.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheSynopsisCoversTheAnsweredUserTurn_KeepsTheVerbatimHistory()
+    {
+        // Guard on the splice: a synopsis that reaches the very user turn the rerun is answering would leave the model
+        // with a summary and no question, so that case keeps the pre-cutoff history verbatim and sends no synopsis.
+        await using var provider = await BuildProviderAsync("regeneration-compaction-covers-cutoff.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var userMessageId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var userSequence = seeded.Messages.Single(message => message.MessageId == userMessageId).Sequence;
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "covers everything", userSequence, UpdatedAtUtc: 14))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        var context = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.Equal(expected: 1, context.Count);
+        AssertEx.Equal(userMessageId, context[0].Id);
+        AssertEx.False(context.Any(message => message.Content.Contains("covers everything", StringComparison.Ordinal)),
+            "A synopsis reaching the answered user turn must not replace it.");
+    }
     [Test]
     public async Task RegenerateAsync_ThreadsReasoningEffortIntoRuntimePackage()
     {
@@ -1871,6 +2094,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The timeout block carried on the runtime package; the node-settings test asserts the operator's
         // "Maximum message request timeout" reaches a regenerated turn too, not just the send path.
         public TimeoutSettings? LastTimeouts { get; private set; }
+
+        // The per-turn sampling overrides carried on the runtime package; the sampling tests assert the developer-mode
+        // knobs reach a regenerated turn too, and that an override-free rerun still carries none.
+        public SamplingOptions? LastSamplingOptions { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
@@ -1883,6 +2110,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             LastModelProfile = context.Package.ModelProfile;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             LastTimeouts = context.Package.Timeouts;
+            LastSamplingOptions = context.Package.SamplingOptions;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0).ConfigureAwait(false);
         }

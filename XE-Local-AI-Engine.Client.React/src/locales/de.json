@@ -929,7 +929,9 @@
 			"error": {
 				"title": "Antwort fehlgeschlagen",
 				"modelNotInstalled": "Kein Chat-Modell installiert. Lade ein GGUF-Modell herunter, um zu chatten.",
-				"goToModels": "Zu Modelle"
+				"goToModels": "Zu Modelle",
+				"clientWatchdogNoFirstChunk": "Verbindungsüberwachung: In diesem Browser ist nie eine Antwort eingetroffen.",
+				"clientWatchdogStall": "Verbindungsüberwachung: In diesem Browser treffen keine Antwortdaten mehr ein."
 			},
 			"reasoning": {
 				"label": "Denken: {{effort}}",
@@ -974,10 +976,11 @@
 				"seed": "Seed",
 				"seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
 				"numCtx": "Kontextlänge (num_ctx)",
-				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens.",
+				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens. Bei der lokalen llama.cpp-Laufzeit ist das Serverfenster beim Laden des Modells festgelegt, daher begrenzt dies nur, wie viel Gesprächsverlauf gesendet wird.",
 				"stop": "Stop-Sequenzen",
 				"stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
 				"modelDefault": "Modellstandard",
+				"cloudUnsupported": "Von Cloud-Anbietern nicht unterstützt",
 				"reset": "Auf Standard zurücksetzen",
 				"close": "Schließen",
 				"resetField": "{{field}} zurücksetzen"
@@ -1678,10 +1681,12 @@
 				"clearError": "Das Token konnte nicht gelöscht werden."
 			},
 			"saved": "Knoteneinstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
+			"savedRestartRequired": "Knoteneinstellungen gespeichert. Einige der geänderten Einstellungen werden erst nach einem Neustart des Knotens wirksam.",
 			"fields": {
 				"save": "Knoteneinstellungen speichern",
 				"validationError": "Einige Einstellungen sind ungültig. Bitte die markierten Felder korrigieren.",
 				"allowedRange": "Zulässiger Bereich",
+				"restartRequired": "Wird erst nach einem Neustart des Knotens wirksam.",
 				"seconds": "Sekunden",
 				"minutes": "Minuten",
 				"bytesPositive": "Eine positive Anzahl an Bytes. Änderungen werden ohne Neustart des Knotens wirksam.",
@@ -1704,7 +1709,7 @@
 				},
 				"defaultModelName": {
 					"label": "Standardmodell",
-					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden. Wird nach einem Neustart des Knotens wirksam."
+					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden."
 				},
 				"enableTools": {
 					"label": "Tools aktivieren",
@@ -1723,12 +1728,10 @@
 					"tagHint": "Die empfohlene llama.cpp-Version wird in der Karte für llama.cpp-Laufzeit-Updates oben verwaltet."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max. geladene llama-server-Prozesse",
-					"description": "Wird nach einem Neustart des Knotens wirksam."
+					"label": "Max. geladene llama-server-Prozesse"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Leerlauf-Prozess-Lebensdauer",
-					"description": "Wird nach einem Neustart des Knotens wirksam."
+					"label": "Leerlauf-Prozess-Lebensdauer"
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Modell warmhalten",
@@ -1743,30 +1746,28 @@
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama-Endpunkt",
-					"description": "Die Basis-URL der Ollama-API. Gilt nach einem Neustart."
+					"description": "Die Basis-URL der Ollama-API."
 				},
 				"huggingFace": {
 					"title": "Hugging Face"
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Standard-Quantisierung",
-					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M). Wird nach einem Neustart des Knotens wirksam."
+					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M)."
 				},
 				"worker": {
 					"title": "Worker-Limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Maximale Antwortgröße",
-					"description": "Wird nach einem Neustart des Knotens wirksam."
+					"label": "Maximale Antwortgröße"
 				},
 				"advanced": {
 					"title": "Erweitert (Entwickler)",
-					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Der Orchestrierungs-Leerlauf-Timeout und die ausstehende Tool-Aufruf-Dauer werden nach einem Neustart wirksam; die AgentHome-Limits gelten sofort.",
+					"description": "Low-Level-Orchestrierung und AgentHome-Limits.",
 					"samplingNote": "Sampling-Standardwerte werden pro Nachricht im Chat konfiguriert."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestrierungs-Leerlauf-Timeout",
-					"description": "Wird nach einem Neustart des Knotens wirksam."
+					"label": "Orchestrierungs-Leerlauf-Timeout"
 				},
 				"agentHomePrepareTimeoutSeconds": {
 					"label": "AgentHome-Vorbereitungs-Timeout",
@@ -1783,12 +1784,11 @@
 					"label": "AgentHome max. Patch-Größe"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max. ausstehende Tool-Aufruf-Dauer",
-					"description": "Wird nach einem Neustart des Knotens wirksam."
+					"label": "Max. ausstehende Tool-Aufruf-Dauer"
 				},
 				"speculativeMode": {
 					"label": "Spekulatives Decoding",
-					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird. Wird nach einem Neustart des Knotens wirksam.",
+					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird.",
 					"options": {
 						"off": "Aus",
 						"ngram-mod": "n-Gramm (kein Entwurfsmodell)",
@@ -1800,21 +1800,20 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Entwurfsmodell",
-					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen. Wird nach einem Neustart des Knotens wirksam.",
+					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen.",
 					"placeholder": "Entwurfsmodell auswählen",
 					"empty": "Keine installierten Chat-Modelle"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Entwurfstoken pro Schritt",
-					"description": "Wird nach einem Neustart des Knotens wirksam."
+					"label": "Entwurfstoken pro Schritt"
 				},
 				"chatCacheReuse": {
 					"label": "Prompt-Cache-Wiederverwendung",
-					"description": "Unveränderten Prompt-Präfix über Turns hinweg wiederverwenden (Token). 0 deaktiviert. Wird nach einem Neustart des Knotens wirksam."
+					"description": "Unveränderten Prompt-Präfix über Turns hinweg wiederverwenden (Token). 0 deaktiviert."
 				},
 				"rerankerModel": {
 					"label": "Reranker-Modell",
-					"description": "Cross-Encoder-Reranker, der die Suchergebnisse der Wissensdatenbank nach Relevanz neu ordnet. Deaktiviert lassen, wenn kein Reranker-Modell installiert ist. Wird nach einem Neustart des Knotens wirksam. Verbraucht zusätzlichen VRAM, der von Kapazitätsprüfungen nicht berücksichtigt wird.",
+					"description": "Cross-Encoder-Reranker, der die Suchergebnisse der Wissensdatenbank nach Relevanz neu ordnet. Deaktiviert lassen, wenn kein Reranker-Modell installiert ist. Verbraucht zusätzlichen VRAM, der von Kapazitätsprüfungen nicht berücksichtigt wird.",
 					"off": "Aus",
 					"empty": "Keine installierten Modelle",
 					"downloadRecommended": "Empfohlenen Reranker herunterladen",
@@ -3919,7 +3918,18 @@
 		},
 		"tools": {
 			"title": "Lokale Werkzeuge",
-			"subtitle": "Werkzeuge, die dem lokalen Node-Agenten zur Verfügung stehen: integrierte In-Process-Werkzeuge sowie Werkzeuge aus aktivierten MCP-Servern."
+			"subtitle": "Auf diesem Knoten installierte Tools: integrierte In-Process-Tools sowie Tools aus aktivierten MCP-Servern. Einem Chat-Turn wird nur eine Teilmenge davon angeboten.",
+			"overview": {
+				"title": "Auf diesem Knoten installierte Tools",
+				"installedCount": "{{total}} installiert",
+				"scopeNotice": "Der vollständige Knoten-Katalog. Was ein Chat-Turn davon tatsächlich nutzen kann, ist enger: Es hängt von der Tool-Unterstützung des gewählten Modells, der Liste tool-fähiger Modelle des Knotens und den erlaubten Tools des Agenten ab, der den Turn bearbeitet.",
+				"loading": "Tools werden geladen …",
+				"error": "Der Tool-Katalog konnte nicht geladen werden.",
+				"empty": "Keine Tools installiert.",
+				"footer": "Integrierte Tools laufen in-process auf diesem Knoten. MCP-Tools laufen auf ihren registrierten Servern.",
+				"requiresApproval": "Genehmigung erforderlich",
+				"autoExecute": "automatisch"
+			}
 		},
 		"benchmarks": {
 			"title": "Lokale Modell-Benchmarks",

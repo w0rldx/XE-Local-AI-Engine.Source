@@ -167,4 +167,14 @@ public sealed class ToolCatalogEntryResponse
     ///     bound agent may tighten further via its own per-tool overrides). It is the floor an operator sees for the tool.
     /// </summary>
     public required bool EffectiveRequiresApproval { get; init; }
+
+    /// <summary>
+    ///     Whether an "approve for this session" decision on this tool can actually be REMEMBERED by the node, computed
+    ///     through the same <c>SessionApprovalEligibility</c> predicate the invocation runner's memo uses. The chat
+    ///     approval card hides the session button when this is <see langword="false" />, so it never promises a durable
+    ///     decision the node will quietly downgrade to a one-shot approval. It is an upper bound, not a guarantee: the
+    ///     runner applies further per-CALL narrowings the catalog cannot see (an imported skill, a skill the package does
+    ///     not carry, a resource-read that names no resource) which only ever remove eligibility.
+    /// </summary>
+    public required bool SessionScopeEligible { get; init; }
 }

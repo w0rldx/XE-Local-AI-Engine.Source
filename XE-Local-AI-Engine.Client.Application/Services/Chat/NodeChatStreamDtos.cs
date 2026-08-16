@@ -164,4 +164,15 @@ public sealed record ChatStreamEvent(
     //
     // Trailing optional so every existing event type's wire shape is unchanged.
     long? ContentOffset = null,
-    long? ReasoningOffset = null);
+    long? ReasoningOffset = null,
+    // The effective whole-turn ceiling for THIS turn in seconds — the operator's node "Maximum message request
+    // timeout" as it was resolved into the runtime package's TimeoutSettings.InvocationTimeoutSeconds. Stamped on
+    // AssistantQueued and AssistantStreaming only (null everywhere else) so the browser's own stream watchdog can
+    // derive its deadline from the node's ceiling instead of a fixed constant that pre-empts it. Trailing optional so
+    // every existing event type's wire shape is unchanged.
+    int? InvocationTimeoutSeconds = null,
+    // Whether the node can REMEMBER an "approve for this session" decision for this exact request (ApprovalRequested
+    // events only; null everywhere else, and null on a reconnect replay that cannot resolve it). The browser prefers
+    // this per-request answer over the tool catalog's tool-identity flag when deciding whether to offer the session
+    // button. Trailing optional so every existing event type's wire shape is unchanged.
+    bool? SessionScopeEligible = null);

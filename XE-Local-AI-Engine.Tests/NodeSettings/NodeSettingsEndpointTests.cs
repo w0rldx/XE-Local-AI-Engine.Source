@@ -196,55 +196,6 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
-    public async Task SaveNodeSettings_WhenSamplingSeedNotAnInteger_ReturnsValidationProblem()
-    {
-        // Blocker 3: the default-sampling seed rides the wire as a string; a non-integer value is rejected at the boundary.
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        await using var factory = CreateFactory(nodeSettingsStore);
-        using var client = factory.CreateClient();
-
-        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
-        {
-            SamplingDefaults = new SamplingOptions
-            {
-                Seed = "not-a-number"
-            }
-        });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task SaveNodeSettings_WhenSamplingSeedIsLargeInteger_SavesExactString()
-    {
-        // A 64-bit seed above 2^53 is accepted and persisted verbatim — the string wire form loses no precision.
-        const string largeSeed = "9007199254740993";
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(nodeSettingsStore, capabilityReporter);
-        using var client = factory.CreateClient();
-
-        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
-        {
-            MaxMessageRequestTimeoutSeconds = 600,
-            SamplingDefaults = new SamplingOptions
-            {
-                Seed = largeSeed
-            }
-        });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.SamplingDefaults != null && stored.SamplingDefaults.Seed == largeSeed),
-            Arg.Any<CancellationToken>());
-    }
-
-    [Test]
     public async Task SaveNodeSettings_WhenOllamaEndpointNotAUrl_ReturnsValidationProblem()
     {
         var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
@@ -531,34 +482,28 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
-    public void NodeSettings_LegacyVoiceFields_RoundTripWithoutActivatingNeuralVoiceBehavior()
+    public void NodeSettings_VoiceFields_RoundTripWithoutActivatingNeuralVoiceBehavior()
     {
         var request = new SaveNodeSettingsRequest
         {
             VoiceFeatureEnabled = true,
-            AllowedVoiceModels = ["legacy-neural-model"],
             DefaultVoiceProfile = "  af_heart  "
         };
 
         var stored = request.ToStoredSettings(new StoredNodeSettings());
 
         AssertEx.Equal(expected: true, stored.VoiceFeatureEnabled);
-        AssertEx.NotNull(stored.AllowedVoiceModels);
-        AssertEx.Contains(stored.AllowedVoiceModels!, "legacy-neural-model");
         AssertEx.Equal("af_heart", stored.DefaultVoiceProfile);
 
         var response = stored.ToResponse();
 
         AssertEx.Equal(expected: true, response.VoiceFeatureEnabled);
-        AssertEx.NotNull(response.AllowedVoiceModels);
-        AssertEx.Contains(response.AllowedVoiceModels!, "legacy-neural-model");
         AssertEx.Equal("af_heart", response.DefaultVoiceProfile);
 
         // Omitting the voice fields on a later save keeps the current stored values (additive merge).
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal(expected: true, merged.VoiceFeatureEnabled);
         AssertEx.Equal("af_heart", merged.DefaultVoiceProfile);
-        AssertEx.NotNull(merged.AllowedVoiceModels);
     }
 
     [Test]

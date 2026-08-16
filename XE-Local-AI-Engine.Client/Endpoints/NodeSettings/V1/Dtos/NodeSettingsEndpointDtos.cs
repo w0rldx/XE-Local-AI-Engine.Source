@@ -130,15 +130,10 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedDetachedGraceSeconds { get; init; }
 
-    public SamplingOptions? SamplingDefaults { get; init; }
-
     // ── Client voice (TTS) feature ──
 
     /// <summary>Node-level master flag for the client voice feature. <see langword="null" /> reads as off.</summary>
     public bool? VoiceFeatureEnabled { get; init; }
-
-    /// <summary>Legacy neural-voice model allow-list, retained for settings compatibility but unused by Web Speech.</summary>
-    public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
 
     /// <summary>Preferred browser voice identifier; unmatched legacy values safely fall back to a browser voice.</summary>
     public string? DefaultVoiceProfile { get; init; }
@@ -228,12 +223,8 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels.</summary>
     public int? DetachedGraceSeconds { get; init; }
 
-    public SamplingOptions? SamplingDefaults { get; init; }
-
     // ── Client voice (TTS) feature ──
     public bool? VoiceFeatureEnabled { get; init; }
-
-    public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
 
     public string? DefaultVoiceProfile { get; init; }
 

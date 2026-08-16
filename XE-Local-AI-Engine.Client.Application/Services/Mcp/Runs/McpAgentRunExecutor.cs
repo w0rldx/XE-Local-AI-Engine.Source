@@ -4,7 +4,12 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 
-/// <summary>Seeds the root spawn budget missing from a detached worker before invoking the G001 execution boundary.</summary>
+/// <summary>
+///     Seeds the root spawn budget missing from a detached worker before invoking the G001 execution boundary. The
+///     whole-turn deadline is NOT applied here: it lives inside <c>SpawnForMcpAsync</c> so the synchronous
+///     <c>run_agent</c> tool and this detached path are bounded by the node "Maximum message request timeout" exactly
+///     once, on the same terms.
+/// </summary>
 internal sealed class McpAgentRunExecutor(
     IMcpAgentExecutionService executionService,
     IOptions<SpawnOptions> spawnOptions) : IMcpAgentRunExecutor

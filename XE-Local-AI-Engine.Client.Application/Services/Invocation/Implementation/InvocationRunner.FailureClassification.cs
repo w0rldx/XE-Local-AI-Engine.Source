@@ -63,6 +63,11 @@ public sealed partial class InvocationRunner
             // bare TimeoutException) carries a framework message that can name hosts/paths/internals and is unbounded, so
             // it is collapsed to a fixed, path-free constant rather than forwarded.
             TimeoutException => (FailureCategory.Timeout, TimedOutMessage),
+            // A tool call the runner itself timed out (ToolResultTimeout / the pending-tool-call cleanup) wraps the
+            // timeout as its inner exception. Matched BEFORE the generic tool-call arm so a tool-side timeout is
+            // attributable instead of collapsing into the same "Worker tool execution failed." every tool error uses.
+            WorkerToolCallException { InnerException: TimeoutException or OperationCanceledException } =>
+                (FailureCategory.AgentToolCall, ToolCallTimedOutMessage),
             WorkerToolCallException => (FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
             NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
             InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>

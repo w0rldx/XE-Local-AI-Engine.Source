@@ -583,6 +583,27 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(payload);
 
+        // Fold the runner's session-scope answer onto the pending-approval slot the preceding
+        // ReportApprovalRequestedAsync recorded. It cannot ride that call: ApprovalRequestPayload is the platform-hub
+        // contract and carries no such field. Without this the reconnect replay had nothing to send and the browser
+        // fell back to the tool catalog — the exact fallback that offered a session scope for the skill tools.
+        if (payload.SessionScopeEligible is { } sessionScopeEligible)
+        {
+            UpdateInvocation(payload.InvocationId,
+                state =>
+                {
+                    if (state.PendingApproval is { } approval && string.Equals(approval.RequestId, payload.RequestId, StringComparison.Ordinal))
+                    {
+                        state.PendingApproval = approval with
+                        {
+                            SessionScopeEligible = sessionScopeEligible
+                        };
+                    }
+
+                    return state;
+                });
+        }
+
         ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
 
         return Task.CompletedTask;

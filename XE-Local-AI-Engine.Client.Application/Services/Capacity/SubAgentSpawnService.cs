@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -78,6 +79,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
     private readonly IMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly SpawnOptions _options;
     private readonly ISpawnSerializer _spawnSerializer;
     private readonly IAgentToolRegistry _toolRegistry;
@@ -95,6 +97,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         IModelCapabilityResolver modelCapabilityResolver,
         IMcpExecutionBindingResolver mcpExecutionBindingResolver,
         IMcpWorkspaceExecutionSessionFactory mcpWorkspaceSessionFactory,
+        INodeSettingsStore nodeSettingsStore,
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
@@ -112,6 +115,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _mcpExecutionBindingResolver = mcpExecutionBindingResolver ?? throw new ArgumentNullException(nameof(mcpExecutionBindingResolver));
         _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
+        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -163,6 +167,13 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     The whole-turn deadline lives HERE, at the one boundary both inbound MCP front doors cross — the synchronous
+    ///     <c>run_agent</c> tool and the detached <c>start_agent_run</c> executor — so an inbound run is bounded exactly
+    ///     once, by the SAME operator knob that bounds a local chat send/regenerate and a scheduled run. Wrapping only
+    ///     one caller left the other with no whole-turn bound at all. The setting is read per execution, so a Save
+    ///     applies to the next run without a node restart.
+    /// </remarks>
     public async Task<SpawnOutcome> SpawnForMcpAsync(McpExecutionBindingRequest request,
         string task,
         string? expectedBindingFingerprint,
@@ -171,6 +182,33 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
+
+        // Linked, not replaced: the caller's token still wins (operator cancel, dispatcher watchdog, host shutdown) and
+        // its durable stop marker still chooses the terminal outcome. This only adds the missing whole-turn deadline.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(TimeSpan.FromSeconds(nodeSettings.MaxMessageRequestTimeoutSeconds));
+
+        try
+        {
+            return await SpawnForMcpCoreAsync(request, task, expectedBindingFingerprint, workspaceId, deadline.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // Only OUR deadline fired (both halves are required: an unrelated inner token must not be reported as this
+            // node's timeout, and the caller's own cancellation must escape). A typed outcome instead of an escaping
+            // cancellation is what lets get_agent_run report a distinguishable failure_code the caller can act on.
+            return SpawnOutcome.Failed(McpExecutionFailureCodes.TimedOut,
+                "The run exceeded the node's maximum message request timeout.");
+        }
+    }
+
+    private async Task<SpawnOutcome> SpawnForMcpCoreAsync(McpExecutionBindingRequest request,
+        string task,
+        string? expectedBindingFingerprint,
+        Guid? workspaceId,
+        CancellationToken ct)
+    {
         if (string.IsNullOrWhiteSpace(task))
         {
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.InvalidRequest, "Cannot run: provide a non-empty task.");

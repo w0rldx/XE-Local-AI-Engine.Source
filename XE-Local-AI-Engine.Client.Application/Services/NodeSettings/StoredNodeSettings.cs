@@ -289,12 +289,6 @@ public sealed partial record StoredNodeSettings
     public string? RerankerModelName { get; init; }
 
     /// <summary>
-    ///     Node-level sampling defaults (developer-only, optional). <see langword="null" /> = no node-level override —
-    ///     today's behavior. Persisting the shape is done; consumption on the loopback send path is a follow-up.
-    /// </summary>
-    public SamplingOptions? SamplingDefaults { get; init; }
-
-    /// <summary>
     ///     Node-level master flag for the client voice (TTS) feature. <see langword="null" /> (absent) reads as
     ///     <see cref="DefaultVoiceFeatureEnabled" /> (off).
     /// </summary>
@@ -306,12 +300,6 @@ public sealed partial record StoredNodeSettings
     ///     passes it through untouched.
     /// </summary>
     public bool? CustomToolsEnabled { get; init; }
-
-    /// <summary>
-    ///     Legacy neural-voice model allow-list. Retained only so settings written by older releases round-trip without
-    ///     data loss; the Web Speech-only client does not read or download these models.
-    /// </summary>
-    public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
 
     /// <summary>
     ///     Preferred browser voice identifier. Older values such as <c>af_heart</c> remain valid persisted data; when
