@@ -53,10 +53,19 @@ export function launchEvidenceEntries(
 	];
 }
 
+const lastSegment = (key: string): string => key.split(".").at(-1) ?? key;
+
 const toMap = (entries: readonly BenchmarkEvidenceEntry[]): Map<string, unknown> =>
 	new Map(entries.map((entry) => [entry.key, entry.value]));
 
-/** Union of both sides' fields, in left-then-right-only order, each row flagged when the two values disagree. */
+// Stamped per capture by construction, so it can never match across two runs: comparing it would report every pair of
+// runs as differing. The row is still rendered with both values — it just does not count as a difference.
+const isInformationalEvidenceKey = (key: string): boolean => lastSegment(key) === "capturedAtUtc";
+
+/**
+ * Union of both sides' fields, in left-then-right-only order, each row flagged when the two values disagree.
+ * Informational fields never flag, so callers deriving a banner from `differs` inherit the exclusion.
+ */
 export function diffLaunchEvidence(
 	left: readonly BenchmarkEvidenceEntry[],
 	right: readonly BenchmarkEvidenceEntry[],
@@ -67,14 +76,14 @@ export function diffLaunchEvidence(
 	return keys.map((key) => {
 		const leftValue = leftValues.get(key) ?? null;
 		const rightValue = rightValues.get(key) ?? null;
-		return { key, left: leftValue, right: rightValue, differs: !Object.is(leftValue, rightValue) };
+		const differs = !isInformationalEvidenceKey(key) && !Object.is(leftValue, rightValue);
+		return { key, left: leftValue, right: rightValue, differs };
 	});
 }
 
 export const differingEvidenceKeys = (rows: readonly BenchmarkEvidenceDiffRow[]): string[] =>
 	rows.filter((row) => row.differs).map((row) => row.key);
 
-const lastSegment = (key: string): string => key.split(".").at(-1) ?? key;
 const hashSegment = /(sha256|hash|identity|fingerprint)$/i;
 
 /** Hash-like fields are truncated for display; the untruncated value stays available to copy. */
