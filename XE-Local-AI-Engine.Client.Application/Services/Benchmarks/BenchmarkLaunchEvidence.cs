@@ -77,7 +77,13 @@ internal static class BenchmarkLaunchEvidence
         }
 
         var environmentJson = BenchmarkCanonicalJson.Serialize(environmentFacts);
-        var environmentHash = BenchmarkCanonicalJson.Hash(environmentJson);
+
+        // Hashed WITHOUT the capture clock: the hash answers "is this the same environment?", and a wall-clock
+        // reading would make every run of an unchanged node look different. The persisted JSON keeps the real time.
+        var environmentHash = BenchmarkCanonicalJson.HashOf(environmentFacts with
+        {
+            CapturedAtUtc = 0
+        });
         if (receipt is null)
         {
             return new BenchmarkLaunchReceiptCommand(ReceiptJson: null,
