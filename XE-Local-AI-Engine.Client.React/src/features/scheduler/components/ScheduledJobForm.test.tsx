@@ -29,6 +29,20 @@ const templates: ScheduledJobTemplate[] = [
 		allowAgentCreation: false,
 		historyDetailLevel: "Summary",
 	},
+	{
+		templateId: "run-agent",
+		displayName: "Run agent",
+		description: "Runs a saved agent",
+		parameterSchema: null,
+		defaultParameters: null,
+		supportedScheduleKinds: ["Cron", "SimpleInterval"],
+		defaultScheduleKind: "Cron",
+		defaultMisfirePolicy: "Smart",
+		defaultMaxRuntimeSeconds: null,
+		allowManualTrigger: true,
+		allowAgentCreation: true,
+		historyDetailLevel: "Summary",
+	},
 ];
 
 function emptyValues(): ScheduledJobFormValues {
@@ -170,6 +184,23 @@ describe("ScheduledJobForm", () => {
 		submitViaHandle(ref);
 
 		expect(onSubmit).toHaveBeenCalledTimes(1);
+	});
+
+	// The max-runtime help copy has to match ScheduledJobManagementService.ResolveMaxRuntimeSecondsAsync: only the
+	// run-agent template derives a ceiling from the node timeout when the field is blank; every other template falls
+	// back to the global node default.
+	it("explains the derived max-runtime ceiling for the run-agent template", () => {
+		renderForm({ initialValues: { ...emptyValues(), templateId: "run-agent", displayName: "Nightly agent" } });
+
+		expect(screen.getByText(/derive the limit from the node's maximum message request timeout/)).toBeTruthy();
+		expect(screen.queryByText("Leave blank to use the node default.")).toBeNull();
+	});
+
+	it("explains the node default max-runtime for other templates", () => {
+		renderForm({ initialValues: { ...emptyValues(), templateId: "cleanup", displayName: "Cleanup" } });
+
+		expect(screen.getByText("Leave blank to use the node default.")).toBeTruthy();
+		expect(screen.queryByText(/derive the limit from the node's maximum message request timeout/)).toBeNull();
 	});
 
 	it("disables the template picker when editing", () => {
