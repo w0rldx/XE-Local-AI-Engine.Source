@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { benchmarkHubEvents, useBenchmarkRunHub } from "@/features/benchmarks/hooks/useBenchmarkRunHub";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 
 const handlers = new Map<string, (payload: unknown) => void>();
 const invoke = vi.fn(() => Promise.resolve());
@@ -68,6 +69,12 @@ function run(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
 		tokensPerSecond: null,
 		userScore: null,
 		lastStreamSequence: 0,
+		primaryLaunch: noBenchmarkLaunchFacts,
+		judgeLaunch: noBenchmarkLaunchFacts,
+		primaryLaunchReceipt: null,
+		judgeLaunchReceipt: null,
+		primaryEnvironmentFacts: null,
+		judgeEnvironmentFacts: null,
 		version: 1,
 		createdAtUtc: 1,
 		updatedAtUtc: 1,

@@ -7,6 +7,7 @@ import {
 	toBenchmarkRunDetail,
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
+import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 
 // Boundary mappers: the generated OpenAPI shapes keep almost every member optional, so these supply the UI defaults.
 // The rule they encode is that a DEFAULT must never erase a lifecycle or provenance distinction — a missing numeric
@@ -182,5 +183,102 @@ describe("toBenchmarkEligibleModel", () => {
 		);
 
 		expect(mapped).toMatchObject({ origin: "imported", supportsTools: true });
+	});
+});
+
+// Launch evidence is optional by contract: a run frozen before the receipt existed carries NULL in every column, and
+// the UI must be able to tell that apart from a recorded value. The columns arrive per side under a primary…/judge…
+// prefix, so the mapper is asserted to keep the two sides separate rather than reading one into both.
+describe("launch evidence mapping", () => {
+	it("maps every launch column of a run that recorded one", () => {
+		const mapped = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				primaryVariant: "cuda",
+				primaryKvCacheType: "q8_0",
+				primaryKvCacheTypeSource: "auto",
+				primaryKvAutoReason: "manifest supports q8_0",
+				primaryFlashAttentionMode: "on",
+				primaryIntendedLaunchIdentity: "identity-1",
+				primaryIntendedExecutableSha256: "sha-intended",
+				primaryEffectiveLaunchIdentity: "identity-1",
+				primaryEffectiveBackend: "cuda",
+				primaryPlacementOffloaded: 32,
+				primaryPlacementTotal: 32,
+				primaryExecutableSha256: "sha-effective",
+				primaryHasAuxAssets: false,
+				primaryReceiptHash: "receipt-1",
+				primaryEnvironmentFactsHash: "env-1",
+				judgeKvCacheType: "f16",
+				judgeKvCacheTypeSource: "auto",
+				judgeReceiptHash: "judge-receipt-1",
+			}),
+		);
+
+		expect(mapped.primaryLaunch).toEqual({
+			variant: "cuda",
+			kvCacheType: "q8_0",
+			kvCacheTypeSource: "auto",
+			kvAutoReason: "manifest supports q8_0",
+			flashAttentionMode: "on",
+			intendedLaunchIdentity: "identity-1",
+			intendedExecutableSha256: "sha-intended",
+			effectiveLaunchIdentity: "identity-1",
+			effectiveBackend: "cuda",
+			placementOffloaded: 32,
+			placementTotal: 32,
+			executableSha256: "sha-effective",
+			hasAuxAssets: false,
+			receiptHash: "receipt-1",
+			environmentFactsHash: "env-1",
+		});
+		expect(mapped.judgeLaunch).toMatchObject({ kvCacheType: "f16", receiptHash: "judge-receipt-1", variant: null });
+	});
+
+	it("keeps a legacy run's launch facts null instead of inventing defaults", () => {
+		const mapped = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));
+
+		expect(mapped.primaryLaunch).toEqual(noBenchmarkLaunchFacts);
+		expect(mapped.judgeLaunch).toEqual(noBenchmarkLaunchFacts);
+	});
+
+	// A placement of zero offloaded layers is a fact (the GPU took nothing), not an absent measurement.
+	it("preserves a zero placement count and rejects an unknown source or flash-attention mode", () => {
+		const mapped = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				primaryPlacementOffloaded: 0,
+				primaryPlacementTotal: 32,
+				primaryKvCacheTypeSource: "guessed",
+				primaryFlashAttentionMode: "off",
+			}),
+		);
+
+		expect(mapped.primaryLaunch.placementOffloaded).toBe(0);
+		expect(mapped.primaryLaunch.placementTotal).toBe(32);
+		expect(mapped.primaryLaunch.kvCacheTypeSource).toBeNull();
+		expect(mapped.primaryLaunch.flashAttentionMode).toBeNull();
+	});
+
+	it("carries the decoded receipt and environment objects through, and nulls a non-object payload", () => {
+		const mapped = toBenchmarkRunDetail(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				primaryLaunchReceipt: { variant: "cuda", placement: { outcome: "Full" } },
+				primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" } },
+				judgeLaunchReceipt: "not-an-object",
+			}),
+		);
+
+		expect(mapped.primaryLaunchReceipt).toEqual({ variant: "cuda", placement: { outcome: "Full" } });
+		expect(mapped.primaryEnvironmentFacts).toEqual({ llamaRuntime: { version: "b10201" } });
+		expect(mapped.judgeLaunchReceipt).toBeNull();
+		expect(mapped.judgeEnvironmentFacts).toBeNull();
 	});
 });
