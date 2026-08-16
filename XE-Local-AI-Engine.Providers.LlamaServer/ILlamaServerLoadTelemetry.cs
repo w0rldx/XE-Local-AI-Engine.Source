@@ -13,10 +13,24 @@ public enum LlamaServerReadinessOutcome
 /// <summary>Measured placement class for one llama-server load attempt.</summary>
 public enum LlamaServerPlacementOutcome
 {
+    /// <summary>A CPU build: there was no placement question to ask.</summary>
     Cpu,
+
+    /// <summary>Every layer landed on the GPU.</summary>
     Full,
+
+    /// <summary>Some layers landed on the GPU and the rest run from system RAM.</summary>
     Partial,
-    Unknown
+
+    /// <summary>No banner was observed, so placement was never measured.</summary>
+    Unknown,
+
+    /// <summary>
+    ///     A GPU build placed NONE of the model's layers on the GPU (<c>0/N</c>) — it is serving entirely from system
+    ///     RAM. Distinguished from <see cref="Partial" /> because the two say different things about a measurement, and
+    ///     appended last so the existing ordinals are unchanged.
+    /// </summary>
+    None
 }
 
 /// <summary>Whether this was the primary launch candidate or the explicit one-shot KV/FA-safe retry.</summary>

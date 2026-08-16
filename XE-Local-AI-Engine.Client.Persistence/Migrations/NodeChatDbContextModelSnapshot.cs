@@ -480,10 +480,90 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("judge_completed_at_utc");
 
+                    b.Property<string>("JudgeEffectiveBackend")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_effective_backend");
+
+                    b.Property<string>("JudgeEffectiveLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_effective_launch_identity");
+
+                    b.Property<string>("JudgeEnvironmentFactsHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_environment_facts_hash");
+
+                    b.Property<byte[]>("JudgeEnvironmentFactsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("judge_environment_facts_json");
+
                     b.Property<string>("JudgeErrorMessage")
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT")
                         .HasColumnName("judge_error_message");
+
+                    b.Property<string>("JudgeFlashAttentionMode")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_flash_attention_mode");
+
+                    b.Property<string>("JudgeIntendedExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_intended_executable_sha256");
+
+                    b.Property<string>("JudgeIntendedLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_intended_launch_identity");
+
+                    b.Property<string>("JudgeKvAutoReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_kv_auto_reason");
+
+                    b.Property<string>("JudgeKvCacheType")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_kv_cache_type");
+
+                    b.Property<string>("JudgeKvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_kv_cache_type_source");
+
+                    b.Property<string>("JudgeLaunchExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_launch_executable_sha256");
+
+                    b.Property<bool?>("JudgeLaunchHasAuxAssets")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_launch_has_aux_assets");
+
+                    b.Property<string>("JudgeLaunchKvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_launch_kv_cache_type_source");
+
+                    b.Property<byte[]>("JudgeLaunchReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("judge_launch_receipt_json");
+
+                    b.Property<int?>("JudgePlacementOffloaded")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_placement_offloaded");
+
+                    b.Property<int?>("JudgePlacementTotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("judge_placement_total");
+
+                    b.Property<string>("JudgeReceiptHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_receipt_hash");
 
                     b.Property<byte[]>("JudgeResultJson")
                         .HasColumnType("BLOB")
@@ -498,6 +578,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasMaxLength(32)
                         .HasColumnType("TEXT")
                         .HasColumnName("judge_status");
+
+                    b.Property<string>("JudgeVariant")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_variant");
 
                     b.Property<long>("LastStreamSequence")
                         .HasColumnType("INTEGER")
@@ -517,10 +602,77 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("primary_completed_at_utc");
 
+                    b.Property<string>("PrimaryEffectiveBackend")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_effective_backend");
+
+                    b.Property<string>("PrimaryEffectiveLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_effective_launch_identity");
+
+                    b.Property<string>("PrimaryEnvironmentFactsHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_environment_facts_hash");
+
+                    b.Property<byte[]>("PrimaryEnvironmentFactsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("primary_environment_facts_json");
+
                     b.Property<string>("PrimaryErrorMessage")
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT")
                         .HasColumnName("primary_error_message");
+
+                    b.Property<string>("PrimaryFlashAttentionMode")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_flash_attention_mode");
+
+                    b.Property<string>("PrimaryIntendedExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_intended_executable_sha256");
+
+                    b.Property<string>("PrimaryIntendedLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_intended_launch_identity");
+
+                    b.Property<string>("PrimaryKvAutoReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_kv_auto_reason");
+
+                    b.Property<string>("PrimaryKvCacheType")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_kv_cache_type");
+
+                    b.Property<string>("PrimaryKvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_kv_cache_type_source");
+
+                    b.Property<string>("PrimaryLaunchExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_launch_executable_sha256");
+
+                    b.Property<bool?>("PrimaryLaunchHasAuxAssets")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_launch_has_aux_assets");
+
+                    b.Property<string>("PrimaryLaunchKvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_launch_kv_cache_type_source");
+
+                    b.Property<byte[]>("PrimaryLaunchReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("primary_launch_receipt_json");
 
                     b.Property<string>("PrimaryModelName")
                         .IsRequired()
@@ -533,11 +685,29 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("primary_model_origin");
 
+                    b.Property<int?>("PrimaryPlacementOffloaded")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_placement_offloaded");
+
+                    b.Property<int?>("PrimaryPlacementTotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_placement_total");
+
+                    b.Property<string>("PrimaryReceiptHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_receipt_hash");
+
                     b.Property<string>("PrimaryStatus")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("TEXT")
                         .HasColumnName("primary_status");
+
+                    b.Property<string>("PrimaryVariant")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("primary_variant");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT")
@@ -581,6 +751,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasIndex("ProjectId", "CreatedAtUtc")
                         .HasDatabaseName("ix_benchmark_runs_project_created_at");
+
+                    b.HasIndex("ProjectId", "PrimaryKvCacheType")
+                        .HasDatabaseName("ix_benchmark_runs_project_primary_kv_cache_type");
 
                     b.ToTable("benchmark_runs", null, t =>
                         {

@@ -327,6 +327,32 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 entry.Entity.Id,
                 "benchmark_judge_result_json",
                 trackedProperties);
+            // The launch evidence blocks. A distinct AAD column name per phase so a writer cannot present the
+            // primary's receipt as the judge's (or an environment capture as a receipt).
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.PrimaryLaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_primary_launch_receipt_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.PrimaryEnvironmentFactsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_primary_environment_facts_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.JudgeLaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_launch_receipt_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.JudgeEnvironmentFactsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_environment_facts_json",
+                trackedProperties);
         }
 
         // Training dataset definitions are node-scoped, so the AAD binds the empty conversation id to the definition's

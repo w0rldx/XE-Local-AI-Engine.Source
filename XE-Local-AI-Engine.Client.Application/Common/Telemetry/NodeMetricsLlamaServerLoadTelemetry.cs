@@ -65,6 +65,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
             LlamaServerPlacementOutcome.Cpu => "cpu",
             LlamaServerPlacementOutcome.Full => "full",
             LlamaServerPlacementOutcome.Partial => "partial",
+            LlamaServerPlacementOutcome.None => "none",
             _ => "unknown"
         };
     }

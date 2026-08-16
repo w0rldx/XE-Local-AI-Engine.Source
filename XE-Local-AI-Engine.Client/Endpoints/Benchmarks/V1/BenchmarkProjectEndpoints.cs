@@ -24,7 +24,7 @@ public sealed class ListBenchmarkProjectsEndpoint(IBenchmarkStore store)
         var items = new List<BenchmarkProjectSummaryResponse>(projects.Count);
         foreach (var project in projects)
         {
-            var count = (await _store.ListRunsAsync(project.Id, ct).ConfigureAwait(false)).Count;
+            var count = await _store.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
             items.Add(project.ToSummary(count));
         }
 
@@ -87,7 +87,7 @@ public sealed class GetBenchmarkProjectEndpoint(IBenchmarkStore store)
             return;
         }
 
-        var runCount = (await _store.ListRunsAsync(project.Id, ct).ConfigureAwait(false)).Count;
+        var runCount = await _store.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
         await Send.OkAsync(project.ToDetail(runCount), ct).ConfigureAwait(false);
     }
 }
@@ -151,5 +151,6 @@ public sealed class DeleteBenchmarkProjectEndpoint(IBenchmarkStore store)
 internal static class BenchmarkExceptionFilter
 {
     public static bool IsHandled(Exception exception) =>
-        exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException;
+        exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException
+            or BenchmarkUnsupportedKvCacheTypeException;
 }

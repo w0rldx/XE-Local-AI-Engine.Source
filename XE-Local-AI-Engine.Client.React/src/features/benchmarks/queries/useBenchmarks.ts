@@ -13,6 +13,7 @@ import {
 	startBenchmarkRun,
 	updateBenchmarkProject,
 } from "@/core/api/generated";
+import type { XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toBenchmarkEligibleModel,
@@ -23,6 +24,7 @@ import {
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import type {
 	BenchmarkEligibleModel,
+	BenchmarkKvCacheType,
 	BenchmarkProjectDetail,
 	BenchmarkProjectDraft,
 	BenchmarkProjectSummary,
@@ -183,14 +185,20 @@ export function useStartBenchmarkRun() {
 			projectId,
 			modelName,
 			expectedProjectVersion,
+			kvCacheType,
 		}: {
 			projectId: string;
 			modelName: string;
 			expectedProjectVersion: number;
+			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
+			kvCacheType: BenchmarkKvCacheType | null;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				startBenchmarkRun({ path: { projectId }, body: { modelName, expectedProjectVersion }, throwOnError: true }),
-			);
+			const body: StartBenchmarkRunRequest = {
+				modelName,
+				expectedProjectVersion,
+				...(kvCacheType === null ? {} : { kvCacheType }),
+			};
+			const { data } = await callWithResponseValidation(startBenchmarkRun({ path: { projectId }, body, throwOnError: true }));
 			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),

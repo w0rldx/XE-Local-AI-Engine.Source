@@ -35,14 +35,13 @@ public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
             return;
         }
 
-        var runs = await _store.ListRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
-        var items = runs.Skip((req.Page - 1) * req.PageSize).Take(req.PageSize).Select(static run => run.ToSummary()).ToArray();
+        var page = await _store.ListRunsAsync(req.ProjectId, (req.Page - 1) * req.PageSize, req.PageSize, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListBenchmarkRunsResponse
                   {
-                      Items = items,
+                      Items = page.Items.Select(static run => run.ToSummary()).ToArray(),
                       Page = req.Page,
                       PageSize = req.PageSize,
-                      TotalCount = runs.Count
+                      TotalCount = page.TotalCount
                   }, ct)
                   .ConfigureAwait(false);
     }
@@ -73,9 +72,19 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
             return;
         }
 
+        // Absent/blank is Auto and stays null; anything outside the allow-list is the caller's mistake, not an
+        // unsupported runtime, so it is a 400 here rather than the 422 an unlaunchable-but-known type gets.
+        if (!BenchmarkKvCacheType.TryNormalize(req.KvCacheType, out var kvCacheType))
+        {
+            await Send.ResultAsync(BenchmarkEndpointSupport.Problem(StatusCodes.Status400BadRequest,
+                BenchmarkErrorCode.InvalidRequest,
+                "The requested KV-cache type is not supported.")).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
-            var run = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, ct).ConfigureAwait(false);
+            var run = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, kvCacheType, ct).ConfigureAwait(false);
             await Send.ResultAsync(Results.Accepted(value: run.ToDetail())).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception) || exception is KeyNotFoundException)

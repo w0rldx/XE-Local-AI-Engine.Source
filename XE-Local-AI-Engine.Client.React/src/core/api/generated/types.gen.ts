@@ -3495,6 +3495,36 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	version?: number;
 	createdAtUtc?: number;
 	updatedAtUtc?: number;
+	primaryVariant?: string | null;
+	primaryKvCacheType?: string | null;
+	primaryKvCacheTypeSource?: string | null;
+	primaryKvAutoReason?: string | null;
+	primaryFlashAttentionMode?: string | null;
+	primaryIntendedLaunchIdentity?: string | null;
+	primaryIntendedExecutableSha256?: string | null;
+	primaryEffectiveLaunchIdentity?: string | null;
+	primaryEffectiveBackend?: string | null;
+	primaryPlacementOffloaded?: number | null;
+	primaryPlacementTotal?: number | null;
+	primaryExecutableSha256?: string | null;
+	primaryHasAuxAssets?: boolean | null;
+	primaryReceiptHash?: string | null;
+	primaryEnvironmentFactsHash?: string | null;
+	judgeVariant?: string | null;
+	judgeKvCacheType?: string | null;
+	judgeKvCacheTypeSource?: string | null;
+	judgeKvAutoReason?: string | null;
+	judgeFlashAttentionMode?: string | null;
+	judgeIntendedLaunchIdentity?: string | null;
+	judgeIntendedExecutableSha256?: string | null;
+	judgeEffectiveLaunchIdentity?: string | null;
+	judgeEffectiveBackend?: string | null;
+	judgePlacementOffloaded?: number | null;
+	judgePlacementTotal?: number | null;
+	judgeExecutableSha256?: string | null;
+	judgeHasAuxAssets?: boolean | null;
+	judgeReceiptHash?: string | null;
+	judgeEnvironmentFactsHash?: string | null;
 };
 
 export type XeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus =
@@ -3529,6 +3559,10 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse
 		primaryCompletedAtUtc?: number | null;
 		judgeStartedAtUtc?: number | null;
 		judgeCompletedAtUtc?: number | null;
+		primaryLaunchReceipt?: unknown;
+		primaryEnvironmentFacts?: unknown;
+		judgeLaunchReceipt?: unknown;
+		judgeEnvironmentFacts?: unknown;
 	};
 
 export type XeLocalAiEngineClientServicesBenchmarksBenchmarkJudgeResultV1 = {
@@ -3542,6 +3576,7 @@ export type XeLocalAiEngineClientServicesBenchmarksBenchmarkJudgeResultV1 = {
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest = {
 	modelName?: string;
 	expectedProjectVersion?: number;
+	kvCacheType?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunRouteRequest = {

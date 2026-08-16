@@ -66,6 +66,10 @@ public sealed class LlamaServerCapabilityManifestTests
 
         AssertEx.True(first.ProbeSucceeded);
         AssertEx.Equal(AssertEx.NotNull(first.ExecutableSha256), second.ExecutableSha256);
+
+        // Lowercase hex, like every other digest in the tree: the freeze records this value as the INTENDED
+        // executable and the receipt records a fresh digest of the running image, and the two are compared ordinally.
+        AssertEx.Equal(temp.InitialSha256, first.ExecutableSha256);
         AssertEx.Equal("version: 10201 (b10201)", first.Version);
         AssertEx.Equal(2, runner.Calls.Count);
         AssertEx.Equal("--version", runner.Calls.ElementAt(0).Single());
@@ -478,7 +482,7 @@ public sealed class LlamaServerCapabilityManifestTests
 
         private static string ComputeSha256(string path)
         {
-            return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+            return Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
         }
     }
 }

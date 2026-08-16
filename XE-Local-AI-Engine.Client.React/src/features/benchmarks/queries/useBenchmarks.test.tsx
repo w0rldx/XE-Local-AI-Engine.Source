@@ -210,7 +210,7 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2 });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(observedBody).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2 });
@@ -229,11 +229,52 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1 });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1, kvCacheType: null });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect(result.current.error).toBeInstanceOf(ApiError);
 		expect((result.current.error as ApiError).statusCode).toBe(409);
 		expect((result.current.error as ApiError).message).toBe("The project changed since it was loaded.");
+	});
+	// "Auto" is the absence of a pick, not a value: the node resolves the KV cache type at freeze, so the member must be
+	// omitted rather than sent as a string the contract does not define. An explicit pick rides along verbatim.
+	it("omits kvCacheType for Auto and sends an explicit pick verbatim", async () => {
+		const bodies: unknown[] = [];
+		server.use(
+			http.post(localApiPath(`benchmarks/projects/${projectId}/runs`), async ({ request }) => {
+				bodies.push(await request.json());
+				return HttpResponse.json(runRow({ primaryStatus: "Queued" }));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
+
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null });
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0" });
+		await waitFor(() => expect(bodies).toHaveLength(2));
+
+		expect(bodies[0]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2 });
+		expect(bodies[1]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0" });
+	});
+
+	// A 422 is the node refusing this KV type on this runtime; its sanitized reason has to survive to the caller.
+	it("surfaces an unsupported KV cache type as a 422 ApiError carrying the server message", async () => {
+		server.use(
+			domainErrorRoute("post", `benchmarks/projects/${projectId}/runs`, 422, {
+				reason: "UnsupportedKvCacheType",
+				message: "q4_0 is not supported by the selected runtime.",
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
+
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q4_0" });
+
+		await waitFor(() => expect(result.current.isError).toBe(true));
+		expect((result.current.error as ApiError).statusCode).toBe(422);
+		expect((result.current.error as ApiError).message).toBe("q4_0 is not supported by the selected runtime.");
 	});
 });

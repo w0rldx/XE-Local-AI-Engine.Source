@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { ApiError } from "@/core/api/errors/ApiError";
+
 import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } from "@/core/api/generated";
 import type { ChatMessagePart, ToolCallState } from "@/features/chat/models/ChatModels";
 
@@ -78,6 +80,70 @@ export interface BenchmarkOutputPart {
 	isError?: boolean | null;
 }
 
+/**
+ * True when the node refused the requested KV cache type specifically, read off the ProblemDetails `code` extension.
+ * The status alone is not enough: an ineligible model or agent answers 422 too, and local hey-api response validation
+ * reuses 422 as its own status — neither is fixed by picking f16.
+ */
+export const isUnsupportedKvCacheTypeError = (error: unknown): boolean =>
+	error instanceof ApiError &&
+	error.statusCode === 422 &&
+	(error.apiProblemDetails as unknown as Record<string, unknown> | undefined)?.["code"] === "UnsupportedKvCacheType";
+
+export const benchmarkKvCacheTypes = ["f16", "q8_0", "q4_0"] as const;
+export type BenchmarkKvCacheType = (typeof benchmarkKvCacheTypes)[number];
+/** Was the type picked by the operator, or derived at freeze from the binary's manifest? */
+export type BenchmarkKvCacheTypeSource = "explicit" | "auto";
+export type BenchmarkFlashAttentionMode = "auto" | "on";
+
+/**
+ * What a run intended to launch and what actually launched, as flat facts — never a verdict. Legacy rows carry null in
+ * every member and render "—". Present on both the primary and the judge side of every run summary.
+ */
+export interface BenchmarkLaunchFacts {
+	variant: string | null;
+	kvCacheType: string | null;
+	kvCacheTypeSource: BenchmarkKvCacheTypeSource | null;
+	kvAutoReason: string | null;
+	flashAttentionMode: BenchmarkFlashAttentionMode | null;
+	intendedLaunchIdentity: string | null;
+	intendedExecutableSha256: string | null;
+	effectiveLaunchIdentity: string | null;
+	/** Variant name, or `cpu` / `cpu-fallback` / `metal-unverified` / `unknown`. */
+	effectiveBackend: string | null;
+	placementOffloaded: number | null;
+	placementTotal: number | null;
+	executableSha256: string | null;
+	hasAuxAssets: boolean | null;
+	receiptHash: string | null;
+	environmentFactsHash: string | null;
+}
+
+/** Every fact absent — what a run frozen before the launch receipt existed maps to, and what the UI renders as "—". */
+export const noBenchmarkLaunchFacts: BenchmarkLaunchFacts = {
+	variant: null,
+	kvCacheType: null,
+	kvCacheTypeSource: null,
+	kvAutoReason: null,
+	flashAttentionMode: null,
+	intendedLaunchIdentity: null,
+	intendedExecutableSha256: null,
+	effectiveLaunchIdentity: null,
+	effectiveBackend: null,
+	placementOffloaded: null,
+	placementTotal: null,
+	executableSha256: null,
+	hasAuxAssets: null,
+	receiptHash: null,
+	environmentFactsHash: null,
+};
+
+/**
+ * A decoded launch receipt or environment-facts object. Kept opaque on purpose: the UI renders and diffs whatever
+ * fields the node recorded (D12 — facts, not verdicts), so a contract addition needs no frontend change.
+ */
+export type BenchmarkEvidenceObject = Readonly<Record<string, unknown>>;
+
 export interface BenchmarkRunSummary {
 	id: string;
 	projectId: string;
@@ -98,9 +164,15 @@ export interface BenchmarkRunSummary {
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	primaryLaunch: BenchmarkLaunchFacts;
+	judgeLaunch: BenchmarkLaunchFacts;
 }
 
 export interface BenchmarkRunDetail extends BenchmarkRunSummary {
+	primaryLaunchReceipt: BenchmarkEvidenceObject | null;
+	judgeLaunchReceipt: BenchmarkEvidenceObject | null;
+	primaryEnvironmentFacts: BenchmarkEvidenceObject | null;
+	judgeEnvironmentFacts: BenchmarkEvidenceObject | null;
 	outputParts: BenchmarkOutputPart[];
 	judgeResult: BenchmarkJudgeResult | null;
 	primaryErrorMessage: string | null;

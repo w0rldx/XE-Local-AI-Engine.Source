@@ -17,6 +17,9 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkCatalogService, BenchmarkCatalogService>();
         builder.Services.AddSingleton<IBenchmarkEligibilityPolicy, BenchmarkEligibilityPolicy>();
         builder.Services.AddSingleton<IBenchmarkRuntimeSnapshotFactory, BenchmarkRuntimeSnapshotFactory>();
+
+        // Singleton: it owns a file-hash cache with file-system watchers, so one instance per process, not per run.
+        builder.Services.AddSingleton<IRuntimeEnvironmentFactsProvider, RuntimeEnvironmentFactsProvider>();
         builder.Services.AddOptions<BenchmarkEventBufferOptions>();
         builder.Services.AddOptions<BenchmarkQueueOptions>();
         builder.Services.AddSingleton<IBenchmarkEventBuffer, BenchmarkEventBuffer>();

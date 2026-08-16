@@ -27356,6 +27356,130 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "primaryVariant": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryKvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryKvCacheTypeSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryKvAutoReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryFlashAttentionMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryIntendedLaunchIdentity": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryIntendedExecutableSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryEffectiveLaunchIdentity": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryEffectiveBackend": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryPlacementOffloaded": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "primaryPlacementTotal": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "primaryExecutableSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryHasAuxAssets": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "primaryReceiptHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryEnvironmentFactsHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeVariant": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeKvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeKvCacheTypeSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeKvAutoReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeFlashAttentionMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeIntendedLaunchIdentity": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeIntendedExecutableSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeEffectiveLaunchIdentity": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeEffectiveBackend": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgePlacementOffloaded": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "judgePlacementTotal": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "judgeExecutableSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeHasAuxAssets": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "judgeReceiptHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "judgeEnvironmentFactsHash": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -27450,6 +27574,18 @@
               "judgeCompletedAtUtc": {
                 "type": "integer",
                 "nullable": true
+              },
+              "primaryLaunchReceipt": {
+                "nullable": true
+              },
+              "primaryEnvironmentFacts": {
+                "nullable": true
+              },
+              "judgeLaunchReceipt": {
+                "nullable": true
+              },
+              "judgeEnvironmentFacts": {
+                "nullable": true
               }
             }
           }
@@ -27488,6 +27624,10 @@
           },
           "expectedProjectVersion": {
             "type": "integer"
+          },
+          "kvCacheType": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

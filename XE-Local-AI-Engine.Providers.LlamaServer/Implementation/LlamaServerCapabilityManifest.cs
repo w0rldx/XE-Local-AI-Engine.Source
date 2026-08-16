@@ -58,7 +58,12 @@ internal sealed partial record LlamaServerCapabilityManifest
 
     public IReadOnlySet<string> FlashAttentionModes { get; }
 
-    private bool SupportsAllOptions { get; }
+    /// <summary>
+    ///     Set only by <see cref="AllSupportedForTesting" />, which stands in for a binary whose whole option surface is
+    ///     assumed. Internal rather than private so <see cref="LlamaServerLaunchCapabilityInspector" /> carries the same
+    ///     assumption into its public answers instead of reporting "supports nothing".
+    /// </summary>
+    internal bool SupportsAllOptions { get; }
 
     public bool SupportsOption(string option)
     {
@@ -378,7 +383,7 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
         await using var stream = new FileStream(executablePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var digest = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        return Convert.ToHexString(digest);
+        return Convert.ToHexStringLower(digest);
     }
 
     private static string FirstNonEmptyLine(string output)
