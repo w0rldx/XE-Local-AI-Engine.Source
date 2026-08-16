@@ -68,13 +68,26 @@ public sealed class BenchmarkJudgeExecutor(
             // The host facts this judging ran on, captured before anything is reserved or spawned. Non-throwing.
             environment = await environmentFacts.CaptureAsync(runtime.Variant, token).ConfigureAwait(false);
 
-            // Admission sizes against the frozen judge runtime's own context, not the project's request.
+            // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒
+            // f16), not the project's request.
             // No launch admission — see BenchmarkRunExecutor: the judge spawns its own process from frozen arguments.
             var decision = await capacity.DecideAsync(new CapacityRequest(judgeModel.ModelName,
                                              ModelRole.Chat,
                                              runtime.ContextTokens,
-                                             PublishLaunchAdmission: false), token)
+                                             PublishLaunchAdmission: false,
+                                             runtime.KvTypeK), token)
                                          .ConfigureAwait(false);
+            logger.LogInformation(
+                "Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
+                + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
+                work.RunId,
+                "judge",
+                judgeModel.ModelName,
+                requiredContext,
+                runtime.ContextTokens,
+                runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                decision.Verdict,
+                decision.Reason);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 throw new BenchmarkExecutionException(CapacityRejectedMessage);
@@ -190,7 +203,23 @@ public sealed class BenchmarkJudgeExecutor(
             Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(snapshot.Judge.Sampling ?? throw new BenchmarkExecutionException("The frozen judge sampling policy is unavailable."),
                 snapshot.Judge.RequestedContextTokens!.Value),
-            IsUnattended: true));
+            IsUnattended: true,
+            // The prompt ASKS for this shape and ParseResult refuses anything else, which cost one judge invocation in
+            // three against a 3B model. Constraining the decode makes the two agree instead of hoping they do; the
+            // response-format schema drops the string-length bounds ParseResult still enforces (see the constant).
+            ResponseJsonSchema: JudgeResponseFormatSchema));
+    }
+
+    /// <summary>
+    ///     The judge turn's constrained-decoding schema, parsed once. Cloned out of its document because a
+    ///     <see cref="JsonElement" /> does not outlive the <see cref="JsonDocument" /> it was read from.
+    /// </summary>
+    private static readonly JsonElement JudgeResponseFormatSchema = ParseJudgeResponseFormatSchema();
+
+    private static JsonElement ParseJudgeResponseFormatSchema()
+    {
+        using var document = JsonDocument.Parse(BenchmarkFrozenPolicies.JudgeResponseFormatSchemaJson);
+        return document.RootElement.Clone();
     }
 
     internal static BenchmarkJudgeResultV1 ParseResult(string content,

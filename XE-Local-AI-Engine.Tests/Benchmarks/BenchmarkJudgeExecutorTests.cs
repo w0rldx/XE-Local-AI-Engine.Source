@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -83,6 +84,13 @@ public sealed class BenchmarkJudgeExecutorTests
                 promptPayload.RootElement.GetProperty("outputSchema").GetString());
         }
 
+        // The judge's reply is parsed strictly, so the decode is CONSTRAINED to the same shape rather than merely asked
+        // for in prose — one judge invocation in three failed "invalid result" against a 3B model without this.
+        var responseSchema = package.ResponseJsonSchema ?? throw new AssertionException("Expected the judge package to carry a response schema.");
+        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeResponseFormatSchemaJson,
+            JsonSerializer.Serialize(responseSchema),
+            "The judge turn must carry the bound-free response-format schema, not the frozen bounded one.");
+
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
         AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
@@ -131,6 +139,50 @@ public sealed class BenchmarkJudgeExecutorTests
         _ = dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationAssignedAsync(default!, default);
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
         AssertEx.True(lease.Disposed);
+    }
+
+    [Test]
+    [Arguments("q8_0", "KV cache q8_0")]
+    [Arguments(null, "KV cache f16")]
+    public async Task Execute_JudgeAdmissionSizesAgainstItsFrozenKvCacheTypeAndLogsWhatItDecidedOn(string? frozenKvCacheType, string loggedKvCacheType)
+    {
+        // The judge books its OWN frozen KV term, and the decision is legible afterwards. Auto/f16 must still reach
+        // capacity as the unchanged default (null), while the log names the effective type rather than an empty field.
+        var installed = Installed();
+        var snapshot = Snapshot(installed, frozenKvCacheType);
+        var run = Run(snapshot, BenchmarkJudgeStatus.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 JudgeStatus = BenchmarkJudgeStatus.Failed,
+                 Version = 5
+             });
+        var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient);
+        var logger = new RecordingLogger<BenchmarkJudgeExecutor>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            snapshot,
+            lease,
+            capacity,
+            Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(),
+            logger: logger);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal<string?>(frozenKvCacheType, AssertEx.NotNull(capacity.LastRequest).KvCacheType);
+        var admission = AssertEx.NotNull(logger.Entries.FirstOrDefault(entry =>
+            entry.Level == LogLevel.Information && entry.Message.Contains("capacity admission", StringComparison.Ordinal)));
+        foreach (var expected in new[]
+                 {
+                     run.Id.ToString(), "phase judge", "requested context 4096",
+                     "frozen runtime context 4096", loggedKvCacheType, "RejectInsufficient"
+                 })
+        {
+            AssertEx.Contains(admission.Message, expected);
+        }
     }
 
     [Test]
@@ -233,7 +285,8 @@ public sealed class BenchmarkJudgeExecutorTests
         IWorkerEventDispatcher dispatcher,
         IInvocationRunner runner,
         ILlamaServerProcessSupervisor? supervisor = null,
-        IBenchmarkCancellationRegistry? cancellations = null) =>
+        IBenchmarkCancellationRegistry? cancellations = null,
+        ILogger<BenchmarkJudgeExecutor>? logger = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -247,7 +300,7 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations ?? new BenchmarkCancellationRegistry(),
             new StubEnvironmentFacts(),
-            NullLogger<BenchmarkJudgeExecutor>.Instance);
+            logger ?? NullLogger<BenchmarkJudgeExecutor>.Instance);
 
     private sealed class StubEnvironmentFacts : IRuntimeEnvironmentFactsProvider
     {
@@ -327,7 +380,7 @@ public sealed class BenchmarkJudgeExecutorTests
             V1('c'));
     }
 
-    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot installed)
+    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot installed, string? judgeKvCacheType = null)
     {
         var model = new BenchmarkInstalledModelSnapshotV1(installed.ModelName,
             installed.RegistryRevision,
@@ -369,7 +422,7 @@ public sealed class BenchmarkJudgeExecutorTests
                 4096,
                 BenchmarkFrozenPolicies.JudgeSystemPrompt,
                 BenchmarkFrozenPolicies.JudgeOutputSchemaJson,
-                Runtime(4096),
+                Runtime(4096, judgeKvCacheType),
                 BenchmarkFrozenPolicies.DeterministicSampling(),
                 "judge-hash"),
             new BenchmarkFreezeDependencySetV1("a", "b", "c", "d", "e", "f"),
@@ -381,8 +434,9 @@ public sealed class BenchmarkJudgeExecutorTests
     private static string V1(char value) =>
         $"v1:{new string(value, 64)}";
 
-    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens) =>
-        new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens, string? kvCacheType = null) =>
+        new(GpuVariant.Cpu, contextTokens, null, null, null, kvCacheType, kvCacheType, kvCacheType is not null,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
     private static IGpuVariantSelector FixedVariantSelector()
     {
