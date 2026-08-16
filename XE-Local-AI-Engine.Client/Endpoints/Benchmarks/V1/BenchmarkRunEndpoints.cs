@@ -35,14 +35,13 @@ public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
             return;
         }
 
-        var runs = await _store.ListRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
-        var items = runs.Skip((req.Page - 1) * req.PageSize).Take(req.PageSize).Select(static run => run.ToSummary()).ToArray();
+        var page = await _store.ListRunsAsync(req.ProjectId, (req.Page - 1) * req.PageSize, req.PageSize, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListBenchmarkRunsResponse
                   {
-                      Items = items,
+                      Items = page.Items.Select(static run => run.ToSummary()).ToArray(),
                       Page = req.Page,
                       PageSize = req.PageSize,
-                      TotalCount = runs.Count
+                      TotalCount = page.TotalCount
                   }, ct)
                   .ConfigureAwait(false);
     }

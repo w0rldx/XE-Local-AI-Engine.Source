@@ -152,10 +152,14 @@ public sealed class BenchmarkRunFreezeService(
             // One capability read per freeze: the primary and the judge launch the same binary, and asking twice could
             // straddle a runtime swap and freeze two different answers into one run.
             var binaryCapabilities = await InspectLaunchCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-            var primaryLaunch = await ResolveRuntimeAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, cancellationToken)
+
+            // ONE variant for the whole freeze, taken from the inspection that produced the capabilities: both phases
+            // launch the same binary, and a second selection could disagree with the manifest whose digest we record.
+            var variant = binaryCapabilities?.Variant ?? await _variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
+            var primaryLaunch = await ResolveRuntimeAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken)
                 .ConfigureAwait(false);
             var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling();
-            var (judgeSnapshot, judgeLaunch) = await CreateJudgeSnapshotAsync(project, judge, binaryCapabilities, cancellationToken).ConfigureAwait(false);
+            var (judgeSnapshot, judgeLaunch) = await CreateJudgeSnapshotAsync(project, judge, binaryCapabilities, variant, cancellationToken).ConfigureAwait(false);
             var snapshot = _snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
                 definition.Id,
                 definition.Version,
@@ -199,6 +203,7 @@ public sealed class BenchmarkRunFreezeService(
     private async Task<(BenchmarkJudgeSnapshotV1 Snapshot, BenchmarkFrozenLaunch? Launch)> CreateJudgeSnapshotAsync(BenchmarkProjectRecord project,
         InstalledModelSnapshot? judge,
         LlamaServerLaunchCapabilities? capabilities,
+        GpuVariant variant,
         CancellationToken cancellationToken)
     {
         if (!BenchmarkFrozenPolicies.SupportsVersions(project.JudgePromptVersion, project.JudgeOutputSchemaVersion))
@@ -222,7 +227,7 @@ public sealed class BenchmarkRunFreezeService(
         var contextTokens = project.JudgeContextTokens!.Value;
 
         // The judge is scoring, not being measured: it never takes the run's KV pick, only Auto.
-        var launch = await ResolveRuntimeAsync(model.ModelName, contextTokens, requestedKvCacheType: null, capabilities, cancellationToken).ConfigureAwait(false);
+        var launch = await ResolveRuntimeAsync(model.ModelName, contextTokens, requestedKvCacheType: null, capabilities, variant, cancellationToken).ConfigureAwait(false);
         var runtime = launch.Runtime;
         var sampling = BenchmarkFrozenPolicies.DeterministicSampling();
         return (new BenchmarkJudgeSnapshotV1(true,
@@ -256,9 +261,9 @@ public sealed class BenchmarkRunFreezeService(
         int requiredContextTokens,
         string? requestedKvCacheType,
         LlamaServerLaunchCapabilities? capabilities,
+        GpuVariant variant,
         CancellationToken cancellationToken)
     {
-        var variant = await _variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
         var resolved = await _inferenceProfiles.ResolveAsync(modelName, ModelRole.Chat, variant, cancellationToken).ConfigureAwait(false);
         if (resolved.ExploreMode)
         {
@@ -312,8 +317,7 @@ public sealed class BenchmarkRunFreezeService(
         LlamaServerLaunchCapabilities? capabilities,
         bool optimizedDisabled)
     {
-        // Capabilities for a different variant answer for a different binary, so they are no evidence at all here.
-        var probed = capabilities is { ProbeSucceeded: true } && capabilities.Variant == variant;
+        var probed = capabilities is { ProbeSucceeded: true };
         var isGpu = variant != GpuVariant.Cpu;
         if (requested is null)
         {

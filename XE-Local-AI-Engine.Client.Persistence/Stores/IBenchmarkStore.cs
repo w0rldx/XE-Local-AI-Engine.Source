@@ -12,7 +12,15 @@ public interface IBenchmarkStore
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<BenchmarkRunRecord>> ListRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     One page of a project's runs, newest first, carrying only what a summary needs. The encrypted payload
+    ///     columns are NOT read: a list of runs must not decrypt every snapshot, output and receipt on the way to
+    ///     rendering a table.
+    /// </summary>
+    Task<BenchmarkRunPage> ListRunsAsync(Guid projectId, int skip, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>How many runs a project has, counted in the database.</summary>
+    Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);
@@ -249,6 +257,9 @@ public sealed record BenchmarkLaunchReceiptCommand(
     string? ExecutableSha256,
     bool? HasAuxAssets,
     string KvCacheTypeSource);
+
+/// <param name="TotalCount">Runs in the project, not in this page.</param>
+public sealed record BenchmarkRunPage(IReadOnlyList<BenchmarkRunRecord> Items, int TotalCount);
 
 public sealed record BenchmarkClaimedWork(
     long QueueSequence,

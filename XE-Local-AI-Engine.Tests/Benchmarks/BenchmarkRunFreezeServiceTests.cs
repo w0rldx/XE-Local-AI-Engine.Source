@@ -218,6 +218,37 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_FreezesTheVariantTheInspectedBinaryReports_SoTheIntendedDigestDescribesIt()
+    {
+        // A second selection could answer differently from the one the inspection used; the digest recorded as
+        // INTENDED must belong to the binary that was actually inspected, or every run reads as intended != effective.
+        var harness = new FreezeHarness(variant: GpuVariant.Cpu, inspectedVariant: GpuVariant.Cuda, judgeModel: "z-judge.gguf");
+
+        _ = await harness.StartAsync();
+
+        var intent = AssertEx.NotNull(harness.Command!.PrimaryLaunchIntent);
+        AssertEx.Equal("cuda", intent.Variant);
+        AssertEx.Equal("manifest-sha", intent.IntendedExecutableSha256);
+        AssertEx.Equal(BenchmarkKvCacheType.Q8_0, intent.KvCacheType, "The inspected GPU binary's own capabilities decide Auto.");
+        AssertEx.Equal(GpuVariant.Cuda, AssertEx.NotNull(harness.SnapshotInput).PrimaryRuntime.Variant);
+        AssertEx.Equal("cuda", AssertEx.NotNull(harness.Command.JudgeLaunchIntent).Variant, "Both phases launch one binary and must freeze one variant.");
+    }
+
+    [Test]
+    public async Task Start_WhenTheBinaryCannotBeInspected_FallsBackToTheSelectedVariantAndRecordsNoDigest()
+    {
+        var harness = new FreezeHarness(variant: GpuVariant.Cuda, inspectionFails: true);
+
+        _ = await harness.StartAsync();
+
+        var intent = AssertEx.NotNull(harness.Command!.PrimaryLaunchIntent);
+        AssertEx.Equal("cuda", intent.Variant);
+        AssertEx.Null(intent.IntendedExecutableSha256, "No inspection means no digest to claim as intended.");
+        AssertEx.Equal(BenchmarkKvCacheType.F16, intent.KvCacheType);
+        AssertEx.Equal(BenchmarkRunFreezeService.AutoReasonProbeUnavailable, intent.KvAutoReason);
+    }
+
+    [Test]
     public async Task Start_UnknownKvCacheType_IsRejectedBeforeAnythingIsFrozen()
     {
         var harness = new FreezeHarness();
@@ -240,6 +271,8 @@ public sealed class BenchmarkRunFreezeServiceTests
         public FreezeHarness(string primaryModel = "a-primary.gguf",
             string? judgeModel = null,
             GpuVariant variant = GpuVariant.Cpu,
+            GpuVariant? inspectedVariant = null,
+            bool inspectionFails = false,
             bool probeSucceeded = true,
             bool supportsQuantizedKv = true,
             bool optimizedConfigDisabled = false,
@@ -288,7 +321,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 snapshots,
                 Profiles(profile),
                 Variants(variant),
-                Inspector(variant, probeSucceeded, supportsQuantizedKv),
+                Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails),
                 FallbackStore(optimizedConfigDisabled),
                 LaunchPolicy(),
                 TimeProvider.System);
@@ -362,8 +395,19 @@ public sealed class BenchmarkRunFreezeServiceTests
             return variants;
         }
 
-        private static ILlamaServerLaunchCapabilityInspector Inspector(GpuVariant variant, bool probeSucceeded, bool supportsQuantizedKv)
+        private static ILlamaServerLaunchCapabilityInspector Inspector(GpuVariant variant,
+            bool probeSucceeded,
+            bool supportsQuantizedKv,
+            bool inspectionFails)
         {
+            if (inspectionFails)
+            {
+                var unavailable = Substitute.For<ILlamaServerLaunchCapabilityInspector>();
+                unavailable.InspectAsync(Arg.Any<CancellationToken>())
+                           .Returns<LlamaServerLaunchCapabilities>(_ => throw new LlamaRuntimeException("The llama.cpp runtime is not installed."));
+                return unavailable;
+            }
+
             var cacheTypes = supportsQuantizedKv
                 ? new HashSet<string>(StringComparer.Ordinal)
                 {
