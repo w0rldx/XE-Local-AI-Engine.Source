@@ -432,6 +432,13 @@ public sealed class NodeChatStreamService(
             imageContext = await BuildImageAttachmentMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
         }
 
+        // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local chat
+        // turn — without threading it here the package fell back to TimeoutSettings' own default and a raised setting
+        // was silently ignored. Only the invocation timeout is operator-controlled; the tool-call and stream-idle
+        // timeouts keep their defaults. When the setting equals the TimeoutSettings default the package — and therefore
+        // its config hash — is byte-identical to a package built without an explicit Timeouts.
+        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
@@ -441,6 +448,10 @@ public sealed class NodeChatStreamService(
             LocalChatLoopbackDefaults.ClientNodeId,
             allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts: new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = runtimeNodeSettings.MaxMessageRequestTimeoutSeconds
+            },
             ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
             OrchestrationSpec: orchestration?.Spec,
             SupportsThinking: resolution.SupportsThinking,

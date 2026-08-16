@@ -860,6 +860,65 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
+    {
+        // Send-path parity: the operator's node-level "Maximum message request timeout" (900s here) must bound a
+        // regenerated turn too. Before the fix the package carried a null timeout block and the builder's own default
+        // cut long reruns off with FailureCategory=Timeout. 900 is deliberately NOT the default, so this still fails
+        // if the wiring is dropped. Tool-call/stream-idle keep their defaults.
+        await using var provider = await BuildProviderAsync("regeneration-node-timeout.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "noon", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            capturingRunner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(maxMessageRequestTimeoutSeconds: 900),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.NotNull(capturingRunner.LastTimeouts);
+        AssertEx.Equal(expected: 900, capturingRunner.LastTimeouts!.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, capturingRunner.LastTimeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, capturingRunner.LastTimeouts.StreamIdleTimeoutSeconds);
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenLocalToolsEnabled_OffersCatalogToolsInRuntimePackage()
     {
         await using var provider = await BuildProviderAsync("regeneration-offer-tools.sqlite").ConfigureAwait(false);
@@ -1545,12 +1604,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
     // The default node-settings store: no operator-selected node default, so model resolution falls through to the
     // original turn's model (or the static config fallback) exactly as the send path does.
-    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null)
+    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null,
+        int maxMessageRequestTimeoutSeconds = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds)
     {
         var store = Substitute.For<INodeSettingsStore>();
         store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
         {
-            DefaultModelName = defaultModelName
+            DefaultModelName = defaultModelName,
+            MaxMessageRequestTimeoutSeconds = maxMessageRequestTimeoutSeconds
         });
         return store;
     }
@@ -1806,6 +1867,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The model the runtime package ran on; the effective-model tests assert the dropdown pick / pin precedence.
         public string? LastModelProfile { get; private set; }
         public OrchestrationSpec? LastOrchestrationSpec { get; private set; }
+
+        // The timeout block carried on the runtime package; the node-settings test asserts the operator's
+        // "Maximum message request timeout" reaches a regenerated turn too, not just the send path.
+        public TimeoutSettings? LastTimeouts { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
@@ -1817,6 +1882,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
             LastModelProfile = context.Package.ModelProfile;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
+            LastTimeouts = context.Package.Timeouts;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0).ConfigureAwait(false);
         }
