@@ -169,6 +169,49 @@ public sealed class SelectedPathResolverTests
         AssertEx.Equal(newer.MessageId, path[0].MessageId);
     }
 
+    /// <summary>
+    ///     A sibling minted by regenerating an EARLY turn AFTER later turns exist takes the next free sequence, so its
+    ///     raw sequence lands past those later turns. It still belongs to the early turn: the anchor resolver must place
+    ///     it at its group's earliest member sequence so callers order/filter it into the early position.
+    /// </summary>
+    [Test]
+    public void CreateAnchorResolver_ForLateMintedSiblingOfEarlyTurn_AnchorsAtTheGroupsEarliestMember()
+    {
+        // U1(1) A1(2,G) U2(3) A2(4) U3(5) A3(6), then regenerate A1 -> A1'(7,G).
+        var group = Guid.NewGuid();
+        var u1 = Message(seq: 1, group: null, createdAt: 10);
+        var a1 = Message(seq: 2, group, createdAt: 20);
+        var u2 = Message(seq: 3, group: null, createdAt: 30);
+        var a2 = Message(seq: 4, group: null, createdAt: 40);
+        var u3 = Message(seq: 5, group: null, createdAt: 50);
+        var a3 = Message(seq: 6, group: null, createdAt: 60);
+        var a1Prime = Message(seq: 7, group, createdAt: 70);
+
+        TestMessage[] all = [u1, a1, u2, a2, u3, a3, a1Prime];
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(all);
+
+        AssertEx.Equal(expected: 2, anchorSequence(a1Prime));
+        AssertEx.Equal(expected: 2, anchorSequence(a1));
+        AssertEx.Equal(a3.Sequence, anchorSequence(a3));
+
+        // The whole point: ordering the RESOLVED path by anchor puts the selected late sibling back at the early turn.
+        var path = SelectedPathResolver.Resolve(all,
+            new Dictionary<Guid, Guid>
+            {
+                [group] = a1Prime.MessageId
+            });
+        var anchored = path.OrderBy(anchorSequence).Select(message => message.MessageId).ToArray();
+
+        AssertEx.Equal(a1Prime.MessageId, path[^1].MessageId, "Raw-sequence resolver output puts the late sibling last — that is what the anchor must correct.");
+        AssertEx.Equal(expected: 6, anchored.Length);
+        AssertEx.Equal(u1.MessageId, anchored[0]);
+        AssertEx.Equal(a1Prime.MessageId, anchored[1]);
+        AssertEx.Equal(u2.MessageId, anchored[2]);
+        AssertEx.Equal(a2.MessageId, anchored[3]);
+        AssertEx.Equal(u3.MessageId, anchored[4]);
+        AssertEx.Equal(a3.MessageId, anchored[5]);
+    }
+
     private static TestMessage Message(int seq, Guid? group, long createdAt)
     {
         return new TestMessage

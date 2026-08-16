@@ -125,13 +125,20 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     [Test]
     public async Task TurnRead_KeepsPayloadsOfASelectedSiblingAboveTheBoundary()
     {
-        // The newest sibling sits at sequence 5, ABOVE the boundary, so with no pin it is both selected and sent — its
-        // payload must survive even though its group's other sibling is below the boundary.
+        // The newest sibling sits at sequence 5, ABOVE the boundary, so with no pin it is both selected and its payload
+        // is loaded — it must survive even though its group's other sibling is below the boundary. What the turn SENDS
+        // is decided in anchor space: the sibling's group anchors at sequence 2, which the synopsis covers, so the
+        // synopsis stands in for it. The cap is deliberately the more conservative of the two (it keys on each row's own
+        // sequence, and a group's anchor is never above a member's sequence), so it can only ever over-load, never
+        // blank a payload the turn still needs.
         await using var provider = await BuildProviderAsync("turn-read-cap-newest.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
         var built = await BuildBranchedConversationAsync(service, pinOldSibling: false).ConfigureAwait(false);
 
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(built.ConversationId, "SYNOPSIS", CoversToSequence: 3, UpdatedAtUtc: 60))
+        // Sequences are 0-based: 0 user-one, 1 assistant-one (sibling A), 2 user-two, 3 assistant-two, 4 assistant-one-variant
+        // (sibling B). The boundary sits at 2, so the cap blanks sibling A's payload and keeps assistant-two's — the one
+        // message the turn still sends verbatim.
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(built.ConversationId, "SYNOPSIS", CoversToSequence: 2, UpdatedAtUtc: 60))
                      .ConfigureAwait(false);
 
         var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId).ConfigureAwait(false));
@@ -148,7 +155,14 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             AssertEx.Equal(fullContext[index], turnContext[index]);
         }
 
-        AssertEx.Contains(turnContext, entry => entry.Contains("assistant-one-variant", StringComparison.Ordinal));
+        // The payload above the boundary is intact in the READ — a cap keyed on the group instead of the row would have
+        // blanked it here, and a later boundary shift would then surface an empty assistant answer.
+        var siblingFromTurn = turn.Messages.Single(message => message.MessageId == built.NewerSiblingId);
+        AssertEx.Equal("assistant-one-variant", siblingFromTurn.Content);
+        AssertEx.Equal(full.Messages.Single(message => message.MessageId == built.NewerSiblingId).Content, siblingFromTurn.Content);
+
+        // And the turn still sends the one exchange the synopsis does not cover, verbatim, from a payload the cap kept.
+        AssertEx.Contains(turnContext, entry => entry.Contains("assistant-two", StringComparison.Ordinal));
     }
 
     [Test]
@@ -207,16 +221,17 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     /// </summary>
     private static IReadOnlyList<string> ProjectSentHistory(NodeChatConversationDto conversation)
     {
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
         var selected = SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath);
         if (conversation.CompactionSummary is { Length: > 0 } && conversation.CompactionSummaryCoversToSequence is { } coveredSequence)
         {
-            selected = [.. selected.Where(message => message.Sequence > coveredSequence)];
+            selected = [.. selected.Where(message => anchorSequence(message) > coveredSequence)];
         }
 
         return selected
                .Where(message => !string.IsNullOrWhiteSpace(message.Content)
                                  && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-               .OrderBy(message => message.Sequence)
+               .OrderBy(anchorSequence)
                .Select(message => $"{message.MessageId}|{message.Role}|{message.Content}|{message.Reasoning}|{message.Model}")
                .ToArray();
     }

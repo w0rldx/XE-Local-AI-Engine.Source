@@ -693,6 +693,9 @@ public sealed class NodeChatStreamService(
         NodeChatPersistedMessageDto userMessage,
         IReadOnlyDictionary<Guid, Guid>? selectedPath)
     {
+        // Order by the variant group's ANCHOR, not the chosen sibling's own sequence, so a late-regenerated early turn
+        // is mined in its logical position (SelectedPathResolver.CreateAnchorResolver).
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
         return selected
@@ -700,7 +703,7 @@ public sealed class NodeChatStreamService(
                                         && !string.IsNullOrWhiteSpace(message.Content)
                                         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
                .Concat([userMessage])
-               .OrderBy(static message => message.Sequence)
+               .OrderBy(anchorSequence)
                .Select(static message => new MemoryExtractionTurn(message.Content))
                .ToArray();
     }
@@ -715,6 +718,12 @@ public sealed class NodeChatStreamService(
         // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
         // apply the existing content/status filters. Without this every regenerated sibling would be sent as
         // context; the resolver keeps only the chosen branch.
+        // Every ordering/filtering below runs in ANCHOR space (the group's earliest member sequence), never on the
+        // chosen sibling's own sequence: regenerating an EARLY turn after later turns exist mints a sibling whose raw
+        // sequence lands past them, which would otherwise splice that answer in at the tail and break alternation.
+        // See SelectedPathResolver.CreateAnchorResolver. With no variants anchor == raw sequence, so a persisted
+        // CompactionSummaryCoversToSequence written before this change stays valid.
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
         // The synthetic context messages (attachment inlining, then knowledge-base grounding, then the compaction
@@ -757,14 +766,14 @@ public sealed class NodeChatStreamService(
         if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
             leadingContext.Add(compaction.Summary);
-            selected = [.. selected.Where(message => message.Sequence > compaction.CoveredSequence)];
+            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];
         }
 
         var history = selected
                       .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
                                                && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
                       .Concat([userMessage])
-                      .OrderBy(static message => message.Sequence)
+                      .OrderBy(anchorSequence)
                       .Select((message, index) => new ConversationMessageDto
                       {
                           Id = message.MessageId,
