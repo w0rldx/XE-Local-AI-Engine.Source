@@ -43,12 +43,21 @@ internal sealed class ConversationCompactionService(
         // the covered sequence, feeding future turns content the user never picked.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath);
 
+        // Order and fold in ANCHOR space (each group's earliest member sequence), exactly as the send/regenerate paths
+        // build their context. A sibling minted by regenerating an EARLY turn after later turns exist carries a raw
+        // sequence past them, so raw-sequence ordering would treat that stale answer as the newest message: it would
+        // survive the keep-verbatim window while a genuinely recent exchange got folded away instead. See
+        // SelectedPathResolver.CreateAnchorResolver. The cutoff persisted below as CompactionSummaryCoversToSequence is
+        // therefore an anchor too — with no variants anchor == raw sequence, so values written before this change stay
+        // valid, and the send/regenerate paths compare against it in the same space.
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
+
         // Only completed, content-bearing messages are sendable history — the same filter the send path applies before
         // budgeting — so they are the only messages worth folding into a synopsis.
         var completed = selected
                         .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
                                                  && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                        .OrderBy(static message => message.Sequence)
+                        .OrderBy(anchorSequence)
                         .ToList();
 
         var keep = Math.Max(2, _options.RecentMessagesToKeepVerbatim);
@@ -58,10 +67,10 @@ internal sealed class ConversationCompactionService(
         }
 
         // Everything before the recent-keep window is foldable; the newest kept message is the first one we DON'T fold.
-        var cutoffSequence = completed[completed.Count - keep - 1].Sequence;
+        var cutoffSequence = anchorSequence(completed[completed.Count - keep - 1]);
         var priorCover = conversation.CompactionSummaryCoversToSequence;
         var toFold = completed
-                     .Where(message => message.Sequence <= cutoffSequence && (priorCover is null || message.Sequence > priorCover.Value))
+                     .Where(message => anchorSequence(message) <= cutoffSequence && (priorCover is null || anchorSequence(message) > priorCover.Value))
                      .Select(static message => new ConversationSummarizerMessage(message.Role, message.Content))
                      .ToList();
 

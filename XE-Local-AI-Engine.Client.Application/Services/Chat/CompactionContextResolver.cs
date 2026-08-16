@@ -10,8 +10,10 @@ using XE_Local_AI_Engine.Client.Models;
 ///     conversation that regenerates would otherwise re-send the verbatim messages the synopsis already replaced.
 ///     <para>
 ///         The originals stay persisted — this only shapes what is SENT. Callers prepend
-///         <c>Summary</c> to their leading context and drop every message whose sequence is at or below
-///         <c>CoveredSequence</c> from the verbatim history.
+///         <c>Summary</c> to their leading context and drop every message whose ANCHOR sequence is at or below
+///         <c>CoveredSequence</c> from the verbatim history — anchors, not raw sequences, because that is the space
+///         <c>ConversationCompactionService</c> computed the covered value in
+///         (<see cref="SelectedPathResolver.CreateAnchorResolver{TMessage}" />).
 ///     </para>
 /// </summary>
 internal static class CompactionContextResolver

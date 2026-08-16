@@ -324,6 +324,21 @@ public sealed class NodeChatRegenerationService(
                 ];
             }
 
+            // G16 parity with the send path: an Orchestrator whose orchestration did not compile reruns as a lone single
+            // agent, which used to be visible only in a server log. Emit ONE notice naming the typed reason; a Single-kind
+            // agent (NotOrchestrated) has no notice, so the common path stays silent.
+            if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
+            {
+                await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                                     {
+                                         InvocationId = requestId,
+                                         Kind = TurnNoticeKind.OrchestrationDegraded,
+                                         Message = orchestrationDegradedMessage,
+                                         Detail = resolution.OrchestrationOutcome.Reason.ToString()
+                                     })
+                                     .ConfigureAwait(false);
+            }
+
             // Knowledge-base grounding parity with the send path: a regenerated plain-chat turn honors
             // the same opt-in knowledge grounding + cloud-egress gate the send path applies, so a rerun does not silently
             // lose grounding + its sources strip. Agent mode reaches the KB through the gated search_knowledge_base tool
@@ -585,7 +600,14 @@ public sealed class NodeChatRegenerationService(
         ConversationMessageDto? knowledgeContext = null,
         bool applyCompaction = true)
     {
-        var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original);
+        // Everything here — the cutoff, the compaction splice and the final ordering — runs in ANCHOR space (each
+        // group's earliest member sequence), never on a chosen sibling's own sequence. A sibling minted by
+        // regenerating an EARLY turn after later turns exist carries a raw sequence PAST them, so a raw
+        // `Sequence <= cutoff` filter would drop that turn from context entirely. See
+        // SelectedPathResolver.CreateAnchorResolver. With no variants anchor == raw sequence, so a persisted
+        // CompactionSummaryCoversToSequence written before this change stays valid.
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
+        var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original, anchorSequence);
 
         // A prior turn before the cutoff may itself have variants; collapse those to the selected path so the
         // regenerate sees the same chosen branch the send path would. The group being regenerated already sorts
@@ -613,14 +635,14 @@ public sealed class NodeChatRegenerationService(
         if (applyCompaction && CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction && compaction.CoveredSequence < cutoffSequence)
         {
             leadingContext.Add(compaction.Summary);
-            selected = [.. selected.Where(message => message.Sequence > compaction.CoveredSequence)];
+            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];
         }
 
         var messages = selected
-                       .Where(message => message.Sequence <= cutoffSequence
+                       .Where(message => anchorSequence(message) <= cutoffSequence
                                          && !string.IsNullOrWhiteSpace(message.Content)
                                          && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                       .OrderBy(static message => message.Sequence)
+                       .OrderBy(anchorSequence)
                        .Select((message, index) => new ConversationMessageDto
                        {
                            Id = message.MessageId,
@@ -643,22 +665,30 @@ public sealed class NodeChatRegenerationService(
     ///     context is everything that came before — never the answer being replaced.
     /// </summary>
     private static int ResolvePrecedingUserTurnCutoff(NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto original)
+        NodeChatPersistedMessageDto original,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence)
     {
-        var earliestGroupSequence = original.VariantGroupId is { } groupId
-            ? conversation.Messages.Where(message => message.VariantGroupId == groupId)
-                          .Select(message => message.Sequence)
-                          .DefaultIfEmpty(original.Sequence)
-                          .Min()
-            : original.Sequence;
+        var precedingUserTurn = ResolvePrecedingUserTurn(conversation, original, anchorSequence);
+        return precedingUserTurn is not null ? anchorSequence(precedingUserTurn) : anchorSequence(original) - 1;
+    }
 
-        var precedingUserTurn = conversation.Messages
-                                            .Where(message => message.Sequence < earliestGroupSequence
-                                                              && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
-                                            .OrderByDescending(message => message.Sequence)
-                                            .FirstOrDefault();
+    /// <summary>
+    ///     The latest USER turn anchored strictly before the original's variant group. The group's anchor IS the
+    ///     earliest member's sequence (<see cref="SelectedPathResolver.CreateAnchorResolver{TMessage}" />), so every
+    ///     member — the original answer and each sibling variant — anchors at or after it and is excluded whichever
+    ///     member is being regenerated.
+    /// </summary>
+    private static NodeChatPersistedMessageDto? ResolvePrecedingUserTurn(NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto original,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence)
+    {
+        var groupAnchor = anchorSequence(original);
 
-        return precedingUserTurn?.Sequence ?? earliestGroupSequence - 1;
+        return conversation.Messages
+                           .Where(message => anchorSequence(message) < groupAnchor
+                                             && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
+                           .OrderByDescending(anchorSequence)
+                           .FirstOrDefault();
     }
 
     /// <summary>
@@ -762,22 +792,8 @@ public sealed class NodeChatRegenerationService(
     ///     resolver falls back to the full static prepend.
     /// </summary>
     private static string? ResolvePrecedingUserTurnContent(NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto original)
-    {
-        var earliestGroupSequence = original.VariantGroupId is { } groupId
-            ? conversation.Messages.Where(message => message.VariantGroupId == groupId)
-                          .Select(message => message.Sequence)
-                          .DefaultIfEmpty(original.Sequence)
-                          .Min()
-            : original.Sequence;
-
-        return conversation.Messages
-                           .Where(message => message.Sequence < earliestGroupSequence
-                                             && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
-                           .OrderByDescending(message => message.Sequence)
-                           .Select(message => message.Content)
-                           .FirstOrDefault();
-    }
+        NodeChatPersistedMessageDto original) =>
+        ResolvePrecedingUserTurn(conversation, original, SelectedPathResolver.CreateAnchorResolver(conversation.Messages))?.Content;
 
     // Emits the KnowledgeWithheld notice when the user opted into knowledge grounding for a regenerated plain-chat turn
     // but a cloud effective model would have received it without the operator's data-access opt-in. Mirrors the send
