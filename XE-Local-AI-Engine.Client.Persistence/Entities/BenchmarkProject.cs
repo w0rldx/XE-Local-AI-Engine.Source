@@ -13,11 +13,6 @@ internal sealed record class BenchmarkProject
 
     public int ContextTokens { get; set; }
     public Guid AgentDefinitionId { get; set; }
-    public bool JudgeEnabled { get; set; }
-    public string? JudgeModelName { get; set; }
-    public int? JudgeContextTokens { get; set; }
-    public int JudgePromptVersion { get; set; }
-    public int JudgeOutputSchemaVersion { get; set; }
 
     /// <summary>The judge policy revision this project judges under, or <see langword="null" /> when judging is off.</summary>
     public Guid? CurrentJudgePolicyRevisionId { get; set; }

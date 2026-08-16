@@ -29,11 +29,14 @@ public sealed record BenchmarkRuntimeSnapshotInput(
     BenchmarkLlamaRuntimeSnapshotV1 PrimaryRuntime,
     BenchmarkSamplingSnapshotV1 PrimarySampling,
     BenchmarkInstalledModelSnapshotV1 PrimaryModel,
-    BenchmarkJudgeSnapshotV1 Judge,
     BenchmarkFreezeDependencySetV1 Dependencies,
     string ApplicationVersion,
     long CreatedAtUtc);
 
+/// <summary>
+///     What a run was frozen with. Primary-only: judging is defined by the project's judge policy revision and frozen
+///     per attempt, so nothing about it belongs to a run that can be judged many times.
+/// </summary>
 public sealed record BenchmarkRuntimeSnapshotV1(
     int SchemaVersion,
     Guid ProjectId,
@@ -45,7 +48,6 @@ public sealed record BenchmarkRuntimeSnapshotV1(
     BenchmarkLlamaRuntimeSnapshotV1 PrimaryRuntime,
     BenchmarkSamplingSnapshotV1 PrimarySampling,
     BenchmarkInstalledModelSnapshotV1 PrimaryModel,
-    BenchmarkJudgeSnapshotV1 Judge,
     BenchmarkFreezeDependencySetV1 Dependencies,
     string ApplicationVersion,
     long CreatedAtUtc,
@@ -79,18 +81,6 @@ public sealed record BenchmarkPhysicalMemberSnapshotV1(
     bool Required,
     int? MetadataSchemaVersion,
     string? MemberFingerprint);
-
-public sealed record BenchmarkJudgeSnapshotV1(
-    bool Enabled,
-    BenchmarkInstalledModelSnapshotV1? Model,
-    int PromptVersion,
-    int OutputSchemaVersion,
-    int? RequestedContextTokens,
-    string? SystemPrompt,
-    string? OutputSchemaJson,
-    BenchmarkLlamaRuntimeSnapshotV1? Runtime,
-    BenchmarkSamplingSnapshotV1? Sampling,
-    string ConfigurationHash);
 
 public sealed record BenchmarkLlamaRuntimeSnapshotV1(
     GpuVariant Variant,
@@ -129,15 +119,7 @@ public sealed record BenchmarkSamplingSnapshotV1(
 
 public static class BenchmarkFrozenPolicies
 {
-    public const int JudgePromptVersion = 1;
-    public const int JudgeOutputSchemaVersion = 1;
     public const string FixedSeedPolicy = "fixed";
-
-    public const string JudgeOutputSchemaJson =
-        "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"schemaVersion\",\"score\",\"rationale\"],\"properties\":{\"schemaVersion\":{\"const\":1},\"score\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":5},\"rationale\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192}}}";
-
-    public const string JudgeSystemPrompt =
-        "Evaluate only the supplied benchmark task and primary output. Return exactly one JSON object matching the supplied output schema. Return no markdown or extra properties.";
 
     public static BenchmarkSamplingSnapshotV1 DeterministicSampling() =>
         new(0, null, null, null, null, null, null, null, null, [], FixedSeedPolicy, "0");
@@ -156,8 +138,6 @@ public static class BenchmarkFrozenPolicies
             StreamIdleTimeoutSeconds = 60
         };
 
-    public static bool SupportsVersions(int promptVersion, int outputSchemaVersion) =>
-        promptVersion == JudgePromptVersion && outputSchemaVersion == JudgeOutputSchemaVersion;
 }
 
 public sealed record BenchmarkFreezeDependencySetV1(
@@ -185,11 +165,10 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         ArgumentNullException.ThrowIfNull(input);
         var eligibleRuntime = _eligibilityPolicy.Apply(input.ResolvedRuntime);
         ValidateModel(input.PrimaryModel);
-        ValidateJudge(input.Judge);
         ValidateRuntime(input.PrimaryRuntime, input.RequestedContextTokens);
         ValidateSampling(input.PrimarySampling);
         var unhashed = new BenchmarkRuntimeSnapshotV1(1, input.ProjectId, input.AgentDefinitionId, input.AgentVersion,
-            input.CoreTask, input.RequestedContextTokens, eligibleRuntime, input.PrimaryRuntime, input.PrimarySampling, input.PrimaryModel, input.Judge, input.Dependencies,
+            input.CoreTask, input.RequestedContextTokens, eligibleRuntime, input.PrimaryRuntime, input.PrimarySampling, input.PrimaryModel, input.Dependencies,
             input.ApplicationVersion, input.CreatedAtUtc, string.Empty);
         return unhashed with
         {
@@ -222,7 +201,6 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         ValidateRuntime(snapshot.PrimaryRuntime, snapshot.RequestedContextTokens);
         ValidateSampling(snapshot.PrimarySampling);
         ValidateModel(snapshot.PrimaryModel);
-        ValidateJudge(snapshot.Judge);
         var expected = ComputeHash(snapshot with
         {
             ConfigurationHash = string.Empty
@@ -231,39 +209,6 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         {
             throw new BenchmarkSnapshotException("Benchmark snapshot configuration hash is invalid.");
         }
-    }
-
-    private static void ValidateJudge(BenchmarkJudgeSnapshotV1 judge)
-    {
-        if (!BenchmarkFrozenPolicies.SupportsVersions(judge.PromptVersion, judge.OutputSchemaVersion))
-        {
-            throw new BenchmarkSnapshotException("The frozen judge prompt or output schema version is unsupported.");
-        }
-
-        if (!judge.Enabled)
-        {
-            if (judge.Model is not null || judge.Runtime is not null || judge.Sampling is not null || judge.SystemPrompt is not null || judge.OutputSchemaJson is not null)
-            {
-                throw new BenchmarkSnapshotException("A disabled judge cannot carry a model snapshot.");
-            }
-
-            return;
-        }
-
-        if (judge.Model is null || judge.RequestedContextTokens is null or <= 0 || judge.Runtime is null || judge.Sampling is null)
-        {
-            throw new BenchmarkSnapshotException("An enabled judge requires a verified model and context.");
-        }
-
-        ValidateModel(judge.Model);
-        if (!string.Equals(judge.SystemPrompt, BenchmarkFrozenPolicies.JudgeSystemPrompt, StringComparison.Ordinal)
-            || !string.Equals(judge.OutputSchemaJson, BenchmarkFrozenPolicies.JudgeOutputSchemaJson, StringComparison.Ordinal))
-        {
-            throw new BenchmarkSnapshotException("The frozen judge prompt or output schema is unsupported.");
-        }
-
-        ValidateRuntime(judge.Runtime, judge.RequestedContextTokens.Value);
-        ValidateSampling(judge.Sampling);
     }
 
     private static void ValidateRuntime(BenchmarkLlamaRuntimeSnapshotV1 runtime, int minimumContextTokens)

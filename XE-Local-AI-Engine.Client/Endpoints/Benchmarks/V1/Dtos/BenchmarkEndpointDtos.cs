@@ -68,10 +68,8 @@ public class BenchmarkProjectSummaryResponse
 public sealed class BenchmarkProjectDetailResponse : BenchmarkProjectSummaryResponse
 {
     public required string CoreTask { get; init; }
-    public string? JudgeModelName { get; init; }
-    public int? JudgeContextTokens { get; init; }
-    public int JudgePromptVersion { get; init; }
-    public int JudgeOutputSchemaVersion { get; init; }
+    /// <summary>The policy revision the project judges under, or null when judging is off. S2 projects the policy itself.</summary>
+    public Guid? CurrentJudgePolicyRevisionId { get; init; }
 }
 
 public sealed class ListBenchmarkProjectsResponse
@@ -132,7 +130,16 @@ public class BenchmarkRunSummaryResponse
     public long AgentVersion { get; init; }
     public int RequestedContextTokens { get; init; }
     public BenchmarkPrimaryStatus PrimaryStatus { get; init; }
-    public BenchmarkJudgeStatus JudgeStatus { get; init; }
+    /// <summary>
+    ///     The derived judge state of the run's current attempt: <c>none|queued|running|succeeded|failed|cancelled</c>.
+    /// </summary>
+    public required string JudgeStatus { get; init; }
+
+    /// <summary>The current attempt's 0..100 score, or null when it has none.</summary>
+    public int? JudgeScore { get; init; }
+
+    /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
+    public string? RankExclusionReason { get; init; }
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
     public int? TotalTokens { get; init; }
@@ -163,33 +170,17 @@ public class BenchmarkRunSummaryResponse
     public bool? PrimaryHasAuxAssets { get; set; }
     public string? PrimaryReceiptHash { get; set; }
     public string? PrimaryEnvironmentFactsHash { get; set; }
-    public string? JudgeVariant { get; set; }
-    public string? JudgeKvCacheType { get; set; }
-    public string? JudgeKvCacheTypeSource { get; set; }
-    public string? JudgeKvAutoReason { get; set; }
-    public string? JudgeFlashAttentionMode { get; set; }
-    public string? JudgeIntendedLaunchIdentity { get; set; }
-    public string? JudgeIntendedExecutableSha256 { get; set; }
-    public string? JudgeEffectiveLaunchIdentity { get; set; }
-    public string? JudgeEffectiveBackend { get; set; }
-    public int? JudgePlacementOffloaded { get; set; }
-    public int? JudgePlacementTotal { get; set; }
-    public string? JudgeExecutableSha256 { get; set; }
-    public bool? JudgeHasAuxAssets { get; set; }
-    public string? JudgeReceiptHash { get; set; }
-    public string? JudgeEnvironmentFactsHash { get; set; }
 }
 
 public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 {
     public JsonElement? OutputParts { get; init; }
-    public BenchmarkJudgeResultV1? JudgeResult { get; init; }
+    /// <summary>The rubric verdict of the current attempt (<c>BenchmarkJudgeResultV2</c>), or null.</summary>
+    public JsonElement? JudgeResult { get; init; }
     public string? PrimaryErrorMessage { get; init; }
     public string? JudgeErrorMessage { get; init; }
     public long? StartedAtUtc { get; init; }
     public long? PrimaryCompletedAtUtc { get; init; }
-    public long? JudgeStartedAtUtc { get; init; }
-    public long? JudgeCompletedAtUtc { get; init; }
 
     /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c> v1), or null when none was recorded.</summary>
     public JsonElement? PrimaryLaunchReceipt { get; init; }
@@ -197,8 +188,6 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>
     public JsonElement? PrimaryEnvironmentFacts { get; init; }
 
-    public JsonElement? JudgeLaunchReceipt { get; init; }
-    public JsonElement? JudgeEnvironmentFacts { get; init; }
 }
 
 public sealed class ListBenchmarkRunsResponse

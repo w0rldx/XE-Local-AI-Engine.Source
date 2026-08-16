@@ -23,11 +23,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             CoreTaskJson = input.CoreTaskJson.ToArray(),
             ContextTokens = input.ContextTokens,
             AgentDefinitionId = input.AgentDefinitionId,
-            JudgeEnabled = input.JudgeEnabled,
-            JudgeModelName = NormalizeOptional(input.JudgeModelName),
-            JudgeContextTokens = input.JudgeContextTokens,
-            JudgePromptVersion = input.JudgePromptVersion,
-            JudgeOutputSchemaVersion = input.JudgeOutputSchemaVersion,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -75,11 +70,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
         project.AgentDefinitionId = input.AgentDefinitionId;
-        project.JudgeEnabled = input.JudgeEnabled;
-        project.JudgeModelName = NormalizeOptional(input.JudgeModelName);
-        project.JudgeContextTokens = input.JudgeContextTokens;
-        project.JudgePromptVersion = input.JudgePromptVersion;
-        project.JudgeOutputSchemaVersion = input.JudgeOutputSchemaVersion;
         project.Version++;
         project.UpdatedAtUtc = Now();
         await SaveAsync(cancellationToken).ConfigureAwait(false);
@@ -113,11 +103,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var project = await RequireProjectAsync(command.ProjectId, cancellationToken).ConfigureAwait(false);
         EnsureVersion(project.Version, command.ExpectedProjectVersion);
-        if (project.JudgeEnabled != command.JudgeEnabled)
-        {
-            throw new BenchmarkConflictException("FreezeDependencyChanged");
-        }
-
         if (command.FreezeCommitGuard is not null
             && !await command.FreezeCommitGuard.IsCurrentAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -137,7 +122,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             AgentVersion = command.AgentVersion,
             RequestedContextTokens = command.RequestedContextTokens,
             PrimaryStatus = BenchmarkPrimaryStatus.Queued,
-            JudgeStatus = command.JudgeEnabled ? BenchmarkJudgeStatus.Pending : BenchmarkJudgeStatus.Disabled,
             PrimaryVariant = command.PrimaryLaunchIntent?.Variant,
             PrimaryKvCacheType = command.PrimaryLaunchIntent?.KvCacheType,
             PrimaryKvCacheTypeSource = command.PrimaryLaunchIntent?.KvCacheTypeSource,
@@ -145,13 +129,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             PrimaryFlashAttentionMode = command.PrimaryLaunchIntent?.FlashAttentionMode,
             PrimaryIntendedLaunchIdentity = command.PrimaryLaunchIntent?.IntendedLaunchIdentity,
             PrimaryIntendedExecutableSha256 = command.PrimaryLaunchIntent?.IntendedExecutableSha256,
-            JudgeVariant = command.JudgeLaunchIntent?.Variant,
-            JudgeKvCacheType = command.JudgeLaunchIntent?.KvCacheType,
-            JudgeKvCacheTypeSource = command.JudgeLaunchIntent?.KvCacheTypeSource,
-            JudgeKvAutoReason = command.JudgeLaunchIntent?.KvAutoReason,
-            JudgeFlashAttentionMode = command.JudgeLaunchIntent?.FlashAttentionMode,
-            JudgeIntendedLaunchIdentity = command.JudgeLaunchIntent?.IntendedLaunchIdentity,
-            JudgeIntendedExecutableSha256 = command.JudgeLaunchIntent?.IntendedExecutableSha256,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -171,13 +148,22 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         _dbContext.BenchmarkWorkItems.Add(work);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
+        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        (await _dbContext.BenchmarkRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false)) is { } entity
-            ? ToRecord(entity)
-            : null;
+    public async Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        if (await _dbContext.BenchmarkRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false) is not { } entity)
+        {
+            return null;
+        }
+
+        var views = await LoadJudgeViewsAsync([runId], cancellationToken).ConfigureAwait(false);
+        return ToRecord(entity) with
+        {
+            Judge = JudgeViewFor(views, runId, entity.UserScore)
+        };
+    }
 
     public async Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
         int skip,
@@ -214,16 +200,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                   null,
                                   entity.LastStreamSequence,
                                   entity.UserScore,
-                                  entity.JudgeStatus,
-                                  null,
                                   entity.PrimaryErrorMessage,
-                                  entity.JudgeErrorMessage,
                                   entity.Version,
                                   entity.CreatedAtUtc,
                                   entity.StartedAtUtc,
                                   entity.PrimaryCompletedAtUtc,
-                                  entity.JudgeStartedAtUtc,
-                                  entity.JudgeCompletedAtUtc,
                                   entity.UpdatedAtUtc,
                                   entity.PrimaryVariant == null
                                       ? null
@@ -234,15 +215,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                           entity.PrimaryFlashAttentionMode!,
                                           entity.PrimaryIntendedLaunchIdentity!,
                                           entity.PrimaryIntendedExecutableSha256),
-                                  entity.JudgeVariant == null
-                                      ? null
-                                      : new BenchmarkRunLaunchIntent(entity.JudgeVariant,
-                                          entity.JudgeKvCacheType!,
-                                          entity.JudgeKvCacheTypeSource!,
-                                          entity.JudgeKvAutoReason,
-                                          entity.JudgeFlashAttentionMode!,
-                                          entity.JudgeIntendedLaunchIdentity!,
-                                          entity.JudgeIntendedExecutableSha256),
                                   entity.PrimaryEnvironmentFactsHash == null
                                       ? null
                                       : new BenchmarkRunLaunchEvidence(null,
@@ -255,23 +227,17 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                           entity.PrimaryPlacementTotal,
                                           entity.PrimaryLaunchExecutableSha256,
                                           entity.PrimaryLaunchHasAuxAssets,
-                                          entity.PrimaryLaunchKvCacheTypeSource),
-                                  entity.JudgeEnvironmentFactsHash == null
-                                      ? null
-                                      : new BenchmarkRunLaunchEvidence(null,
-                                          null,
-                                          entity.JudgeReceiptHash,
-                                          entity.JudgeEnvironmentFactsHash,
-                                          entity.JudgeEffectiveLaunchIdentity,
-                                          entity.JudgeEffectiveBackend,
-                                          entity.JudgePlacementOffloaded,
-                                          entity.JudgePlacementTotal,
-                                          entity.JudgeLaunchExecutableSha256,
-                                          entity.JudgeLaunchHasAuxAssets,
-                                          entity.JudgeLaunchKvCacheTypeSource)))
+                                          entity.PrimaryLaunchKvCacheTypeSource)))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
-        return new BenchmarkRunPage(items, totalCount);
+
+        // One extra query for the page rather than a join inside the no-payload projection: the judge view is derived
+        // from three more tables, and folding it in would make that projection unreadable.
+        var views = await LoadJudgeViewsAsync([.. items.Select(static item => item.Id)], cancellationToken).ConfigureAwait(false);
+        return new BenchmarkRunPage([.. items.Select(item => item with
+        {
+            Judge = JudgeViewFor(views, item.Id, item.UserScore)
+        })], totalCount);
     }
 
     public Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
@@ -330,25 +296,19 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             }
             else
             {
-                if (run.JudgeStatus != BenchmarkJudgeStatus.Queued)
+                // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
+                // polling the run still sees that something about it changed.
+                var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
+                                       cancellationToken)
+                                   .ConfigureAwait(false);
+                if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
                 {
                     throw new BenchmarkConflictException("InvalidJudgeTransition");
                 }
 
-                run.JudgeStatus = BenchmarkJudgeStatus.Running;
-                run.JudgeStartedAtUtc = now;
-                if (work.JudgeAttemptId is { } claimedAttemptId)
-                {
-                    var attempt = await RequireJudgeAttemptAsync(claimedAttemptId, cancellationToken).ConfigureAwait(false);
-                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
-                    {
-                        throw new BenchmarkConflictException("InvalidJudgeTransition");
-                    }
-
-                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
-                    attempt.StartedAtUtc = now;
-                    attempt.Version++;
-                }
+                attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                attempt.StartedAtUtc = now;
+                attempt.Version++;
             }
 
             run.Version++;
@@ -372,7 +332,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var run = await RequireRunAsync(command.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded)
         {
-            return ToRecord(run);
+            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
         }
 
         var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
@@ -391,11 +351,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.PrimaryCompletedAtUtc = cancelledAt;
             run.Version++;
             run.UpdatedAtUtc = cancelledAt;
-            SkipPendingJudge(run);
             TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, cancelledAt);
             await SaveAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return ToRecord(run);
+            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
         }
 
         EnsurePrimaryState(run, BenchmarkPrimaryStatus.Running);
@@ -411,46 +370,38 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.Version++;
         run.UpdatedAtUtc = now;
         TerminalizeWork(work, BenchmarkWorkStatus.Succeeded, errorMessage: null, now);
-        if (run.JudgeStatus == BenchmarkJudgeStatus.Pending)
+        // Only the pointer column: deciding whether to judge must not decrypt the project's core task. No pointer
+        // means nothing to judge under, and the run simply never gets an attempt.
+        var currentRevisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                                .Where(entity => entity.Id == run.ProjectId)
+                                                .Select(entity => entity.CurrentJudgePolicyRevisionId)
+                                                .SingleOrDefaultAsync(cancellationToken)
+                                                .ConfigureAwait(false);
+        if (currentRevisionId is { } revisionId)
         {
-            // Only the pointer column: deciding whether to judge must not decrypt the project's core task.
-            var currentRevisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
-                                                    .Where(entity => entity.Id == run.ProjectId)
-                                                    .Select(entity => entity.CurrentJudgePolicyRevisionId)
-                                                    .SingleOrDefaultAsync(cancellationToken)
-                                                    .ConfigureAwait(false);
-            if (currentRevisionId is { } revisionId)
-            {
-                var seed = command.JudgeAttempt;
+            var seed = command.JudgeAttempt;
 
-                // The runtime was resolved for one specific revision. If the project moved on meanwhile, abandoning the
-                // transaction rolls primary success back with it, and the caller re-resolves and retries.
-                if (seed?.ExpectedJudgePolicyRevisionId is { } expectedRevisionId && expectedRevisionId != revisionId)
-                {
-                    throw new BenchmarkJudgePolicyChangedException("The project's judge policy changed while the run was executing.");
-                }
-
-                var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
-                _ = await InsertJudgeAttemptAsync(run,
-                                                  revision,
-                                                  seed?.RuntimeJson,
-                                                  seed?.RuntimeUnresolvedReason,
-                                                  seed?.LaunchIntent,
-                                                  now,
-                                                  cancellationToken)
-                        .ConfigureAwait(false);
-            }
-            else
+            // The runtime was resolved for one specific revision. If the project moved on meanwhile, abandoning the
+            // transaction rolls primary success back with it, and the caller re-resolves and retries.
+            if (seed?.ExpectedJudgePolicyRevisionId is { } expectedRevisionId && expectedRevisionId != revisionId)
             {
-                // No policy means nothing to judge under. A judge work item without an attempt is not representable,
-                // so the phase terminalizes here rather than queueing work that can never be claimed.
-                run.JudgeStatus = BenchmarkJudgeStatus.Skipped;
+                throw new BenchmarkJudgePolicyChangedException("The project's judge policy changed while the run was executing.");
             }
+
+            var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
+            _ = await InsertJudgeAttemptAsync(run,
+                                              revision,
+                                              seed?.RuntimeJson,
+                                              seed?.RuntimeUnresolvedReason,
+                                              seed?.LaunchIntent,
+                                              now,
+                                              cancellationToken)
+                    .ConfigureAwait(false);
         }
 
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
+        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
@@ -474,127 +425,214 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     public async Task<BenchmarkRunRecord> MarkJudgeSucceededAsync(BenchmarkJudgeSuccessCommand command, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(command);
         if (command.JudgeResultJson.IsEmpty)
         {
             throw new BenchmarkValidationException("Successful judge output cannot be empty.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await AcquireWorkCompletionAsync(command.RunId, BenchmarkWorkKind.Judge, command.ExpectedWorkVersion, cancellationToken).ConfigureAwait(false);
-        _dbContext.ChangeTracker.Clear();
-        var run = await RequireRunAsync(command.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
-        if (run.JudgeStatus == BenchmarkJudgeStatus.Succeeded)
-        {
-            return ToRecord(run);
-        }
-
-        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
-        EnsureVersion(work.Version, command.ExpectedWorkVersion);
-        EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
-        var now = Now();
-        run.JudgeStatus = BenchmarkJudgeStatus.Succeeded;
-        run.JudgeResultJson = command.JudgeResultJson.ToArray();
-        UpdateLastStreamSequence(run, command.LastStreamSequence);
-        run.JudgeCompletedAtUtc = now;
-        run.Version++;
-        run.UpdatedAtUtc = now;
-        TerminalizeWork(work, BenchmarkWorkStatus.Succeeded, errorMessage: null, now);
-        await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Succeeded, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
+        return await TerminalizeJudgeAsync(command.RunId,
+                         command.ExpectedWorkVersion,
+                         BenchmarkJudgeAttemptStatus.Succeeded,
+                         BenchmarkWorkStatus.Succeeded,
+                         errorMessage: null,
+                         command.LastStreamSequence,
+                         (attempt, promote) =>
+                         {
+                             attempt.ResultJson = command.JudgeResultJson.ToArray();
+                             attempt.Score = command.Score;
+                             return promote;
+                         },
+                         cancellationToken)
+                     .ConfigureAwait(false);
     }
 
-    public async Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
+    public Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
-        CancellationToken cancellationToken = default)
-    {
-        return await MarkJudgeFailedAsync(runId, expectedRunVersion, errorMessage, lastStreamSequence: 0, cancellationToken).ConfigureAwait(false);
-    }
+        CancellationToken cancellationToken = default) =>
+        MarkJudgeFailedAsync(runId, expectedRunVersion, errorMessage, lastStreamSequence: 0, cancellationToken);
 
-    public async Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
+    public Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
         long lastStreamSequence,
-        CancellationToken cancellationToken = default)
-    {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Judge, expectedRunVersion, cancellationToken).ConfigureAwait(false);
-        _dbContext.ChangeTracker.Clear();
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
-        if (run.JudgeStatus == BenchmarkJudgeStatus.Failed)
-        {
-            return ToRecord(run);
-        }
+        CancellationToken cancellationToken = default) =>
+        TerminalizeJudgeAsync(runId,
+            expectedRunVersion,
+            BenchmarkJudgeAttemptStatus.Failed,
+            BenchmarkWorkStatus.Failed,
+            Sanitize(errorMessage),
+            lastStreamSequence,
+            static (_, _) => false,
+            cancellationToken);
 
-        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
-        EnsureVersion(work.Version, expectedRunVersion);
-        EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
-        var now = Now();
-        run.JudgeStatus = BenchmarkJudgeStatus.Failed;
-        run.JudgeErrorMessage = Sanitize(errorMessage);
-        UpdateLastStreamSequence(run, lastStreamSequence);
-        run.JudgeCompletedAtUtc = now;
-        run.Version++;
-        run.UpdatedAtUtc = now;
-        TerminalizeWork(work, BenchmarkWorkStatus.Failed, run.JudgeErrorMessage, now);
-        await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, run.JudgeErrorMessage, now, cancellationToken).ConfigureAwait(false);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
-    }
-
-    public async Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
+    public Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
         long expectedRunVersion,
-        CancellationToken cancellationToken = default)
-    {
-        return await MarkJudgeCancelledAsync(runId, expectedRunVersion, lastStreamSequence: 0, cancellationToken).ConfigureAwait(false);
-    }
+        CancellationToken cancellationToken = default) =>
+        MarkJudgeCancelledAsync(runId, expectedRunVersion, lastStreamSequence: 0, cancellationToken);
 
-    public async Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
+    public Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        TerminalizeJudgeAsync(runId,
+            expectedRunVersion,
+            BenchmarkJudgeAttemptStatus.Cancelled,
+            BenchmarkWorkStatus.Cancelled,
+            errorMessage: null,
+            lastStreamSequence,
+            static (_, _) => false,
+            cancellationToken);
+
+    /// <summary>
+    ///     The one judge terminalization path. The compare-and-swap is on the immutable work item, the state lives on
+    ///     the attempt, and the run only moves its version and stream sequence — a judging is not run state.
+    /// </summary>
+    /// <param name="apply">
+    ///     Writes the terminal payload onto the attempt and returns whether this outcome may claim the rank cohort.
+    ///     Only a success may: a failed or cancelled judging must never define what the ranked runs are compared to.
+    /// </param>
+    private async Task<BenchmarkRunRecord> TerminalizeJudgeAsync(Guid runId,
+        long expectedWorkVersion,
+        BenchmarkJudgeAttemptStatus attemptStatus,
+        BenchmarkWorkStatus workStatus,
+        string? errorMessage,
+        long lastStreamSequence,
+        Func<BenchmarkJudgeAttempt, bool, bool> apply,
+        CancellationToken cancellationToken)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Judge, expectedRunVersion, cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Judge, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
         _dbContext.ChangeTracker.Clear();
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
-        if (run.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var now = Now();
+        TerminalizeWork(work, workStatus, errorMessage, now);
+        var attempt = await TerminalizeJudgeAttemptAsync(work, attemptStatus, errorMessage, now, cancellationToken).ConfigureAwait(false);
+        if (attempt is null)
         {
-            return ToRecord(run);
+            // Already terminal: repeating a terminalization must not write a second result or bump anything.
+            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
         }
 
-        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
-        EnsureVersion(work.Version, expectedRunVersion);
-        EnsureJudgeState(run, BenchmarkJudgeStatus.Running);
-        var now = Now();
-        run.JudgeStatus = BenchmarkJudgeStatus.Cancelled;
+        if (apply(attempt, attemptStatus == BenchmarkJudgeAttemptStatus.Succeeded) && attempt.JudgeExecutionKey is { } executionKey)
+        {
+            // The cohort is claimed by the first SUCCESS of the live generation, never at readiness: a failed first
+            // attempt must not poison the ranking for the runtime it happened to run on.
+            _ = await TryPromoteReferenceExecutionKeyAsync(attempt.PolicyRevisionId, attempt.CohortGeneration, executionKey, cancellationToken)
+                    .ConfigureAwait(false);
+        }
+
         UpdateLastStreamSequence(run, lastStreamSequence);
-        run.JudgeCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
-        TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
-        await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
+        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<bool> MarkPrimaryLaunchReadyAsync(Guid runId,
+    public async Task<bool> MarkPrimaryLaunchReadyAsync(Guid runId,
         long workItemId,
         long claimedWorkVersion,
         BenchmarkLaunchReceiptCommand command,
-        CancellationToken cancellationToken = default) =>
-        MarkLaunchReadyAsync(runId, BenchmarkWorkKind.Primary, workItemId, claimedWorkVersion, command, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
+                                   .ConfigureAwait(false);
 
-    public Task<bool> MarkJudgeLaunchReadyAsync(Guid runId,
+        // Running at the claimed version is the ordinary case; Cancelled at its successor is the proven cancel-first
+        // ordering, where the work item was terminalized (Version + 1) while this launch was still coming up.
+        if (work is null
+            || work.RunId != runId
+            || work.Kind != BenchmarkWorkKind.Primary
+            || !((work.Status == BenchmarkWorkStatus.Running && work.Version == claimedWorkVersion)
+                 || (work.Status == BenchmarkWorkStatus.Cancelled && work.Version == claimedWorkVersion + 1)))
+        {
+            return false;
+        }
+
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (run.PrimaryLaunchReceiptJson is not null || run.PrimaryEnvironmentFactsJson is not null)
+        {
+            return false;
+        }
+
+        run.PrimaryLaunchReceiptJson = command.ReceiptJson is null ? null : Encoding.UTF8.GetBytes(command.ReceiptJson);
+        run.PrimaryEnvironmentFactsJson = Encoding.UTF8.GetBytes(command.EnvironmentFactsJson);
+        run.PrimaryReceiptHash = command.ReceiptHash;
+        run.PrimaryEnvironmentFactsHash = command.EnvironmentFactsHash;
+        run.PrimaryEffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
+        run.PrimaryEffectiveBackend = command.EffectiveBackend;
+        run.PrimaryPlacementOffloaded = command.PlacementOffloaded;
+        run.PrimaryPlacementTotal = command.PlacementTotal;
+        run.PrimaryLaunchExecutableSha256 = command.ExecutableSha256;
+        run.PrimaryLaunchHasAuxAssets = command.HasAuxAssets;
+        run.PrimaryLaunchKvCacheTypeSource = command.KvCacheTypeSource;
+
+        // The run's own version is deliberately left alone: the checkpoint is evidence, not a lifecycle transition,
+        // and bumping it would 409 an operator cancellation that is holding the version it just read.
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<bool> MarkJudgeLaunchReadyAsync(Guid attemptId,
         long workItemId,
         long claimedWorkVersion,
         BenchmarkLaunchReceiptCommand command,
-        CancellationToken cancellationToken = default) =>
-        MarkLaunchReadyAsync(runId, BenchmarkWorkKind.Judge, workItemId, claimedWorkVersion, command, cancellationToken);
+        string? judgeExecutionKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
+                                   .ConfigureAwait(false);
+
+        // Same CAS as the primary: Running at the claimed version, or Cancelled at its successor — the proven
+        // cancel-first ordering, where the work item was terminalized while this launch was still coming up.
+        if (work is null
+            || work.Kind != BenchmarkWorkKind.Judge
+            || work.JudgeAttemptId != attemptId
+            || !((work.Status == BenchmarkWorkStatus.Running && work.Version == claimedWorkVersion)
+                 || (work.Status == BenchmarkWorkStatus.Cancelled && work.Version == claimedWorkVersion + 1)))
+        {
+            return false;
+        }
+
+        var attempt = await RequireJudgeAttemptAsync(attemptId, cancellationToken).ConfigureAwait(false);
+        if (attempt.LaunchReceiptJson is not null || attempt.EnvironmentFactsJson is not null)
+        {
+            return false;
+        }
+
+        attempt.LaunchReceiptJson = command.ReceiptJson is null ? null : Encoding.UTF8.GetBytes(command.ReceiptJson);
+        attempt.EnvironmentFactsJson = Encoding.UTF8.GetBytes(command.EnvironmentFactsJson);
+        attempt.ReceiptHash = command.ReceiptHash;
+        attempt.EnvironmentFactsHash = command.EnvironmentFactsHash;
+        attempt.EffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
+        attempt.EffectiveBackend = command.EffectiveBackend;
+        attempt.PlacementOffloaded = command.PlacementOffloaded;
+        attempt.PlacementTotal = command.PlacementTotal;
+        attempt.LaunchExecutableSha256 = command.ExecutableSha256;
+        attempt.LaunchHasAuxAssets = command.HasAuxAssets;
+        attempt.LaunchKvCacheTypeSource = command.KvCacheTypeSource;
+
+        // Written here and only here: the cohort key describes what this attempt actually launched. NULL stays NULL —
+        // an incomplete execution identity must never be repaired into a rankable one later.
+        attempt.JudgeExecutionKey = judgeExecutionKey;
+
+        // The attempt's own version is deliberately left alone: the checkpoint is evidence, not a lifecycle
+        // transition, and bumping it would invalidate the completion token the executor is holding.
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
 
     public async Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
     {
@@ -602,13 +640,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.PrimaryStatus is BenchmarkPrimaryStatus.CancelRequested or BenchmarkPrimaryStatus.Cancelled)
         {
-            return ToRecord(run);
+            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
         }
 
+        var currentAttempt = run.CurrentJudgeAttemptId is { } currentAttemptId
+            ? await RequireJudgeAttemptAsync(currentAttemptId, cancellationToken).ConfigureAwait(false)
+            : null;
         if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
-            && run.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
+            && currentAttempt?.Status == BenchmarkJudgeAttemptStatus.Cancelled)
         {
-            return ToRecord(run);
+            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
         }
 
         EnsureVersion(run.Version, expectedRunVersion);
@@ -619,19 +660,17 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.PrimaryCompletedAtUtc = now;
             var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
             TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
-            SkipPendingJudge(run);
         }
         else if (run.PrimaryStatus == BenchmarkPrimaryStatus.Running)
         {
             run.PrimaryStatus = BenchmarkPrimaryStatus.CancelRequested;
         }
-        else if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded && run.JudgeStatus is BenchmarkJudgeStatus.Queued or BenchmarkJudgeStatus.Running)
+        else if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                 && currentAttempt?.Status is BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running)
         {
-            run.JudgeStatus = BenchmarkJudgeStatus.Cancelled;
-            run.JudgeCompletedAtUtc = now;
             var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
             TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
-            await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+            _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -642,7 +681,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
+        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<BenchmarkRunRecord> SetUserScoreAsync(Guid runId,
@@ -666,7 +705,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.Version++;
         run.UpdatedAtUtc = Now();
         await SaveAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
+        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default) =>
@@ -708,14 +747,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 run.PrimaryStatus = cancelledPrimary ? BenchmarkPrimaryStatus.Cancelled : BenchmarkPrimaryStatus.Failed;
                 run.PrimaryErrorMessage = cancelledPrimary ? null : InterruptedMessage;
                 run.PrimaryCompletedAtUtc = now;
-                SkipPendingJudge(run);
             }
             else
             {
-                run.JudgeStatus = BenchmarkJudgeStatus.Failed;
-                run.JudgeErrorMessage = InterruptedMessage;
-                run.JudgeCompletedAtUtc = now;
-                await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
+                _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
             }
 
             run.Version++;
@@ -731,7 +766,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.Version++;
             run.LastStreamSequence = checked(run.LastStreamSequence + 1);
             run.UpdatedAtUtc = now;
-            SkipPendingJudge(run);
             recoveredRunIds.Add(run.Id);
         }
 
@@ -748,7 +782,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         EnsureVersion(run.Version, expectedRunVersion);
         if (!IsPrimaryTerminal(run.PrimaryStatus)
-            || run.JudgeStatus is BenchmarkJudgeStatus.Pending or BenchmarkJudgeStatus.Queued or BenchmarkJudgeStatus.Running
             || await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
                                                                       && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running), cancellationToken)
                                .ConfigureAwait(false)
@@ -823,15 +856,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.CurrentJudgePolicyRevisionId = revision.Id;
         project.Version++;
         project.UpdatedAtUtc = now;
-        var succeededRunIds = await _dbContext.BenchmarkRuns.AsNoTracking()
-                                              .Where(entity => entity.ProjectId == projectId
-                                                               && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
-                                                               && entity.OutputPartsJson != null)
-                                              .OrderBy(entity => entity.CreatedAtUtc)
-                                              .ThenBy(entity => entity.Id)
-                                              .Select(entity => entity.Id)
-                                              .ToArrayAsync(cancellationToken)
-                                              .ConfigureAwait(false);
+        var succeededRunIds = await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), wasCreated, succeededRunIds);
@@ -849,6 +874,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
+        await _dbContext.BenchmarkJudgeAttempts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false) is { } attempt
+            ? ToRecord(attempt)
+            : null;
+
+    public async Task<BenchmarkJudgePolicyRevisionRecord?> GetJudgePolicyRevisionAsync(Guid revisionId, CancellationToken cancellationToken = default) =>
+        await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == revisionId, cancellationToken).ConfigureAwait(false) is { } revision
+            ? ToRecord(revision, includePayload: true)
+            : null;
 
     public async Task<BenchmarkJudgePolicyRevisionRecord?> GetCurrentJudgePolicyRevisionAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
@@ -944,6 +979,32 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return ToRecord(attempt);
     }
 
+    public async Task<BenchmarkJudgePolicyActivation> BeginProjectRejudgeAsync(Guid projectId,
+        long expectedProjectVersion,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(project.Version, expectedProjectVersion);
+        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
+        {
+            throw new BenchmarkConflictException("JudgeDisabled");
+        }
+
+        // The reset and the eligible set are decided together, so "move the cohort to the current runtime" can never
+        // enqueue a partial set that would then rank against a key half of it never ran under.
+        var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
+        revision.ReferenceExecutionKey = null;
+        revision.CohortGeneration = checked(revision.CohortGeneration + 1);
+        project.Version++;
+        project.UpdatedAtUtc = Now();
+        var succeededRunIds = await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), WasCreated: false, succeededRunIds);
+    }
+
     public async Task<bool> TryPromoteReferenceExecutionKeyAsync(Guid revisionId,
         int cohortGeneration,
         string executionKey,
@@ -979,7 +1040,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
         if (run.PrimaryStatus == status)
         {
-            return ToRecord(run);
+            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
         }
 
         var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
@@ -1002,88 +1063,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
-        SkipPendingJudge(run);
         TerminalizeWork(work, reconciledWorkStatus, run.PrimaryErrorMessage, now);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return ToRecord(run);
-    }
-
-    /// <summary>
-    ///     Insert-if-null write of one phase's launch evidence. Keyed by the immutable work item, so a run version
-    ///     that moved on (a score, a cancellation request) cannot invalidate the checkpoint, and no status is touched.
-    /// </summary>
-    private async Task<bool> MarkLaunchReadyAsync(Guid runId,
-        BenchmarkWorkKind kind,
-        long workItemId,
-        long claimedWorkVersion,
-        BenchmarkLaunchReceiptCommand command,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
-                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
-                                   .ConfigureAwait(false);
-
-        // Running at the claimed version is the ordinary case; Cancelled at its successor is the proven cancel-first
-        // ordering, where the work item was terminalized (Version + 1) while this launch was still coming up.
-        if (work is null
-            || work.RunId != runId
-            || work.Kind != kind
-            || !((work.Status == BenchmarkWorkStatus.Running && work.Version == claimedWorkVersion)
-                 || (work.Status == BenchmarkWorkStatus.Cancelled && work.Version == claimedWorkVersion + 1)))
-        {
-            return false;
-        }
-
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var receiptJson = command.ReceiptJson is null ? null : Encoding.UTF8.GetBytes(command.ReceiptJson);
-        var environmentFactsJson = Encoding.UTF8.GetBytes(command.EnvironmentFactsJson);
-        if (kind == BenchmarkWorkKind.Primary)
-        {
-            if (run.PrimaryLaunchReceiptJson is not null || run.PrimaryEnvironmentFactsJson is not null)
-            {
-                return false;
-            }
-
-            run.PrimaryLaunchReceiptJson = receiptJson;
-            run.PrimaryEnvironmentFactsJson = environmentFactsJson;
-            run.PrimaryReceiptHash = command.ReceiptHash;
-            run.PrimaryEnvironmentFactsHash = command.EnvironmentFactsHash;
-            run.PrimaryEffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
-            run.PrimaryEffectiveBackend = command.EffectiveBackend;
-            run.PrimaryPlacementOffloaded = command.PlacementOffloaded;
-            run.PrimaryPlacementTotal = command.PlacementTotal;
-            run.PrimaryLaunchExecutableSha256 = command.ExecutableSha256;
-            run.PrimaryLaunchHasAuxAssets = command.HasAuxAssets;
-            run.PrimaryLaunchKvCacheTypeSource = command.KvCacheTypeSource;
-        }
-        else
-        {
-            if (run.JudgeLaunchReceiptJson is not null || run.JudgeEnvironmentFactsJson is not null)
-            {
-                return false;
-            }
-
-            run.JudgeLaunchReceiptJson = receiptJson;
-            run.JudgeEnvironmentFactsJson = environmentFactsJson;
-            run.JudgeReceiptHash = command.ReceiptHash;
-            run.JudgeEnvironmentFactsHash = command.EnvironmentFactsHash;
-            run.JudgeEffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
-            run.JudgeEffectiveBackend = command.EffectiveBackend;
-            run.JudgePlacementOffloaded = command.PlacementOffloaded;
-            run.JudgePlacementTotal = command.PlacementTotal;
-            run.JudgeLaunchExecutableSha256 = command.ExecutableSha256;
-            run.JudgeLaunchHasAuxAssets = command.HasAuxAssets;
-            run.JudgeLaunchKvCacheTypeSource = command.KvCacheTypeSource;
-        }
-
-        // The run's own version is deliberately left alone: the checkpoint is evidence, not a lifecycle transition,
-        // and bumping it would 409 an operator cancellation that is holding the version it just read.
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return true;
+        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1143,15 +1126,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             ErrorMessage = failure
         });
         run.CurrentJudgeAttemptId = attempt.Id;
-        run.JudgeStatus = unresolved ? BenchmarkJudgeStatus.Failed : BenchmarkJudgeStatus.Queued;
-        run.JudgeErrorMessage = failure;
-        run.JudgeStartedAtUtc = null;
-        run.JudgeCompletedAtUtc = unresolved ? now : null;
         return attempt;
     }
 
-    /// <summary>Moves the attempt behind a judge work item to its terminal state. Never overwrites a terminal one.</summary>
-    private async Task TerminalizeJudgeAttemptAsync(BenchmarkWorkItem work,
+    /// <summary>
+    ///     Moves the attempt behind a judge work item to its terminal state and returns it. Never overwrites a terminal
+    ///     one — a repeated terminalization returns <see langword="null" /> so no result is written twice.
+    /// </summary>
+    private async Task<BenchmarkJudgeAttempt?> TerminalizeJudgeAttemptAsync(BenchmarkWorkItem work,
         BenchmarkJudgeAttemptStatus status,
         string? errorMessage,
         long now,
@@ -1159,20 +1141,21 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     {
         if (work.JudgeAttemptId is not { } attemptId)
         {
-            return;
+            return null;
         }
 
         var attempt = await _dbContext.BenchmarkJudgeAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false);
         if (attempt is null
             || attempt.Status is BenchmarkJudgeAttemptStatus.Succeeded or BenchmarkJudgeAttemptStatus.Failed or BenchmarkJudgeAttemptStatus.Cancelled)
         {
-            return;
+            return null;
         }
 
         attempt.Status = status;
         attempt.ErrorMessage = errorMessage;
         attempt.CompletedAtUtc = now;
         attempt.Version++;
+        return attempt;
     }
 
     /// <summary>
@@ -1233,6 +1216,147 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         return (revision, true);
     }
+
+    /// <summary>
+    ///     A run record carrying its derived judge view. Every path that returns a run uses this: the view is how a
+    ///     caller reads judge state now, and a record that silently omitted it would read as "no judging" to a caller
+    ///     that had just terminalized one.
+    /// </summary>
+    private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
+    {
+        var views = await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false);
+        return ToRecord(run) with
+        {
+            Judge = JudgeViewFor(views, run.Id, run.UserScore)
+        };
+    }
+
+    private static BenchmarkRunJudgeView JudgeViewFor(IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views, Guid runId, int? userScore)
+    {
+        if (views.TryGetValue(runId, out var view))
+        {
+            return view;
+        }
+
+        // No attempt: there is nothing to derive a judging from, so the run is unranked unless the operator scored it.
+        var reason = userScore is null ? BenchmarkRunJudgeStates.ReasonNoScore : null;
+        return new BenchmarkRunJudgeView(BenchmarkRunJudgeStates.None, Score: null, PolicyRevision: null, PolicyRevisionId: null,
+            AttemptSequence: null, CohortGeneration: null, ExecutionKey: null, ErrorMessage: null, PolicyCurrent: false,
+            ExecutionCurrent: false, reason);
+    }
+
+    /// <summary>
+    ///     The derived judge state for each run that has a current attempt. Runs without one are absent, and the caller
+    ///     substitutes the <c>none</c> view — a run with no attempt has nothing to derive from.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, BenchmarkRunJudgeView>> LoadJudgeViewsAsync(IReadOnlyList<Guid> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return new Dictionary<Guid, BenchmarkRunJudgeView>();
+        }
+
+        // Flat columns only across all four tables, so nothing is decrypted to answer "is this run ranked?".
+        var rows = await (from run in _dbContext.BenchmarkRuns.AsNoTracking()
+                          join attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking() on run.CurrentJudgeAttemptId equals attempt.Id
+                          join revision in _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking() on attempt.PolicyRevisionId equals revision.Id
+                          join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
+                          where runIds.Contains(run.Id)
+                          select new JudgeViewRow(run.Id,
+                              run.UserScore,
+                              attempt.Status,
+                              attempt.Score,
+                              attempt.Sequence,
+                              attempt.CohortGeneration,
+                              attempt.JudgeExecutionKey,
+                              attempt.ErrorMessage,
+                              attempt.PolicyRevisionId,
+                              revision.Revision,
+                              revision.CohortGeneration,
+                              revision.ReferenceExecutionKey,
+                              project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        return rows.ToDictionary(static row => row.RunId, BuildJudgeView);
+    }
+
+    /// <summary>
+    ///     Rank membership, decided at read time (plan §3.5): an operator score always ranks; a judge score ranks only
+    ///     under the project's current policy revision, in that revision's live cohort generation, with the execution
+    ///     key the cohort was claimed with. Anything else is honestly unranked, with a reason the UI can act on.
+    /// </summary>
+    private static BenchmarkRunJudgeView BuildJudgeView(JudgeViewRow row)
+    {
+        var state = row.Status switch
+        {
+            BenchmarkJudgeAttemptStatus.Queued => BenchmarkRunJudgeStates.Queued,
+            BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.Running,
+            BenchmarkJudgeAttemptStatus.Succeeded => BenchmarkRunJudgeStates.Succeeded,
+            BenchmarkJudgeAttemptStatus.Failed => BenchmarkRunJudgeStates.Failed,
+            _ => BenchmarkRunJudgeStates.Cancelled
+        };
+        var policyCurrent = row.ProjectCurrentRevisionId == row.PolicyRevisionId;
+        var executionCurrent = row.AttemptGeneration == row.RevisionGeneration
+                               && row.ExecutionKey is not null
+                               && string.Equals(row.ExecutionKey, row.ReferenceExecutionKey, StringComparison.Ordinal);
+        return new BenchmarkRunJudgeView(state,
+            row.Score,
+            row.RevisionNumber,
+            row.PolicyRevisionId,
+            row.Sequence,
+            row.AttemptGeneration,
+            row.ExecutionKey,
+            row.ErrorMessage,
+            policyCurrent,
+            executionCurrent,
+            RankExclusionReason(row, policyCurrent, executionCurrent));
+    }
+
+    private static string? RankExclusionReason(JudgeViewRow row, bool policyCurrent, bool executionCurrent)
+    {
+        if (row.UserScore is not null)
+        {
+            return null;
+        }
+
+        return row.Status switch
+        {
+            BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
+            BenchmarkJudgeAttemptStatus.Failed or BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            _ when row.Score is null => BenchmarkRunJudgeStates.ReasonNoScore,
+            _ when !policyCurrent => BenchmarkRunJudgeStates.ReasonPolicyOutdated,
+            _ when row.AttemptGeneration != row.RevisionGeneration => BenchmarkRunJudgeStates.ReasonGenerationStale,
+            _ when row.ExecutionKey is null => BenchmarkRunJudgeStates.ReasonExecutionIdentityIncomplete,
+            _ when !executionCurrent => BenchmarkRunJudgeStates.ReasonExecutionKeyMismatch,
+            _ => null
+        };
+    }
+
+    /// <summary>The flat columns the derived judge view is computed from. Never leaves this class.</summary>
+    private sealed record JudgeViewRow(
+        Guid RunId,
+        int? UserScore,
+        BenchmarkJudgeAttemptStatus Status,
+        int? Score,
+        int Sequence,
+        int AttemptGeneration,
+        string? ExecutionKey,
+        string? ErrorMessage,
+        Guid PolicyRevisionId,
+        int RevisionNumber,
+        int RevisionGeneration,
+        string? ReferenceExecutionKey,
+        Guid? ProjectCurrentRevisionId);
+
+    /// <summary>The project's succeeded runs with stored output — exactly the set a re-judge must cover.</summary>
+    private async Task<IReadOnlyList<Guid>> SucceededRunIdsAsync(Guid projectId, CancellationToken cancellationToken) =>
+        await _dbContext.BenchmarkRuns.AsNoTracking()
+                        .Where(entity => entity.ProjectId == projectId
+                                         && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                                         && entity.OutputPartsJson != null)
+                        .OrderBy(entity => entity.CreatedAtUtc)
+                        .ThenBy(entity => entity.Id)
+                        .Select(entity => entity.Id)
+                        .ToArrayAsync(cancellationToken)
+                        .ConfigureAwait(false);
 
     private async Task ResetCurrentCohortAsync(Guid projectId, CancellationToken cancellationToken)
     {
@@ -1369,11 +1493,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         {
             throw new BenchmarkValidationException("Benchmark project input is invalid.");
         }
-
-        if (input.JudgeEnabled && (string.IsNullOrWhiteSpace(input.JudgeModelName) || input.JudgeContextTokens is null or <= 0))
-        {
-            throw new BenchmarkValidationException("Enabled judging requires a model and positive context.");
-        }
     }
 
     private static void ValidateStart(BenchmarkStartRunCommand command)
@@ -1403,22 +1522,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
     }
 
-    private static void EnsureJudgeState(BenchmarkRun run, BenchmarkJudgeStatus required)
-    {
-        if (run.JudgeStatus != required)
-        {
-            throw new BenchmarkConflictException("InvalidJudgeTransition");
-        }
-    }
-
-    private static void SkipPendingJudge(BenchmarkRun run)
-    {
-        if (run.JudgeStatus == BenchmarkJudgeStatus.Pending)
-        {
-            run.JudgeStatus = BenchmarkJudgeStatus.Skipped;
-        }
-    }
-
     private static bool IsPrimaryTerminal(BenchmarkPrimaryStatus status) =>
         status is BenchmarkPrimaryStatus.Succeeded or BenchmarkPrimaryStatus.Failed or BenchmarkPrimaryStatus.Cancelled;
 
@@ -1427,9 +1530,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var normalized = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
         return normalized.Length <= 1024 ? normalized : normalized[..1024];
     }
-
-    private static string? NormalizeOptional(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void UpdateLastStreamSequence(BenchmarkRun run, long sequence)
     {
@@ -1443,29 +1543,22 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
-        new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId, entity.JudgeEnabled,
-            entity.JudgeModelName, entity.JudgeContextTokens, entity.JudgePromptVersion, entity.JudgeOutputSchemaVersion, frozen,
+        new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
+            entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
 
     private static BenchmarkRunRecord ToRecord(BenchmarkRun entity) =>
         new(entity.Id, entity.ProjectId, entity.RuntimeSnapshotJson.ToArray(), entity.PrimaryModelName, entity.PrimaryModelOrigin,
             entity.ModelContentFingerprint, entity.AgentName, entity.AgentVersion, entity.RequestedContextTokens, entity.PrimaryStatus,
             entity.EffectiveContextTokens, entity.DurationMs, entity.TotalTokens, entity.TokensPerSecond, CopyOptional(entity.OutputPartsJson),
-            entity.LastStreamSequence, entity.UserScore, entity.JudgeStatus, CopyOptional(entity.JudgeResultJson), entity.PrimaryErrorMessage,
-            entity.JudgeErrorMessage, entity.Version, entity.CreatedAtUtc, entity.StartedAtUtc, entity.PrimaryCompletedAtUtc,
-            entity.JudgeStartedAtUtc, entity.JudgeCompletedAtUtc, entity.UpdatedAtUtc,
+            entity.LastStreamSequence, entity.UserScore, entity.PrimaryErrorMessage, entity.Version, entity.CreatedAtUtc, entity.StartedAtUtc,
+            entity.PrimaryCompletedAtUtc, entity.UpdatedAtUtc,
             ToIntent(entity.PrimaryVariant, entity.PrimaryKvCacheType, entity.PrimaryKvCacheTypeSource, entity.PrimaryKvAutoReason,
                 entity.PrimaryFlashAttentionMode, entity.PrimaryIntendedLaunchIdentity, entity.PrimaryIntendedExecutableSha256),
-            ToIntent(entity.JudgeVariant, entity.JudgeKvCacheType, entity.JudgeKvCacheTypeSource, entity.JudgeKvAutoReason,
-                entity.JudgeFlashAttentionMode, entity.JudgeIntendedLaunchIdentity, entity.JudgeIntendedExecutableSha256),
             ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
                 entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
                 entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
-                entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource),
-            ToEvidence(entity.JudgeLaunchReceiptJson, entity.JudgeEnvironmentFactsJson, entity.JudgeReceiptHash,
-                entity.JudgeEnvironmentFactsHash, entity.JudgeEffectiveLaunchIdentity, entity.JudgeEffectiveBackend,
-                entity.JudgePlacementOffloaded, entity.JudgePlacementTotal, entity.JudgeLaunchExecutableSha256,
-                entity.JudgeLaunchHasAuxAssets, entity.JudgeLaunchKvCacheTypeSource));
+                entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource));
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

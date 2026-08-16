@@ -78,10 +78,16 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     /// <inheritdoc cref="MarkPrimaryLaunchReadyAsync" />
-    Task<bool> MarkJudgeLaunchReadyAsync(Guid runId,
+    /// <param name="attemptId">The judge attempt this launch belongs to — judge evidence lives on the attempt, not the run.</param>
+    /// <param name="judgeExecutionKey">
+    ///     The rank-cohort key computed from this launch's effective evidence, or <see langword="null" /> when the
+    ///     execution identity was incomplete (fail-closed: such an attempt is never ranked).
+    /// </param>
+    Task<bool> MarkJudgeLaunchReadyAsync(Guid attemptId,
         long workItemId,
         long claimedWorkVersion,
         BenchmarkLaunchReceiptCommand command,
+        string? judgeExecutionKey,
         CancellationToken cancellationToken = default);
 
     Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
@@ -120,6 +126,12 @@ public interface IBenchmarkStore
     /// </summary>
     Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
 
+    /// <summary>One judge attempt by id, payloads included, or null when it is gone.</summary>
+    Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
+
+    /// <summary>One judge policy revision by id, payload included, or null when it is gone.</summary>
+    Task<BenchmarkJudgePolicyRevisionRecord?> GetJudgePolicyRevisionAsync(Guid revisionId, CancellationToken cancellationToken = default);
+
     /// <summary>The revision the project judges under, payload included, or null when judging is off.</summary>
     Task<BenchmarkJudgePolicyRevisionRecord?> GetCurrentJudgePolicyRevisionAsync(Guid projectId, CancellationToken cancellationToken = default);
 
@@ -149,6 +161,16 @@ public interface IBenchmarkStore
         int cohortGeneration,
         string executionKey,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Opens a project-wide re-judge: refuses while any attempt of the project is active, resets the current
+    ///     revision's cohort (reference key cleared, generation bumped), bumps the project version, and returns the
+    ///     succeeded runs the caller must enqueue attempts for. The reset and the eligible set are decided in one
+    ///     transaction, so a re-judge is never partial.
+    /// </summary>
+    Task<BenchmarkJudgePolicyActivation> BeginProjectRejudgeAsync(Guid projectId,
+        long expectedProjectVersion,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record BenchmarkProjectInput(
@@ -156,12 +178,7 @@ public sealed record BenchmarkProjectInput(
     string Name,
     ReadOnlyMemory<byte> CoreTaskJson,
     int ContextTokens,
-    Guid AgentDefinitionId,
-    bool JudgeEnabled,
-    string? JudgeModelName,
-    int? JudgeContextTokens,
-    int JudgePromptVersion = 1,
-    int JudgeOutputSchemaVersion = 1);
+    Guid AgentDefinitionId);
 
 public sealed record BenchmarkStartRunCommand(
     Guid RunId,
@@ -174,10 +191,8 @@ public sealed record BenchmarkStartRunCommand(
     string AgentName,
     long AgentVersion,
     int RequestedContextTokens,
-    bool JudgeEnabled,
     IBenchmarkFreezeCommitGuard? FreezeCommitGuard = null,
-    BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
-    BenchmarkRunLaunchIntent? JudgeLaunchIntent = null);
+    BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
@@ -268,12 +283,15 @@ public sealed record BenchmarkJudgeAttemptRecord(
     BenchmarkRunLaunchIntent? LaunchIntent = null,
     BenchmarkRunLaunchEvidence? LaunchEvidence = null);
 
+/// <param name="Score">The server-computed 0..100 rubric score stored on the attempt, plaintext and sortable.</param>
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
     ReadOnlyMemory<byte> JudgeResultJson,
-    long LastStreamSequence = 0);
+    long LastStreamSequence = 0,
+    int? Score = null);
 
+/// <param name="JudgeEnabled">Derived: the project judges exactly while it points at a policy revision.</param>
 public sealed record BenchmarkProjectRecord(
     Guid Id,
     string Name,
@@ -281,15 +299,16 @@ public sealed record BenchmarkProjectRecord(
     int ContextTokens,
     Guid AgentDefinitionId,
     bool JudgeEnabled,
-    string? JudgeModelName,
-    int? JudgeContextTokens,
-    int JudgePromptVersion,
-    int JudgeOutputSchemaVersion,
+    Guid? CurrentJudgePolicyRevisionId,
     bool IsFrozen,
     long Version,
     long CreatedAtUtc,
     long UpdatedAtUtc);
 
+/// <param name="Judge">
+///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
+///     about a judging is stored on the run itself beyond the pointer to its current attempt.
+/// </param>
 public sealed record BenchmarkRunRecord(
     Guid Id,
     Guid ProjectId,
@@ -308,21 +327,15 @@ public sealed record BenchmarkRunRecord(
     ReadOnlyMemory<byte>? OutputPartsJson,
     long LastStreamSequence,
     int? UserScore,
-    BenchmarkJudgeStatus JudgeStatus,
-    ReadOnlyMemory<byte>? JudgeResultJson,
     string? PrimaryErrorMessage,
-    string? JudgeErrorMessage,
     long Version,
     long CreatedAtUtc,
     long? StartedAtUtc,
     long? PrimaryCompletedAtUtc,
-    long? JudgeStartedAtUtc,
-    long? JudgeCompletedAtUtc,
     long UpdatedAtUtc,
     BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
-    BenchmarkRunLaunchIntent? JudgeLaunchIntent = null,
     BenchmarkRunLaunchEvidence? PrimaryLaunchEvidence = null,
-    BenchmarkRunLaunchEvidence? JudgeLaunchEvidence = null);
+    BenchmarkRunJudgeView? Judge = null);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
@@ -380,6 +393,48 @@ public sealed record BenchmarkLaunchReceiptCommand(
     string? ExecutableSha256,
     bool? HasAuxAssets,
     string KvCacheTypeSource);
+
+/// <summary>
+///     The run-level judge state the API shows, derived from the run's current attempt and the project's current policy
+///     revision. Nothing here is stored: a policy or runtime change must re-derive it, never re-label a stored value.
+/// </summary>
+/// <param name="State"><c>none</c> when there is no attempt, otherwise the current attempt's status, lowercased.</param>
+/// <param name="RankExclusionReason">
+///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked. One of <c>no-score</c>,
+///     <c>judge-pending</c>, <c>judge-failed</c>, <c>policy-outdated</c>, <c>generation-stale</c>,
+///     <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>.
+/// </param>
+public sealed record BenchmarkRunJudgeView(
+    string State,
+    int? Score,
+    int? PolicyRevision,
+    Guid? PolicyRevisionId,
+    int? AttemptSequence,
+    int? CohortGeneration,
+    string? ExecutionKey,
+    string? ErrorMessage,
+    bool PolicyCurrent,
+    bool ExecutionCurrent,
+    string? RankExclusionReason);
+
+/// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>
+public static class BenchmarkRunJudgeStates
+{
+    public const string None = "none";
+    public const string Queued = "queued";
+    public const string Running = "running";
+    public const string Succeeded = "succeeded";
+    public const string Failed = "failed";
+    public const string Cancelled = "cancelled";
+
+    public const string ReasonNoScore = "no-score";
+    public const string ReasonJudgePending = "judge-pending";
+    public const string ReasonJudgeFailed = "judge-failed";
+    public const string ReasonPolicyOutdated = "policy-outdated";
+    public const string ReasonGenerationStale = "generation-stale";
+    public const string ReasonExecutionKeyMismatch = "execution-key-mismatch";
+    public const string ReasonExecutionIdentityIncomplete = "execution-identity-incomplete";
+}
 
 /// <param name="TotalCount">Runs in the project, not in this page.</param>
 public sealed record BenchmarkRunPage(IReadOnlyList<BenchmarkRunRecord> Items, int TotalCount);

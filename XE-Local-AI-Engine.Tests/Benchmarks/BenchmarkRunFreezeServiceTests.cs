@@ -24,32 +24,19 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         _ = await harness.StartAsync();
 
-        AssertEx.True(harness.LeaseProvider.Acquired.SequenceEqual(["a-primary.gguf", "z-judge.gguf"]),
-            "Installed-model leases must be acquired in deterministic model-name order.");
+        // Only the primary: the judge is defined by the project's policy revision and frozen per attempt, so a freeze
+        // neither leases nor resolves it.
+        AssertEx.True(harness.LeaseProvider.Acquired.SequenceEqual(["a-primary.gguf"]),
+            "A freeze must lease exactly the primary model.");
         AssertEx.Equal("exact task", AssertEx.NotNull(harness.SnapshotInput).CoreTask);
         AssertEx.Equal(GpuVariant.Cpu, harness.SnapshotInput!.PrimaryRuntime.Variant);
         AssertEx.Equal(4096, harness.SnapshotInput.PrimaryRuntime.ContextTokens);
         AssertEx.Equal(BenchmarkFrozenPolicies.FixedSeedPolicy, harness.SnapshotInput.PrimarySampling.SeedPolicy);
         AssertEx.Equal("0", harness.SnapshotInput.PrimarySampling.SeedValue);
-        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeSystemPrompt, harness.SnapshotInput.Judge.SystemPrompt);
-        AssertEx.Equal(BenchmarkFrozenPolicies.JudgeOutputSchemaJson, harness.SnapshotInput.Judge.OutputSchemaJson);
-        AssertEx.Equal(2048, AssertEx.NotNull(harness.SnapshotInput.Judge.Runtime).ContextTokens);
         AssertEx.NotNull(harness.Command);
         AssertEx.NotNull(harness.Command!.FreezeCommitGuard);
         AssertEx.True(harness.LeaseProvider.Leases.All(static lease => lease.Disposed), "All installed-model read leases must be released after commit.");
         _ = harness.Resolver.Received(1).ResolveAsync(harness.AgentId, "a-primary.gguf", "exact task", true, false, false, Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task Start_ReusesOneLeaseWhenPrimaryAndJudgeAliasMatchIgnoringCase()
-    {
-        var harness = new FreezeHarness(primaryModel: "model.gguf", judgeModel: "MODEL.GGUF");
-
-        _ = await harness.StartAsync();
-
-        AssertEx.Equal(expected: 1, harness.LeaseProvider.Acquired.Count);
-        AssertEx.Equal(expected: 1, harness.LeaseProvider.Leases.Count);
-        AssertEx.True(harness.LeaseProvider.Leases[0].Disposed, "The reused lease must be disposed exactly once.");
     }
 
     [Test]
@@ -185,19 +172,6 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
-    public async Task Start_JudgePhase_IgnoresTheRunsPickAndResolvesAuto()
-    {
-        var harness = new FreezeHarness(variant: GpuVariant.Cuda, judgeModel: "z-judge.gguf");
-
-        _ = await harness.StartAsync(BenchmarkKvCacheType.Q4_0);
-
-        AssertEx.Equal(BenchmarkKvCacheType.Q4_0, AssertEx.NotNull(harness.Command!.PrimaryLaunchIntent).KvCacheType);
-        var judge = AssertEx.NotNull(harness.Command.JudgeLaunchIntent);
-        AssertEx.Equal(BenchmarkKvCacheType.Q8_0, judge.KvCacheType);
-        AssertEx.Equal(BenchmarkKvCacheType.SourceAuto, judge.KvCacheTypeSource);
-    }
-
-    [Test]
     public async Task Start_IntendedLaunchIdentity_IsTheProjectionOfTheFrozenVector()
     {
         var harness = new FreezeHarness(variant: GpuVariant.Cuda,
@@ -231,7 +205,6 @@ public sealed class BenchmarkRunFreezeServiceTests
         AssertEx.Equal("manifest-sha", intent.IntendedExecutableSha256);
         AssertEx.Equal(BenchmarkKvCacheType.Q8_0, intent.KvCacheType, "The inspected GPU binary's own capabilities decide Auto.");
         AssertEx.Equal(GpuVariant.Cuda, AssertEx.NotNull(harness.SnapshotInput).PrimaryRuntime.Variant);
-        AssertEx.Equal("cuda", AssertEx.NotNull(harness.Command.JudgeLaunchIntent).Variant, "Both phases launch one binary and must freeze one variant.");
     }
 
     [Test]
@@ -319,11 +292,11 @@ public sealed class BenchmarkRunFreezeServiceTests
                 new BenchmarkEligibilityPolicy(),
                 dependencies,
                 snapshots,
-                Profiles(profile),
-                Variants(variant),
-                Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails),
-                FallbackStore(optimizedConfigDisabled),
-                LaunchPolicy(),
+                new BenchmarkPhaseLaunchResolver(Profiles(profile),
+                    Variants(variant),
+                    Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails),
+                    FallbackStore(optimizedConfigDisabled),
+                    LaunchPolicy()),
                 TimeProvider.System);
         }
 
@@ -336,9 +309,12 @@ public sealed class BenchmarkRunFreezeServiceTests
         public Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
             _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType);
 
-        private static BenchmarkProjectRecord Project(Guid id, Guid agentId, bool judgeEnabled, string? judgeModel) =>
-            new(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId, judgeEnabled, judgeModel,
-                judgeEnabled ? 2048 : null, 1, 1, false, 7, 1, 1);
+        private static BenchmarkProjectRecord Project(Guid id, Guid agentId, bool judgeEnabled, string? judgeModel)
+        {
+            _ = judgeModel;
+            return new BenchmarkProjectRecord(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId,
+                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1);
+        }
 
         private static AgentDefinitionRecord Definition(Guid id) =>
             new(id, "Agent", null, "instructions", null, null, AgentDefinitionKind.Single, [], new Dictionary<string, bool>(), null, 3, 1, 1);
@@ -373,7 +349,7 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         private static BenchmarkRuntimeSnapshotV1 CreateRuntimeSnapshot(BenchmarkRuntimeSnapshotInput input) =>
             new(1, input.ProjectId, input.AgentDefinitionId, input.AgentVersion, input.CoreTask, input.RequestedContextTokens,
-                input.ResolvedRuntime, input.PrimaryRuntime, input.PrimarySampling, input.PrimaryModel, input.Judge, input.Dependencies,
+                input.ResolvedRuntime, input.PrimaryRuntime, input.PrimarySampling, input.PrimaryModel, input.Dependencies,
                 input.ApplicationVersion, input.CreatedAtUtc, "hash");
 
         private static IInferenceProfileResolver Profiles(Func<int, ResolvedLaunchArguments>? profile)
@@ -453,8 +429,7 @@ public sealed class BenchmarkRunFreezeServiceTests
         private static BenchmarkRunRecord Run(BenchmarkStartRunCommand command) =>
             new(command.RunId, command.ProjectId, command.RuntimeSnapshotJson, command.PrimaryModelName, command.PrimaryModelOrigin,
                 command.ModelContentFingerprint, command.AgentName, command.AgentVersion, command.RequestedContextTokens,
-                BenchmarkPrimaryStatus.Queued, null, null, null, null, null, 0, null,
-                command.JudgeEnabled ? BenchmarkJudgeStatus.Pending : BenchmarkJudgeStatus.Disabled, null, null, null, 1, 1, null, null, null, null, 1);
+                BenchmarkPrimaryStatus.Queued, null, null, null, null, null, 0, null, null, 1, 1, null, null, 1);
     }
 
     private sealed class RecordingLeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots) : IBenchmarkInstalledModelLeaseProvider

@@ -90,7 +90,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
         buffer.BeginActivePhase(runId, primaryTerminal.Sequence);
         var judgeRunning = buffer.Append(runId,
             BenchmarkRunStreamEventKind.JudgeState,
-            new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Running.ToString()));
+            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running.ToString()));
 
         var current = buffer.Replay(runId, primaryTerminal.Sequence, runVersion: 3);
         var stale = buffer.Replay(runId, primaryTerminal.Sequence - 1, runVersion: 3);
@@ -101,7 +101,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
 
         var judgeTerminal = buffer.Append(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkJudgeStatus.Succeeded.ToString()));
+            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded.ToString()));
         buffer.EvictPlaintext(runId);
         var terminalReplay = buffer.Replay(runId, judgeTerminal.Sequence, runVersion: 4);
         AssertEx.True(terminalReplay.ResetRequired);
@@ -144,7 +144,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
     [Test]
     public async Task CancellationService_RunningPrimaryPersistsRequestThenSignalsOwnedToken()
     {
-        var run = Run(BenchmarkPrimaryStatus.Running, BenchmarkJudgeStatus.Pending, version: 4);
+        var run = Run(BenchmarkPrimaryStatus.Running, BenchmarkRunJudgeStates.None, version: 4);
         var requested = run with
         {
             PrimaryStatus = BenchmarkPrimaryStatus.CancelRequested,
@@ -167,7 +167,7 @@ public sealed class BenchmarkExecutionPrimitivesTests
     [Test]
     public async Task CancellationService_RejectsJudgeCancellationWhilePrimaryIsRunning()
     {
-        var run = Run(BenchmarkPrimaryStatus.Running, BenchmarkJudgeStatus.Pending, version: 4);
+        var run = Run(BenchmarkPrimaryStatus.Running, BenchmarkRunJudgeStates.None, version: 4);
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
         var service = new BenchmarkCancellationService(store, new BenchmarkCancellationRegistry());
@@ -177,23 +177,6 @@ public sealed class BenchmarkExecutionPrimitivesTests
 
         AssertEx.Equal("JudgeNotCancellable", exception.Code);
         _ = store.DidNotReceive().CancelAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public void JudgeResultParser_AcceptsOnlyExactVersionedSchema()
-    {
-        var fingerprint = $"v1:{new string('b', 64)}";
-
-        var result = BenchmarkJudgeExecutor.ParseResult("{\"schemaVersion\":1,\"score\":4,\"rationale\":\"solid\"}", fingerprint, promptVersion: 1);
-        _ = AssertEx.Throws<InvalidOperationException>(() => BenchmarkJudgeExecutor.ParseResult(
-            "{\"schemaVersion\":1,\"score\":4,\"rationale\":\"solid\",\"extra\":true}", fingerprint, promptVersion: 1));
-        _ = AssertEx.Throws<InvalidOperationException>(() => BenchmarkJudgeExecutor.ParseResult(
-            "```json {\"schemaVersion\":1,\"score\":4,\"rationale\":\"solid\"} ```", fingerprint, promptVersion: 1));
-
-        AssertEx.Equal(1, result.SchemaVersion);
-        AssertEx.Equal(4, result.Score);
-        AssertEx.Equal("solid", result.Rationale);
-        AssertEx.Equal(fingerprint, result.JudgeModelContentFingerprint);
     }
 
     private static InvocationGenerationAdmissionContext Context(int? effective) =>
@@ -213,10 +196,11 @@ public sealed class BenchmarkExecutionPrimitivesTests
             MaxUtf8Bytes = maxBytes
         }));
 
-    private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary, BenchmarkJudgeStatus judge, long version) =>
+    private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary, string judgeState, long version) =>
         new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
             {
                 1
             }, "model.gguf", null, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
-            primary, null, null, null, null, null, 0, null, judge, null, null, null, version, 1, 1, null, null, null, 1);
+            primary, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1, null, null,
+            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
 }

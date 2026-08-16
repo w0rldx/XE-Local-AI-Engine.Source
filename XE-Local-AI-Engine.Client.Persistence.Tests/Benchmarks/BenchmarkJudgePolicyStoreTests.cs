@@ -164,22 +164,14 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     {
         await using var context = await CreateDatabaseAsync("attempt-none.sqlite").ConfigureAwait(false);
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        }).ConfigureAwait(false);
-        var run = await store.StartRunAsync(NewRun(project) with
-        {
-            JudgeEnabled = true
-        }).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
 
         var succeeded = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version)).ConfigureAwait(false);
 
-        AssertEx.Equal(BenchmarkJudgeStatus.Skipped, succeeded.JudgeStatus, "There is no policy to judge under.");
-        AssertEx.Empty(await ReadAttemptsAsync(context, run.Id).ConfigureAwait(false));
+        AssertEx.Empty(await ReadAttemptsAsync(context, run.Id).ConfigureAwait(false), "There is no policy to judge under.");
+        _ = succeeded;
         AssertEx.Null(await store.ClaimNextAsync().ConfigureAwait(false), "No attempt means no claimable judge work.");
     }
 
@@ -189,10 +181,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         await using var context = await CreateDatabaseAsync("attempt-policy-changed.sqlite").ConfigureAwait(false);
         var store = new BenchmarkStore(context, TimeProvider.System);
         var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(NewRun(project) with
-        {
-            JudgeEnabled = true
-        }).ConfigureAwait(false);
+        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
 
         _ = await AssertEx.ThrowsAsync<BenchmarkJudgePolicyChangedException>(() =>
@@ -214,10 +203,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         await using var context = await CreateDatabaseAsync("attempt-unresolved.sqlite").ConfigureAwait(false);
         var store = new BenchmarkStore(context, TimeProvider.System);
         var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(NewRun(project) with
-        {
-            JudgeEnabled = true
-        }).ConfigureAwait(false);
+        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
 
         var succeeded = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
@@ -234,10 +220,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
 
         // The work item exists so the attempt/work-item invariant holds, but it is terminal: never claimable, and it
         // must not sit in front of the next run's primary work.
-        var second = await store.StartRunAsync(NewRun(AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false))) with
-        {
-            JudgeEnabled = true
-        }).ConfigureAwait(false);
+        var second = await store.StartRunAsync(NewRun(AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false)))).ConfigureAwait(false);
         var next = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
         AssertEx.Equal(second.Id, next.RunId);
         AssertEx.Equal(BenchmarkWorkKind.Primary, next.Kind);
@@ -400,6 +383,77 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     }
 
     [Test]
+    public async Task JudgeSuccess_PromotesTheCohortOnTheFirstSuccess_NotAtReadiness()
+    {
+        await using var context = await CreateDatabaseAsync("promote-on-success.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await SucceedRunAsync(store, project, revision).ConfigureAwait(false);
+
+        // The first attempt reaches readiness under runtime A and then fails. A failed judging must not define the
+        // cohort, or one bad launch would exclude every later run that ran correctly on a different runtime.
+        var first = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkJudgeLaunchReadyAsync(RequireAttemptId(first), first.QueueSequence, first.Version, Receipt(), "runtime-a").ConfigureAwait(false);
+        var failed = await store.MarkJudgeFailedAsync(run.Id, first.Version, "judge blew up").ConfigureAwait(false);
+        AssertEx.Null(AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false)).ReferenceExecutionKey,
+            "A failed first attempt must leave the cohort open.");
+
+        var second = await store.EnqueueJudgeAttemptAsync(Enqueue(run.Id, failed.Version, revision.Id)).ConfigureAwait(false);
+        var secondWork = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkJudgeLaunchReadyAsync(second.Id, secondWork.QueueSequence, secondWork.Version, Receipt(), "runtime-b").ConfigureAwait(false);
+        _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, secondWork.Version, Encoding.UTF8.GetBytes("{}"), 5, 73))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal("runtime-b", AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false)).ReferenceExecutionKey,
+            "The first SUCCESS of the live generation defines the cohort.");
+        var persisted = AssertEx.NotNull(await store.GetJudgeAttemptAsync(second.Id).ConfigureAwait(false));
+        AssertEx.Equal<int?>(73, persisted.Score);
+        AssertEx.Equal(BenchmarkJudgeAttemptStatus.Succeeded, persisted.Status);
+    }
+
+    [Test]
+    public async Task RunJudgeView_ReportsWhyARunIsNotRanked()
+    {
+        await using var context = await CreateDatabaseAsync("judge-view.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await SucceedRunAsync(store, project, revision).ConfigureAwait(false);
+
+        var queued = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Judge);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Queued, queued.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonJudgePending, queued.RankExclusionReason);
+        AssertEx.True(queued.PolicyCurrent, "The attempt was enqueued under the project's current revision.");
+        AssertEx.False(queued.ExecutionCurrent, "Nothing has claimed the cohort yet.");
+
+        var work = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var judged = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, work.Version, Encoding.UTF8.GetBytes("{}"), 5, 61))
+                                .ConfigureAwait(false);
+
+        // Succeeded and scored, but the launch never produced an execution key, so it can never be ranked.
+        var incomplete = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Judge);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Succeeded, incomplete.State);
+        AssertEx.Equal<int?>(61, incomplete.Score);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonExecutionIdentityIncomplete, incomplete.RankExclusionReason);
+
+        // An operator score always ranks, whatever the judge did.
+        var scored = await store.SetUserScoreAsync(run.Id, score: 88, judged.Version).ConfigureAwait(false);
+        var ranked = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Judge);
+        AssertEx.Null(ranked.RankExclusionReason, "An operator override is always part of the ranking.");
+        AssertEx.Equal<int?>(88, scored.UserScore);
+
+        // A run with no attempt at all is `none`, and unscored.
+        var plainProject = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+        var plainRun = await store.StartRunAsync(NewRun(plainProject)).ConfigureAwait(false);
+        var none = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(plainRun.Id).ConfigureAwait(false)).Judge);
+        AssertEx.Equal(BenchmarkRunJudgeStates.None, none.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonNoScore, none.RankExclusionReason);
+    }
+
+    private static BenchmarkLaunchReceiptCommand Receipt() =>
+        new("{}", "{}", new string('e', count: 64), new string('r', count: 64), "identity", "cpu", null, null,
+            new string('x', count: 64), false, "auto");
+
+    [Test]
     public async Task TryPromoteReferenceExecutionKey_PromotesOnceAndRefusesStaleGenerations()
     {
         await using var context = await CreateDatabaseAsync("promote-cas.sqlite").ConfigureAwait(false);
@@ -455,12 +509,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
 
     private static async Task<(BenchmarkProjectRecord Project, BenchmarkJudgePolicyRevisionRecord Revision)> CreateJudgeProjectAsync(BenchmarkStore store)
     {
-        var project = await store.CreateProjectAsync(NewProject() with
-        {
-            JudgeEnabled = true,
-            JudgeModelName = "judge.gguf",
-            JudgeContextTokens = 2048
-        }).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
         var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA).ConfigureAwait(false);
         return (AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false)), activation.Revision);
     }
@@ -469,10 +518,7 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         BenchmarkProjectRecord project,
         BenchmarkJudgePolicyRevisionRecord revision)
     {
-        var run = await store.StartRunAsync(NewRun(project) with
-        {
-            JudgeEnabled = true
-        }).ConfigureAwait(false);
+        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
         return await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
         {
@@ -487,11 +533,11 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         new(runId, expectedRunVersion, revisionId, new ReadOnlyMemory<byte>(JudgeRuntime));
 
     private static BenchmarkProjectInput NewProject(Guid? id = null) =>
-        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("""{"task":"answer"}"""), 4096, Guid.NewGuid(), false, null, null);
+        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("""{"task":"answer"}"""), 4096, Guid.NewGuid());
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
         new(Guid.NewGuid(), project.Id, project.Version, Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""), "model.gguf",
-            LocalModelOrigin.Imported, "v1:" + new string('a', count: 64), "Agent", 1, 4096, project.JudgeEnabled);
+            LocalModelOrigin.Imported, "v1:" + new string('a', count: 64), "Agent", 1, 4096);
 
     private static void AssertBytes(ReadOnlySpan<byte> expected, ReadOnlySpan<byte> actual) =>
         AssertEx.True(actual.SequenceEqual(expected), "Byte payload should round-trip exactly.");

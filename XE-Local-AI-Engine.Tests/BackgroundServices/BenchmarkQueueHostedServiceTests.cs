@@ -136,16 +136,11 @@ public sealed class BenchmarkQueueHostedServiceTests
             OutputPartsJson: null,
             LastStreamSequence: 0,
             UserScore: null,
-            BenchmarkJudgeStatus.Disabled,
-            JudgeResultJson: null,
             PrimaryErrorMessage: null,
-            JudgeErrorMessage: null,
             Version: 1,
             CreatedAtUtc: 1,
             StartedAtUtc: null,
             PrimaryCompletedAtUtc: null,
-            JudgeStartedAtUtc: null,
-            JudgeCompletedAtUtc: null,
             UpdatedAtUtc: 1);
 
     private sealed class Harness : IDisposable

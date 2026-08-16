@@ -250,13 +250,6 @@ public sealed record BenchmarkOutputPart(
     string? Result = null,
     bool? IsError = null);
 
-public sealed record BenchmarkJudgeResultV1(
-    int SchemaVersion,
-    int Score,
-    string Rationale,
-    string JudgeModelContentFingerprint,
-    int PromptVersion);
-
 public sealed class BenchmarkContextAdmissionPolicy(int requiredContextTokens) : IInvocationGenerationAdmissionPolicy
 {
     private readonly int _requiredContextTokens = requiredContextTokens > 0
@@ -347,7 +340,4 @@ internal static class BenchmarkExecutionSerialization
     public static IReadOnlyList<BenchmarkOutputPart> DeserializeParts(ReadOnlySpan<byte> payload) =>
         JsonSerializer.Deserialize<BenchmarkOutputPart[]>(payload, JsonOptions)
         ?? throw new BenchmarkSnapshotException("Benchmark output parts are invalid.");
-
-    public static byte[] SerializeJudge(BenchmarkJudgeResultV1 result) =>
-        JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
 }
