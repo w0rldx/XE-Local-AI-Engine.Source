@@ -929,7 +929,9 @@
 			"error": {
 				"title": "Response failed",
 				"modelNotInstalled": "No chat model installed. Pull a GGUF model to start chatting.",
-				"goToModels": "Go to Models"
+				"goToModels": "Go to Models",
+				"clientWatchdogNoFirstChunk": "Connection watchdog: the response never started arriving in this browser.",
+				"clientWatchdogStall": "Connection watchdog: the response stopped arriving in this browser."
 			},
 			"reasoning": {
 				"label": "Reasoning: {{effort}}",
