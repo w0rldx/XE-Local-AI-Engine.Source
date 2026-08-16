@@ -11,7 +11,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
     {
         builder.ToTable("benchmark_runs", table =>
         {
-            table.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 1 AND user_score <= 5)");
+            table.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 0 AND user_score <= 100)");
             table.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported', 'trained')");
             table.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
         });
@@ -38,6 +38,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");
         builder.Property(entity => entity.JudgeStatus).HasColumnName("judge_status").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.JudgeResultJson).HasColumnName("judge_result_json");
+        builder.Property(entity => entity.CurrentJudgeAttemptId).HasColumnName("current_judge_attempt_id");
         builder.Property(entity => entity.PrimaryVariant).HasColumnName("primary_variant").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheType).HasColumnName("primary_kv_cache_type").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheTypeSource).HasColumnName("primary_kv_cache_type_source").HasMaxLength(16);

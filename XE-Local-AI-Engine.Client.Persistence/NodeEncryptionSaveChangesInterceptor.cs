@@ -355,6 +355,46 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkJudgePolicyRevision>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.PolicyJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_policy_json",
+                trackedProperties);
+        }
+
+        // Every attempt column is optional: an attempt inserted directly as Failed carries no runtime, and an attempt
+        // that never reached readiness carries no receipt. The optional path never dereferences a missing value.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkJudgeAttempt>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.JudgeRuntimeJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_runtime_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ResultJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_attempt_result_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_attempt_launch_receipt_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.EnvironmentFactsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_attempt_environment_facts_json",
+                trackedProperties);
+        }
+
         // Training dataset definitions are node-scoped, so the AAD binds the empty conversation id to the definition's
         // own id plus the column name — same layout as benchmark projects.
         foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetDefinition>())

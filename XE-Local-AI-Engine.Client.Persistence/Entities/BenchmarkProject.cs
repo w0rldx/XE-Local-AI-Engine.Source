@@ -18,6 +18,9 @@ internal sealed record class BenchmarkProject
     public int? JudgeContextTokens { get; set; }
     public int JudgePromptVersion { get; set; }
     public int JudgeOutputSchemaVersion { get; set; }
+
+    /// <summary>The judge policy revision this project judges under, or <see langword="null" /> when judging is off.</summary>
+    public Guid? CurrentJudgePolicyRevisionId { get; set; }
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

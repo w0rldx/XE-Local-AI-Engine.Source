@@ -41,6 +41,9 @@ internal sealed record class BenchmarkRun
     /// </summary>
     public byte[]? JudgeResultJson { get; set; }
 
+    /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
+    public Guid? CurrentJudgeAttemptId { get; set; }
+
     /// <summary>
     ///     What freeze INTENDED this run to launch, per phase. All null for rows created before launch evidence
     ///     existed (they are displayed as "—", never inferred).
