@@ -45,6 +45,13 @@ public sealed record LlamaServerProfilingContext(
     /// </summary>
     public LlamaServerLoadObservation? LoadObservation { get; init; }
 
+    /// <summary>
+    ///     What this spawn actually launched, assembled after readiness. Populated for a BENCHMARK spawn only — the one
+    ///     spawn shape whose whole purpose is a measurement someone will later compare — and <see langword="null" /> for
+    ///     every other profiling spawn, or when the facts could not be assembled.
+    /// </summary>
+    public LlamaServerLaunchReceipt? LaunchReceipt { get; init; }
+
     /// <summary>Creates a profiling context without machine-readable fit output (replay/benchmark callers).</summary>
     public LlamaServerProfilingContext(LlamaServerEndpoint endpoint, IReadOnlyList<string> startupOutput)
         : this(endpoint, startupOutput, FitParamsOutput: [], ProcessId: null)

@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
-using System.Buffers.Binary;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -167,9 +165,14 @@ public sealed class LaunchPolicyFingerprintProvider(
         var binary = await _binaryManager.EnsureBinaryAsync(requestedVariant, ct).ConfigureAwait(false);
         var executableIdentity = includeContentHashes
             ? await _fileHashCache.GetSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false)
-            : await GetFileValidationIdentityAsync(binary.ServerExecutablePath, ct).ConfigureAwait(false);
-        var runtimeBundle = await ComputeRuntimeBundleIdentityAsync(binary.ServerExecutablePath,
-                includeContentHashes,
+            : await RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(binary.ServerExecutablePath,
+                    _fileHashCache,
+                    ct)
+                .ConfigureAwait(false);
+        var runtimeBundle = await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
+                (path, token) => includeContentHashes
+                    ? _fileHashCache.GetSha256Async(path, token)
+                    : RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
                 ct)
             .ConfigureAwait(false);
         var isOperatorOverride = string.Equals(binary.Version, "override", StringComparison.OrdinalIgnoreCase);
@@ -210,7 +213,7 @@ public sealed class LaunchPolicyFingerprintProvider(
                     version = binary.Version,
                     variant = binary.Variant.ToString(),
                     contentIdentity = executableIdentity,
-                    runtimeBundleIdentity = runtimeBundle.Sha256,
+                    runtimeBundleIdentity = runtimeBundle.Identity,
                     runtimeBundle.FileCount,
                     binary.IsPinnedFallback
                 }
@@ -485,7 +488,7 @@ public sealed class LaunchPolicyFingerprintProvider(
                 return includeContentHashes
                     ? new ModelContentIdentity("verified-registry-sha256", registrySha256, guard)
                     : new ModelContentIdentity("validation-stamp-v1",
-                        BuildValidationIdentity(file, guard, registrySha256),
+                        RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, guard, registrySha256),
                         guard);
             }
         }
@@ -499,60 +502,8 @@ public sealed class LaunchPolicyFingerprintProvider(
 
         var validationGuard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct).ConfigureAwait(false);
         return new ModelContentIdentity("validation-stamp-v1",
-            BuildValidationIdentity(file, validationGuard, authoritySha256: null),
+            RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, validationGuard, authoritySha256: null),
             validationGuard);
-    }
-
-    private async Task<RuntimeBundleIdentity> ComputeRuntimeBundleIdentityAsync(string serverExecutablePath,
-        bool includeContentHashes,
-        CancellationToken ct)
-    {
-        var executablePath = Path.GetFullPath(serverExecutablePath);
-        var directory = Path.GetDirectoryName(executablePath)
-                        ?? throw new InvalidOperationException("The selected llama-server path has no parent directory.");
-        var files = Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
-                             .Where(path => IsRuntimeBundleFile(path, executablePath))
-                             .OrderBy(Path.GetFileName, StringComparer.Ordinal)
-                             .ToArray();
-        if (files.Length == 0)
-        {
-            throw new FileNotFoundException("The selected llama-server runtime bundle no longer exists.", executablePath);
-        }
-
-        using var bundleHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var path in files)
-        {
-            ct.ThrowIfCancellationRequested();
-            var nameBytes = Encoding.UTF8.GetBytes(Path.GetFileName(path));
-            var nameLength = new byte[sizeof(int)];
-            BinaryPrimitives.WriteInt32LittleEndian(nameLength, nameBytes.Length);
-            var fileLength = new byte[sizeof(long)];
-            var file = new FileInfo(path);
-            file.Refresh();
-            BinaryPrimitives.WriteInt64LittleEndian(fileLength, file.Length);
-            bundleHash.AppendData(nameLength);
-            bundleHash.AppendData(nameBytes);
-            bundleHash.AppendData(fileLength);
-            var contentIdentity = includeContentHashes
-                ? await _fileHashCache.GetSha256Async(path, ct).ConfigureAwait(false)
-                : await GetFileValidationIdentityAsync(path, ct).ConfigureAwait(false);
-            bundleHash.AppendData(Convert.FromHexString(contentIdentity));
-        }
-
-        return new RuntimeBundleIdentity(Convert.ToHexStringLower(bundleHash.GetHashAndReset()), files.Length);
-    }
-
-    private static bool IsRuntimeBundleFile(string path, string executablePath)
-    {
-        if (string.Equals(Path.GetFullPath(path), executablePath, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        var name = Path.GetFileName(path);
-        return name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
-               || name.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase)
-               || name.Contains(".so", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool PathsEqual(string left, string right)
@@ -572,26 +523,6 @@ public sealed class LaunchPolicyFingerprintProvider(
 
         normalized = string.Empty;
         return false;
-    }
-
-    private async Task<string> GetFileValidationIdentityAsync(string filePath, CancellationToken ct)
-    {
-        var file = new FileInfo(filePath);
-        file.Refresh();
-        if (!file.Exists)
-        {
-            throw new FileNotFoundException("The fingerprinted file no longer exists.", filePath);
-        }
-
-        var guard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct).ConfigureAwait(false);
-        return BuildValidationIdentity(file, guard, authoritySha256: null);
-    }
-
-    private static string BuildValidationIdentity(FileInfo file, string guardSha256, string? authoritySha256)
-    {
-        var canonical = string.Create(CultureInfo.InvariantCulture,
-            $"{file.Length}:{file.LastWriteTimeUtc.Ticks}:{file.CreationTimeUtc.Ticks}:{guardSha256}:{authoritySha256 ?? "unavailable"}");
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
     private static bool TrySplitFingerprint(string? value,
@@ -622,8 +553,6 @@ public sealed class LaunchPolicyFingerprintProvider(
         var canonical = string.Concat(strongHash, ":", validationDocumentHash);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
-
-    private sealed record RuntimeBundleIdentity(string Sha256, int FileCount);
 
     private sealed record ModelContentIdentity(string Source, string ContentIdentity, string? GuardSha256);
 }

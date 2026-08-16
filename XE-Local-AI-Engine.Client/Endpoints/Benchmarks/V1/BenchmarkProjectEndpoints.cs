@@ -151,5 +151,6 @@ public sealed class DeleteBenchmarkProjectEndpoint(IBenchmarkStore store)
 internal static class BenchmarkExceptionFilter
 {
     public static bool IsHandled(Exception exception) =>
-        exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException;
+        exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException
+            or BenchmarkUnsupportedKvCacheTypeException;
 }

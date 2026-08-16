@@ -17,6 +17,7 @@ internal static class BenchmarkEndpointSupport
             BenchmarkNotFoundException or KeyNotFoundException => Problem(StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound, "The requested benchmark resource was not found."),
             BenchmarkValidationException => Problem(StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
             BenchmarkEligibilityException => Problem(StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
+            BenchmarkUnsupportedKvCacheTypeException => Problem(StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType, exception.Message),
             BenchmarkConflictException conflict => Problem(StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code), SafeConflictMessage(conflict.Code)),
             _ => throw exception
         };

@@ -58,7 +58,12 @@ internal sealed partial record LlamaServerCapabilityManifest
 
     public IReadOnlySet<string> FlashAttentionModes { get; }
 
-    private bool SupportsAllOptions { get; }
+    /// <summary>
+    ///     Set only by <see cref="AllSupportedForTesting" />, which stands in for a binary whose whole option surface is
+    ///     assumed. Internal rather than private so <see cref="LlamaServerLaunchCapabilityInspector" /> carries the same
+    ///     assumption into its public answers instead of reporting "supports nothing".
+    /// </summary>
+    internal bool SupportsAllOptions { get; }
 
     public bool SupportsOption(string option)
     {

@@ -17,7 +17,8 @@ public enum BenchmarkErrorCode
     FingerprintChanged,
     IneligibleAgent,
     IneligibleModel,
-    UnsupportedSnapshot
+    UnsupportedSnapshot,
+    UnsupportedKvCacheType
 }
 
 public class BenchmarkProjectMutationRequest

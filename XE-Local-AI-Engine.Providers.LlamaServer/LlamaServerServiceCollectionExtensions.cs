@@ -119,6 +119,14 @@ public static class LlamaServerServiceCollectionExtensions
         // including BYO/source builds.
         services.TryAddSingleton<ILlamaServerCapabilityManifestProbe, LlamaServerCapabilityManifestProbe>();
 
+        // The public question-answering seam over that same probe, for callers outside this provider that must settle a
+        // launch vector BEFORE a spawn exists (the benchmark freeze). It exposes neither the manifest nor the resolved
+        // binary, so no path crosses the boundary.
+        services.TryAddSingleton<ILlamaServerLaunchCapabilityInspector>(static sp =>
+            new LlamaServerLaunchCapabilityInspector(sp.GetRequiredService<IGpuVariantSelector>(),
+                sp.GetRequiredService<ILlamaCppBinaryManager>(),
+                sp.GetRequiredService<ILlamaServerCapabilityManifestProbe>()));
+
         // AUD4-06 GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
         // application layer has not registered the real, metric-emitting serializer. The composition root overrides this
         // with a plain AddSingleton (last-wins) so both the LLM and image supervisors share ONE process-wide gate.

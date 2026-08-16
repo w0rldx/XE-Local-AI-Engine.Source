@@ -22,6 +22,16 @@ public interface ILlamaServerLaunchPolicy
         CancellationToken ct);
 
     /// <summary>
+    ///     The plan for a CPU spawn that bypasses <see cref="ResolveAsync" /> entirely — a replay/benchmark spawn built
+    ///     with no policy, where the supplied frozen args ARE the experiment. A CPU build emits none of a GPU profile's
+    ///     replay args, so such a spawn otherwise emitted neither a context window nor thread counts and ran at
+    ///     llama.cpp's own defaults. This supplies exactly the two things a CPU build can honour: the replay's own
+    ///     <c>-c</c> and the CPU thread policy. It never touches the KV-cache/flash-attention vector, and it requests no
+    ///     context for an explore-mode argument set (which pins none).
+    /// </summary>
+    LlamaServerLaunchPlan ResolveCpuReplayPlan(ResolvedLaunchArguments resolved);
+
+    /// <summary>
     ///     Records that the optimized KV-quant + flash-attention config could not reach readiness on
     ///     <paramref name="variant" />, so future <see cref="ResolveAsync" /> calls emit the safe config for it.
     /// </summary>
