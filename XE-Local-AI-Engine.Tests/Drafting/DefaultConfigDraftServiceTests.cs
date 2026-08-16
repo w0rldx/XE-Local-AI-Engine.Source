@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -102,6 +103,26 @@ public sealed class DefaultConfigDraftServiceTests
             {
                 GenerationTimeout = TimeSpan.FromMilliseconds(50)
             }
+        };
+
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
+        AssertEx.True(harness.Gate.TryAcquire(out var lease), "The admission gate must be released after a timeout.");
+        lease?.Dispose();
+    }
+
+    [Test]
+    public async Task DraftAgent_WithNoExplicitOption_UsesTheNodeMaximumMessageRequestTimeout()
+    {
+        // G14: the drafting budget was a hardcoded 300s, so a raised node "Maximum message request timeout" was
+        // silently ignored here. With no explicit Drafting:GenerationTimeout the budget now follows the node setting,
+        // read live. A 0s setting makes the hang elapse immediately — it would run to the model's completion (and the
+        // assert would see no failure) if the wiring were dropped back to a fixed default.
+        var harness = new Harness
+        {
+            HangUntilCancelled = true,
+            NodeMessageRequestTimeoutSeconds = 0
         };
 
         var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
@@ -466,6 +487,9 @@ public sealed class DefaultConfigDraftServiceTests
 
         public DraftingOptions Options { get; init; } = new();
 
+        /// <summary>The node-level "Maximum message request timeout" the drafting budget follows when Options sets none.</summary>
+        public int NodeMessageRequestTimeoutSeconds { get; init; } = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds;
+
         public DefaultConfigDraftService Service => _service ??= Build();
 
         private IOllamaApiClient? OllamaApiClient { get; set; }
@@ -506,11 +530,18 @@ public sealed class DefaultConfigDraftServiceTests
 
             Gate = new DraftAdmissionGate(WorkerEventDispatcher, InvocationRunner);
 
+            var nodeSettings = Substitute.For<INodeSettingsStore>();
+            nodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+            {
+                MaxMessageRequestTimeoutSeconds = NodeMessageRequestTimeoutSeconds
+            });
+
             return new DefaultConfigDraftService(Resolver,
                 GgufModelStore,
                 Classifications,
                 Gate,
                 Microsoft.Extensions.Options.Options.Create(Options),
+                nodeSettings,
                 new FixedTimeProvider(DraftedAt),
                 NullLogger<DefaultConfigDraftService>.Instance,
                 OllamaApiClient);

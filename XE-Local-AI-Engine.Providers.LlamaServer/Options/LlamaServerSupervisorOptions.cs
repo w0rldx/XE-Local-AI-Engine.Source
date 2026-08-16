@@ -182,9 +182,9 @@ public sealed class LlamaServerSupervisorOptions
     /// <summary>
     ///     Network timeout for a single local-inference HTTP call to the llama-server OpenAI-compatible surface (AUD4-18).
     ///     Set EXPLICITLY on the built OpenAI client so it never inherits System.ClientModel's 100 s
-    ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS
-    ///     (default 600 s): streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and
-    ///     a non-streaming sub-agent completion is bounded by the invocation timeout, so this is only the outermost floor
+    ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS:
+    ///     streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and a non-streaming
+    ///     sub-agent completion is bounded by the per-request invocation deadline, so this is only the outermost floor
     ///     against a wedged socket and must not pre-empt a slow-but-progressing local model. The SDK retry layer is pinned
     ///     OFF independently of this value (a local chat completion is non-idempotent and must never be re-issued). Must be
     ///     positive.
@@ -197,7 +197,13 @@ public sealed class LlamaServerSupervisorOptions
     private const double DefaultReadinessCapSeconds = 600d;
     private const int DefaultMaxReadinessTimeoutRetries = 1;
     private const double DefaultEjectDrainTimeoutSeconds = 30d;
-    private const double DefaultHttpNetworkTimeoutSeconds = 600d;
+    // COUPLING: the ceiling of the node-level "Maximum message request timeout"
+    // (XE-Local-AI-Engine.Client.Application StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds = 3600). This project
+    // only references Providers.Abstractions, so that constant cannot be referenced here — keep the two in step. A
+    // shorter default would silently pre-empt the operator's setting: an operator who raised the message timeout above
+    // this got a socket abort from the inner HTTP timeout first. The real per-turn bound is the invocation deadline's
+    // cancellation token; this stays the outermost wedged-socket floor.
+    private const double DefaultHttpNetworkTimeoutSeconds = 3600d;
 
     /// <summary>
     ///     Computes the size-aware cold-start readiness deadline for a model of <paramref name="modelSizeBytes" /> on

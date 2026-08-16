@@ -225,6 +225,27 @@ public sealed class RunSavedAgentHandlerTests
     }
 
     [Test]
+    public async Task ExecuteAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
+    {
+        // Send/regenerate parity (G1): the operator's node-level "Maximum message request timeout" (900s here) must
+        // bound a scheduled run too. Before the fix the package carried no timeout block and the builder's own 600s
+        // default cut long unattended runs off. 900 is deliberately NOT the default, so this still fails if the wiring
+        // is dropped. Tool-call/stream-idle are not operator-controlled and keep their defaults.
+        using var harness = new Harness();
+        harness.NodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 900
+        });
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.NotNull(harness.CapturedPackage);
+        AssertEx.Equal(expected: 900, harness.CapturedPackage!.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, harness.CapturedPackage.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, harness.CapturedPackage.Timeouts.StreamIdleTimeoutSeconds);
+    }
+
+    [Test]
     public async Task ExecuteAsync_OnSuccess_RecordsContentSafeSummaryWithoutPromptText()
     {
         using var harness = new Harness();

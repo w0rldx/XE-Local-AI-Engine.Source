@@ -35,10 +35,4 @@ public sealed class CentralPlatformOptions
 
     [Range(minimum: 0, maximum: 100)]
     public int ReconnectMaxAttempts { get; set; } = 0;
-
-    [Range(minimum: 5, maximum: 600)]
-    public int ToolCallTimeoutSeconds { get; set; } = 30;
-
-    [Range(minimum: 10, maximum: 3600)]
-    public int InvocationTimeoutSeconds { get; set; } = 600;
 }
