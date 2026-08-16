@@ -74,6 +74,33 @@ public sealed class BenchmarkCatalogServiceTests
         AssertEx.Equal("Eligible", agent.Name);
     }
 
+    /// <summary>
+    ///     A chat GGUF that carries the optional <c>mmproj</c> projector companion the HF acquisition path auto-attaches
+    ///     to modern text models stays benchmark-eligible; role and provider remain the only disqualifiers.
+    /// </summary>
+    [Test]
+    public async Task ListModels_KeepsProjectorBearingChatModelAndStillDropsNonChatAndNonLlamaCpp()
+    {
+        var models = Substitute.For<IGgufModelStore>();
+        models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
+            Descriptor("chat-with-projector", 8192),
+            Descriptor("embedding", 8192),
+            Descriptor("ollama-chat", 8192)
+        ]);
+        var leases = new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["chat-with-projector"] = CreateSnapshot("chat-with-projector", LocalModelOrigin.Imported, withProjector: true),
+            ["embedding"] = CreateSnapshot("embedding", LocalModelOrigin.Imported, role: GgufRole.Embedding),
+            ["ollama-chat"] = CreateSnapshot("ollama-chat", LocalModelOrigin.Imported, providerName: "ollama")
+        });
+        var service = CreateService(models, leases);
+
+        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, result.Count);
+        AssertEx.Equal("chat-with-projector", result[0].ModelName);
+    }
+
     private static BenchmarkCatalogService CreateService(IGgufModelStore models, IBenchmarkInstalledModelLeaseProvider leases)
     {
         var definitions = Substitute.For<IAgentDefinitionStore>();
@@ -97,25 +124,37 @@ public sealed class BenchmarkCatalogServiceTests
     private static AgentDefinitionRecord Definition(Guid id, string name, AgentDefinitionKind kind) =>
         new(id, name, null, "instructions", null, null, kind, [], new Dictionary<string, bool>(), null, 7, 1, 1);
 
-    private static InstalledModelSnapshot CreateSnapshot(string name, LocalModelOrigin? origin)
+    private static InstalledModelSnapshot CreateSnapshot(string name,
+        LocalModelOrigin? origin,
+        bool withProjector = false,
+        GgufRole role = GgufRole.Chat,
+        string providerName = "llamacpp")
     {
         var identity = "v1:" + new string('a', 64);
+        List<InstalledModelPhysicalMember> members =
+        [
+            new(name, InstalledModelPhysicalMemberRole.Weight, 12, new string('b', 64),
+                "sha256:" + new string('b', 64) + ":12", [name], true, null)
+        ];
+        if (withProjector)
+        {
+            members.Add(new InstalledModelPhysicalMember(name + "-mmproj", InstalledModelPhysicalMemberRole.Projector, 6,
+                new string('c', 64), "sha256:" + new string('c', 64) + ":6", [name + "-mmproj"], true, null));
+        }
+
         return new InstalledModelSnapshot(name,
             identity,
             [],
             identity,
-            [
-                new InstalledModelPhysicalMember(name, InstalledModelPhysicalMemberRole.Weight, 12, new string('b', 64),
-                    "sha256:" + new string('b', 64) + ":12", [name], true, null)
-            ],
+            members,
             identity,
             origin,
-            "llamacpp",
+            providerName,
             "map-revision",
             "repo/model",
             "revision",
             "Q4_K_M",
-            GgufRole.Chat,
+            role,
             identity);
     }
 
