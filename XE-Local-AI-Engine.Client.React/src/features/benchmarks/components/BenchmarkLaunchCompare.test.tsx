@@ -178,4 +178,22 @@ describe("BenchmarkLaunchCompare", () => {
 
 		expect(screen.getByTestId("benchmark-primary-launch-differs").textContent).toContain("launch.kvCacheTypeSource");
 	});
+
+	// Every run stamps its own capture time, so a run pair that is otherwise identical must not raise a banner.
+	it("raises no banner when the runs differ only by their environment capture time", () => {
+		const right = detail(rightId, {
+			primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 222 },
+			judgeEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 222 },
+		});
+		renderCompare(
+			detail(leftId, {
+				primaryEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 111 },
+				judgeEnvironmentFacts: { llamaRuntime: { version: "b10201" }, capturedAtUtc: 111 },
+			}),
+			right,
+		);
+
+		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
+		expect(screen.queryByTestId("benchmark-judge-launch-differs")).toBeNull();
+	});
 });

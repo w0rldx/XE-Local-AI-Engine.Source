@@ -41,7 +41,11 @@ const receipt = (overrides: Record<string, unknown> = {}): BenchmarkEvidenceObje
 
 const environment = (overrides: Record<string, unknown> = {}): BenchmarkEvidenceObject => ({
 	runtimeBundle: { identity: "bundle-1", fileCount: 2, files: [{ name: "llama-server", sizeBytes: 10_485_760 }] },
-	hardware: { osDescription: "Linux 6.18 WSL2", ramBytes: 68_719_476_736, gpus: [{ name: "RTX 5090", totalBytes: 34_359_738_368 }] },
+	hardware: {
+		osDescription: "Linux 6.18 WSL2",
+		ramBytes: 68_719_476_736,
+		gpus: [{ name: "RTX 5090", totalBytes: 34_359_738_368 }],
+	},
 	llamaRuntime: { version: "b10201", variant: "cuda" },
 	missing: [],
 	...overrides,
@@ -139,6 +143,18 @@ describe("diffLaunchEvidence", () => {
 
 		expect(rows.some((row) => row.key === "receipt.benchmarkLaunchPolicy" && row.left === null && row.differs)).toBe(true);
 		expect(rows.some((row) => row.key === "environment.llamaRuntime.version" && row.differs)).toBe(true);
+	});
+
+	// The capture timestamp differs on every run by construction; counting it would make every comparison "differ".
+	it("renders the capture timestamp without counting it as a difference", () => {
+		const rows = diffLaunchEvidence(
+			launchEvidenceEntries(facts(), receipt(), environment({ capturedAtUtc: 1 })),
+			launchEvidenceEntries(facts(), receipt(), environment({ capturedAtUtc: 2 })),
+		);
+		const captured = rows.find((row) => row.key === "environment.capturedAtUtc");
+
+		expect(captured).toMatchObject({ left: 1, right: 2, differs: false });
+		expect(differingEvidenceKeys(rows)).toEqual([]);
 	});
 
 	it("reports no difference between two identical launches", () => {
