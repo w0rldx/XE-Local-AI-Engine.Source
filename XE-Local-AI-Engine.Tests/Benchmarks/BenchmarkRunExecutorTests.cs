@@ -134,6 +134,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.True(AssertEx.NotNull(capacity.Reservation).Disposed);
         AssertEx.True(lease.Disposed);
         var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Null(package.ResponseJsonSchema, "Only the judge is decode-constrained; the primary measurement is not.");
         AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
         AssertEx.Equal("0", package.SamplingOptions!.Seed);
         AssertEx.Equal(8192, package.SamplingOptions.NumCtx);

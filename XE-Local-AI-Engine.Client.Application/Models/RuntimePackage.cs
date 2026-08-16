@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+using System.Text.Json;
+
 public sealed record RuntimePackage
 {
     public required Guid InvocationId { get; init; }
@@ -84,6 +86,15 @@ public sealed record RuntimePackage
     ///     memo and re-prompts.
     /// </summary>
     public IReadOnlyList<ResolvedCustomTool>? CustomTools { get; init; }
+
+    /// <summary>
+    ///     OPTIONAL JSON schema this turn's output is CONSTRAINED to (llama-server compiles it into a GBNF grammar via
+    ///     the MEAI <c>response_format</c> mapping). Set only by the benchmark judge, whose reply is parsed strictly;
+    ///     every other path leaves it null, which keeps the request byte-identical to today. Deliberately excluded from
+    ///     <see cref="ConfigHash" /> (mirrors <see cref="SamplingOptions" />): it is a per-send decoding constraint, not
+    ///     agent configuration, so the cross-repo encrypted/server digest stays stable.
+    /// </summary>
+    public JsonElement? ResponseJsonSchema { get; init; }
 
     public required string ConfigHash { get; init; }
 }

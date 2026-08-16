@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
 
 public sealed record LocalChatRuntimePackageRequest(
@@ -20,4 +21,5 @@ public sealed record LocalChatRuntimePackageRequest(
     SamplingOptions? SamplingOptions = null,
     IReadOnlyList<ResolvedSkill>? Skills = null,
     bool IsUnattended = false,
-    IReadOnlyList<ResolvedCustomTool>? CustomTools = null);
+    IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
+    JsonElement? ResponseJsonSchema = null);

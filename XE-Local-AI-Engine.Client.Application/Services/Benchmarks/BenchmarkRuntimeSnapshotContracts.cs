@@ -139,6 +139,25 @@ public static class BenchmarkFrozenPolicies
     public const string JudgeSystemPrompt =
         "Evaluate only the supplied benchmark task and primary output. Return exactly one JSON object matching the supplied output schema. Return no markdown or extra properties.";
 
+    /// <summary>
+    ///     The same contract as <see cref="JudgeOutputSchemaJson" /> with the string-length bounds removed, used as the
+    ///     judge turn's <c>response_format</c> so the model is CONSTRAINED to emit it rather than merely asked to.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Two schemas, deliberately. <see cref="JudgeOutputSchemaJson" /> is FROZEN into every snapshot and its
+    ///         configuration hash — editing it invalidates stored runs — and it is the contract the prompt states and
+    ///         <c>BenchmarkJudgeExecutor.ParseResult</c> enforces, bounds included. This one is a runtime-only launch
+    ///         detail that llama-server compiles into a GBNF grammar, where <c>minLength</c>/<c>maxLength</c> are
+    ///         repetition keywords with a hard ceiling (see the GBNF note in <c>docs/agent-knowledge.md</c>). The MEAI
+    ///         adapter's strict-schema transform strips them today, but relying on that leaves the sampler one library
+    ///         bump away from "failed to parse grammar"; the bounds are enforced after decoding instead, where they
+    ///         cost nothing. <c>minimum</c>/<c>maximum</c> stay — they are a numeric range, not a repetition.
+    ///     </para>
+    /// </remarks>
+    public const string JudgeResponseFormatSchemaJson =
+        "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"schemaVersion\",\"score\",\"rationale\"],\"properties\":{\"schemaVersion\":{\"const\":1},\"score\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":5},\"rationale\":{\"type\":\"string\"}}}";
+
     public static BenchmarkSamplingSnapshotV1 DeterministicSampling() =>
         new(0, null, null, null, null, null, null, null, null, [], FixedSeedPolicy, "0");
 
