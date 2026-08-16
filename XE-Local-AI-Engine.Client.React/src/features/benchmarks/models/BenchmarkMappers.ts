@@ -5,7 +5,6 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse as RunSummaryResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse as EligibleModelResponse,
 } from "@/core/api/generated";
-import type { BenchmarkRunDetailWire, BenchmarkRunSummaryWire } from "@/features/benchmarks/models/BenchmarkLaunchEvidenceWire";
 import type {
 	BenchmarkEligibleModel,
 	BenchmarkEvidenceObject,
@@ -70,7 +69,7 @@ const evidenceObject = (value: unknown): BenchmarkEvidenceObject | null =>
 
 // The two launch sides carry the identical column set under a `primary…`/`judge…` prefix, so one prefix-driven reader
 // covers both. Every member is nullable by contract (D7: legacy rows predate the receipt and stay NULL).
-function launchFacts(value: BenchmarkRunSummaryWire, prefix: "primary" | "judge"): BenchmarkLaunchFacts {
+function launchFacts(value: RunSummaryResponse, prefix: "primary" | "judge"): BenchmarkLaunchFacts {
 	const at = (suffix: string): unknown => (value as Record<string, unknown>)[`${prefix}${suffix}`];
 	return {
 		variant: text(at("Variant")),
@@ -92,11 +91,9 @@ function launchFacts(value: BenchmarkRunSummaryWire, prefix: "primary" | "judge"
 }
 
 export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSummary {
-	// Swap seam: drop the cast (and the import) once the regenerated client carries the launch columns.
-	const wire = value as BenchmarkRunSummaryWire;
 	return {
-		primaryLaunch: launchFacts(wire, "primary"),
-		judgeLaunch: launchFacts(wire, "judge"),
+		primaryLaunch: launchFacts(value, "primary"),
+		judgeLaunch: launchFacts(value, "judge"),
 		id: value.id ?? "",
 		projectId: value.projectId ?? "",
 		primaryModelName: value.primaryModelName,
@@ -139,14 +136,12 @@ function judgeResult(value: RunDetailResponse["judgeResult"]): BenchmarkJudgeRes
 }
 
 export function toBenchmarkRunDetail(value: RunDetailResponse): BenchmarkRunDetail {
-	// Swap seam: drop the cast (and the import) once the regenerated client carries the decoded evidence members.
-	const wire = value as BenchmarkRunDetailWire;
 	return {
 		...toBenchmarkRunSummary(value),
-		primaryLaunchReceipt: evidenceObject(wire.primaryLaunchReceipt),
-		judgeLaunchReceipt: evidenceObject(wire.judgeLaunchReceipt),
-		primaryEnvironmentFacts: evidenceObject(wire.primaryEnvironmentFacts),
-		judgeEnvironmentFacts: evidenceObject(wire.judgeEnvironmentFacts),
+		primaryLaunchReceipt: evidenceObject(value.primaryLaunchReceipt),
+		judgeLaunchReceipt: evidenceObject(value.judgeLaunchReceipt),
+		primaryEnvironmentFacts: evidenceObject(value.primaryEnvironmentFacts),
+		judgeEnvironmentFacts: evidenceObject(value.judgeEnvironmentFacts),
 		outputParts: outputParts(value.outputParts),
 		judgeResult: judgeResult(value.judgeResult),
 		primaryErrorMessage: value.primaryErrorMessage ?? null,
