@@ -5,6 +5,8 @@ using Quartz;
 using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
 ///     Default <see cref="IScheduledJobManagementService" />. Validates the requested schedule, persists the definition
@@ -18,9 +20,19 @@ public sealed class ScheduledJobManagementService(
     IScheduledJobTemplateRegistry templateRegistry,
     ISchedulerFactory schedulerFactory,
     ISchedulerEventPublisher eventPublisher,
+    INodeSettingsStore nodeSettingsStore,
     ILogger<ScheduledJobManagementService> logger,
     TimeProvider timeProvider) : IScheduledJobManagementService
 {
+    /// <summary>
+    ///     Slack added on top of the node "Maximum message request timeout" when the run-agent template's ceiling is
+    ///     derived rather than operator-set. The run's own invocation deadline only starts once it holds the shared
+    ///     invocation slot, so the outer Quartz ceiling must additionally cover the queue wait behind an in-flight turn
+    ///     plus the pre-run resolve/capacity work. Five minutes matches <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>,
+    ///     the coarse slack unit this subsystem already uses.
+    /// </summary>
+    private const int DerivedMaxRuntimeOverheadSeconds = 300;
+
     private readonly IScheduledJobDefinitionStore _definitionStore =
         definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
 
@@ -29,6 +41,9 @@ public sealed class ScheduledJobManagementService(
 
     private readonly ILogger<ScheduledJobManagementService> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
+
+    private readonly INodeSettingsStore _nodeSettingsStore =
+        nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
 
     private readonly IScheduledJobRunStore _runStore =
         runStore ?? throw new ArgumentNullException(nameof(runStore));
@@ -243,7 +258,7 @@ public sealed class ScheduledJobManagementService(
         // surfaces the real, actionable error.
         try
         {
-            await scheduler.AddJob(BuildJobDetail(definition), replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken).ConfigureAwait(false), replace: true, cancellationToken).ConfigureAwait(false);
         }
         catch (SchedulerException ex)
         {
@@ -312,7 +327,7 @@ public sealed class ScheduledJobManagementService(
                 continue;
             }
 
-            await scheduler.AddJob(BuildJobDetail(definition), replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken).ConfigureAwait(false), replace: true, cancellationToken).ConfigureAwait(false);
             healedCount++;
         }
 
@@ -529,7 +544,7 @@ public sealed class ScheduledJobManagementService(
         // Ensure no stale job/trigger remains before (re)scheduling.
         _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken).ConfigureAwait(false);
 
-        var jobDetail = BuildJobDetail(record);
+        var jobDetail = await BuildJobDetailAsync(record, cancellationToken).ConfigureAwait(false);
 
         if (record.ScheduleKind == ScheduleKind.Manual)
         {
@@ -555,7 +570,7 @@ public sealed class ScheduledJobManagementService(
         return new TriggerKey(definitionId.ToString("N"), SchedulerJobKeys.Group);
     }
 
-    private static IJobDetail BuildJobDetail(ScheduledJobDefinitionRecord record)
+    private async Task<IJobDetail> BuildJobDetailAsync(ScheduledJobDefinitionRecord record, CancellationToken cancellationToken)
     {
         var jobType = record.PreventOverlap
             ? typeof(NonOverlappingSchedulerDispatchJob)
@@ -570,15 +585,40 @@ public sealed class ScheduledJobManagementService(
                                 .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable, "true")
                                 .StoreDurably();
 
-        // Per-job max-runtime override: the plugin parses MaxRunTime as a millisecond long from its string form
-        // (TryGetLongValueFromString → TimeSpan.FromMilliseconds). Falls back to the global default when unset.
-        if (record.MaxRuntimeSeconds is > 0)
+        // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling.
+        // The plugin parses MaxRunTime as a millisecond long from its string form (TryGetLongValueFromString →
+        // TimeSpan.FromMilliseconds); with neither, the global default applies.
+        var maxRuntimeSeconds = record.MaxRuntimeSeconds is > 0
+            ? record.MaxRuntimeSeconds.Value
+            : await ResolveImplicitMaxRuntimeSecondsAsync(record.TemplateId, cancellationToken).ConfigureAwait(false);
+
+        if (maxRuntimeSeconds is > 0)
         {
             builder = builder.UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime,
-                (record.MaxRuntimeSeconds.Value * 1000L).ToString(CultureInfo.InvariantCulture));
+                (maxRuntimeSeconds.Value * 1000L).ToString(CultureInfo.InvariantCulture));
         }
 
         return builder.Build();
+    }
+
+    /// <summary>
+    ///     The ceiling a template gets when the schedule carries no operator-set max runtime. Only the run-agent
+    ///     template has one: it drives exactly one model invocation, whose own deadline is the node "Maximum message
+    ///     request timeout", so a Quartz interrupt below that setting would always pre-empt the run's own ceiling —
+    ///     the operator raises the node timeout and the unattended run still dies at the older, lower bound. Every
+    ///     other template keeps the global <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c> fallback (null here).
+    ///     Re-resolved on every schedule/reconcile, so a raised node setting reaches existing schedules at the next
+    ///     startup reconciliation.
+    /// </summary>
+    private async Task<int?> ResolveImplicitMaxRuntimeSecondsAsync(string templateId, CancellationToken cancellationToken)
+    {
+        if (!string.Equals(templateId, RunSavedAgentHandler.TemplateIdValue, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        return nodeSettings.MaxMessageRequestTimeoutSeconds + DerivedMaxRuntimeOverheadSeconds;
     }
 
     private static ITrigger BuildTrigger(ScheduledJobDefinitionRecord record, TimeProvider timeProvider)

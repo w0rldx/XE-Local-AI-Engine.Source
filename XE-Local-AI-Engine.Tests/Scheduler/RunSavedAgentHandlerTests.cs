@@ -46,7 +46,10 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.True(harness.Handler.Descriptor.AllowAgentCreation, "OPP-02 lets the AI agent schedule saved-agent runs.");
         AssertEx.True(harness.Handler.Descriptor.AllowManualTrigger, "operators may run a scheduled agent on demand.");
         AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, harness.Handler.Descriptor.DefaultMisfirePolicy);
-        AssertEx.Equal(expected: 600, harness.Handler.Descriptor.DefaultMaxRuntimeSeconds ?? 0);
+        // No template default on purpose: the descriptor value pre-fills the per-schedule ceiling, and a fixed 600 s
+        // capped every unattended run below a raised node "Maximum message request timeout". With none, the management
+        // service derives the ceiling from that setting (ScheduledJobManagementServiceTests covers the derivation).
+        AssertEx.Null(harness.Handler.Descriptor.DefaultMaxRuntimeSeconds);
         AssertEx.Equal(HistoryDetailLevel.Detailed, harness.Handler.Descriptor.HistoryDetailLevel);
         AssertEx.NotNull(harness.Handler.Descriptor.ParameterSchema);
     }

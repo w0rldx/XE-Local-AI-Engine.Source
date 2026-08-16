@@ -177,6 +177,42 @@ describe("ToolCallCard", () => {
 		expect(screen.queryByTestId("chat-tool-call-approve-session-mcp__files__write_file")).toBeNull();
 	});
 
+	it("prefers the backend per-request flag over the catalog when deciding the session button", () => {
+		// The catalog answers at tool-identity level and does not carry the MAF skill tools at all, so run_skill_script and
+		// imported skills kept offering a session scope the node never honours. The runner publishes its own answer with
+		// the approval request, and it wins in both directions.
+		renderWithProviders(
+			<ToolCallCard
+				part={toolPart({
+					name: "run_skill_script",
+					state: "waiting",
+					requiresApproval: true,
+					pendingApprovalRequestId: "approval-42",
+					pendingApprovalSessionScopeEligible: false,
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-tool-call-approve-run_skill_script")).toBeTruthy();
+		expect(screen.queryByTestId("chat-tool-call-approve-session-run_skill_script")).toBeNull();
+	});
+
+	it("offers the session button when the backend says this request is eligible even if the catalog says otherwise", () => {
+		renderWithProviders(
+			<ToolCallCard
+				part={toolPart({
+					name: "mcp__files__write_file",
+					state: "waiting",
+					requiresApproval: true,
+					pendingApprovalRequestId: "approval-42",
+					pendingApprovalSessionScopeEligible: true,
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-tool-call-approve-session-mcp__files__write_file")).toBeTruthy();
+	});
+
 	it("keeps the session button for a tool absent from the catalog", () => {
 		// The MAF skill tools (load_skill / read_skill_resource) are per-agent, not node-level, so they never appear in
 		// the node tool catalog — and they ARE the original session-scope case. An unknown entry must therefore keep the

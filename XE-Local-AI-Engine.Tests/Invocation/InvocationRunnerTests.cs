@@ -876,6 +876,26 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTheProviderTimesOutWithNoTokenCancelled_ReportsATimeoutNotAnExternalStop()
+    {
+        // A provider-side HTTP timeout arrives as a TaskCanceledException whose token is NOT the runner's or the
+        // caller's. It used to fall into the origin fallback and persist "Stopped externally (node shutdown or client
+        // disconnect)" under the Cancelled category — blaming a disconnect that never happened and hiding a real
+        // timeout. Nothing of ours is cancelled in this test, which is exactly the state that must map to Timeout.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var runner = CreateRunner(sender, CreateFactory(ProviderTimeoutUpdates()), eventDispatcher: dispatcher);
+
+        await RunAsync(runner, package);
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.FailureCategory == nameof(FailureCategory.Timeout)
+                       && failure.Error == "Timed out: the model provider stopped responding before the node's own ceiling was reached.");
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    [Test]
     public async Task RunAsync_WhenToolResultTimesOut_KeepsTheToolTimeoutDistinctFromAGenericToolFailure()
     {
         // ToolResultTimeout used to collapse into the same "Worker tool execution failed." every tool error uses, so a
@@ -1685,6 +1705,39 @@ public sealed class InvocationRunnerTests
         await secondTurn;
 
         AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a Parameterized custom tool must never be session-approvable — one click must not grant open-ended model-chosen execution");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenApprovalIsRequested_TheEventSaysWhetherSessionScopeCanBeRemembered()
+    {
+        // The chat approval card used to decide the "Approve for this session" button from the node TOOL CATALOG, which
+        // does not carry the MAF skill tools at all — so run_skill_script and imported skills offered a session scope
+        // the runner would never memoize, and the click silently degraded to a plain "Once". The runner already resolves
+        // the memo key before broadcasting, so it publishes that answer on the approval event itself.
+        AssertEx.Equal(expected: false, await CaptureSessionScopeEligibleAsync(SkillApprovalFactory(RunSkillScriptToolName, SkillName), SkillPackage(Guid.NewGuid())),
+            "script execution is outside the memo allow-list, so the card must not offer a session scope.");
+        AssertEx.Equal(expected: false,
+            await CaptureSessionScopeEligibleAsync(SkillApprovalFactory(LoadSkillToolName, SkillName), SkillPackage(Guid.NewGuid(), imported: true)),
+            "an imported skill is never session-approvable — a per-CALL narrowing the tool catalog cannot see.");
+        AssertEx.Equal(expected: true, await CaptureSessionScopeEligibleAsync(CustomToolApprovalFactory(CustomToolName), CustomToolPackage(Guid.NewGuid(), isFixed: true)),
+            "a Fixed custom tool IS memoized, so the button must still be offered.");
+    }
+
+    // Runs one approval round-trip and returns the SessionScopeEligible flag the runner published with it.
+    private static async Task<bool?> CaptureSessionScopeEligibleAsync(IInvocationAgentFactory factory, RuntimePackageBuilder package)
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var published = new List<ApprovalLifecyclePayload>();
+        dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(payload => published.Add(payload))).Returns(Task.CompletedTask);
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+
+        var turn = RunAsync(runner, package.Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await turn;
+
+        return published.Single().SessionScopeEligible;
     }
 
     [Test]
@@ -3600,6 +3653,15 @@ public sealed class InvocationRunnerTests
     {
         await Task.Yield();
         yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    // The shape an HTTP client timeout takes: a TaskCanceledException on a token this node does not own, raised while
+    // every runner/caller token is still live.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ProviderTimeoutUpdates()
+    {
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(
+            new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout elapsing."));
     }
 
     private static IOrchestrationAgentFactory CreateOrchestrationFactory(IAsyncEnumerable<OrchestrationUpdate> updates, out Ref<FakeOrchestrationRunSession> sessionRef)

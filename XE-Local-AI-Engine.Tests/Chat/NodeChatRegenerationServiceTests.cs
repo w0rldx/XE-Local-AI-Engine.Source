@@ -1238,6 +1238,64 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WithASelectedPathSwitch_DoesNotSendTheSynopsisTheSwitchCleared()
+    {
+        // Persisting a request-supplied selection CLEARS the conversation's compaction synopsis (the synopsis was built
+        // on the previously-selected path). The conversation DTO used to be read BEFORE that write, so the rerun still
+        // spliced the now-deleted synopsis in and dropped the very messages it claimed to cover — the branch switch
+        // silently rewrote the model's view of the conversation.
+        await using var provider = await BuildProviderAsync("regeneration-compaction-path-switch.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var oldUserId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, oldUserId, "ancient question", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var oldAssistantId = Guid.NewGuid();
+        var oldCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, oldAssistantId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var recentUserId = Guid.NewGuid();
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, recentUserId, "what is 2+2?", CreatedAtUtc: 14)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 15,
+                             "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 16, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var coveredSequence = seeded.Messages.Single(message => message.MessageId == oldAssistantId).Sequence;
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "ancient synopsis", coveredSequence, UpdatedAtUtc: 17))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateService(persistence, dispatcher, capturingRunner);
+
+        var drained = 0;
+        // Any request-supplied selection map takes the persist-then-clear branch; this map selects no variant itself.
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, selectedPath: new Dictionary<Guid, Guid>()).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+
+        var context = AssertEx.NotNull(capturingRunner.LastContext);
+        AssertEx.False(context.Any(message => message.Content.Contains("ancient synopsis", StringComparison.Ordinal)),
+            "The path switch cleared the synopsis, so the rerun must not send it.");
+        AssertEx.True(context.Any(message => message.Id == oldUserId), "The history the cleared synopsis covered must be sent verbatim again.");
+        AssertEx.True(context.Any(message => message.Id == recentUserId), "The answered user turn must still be sent.");
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenTheSynopsisCoversTheAnsweredUserTurn_KeepsTheVerbatimHistory()
     {
         // Guard on the splice: a synopsis that reaches the very user turn the rerun is answering would leave the model
