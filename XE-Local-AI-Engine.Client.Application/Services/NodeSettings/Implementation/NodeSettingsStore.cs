@@ -197,7 +197,6 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             SpeculativeDraftGpuLayers = ClampToRange(settings.SpeculativeDraftGpuLayers,
                 StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers),
             RerankerModelName = TrimToNull(settings.RerankerModelName),
-            AllowedVoiceModels = NormalizeStringList(settings.AllowedVoiceModels),
             DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile),
             UsageRates = NormalizeUsageRates(settings.UsageRates)
         };

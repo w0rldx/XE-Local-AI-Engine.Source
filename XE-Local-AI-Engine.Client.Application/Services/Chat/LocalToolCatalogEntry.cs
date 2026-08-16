@@ -26,4 +26,12 @@ public sealed record LocalToolCatalogEntry
     ///     approval. Defaults to <see cref="ToolCategory.Unknown" /> (fail-closed) for any entry that did not declare one.
     /// </summary>
     public ToolCategory Category { get; init; } = ToolCategory.Unknown;
+
+    /// <summary>
+    ///     Set only for a node-local custom tool: whether it runs a verbatim, operator-authored invocation
+    ///     (<c>CustomToolMode.Fixed</c>) rather than one the model parameterizes. The catalog response feeds it to
+    ///     <c>SessionApprovalEligibility.IsToolEligible</c> — a Fixed custom tool can carry a session-scoped approval, a
+    ///     Parameterized one is once-or-deny. <see langword="false" /> for every non-custom entry.
+    /// </summary>
+    public bool IsFixedCustomTool { get; init; }
 }

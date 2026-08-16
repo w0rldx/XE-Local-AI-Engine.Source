@@ -82,6 +82,10 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	const catalogEntry = catalogQuery.data?.find((tool) => tool.name === part.name);
 	const toolCategory = catalogEntry?.category ?? "Unknown";
 	const toolEffectiveApproval = catalogEntry?.effectiveRequiresApproval ?? true;
+	// Whether the node can actually REMEMBER a session-scoped approval for this tool. A tool the catalog does not carry
+	// (the MAF skill tools, which are per-agent rather than node-level, or a since-removed MCP server) keeps the
+	// pre-catalog fallback of offering the button — the node stays the authority either way.
+	const sessionScopeEligible = catalogEntry?.sessionScopeEligible ?? true;
 
 	const handleToggle = (open: boolean) => {
 		expandedByToolId.set(part.id, open);
@@ -211,20 +215,25 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 						>
 							{t("chat.toolCall.approve", "Approve")}
 						</Button>
-						{/* Session scope is a REQUEST, not a guarantee: the node withholds it for imported skills and an
-						    operator policy can disable it outright, in which case the same tool prompts again. That is
-						    expected, not a failure — the controls re-arm on the new request id. */}
-						<Button
-							size="compact-xs"
-							color="teal"
-							variant="subtle"
-							leftSection={<IconCheck size={12} />}
-							loading={resolveApproval.isPending}
-							onClick={() => handleApprovalDecision(true, "Session")}
-							data-testid={`chat-tool-call-approve-session-${part.name}`}
-						>
-							{t("chat.toolCall.approveSession", "Approve for this session")}
-						</Button>
+						{/* Session scope is a REQUEST, not a guarantee: even for an eligible tool the node withholds it for
+						    imported skills, in which case the same tool prompts again. That is expected, not a failure —
+						    the controls re-arm on the new request id. What the catalog's sessionScopeEligible removes is
+						    the far worse case: offering the button for a tool the node can NEVER remember (an MCP tool,
+						    run_in_agent_home, a Parameterized custom tool, or anything at all while the operator's
+						    always-prompt switch is on), where the click silently degraded to a plain "Once". */}
+						{sessionScopeEligible ? (
+							<Button
+								size="compact-xs"
+								color="teal"
+								variant="subtle"
+								leftSection={<IconCheck size={12} />}
+								loading={resolveApproval.isPending}
+								onClick={() => handleApprovalDecision(true, "Session")}
+								data-testid={`chat-tool-call-approve-session-${part.name}`}
+							>
+								{t("chat.toolCall.approveSession", "Approve for this session")}
+							</Button>
+						) : null}
 						<Button
 							size="compact-xs"
 							color="red"

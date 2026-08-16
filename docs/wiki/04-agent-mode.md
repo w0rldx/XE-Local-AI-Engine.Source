@@ -572,6 +572,15 @@ resolved in `InvocationRunner.RequestToolApprovalAsync`:
   - A memo-suppressed approval **still writes its audit row** (`SessionScopeApprovalDecision`) — a
     approval that leaves no trace would thin the record of what an agent was allowed to do.
   - Denials are **never** remembered, under any scope.
+  - The chat card only OFFERS session scope where the node can honor it. `SessionApprovalEligibility`
+    is the one predicate `TryResolveSessionApprovalKey` and the node tool-catalog response
+    (`ToolCatalogEntryResponse.SessionScopeEligible`) both read, so `ToolCallCard` hides its "Approve
+    for this session" button for every tool that can never carry a memo — an MCP tool,
+    `run_in_agent_home`, a `Parameterized` custom tool, or anything at all while
+    `SkillSessionScopeDisabled` is on. The catalog answer is a tool-identity UPPER BOUND: the runner
+    still applies the per-call narrowings above (imported skill, skill not in the package, unnamed
+    resource), which only ever remove eligibility. The MAF skill tools are per-agent and therefore
+    absent from the node catalog, so an entry the card cannot find keeps offering the button.
 
 **Unattended runs fail fast, and the check runs before the memo, not after.** A scheduled `run-agent`
 job carries `RuntimePackage.IsUnattended` (excluded from the config hash, same posture as
