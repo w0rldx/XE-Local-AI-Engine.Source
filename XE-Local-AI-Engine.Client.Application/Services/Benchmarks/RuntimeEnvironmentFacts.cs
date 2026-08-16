@@ -42,7 +42,12 @@ public sealed record BenchmarkLlamaRuntimeFactsV1(string Version, string Variant
 /// </summary>
 /// <param name="Missing">
 ///     The parts that could not be captured, by name (<c>runtimeBundle</c>, <c>hardware</c>, <c>llamaRuntime</c>). A
-///     capture never fails the run, so an empty list is the only proof that everything was observed.
+///     capture never fails the run, so an empty list is the only proof that everything was observed. It IS part of the
+///     hash: a part that could not be read is itself an environmental fact.
+/// </param>
+/// <param name="CapturedAtUtc">
+///     When this capture was taken. Persisted, but deliberately NOT part of <c>EnvironmentFactsHash</c> — that hash
+///     answers "is this the same environment?", and a wall clock would make two runs of an unchanged node differ.
 /// </param>
 public sealed record RuntimeEnvironmentFactsV1(
     int SchemaVersion,

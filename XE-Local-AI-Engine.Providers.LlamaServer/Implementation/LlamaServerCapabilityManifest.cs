@@ -383,7 +383,7 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
         await using var stream = new FileStream(executablePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var digest = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        return Convert.ToHexString(digest);
+        return Convert.ToHexStringLower(digest);
     }
 
     private static string FirstNonEmptyLine(string output)
