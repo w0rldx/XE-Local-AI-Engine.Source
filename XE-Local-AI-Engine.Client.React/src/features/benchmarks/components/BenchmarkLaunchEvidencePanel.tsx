@@ -1,42 +1,29 @@
-import { Alert, Stack } from "@mantine/core";
+import { Accordion, Alert, Stack } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { BenchmarkEvidenceDiffTable, BenchmarkEvidenceTable } from "@/features/benchmarks/components/BenchmarkEvidenceTable";
 import type { BenchmarkEvidenceDiffRow } from "@/features/benchmarks/models/BenchmarkLaunchEvidence";
 import { flattenEvidence } from "@/features/benchmarks/models/BenchmarkLaunchEvidence";
-import type { BenchmarkEvidenceObject, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import type {
+	BenchmarkEvidenceObject,
+	BenchmarkLaunchFacts,
+	BenchmarkRunDetail,
+} from "@/features/benchmarks/models/BenchmarkModels";
 
-interface EvidenceBlockProps {
-	title: string;
-	evidence: BenchmarkEvidenceObject | null;
-	/** Root of the dotted field paths; the same roots the compare diff uses, so field names read identically. */
-	prefix: string;
+interface IntendedEffectiveAlertProps {
+	launch: BenchmarkLaunchFacts;
+	message: string;
 	testId: string;
 }
 
-function EvidenceBlock({ title, evidence, prefix, testId }: EvidenceBlockProps) {
-	if (evidence === null) {
-		return null;
-	}
-	return (
-		<SectionCard title={title} gap="sm">
-			<BenchmarkEvidenceTable entries={flattenEvidence(evidence, prefix)} data-testid={testId} />
-		</SectionCard>
-	);
-}
-
-// The durable launch evidence of one run: what the freeze intended, what the provider reported after readiness, and the
-// environment captured just before the spawn. Nothing here is a judgement — differences are shown, not interpreted.
-export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail }) {
+// Both recorded facts are compared, not just the identity: an executable whose digest moved between freeze and spawn is
+// a real drift even when the projection hashed the same. A side that recorded only one half cannot be compared, so a
+// row with a missing end is not a difference.
+function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAlertProps) {
 	const { t } = useTranslation();
-	const launch = run.primaryLaunch;
-	const intendedDiffers =
-		launch.intendedLaunchIdentity !== null &&
-		launch.effectiveLaunchIdentity !== null &&
-		launch.intendedLaunchIdentity !== launch.effectiveLaunchIdentity;
-	const intendedRows: BenchmarkEvidenceDiffRow[] = [
+	const rows: BenchmarkEvidenceDiffRow[] = [
 		{
 			key: "launch.launchIdentity",
 			left: launch.intendedLaunchIdentity,
@@ -50,46 +37,90 @@ export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail 
 			differs: launch.intendedExecutableSha256 !== launch.executableSha256,
 		},
 	];
+	if (!rows.some((row) => row.differs && row.left !== null && row.right !== null)) {
+		return null;
+	}
+	return (
+		<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid={testId}>
+			<Stack gap="xs">
+				{message}
+				<BenchmarkEvidenceDiffTable
+					rows={rows}
+					leftLabel={t("pages.benchmarks.launch.intended", "Intended")}
+					rightLabel={t("pages.benchmarks.launch.effective", "Effective")}
+					data-testid={`${testId}-table`}
+				/>
+			</Stack>
+		</Alert>
+	);
+}
+
+// The durable launch evidence of one run: what the freeze intended, what the provider reported after readiness, and the
+// environment captured just before the spawn. Nothing here is a judgement — differences are shown, not interpreted.
+// The evidence objects sit behind a collapsed accordion because a runtime-bundle listing runs to hundreds of rows.
+export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail }) {
+	const { t } = useTranslation();
+	const [opened, setOpened] = useState<string[]>([]);
+	const blocks: { value: string; title: string; evidence: BenchmarkEvidenceObject | null; prefix: string }[] = [
+		{
+			value: "primary-receipt",
+			title: t("pages.benchmarks.launch.receipt", "Launch receipt"),
+			evidence: run.primaryLaunchReceipt,
+			prefix: "receipt",
+		},
+		{
+			value: "primary-environment",
+			title: t("pages.benchmarks.launch.environment", "Environment"),
+			evidence: run.primaryEnvironmentFacts,
+			prefix: "environment",
+		},
+		{
+			value: "judge-receipt",
+			title: t("pages.benchmarks.launch.judgeReceipt", "Judge launch receipt"),
+			evidence: run.judgeLaunchReceipt,
+			prefix: "receipt",
+		},
+		{
+			value: "judge-environment",
+			title: t("pages.benchmarks.launch.judgeEnvironment", "Judge environment"),
+			evidence: run.judgeEnvironmentFacts,
+			prefix: "environment",
+		},
+	];
+	const present = blocks.filter((block) => block.evidence !== null);
 
 	return (
 		<Stack gap="sm">
-			{intendedDiffers ? (
-				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-intended-effective-differs">
-					<Stack gap="xs">
-						{t("pages.benchmarks.launch.intendedDiffers", "The intended launch and the effective launch differ.")}
-						<BenchmarkEvidenceDiffTable
-							rows={intendedRows}
-							leftLabel={t("pages.benchmarks.launch.intended", "Intended")}
-							rightLabel={t("pages.benchmarks.launch.effective", "Effective")}
-							data-testid="benchmark-intended-effective-table"
-						/>
-					</Stack>
-				</Alert>
+			<IntendedEffectiveAlert
+				launch={run.primaryLaunch}
+				message={t("pages.benchmarks.launch.intendedDiffers", "The intended launch and the effective launch differ.")}
+				testId="benchmark-intended-effective-differs"
+			/>
+			<IntendedEffectiveAlert
+				launch={run.judgeLaunch}
+				message={t(
+					"pages.benchmarks.launch.judgeIntendedDiffers",
+					"The intended judge launch and the effective judge launch differ.",
+				)}
+				testId="benchmark-judge-intended-effective-differs"
+			/>
+			{present.length > 0 ? (
+				<Accordion multiple={true} variant="contained" value={opened} onChange={setOpened}>
+					{present.map((block) => (
+						<Accordion.Item key={block.value} value={block.value}>
+							<Accordion.Control>{block.title}</Accordion.Control>
+							<Accordion.Panel>
+								{opened.includes(block.value) ? (
+									<BenchmarkEvidenceTable
+										entries={flattenEvidence(block.evidence, block.prefix)}
+										data-testid={`benchmark-${block.value}`}
+									/>
+								) : null}
+							</Accordion.Panel>
+						</Accordion.Item>
+					))}
+				</Accordion>
 			) : null}
-			<EvidenceBlock
-				title={t("pages.benchmarks.launch.receipt", "Launch receipt")}
-				evidence={run.primaryLaunchReceipt}
-				prefix="receipt"
-				testId="benchmark-primary-receipt"
-			/>
-			<EvidenceBlock
-				title={t("pages.benchmarks.launch.environment", "Environment")}
-				evidence={run.primaryEnvironmentFacts}
-				prefix="environment"
-				testId="benchmark-primary-environment"
-			/>
-			<EvidenceBlock
-				title={t("pages.benchmarks.launch.judgeReceipt", "Judge launch receipt")}
-				evidence={run.judgeLaunchReceipt}
-				prefix="receipt"
-				testId="benchmark-judge-receipt"
-			/>
-			<EvidenceBlock
-				title={t("pages.benchmarks.launch.judgeEnvironment", "Judge environment")}
-				evidence={run.judgeEnvironmentFacts}
-				prefix="environment"
-				testId="benchmark-judge-environment"
-			/>
 		</Stack>
 	);
 }

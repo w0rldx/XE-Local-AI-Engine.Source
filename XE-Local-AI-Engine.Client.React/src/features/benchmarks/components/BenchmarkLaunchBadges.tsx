@@ -51,12 +51,16 @@ export function BenchmarkLaunchBadges({ launch, "data-testid": testId }: Benchma
 	};
 
 	const backendBadge = backend();
+	// A null source is "not recorded" (D7), which must not be dressed up as an explicit operator pick: the suffix
+	// appears only for a source the node actually wrote.
 	const kvLabel =
 		launch.kvCacheType === null
 			? null
 			: launch.kvCacheTypeSource === "auto"
 				? t("pages.benchmarks.launch.kvAuto", "KV {{type}} (auto)", { type: launch.kvCacheType })
-				: t("pages.benchmarks.launch.kv", "KV {{type}}", { type: launch.kvCacheType });
+				: launch.kvCacheTypeSource === "explicit"
+					? t("pages.benchmarks.launch.kvExplicit", "KV {{type}} (explicit)", { type: launch.kvCacheType })
+					: t("pages.benchmarks.launch.kv", "KV {{type}}", { type: launch.kvCacheType });
 
 	if (kvLabel === null && launch.flashAttentionMode === null && backendBadge === null && launch.hasAuxAssets !== true) {
 		return (
@@ -70,7 +74,9 @@ export function BenchmarkLaunchBadges({ launch, "data-testid": testId }: Benchma
 		<Group gap="xs" data-testid={testId}>
 			{kvLabel === null ? null : (
 				<Tooltip label={launch.kvAutoReason} disabled={launch.kvAutoReason === null}>
-					<StatusBadge color="grape" label={kvLabel} data-testid="benchmark-launch-kv" />
+					<span>
+						<StatusBadge color="grape" label={kvLabel} data-testid="benchmark-launch-kv" />
+					</span>
 				</Tooltip>
 			)}
 			{launch.flashAttentionMode === null ? null : (

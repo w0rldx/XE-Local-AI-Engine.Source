@@ -167,4 +167,15 @@ describe("BenchmarkLaunchCompare", () => {
 		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
 		expect(screen.getByTestId("benchmark-judge-launch-differs").textContent).toContain("launch.environmentFactsHash");
 	});
+
+	// Neither hash covers the freeze-side facts, so a KV source that changed between the two runs would leave a
+	// hash-driven check silent while the table below it already shows the difference.
+	it("reports a difference neither hash covers", () => {
+		const right = detail(rightId, {
+			primaryLaunch: { ...detail(rightId).primaryLaunch, kvCacheTypeSource: "explicit" },
+		});
+		renderCompare(detail(leftId), right);
+
+		expect(screen.getByTestId("benchmark-primary-launch-differs").textContent).toContain("launch.kvCacheTypeSource");
+	});
 });

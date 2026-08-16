@@ -155,6 +155,7 @@ describe("formatEvidenceValue", () => {
 	it("humanizes byte counts and truncates hash-like values", () => {
 		expect(formatEvidenceValue("environment.hardware.ramBytes", 68_719_476_736)).toBe("64.0 GB");
 		expect(formatEvidenceValue("environment.runtimeBundle.files.0.sizeBytes", 10_485_760)).toBe("10.0 MB");
+		expect(formatEvidenceValue("environment.runtimeBundle.files.0.sizeBytes", 512)).toBe("512 B");
 		expect(formatEvidenceValue("receipt.executableSha256", "a".repeat(64))).toBe(`${"a".repeat(12)}…`);
 		expect(formatEvidenceValue("receipt.launchProjection.contextTokens", 4096)).toBe("4096");
 	});

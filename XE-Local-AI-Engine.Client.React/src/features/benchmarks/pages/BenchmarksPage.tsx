@@ -17,7 +17,6 @@ import { IconAlertTriangle, IconFlask, IconLock, IconPlus, IconRefresh, IconRock
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -29,7 +28,7 @@ import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/Benchma
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import type { BenchmarkKvCacheType, BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkKvCacheTypes } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkKvCacheTypes, isUnsupportedKvCacheTypeError } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
@@ -68,7 +67,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
-	const [selectedKvCacheType, setSelectedKvCacheType] = useState<string>(autoKvCacheType);
+	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
 	const projectQuery = useBenchmarkProject(selectedProjectId);
 	const runsQuery = useBenchmarkRuns(selectedProjectId);
@@ -116,6 +115,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		});
 	}, [runsQuery.data, linkedRunIds]);
 
+	// The pick belongs to one prospective run; a different model or project is a different run, so it falls back to Auto
+	// rather than silently carrying a quantized type onto a model that may not support it.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: resetting is the effect, the pick itself is not an input.
+	useEffect(() => setSelectedKvCacheType(autoKvCacheType), [selectedModel, selectedProjectId]);
+
 	const detail = projectQuery.data;
 	const editDraft = useMemo<BenchmarkProjectDraft>(
 		() =>
@@ -157,10 +161,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		});
 	};
 	// A 422 is the node refusing this KV type for this runtime (quantized KV on CPU, or a binary whose manifest does not
-	// support it). Its sanitized reason is the useful half; the hint says what actually gets the run started.
+	// support it). Its sanitized reason is the useful half; the hint says what actually gets the run started. A local
+	// response-validation failure reuses 422 as its status, and telling the operator to pick f16 would be nonsense there.
 	const startRunErrorMessage = (error: unknown): string => {
 		const message = apiErrorMessage(error, t("pages.benchmarks.errors.start", "Could not start the benchmark run."));
-		return error instanceof ApiError && error.statusCode === 422
+		return isUnsupportedKvCacheTypeError(error)
 			? `${message} ${t("pages.benchmarks.errors.kvUnsupportedHint", "Pick f16 explicitly to run this model on this runtime.")}`
 			: message;
 	};
@@ -286,7 +291,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										)}
 										allowDeselect={false}
 										value={selectedKvCacheType}
-										onChange={(value) => setSelectedKvCacheType(value ?? autoKvCacheType)}
+										onChange={(value) =>
+											setSelectedKvCacheType(benchmarkKvCacheTypes.find((type) => type === value) ?? autoKvCacheType)
+										}
 										data={[
 											{ value: autoKvCacheType, label: t("pages.benchmarks.run.kvCacheTypeAuto", "Auto") },
 											...benchmarkKvCacheTypes.map((type) => ({ value: type, label: type })),
@@ -304,8 +311,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 													projectId: detail.id,
 													modelName: selectedModel,
 													expectedProjectVersion: detail.version,
-													kvCacheType:
-														selectedKvCacheType === autoKvCacheType ? null : (selectedKvCacheType as BenchmarkKvCacheType),
+													kvCacheType: selectedKvCacheType === autoKvCacheType ? null : selectedKvCacheType,
 												},
 												{
 													onSuccess: (run) => setSelectedRunIds((current) => [run.id, ...current].slice(0, 2)),

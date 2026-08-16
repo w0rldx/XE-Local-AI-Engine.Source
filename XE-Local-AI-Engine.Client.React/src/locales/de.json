@@ -4045,7 +4045,10 @@
 				"primaryDiffers": "Start unterscheidet sich: {{fields}}",
 				"judgeDiffers": "Start/Umgebung der Bewertung unterscheidet sich: {{fields}}",
 				"copy": "Kopieren",
-				"copied": "Kopiert"
+				"copied": "Kopiert",
+				"kvExplicit": "KV {{type}} (ausdrücklich)",
+				"value": "Wert",
+				"judgeIntendedDiffers": "Der beabsichtigte und der tatsächliche Start der Bewertung unterscheiden sich."
 			}
 		},
 		"customTools": {

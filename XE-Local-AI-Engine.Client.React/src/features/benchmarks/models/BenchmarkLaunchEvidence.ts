@@ -85,9 +85,12 @@ export function formatEvidenceValue(key: string, value: unknown): string {
 		return "—";
 	}
 	if (typeof value === "number" && lastSegment(key).endsWith("Bytes")) {
-		// RAM and VRAM are GB-scale, but the runtime-bundle file list is not: rendering a 10 MB shared library as
-		// "0.0 GB" would destroy the fact rather than humanize it.
-		return value >= 1024 ** 3 ? formatBytesAsGb(value) : `${(value / 1024 ** 2).toFixed(1)} MB`;
+		// RAM and VRAM are GB-scale but the runtime-bundle file list is not, and a small file is not "0.0 GB": pick the
+		// unit from the magnitude so every recorded size stays readable as itself.
+		if (value >= 1024 ** 3) {
+			return formatBytesAsGb(value);
+		}
+		return value >= 1024 ** 2 ? `${(value / 1024 ** 2).toFixed(1)} MB` : `${value} B`;
 	}
 	const rendered = String(value);
 	return isEvidenceHashKey(key) && rendered.length > 20 ? `${rendered.slice(0, 12)}…` : rendered;
