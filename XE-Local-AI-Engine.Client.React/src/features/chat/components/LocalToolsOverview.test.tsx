@@ -156,6 +156,25 @@ describe("LocalToolsOverview", () => {
 		expect(screen.getByTestId("local-tools-empty")).toBeTruthy();
 	});
 
+	// G13: the panel renders the node's INSTALLED catalog, while the per-turn offer is narrowed by model tool capability,
+	// the ToolCapableModels allow-list and the agent's AllowedToolNames. The copy has to say so rather than imply the
+	// listed tools are all callable right now.
+	it("labels the list as what is installed on the node, not what a turn can call", () => {
+		renderWithProviders(<LocalToolsOverview />);
+
+		expect(screen.getByText("Tools installed on this node")).toBeTruthy();
+		expect(screen.getByText("2 installed")).toBeTruthy();
+	});
+
+	it("states that the usable subset depends on the model and the agent", () => {
+		renderWithProviders(<LocalToolsOverview />);
+
+		const notice = screen.getByTestId("local-tools-scope-notice").textContent ?? "";
+		expect(notice).toContain("full node catalog");
+		expect(notice).toContain("selected model");
+		expect(notice).toContain("agent");
+	});
+
 	it("shows an error state when the catalog fails to load", () => {
 		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: false, error: new Error("boom") });
 
