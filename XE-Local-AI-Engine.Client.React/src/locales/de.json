@@ -3964,7 +3964,10 @@
 				"cancel": "Lauf abbrechen",
 				"delete": "Abgeschlossenen Lauf löschen",
 				"waiting": "Warten auf Modellausgabe…",
-				"compareSelection": "Zu vergleichende Läufe"
+				"compareSelection": "Zu vergleichende Läufe",
+				"kvCacheType": "KV-Cache-Typ",
+				"kvCacheTypeAuto": "Automatisch",
+				"kvCacheTypeHelp": "Quantisierte Typen starten mit aktivierter Flash Attention. Automatisch verwendet q8_0 auf der GPU, sofern die gewählte Binärdatei das unterstützt, sonst f16."
 			},
 			"metrics": {
 				"duration": "Dauer",
@@ -4013,11 +4016,36 @@
 				"contextRefused": "Das Modell konnte den angeforderten Kontext nicht bereitstellen.",
 				"fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
 				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Knotens unterbrochen.",
-				"judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar."
+				"judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar.",
+				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen."
 			},
 			"loading": {
 				"projects": "Benchmark-Projekte werden geladen…",
 				"project": "Benchmark-Projekt wird geladen…"
+			},
+			"launch": {
+				"kv": "KV {{type}}",
+				"kvAuto": "KV {{type}} (automatisch)",
+				"flashAttention": "FA {{mode}}",
+				"layers": "{{backend}} {{offloaded}}/{{total}} Layer",
+				"cpu": "CPU",
+				"cpuFallback": "CPU-Rückfall",
+				"backendUnknown": "Backend unbekannt",
+				"metalUnverified": "Metal (nicht verifiziert)",
+				"auxAsset": "Adapter/Zusatz-Asset",
+				"none": "—",
+				"field": "Feld",
+				"receipt": "Startprotokoll",
+				"environment": "Umgebung",
+				"judgeReceipt": "Startprotokoll der Bewertung",
+				"judgeEnvironment": "Umgebung der Bewertung",
+				"intended": "Beabsichtigt",
+				"effective": "Tatsächlich",
+				"intendedDiffers": "Der beabsichtigte und der tatsächliche Start unterscheiden sich.",
+				"primaryDiffers": "Start unterscheidet sich: {{fields}}",
+				"judgeDiffers": "Start/Umgebung der Bewertung unterscheidet sich: {{fields}}",
+				"copy": "Kopieren",
+				"copied": "Kopiert"
 			}
 		},
 		"customTools": {

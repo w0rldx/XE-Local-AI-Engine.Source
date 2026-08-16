@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJudgePanel";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The judge lifecycle is independent from the primary run, and the panel is where that independence is made legible:
@@ -29,6 +30,12 @@ function run(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
 		tokensPerSecond: 24,
 		userScore: null,
 		lastStreamSequence: 2,
+		primaryLaunch: noBenchmarkLaunchFacts,
+		judgeLaunch: noBenchmarkLaunchFacts,
+		primaryLaunchReceipt: null,
+		judgeLaunchReceipt: null,
+		primaryEnvironmentFacts: null,
+		judgeEnvironmentFacts: null,
 		version: 3,
 		createdAtUtc: 1,
 		updatedAtUtc: 2,

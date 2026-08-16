@@ -3,6 +3,8 @@ import { IconAlertTriangle, IconPlugConnected, IconPlugConnectedX, IconSquare, I
 import { useTranslation } from "react-i18next";
 
 import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJudgePanel";
+import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
+import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
 import { BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
@@ -53,6 +55,7 @@ export function BenchmarkRunPane({
 					</Stack>
 					<BenchmarkStatusBadge status={run.primaryStatus} />
 				</Group>
+				<BenchmarkLaunchBadges launch={run.primaryLaunch} data-testid="benchmark-run-launch" />
 				<Group gap="lg">
 					<Text size="sm">
 						{t("pages.benchmarks.metrics.duration", "Duration")}: <b>{formatDuration(run.durationMs)}</b>
@@ -110,6 +113,7 @@ export function BenchmarkRunPane({
 					onChange={onScore}
 				/>
 				<BenchmarkJudgePanel run={run} />
+				<BenchmarkLaunchEvidencePanel run={run} />
 				{isRunTerminal(run) ? (
 					<Button variant="subtle" color="red" leftSection={<IconTrash size={14} />} loading={isDeleting} onClick={onDelete}>
 						{t("pages.benchmarks.run.delete", "Delete terminal run")}

@@ -3964,7 +3964,10 @@
 				"cancel": "Cancel run",
 				"delete": "Delete terminal run",
 				"waiting": "Waiting for model output…",
-				"compareSelection": "Runs to compare"
+				"compareSelection": "Runs to compare",
+				"kvCacheType": "KV cache type",
+				"kvCacheTypeAuto": "Auto",
+				"kvCacheTypeHelp": "Quantized types launch with flash attention on. Auto uses q8_0 on GPU when the selected binary supports it, otherwise f16."
 			},
 			"metrics": {
 				"duration": "Duration",
@@ -4013,11 +4016,36 @@
 				"contextRefused": "The model could not provide the requested context.",
 				"fingerprintChanged": "The installed model changed after this run was frozen.",
 				"restartInterrupted": "This running phase was interrupted by a node restart.",
-				"judgeFailed": "The automated judge failed; the primary result is still available."
+				"judgeFailed": "The automated judge failed; the primary result is still available.",
+				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime."
 			},
 			"loading": {
 				"projects": "Loading benchmark projects…",
 				"project": "Loading benchmark project…"
+			},
+			"launch": {
+				"kv": "KV {{type}}",
+				"kvAuto": "KV {{type}} (auto)",
+				"flashAttention": "FA {{mode}}",
+				"layers": "{{backend}} {{offloaded}}/{{total}} layers",
+				"cpu": "CPU",
+				"cpuFallback": "CPU fallback",
+				"backendUnknown": "backend unknown",
+				"metalUnverified": "Metal (unverified)",
+				"auxAsset": "adapter/aux asset",
+				"none": "—",
+				"field": "Field",
+				"receipt": "Launch receipt",
+				"environment": "Environment",
+				"judgeReceipt": "Judge launch receipt",
+				"judgeEnvironment": "Judge environment",
+				"intended": "Intended",
+				"effective": "Effective",
+				"intendedDiffers": "The intended launch and the effective launch differ.",
+				"primaryDiffers": "Launch differs: {{fields}}",
+				"judgeDiffers": "Judge launch/environment differs: {{fields}}",
+				"copy": "Copy",
+				"copied": "Copied"
 			}
 		},
 		"customTools": {

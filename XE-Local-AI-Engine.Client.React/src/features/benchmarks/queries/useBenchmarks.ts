@@ -14,6 +14,7 @@ import {
 	updateBenchmarkProject,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import type { StartBenchmarkRunBody } from "@/features/benchmarks/models/BenchmarkLaunchEvidenceWire";
 import {
 	toBenchmarkEligibleModel,
 	toBenchmarkProjectDetail,
@@ -23,6 +24,7 @@ import {
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import type {
 	BenchmarkEligibleModel,
+	BenchmarkKvCacheType,
 	BenchmarkProjectDetail,
 	BenchmarkProjectDraft,
 	BenchmarkProjectSummary,
@@ -183,14 +185,21 @@ export function useStartBenchmarkRun() {
 			projectId,
 			modelName,
 			expectedProjectVersion,
+			kvCacheType,
 		}: {
 			projectId: string;
 			modelName: string;
 			expectedProjectVersion: number;
+			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
+			kvCacheType: BenchmarkKvCacheType | null;
 		}) => {
-			const { data } = await callWithResponseValidation(
-				startBenchmarkRun({ path: { projectId }, body: { modelName, expectedProjectVersion }, throwOnError: true }),
-			);
+			// Swap seam: `StartBenchmarkRunBody` is the hand-written mirror; after the regen this is the generated body type.
+			const body: StartBenchmarkRunBody = {
+				modelName,
+				expectedProjectVersion,
+				...(kvCacheType === null ? {} : { kvCacheType }),
+			};
+			const { data } = await callWithResponseValidation(startBenchmarkRun({ path: { projectId }, body, throwOnError: true }));
 			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
