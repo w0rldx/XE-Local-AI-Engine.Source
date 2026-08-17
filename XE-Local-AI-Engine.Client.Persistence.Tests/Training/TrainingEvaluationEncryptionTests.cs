@@ -5,7 +5,6 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
@@ -100,8 +99,7 @@ public sealed class TrainingEvaluationEncryptionTests : IDisposable
         }
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
-        _ = await AssertEx.ThrowsAsync<CryptographicException>(
-            async () => _ = await readContext.TrainingEvaluationRuns.SingleAsync(item => item.ModelName == BaseModelName),
+        _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.TrainingEvaluationRuns.SingleAsync(item => item.ModelName == BaseModelName),
             "Evaluation ciphertext read under another evaluation id must fail the AEAD tag check.");
     }
 

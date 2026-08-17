@@ -903,8 +903,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(
-                   new WorkerToolCallException("read_file", "Tool call timed out waiting for a result.", new TimeoutException("timed out"))));
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("read_file", "Tool call timed out waiting for a result.", new TimeoutException("timed out"))));
 
         var runner = CreateRunner(sender, factory);
 
@@ -3702,8 +3701,7 @@ public sealed class InvocationRunnerTests
     private static async IAsyncEnumerable<AgentResponseUpdate> ProviderTimeoutUpdates()
     {
         await Task.Yield();
-        yield return await Task.FromException<AgentResponseUpdate>(
-            new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout elapsing."));
+        yield return await Task.FromException<AgentResponseUpdate>(new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout elapsing."));
     }
 
     private static IOrchestrationAgentFactory CreateOrchestrationFactory(IAsyncEnumerable<OrchestrationUpdate> updates, out Ref<FakeOrchestrationRunSession> sessionRef)

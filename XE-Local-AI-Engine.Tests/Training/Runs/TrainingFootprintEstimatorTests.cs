@@ -56,8 +56,14 @@ public sealed class TrainingFootprintEstimatorTests
     {
         IReadOnlyList<BaseArtifactFileView> files = [new("Weights", "model.safetensors", "/base/model.safetensors", 2_000_000_000, null)];
 
-        var undeclared = TrainingFootprintEstimator.EstimateParameterCount(files, Llama8B with { TorchDtype = null });
-        var eightBit = TrainingFootprintEstimator.EstimateParameterCount(files, Llama8B with { TorchDtype = "int8" });
+        var undeclared = TrainingFootprintEstimator.EstimateParameterCount(files, Llama8B with
+        {
+            TorchDtype = null
+        });
+        var eightBit = TrainingFootprintEstimator.EstimateParameterCount(files, Llama8B with
+        {
+            TorchDtype = "int8"
+        });
 
         // Assuming the wider dtype over-counts parameters, which over-counts the footprint, which refuses rather
         // than admits — the safe direction for an unknown.
@@ -87,7 +93,7 @@ public sealed class TrainingFootprintEstimatorTests
         var estimate = TrainingFootprintEstimator.Estimate(8_000_000_000, shapeless, Options(sequenceLength: 128, batchSize: 1));
 
         AssertEx.True(estimate.GpuBytes >= (long)(8_000_000_000L * TrainingFootprintEstimator.QuantizedBytesPerParameter)
-                                          + TrainingFootprintEstimator.CudaContextOverheadBytes,
+            + TrainingFootprintEstimator.CudaContextOverheadBytes,
             "The frozen 4-bit weights and a CUDA context have to be resident no matter what the rest of the formula says.");
     }
 

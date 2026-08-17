@@ -18,7 +18,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 internal static class SelectedFolderEndpointSupport
 {
     /// <summary>Exception-filter predicate: true for the whole family, since both specific types derive from the aggregate.</summary>
-    public static bool IsHandled(Exception exception) => exception is SelectedFolderValidationException;
+    public static bool IsHandled(Exception exception) =>
+        exception is SelectedFolderValidationException;
 
     /// <summary>
     ///     Writes the response for a <see cref="IsHandled" /> exception. Anything else is rethrown so a genuine fault

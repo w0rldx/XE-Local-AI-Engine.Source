@@ -107,7 +107,10 @@ public sealed class DeferredLlamaServerStructuredOutputTests
 
         // The schema-less variant (ChatResponseFormat.Json). llama-server's json_object branch finds no `schema` and
         // constrains to free-form JSON — weaker than a schema, but a valid and forwarded request, so it is not rejected.
-        var options = new ChatOptions { ResponseFormat = ChatResponseFormat.Json };
+        var options = new ChatOptions
+        {
+            ResponseFormat = ChatResponseFormat.Json
+        };
 
         await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], ApplyClientTransforms(options), CancellationToken.None);
 

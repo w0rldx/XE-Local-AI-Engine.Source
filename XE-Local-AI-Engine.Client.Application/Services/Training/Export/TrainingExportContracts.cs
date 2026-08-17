@@ -60,8 +60,7 @@ public static class TrainingExportQuantizations
         "Q3_K_M"
     };
 
-    public static IReadOnlyCollection<string> All =>
-        Allowed;
+    public static IReadOnlyCollection<string> All => Allowed;
 
     /// <summary>Normalizes and validates a requested quantization, or returns null when it is not supported.</summary>
     public static string? TryNormalize(string? requested)

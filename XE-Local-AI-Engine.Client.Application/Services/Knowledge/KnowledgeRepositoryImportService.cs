@@ -159,9 +159,9 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             // written document (inserted, or a repository file whose bytes changed) is always queued, an unchanged
             // dedupe hit only from a retryable status. Enqueue is null when it decided not to queue at all.
             var admission = await _admission.AdmitStoredDocumentAsync(result.DocumentId,
-                    result.WasInserted || result.WasUpdated,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                                result.WasInserted || result.WasUpdated,
+                                                cancellationToken)
+                                            .ConfigureAwait(false);
             if (admission.QueueFull)
             {
                 // Stop the scan: the rest of the repository was never offered to the queue, so the snapshot is partial

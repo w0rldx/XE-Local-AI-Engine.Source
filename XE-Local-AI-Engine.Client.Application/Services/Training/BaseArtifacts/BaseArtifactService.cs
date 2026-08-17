@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -124,8 +125,7 @@ internal sealed class BaseArtifactService(
             return;
         }
 
-        throw new BaseArtifactRejectedException(
-            $"The base checkpoint needs {FormatGigabytes(requiredBytes + DiskHeadroomBytes)} of free space but only {FormatGigabytes(available)} is available.");
+        throw new BaseArtifactRejectedException($"The base checkpoint needs {FormatGigabytes(requiredBytes + DiskHeadroomBytes)} of free space but only {FormatGigabytes(available)} is available.");
     }
 
     private BaseArtifactView ToView(TrainingBaseArtifactRecord record)
@@ -146,7 +146,7 @@ internal sealed class BaseArtifactService(
 
     private static string FormatGigabytes(long bytes)
     {
-        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GB");
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GB");
     }
 
     private static void TryDeleteDirectory(string path)

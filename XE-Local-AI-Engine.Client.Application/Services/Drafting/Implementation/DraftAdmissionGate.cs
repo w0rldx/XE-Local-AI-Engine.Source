@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
-using XE_Local_AI_Engine.AI.Contracts.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 

@@ -33,6 +33,7 @@ internal sealed record class BenchmarkRun
 
     public long LastStreamSequence { get; set; }
     public int? UserScore { get; set; }
+
     /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
     public Guid? CurrentJudgeAttemptId { get; set; }
 

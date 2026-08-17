@@ -117,7 +117,9 @@ public sealed class GgufImportEndpointDesktopGateTests
         factory.AddNodeBearerToken(cancelRequest);
         // The cancel endpoint binds a request DTO, so FastEndpoints requires a JSON content type even though the
         // operation id rides in the route — mirror the generated client's empty JSON body.
-        cancelRequest.Content = JsonContent.Create(new { });
+        cancelRequest.Content = JsonContent.Create(new
+        {
+        });
         using var cancelResponse = await client.SendAsync(cancelRequest).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);

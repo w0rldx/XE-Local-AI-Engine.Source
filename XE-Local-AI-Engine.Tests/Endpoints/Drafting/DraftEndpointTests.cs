@@ -113,14 +113,14 @@ public sealed class DraftEndpointTests
         using var client = factory.CreateClient();
 
         using var response = await PostAsync(factory,
-                                       client,
-                                       AgentDraftRoute,
-                                       new
-                                       {
-                                           mode = "create",
-                                           brief = "An agent that reviews Terraform plans."
-                                       })
-                                   .ConfigureAwait(false);
+                client,
+                AgentDraftRoute,
+                new
+                {
+                    mode = "create",
+                    brief = "An agent that reviews Terraform plans."
+                })
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "A request missing the model must be rejected before the drafting service runs.");
@@ -147,16 +147,16 @@ public sealed class DraftEndpointTests
         using var client = factory.CreateClient();
 
         using var response = await PostAsync(factory,
-                                       client,
-                                       AgentDraftRoute,
-                                       new
-                                       {
-                                           mode = "improve",
-                                           modelName = "qwen3.5:0.8b",
-                                           brief = "Make it stricter.",
-                                           existingContent = new string('c', count: 20001)
-                                       })
-                                   .ConfigureAwait(false);
+                client,
+                AgentDraftRoute,
+                new
+                {
+                    mode = "improve",
+                    modelName = "qwen3.5:0.8b",
+                    brief = "Make it stricter.",
+                    existingContent = new string('c', count: 20001)
+                })
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "Improve-mode content is capped at the endpoint like every other field.");
@@ -170,16 +170,16 @@ public sealed class DraftEndpointTests
         using var client = factory.CreateClient();
 
         using var response = await PostAsync(factory,
-                                       client,
-                                       AgentDraftRoute,
-                                       new
-                                       {
-                                           mode = "improve",
-                                           modelName = "qwen3.5:0.8b",
-                                           brief = "Make it stricter.",
-                                           existingName = new string('n', count: 121)
-                                       })
-                                   .ConfigureAwait(false);
+                client,
+                AgentDraftRoute,
+                new
+                {
+                    mode = "improve",
+                    modelName = "qwen3.5:0.8b",
+                    brief = "Make it stricter.",
+                    existingName = new string('n', count: 121)
+                })
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount);
@@ -195,16 +195,16 @@ public sealed class DraftEndpointTests
         // 65 characters is inside the AGENT cap (120) and outside the SKILL cap (64): the two surfaces really do carry
         // different ceilings, so a shared cap would have let this through.
         using var response = await PostAsync(factory,
-                                       client,
-                                       SkillDraftRoute,
-                                       new
-                                       {
-                                           mode = "improve",
-                                           modelName = "qwen3.5:0.8b",
-                                           brief = "Make it stricter.",
-                                           existingName = new string('n', count: 65)
-                                       })
-                                   .ConfigureAwait(false);
+                client,
+                SkillDraftRoute,
+                new
+                {
+                    mode = "improve",
+                    modelName = "qwen3.5:0.8b",
+                    brief = "Make it stricter.",
+                    existingName = new string('n', count: 65)
+                })
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount);

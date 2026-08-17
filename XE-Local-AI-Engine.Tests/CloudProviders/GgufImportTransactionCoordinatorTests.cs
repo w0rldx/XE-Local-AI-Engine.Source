@@ -151,10 +151,10 @@ public sealed class GgufImportTransactionCoordinatorTests
 
         var secondPreview = await coordinator.PreviewAsync(sourcePath);
         var exception = await Assert.ThrowsAsync<GgufImportApplicationException>(() => coordinator.StartAsync(new StartGgufImportCommand(sourcePath,
-                                                                                              secondPreview.PreviewToken,
-                                                                                              secondPreview.ModelBaseName,
-                                                                                              "Q4_K_M"))
-            .WaitAsync(TimeSpan.FromSeconds(2)));
+                                                                                                      secondPreview.PreviewToken,
+                                                                                                      secondPreview.ModelBaseName,
+                                                                                                      "Q4_K_M"))
+                                                                                                  .WaitAsync(TimeSpan.FromSeconds(2)));
 
         AssertEx.Equal("AcquisitionAlreadyActive", exception!.ErrorCode);
 

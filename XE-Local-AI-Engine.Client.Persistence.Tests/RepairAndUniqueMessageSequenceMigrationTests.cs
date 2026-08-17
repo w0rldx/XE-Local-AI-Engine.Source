@@ -35,7 +35,12 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
 
         var sequences = await probe.LongsAsync("SELECT sequence FROM messages ORDER BY created_at_utc;").ConfigureAwait(false);
 
-        AssertEx.True(sequences.SequenceEqual(new[] { 0L, 1L, 2L }),
+        AssertEx.True(sequences.SequenceEqual(new[]
+            {
+                0L,
+                1L,
+                2L
+            }),
             $"Colliding sequences must be renumbered contiguously in the original order; got [{string.Join(", ", sequences)}].");
     }
 
@@ -54,7 +59,12 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
 
         var sequences = await probe.LongsAsync("SELECT sequence FROM messages ORDER BY created_at_utc;").ConfigureAwait(false);
 
-        AssertEx.True(sequences.SequenceEqual(new[] { 0L, 1L, 2L }),
+        AssertEx.True(sequences.SequenceEqual(new[]
+            {
+                0L,
+                1L,
+                2L
+            }),
             $"An already-contiguous conversation must come through unchanged; got [{string.Join(", ", sequences)}].");
     }
 

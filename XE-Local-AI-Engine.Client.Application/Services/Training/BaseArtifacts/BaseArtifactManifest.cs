@@ -27,10 +27,10 @@ internal static class BaseArtifactManifest
         ArgumentNullException.ThrowIfNull(files);
 
         var manifest = files.Select(static file => new BaseArtifactFileView(file.Role.ToString(),
-                                 file.FileName,
-                                 file.LocalPath,
-                                 file.SizeBytes,
-                                 file.Sha256))
+                                file.FileName,
+                                file.LocalPath,
+                                file.SizeBytes,
+                                file.Sha256))
                             .ToArray();
 
         return JsonSerializer.SerializeToUtf8Bytes(manifest, SerializerOptions);

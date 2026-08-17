@@ -55,10 +55,10 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
         {
             var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct).ConfigureAwait(false);
             await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
-                      {
-                          projectId = project.Id
-                      }, project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)),
-                      cancellation: ct)
+                          {
+                              projectId = project.Id
+                          }, project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)),
+                          cancellation: ct)
                       .ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
@@ -138,10 +139,9 @@ public sealed class NodeAuthorizationPolicyTests
     }
 
     private static StringContent JsonRpcPing() =>
-        new("""{"jsonrpc":"2.0","id":1,"method":"ping"}""", System.Text.Encoding.UTF8, "application/json");
+        new("""{"jsonrpc":"2.0","id":1,"method":"ping"}""", Encoding.UTF8, "application/json");
 
-    private static string OperatorEndpoint =>
-        "/" + LocalApiRoutes.Prefix + "/" + LocalApiRoutes.LocalModels.Models;
+    private static string OperatorEndpoint => "/" + LocalApiRoutes.Prefix + "/" + LocalApiRoutes.LocalModels.Models;
 
     private async Task<AuthorizationPolicy> GetPolicyAsync(string policyName)
     {

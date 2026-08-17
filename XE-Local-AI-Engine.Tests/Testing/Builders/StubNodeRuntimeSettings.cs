@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Testing.Builders;
 
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 
-using Microsoft.AspNetCore.Http;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 
 /// <summary>

@@ -89,7 +89,8 @@ internal static class TrainingRuntimeTestInfrastructure
             return Task.FromResult(handler(file, args, logSink));
         }
 
-        internal sealed record Invocation(string File,
+        internal sealed record Invocation(
+            string File,
             IReadOnlyList<string> Args,
             IReadOnlyDictionary<string, string> Environment,
             string WorkingDirectory);

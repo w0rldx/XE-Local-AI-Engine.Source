@@ -179,8 +179,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
 
         if (!isGpu)
         {
-            throw new BenchmarkUnsupportedKvCacheTypeException(
-                $"A {requested} KV cache needs a GPU llama.cpp build, and this node selected the CPU build. Pick f16.");
+            throw new BenchmarkUnsupportedKvCacheTypeException($"A {requested} KV cache needs a GPU llama.cpp build, and this node selected the CPU build. Pick f16.");
         }
 
         if (!probed)
@@ -191,8 +190,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
 
         if (!Accepts(capabilities!, requested))
         {
-            throw new BenchmarkUnsupportedKvCacheTypeException(
-                $"The selected llama.cpp binary does not accept a {requested} KV cache with flash attention. Pick f16.");
+            throw new BenchmarkUnsupportedKvCacheTypeException($"The selected llama.cpp binary does not accept a {requested} KV cache with flash attention. Pick f16.");
         }
 
         return new KvCacheResolution(requested, BenchmarkKvCacheType.SourceExplicit, null);

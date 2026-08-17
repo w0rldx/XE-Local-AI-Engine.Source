@@ -45,7 +45,10 @@ public sealed class GenerationProvenanceSaveTests
             mode = "create",
             userBrief = brief,
             rationale = "Kept the body short so the operator can extend it.",
-            assumptions = new[] { "The operator runs Terraform locally." },
+            assumptions = new[]
+            {
+                "The operator runs Terraform locally."
+            },
             confidence = 0.8d,
             generatedAtUtc = 1_700_000_000_000L,
             draftContentHash
@@ -91,19 +94,19 @@ public sealed class GenerationProvenanceSaveTests
         using var client = factory.CreateClient();
 
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      SkillsRoute,
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = SkillBody,
-                                          generated = true,
-                                          generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, SkillBody))
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                SkillsRoute,
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = SkillBody,
+                    generated = true,
+                    generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, SkillBody))
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         var skill = created.RootElement;
         AssertEx.Equal("Imported", skill.GetProperty("origin").GetString(), "AI-drafted content lands in the Imported (fenced) posture.");
@@ -125,17 +128,17 @@ public sealed class GenerationProvenanceSaveTests
 
         // Start from the state the demotion has to survive: an ordinary operator-authored skill, Local and enabled.
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      SkillsRoute,
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = SkillBody
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                SkillsRoute,
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = SkillBody
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         var skillId = created.RootElement.GetProperty("id").GetGuid();
         AssertEx.Equal("Local", created.RootElement.GetProperty("origin").GetString());
@@ -146,20 +149,20 @@ public sealed class GenerationProvenanceSaveTests
         // The client asks for enabled: true. An AI improve must override it — model-revised content is no more reviewed
         // than model-written content.
         using var updated = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Put,
-                                      $"{SkillsRoute}/{skillId}",
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = ImprovedBody,
-                                          enabled = true,
-                                          generated = true,
-                                          generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, ImprovedBody))
-                                      },
-                                      HttpStatusCode.OK)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Put,
+                $"{SkillsRoute}/{skillId}",
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = ImprovedBody,
+                    enabled = true,
+                    generated = true,
+                    generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, ImprovedBody))
+                },
+                HttpStatusCode.OK)
+            .ConfigureAwait(false);
 
         AssertEx.Equal("Imported", updated.RootElement.GetProperty("origin").GetString(), "An AI improve demotes a Local skill to Imported.");
         AssertEx.False(updated.RootElement.GetProperty("enabled").GetBoolean(), "The client-supplied enabled: true must be overridden.");
@@ -174,38 +177,38 @@ public sealed class GenerationProvenanceSaveTests
         using var client = factory.CreateClient();
 
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      SkillsRoute,
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = SkillBody,
-                                          generated = true,
-                                          generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, SkillBody),
-                                              "the original brief")
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                SkillsRoute,
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = SkillBody,
+                    generated = true,
+                    generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, SkillBody),
+                        "the original brief")
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         var skillId = created.RootElement.GetProperty("id").GetGuid();
 
         // An ordinary edit afterwards: the operator reviewed the draft and re-enables it, and the form carries no
         // provenance block. The stored provenance must survive, and the enabled echo must be honoured.
         using var updated = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Put,
-                                      $"{SkillsRoute}/{skillId}",
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = SkillBody + "\n\nReviewed by the operator.",
-                                          enabled = true
-                                      },
-                                      HttpStatusCode.OK)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Put,
+                $"{SkillsRoute}/{skillId}",
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = SkillBody + "\n\nReviewed by the operator.",
+                    enabled = true
+                },
+                HttpStatusCode.OK)
+            .ConfigureAwait(false);
 
         AssertEx.True(updated.RootElement.GetProperty("enabled").GetBoolean(), "An ordinary edit echoes the operator's enabled choice.");
         AssertEx.Equal("Imported", updated.RootElement.GetProperty("origin").GetString(), "Provenance stays promote-only — an edit never launders it back to Local.");
@@ -225,19 +228,19 @@ public sealed class GenerationProvenanceSaveTests
         var draftHash = DraftContentHash.Compute(SkillName, SkillDescription, SkillBody);
 
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      SkillsRoute,
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = SkillBody + "\n\nAlso check for drifted state.",
-                                          generated = true,
-                                          generationMetadata = BuildMetadata(draftHash)
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                SkillsRoute,
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = SkillBody + "\n\nAlso check for drifted state.",
+                    generated = true,
+                    generationMetadata = BuildMetadata(draftHash)
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         AssertEx.True(created.RootElement.GetProperty("generationMetadata").GetProperty("wasEdited").GetBoolean(),
             "Content that differs from the draft must be recorded as edited.");
@@ -253,19 +256,19 @@ public sealed class GenerationProvenanceSaveTests
         var draftHash = DraftContentHash.Compute(SkillName, SkillDescription, SkillBody);
 
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      SkillsRoute,
-                                      new
-                                      {
-                                          name = SkillName,
-                                          description = SkillDescription,
-                                          body = SkillBody.Replace("\n", "\r\n", StringComparison.Ordinal),
-                                          generated = true,
-                                          generationMetadata = BuildMetadata(draftHash)
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                SkillsRoute,
+                new
+                {
+                    name = SkillName,
+                    description = SkillDescription,
+                    body = SkillBody.Replace("\n", "\r\n", StringComparison.Ordinal),
+                    generated = true,
+                    generationMetadata = BuildMetadata(draftHash)
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         AssertEx.False(created.RootElement.GetProperty("generationMetadata").GetProperty("wasEdited").GetBoolean(),
             "CRLF-folded content is byte-different but not an edit.");
@@ -312,19 +315,19 @@ public sealed class GenerationProvenanceSaveTests
         const string BriefSentinel = "agent-provenance-sentinel-brief";
 
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      AgentsRoute,
-                                      new
-                                      {
-                                          name = AgentName,
-                                          description = AgentDescription,
-                                          instructions = AgentInstructions,
-                                          generationMetadata = BuildMetadata(DraftContentHash.Compute(AgentName, AgentDescription, AgentInstructions),
-                                              BriefSentinel)
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                AgentsRoute,
+                new
+                {
+                    name = AgentName,
+                    description = AgentDescription,
+                    instructions = AgentInstructions,
+                    generationMetadata = BuildMetadata(DraftContentHash.Compute(AgentName, AgentDescription, AgentInstructions),
+                        BriefSentinel)
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         var agentId = created.RootElement.GetProperty("id").GetGuid();
         AssertEx.Equal(BriefSentinel, created.RootElement.GetProperty("generationMetadata").GetProperty("userBrief").GetString());
@@ -362,16 +365,16 @@ public sealed class GenerationProvenanceSaveTests
         const string AgentInstructions = "You review Terraform plans and flag destructive changes.";
 
         using var created = await SendAsync(factory,
-                                      client,
-                                      HttpMethod.Post,
-                                      AgentsRoute,
-                                      new
-                                      {
-                                          name = AgentName,
-                                          instructions = AgentInstructions
-                                      },
-                                      HttpStatusCode.Created)
-                                  .ConfigureAwait(false);
+                client,
+                HttpMethod.Post,
+                AgentsRoute,
+                new
+                {
+                    name = AgentName,
+                    instructions = AgentInstructions
+                },
+                HttpStatusCode.Created)
+            .ConfigureAwait(false);
 
         var agentId = created.RootElement.GetProperty("id").GetGuid();
         AssertEx.Equal(JsonValueKind.Null, created.RootElement.GetProperty("generationMetadata").ValueKind, "A plain create carries no provenance.");
@@ -379,18 +382,18 @@ public sealed class GenerationProvenanceSaveTests
         const string ImprovedInstructions = "You review Terraform plans, flag destructive changes, and summarise the blast radius.";
 
         using var improved = await SendAsync(factory,
-                                       client,
-                                       HttpMethod.Put,
-                                       $"{AgentsRoute}/{agentId}",
-                                       new
-                                       {
-                                           name = AgentName,
-                                           instructions = ImprovedInstructions,
-                                           generationMetadata = BuildMetadata(DraftContentHash.Compute(AgentName, description: null, ImprovedInstructions),
-                                               "improve-brief")
-                                       },
-                                       HttpStatusCode.OK)
-                                   .ConfigureAwait(false);
+                client,
+                HttpMethod.Put,
+                $"{AgentsRoute}/{agentId}",
+                new
+                {
+                    name = AgentName,
+                    instructions = ImprovedInstructions,
+                    generationMetadata = BuildMetadata(DraftContentHash.Compute(AgentName, description: null, ImprovedInstructions),
+                        "improve-brief")
+                },
+                HttpStatusCode.OK)
+            .ConfigureAwait(false);
 
         AssertEx.Equal("improve-brief", improved.RootElement.GetProperty("generationMetadata").GetProperty("userBrief").GetString());
         AssertEx.False(improved.RootElement.GetProperty("generationMetadata").GetProperty("wasEdited").GetBoolean());
@@ -398,16 +401,16 @@ public sealed class GenerationProvenanceSaveTests
         // A later edit that carries no block must not clear what is stored — the documented deviation from PUT's
         // full-replacement contract.
         using var edited = await SendAsync(factory,
-                                     client,
-                                     HttpMethod.Put,
-                                     $"{AgentsRoute}/{agentId}",
-                                     new
-                                     {
-                                         name = AgentName,
-                                         instructions = ImprovedInstructions + " Then stop."
-                                     },
-                                     HttpStatusCode.OK)
-                                 .ConfigureAwait(false);
+                client,
+                HttpMethod.Put,
+                $"{AgentsRoute}/{agentId}",
+                new
+                {
+                    name = AgentName,
+                    instructions = ImprovedInstructions + " Then stop."
+                },
+                HttpStatusCode.OK)
+            .ConfigureAwait(false);
 
         AssertEx.Equal("improve-brief", edited.RootElement.GetProperty("generationMetadata").GetProperty("userBrief").GetString(),
             "An omitted provenance block preserves the stored one.");

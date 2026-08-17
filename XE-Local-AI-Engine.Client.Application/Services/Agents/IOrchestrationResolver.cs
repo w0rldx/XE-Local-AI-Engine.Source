@@ -92,9 +92,10 @@ public sealed record OrchestrationResolution(ResolvedOrchestration? Orchestratio
     ///     The sanitized turn-notice sentence for a degraded resolve, or <c>null</c> when there is nothing to report (the
     ///     orchestration compiled, or the definition was never an orchestrator — a single-kind agent must stay silent).
     /// </summary>
-    public string? DegradationNotice => ReasonText is null
-        ? null
-        : $"Orchestration was not used for this turn: {ReasonText}. The agent ran as a single agent instead.";
+    public string? DegradationNotice =>
+        ReasonText is null
+            ? null
+            : $"Orchestration was not used for this turn: {ReasonText}. The agent ran as a single agent instead.";
 }
 
 /// <summary>

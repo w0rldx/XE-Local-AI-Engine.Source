@@ -42,8 +42,8 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
         }
 
         var (removed, runningProcessCount, buildActive) = await LlamaCppPrebuiltRuntimeMutationGuard
-                                                                 .TryRemoveAsync(processSupervisor, sourceBuildActivity, binaryManager.RemoveSourceBuildAsync, ct)
-                                                                 .ConfigureAwait(false);
+                                                                .TryRemoveAsync(processSupervisor, sourceBuildActivity, binaryManager.RemoveSourceBuildAsync, ct)
+                                                                .ConfigureAwait(false);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse

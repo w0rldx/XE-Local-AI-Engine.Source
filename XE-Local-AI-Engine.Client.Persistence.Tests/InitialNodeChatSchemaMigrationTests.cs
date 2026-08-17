@@ -18,7 +18,13 @@ public sealed class InitialNodeChatSchemaMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("initial-node-chat-schema.sqlite", ThisMigrationId).ConfigureAwait(false);
 
-        foreach (var table in new[] { "conversations", "messages", "tool_events", "purged_tombstones" })
+        foreach (var table in new[]
+                 {
+                     "conversations",
+                     "messages",
+                     "tool_events",
+                     "purged_tombstones"
+                 })
         {
             AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
         }

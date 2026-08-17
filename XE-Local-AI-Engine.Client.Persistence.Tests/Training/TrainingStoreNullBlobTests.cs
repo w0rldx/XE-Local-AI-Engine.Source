@@ -52,8 +52,7 @@ public sealed class TrainingStoreNullBlobTests : IDisposable
         await using var context = await CreateDatabaseAsync("sample-null-validation.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
 
-        var definition = await store.CreateDefinitionAsync(
-            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var definition = await store.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
         var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
         _ = await store.ClaimNextAsync();
         var appended = await store.AppendSampleAsync(new TrainingSampleInput(dataset.Id,
@@ -76,8 +75,7 @@ public sealed class TrainingStoreNullBlobTests : IDisposable
         await using var context = await CreateDatabaseAsync("dataset-null-definition.sqlite");
         var store = new TrainingDatasetStore(context, TimeProvider.System);
 
-        var definition = await store.CreateDefinitionAsync(
-            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var definition = await store.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
         var dataset = await store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
 
         // The shape of a row written before pinning existed: the additive migration leaves the column NULL. Reading it

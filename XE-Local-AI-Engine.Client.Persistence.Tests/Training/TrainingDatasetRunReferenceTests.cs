@@ -34,15 +34,13 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
         var runs = new TrainingRunStore(context, TimeProvider.System);
         var run = await runs.CreateAndEnqueueAsync(Command(fixture));
 
-        var refused = await AssertEx.ThrowsAsync<TrainingConflictException>(
-            () => datasets.DeleteDatasetAsync(fixture.DatasetId, fixture.DatasetVersion));
+        var refused = await AssertEx.ThrowsAsync<TrainingConflictException>(() => datasets.DeleteDatasetAsync(fixture.DatasetId, fixture.DatasetVersion));
 
         AssertEx.Equal("DatasetReferenced", refused.Code);
 
         // Still refused after the run finishes: the freeze names this dataset for as long as the run row exists.
         _ = await runs.CompleteRunAsync(run.Id, TrainingWorkStatus.Succeeded, errorMessage: null);
-        var stillRefused = await AssertEx.ThrowsAsync<TrainingConflictException>(
-            () => datasets.DeleteDatasetAsync(fixture.DatasetId, fixture.DatasetVersion));
+        var stillRefused = await AssertEx.ThrowsAsync<TrainingConflictException>(() => datasets.DeleteDatasetAsync(fixture.DatasetId, fixture.DatasetVersion));
         AssertEx.Equal("DatasetReferenced", stillRefused.Code);
     }
 
@@ -83,8 +81,7 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
     {
         await using var context = await CreateDatabaseAsync("cancel-queued-generation.sqlite");
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasets.CreateDefinitionAsync(
-            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
         var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
         AssertEx.Equal(DatasetGenerationWorkStatus.Queued, dataset.WorkStatus);
 
@@ -104,8 +101,7 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
 
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context, TrainingDatasetStore datasets)
     {
-        var definition = await datasets.CreateDefinitionAsync(
-            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
         var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
         _ = await datasets.ClaimNextAsync();
         _ = await datasets.AppendSampleAsync(new TrainingSampleInput(dataset.Id,

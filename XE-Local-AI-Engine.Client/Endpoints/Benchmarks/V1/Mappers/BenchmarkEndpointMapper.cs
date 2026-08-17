@@ -220,10 +220,10 @@ internal static class BenchmarkEndpointMapper
             ? null
             : new BenchmarkJudgeRubricV1(dto.Version,
                 dto.Criteria.Select(static criterion => new BenchmarkJudgeRubricCriterionV1(criterion.Id,
-                                criterion.Title,
-                                criterion.Description,
-                                criterion.Weight))
-                            .ToArray());
+                       criterion.Title,
+                       criterion.Description,
+                       criterion.Weight))
+                   .ToArray());
 
     /// <summary>
     ///     The project's judge configuration. <paramref name="policy" /> is the decrypted current revision, or null
@@ -259,5 +259,4 @@ internal static class BenchmarkEndpointMapper
         using var document = JsonDocument.Parse(value);
         return document.RootElement.Clone();
     }
-
 }

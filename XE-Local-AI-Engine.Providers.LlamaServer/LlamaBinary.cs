@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
 /// <summary>
 ///     A resolved, hash-verified llama.cpp prebuilt binary on disk.
 /// </summary>
@@ -22,5 +24,5 @@ public sealed record LlamaBinary(
     ///     recorded presence check, evaluated on read rather than stored so it can never go stale against the tree.
     ///     A null here means "training exports cannot quantize with this runtime", never that the runtime is unusable.
     /// </summary>
-    public string? QuantizerExecutablePath => Contracts.LlamaCppToolBinaries.TryResolveQuantizerBesideServer(ServerExecutablePath);
+    public string? QuantizerExecutablePath => LlamaCppToolBinaries.TryResolveQuantizerBesideServer(ServerExecutablePath);
 }

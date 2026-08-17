@@ -36,7 +36,8 @@ internal static class CustomToolEndpointPayloads
     {
         object[] headers = secretHeaderValue is null
             ? []
-            : [
+            :
+            [
                 new
                 {
                     name = "X-Api-Key",

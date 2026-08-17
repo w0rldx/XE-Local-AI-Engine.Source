@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -107,7 +106,8 @@ public static class BenchmarkE2ETestDoubles
         {
             public InstalledModelSnapshot Snapshot => InstalledModel;
 
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            public ValueTask DisposeAsync() =>
+                ValueTask.CompletedTask;
         }
     }
 
@@ -130,8 +130,7 @@ public static class BenchmarkE2ETestDoubles
                 "f16",
                 FlashAttention: false,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
-            return Task.FromResult(new BenchmarkJudgeRuntimeResolution(
-                new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
+            return Task.FromResult(new BenchmarkJudgeRuntimeResolution(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
                     SnapshotV1,
                     policy.RequestedContextTokens,
                     runtime,
@@ -160,8 +159,7 @@ public static class BenchmarkE2ETestDoubles
 
         public Task<IReadOnlyList<BenchmarkEligibleModel>> ListEligibleModelsAsync(int? contextTokens,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<BenchmarkEligibleModel>>(
-            [
+            Task.FromResult<IReadOnlyList<BenchmarkEligibleModel>>([
                 new BenchmarkEligibleModel(ModelName,
                     MaxContextTokens: 32768,
                     EffectiveContextTokens: null,

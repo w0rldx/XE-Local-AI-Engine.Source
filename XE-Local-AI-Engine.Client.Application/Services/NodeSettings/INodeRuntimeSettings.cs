@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-using XE_Local_AI_Engine.Client.Models;
-
 /// <summary>
 ///     The single read surface migrated consumers use for user-editable runtime knobs (the
 ///     appsettings-to-node-settings migration). Each getter resolves the effective value with the precedence

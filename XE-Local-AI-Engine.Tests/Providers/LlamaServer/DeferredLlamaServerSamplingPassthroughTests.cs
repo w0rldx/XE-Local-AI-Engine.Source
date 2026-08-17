@@ -38,15 +38,20 @@ public sealed class DeferredLlamaServerSamplingPassthroughTests
         var unpatchedBody = await LlamaGrammarToolOffer.CaptureWireBodyAsync(options, CancellationToken.None);
         using (var unpatched = JsonDocument.Parse(unpatchedBody))
         {
-            foreach (var field in new[] { "top_k", SamplingOptionKeys.MinP, SamplingOptionKeys.RepeatPenalty, SamplingOptionKeys.RepeatLastN })
+            foreach (var field in new[]
+                     {
+                         "top_k",
+                         SamplingOptionKeys.MinP,
+                         SamplingOptionKeys.RepeatPenalty,
+                         SamplingOptionKeys.RepeatLastN
+                     })
             {
                 AssertEx.False(unpatched.RootElement.TryGetProperty(field, out _),
                     $"the MEAI OpenAI adapter is expected to drop {field}; if it maps it now the passthrough is redundant.");
             }
         }
 
-        var body = await LlamaGrammarToolOffer.CaptureWireBodyAsync(
-            AssertEx.NotNull(DeferredLlamaServerChatClient.ApplySamplingPassthrough(options)),
+        var body = await LlamaGrammarToolOffer.CaptureWireBodyAsync(AssertEx.NotNull(DeferredLlamaServerChatClient.ApplySamplingPassthrough(options)),
             CancellationToken.None);
 
         using var doc = JsonDocument.Parse(body);
@@ -99,8 +104,7 @@ public sealed class DeferredLlamaServerSamplingPassthroughTests
             }
         };
 
-        var patched = DeferredLlamaServerChatClient.ApplySamplingPassthrough(
-            DeferredLlamaServerChatClient.ApplyThinkingSwitch(options));
+        var patched = DeferredLlamaServerChatClient.ApplySamplingPassthrough(DeferredLlamaServerChatClient.ApplyThinkingSwitch(options));
 
         var body = await LlamaGrammarToolOffer.CaptureWireBodyAsync(AssertEx.NotNull(patched),
             CancellationToken.None);

@@ -29,7 +29,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(5)]
     public void Validate_WhenMaxConcurrentWorkersIsOutOfRange_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { MaxConcurrentWorkers = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                MaxConcurrentWorkers = value
+            }),
             "MaxConcurrentWorkers must be between 1 and 4.");
     }
 
@@ -38,7 +41,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(61)]
     public void Validate_WhenWatchdogMinutesIsOutOfRange_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { WatchdogMinutes = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                WatchdogMinutes = value
+            }),
             "WatchdogMinutes must be between 1 and 60.");
     }
 
@@ -47,7 +53,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(5001)]
     public void Validate_WhenPollIntervalIsOutOfRange_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { PollIntervalMilliseconds = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                PollIntervalMilliseconds = value
+            }),
             "PollIntervalMilliseconds must be between 50 and 5000.");
     }
 
@@ -56,7 +65,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(61)]
     public void Validate_WhenCompactionIntervalIsOutOfRange_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { CompactionIntervalMinutes = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                CompactionIntervalMinutes = value
+            }),
             "CompactionIntervalMinutes must be between 1 and 60.");
     }
 
@@ -65,7 +77,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(61)]
     public void Validate_WhenDefaultListLimitIsOutOfRange_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { DefaultListLimit = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                DefaultListLimit = value
+            }),
             "DefaultListLimit must be between 1 and 50.");
     }
 
@@ -74,7 +89,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(64 * 1024)]
     public void Validate_WhenMaxTaskBytesMovesInEitherDirection_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { MaxTaskUtf8Bytes = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                MaxTaskUtf8Bytes = value
+            }),
             "MaxTaskUtf8Bytes must remain 32768.");
     }
 
@@ -83,7 +101,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(32 * 1024)]
     public void Validate_WhenMaxInstructionsBytesMovesInEitherDirection_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { MaxInstructionsUtf8Bytes = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                MaxInstructionsUtf8Bytes = value
+            }),
             "MaxInstructionsUtf8Bytes must remain 16384.");
     }
 
@@ -92,7 +113,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(48_000)]
     public void Validate_WhenMaxResultCharactersMovesInEitherDirection_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { MaxResultCharacters = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                MaxResultCharacters = value
+            }),
             "MaxResultCharacters must remain 24000.");
     }
 
@@ -101,7 +125,10 @@ public sealed class McpAgentRunOptionsValidatorTests
     [Arguments(100)]
     public void Validate_WhenMaxListLimitMovesInEitherDirection_ReturnsFailure(int value)
     {
-        AssertFailureContains(Validate(new McpAgentRunOptions { MaxListLimit = value }),
+        AssertFailureContains(Validate(new McpAgentRunOptions
+            {
+                MaxListLimit = value
+            }),
             "MaxListLimit must remain 50.");
     }
 

@@ -55,8 +55,8 @@ public sealed class RemoveCudaBuildEndpoint(
         }
 
         var (removed, runningProcessCount, buildActive) = await LlamaCppPrebuiltRuntimeMutationGuard
-                                                                 .TryRemoveAsync(_processSupervisor, sourceBuildActivity, _binaryManager.RemoveCudaSourceBuildAsync, ct)
-                                                                 .ConfigureAwait(false);
+                                                                .TryRemoveAsync(_processSupervisor, sourceBuildActivity, _binaryManager.RemoveCudaSourceBuildAsync, ct)
+                                                                .ConfigureAwait(false);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse

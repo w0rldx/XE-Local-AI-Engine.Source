@@ -71,9 +71,8 @@ public sealed class BenchmarkRunExecutor(
                                              PublishLaunchAdmission: false,
                                              snapshot.PrimaryRuntime.KvTypeK), token)
                                          .ConfigureAwait(false);
-            logger.LogInformation(
-                "Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
-                + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
+            logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
+                                  + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
                 work.RunId,
                 "primary",
                 snapshot.PrimaryModel.ModelName,
@@ -144,15 +143,15 @@ public sealed class BenchmarkRunExecutor(
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
             var persisted = await MarkPrimarySucceededAsync(work,
-                                       new BenchmarkPrimarySuccessCommand(work.RunId,
-                                           work.Version,
-                                           BenchmarkExecutionSerialization.SerializeParts(capture.Parts),
-                                           terminalEvent.Sequence,
-                                           effectiveContext,
-                                           durationMs,
-                                           terminal.TotalTokens,
-                                           tokensPerSecond))
-                                   .ConfigureAwait(false);
+                    new BenchmarkPrimarySuccessCommand(work.RunId,
+                        work.Version,
+                        BenchmarkExecutionSerialization.SerializeParts(capture.Parts),
+                        terminalEvent.Sequence,
+                        effectiveContext,
+                        durationMs,
+                        terminal.TotalTokens,
+                        tokensPerSecond))
+                .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
             events.PublishReserved(terminalEvent with
             {

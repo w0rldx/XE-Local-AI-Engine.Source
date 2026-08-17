@@ -136,7 +136,7 @@ public sealed class LocalModelCatalogServiceTests
                                                               [],
                                                               IsOverridden: false),
                                                           StringComparer.OrdinalIgnoreCase)
-                                                  as IReadOnlyDictionary<string, ModelClassificationResult>);
+                                     as IReadOnlyDictionary<string, ModelClassificationResult>);
         }
 
         public void WithOllamaModels(params string[] modelNames) =>

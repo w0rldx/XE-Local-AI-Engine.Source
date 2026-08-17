@@ -53,16 +53,26 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
             var fixture = await SeedAsync(context);
             var store = new TrainingEvaluationStore(context, TimeProvider.System);
 
-            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { MembershipJson = ReadOnlyMemory<byte>.Empty }));
-            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { TotalCount = 0 }));
-            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { ModelName = "  " }));
-            _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { DatasetId = Guid.NewGuid() }));
-            _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { TrainingRunId = Guid.NewGuid() }));
+            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                MembershipJson = ReadOnlyMemory<byte>.Empty
+            }));
+            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                TotalCount = 0
+            }));
+            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                ModelName = "  "
+            }));
+            _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                DatasetId = Guid.NewGuid()
+            }));
+            _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                TrainingRunId = Guid.NewGuid()
+            }));
         }
 
         await using var verify = CreateContext(databasePath);
@@ -195,13 +205,16 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         var baseEvaluation = await Scored(store, fixture, "base-model");
         var tunedEvaluation = await Scored(store, fixture, "tuned-model");
 
-        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-            () => store.CreateComparisonAsync(Report(baseEvaluation.Id, baseEvaluation.Id)),
+        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateComparisonAsync(Report(baseEvaluation.Id, baseEvaluation.Id)),
             "A comparison needs two distinct evaluations.");
-        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-            () => store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id) with { Name = " " }));
-        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-            () => store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id) with { DeltasJson = ReadOnlyMemory<byte>.Empty }));
+        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id) with
+        {
+            Name = " "
+        }));
+        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id) with
+        {
+            DeltasJson = ReadOnlyMemory<byte>.Empty
+        }));
 
         var report = await store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id));
         var bound = AssertEx.NotNull(await store.GetAsync(baseEvaluation.Id));
@@ -212,8 +225,7 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         AssertEx.Equal("EvaluationBound", referenced.Code);
 
         // A second report cannot claim an already-bound evaluation either.
-        var reused = await AssertEx.ThrowsAsync<TrainingConflictException>(
-            () => store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id)));
+        var reused = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id)));
         AssertEx.Equal("EvaluationBound", reused.Code);
 
         await store.DeleteComparisonAsync(report.Id, report.Version);
@@ -283,7 +295,10 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
 
     private static async Task<TrainingEvaluationRecord> Scored(TrainingEvaluationStore store, EvaluationFixture fixture, string modelName)
     {
-        var evaluation = await store.CreateAndEnqueueAsync(Command(fixture) with { ModelName = modelName });
+        var evaluation = await store.CreateAndEnqueueAsync(Command(fixture) with
+        {
+            ModelName = modelName
+        });
         _ = await store.AppendResultsAsync(evaluation.Id,
             fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry(id, "tool-call", Passed: true, "deterministic")).ToArray());
         return await store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Succeeded, errorMessage: null);
@@ -302,8 +317,7 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
     private static async Task<EvaluationFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasetStore = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasetStore.CreateDefinitionAsync(
-            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
         var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
         _ = await datasetStore.ClaimNextAsync();
 

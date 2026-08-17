@@ -228,7 +228,8 @@ internal static class GenerationProvenance
     }
 
     /// <summary>At-rest shape of the <c>generation_metadata_json</c> column (plan §5.1).</summary>
-    private sealed record PersistedGenerationMetadata(string? Model,
+    private sealed record PersistedGenerationMetadata(
+        string? Model,
         DraftMode Mode,
         string? UserBrief,
         string? Rationale,

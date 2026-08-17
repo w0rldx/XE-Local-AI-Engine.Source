@@ -14,7 +14,10 @@ public sealed class BenchmarkRunEventBufferTests
     [Test]
     public void Replay_TrimsByEventCountBudgetAndResetsWhenAfterSequencePredatesRetainedWindow()
     {
-        var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions { MaxEventCount = 5 }));
+        var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions
+        {
+            MaxEventCount = 5
+        }));
         var runId = Guid.NewGuid();
         for (var index = 0; index < 8; index++)
         {
@@ -43,10 +46,12 @@ public sealed class BenchmarkRunEventBufferTests
         // room for exactly 3 of the 10 published events, with slack for the sequence number growing a digit.
         var runId = Guid.NewGuid();
         var payload = new string('a', 256);
-        var probeBytes = JsonSerializer.SerializeToUtf8Bytes(
-            new BenchmarkRunStreamEvent(runId, 1, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: payload)),
+        var probeBytes = JsonSerializer.SerializeToUtf8Bytes(new BenchmarkRunStreamEvent(runId, 1, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: payload)),
             ProbeJsonOptions).Length;
-        var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions { MaxUtf8Bytes = (probeBytes * 3) + 32 }));
+        var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions
+        {
+            MaxUtf8Bytes = (probeBytes * 3) + 32
+        }));
         for (var index = 0; index < 10; index++)
         {
             _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: payload));
@@ -71,8 +76,8 @@ public sealed class BenchmarkRunEventBufferTests
     public void Hub_EventsNeverContainSensitiveSnapshotOrRawErrors()
     {
         var actual = typeof(BenchmarkRunStreamPayload).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                                                        .Select(static property => property.Name)
-                                                        .ToHashSet(StringComparer.Ordinal);
+                                                      .Select(static property => property.Name)
+                                                      .ToHashSet(StringComparer.Ordinal);
         var expected = new HashSet<string>(StringComparer.Ordinal)
         {
             nameof(BenchmarkRunStreamPayload.Content),

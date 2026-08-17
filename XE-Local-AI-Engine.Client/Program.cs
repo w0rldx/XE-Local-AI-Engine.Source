@@ -1,29 +1,5 @@
-using System.Diagnostics;
-using FastEndpoints;
-using FastEndpoints.Swagger;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
-using Scalar.AspNetCore;
 using Serilog;
-using Serilog.Events;
-using XE_Local_AI_Engine.Client;
-using XE_Local_AI_Engine.Client.Common.Extensions;
-using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hosting;
-using XE_Local_AI_Engine.Client.Hubs;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
-using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.Persistence;
-using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Services.Proxy;
-using XE_Local_AI_Engine.Client.Services.Shutdown;
 
 // IMPORTANT: Velopack hook dispatch must be the first executable statement and remain outside the top-level catch.
 // The Windows distribution uses the adjacent C# launcher as its managed executable locator. Linux and development
@@ -75,7 +51,31 @@ return Environment.ExitCode;
 
 namespace XE_Local_AI_Engine.Client
 {
+    using System.Diagnostics;
+    using FastEndpoints;
+    using FastEndpoints.Swagger;
+    using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+    using Microsoft.AspNetCore.Hosting.Server;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
+    using Microsoft.Extensions.Options;
+    using Scalar.AspNetCore;
+    using Serilog;
+    using Serilog.Events;
+    using XE_Local_AI_Engine.Client.Common.Extensions;
+    using XE_Local_AI_Engine.Client.Endpoints.Common;
+    using XE_Local_AI_Engine.Client.Hosting;
+    using XE_Local_AI_Engine.Client.Hubs;
+    using XE_Local_AI_Engine.Client.Persistence.Entities;
+    using XE_Local_AI_Engine.Client.Persistence.Stores;
+    using XE_Local_AI_Engine.Client.Services.Auth;
+    using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
+    using XE_Local_AI_Engine.Client.Services.Chat;
+    using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+    using XE_Local_AI_Engine.Client.Services.Development;
+    using XE_Local_AI_Engine.Client.Services.Persistence;
+    using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+    using XE_Local_AI_Engine.Client.Services.Proxy;
+    using XE_Local_AI_Engine.Client.Services.Shutdown;
 
     /// <summary>
     ///     Application entry point for this executable.
@@ -157,9 +157,9 @@ namespace XE_Local_AI_Engine.Client
                 // generate its own encryption key and split the DB, so fail fast here with a clear message and a non-zero exit
                 // rather than proceeding. Held for the process lifetime; disposed on shutdown after the host is built. Off the
                 // desktop flag this is never reached — headless/Aspire/CI do not share this per-user data root.
-        #pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped below).
+#pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped below).
                 instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
-        #pragma warning restore CA2000
+#pragma warning restore CA2000
                 if (instanceLease is null)
                 {
                     Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
@@ -234,14 +234,14 @@ namespace XE_Local_AI_Engine.Client
             // parent stays "00". Process-global, so set once before Build().
             Activity.DefaultIdFormat = ActivityIdFormat.W3C;
             Activity.ForceDefaultIdFormat = true;
-        #pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
+#pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
             ActivitySource.AddActivityListener(new ActivityListener
             {
                 ShouldListenTo = static source => source.Name == "Microsoft.AspNetCore",
                 Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
                 SampleUsingParentId = static (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData
             });
-        #pragma warning restore CA2000
+#pragma warning restore CA2000
 
             // Applied last so a test can override registrations and swap the server (e.g. TestServer).
             customization?.ConfigureBuilder?.Invoke(builder);
@@ -417,6 +417,7 @@ namespace XE_Local_AI_Engine.Client
             {
                 app.UseRateLimiter();
             }
+
             app.UseAuthentication();
             app.UseAuthorization();
 
@@ -719,9 +720,9 @@ namespace XE_Local_AI_Engine.Client
             // Ownership is transferred to the host lifetime: the instance lives for the app's lifetime (rooting the native
             // console-ctrl delegate held inside it) and is disposed when the host stops. CA2000 can't see the deferred disposal
             // through the lifetime registration, so it is suppressed with that justification.
-        #pragma warning disable CA2000 // Disposal is deferred to and owned by ApplicationStopped below.
+#pragma warning disable CA2000 // Disposal is deferred to and owned by ApplicationStopped below.
             var desktopLifecycle = new DesktopLifecycle(lifetime, server, logger, desktopDataDirectory);
-        #pragma warning restore CA2000
+#pragma warning restore CA2000
             desktopLifecycle.Activate();
             lifetime.ApplicationStopped.Register(desktopLifecycle.Dispose);
         }
@@ -802,6 +803,7 @@ namespace XE_Local_AI_Engine.Client
     ///     when a CLI early-exit path handled the invocation.
     /// </summary>
     public sealed record ProgramStartResult(WebApplication? App, int ExitCode);
+
     /// <summary>
     ///     Projects a readiness <see cref="HealthReport" /> into the <c>/health/ready</c> JSON payload. Each
     ///     check reports its own status, description, and structured reason data, so a Degraded worker that still returns

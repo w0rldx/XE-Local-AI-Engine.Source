@@ -340,8 +340,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
                 // polling the run still sees that something about it changed.
                 var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                        cancellationToken)
+                    .ConfigureAwait(false);
                 if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
                 {
                     throw new BenchmarkConflictException("InvalidJudgeTransition");
@@ -431,13 +431,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
             var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
             _ = await InsertJudgeAttemptAsync(run,
-                                              revision,
-                                              seed?.RuntimeJson,
-                                              seed?.RuntimeUnresolvedReason,
-                                              seed?.LaunchIntent,
-                                              now,
-                                              cancellationToken)
-                    .ConfigureAwait(false);
+                    revision,
+                    seed?.RuntimeJson,
+                    seed?.RuntimeUnresolvedReason,
+                    seed?.LaunchIntent,
+                    now,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         await SaveAsync(cancellationToken).ConfigureAwait(false);
@@ -473,19 +473,19 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         return await TerminalizeJudgeAsync(command.RunId,
-                         command.ExpectedWorkVersion,
-                         BenchmarkJudgeAttemptStatus.Succeeded,
-                         BenchmarkWorkStatus.Succeeded,
-                         errorMessage: null,
-                         command.LastStreamSequence,
-                         (attempt, promote) =>
-                         {
-                             attempt.ResultJson = command.JudgeResultJson.ToArray();
-                             attempt.Score = command.Score;
-                             return promote;
-                         },
-                         cancellationToken)
-                     .ConfigureAwait(false);
+                command.ExpectedWorkVersion,
+                BenchmarkJudgeAttemptStatus.Succeeded,
+                BenchmarkWorkStatus.Succeeded,
+                errorMessage: null,
+                command.LastStreamSequence,
+                (attempt, promote) =>
+                {
+                    attempt.ResultJson = command.JudgeResultJson.ToArray();
+                    attempt.Score = command.Score;
+                    return promote;
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public Task<BenchmarkRunRecord> MarkJudgeFailedAsync(Guid runId,
@@ -563,7 +563,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             // The cohort is claimed by the first SUCCESS of the live generation, never at readiness: a failed first
             // attempt must not poison the ranking for the runtime it happened to run on.
             _ = await TryPromoteReferenceExecutionKeyAsync(attempt.PolicyRevisionId, attempt.CohortGeneration, executionKey, cancellationToken)
-                    .ConfigureAwait(false);
+                .ConfigureAwait(false);
         }
 
         UpdateLastStreamSequence(run, lastStreamSequence);
@@ -999,13 +999,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         var now = Now();
         var attempt = await InsertJudgeAttemptAsync(run,
-                                                    revision,
-                                                    command.RuntimeJson,
-                                                    command.RuntimeUnresolvedReason,
-                                                    command.LaunchIntent,
-                                                    now,
-                                                    cancellationToken)
-                          .ConfigureAwait(false);
+                revision,
+                command.RuntimeJson,
+                command.RuntimeUnresolvedReason,
+                command.LaunchIntent,
+                now,
+                cancellationToken)
+            .ConfigureAwait(false);
         run.Version++;
         run.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
@@ -1399,24 +1399,24 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         // Flat columns only across all four tables, so nothing is decrypted to answer "is this run ranked?".
         var rows = await (from run in _dbContext.BenchmarkRuns.AsNoTracking()
-                          join attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking() on run.CurrentJudgeAttemptId equals attempt.Id
-                          join revision in _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking() on attempt.PolicyRevisionId equals revision.Id
-                          join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
-                          where runIds.Contains(run.Id)
-                          select new JudgeViewRow(run.Id,
-                              attempt.Id,
-                              run.UserScore,
-                              attempt.Status,
-                              attempt.Score,
-                              attempt.Sequence,
-                              attempt.CohortGeneration,
-                              attempt.JudgeExecutionKey,
-                              attempt.ErrorMessage,
-                              attempt.PolicyRevisionId,
-                              revision.Revision,
-                              revision.CohortGeneration,
-                              revision.ReferenceExecutionKey,
-                              project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            join attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking() on run.CurrentJudgeAttemptId equals attempt.Id
+            join revision in _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking() on attempt.PolicyRevisionId equals revision.Id
+            join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
+            where runIds.Contains(run.Id)
+            select new JudgeViewRow(run.Id,
+                attempt.Id,
+                run.UserScore,
+                attempt.Status,
+                attempt.Score,
+                attempt.Sequence,
+                attempt.CohortGeneration,
+                attempt.JudgeExecutionKey,
+                attempt.ErrorMessage,
+                attempt.PolicyRevisionId,
+                revision.Revision,
+                revision.CohortGeneration,
+                revision.ReferenceExecutionKey,
+                project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken).ConfigureAwait(false);
         return rows.ToDictionary(static row => row.RunId, BuildJudgeView);
     }
 
@@ -1580,7 +1580,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         foreach (var run in runs)
         {
             _ = await InsertJudgeAttemptAsync(run, revision, seed.RuntimeJson, seed.RuntimeUnresolvedReason, seed.LaunchIntent, now, cancellationToken)
-                    .ConfigureAwait(false);
+                .ConfigureAwait(false);
             run.Version++;
             run.UpdatedAtUtc = now;
         }
@@ -1622,10 +1622,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private async Task EnsureNoActiveJudgeAttemptsAsync(Guid projectId, CancellationToken cancellationToken)
     {
         var active = await (from attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking()
-                            join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
-                            where run.ProjectId == projectId
-                                  && (attempt.Status == BenchmarkJudgeAttemptStatus.Queued || attempt.Status == BenchmarkJudgeAttemptStatus.Running)
-                            select attempt.Id).AnyAsync(cancellationToken).ConfigureAwait(false);
+            join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
+            where run.ProjectId == projectId
+                  && (attempt.Status == BenchmarkJudgeAttemptStatus.Queued || attempt.Status == BenchmarkJudgeAttemptStatus.Running)
+            select attempt.Id).AnyAsync(cancellationToken).ConfigureAwait(false);
         if (active)
         {
             throw new BenchmarkConflictException("JudgeAttemptsActive");

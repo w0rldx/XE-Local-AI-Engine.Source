@@ -53,7 +53,8 @@ public static class BenchmarkCanonicalJson
     }
 
     /// <summary>The lowercase-hex SHA-256 of <paramref name="value" />'s canonical JSON.</summary>
-    public static string HashOf<T>(T value) => Hash(Serialize(value));
+    public static string HashOf<T>(T value) =>
+        Hash(Serialize(value));
 
     private static void WriteCanonical(JsonElement element, Utf8JsonWriter writer)
     {

@@ -34,8 +34,7 @@ public sealed class UvBinaryAcquirerTests : IDisposable
         });
         using var http = new HttpClient(handler, disposeHandler: false);
 
-        var exception = await AssertEx.ThrowsAsync<TrainingRuntimeException>(
-            () => new UvBinaryAcquirer(http).EnsureUvAsync(_root, _ => { }, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<TrainingRuntimeException>(() => new UvBinaryAcquirer(http).EnsureUvAsync(_root, _ => { }, CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "integrity");
         AssertEx.False(Directory.Exists(Path.Combine(_root, "uv", TrainingRuntimePins.UvVersion)),
@@ -62,8 +61,7 @@ public sealed class UvBinaryAcquirerTests : IDisposable
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound));
         using var http = new HttpClient(handler, disposeHandler: false);
 
-        var exception = await AssertEx.ThrowsAsync<TrainingRuntimeException>(
-            () => new UvBinaryAcquirer(http).EnsureUvAsync(_root, _ => { }, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<TrainingRuntimeException>(() => new UvBinaryAcquirer(http).EnsureUvAsync(_root, _ => { }, CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "network connection");
     }

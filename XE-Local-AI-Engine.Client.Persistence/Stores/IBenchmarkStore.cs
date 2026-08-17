@@ -30,6 +30,7 @@ public interface IBenchmarkStore
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     One page of a project's runs, newest first, carrying only what a summary needs. The encrypted payload
     ///     columns are NOT read: a list of runs must not decrypt every snapshot, output and receipt on the way to
@@ -46,6 +47,7 @@ public interface IBenchmarkStore
 
     /// <summary>How many runs a project has, counted in the database.</summary>
     Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);
@@ -116,11 +118,13 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     Sets or clears the operator's 0..100 override. <see langword="null" /> clears it; the judge score stays
     ///     visible beside it either way.
     /// </summary>
     Task<BenchmarkRunRecord> SetUserScoreAsync(Guid runId, int? score, long expectedRunVersion, CancellationToken cancellationToken = default);
+
     Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default);
 
     async Task<IReadOnlyList<BenchmarkRunRecord>> RecoverRunsOnStartupAsync(CancellationToken cancellationToken = default)
@@ -485,6 +489,7 @@ public static class BenchmarkRunJudgeStates
 
     /// <summary>An operator-cancelled judging is not a failed one: re-judging is all it needs.</summary>
     public const string ReasonJudgeCancelled = "judge-cancelled";
+
     public const string ReasonPolicyOutdated = "policy-outdated";
     public const string ReasonGenerationStale = "generation-stale";
     public const string ReasonExecutionKeyMismatch = "execution-key-mismatch";

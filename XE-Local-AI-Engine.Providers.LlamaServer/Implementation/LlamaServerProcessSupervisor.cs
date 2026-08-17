@@ -293,8 +293,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         // A live or in-flight process blocks the mutation: swapping the runtime binaries under a loaded model would
         // pull them out from under it.
-        return _runtimeMutationGate.TryAcquireLeaseAsync(
-            () => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
+        return _runtimeMutationGate.TryAcquireLeaseAsync(() => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
             ct);
     }
 

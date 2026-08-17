@@ -5,7 +5,6 @@ using System.Net.Http.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.NodeBinding.V1;
 using XE_Local_AI_Engine.Client.Models.NodeBinding;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

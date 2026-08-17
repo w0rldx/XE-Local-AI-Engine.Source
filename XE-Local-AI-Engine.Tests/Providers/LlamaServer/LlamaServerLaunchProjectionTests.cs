@@ -224,24 +224,78 @@ public sealed class LlamaServerLaunchProjectionTests
 
         LlamaServerLaunchProjection[] mutations =
         [
-            baseline with { AutoFit = true },
-            baseline with { Metrics = false },
-            baseline with { ContextTokens = 8193 },
-            baseline with { GpuLayers = 25 },
-            baseline with { TensorSplit = "0.5,0.5" },
-            baseline with { OverrideTensor = "exps=GPU" },
-            baseline with { KvCacheTypeK = "q4_0" },
-            baseline with { KvCacheTypeV = "q4_0" },
-            baseline with { FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionAuto },
-            baseline with { Threads = 7 },
-            baseline with { ThreadsBatch = 9 },
-            baseline with { BatchSize = 4096 },
-            baseline with { UbatchSize = 4096 },
-            baseline with { Parallel = 2 },
-            baseline with { CacheReuse = null },
-            baseline with { CacheRamMiB = 0 },
-            baseline with { Jinja = false },
-            baseline with { Pooling = "rank" }
+            baseline with
+            {
+                AutoFit = true
+            },
+            baseline with
+            {
+                Metrics = false
+            },
+            baseline with
+            {
+                ContextTokens = 8193
+            },
+            baseline with
+            {
+                GpuLayers = 25
+            },
+            baseline with
+            {
+                TensorSplit = "0.5,0.5"
+            },
+            baseline with
+            {
+                OverrideTensor = "exps=GPU"
+            },
+            baseline with
+            {
+                KvCacheTypeK = "q4_0"
+            },
+            baseline with
+            {
+                KvCacheTypeV = "q4_0"
+            },
+            baseline with
+            {
+                FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionAuto
+            },
+            baseline with
+            {
+                Threads = 7
+            },
+            baseline with
+            {
+                ThreadsBatch = 9
+            },
+            baseline with
+            {
+                BatchSize = 4096
+            },
+            baseline with
+            {
+                UbatchSize = 4096
+            },
+            baseline with
+            {
+                Parallel = 2
+            },
+            baseline with
+            {
+                CacheReuse = null
+            },
+            baseline with
+            {
+                CacheRamMiB = 0
+            },
+            baseline with
+            {
+                Jinja = false
+            },
+            baseline with
+            {
+                Pooling = "rank"
+            }
         ];
 
         var identities = new HashSet<string>(StringComparer.Ordinal)
@@ -275,7 +329,14 @@ public sealed class LlamaServerLaunchProjectionTests
 
         var serialized = JsonSerializer.Serialize(projection);
 
-        foreach (var forbidden in new[] { ModelFilePath, ExecutablePath, "/fake", "127.0.0.1", "8080" })
+        foreach (var forbidden in new[]
+                 {
+                     ModelFilePath,
+                     ExecutablePath,
+                     "/fake",
+                     "127.0.0.1",
+                     "8080"
+                 })
         {
             AssertEx.False(serialized.Contains(forbidden, StringComparison.Ordinal),
                 $"The launch projection leaked '{forbidden}': {serialized}");
@@ -377,8 +438,7 @@ public sealed class LlamaServerLaunchProjectionTests
     {
         // Operator extra arguments are appended after everything else and llama.cpp is last-wins for a scalar flag, so
         // the honest reading of the vector is the last value — and an argument this projection does not model is skipped.
-        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(
-        [
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments([
             "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
             "--metrics", "-c", "8192", "--jinja", "--cache-ram", "0", "-lv", "4", "-c", "4096"
         ]));

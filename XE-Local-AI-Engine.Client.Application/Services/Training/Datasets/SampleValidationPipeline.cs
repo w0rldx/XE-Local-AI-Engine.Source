@@ -40,8 +40,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
     private const string CriticPrompt =
         "You judge one training example. Reply with a JSON object {\"verdict\":\"good\"} or {\"verdict\":\"bad\"} and nothing else.";
 
-    private static readonly JsonElement CriticSchema = JsonDocument.Parse(
-        """{"type":"object","properties":{"verdict":{"type":"string"}},"required":["verdict"]}""").RootElement.Clone();
+    private static readonly JsonElement CriticSchema = JsonDocument.Parse("""{"type":"object","properties":{"verdict":{"type":"string"}},"required":["verdict"]}""").RootElement.Clone();
 
     private readonly IHeadlessToolExecutor _executor = executor ?? throw new ArgumentNullException(nameof(executor));
     private readonly IStructuredAgentRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -191,15 +190,15 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
         }
 
         var result = await _runner.RunAsync(context.CriticChatClient,
-                                       new StructuredAgentRequest(context.Definition.CriticModelName,
-                                           CriticPrompt,
-                                           JsonSerializer.Serialize(record, TrainingJson.Options),
-                                           TeacherOutputMode.ValidateAfter,
-                                           CriticSchema,
-                                           Temperature: 0f,
-                                           Seed: null),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                      new StructuredAgentRequest(context.Definition.CriticModelName,
+                                          CriticPrompt,
+                                          JsonSerializer.Serialize(record, TrainingJson.Options),
+                                          TeacherOutputMode.ValidateAfter,
+                                          CriticSchema,
+                                          Temperature: 0f,
+                                          Seed: null),
+                                      cancellationToken)
+                                  .ConfigureAwait(false);
         if (!result.Success)
         {
             layers.Add(new SampleValidationLayerResultV1("critic", Passed: false, "critic:judge", result.FailureReason));

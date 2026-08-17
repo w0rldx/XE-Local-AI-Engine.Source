@@ -153,11 +153,9 @@ public sealed class BenchmarkJudgeExecutionIdentityTests
     [Test]
     public void Identity_RecordsTheOptionalHostFactsWithoutRequiringThem()
     {
-        var present = AssertEx.NotNull(BenchmarkJudgeExecutionKey.TryBuild(
-            Receipt(GpuVariant.Cuda, LlamaServerPlacementOutcome.Full, offloaded: 33, total: 33),
+        var present = AssertEx.NotNull(BenchmarkJudgeExecutionKey.TryBuild(Receipt(GpuVariant.Cuda, LlamaServerPlacementOutcome.Full, offloaded: 33, total: 33),
             Environment()));
-        var absent = AssertEx.NotNull(BenchmarkJudgeExecutionKey.TryBuild(
-            Receipt(GpuVariant.Cuda, LlamaServerPlacementOutcome.Full, offloaded: 33, total: 33),
+        var absent = AssertEx.NotNull(BenchmarkJudgeExecutionKey.TryBuild(Receipt(GpuVariant.Cuda, LlamaServerPlacementOutcome.Full, offloaded: 33, total: 33),
             Environment(cpuModel: null)));
 
         AssertEx.Equal("AMD Ryzen 9 9950X3D", present.CpuModel);

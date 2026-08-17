@@ -84,18 +84,17 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         // something other than what the Hub described. Verification is the only thing standing between that and a
         // corrupt checkpoint that trains for hours before failing.
         using var handler = FileHandler(new Dictionary<string, byte[]>(StringComparer.Ordinal)
-        {
-            ["config.json"] = payloads["config.json"],
-            ["model.safetensors"] = Encoding.UTF8.GetBytes("tampered bytes!")
-        },
+            {
+                ["config.json"] = payloads["config.json"],
+                ["model.safetensors"] = Encoding.UTF8.GetBytes("tampered bytes!")
+            },
             payloads);
         var detail = HubDetail(BaseRepo, payloads, license: "apache-2.0");
 
         var store = Store(handler, detail);
         var manifest = await store.ResolveAsync(BaseRepo, revision: null, CancellationToken.None);
 
-        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(
-            () => store.DownloadAsync(manifest, Path.Combine(_root, "tampered"), progress: null, CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.DownloadAsync(manifest, Path.Combine(_root, "tampered"), progress: null, CancellationToken.None));
     }
 
     [Test]
@@ -126,8 +125,7 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         AssertEx.Equal("llama3.2", manifest.License);
 
         // The quant repo is not merely a different license — it is not trainable at all.
-        var rejection = await AssertEx.ThrowsAsync<BaseCheckpointNotTrainableException>(
-            () => store.ResolveAsync(QuantRepo, revision: null, CancellationToken.None));
+        var rejection = await AssertEx.ThrowsAsync<BaseCheckpointNotTrainableException>(() => store.ResolveAsync(QuantRepo, revision: null, CancellationToken.None));
         AssertEx.Contains(rejection.Message, "safetensors");
     }
 

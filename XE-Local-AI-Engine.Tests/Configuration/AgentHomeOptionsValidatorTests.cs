@@ -189,5 +189,4 @@ public sealed class AgentHomeOptionsValidatorTests
         AssertEx.NotEmpty(result.Failures);
         AssertEx.Contains(result.Failures, failure => failure.Contains(expectedText, StringComparison.Ordinal));
     }
-
 }

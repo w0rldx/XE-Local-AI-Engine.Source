@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
@@ -126,8 +125,7 @@ public sealed class ComparisonReportService(
 
         if (left.DatasetId != right.DatasetId)
         {
-            throw new EvaluationRejectedException(
-                "The two evaluations scored different datasets, so their accuracies cannot be subtracted. Evaluate both models against one dataset.");
+            throw new EvaluationRejectedException("The two evaluations scored different datasets, so their accuracies cannot be subtracted. Evaluate both models against one dataset.");
         }
 
         if (!string.Equals(left.DatasetContentFingerprint, right.DatasetContentFingerprint, StringComparison.Ordinal))
@@ -139,8 +137,7 @@ public sealed class ComparisonReportService(
         // Order-insensitive: scoring walks the frozen order, but two freezes of one set are still the same hold-out.
         if (!left.HoldoutSampleIds.ToHashSet().SetEquals(right.HoldoutSampleIds))
         {
-            throw new EvaluationRejectedException(
-                "The two evaluations scored different hold-out samples, so their accuracies are not comparable. Both sides must come from the same freeze.");
+            throw new EvaluationRejectedException("The two evaluations scored different hold-out samples, so their accuracies are not comparable. Both sides must come from the same freeze.");
         }
     }
 

@@ -403,8 +403,13 @@ public sealed class BenchmarkRunExecutorTests
             entry.Level == LogLevel.Information && entry.Message.Contains("capacity admission", StringComparison.Ordinal)));
         foreach (var expected in new[]
                  {
-                     run.Id.ToString(), "phase primary", "model.gguf", "requested context 8192",
-                     "frozen runtime context 12288", "KV cache q4_0", "Allow"
+                     run.Id.ToString(),
+                     "phase primary",
+                     "model.gguf",
+                     "requested context 8192",
+                     "frozen runtime context 12288",
+                     "KV cache q4_0",
+                     "Allow"
                  })
         {
             AssertEx.Contains(admission.Message, expected);

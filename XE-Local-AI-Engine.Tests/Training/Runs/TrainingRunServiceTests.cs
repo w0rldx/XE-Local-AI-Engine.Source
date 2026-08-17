@@ -41,8 +41,8 @@ public sealed class TrainingRunServiceTests : IDisposable
         var fixture = await SeedAsync(context);
         var service = BuildService(context);
 
-        var rejection = await AssertEx.ThrowsAsync<TrainingRunRejectedException>(
-            () => service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion, fixture.BaseArtifactId, LicenseConfirmed: false)));
+        var rejection = await AssertEx.ThrowsAsync<TrainingRunRejectedException>(() =>
+            service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion, fixture.BaseArtifactId, LicenseConfirmed: false)));
 
         AssertEx.True(rejection.Message.Contains("licensing", StringComparison.OrdinalIgnoreCase), "The refusal has to name the licensing gate.");
         var runStore = new TrainingRunStore(context, TimeProvider.System);
@@ -63,8 +63,8 @@ public sealed class TrainingRunServiceTests : IDisposable
         var service = BuildService(context);
 
         // The wizard's confirmation dialog was opened before somebody edited a sample.
-        _ = await AssertEx.ThrowsAsync<TrainingConflictException>(
-            () => service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion + 1, fixture.BaseArtifactId, LicenseConfirmed: true)));
+        _ = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
+            service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion + 1, fixture.BaseArtifactId, LicenseConfirmed: true)));
 
         var frozenDirectory = Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen");
         AssertEx.True(!Directory.Exists(frozenDirectory) || Directory.GetFiles(frozenDirectory).Length == 0,

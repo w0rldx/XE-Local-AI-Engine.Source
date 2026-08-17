@@ -190,10 +190,10 @@ public sealed class TrainingExclusivityTests
             using var benchmarkSignal = new BenchmarkQueueSignal();
             using var generationSignal = new DatasetGenerationQueueSignal();
             using (var benchmarkQueue = BuildBenchmarkQueue(benchmarks, benchmarkSignal, gate))
-            using (var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate))
-            {
-                await RunBrieflyAsync(benchmarkQueue, generationQueue);
-            }
+                using (var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate))
+                {
+                    await RunBrieflyAsync(benchmarkQueue, generationQueue);
+                }
 
             _ = await benchmarks.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
             _ = await datasets.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.Training.TrainingRuntimeTestInfrastructure;
+using static TrainingRuntimeTestInfrastructure;
 
 /// <summary>
 ///     Drives the runtime phase machine end to end against a fake subprocess runner and a pre-seeded uv cache. The real

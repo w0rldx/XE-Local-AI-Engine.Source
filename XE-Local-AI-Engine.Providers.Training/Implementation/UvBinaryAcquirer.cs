@@ -118,10 +118,10 @@ internal sealed class UvBinaryAcquirer(HttpClient httpClient)
         try
         {
             using (var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var gzip = new GZipStream(fileStream, CompressionMode.Decompress))
-            {
-                TarFile.ExtractToDirectory(gzip, stagingDir, overwriteFiles: true);
-            }
+                using (var gzip = new GZipStream(fileStream, CompressionMode.Decompress))
+                {
+                    TarFile.ExtractToDirectory(gzip, stagingDir, overwriteFiles: true);
+                }
 
             Directory.CreateDirectory(Path.GetDirectoryName(versionDir.TrimEnd(Path.DirectorySeparatorChar))!);
             if (Directory.Exists(versionDir))

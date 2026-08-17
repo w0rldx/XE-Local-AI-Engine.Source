@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
-using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;

@@ -138,8 +138,7 @@ public sealed class ArtifactPromotionService(
         {
             baseModelName = run.LinkedInstalledModelName is { Length: > 0 } linked
                 ? linked
-                : throw new TrainingExportRejectedException(
-                    "This run is not linked to an installed model, so its adapter has no base model to be applied to. Export a merged model instead.");
+                : throw new TrainingExportRejectedException("This run is not linked to an installed model, so its adapter has no base model to be applied to. Export a merged model instead.");
         }
 
         var checkpoint = await _baseArtifacts.GetAsync(run.BaseArtifactId, cancellationToken).ConfigureAwait(false);

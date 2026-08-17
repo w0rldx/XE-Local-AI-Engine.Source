@@ -306,8 +306,7 @@ public sealed class BenchmarkProjectServiceTests
         private async Task<BenchmarkJudgePolicyV1> BuildPolicyAsync(BenchmarkJudgePolicyDraft draft)
         {
             await using var lease = await Models.AcquireAsync(draft.ModelName, CancellationToken.None).ConfigureAwait(false);
-            return new BenchmarkJudgePolicyV1(
-                BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
+            return new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,
                 BenchmarkJudgePolicyVersions.PromptVersion,
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,

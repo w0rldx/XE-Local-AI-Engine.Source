@@ -11,19 +11,18 @@ public sealed class SampleValidationPipelineTests
 {
     private const string ToolSchema = """{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}""";
 
-    private static readonly JsonElement RecordSchema = JsonDocument.Parse(
-        """
-        {
-          "type": "object",
-          "properties": {
-            "userMessage": { "type": "string" },
-            "assistantText": { "type": "string" },
-            "toolName": { "type": "string" },
-            "toolArgumentsJson": { "type": "string" }
-          },
-          "required": ["userMessage", "assistantText"]
-        }
-        """).RootElement.Clone();
+    private static readonly JsonElement RecordSchema = JsonDocument.Parse("""
+                                                                          {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "userMessage": { "type": "string" },
+                                                                              "assistantText": { "type": "string" },
+                                                                              "toolName": { "type": "string" },
+                                                                              "toolArgumentsJson": { "type": "string" }
+                                                                            },
+                                                                            "required": ["userMessage", "assistantText"]
+                                                                          }
+                                                                          """).RootElement.Clone();
 
     [Test]
     public async Task ValidateAfter_SchemaInvalidTurn_RecordedAsSampleFailure()
@@ -58,8 +57,7 @@ public sealed class SampleValidationPipelineTests
         _ = executor.ExecuteAsync("read_file", Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                     .Returns(new HeadlessToolOutcome(HeadlessToolOutcomeKind.Executed, "# Title", "read-local"));
 
-        var outcome = await pipeline.ValidateAsync(
-            """{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
+        var outcome = await pipeline.ValidateAsync("""{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
             Context());
 
         AssertEx.True(outcome.Accepted);
@@ -82,8 +80,7 @@ public sealed class SampleValidationPipelineTests
         _ = executor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                     .Returns(new HeadlessToolOutcome(HeadlessToolOutcomeKind.ValidationOnly, null, "not-read-local; no mock matched"));
 
-        var outcome = await pipeline.ValidateAsync(
-            """{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
+        var outcome = await pipeline.ValidateAsync("""{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
             Context());
 
         AssertEx.True(outcome.Accepted, "Decision #9: a failed layer keeps the sample as negative data.");
@@ -97,8 +94,7 @@ public sealed class SampleValidationPipelineTests
     {
         var pipeline = Create(out _);
 
-        var outcome = await pipeline.ValidateAsync(
-            """{"userMessage":"hi","assistantText":"done","toolName":"delete_everything","toolArgumentsJson":"{}"}""",
+        var outcome = await pipeline.ValidateAsync("""{"userMessage":"hi","assistantText":"done","toolName":"delete_everything","toolArgumentsJson":"{}"}""",
             Context());
 
         AssertEx.True(outcome.Accepted);
@@ -119,8 +115,7 @@ public sealed class SampleValidationPipelineTests
         // small teacher writes "None" for a no-tool answer — that must read as no tool, not as an unresolvable tool name.
         var pipeline = Create(out var executor);
 
-        var outcome = await pipeline.ValidateAsync(
-            $$"""{"userMessage":"How are you?","assistantText":"Fine, thanks.","toolName":"{{sentinel}}","toolArgumentsJson":""}""",
+        var outcome = await pipeline.ValidateAsync($$"""{"userMessage":"How are you?","assistantText":"Fine, thanks.","toolName":"{{sentinel}}","toolArgumentsJson":""}""",
             Context());
 
         AssertEx.True(outcome.Accepted);
@@ -136,8 +131,7 @@ public sealed class SampleValidationPipelineTests
 
         // What today's teacher record can express: exactly one call. The accepted sample must carry exactly one tool
         // part, which is what makes the boundary rule below hold for everything generation persists.
-        var outcome = await pipeline.ValidateAsync(
-            """{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
+        var outcome = await pipeline.ValidateAsync("""{"userMessage":"read the readme","assistantText":"done","toolName":"read_file","toolArgumentsJson":"{\"path\":\"README.md\"}"}""",
             Context());
 
         AssertEx.True(outcome.Accepted);
@@ -146,15 +140,13 @@ public sealed class SampleValidationPipelineTests
         // The rule the pipeline enforces over what it built. TeacherSampleRecordV1 carries ONE toolName, so a second
         // call can only appear if that record shape is later widened — and this is what makes that a visible rejection
         // rather than a sample the scorer grades by its first call.
-        AssertEx.True(TrainingSampleParts.IsMultiCall(
-            [
+        AssertEx.True(TrainingSampleParts.IsMultiCall([
                 new TrainingSamplePartV1("user", 0, "do both"),
                 new TrainingSamplePartV1("tool", 1, ToolName: "read_file", Arguments: "{}"),
                 new TrainingSamplePartV1("tool", 2, ToolName: "read_file", Arguments: "{}")
             ]),
             "Two named tool parts are a multi-call trajectory.");
-        AssertEx.False(TrainingSampleParts.IsMultiCall(
-            [
+        AssertEx.False(TrainingSampleParts.IsMultiCall([
                 new TrainingSamplePartV1("tool", 0, ToolName: "read_file", Arguments: "{}"),
                 new TrainingSamplePartV1("tool", 1, Result: "ok")
             ]),

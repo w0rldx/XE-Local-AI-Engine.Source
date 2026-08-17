@@ -57,8 +57,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
         // all need on the same volume immediately afterwards.
         _ = _freeSpaceProbe.GetAvailableFreeBytes(_root).Returns(manifestBytes + 1);
 
-        var exception = await AssertEx.ThrowsAsync<BaseArtifactRejectedException>(
-            () => Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<BaseArtifactRejectedException>(() => Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "free space");
         await _store.DidNotReceive().StartDownloadAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -71,8 +70,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
                             .Returns<Task<BaseCheckpointManifest>>(_ =>
                                 throw new BaseCheckpointNotTrainableException("The selected repository has no safetensors weights."));
 
-        var exception = await AssertEx.ThrowsAsync<BaseArtifactRejectedException>(
-            () => Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<BaseArtifactRejectedException>(() => Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "safetensors");
     }

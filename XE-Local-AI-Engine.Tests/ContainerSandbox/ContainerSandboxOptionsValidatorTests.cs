@@ -150,7 +150,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Test]
     public void Validate_ARelativeScratchMountTarget_IsRejected()
     {
-        AssertRejected(Options() with { ScratchMountTarget = "scratch" }, "absolute in-container path");
+        AssertRejected(Options() with
+        {
+            ScratchMountTarget = "scratch"
+        }, "absolute in-container path");
     }
 
     [Test]
@@ -160,7 +163,10 @@ public sealed class ContainerSandboxOptionsValidatorTests
     [Arguments("latest")]
     public void Validate_AMinimumApiVersionThatIsNotMajorMinor_IsRejected(string value)
     {
-        AssertRejected(Options() with { MinimumApiVersion = value }, "must be 'major.minor'");
+        AssertRejected(Options() with
+        {
+            MinimumApiVersion = value
+        }, "must be 'major.minor'");
     }
 
     [Test]
@@ -172,9 +178,18 @@ public sealed class ContainerSandboxOptionsValidatorTests
     private static ContainerSandboxOptions WithMountTarget(string property, string value) =>
         property switch
         {
-            "WorkspaceMountTarget" => Options() with { WorkspaceMountTarget = value },
-            "ScratchMountTarget" => Options() with { ScratchMountTarget = value },
-            "TempMountTarget" => Options() with { TempMountTarget = value },
+            "WorkspaceMountTarget" => Options() with
+            {
+                WorkspaceMountTarget = value
+            },
+            "ScratchMountTarget" => Options() with
+            {
+                ScratchMountTarget = value
+            },
+            "TempMountTarget" => Options() with
+            {
+                TempMountTarget = value
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(property), property, "Unknown mount-target property.")
         };
 

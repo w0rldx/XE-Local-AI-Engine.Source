@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -95,5 +94,6 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
             "chat",
             Hash('d'));
 
-    private static string Hash(char value) => $"v1:{new string(value, 64)}";
+    private static string Hash(char value) =>
+        $"v1:{new string(value, 64)}";
 }

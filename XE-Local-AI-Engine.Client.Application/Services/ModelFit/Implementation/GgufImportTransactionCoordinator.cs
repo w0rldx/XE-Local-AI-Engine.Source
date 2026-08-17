@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;

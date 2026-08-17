@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
@@ -11,20 +10,17 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
@@ -32,7 +28,6 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -833,7 +828,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // keeps the unchanged approve/deny path.
                     if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))
                     {
-                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken).ConfigureAwait(false);
+                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken)
+                                                                       .ConfigureAwait(false);
                         approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
                         continue;
                     }
@@ -907,7 +903,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // Name the tool in the approval description so the card matches the single-agent UX (not the opaque id).
                     var pendingApproval = ToApprovalRequest(update);
                     var approvalDescription = $"Tool '{ApprovalToolName(update)}' requires approval before it runs.";
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription).ConfigureAwait(false);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription)
+                                                                 .ConfigureAwait(false);
                     await session.RespondToApprovalAsync(requestId,
                         approved,
                         approved ? "Approved by user." : "Rejected by user.",

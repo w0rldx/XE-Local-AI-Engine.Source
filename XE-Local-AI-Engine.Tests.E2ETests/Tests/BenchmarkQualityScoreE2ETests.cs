@@ -326,8 +326,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
                            .ConfigureAwait(false);
             _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
                                work.Version,
-                               BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
-                                   BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+                               BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                                    criteria,
                                    "The output covers the task at the expected depth.",
                                    score,

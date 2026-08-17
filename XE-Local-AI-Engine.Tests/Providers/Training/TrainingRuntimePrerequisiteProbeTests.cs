@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.Training.TrainingRuntimeTestInfrastructure;
+using static TrainingRuntimeTestInfrastructure;
 
 public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
 {

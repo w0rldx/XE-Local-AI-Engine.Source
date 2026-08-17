@@ -55,8 +55,7 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
         await InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "DEFAULT").ConfigureAwait(false);
         await InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "project-a").ConfigureAwait(false);
 
-        await AssertEx.ThrowsAsync<SqliteException>(
-            () => InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "project-a"),
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "project-a"),
             "The same file must still be rejected as a duplicate within one collection.").ConfigureAwait(false);
     }
 

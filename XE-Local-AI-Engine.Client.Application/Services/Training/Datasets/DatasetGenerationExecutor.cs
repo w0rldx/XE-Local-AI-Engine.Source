@@ -40,19 +40,18 @@ public sealed class DatasetGenerationExecutor(
     ///     validated against. The MEAI adapter rewrites what the teacher actually sees (all-required, bounds folded into
     ///     the description), so only this copy expresses what the definition really requires.
     /// </summary>
-    private static readonly JsonElement RecordSchema = JsonDocument.Parse(
-        """
-        {
-          "type": "object",
-          "properties": {
-            "userMessage": { "type": "string" },
-            "assistantText": { "type": "string" },
-            "toolName": { "type": "string" },
-            "toolArgumentsJson": { "type": "string" }
-          },
-          "required": ["userMessage", "assistantText"]
-        }
-        """).RootElement.Clone();
+    private static readonly JsonElement RecordSchema = JsonDocument.Parse("""
+                                                                          {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                              "userMessage": { "type": "string" },
+                                                                              "assistantText": { "type": "string" },
+                                                                              "toolName": { "type": "string" },
+                                                                              "toolArgumentsJson": { "type": "string" }
+                                                                            },
+                                                                            "required": ["userMessage", "assistantText"]
+                                                                          }
+                                                                          """).RootElement.Clone();
 
     private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
     private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
@@ -213,7 +212,8 @@ public sealed class DatasetGenerationExecutor(
         }
 
         _ = builder.AppendLine().AppendLine()
-                   .AppendLine("Record convention: for an example where the assistant answers WITHOUT calling a tool, set toolName to an empty string \"\" and toolArgumentsJson to \"\". Only name a tool when the assistant actually calls it, and then put its JSON arguments in toolArgumentsJson.")
+                   .AppendLine(
+                       "Record convention: for an example where the assistant answers WITHOUT calling a tool, set toolName to an empty string \"\" and toolArgumentsJson to \"\". Only name a tool when the assistant actually calls it, and then put its JSON arguments in toolArgumentsJson.")
                    .AppendLine().AppendLine("Tools available to the assistant in the examples you produce:");
         foreach (var tool in definition.Tools)
         {

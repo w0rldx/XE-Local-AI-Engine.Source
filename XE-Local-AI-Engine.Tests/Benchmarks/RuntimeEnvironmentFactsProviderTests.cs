@@ -230,6 +230,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => utcNow;
+        public override DateTimeOffset GetUtcNow() =>
+            utcNow;
     }
 }

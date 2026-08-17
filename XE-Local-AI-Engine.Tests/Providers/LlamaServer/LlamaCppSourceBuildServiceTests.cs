@@ -600,8 +600,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             NullLogger<LlamaCppSourceBuildService>.Instance,
             temp.Path);
 
-        var outcome = await service.StartAsync(
-            new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official, Commit: commit.ToUpperInvariant()),
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official, Commit: commit.ToUpperInvariant()),
             CancellationToken.None);
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));

@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
-using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -235,7 +233,8 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     private static BenchmarkPrimarySuccessCommand PrimarySuccess(Guid runId, long expectedWorkVersion) =>
         new(runId, expectedWorkVersion, Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120);
 
-    private static string Fingerprint(char value) => "v1:" + new string(value, count: 64);
+    private static string Fingerprint(char value) =>
+        "v1:" + new string(value, count: 64);
 
     private static BenchmarkProjectInput NewProject() =>
         new(Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("""{"task":"answer"}"""), 4096, Guid.NewGuid());

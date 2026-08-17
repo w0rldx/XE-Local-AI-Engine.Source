@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.Proxy.V1;
 
-using XE_Local_AI_Engine.Tests.Testing;
-
 /// <summary>Request helpers shared by the three inbound model-proxy credential suites.</summary>
 internal static class LocalModelProxyApiKeyRequests
 {

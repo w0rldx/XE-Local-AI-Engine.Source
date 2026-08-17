@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Drafting;
 
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Contracts.Enums;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -53,7 +52,10 @@ public sealed class DraftAdmissionGateTests
         // after the chat turn ended). A terminal leftover must not read as busy, or drafting is refused 409 forever
         // after the first chat turn of the process lifetime.
         using var gate = CreateGate(out var dispatcher, out _);
-        dispatcher.CurrentInvocation.Returns(new InvocationState { Status = status });
+        dispatcher.CurrentInvocation.Returns(new InvocationState
+        {
+            Status = status
+        });
 
         AssertEx.True(gate.TryAcquire(out var lease), "A terminal leftover invocation must not refuse the draft.");
         lease?.Dispose();
@@ -63,7 +65,10 @@ public sealed class DraftAdmissionGateTests
     public void TryAcquire_WhenInvocationInFlight_RefusesAndKeepsSlotFree()
     {
         using var gate = CreateGate(out var dispatcher, out var runner);
-        dispatcher.CurrentInvocation.Returns(new InvocationState { Status = InvocationStatus.Running });
+        dispatcher.CurrentInvocation.Returns(new InvocationState
+        {
+            Status = InvocationStatus.Running
+        });
 
         AssertEx.False(gate.TryAcquire(out _), "A live invocation must refuse the draft.");
 

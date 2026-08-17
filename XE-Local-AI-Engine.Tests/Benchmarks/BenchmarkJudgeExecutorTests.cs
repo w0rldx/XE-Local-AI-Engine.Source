@@ -193,8 +193,12 @@ public sealed class BenchmarkJudgeExecutorTests
             entry.Level == LogLevel.Information && entry.Message.Contains("capacity admission", StringComparison.Ordinal)));
         foreach (var expected in new[]
                  {
-                     run.Id.ToString(), "phase judge", "requested context 4096",
-                     "frozen runtime context 4096", loggedKvCacheType, "RejectInsufficient"
+                     run.Id.ToString(),
+                     "phase judge",
+                     "requested context 4096",
+                     "frozen runtime context 4096",
+                     loggedKvCacheType,
+                     "RejectInsufficient"
                  })
         {
             AssertEx.Contains(admission.Message, expected);

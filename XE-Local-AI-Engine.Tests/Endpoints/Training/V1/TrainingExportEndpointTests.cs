@@ -106,8 +106,7 @@ public sealed class TrainingExportEndpointTests
     {
         await using var context = new Context();
         _ = context.Store.ListArtifactsAsync(RunId, Arg.Any<CancellationToken>())
-                   .Returns<IReadOnlyList<TrainingArtifactRecord>>(
-                   [
+                   .Returns<IReadOnlyList<TrainingArtifactRecord>>([
                        new TrainingArtifactRecord(ArtifactId, RunId, TrainingArtifactKind.MergedGguf,
                            "/var/lib/xe/training/runs/x/staged/merged-Q4_K_M.gguf", "abc", 1024,
                            TrainingArtifactSmokeState.Passed, null, null, 2, 0, 0)

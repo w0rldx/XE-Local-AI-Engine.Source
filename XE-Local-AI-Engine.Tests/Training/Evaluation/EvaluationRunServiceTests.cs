@@ -44,8 +44,7 @@ public sealed class EvaluationRunServiceTests
 
         var enqueued = AssertEx.NotNull(harness.Enqueued, "A matching fingerprint must reach the store.");
         AssertEx.Equal(FrozenFingerprint, enqueued.DatasetContentFingerprint);
-        var membership = AssertEx.NotNull(
-            JsonSerializer.Deserialize<TrainingEvaluationMembershipV1>(enqueued.MembershipJson.Span, TrainingJson.Options),
+        var membership = AssertEx.NotNull(JsonSerializer.Deserialize<TrainingEvaluationMembershipV1>(enqueued.MembershipJson.Span, TrainingJson.Options),
             "The membership must round-trip.");
         AssertEx.Equal(HoldoutSampleId, membership.HoldoutSampleIds.Single());
     }
@@ -83,8 +82,7 @@ public sealed class EvaluationRunServiceTests
 
             var models = Substitute.For<IGgufModelStore>();
             _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns<IReadOnlyList<LocalModelDescriptor>>(
-                      [
+                      .Returns<IReadOnlyList<LocalModelDescriptor>>([
                           new LocalModelDescriptor
                           {
                               ModelName = "base:Q4_K_M",

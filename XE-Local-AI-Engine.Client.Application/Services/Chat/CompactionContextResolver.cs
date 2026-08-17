@@ -35,12 +35,12 @@ internal static class CompactionContextResolver
         }
 
         return new CompactionAnchor(new ConversationMessageDto
-        {
-            Id = Guid.NewGuid(),
-            Role = MessageRole.User,
-            Content = $"[Summary of the earlier conversation, condensed to fit the context window]\n{summary}",
-            SortOrder = sortOrder
-        },
+            {
+                Id = Guid.NewGuid(),
+                Role = MessageRole.User,
+                Content = $"[Summary of the earlier conversation, condensed to fit the context window]\n{summary}",
+                SortOrder = sortOrder
+            },
             coveredSequence);
     }
 }

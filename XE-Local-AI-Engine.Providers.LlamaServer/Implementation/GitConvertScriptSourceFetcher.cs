@@ -57,7 +57,12 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
     private static Dictionary<string, string> BuildScrubbedGitEnvironment(string isolatedHome)
     {
         var scrubbed = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var key in new[] { "PATH", "LANG", "LC_ALL" })
+        foreach (var key in new[]
+                 {
+                     "PATH",
+                     "LANG",
+                     "LC_ALL"
+                 })
         {
             if (Environment.GetEnvironmentVariable(key) is { Length: > 0 } value)
             {

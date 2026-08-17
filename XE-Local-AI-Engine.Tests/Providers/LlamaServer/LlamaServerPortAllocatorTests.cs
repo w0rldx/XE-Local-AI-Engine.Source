@@ -31,7 +31,12 @@ public sealed class LlamaServerPortAllocatorTests
         var third = allocator.Allocate();
 
         AssertEx.Equal(3, allocator.ReservedCount);
-        AssertEx.Equal(3, new HashSet<int> { first, second, third }.Count, "Every allocation must hand out a distinct port.");
+        AssertEx.Equal(3, new HashSet<int>
+        {
+            first,
+            second,
+            third
+        }.Count, "Every allocation must hand out a distinct port.");
         AssertEx.True(first >= start && third <= start + 2, "Allocation must stay inside the configured range.");
     }
 

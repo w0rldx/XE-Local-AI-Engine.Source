@@ -165,8 +165,7 @@ public sealed class EvaluationRunService(
             // A run started from a raw Hugging Face checkpoint has no installed GGUF counterpart to evaluate, so the
             // comparison's accuracy section is marked unavailable rather than silently compared against nothing.
             return run.LinkedInstalledModelName
-                   ?? throw new EvaluationRejectedException(
-                       "This run was not started from an installed model, so its base model cannot be evaluated.");
+                   ?? throw new EvaluationRejectedException("This run was not started from an installed model, so its base model cannot be evaluated.");
         }
 
         var artifacts = await _runs.ListArtifactsAsync(run.Id, cancellationToken).ConfigureAwait(false);

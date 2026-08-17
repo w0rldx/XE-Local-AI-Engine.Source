@@ -507,11 +507,10 @@ public sealed class NodeChatRegenerationService(
                 return;
             }
 
-            await eventSink.WriteAsync(
-                    ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
-                        invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
+                                   invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                               cancellationToken)
+                           .ConfigureAwait(false);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
             // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>Process-group id and start time as read from <c>/proc/[pid]/stat</c>.</summary>
@@ -124,11 +125,11 @@ internal sealed partial class LinuxTrainingProcessInspector(TimeProvider? timePr
         }
 
         const string prefix = RunTokenVariable + "=";
-        return System.Text.Encoding.UTF8.GetString(raw)
-                     .Split('\0', StringSplitOptions.RemoveEmptyEntries)
-                     .Where(static entry => entry.StartsWith(prefix, StringComparison.Ordinal))
-                     .Select(static entry => entry[prefix.Length..])
-                     .FirstOrDefault();
+        return Encoding.UTF8.GetString(raw)
+                       .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                       .Where(static entry => entry.StartsWith(prefix, StringComparison.Ordinal))
+                       .Select(static entry => entry[prefix.Length..])
+                       .FirstOrDefault();
     }
 
     // int kill(pid_t pid, int sig); — a negative pid signals the process group abs(pid).

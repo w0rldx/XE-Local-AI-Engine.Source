@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 
 // Constructor injection here is only safe because the IDevelopmentEndpoint marker keeps these endpoints out of
 // FastEndpoints discovery when Development:Enabled is false (see the EndpointDiscoveryOptions.Filter in
@@ -241,7 +240,7 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopment
         try
         {
             var result = await _service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct)
-                                      .ConfigureAwait(false);
+                                       .ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse(result.Repository.ToResponse(),
                     result.TemplateAlias,
                     result.TemplateCommit),
@@ -350,22 +349,22 @@ public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementServi
         try
         {
             var result = await _service.CreateProjectAsync(new DevelopmentCreateProjectInput(req.OperationId,
-                                              req.SelectedFolderId,
-                                              req.Objective,
-                                              req.BaseBranch,
-                                              req.TaskTitle,
-                                              req.Requirements,
-                                              req.AcceptanceCriteriaJson,
-                                              egressPolicy,
-                                              req.CoderModelId,
-                                              req.ReviewerModelId,
-                                              req.TrustedRepositoryAcknowledged,
-                                              req.MaxTokens,
-                                              req.MaxDurationSeconds,
-                                              req.CommandProfileId,
-                                              req.BuildTarget),
-                                          ct)
-                                      .ConfigureAwait(false);
+                                               req.SelectedFolderId,
+                                               req.Objective,
+                                               req.BaseBranch,
+                                               req.TaskTitle,
+                                               req.Requirements,
+                                               req.AcceptanceCriteriaJson,
+                                               egressPolicy,
+                                               req.CoderModelId,
+                                               req.ReviewerModelId,
+                                               req.TrustedRepositoryAcknowledged,
+                                               req.MaxTokens,
+                                               req.MaxDurationSeconds,
+                                               req.CommandProfileId,
+                                               req.BuildTarget),
+                                           ct)
+                                       .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
@@ -691,7 +690,7 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagemen
         try
         {
             var project = await _service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct)
-                                       .ConfigureAwait(false);
+                                        .ConfigureAwait(false);
             await Send.OkAsync(project.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)

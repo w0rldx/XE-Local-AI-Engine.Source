@@ -30,14 +30,20 @@ public static class BenchmarkJudgePolicyVersions
 // JsonPropertyOrder. Reordering a declaration must never silently change a hash, and the policy must never inherit the
 // declaration order of a type it does not own.
 public sealed record BenchmarkJudgeRubricCriterionV1(
-    [property: JsonPropertyOrder(0)] string Id,
-    [property: JsonPropertyOrder(1)] string Title,
-    [property: JsonPropertyOrder(2)] string Description,
-    [property: JsonPropertyOrder(3)] int Weight);
+    [property: JsonPropertyOrder(0)]
+    string Id,
+    [property: JsonPropertyOrder(1)]
+    string Title,
+    [property: JsonPropertyOrder(2)]
+    string Description,
+    [property: JsonPropertyOrder(3)]
+    int Weight);
 
 public sealed record BenchmarkJudgeRubricV1(
-    [property: JsonPropertyOrder(0)] int Version,
-    [property: JsonPropertyOrder(1)] IReadOnlyList<BenchmarkJudgeRubricCriterionV1> Criteria);
+    [property: JsonPropertyOrder(0)]
+    int Version,
+    [property: JsonPropertyOrder(1)]
+    IReadOnlyList<BenchmarkJudgeRubricCriterionV1> Criteria);
 
 /// <summary>
 /// The judge model identity a policy hashes over. Deliberately narrower than <see cref="BenchmarkInstalledModelSnapshotV1"/>:
@@ -45,9 +51,12 @@ public sealed record BenchmarkJudgeRubricV1(
 /// churn does not spawn a spurious policy revision.
 /// </summary>
 public sealed record BenchmarkJudgePolicyModelV1(
-    [property: JsonPropertyOrder(0)] string ModelName,
-    [property: JsonPropertyOrder(1)] string ModelContentFingerprint,
-    [property: JsonPropertyOrder(2)] IReadOnlyList<string> MemberHashes)
+    [property: JsonPropertyOrder(0)]
+    string ModelName,
+    [property: JsonPropertyOrder(1)]
+    string ModelContentFingerprint,
+    [property: JsonPropertyOrder(2)]
+    IReadOnlyList<string> MemberHashes)
 {
     public static BenchmarkJudgePolicyModelV1 FromSnapshot(BenchmarkInstalledModelSnapshotV1 snapshot)
     {
@@ -62,18 +71,30 @@ public sealed record BenchmarkJudgePolicyModelV1(
 /// it belongs to the runtime snapshot contract, and a reorder there must not move a judge policy hash.
 /// </summary>
 public sealed record BenchmarkJudgePolicySamplingV1(
-    [property: JsonPropertyOrder(0)] float? Temperature,
-    [property: JsonPropertyOrder(1)] float? TopP,
-    [property: JsonPropertyOrder(2)] int? TopK,
-    [property: JsonPropertyOrder(3)] float? MinP,
-    [property: JsonPropertyOrder(4)] int? MaxOutputTokens,
-    [property: JsonPropertyOrder(5)] float? RepeatPenalty,
-    [property: JsonPropertyOrder(6)] int? RepeatLastN,
-    [property: JsonPropertyOrder(7)] float? PresencePenalty,
-    [property: JsonPropertyOrder(8)] float? FrequencyPenalty,
-    [property: JsonPropertyOrder(9)] IReadOnlyList<string> Stop,
-    [property: JsonPropertyOrder(10)] string SeedPolicy,
-    [property: JsonPropertyOrder(11)] string? SeedValue)
+    [property: JsonPropertyOrder(0)]
+    float? Temperature,
+    [property: JsonPropertyOrder(1)]
+    float? TopP,
+    [property: JsonPropertyOrder(2)]
+    int? TopK,
+    [property: JsonPropertyOrder(3)]
+    float? MinP,
+    [property: JsonPropertyOrder(4)]
+    int? MaxOutputTokens,
+    [property: JsonPropertyOrder(5)]
+    float? RepeatPenalty,
+    [property: JsonPropertyOrder(6)]
+    int? RepeatLastN,
+    [property: JsonPropertyOrder(7)]
+    float? PresencePenalty,
+    [property: JsonPropertyOrder(8)]
+    float? FrequencyPenalty,
+    [property: JsonPropertyOrder(9)]
+    IReadOnlyList<string> Stop,
+    [property: JsonPropertyOrder(10)]
+    string SeedPolicy,
+    [property: JsonPropertyOrder(11)]
+    string? SeedValue)
 {
     public static BenchmarkJudgePolicySamplingV1 FromSnapshot(BenchmarkSamplingSnapshotV1 snapshot)
     {
@@ -94,13 +115,20 @@ public sealed record BenchmarkJudgePolicySamplingV1(
 }
 
 public sealed record BenchmarkJudgePolicyV1(
-    [property: JsonPropertyOrder(0)] BenchmarkJudgePolicyModelV1 Model,
-    [property: JsonPropertyOrder(1)] int RequestedContextTokens,
-    [property: JsonPropertyOrder(2)] int PromptVersion,
-    [property: JsonPropertyOrder(3)] int OutputSchemaVersion,
-    [property: JsonPropertyOrder(4)] BenchmarkJudgePolicySamplingV1 Sampling,
-    [property: JsonPropertyOrder(5)] BenchmarkJudgeRubricV1 Rubric,
-    [property: JsonPropertyOrder(6)] string? ReferenceAnswer);
+    [property: JsonPropertyOrder(0)]
+    BenchmarkJudgePolicyModelV1 Model,
+    [property: JsonPropertyOrder(1)]
+    int RequestedContextTokens,
+    [property: JsonPropertyOrder(2)]
+    int PromptVersion,
+    [property: JsonPropertyOrder(3)]
+    int OutputSchemaVersion,
+    [property: JsonPropertyOrder(4)]
+    BenchmarkJudgePolicySamplingV1 Sampling,
+    [property: JsonPropertyOrder(5)]
+    BenchmarkJudgeRubricV1 Rubric,
+    [property: JsonPropertyOrder(6)]
+    string? ReferenceAnswer);
 
 /// <summary>Stable codes carried by <see cref="BenchmarkJudgePolicyValidationException"/>; safe to map to an API error body.</summary>
 public static class BenchmarkJudgePolicyValidationCodes
@@ -223,7 +251,8 @@ public static class BenchmarkJudgePolicyValidator
         id is { Length: > 0 and <= BenchmarkJudgePolicyVersions.MaximumCriterionIdLength }
         && id.AsSpan().IndexOfAnyExcept(CriterionIdCharacters) < 0;
 
-    private static BenchmarkJudgePolicyValidationException Invalid(string code, string message) => new(code, message);
+    private static BenchmarkJudgePolicyValidationException Invalid(string code, string message) =>
+        new(code, message);
 }
 
 /// <summary>

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Training.Export;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -150,7 +151,7 @@ public sealed class TrainedModelSmokeGateTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var body = chatTemplate is null ? "{}" : $$"""{"chat_template":{{System.Text.Json.JsonSerializer.Serialize(chatTemplate)}}}""";
+            var body = chatTemplate is null ? "{}" : $$"""{"chat_template":{{JsonSerializer.Serialize(chatTemplate)}}}""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json")

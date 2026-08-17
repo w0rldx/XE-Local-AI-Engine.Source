@@ -559,7 +559,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 {
                     if (!await TryRepairSidecarAsync(entries, path, ct).ConfigureAwait(false))
                     {
-                        _logger.LogWarning("Acquisition sidecar for GGUF {FileName} is unreadable or corrupt and could not be repaired; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                        _logger.LogWarning(
+                            "Acquisition sidecar for GGUF {FileName} is unreadable or corrupt and could not be repaired; keeping any existing valid manifest entry without sidecar-derived recovery.",
                             Path.GetFileName(path));
                     }
 
@@ -571,7 +572,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 {
                     if (!await TryRepairSidecarAsync(entries, path, ct).ConfigureAwait(false))
                     {
-                        _logger.LogWarning("Acquisition sidecar for GGUF {FileName} failed its RegistryRevision self-check and could not be repaired; keeping any existing valid manifest entry without sidecar-derived recovery.",
+                        _logger.LogWarning(
+                            "Acquisition sidecar for GGUF {FileName} failed its RegistryRevision self-check and could not be repaired; keeping any existing valid manifest entry without sidecar-derived recovery.",
                             Path.GetFileName(path));
                     }
 

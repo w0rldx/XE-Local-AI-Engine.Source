@@ -36,7 +36,7 @@ public sealed class ListRunningModelsEndpointTests
     {
         // Process.HasExited on a handle the supervisor no longer owns — the real, expected supervisor failure.
         using var response = await ListWithFailingSupervisorAsync(new InvalidOperationException("No process is associated with this object."))
-                                   .ConfigureAwait(false);
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }

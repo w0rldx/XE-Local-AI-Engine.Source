@@ -48,16 +48,22 @@ public sealed class TrainingRunStoreTests : IDisposable
             var store = new TrainingRunStore(context, TimeProvider.System);
 
             // The dataset moved under the caller's confirmation dialog.
-            var stale = await AssertEx.ThrowsAsync<TrainingConflictException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { ExpectedDatasetVersion = fixture.DatasetVersion + 1 }));
+            var stale = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                ExpectedDatasetVersion = fixture.DatasetVersion + 1
+            }));
             AssertEx.Equal("VersionConflict", stale.Code);
 
-            _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { BaseArtifactId = Guid.NewGuid() }));
+            _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                BaseArtifactId = Guid.NewGuid()
+            }));
 
             // The license gate is mandatory at creation, not at launch.
-            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-                () => store.CreateAndEnqueueAsync(Command(fixture) with { LicenseConfirmationJson = ReadOnlyMemory<byte>.Empty }));
+            _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.CreateAndEnqueueAsync(Command(fixture) with
+            {
+                LicenseConfirmationJson = ReadOnlyMemory<byte>.Empty
+            }));
         }
 
         await using var verify = CreateContext(databasePath);
@@ -128,8 +134,7 @@ public sealed class TrainingRunStoreTests : IDisposable
         AssertEx.Equal(TrainingRunStatus.Failed, again.Status);
 
         // A terminal run refuses to be walked back onto the executor's progression.
-        var terminal = await AssertEx.ThrowsAsync<TrainingConflictException>(
-            () => afterStore.TransitionAsync(runId, again.Version, TrainingRunStatus.Training));
+        var terminal = await AssertEx.ThrowsAsync<TrainingConflictException>(() => afterStore.TransitionAsync(runId, again.Version, TrainingRunStatus.Training));
         AssertEx.Equal("RunTerminal", terminal.Code);
     }
 
@@ -168,13 +173,11 @@ public sealed class TrainingRunStoreTests : IDisposable
         var hashed = await store.SetArtifactDigestAsync(staged.Id, staged.Version, new string('a', count: 64), sizeBytes: 4096);
         AssertEx.Equal(expected: 4096L, hashed.SizeBytes);
 
-        var pending = await AssertEx.ThrowsAsync<TrainingConflictException>(
-            () => store.SetArtifactCommittedNameAsync(hashed.Id, hashed.Version, "trained-adapter"));
+        var pending = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.SetArtifactCommittedNameAsync(hashed.Id, hashed.Version, "trained-adapter"));
         AssertEx.Equal("SmokeNotPassed", pending.Code);
 
         // A failure and a skip are both decisions that owe a reason.
-        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(
-            () => store.SetArtifactSmokeStateAsync(hashed.Id, hashed.Version, TrainingArtifactSmokeState.Skipped, reason: null));
+        _ = await AssertEx.ThrowsAsync<TrainingValidationException>(() => store.SetArtifactSmokeStateAsync(hashed.Id, hashed.Version, TrainingArtifactSmokeState.Skipped, reason: null));
 
         var smoked = await store.SetArtifactSmokeStateAsync(hashed.Id, hashed.Version, TrainingArtifactSmokeState.Passed, reason: null);
         var promoted = await store.SetArtifactCommittedNameAsync(smoked.Id, smoked.Version, "trained-adapter");
@@ -258,8 +261,7 @@ public sealed class TrainingRunStoreTests : IDisposable
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasetStore = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasetStore.CreateDefinitionAsync(
-            new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
+        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
         var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
         _ = await datasetStore.ClaimNextAsync();
         _ = await datasetStore.AppendSampleAsync(new TrainingSampleInput(dataset.Id,

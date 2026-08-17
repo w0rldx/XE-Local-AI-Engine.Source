@@ -206,7 +206,9 @@ public sealed class LlamaServerSupervisorOptions
     private const double DefaultReadinessSecondsPerGiB = 20d;
     private const double DefaultReadinessCapSeconds = 600d;
     private const int DefaultMaxReadinessTimeoutRetries = 1;
+
     private const double DefaultEjectDrainTimeoutSeconds = 30d;
+
     // COUPLING: the ceiling of the node-level "Maximum message request timeout"
     // (XE-Local-AI-Engine.Client.Application StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds = 3600). This project
     // only references Providers.Abstractions, so that constant cannot be referenced here — keep the two in step. A
