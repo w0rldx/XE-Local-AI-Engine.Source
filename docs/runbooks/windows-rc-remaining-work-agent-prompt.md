@@ -1,5 +1,19 @@
 # Windows RC — remaining work, as a prompt for the Windows-side agent
 
+> **Historical — superseded (noted 2026-08-17). Do not execute this prompt as written.**
+> Its central premise — that the packaging -> upload -> publish -> self-update chain "has never once run end to
+> end" and that "CI is disabled and has never produced an artifact" — is no longer true. The repository has
+> since tagged and shipped `v0.1.0-rc.5.0`, `v0.1.0-rc.5.1` and `v1.0.0-rc.1`, and
+> `.github/workflows/release.yml` is an active, tag-triggered (`push` on `v*`, plus `workflow_dispatch`)
+> release workflow. The release identity no longer lives in `Directory.Build.props` either: it is
+> `eng/ReleaseVersion.props` (`VersionPrefix` / `VersionSuffix`, currently `1.0.0` + `rc.1`). Several commit
+> hashes cited below (including the `d56b426a` this file was derived from) no longer resolve in this
+> repository, and the `file:line` anchors were taken at that commit and have drifted.
+>
+> **Current sources instead:** `docs/runbooks/windows-rc-verification-runbook.md` for the Windows product
+> checks, and `docs/release-publication-checklist.md` for the release/publication chain. This file is kept in
+> place as a dated snapshot of what was open on 2026-08-03.
+
 **Date:** 2026-08-03
 **Audience:** the coding agent running on the operator's **real Windows 11** box, with the repo checked out and a
 packaged tester build available.
@@ -225,7 +239,7 @@ This is the largest single risk in the RC, and it is entirely yours: `publish/pa
 real release path (CI is disabled and has never produced an artifact).
 
 **Start from the version — it has NOT been bumped, and the next release is `rc.5.0`, not `rc.4.x`.**
-`Directory.Build.props:5-6` still reads `0.1.0-rc.4.2`, and the newest tag in the repo and on `origin` is
+`Directory.Build.props:5-6` still reads `0.1.0-rc.4.2` (the release version now lives in `eng/ReleaseVersion.props`), and the newest tag in the repo and on `origin` is
 **`v0.1.0-rc.4.0`** — 824 commits behind HEAD. An `rc.4.2` build was smoke-tested on 2026-08-03 and its tag was
 never pushed.
 

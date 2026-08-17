@@ -16,11 +16,14 @@ guessing.
 | **Backends** | CUDA (Windows), Vulkan (Windows/Linux), CPU |
 | **Runtime integrity** | Each binary pinned to an exact upstream asset + **SHA-256 verified before extraction**; mismatch aborts |
 | **Default context** | **8192 tokens** |
-| **Launch flags** | Benchmarked per machine, then frozen — **not visible, not editable** |
+| **Launch flags** | Benchmarked per machine, then frozen — **not visible, not editable**. A developer-mode-only panel can append extra raw flags per llama.cpp model — see below |
 | **BYO binary** | `XE_LLAMACPP_SERVER_PATH` (env var only) |
-| **Import existing GGUFs** | **Not supported** — see below |
+| **Import existing GGUFs** | **Supported** — one file at a time, copied into the managed directory. Packaged desktop app only. [Details](#using-ggufs-you-already-have) |
 | **Local API** | `/api/local/v1`, loopback-only, OpenAPI at `/openapi/local/v1/…` |
+| **OpenAI-compatible surface** | Opt-in inbound proxy at `/api/local/v1/proxy/v1`, bearer-key gated, loopback-only |
 | **MCP** | Both directions — outbound to servers you register, and an inbound server surface |
+| **Fine-tuning** | QLoRA, **Linux + NVIDIA only**, in a pinned uv-managed Python runtime. [Details](#fine-tuning-training) |
+| **Benchmarks** | One frozen task, many models; KV-cache type per run, launch receipts, optional 1–5 judge. [Details](#benchmarks) |
 | **Multi-GPU / tensor split** | Unverified — ask me |
 
 ---
@@ -69,11 +72,16 @@ heuristic.
 **But:** the Inference Profiles panel (on **Models → Recommendations**) reports *outcomes only* —
 tokens/second and VRAM. It does **not** show the resulting flags, and there is **no UI to edit them**.
 
-So if you're used to hand-tuning `-ngl`, `-c`, `--tensor-split` or flash-attention settings: you can't,
-in this build. The only lever is `XE_LLAMACPP_SERVER_PATH`, which swaps the whole binary rather than
-the arguments.
+So if you're used to hand-tuning `-ngl`, `-c`, `--tensor-split` or flash-attention settings: you cannot
+change what the frozen profile decided. Two levers exist around it:
 
-If that's a dealbreaker, say so — it's exactly the kind of feedback that decides what gets built next.
+- `XE_LLAMACPP_SERVER_PATH`, which swaps the whole binary rather than the arguments.
+- A per-model **extra arguments** override — space-separated raw flags appended when that model loads.
+  It lives on an Advanced tab in the model details dialog, and that tab only renders in **developer
+  mode** and only for llama.cpp models. The model path, host and port stay app-managed. An invalid flag
+  stops that one model from starting; clearing the override restores the defaults.
+
+If that's still a dealbreaker, say so — it's exactly the kind of feedback that decides what gets built next.
 
 ---
 
@@ -90,17 +98,47 @@ Discovery and download are from Hugging Face, in-app. Per-quant hardware fit is 
 measured free VRAM rather than a static table, which is the main thing the model picker does that a
 plain file list doesn't.
 
-### Using GGUFs you already have — not supported
+### Using GGUFs you already have
 
-> **There is no import path in this build.** No import endpoint, no scan-a-folder setting.
-
-Dropping files into `models/` is **not** reliably picked up: the registry is manifest-driven, and the
-directory rescan is a *recovery* path that only runs when the manifest can't be read (and it's
+**Models → Installed → Import model** takes the absolute path to one `.gguf` file, previews what it
+found, then copies it into the managed directory. Still **no scan-a-folder setting**, and dropping
+files into `models/` yourself is still **not** reliably picked up: the registry is manifest-driven, and
+the directory rescan is a *recovery* path that only runs when the manifest can't be read (and it's
 top-directory-only). A symlink or junction has the same problem — the manifest, not the filesystem, is
-the source of truth.
+the source of truth. The import path is what writes the manifest entry, which is why it exists.
 
-If you have a large existing GGUF library, **this is currently a real limitation**, and worth telling
-me about — it's the single most likely reason someone with 200 GB of models bounces off this.
+The flow is preview → confirm:
+
+1. Paste an absolute path. The file is opened without following symlinks/reparse points, and a source
+   inside the managed models directory is refused.
+2. The header is parsed strictly and the file is classified. You get the GGUF version, architecture,
+   size, detected quantization, and a proposed model name.
+3. You confirm (or edit) the base name and quantization. The result is named `basename:QUANT`.
+4. The file is **copied** — SHA-256 hashed as it goes — into `models/`, re-inspected after the copy,
+   then committed together with its sidecar metadata file and its registry entry. A failure part-way
+   through rolls the whole thing back rather than leaving a half-registered model.
+
+Practical consequences:
+
+- **Copy, not move or link.** Your original stays where it is, so you need free space for a second
+  full copy plus a margin. The preview tells you up front if you don't have it.
+- **One standalone chat model per import.** Split/sharded GGUFs (`…-00001-of-00003.gguf`) are refused,
+  as are embedding models, rerankers, bare LoRA adapters, and `mmproj` projectors. Architecture is
+  checked against an allow-list of causal families (llama, mistral, mixtral, qwen2/qwen3/qwen35 and
+  their MoE variants, gemma/gemma2/gemma3, phi2/phi3/phi3moe, deepseek2, command-r, cohere2, gpt2,
+  gptneox, starcoder2, internlm2). GGUF versions 2 and 3 only.
+- **No projector comes with it**, so an imported vision model is text-only. The `mmproj` companion is
+  only fetched on the in-app Hugging Face download path.
+- **The preview is bound to the exact bytes.** It expires after 10 minutes, and if the file changes in
+  between you're told to preview it again.
+- **Packaged desktop app only.** The capability endpoint reports unavailable outside desktop mode, and
+  the Import button doesn't render — so this is available in the Portable ZIP / AppImage / installed
+  builds, and not in a bare server launch.
+
+An imported model is tagged **Imported** in the model list and everywhere origin is shown.
+
+If you have a 200 GB library, you're still importing it one file at a time — bulk import is worth
+asking for if you need it.
 
 ### VRAM measurement gap
 
@@ -174,6 +212,63 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   matching `q8_0` K/V cache with flash attention, then record and use a safe non-quantized fallback if
   that optimized combination is unsupported. CPU launches keep the non-quantized path. Frozen
   inference profiles may replay explicit KV types.
+
+---
+
+## Benchmarks
+
+**Benchmarks** (top-level sidebar entry) is not a token-throughput toy: a *project* freezes one task
+and one agent, and every *run* answers that same frozen task with a different model, so the runs stay
+comparable. A project becomes uneditable once it has runs — delete its terminal runs to edit it again.
+
+| | |
+|---|---|
+| Unit of comparison | One frozen core task + agent + requested context, per project |
+| Run queue | Durable — queued work survives a node restart; a phase that was *running* when the node stopped is reported as interrupted rather than silently retried. The UI falls back to durable HTTP state when the live connection drops |
+| Context | Runs are refused if the model can't provide the requested context, rather than quietly truncating |
+| Model identity | The installed model's content fingerprint is frozen with the run; if the model changes afterwards, the run says so |
+| **KV-cache type** | Chosen **per run**: `Auto`, or an explicit type. Auto uses `q8_0` on GPU when the selected binary supports it, otherwise `f16`. Quantized types launch with flash attention on |
+| Evidence | Every run stores a **launch receipt** and an **environment** snapshot, with *intended* vs *effective* shown side by side and any differing fields called out |
+| Scoring | Your own 1–5 score, plus an optional **automated judge** — a second model, queued separately, that only runs after a successful primary run and returns a 1–5 score with a rationale. A failed judge never invalidates the primary result |
+
+The judge's reply is constrained to a fixed JSON shape (`schemaVersion`, `score`, `rationale`) and a
+score outside 1–5 is rejected, so a rambling judge fails loudly instead of scoring silently.
+
+---
+
+## Fine-tuning (Training)
+
+The **Training** sidebar group is a real QLoRA fine-tuning pipeline, not a wrapper around a cloud API.
+It is **Linux + NVIDIA only** and it takes the whole GPU while a run is going — no chat, image or
+benchmark work happens at the same time.
+
+**Prerequisites**, all checked before anything is installed: Linux host, an NVIDIA driver (probed via
+`nvidia-smi`), **≥ 20 GB free disk**, **≥ 16 GB system RAM**, and the pinned lockfile. Fine-tuning runs
+in a **pinned, uv-managed Python environment** installed once and reused (measured at roughly 7.5 GB;
+the 20 GB figure is peak install, which parks the previous venv until the swap succeeds).
+
+The pipeline:
+
+1. **Datasets** — a *definition* names a node-local **teacher model** (cloud teachers are refused),
+   system instructions, the tools the teacher is offered (schemas snapshotted on save), sample kinds
+   with target counts, hold-out share (5–30%), teacher temperature, an optional base seed, and an
+   optional **critic model** that scores every sample. Cap: 2000 samples per definition. Teacher output
+   is either constrained-decoded or validated after generation. Every sample is reviewable and
+   individually approvable/rejectable, and any generated call to anything but an approval-free
+   read-only tool needs a **tool mock**.
+2. **Runs** — one dataset + one base checkpoint. Base checkpoints are **safetensors from Hugging Face**,
+   not GGUFs: you cannot fine-tune a quantized copy. The wizard estimates VRAM against what's actually
+   free and refuses a run that doesn't fit, and it makes you confirm you may fine-tune those weights
+   (recording the fact when the repo declares no licence). Knobs: sequence length, batch size, LoRA
+   rank, epochs. Live loss and step progress stream while it runs.
+3. **Export** — merged GGUF at a chosen quantization, or adapter-only (always F16, served on top of the
+   base model it trained against). Export runs merge → convert → quantize → inspect → **smoke test**.
+4. **Register as model** — a passing artifact becomes an installed local model, with the quantization
+   appended to the name and the base checkpoint plus dataset fingerprint recorded on the entry.
+5. **Comparisons** — score the base model and the tuned model on the **same frozen hold-out samples**
+   and read the per-sample-kind accuracy delta, optionally paired with two benchmark runs for
+   tokens/second and duration deltas. If the dataset was edited after a run or evaluation froze its
+   hold-out set, the report says the numbers may not be comparable rather than hiding it.
 
 ---
 

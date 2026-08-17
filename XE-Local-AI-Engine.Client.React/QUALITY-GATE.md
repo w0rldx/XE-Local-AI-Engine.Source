@@ -55,19 +55,22 @@ Knip follows the same incremental policy: each issue is fingerprinted by file/ca
 
 These rules are `warn` because the codebase has known existing violations. They surface the
 debt without breaking the gate; promote each to `error` once its violations are paid down.
-Current executable baseline: **0 errors, 78 warnings**. The committed baseline file remains authoritative.
+The enforced (`error`) rules are clean, so the executable baseline is warnings only. `config/dependency-baseline.json`
+holds one fingerprint per accepted violation with the rule name first, and remains the gate's sole authority on how
+much debt exists; run `pnpm run depcruise:report` for the current violations in full. This document names the rules but
+deliberately does not restate their counts.
 
-- **`no-cross-feature` (58)** — one feature importing another feature's internals; shared
+- **`no-cross-feature`** — one feature importing another feature's internals; shared
   code belongs in `core/`. Examples: `model-fit` <-> `models`, `agents` -> `chat`/`tools`/`skills`,
   `mcp` -> `tools`, `preview` -> `chat`/`agents`, `chat` -> `tools`/`agents`.
-- **`no-core-to-legacy` (9)** — `core/` reaching into the legacy `data`/`components`/`modules`
+- **`no-core-to-legacy`** — `core/` reaching into the legacy `data`/`components`/`modules`
   trees. Examples: navigation/header components -> `data/navigation`, `data/language`,
   `components/Logo`, `modules/theme-configurator`.
-- **`no-core-to-features` (8)** — `core/` depending on feature-owned UI or diagnostics.
-- **`no-orphans` (3)** — modules imported by nothing in the current graph.
-- **`no-feature-to-routes` (0)** — no current violations; features stay route-agnostic.
+- **`no-core-to-features`** — `core/` depending on feature-owned UI or diagnostics.
+- **`no-orphans`** — modules imported by nothing in the current graph.
+- **`no-feature-to-routes`** — features stay route-agnostic.
 
 ## Browser and bundle feedback
 
 - Development builds install lightweight browser-console checks for missing image alt text, accessible names, form labels, and main-thread tasks lasting at least 100 ms. They are dynamically imported only when `import.meta.env.DEV` is true.
-- `pnpm run build` finishes with `pnpm run bundle:check`. It recursively measures every deployed `.js` and `.mjs` file under `dist`. The current Web Speech-only build measures **3.71 MB application JavaScript** against the single **3.75 MB** `applicationJavaScriptBytes` budget in `config/bundle-budget.json`. There are no Kokoro worker or ONNX Runtime categories because those payloads are no longer shipped. Budget increases require an explicit, measured decision rather than becoming warning noise; the committed JSON budget and fresh build output are authoritative.
+- `pnpm run build` finishes with `pnpm run bundle:check`. It recursively measures every deployed `.js` and `.mjs` file under `dist` and splits them across the budget categories declared in `config/bundle-budget.json`: `applicationJavaScriptBytes` covers everything a user downloads on boot, and `lazyEditorJavaScriptBytes` covers the Monaco editor core and its worker, which are fetched only when a `CodeEditor` first mounts — measured separately so one multi-megabyte vendor chunk cannot mask growth in the code everyone downloads. There are no Kokoro worker or ONNX Runtime categories because those payloads are no longer shipped. Budget increases require an explicit, measured decision rather than becoming warning noise; the committed JSON budget and fresh build output are authoritative, so neither the byte limits nor the current measurement are restated here.

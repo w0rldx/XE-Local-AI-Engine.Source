@@ -1,6 +1,6 @@
 # Security & Privacy Model
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page documents the cross-cutting security and privacy controls implemented in the XE Local AI
 Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
@@ -146,12 +146,14 @@ WSL mirrored networking.
 
 ### 3.2 Authentication & authorization
 
-Two authentication schemes are registered. **JWT bearer** is the default and gates everything the
+Three authentication schemes are registered. **JWT bearer** is the default and gates everything the
 browser touches via the `NodeOperator` policy. **`McpApiKey`** is a second scheme used by exactly one
-endpoint — the inbound MCP transport — via the `McpServer` policy, which lists only that scheme. The
-two principals therefore cannot impersonate each other: an operator JWT does not open the MCP
-endpoint, and the MCP key does not open the key-management endpoints (or anything else). Both
-directions are asserted in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
+endpoint — the inbound MCP transport — via the `McpServer` policy, which lists only that scheme.
+**`LocalModelProxyApiKey`** is a third, applied only by the `LocalModelProxy` policy on the inbound
+OpenAI-compatible model proxy (§3.2.1). Each policy names exactly one scheme, so no principal can
+impersonate another: an operator JWT does not open the MCP endpoint or the proxy passthrough, and
+neither key opens the key-management endpoints (or anything else). Both directions are asserted for
+MCP in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
 
 The MCP credential is a single 256-bit `xemcp_`-prefixed secret stored as a **one-way SHA-256 digest**
 in the node database. The plaintext is returned exactly once — in the response to the generate call —
@@ -171,6 +173,43 @@ authenticate, comparison hashes the presented value and runs
 byte-at-a-time oracle over loopback), and a node with no key generated authenticates nobody. Spec revision 2026-07-28 makes authorization **OPTIONAL** for MCP
 implementations, so this node implements no OAuth profile and advertises no Protected Resource
 Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
+
+#### 3.2.1 The inbound model-proxy bearer key
+
+The node exposes an **OpenAI-compatible passthrough** (`proxy/v1/{chat/completions,embeddings,models}`)
+so an external tool — LiteLLM, Continue, a Hermes-style agent — can point its `base_url` at this node
+and use the locally loaded model. The credential is a single operator-generated bearer key, deliberately
+chosen because a static `Authorization: Bearer …` header *is* the OpenAI wire convention and is what
+those clients already speak.
+
+Its handling mirrors the MCP key rather than inventing a second posture
+(`LocalModelProxyApiKeyService`, `LocalModelProxyApiKeyAuthenticationHandler`):
+
+- **One key, 256 bits of CSPRNG output**, Base64Url-encoded behind an `xeprx_` scheme prefix so it
+  survives a shell argument, a JSON config file and an HTTP header untouched.
+- **Stored as a one-way SHA-256 digest**, and that digest is *additionally* AEAD-encrypted at rest under
+  its own AAD column (`local_model_proxy_api_key_hash`) — for **integrity, not confidentiality**: a bare
+  hash column would let anyone who can write the database file substitute a digest whose preimage they
+  chose and take over the proxy surface. A plain digest rather than a password KDF is the same
+  deliberate call made for MCP: 256 bits of entropy has no guess space to slow down.
+- **The plaintext is returned exactly once**, from `POST proxy/key`. `GET proxy/key` returns only the
+  display prefix, timestamps and last-used marker; the response type has no key field at all.
+  Generating replaces the previous key with no window in which both authenticate, and `DELETE` revokes.
+- **A node with no key generated authenticates nobody** — an ungenerated credential fails closed rather
+  than reading as "no authentication required".
+- Comparison hashes the presented value and runs `CryptographicOperations.FixedTimeEquals` over the
+  **digest bytes**, because a short-circuiting compare is a byte-at-a-time oracle over loopback.
+- The three passthrough routes carry their own fixed-window rate-limit policy
+  (`NodeAuthRateLimits.LocalModelProxyPolicy`).
+
+**The bearer key is not the only gate, and that is load-bearing.** The passthrough is hand-mapped
+*inside* the `/api/local/v1` prefix precisely so `LocalApiSecurityMiddleware`'s loopback-peer + Host +
+Origin check has already rejected any non-loopback caller before the handler runs. An external tool
+therefore has to be on this box (or reach it through the operator's own tunnel) — mounting these routes
+outside the prefix would silently remove that layer and leave the key as the only control. `proxy/key`
+itself is an ordinary Operator-gated FastEndpoints family, so key management stays on the browser's
+JWT posture. Requests are forwarded verbatim to the resolved `llama-server` child and never route
+through the operator's cloud credentials. See [API & Hubs](09-api-and-hubs.md).
 
 Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthAndConnectionExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
 

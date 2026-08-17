@@ -1,6 +1,6 @@
 # Local Runtime & Model Providers
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (box-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
 
@@ -201,7 +201,9 @@ byte-progress pushes through `RuntimeAcquisitionEventPublisher` / `RuntimeAcquis
 `GetRuntimeAcquisitionStatusEndpoint` provides the late-join hydrate because acquisition can begin before the browser
 authenticates. React's global `RuntimeAcquisitionBanner` merges hydrate and hub push by `sequence`, refetches after a
 reconnect, shows multi-archive step progress for Windows CUDA, and offers retry only after a sanitized failure. The hub
-is the tenth unconditional local hub in `Client/Program.cs`; route and DTO details are in
+is one of the unconditional local hubs in the `MapHub` block of `Client/Program.cs` (see
+[01-architecture-overview.md](01-architecture-overview.md#the-local-surface-browser--node) for the full list);
+route and DTO details are in
 [API & Hubs](09-api-and-hubs.md), and the UI placement is in [React Client](10-react-client.md).
 
 `InstallTagAsync` (the operator updater path) gates the live asset name against a strict allow-list (no path/URL metacharacters) since it is interpolated into a temp path and download URL, verifies the 64-hex digest, and enforces a disk-space guard. It **refuses outright** while a source build is recorded ("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime") — prebuilt install and source build are mutually exclusive, serialized by the manager's `_sourceMutationGate`. `ILlamaCppUpdateState` / `LlamaCppUpdateState` is the shared "is a newer runtime available?" snapshot, written by the startup check and surfaced by a read-only runtime-status endpoint — decoupled from any app-package update channel.
@@ -293,6 +295,32 @@ Everything runs under a **scrubbed, allowlisted environment** with an isolated `
 
 **Test coverage** lives in `XE-Local-AI-Engine.Tests/Providers/LlamaServer/`: `LlamaCppSourceBuildCoreTests.cs`, `LlamaCppSourceBuildServiceTests.cs`, `LlamaCppSourceBuildTransportTests.cs`, `LlamaCppSourceBuildPrerequisiteTests.cs`, `SourceBuildRecoveryTests.cs`, `ManagedSourceBuildSafetyTests.cs`, `CudaBuildServiceTests.cs`, `CudaManagedRuntimeTests.cs`.
 
+### 2.7 Per-model extra launch arguments (operator override)
+
+Distinct from the machine-wide launch policy above, an operator can persist a raw extra-argument string
+**per model**. `LlamaServerExtraLaunchArgumentsResolver` (`Services/Inference/LlamaServerExtraLaunchArgumentsResolver.cs`)
+implements the provider's `ILlamaServerExtraLaunchArgumentsResolver` seam — the provider ships an empty default
+(`EmptyLlamaServerExtraLaunchArgumentsResolver`) and `AddNodeModelRuntime` registers this one last, so it wins —
+reading the stored string through `IModelLaunchArgumentsStore`
+(entity `ModelLaunchArguments`, migration `AddModelLaunchArguments`, CRUD at
+`{Get,Put,Delete}ModelLaunchArgumentsEndpoint`). The supervisor resolves it in `SpawnCoreAsync` alongside the
+profile args and **before** the admission gate, then appends the tokens **after** the built spec, where llama.cpp's
+last-wins parsing lets a later scalar flag override a bundled tuning default.
+
+Three properties are load-bearing:
+
+- **Two flag families are refused on write and stripped on read** by `LlamaLaunchArgumentParser.ParseSanitized`
+  (`Services/Inference/LlamaLaunchArgumentParser.cs`): *reachability* (`-m`/`--model`, `--host`, `--port`) and the
+  *memory-fit placement* family (`-c`, `-ngl`, `-ts`, `-ot`, `-ctk`/`-ctv`, `-fa`, `--parallel`, `-b`/`-ub` and
+  their long aliases), plus `--lora`/`--lora-scaled`. Placement is decided before admission and recorded in the
+  memory ledger, so a post-hoc override would invalidate the ledger, defeat the KV-quant safe-config retry, and
+  overcommit RAM/VRAM. Everything else llama.cpp accepts (sampling, RoPE, penalties, samplers, grammar, mirostat)
+  stays available — re-exploring is the supported way to change placement.
+- **Profiling and benchmark spawns never see it.** The resolve is gated on `applyLaunchPolicy`, so a measurement
+  spawn stays a pure measurement rather than carrying the operator's experimentation flags.
+- **It can never break a spawn.** A store read failure is logged and degrades to "no extra args"; the resolver is a
+  singleton that opens a fresh scope per call because the store is scoped.
+
 ---
 
 ## 3. Satellite providers
@@ -372,3 +400,4 @@ Every `llama-server` child is same-user, unprivileged, and `127.0.0.1`-bound —
 - [11-hosting-and-deployment.md](11-hosting-and-deployment.md) — Aspire dev orchestration & desktop mode
 - [12-security-and-privacy.md](12-security-and-privacy.md) — local-only secrets, node-local AI ops
 - [14-image-generation.md](14-image-generation.md) — `sd-server`, the node's second supervised runtime
+- [18-training.md](18-training.md) — `Providers.Training`, the uv-provisioned Python fine-tuning runtime the node spawns as a supervised child process (Linux only)

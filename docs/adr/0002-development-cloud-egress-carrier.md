@@ -3,17 +3,18 @@
 - **Status:** Accepted
 - **Date:** 2026-07-21
 - **Scope:** Development Mode cloud-egress carrier and enforcement boundary
-- **Pinned dependency:** `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` 10.7.0
+- **Pinned dependency (current):** `Microsoft.Extensions.AI` 10.8.3 / `Microsoft.Extensions.AI.Abstractions` 10.9.0 (`Directory.Packages.props`)
+- **Pinned dependency (at decision):** `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` 10.7.0 — see "Re-verification 2026-08-17"
 
 ## Context
 
 Development Mode must authorize every raw cloud-provider round, including the function-result follow-up round created inside `FunctionInvokingChatClient`. The authorization cannot depend on ambient execution context alone, and an ordinary Chat request must remain behavior-compatible.
 
-The repository pins Microsoft.Extensions.AI 10.7.0. The official NuGet packages identify the exact upstream source commit as `fa0072f10f11eae347aaecaa3c3e81e701b0f79d`.
+At the time of this decision the repository pinned Microsoft.Extensions.AI 10.7.0, whose official NuGet packages identify the exact upstream source commit as `fa0072f10f11eae347aaecaa3c3e81e701b0f79d`. The pin has since moved; see "Re-verification 2026-08-17".
 
-## Version-aware evidence
+## Version-aware evidence (derived at 10.7.0)
 
-At the pinned commit:
+At the 10.7.0 source commit `fa0072f10f11eae347aaecaa3c3e81e701b0f79d`:
 
 1. [`ChatOptions`' copy constructor](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L19-L54) assigns `AdditionalProperties = other.AdditionalProperties?.Clone()`.
 2. [`ChatOptions.Clone`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L226-L238) documents shallow-cloned collections and returns `new(this)`. Therefore the dictionary instance changes, but each stored value reference is preserved.
@@ -46,3 +47,14 @@ The dedicated-client fallback is not implemented in this change. Until it is, up
 - Tests must pin this version-sensitive behavior so a future Microsoft.Extensions.AI upgrade cannot silently remove the carrier from inner rounds.
 - The unimplemented dedicated-client fallback is an upgrade blocker. A dependency update must either preserve the verified shallow-carrier behavior or land the fail-closed dedicated Development client first.
 - This ADR decides only the cloud carrier and final authorization boundary; persistence, orchestration, UI, and API behavior are governed by their own contracts.
+
+## Re-verification 2026-08-17
+
+The pin moved off 10.7.0 without an ADR update, which is precisely what the upgrade gate above was written to prevent. `Directory.Packages.props` now carries `Microsoft.Extensions.AI` 10.8.3 and `Microsoft.Extensions.AI.Abstractions` 10.9.0. The moves were routine dependency servicing: `0f57645b` and `027ddd95` (2026-07-26 / 2026-07-31, in-repo servicing commits, not dependabot) took `Microsoft.Extensions.AI` 10.7.0 -> 10.8.1 -> 10.8.3, and dependabot's `90165471` (2026-08-14, "Bump the agent-ai-coupled group") took `Microsoft.Extensions.AI.Abstractions` and `.OpenAI` to 10.9.0. This ADR was last edited on 2026-07-22 (`36d8566d`).
+
+What was checked on 2026-08-17, and what was not:
+
+- **Carrier regression tests re-run and green.** `dotnet test XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Debug --no-build -- --treenode-filter "/*/*/DevelopmentCloudEgressAuthorizationTests/*"` -> 19 total, 19 succeeded, 0 failed, 0 skipped. That class still contains `FunctionLoop_NonStreaming_ForcedCloneAuthorizesBothRawRoundsBeforeTransport` and `FunctionLoop_Streaming_ForcedCloneAuthorizesBothRawRoundsBeforeTransport` with the Decision 5 assertions unchanged (distinct `ChatOptions`, distinct `AdditionalProperties` dictionaries, same carrier value reference in both, authorizer before each transport). Under the current pin the forced-clone branch is therefore still taken and the carrier still survives it.
+- **The version-aware evidence above has NOT been re-derived.** Its dotnet/extensions source links are pinned to the 10.7.0 commit and describe that revision only; nobody has read the 10.8.3/10.9.0 sources to confirm the clone semantics are unchanged. Read that section as historical evidence for the original decision, not as a statement about the running package. The passing tests are the current evidence.
+- **The dedicated-client fallback named in Decision 7 is still not implemented.** No dedicated Development chat client type exists in the tree.
+
