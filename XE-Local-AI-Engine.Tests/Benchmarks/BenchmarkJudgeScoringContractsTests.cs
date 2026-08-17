@@ -191,6 +191,11 @@ public sealed class BenchmarkJudgeScoringContractsTests
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "rubric");
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "exactly one JSON object");
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "no markdown");
+
+        // Length neutrality is unconditional: an LLM judge rewarding a longer answer for being longer is the bias this
+        // sentence exists to counter, and it must reach a judging of a COMPLETE answer too, not only a truncated one.
+        AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "Do not reward length or verbosity");
+        AssertEx.Contains(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: false), "Do not reward length or verbosity");
     }
 
     // Neither the payload nor the prompt text is hashed into the policy or the JudgeExecutionKey, so an unconditional

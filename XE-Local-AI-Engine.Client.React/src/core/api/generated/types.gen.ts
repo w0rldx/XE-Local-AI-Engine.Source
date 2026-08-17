@@ -3394,6 +3394,29 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelsReq
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse = {
+	name: string;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = {
+	id?: string;
+	name: string;
+	coreTask: string;
+	contextTokens?: number;
+	maxOutputTokens?: number | null;
+	agent?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse | null;
+	judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = {
+	schemaVersion?: number;
+	exportedAtUtc?: number;
+	project: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse;
+	rankCohort: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse;
+	runs?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
 };
@@ -11901,6 +11924,76 @@ export type ListEligibleBenchmarkModelsResponses = {
 
 export type ListEligibleBenchmarkModelsResponse =
 	ListEligibleBenchmarkModelsResponses[keyof ListEligibleBenchmarkModelsResponses];
+
+export type ExportBenchmarkProjectData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/export";
+};
+
+export type ExportBenchmarkProjectErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ExportBenchmarkProjectError = ExportBenchmarkProjectErrors[keyof ExportBenchmarkProjectErrors];
+
+export type ExportBenchmarkProjectResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse;
+};
+
+export type ExportBenchmarkProjectResponse = ExportBenchmarkProjectResponses[keyof ExportBenchmarkProjectResponses];
+
+export type ExportBenchmarkProjectCsvData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/export.csv";
+};
+
+export type ExportBenchmarkProjectCsvErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ExportBenchmarkProjectCsvError = ExportBenchmarkProjectCsvErrors[keyof ExportBenchmarkProjectCsvErrors];
+
+export type ExportBenchmarkProjectCsvResponses = {
+	/**
+	 * Success
+	 */
+	200: string;
+};
+
+export type ExportBenchmarkProjectCsvResponse = ExportBenchmarkProjectCsvResponses[keyof ExportBenchmarkProjectCsvResponses];
 
 export type ListBenchmarkProjectsData = {
 	body?: never;

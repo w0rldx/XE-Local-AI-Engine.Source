@@ -46,6 +46,19 @@ describe("BenchmarkJudgePanel", () => {
 		expect(screen.queryByTestId("benchmark-judge-truncated-notice")).toBeNull();
 	});
 
+	// An LLM judge rewards a longer answer for being longer, so the length of what it graded belongs next to the number
+	// it may have inflated. Absent length must render nothing rather than a "0 tokens" that reads like a measurement.
+	it("shows the graded answer's token count beside the score, and only when it is known", () => {
+		const verdict = benchmarkJudgeFixture({ state: "succeeded", score: 88, policyRevision: 2, policyCurrent: true });
+
+		renderPanel(verdict, { outputTokens: 4200 });
+		expect(screen.getByTestId("benchmark-judge-output-length").textContent).toContain("4200");
+
+		cleanup();
+		renderPanel(verdict);
+		expect(screen.queryByTestId("benchmark-judge-output-length")).toBeNull();
+	});
+
 	it("shows the 0..100 score, the summary and every criterion with its rationale", () => {
 		renderPanel(
 			benchmarkJudgeFixture({

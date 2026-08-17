@@ -116,6 +116,8 @@ import {
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
+	exportBenchmarkProject,
+	exportBenchmarkProjectCsv,
 	exportTrainingDataset,
 	freezeInferenceProfile,
 	generateLocalModelProxyApiKey,
@@ -582,6 +584,12 @@ import type {
 	ExecuteUnsavedPreviewWorkflowResponse,
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileResponse,
+	ExportBenchmarkProjectCsvData,
+	ExportBenchmarkProjectCsvError,
+	ExportBenchmarkProjectCsvResponse,
+	ExportBenchmarkProjectData,
+	ExportBenchmarkProjectError,
+	ExportBenchmarkProjectResponse,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetResponse,
 	FreezeInferenceProfileData,
@@ -6505,6 +6513,50 @@ export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibl
 			return data;
 		},
 		queryKey: listEligibleBenchmarkModelsQueryKey(options),
+	});
+
+export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>
+	createQueryKey("exportBenchmarkProject", options);
+
+export const exportBenchmarkProjectOptions = (options: Options<ExportBenchmarkProjectData>) =>
+	queryOptions<
+		ExportBenchmarkProjectResponse,
+		AxiosError<ExportBenchmarkProjectError>,
+		ExportBenchmarkProjectResponse,
+		ReturnType<typeof exportBenchmarkProjectQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await exportBenchmarkProject({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: exportBenchmarkProjectQueryKey(options),
+	});
+
+export const exportBenchmarkProjectCsvQueryKey = (options: Options<ExportBenchmarkProjectCsvData>) =>
+	createQueryKey("exportBenchmarkProjectCsv", options);
+
+export const exportBenchmarkProjectCsvOptions = (options: Options<ExportBenchmarkProjectCsvData>) =>
+	queryOptions<
+		ExportBenchmarkProjectCsvResponse,
+		AxiosError<ExportBenchmarkProjectCsvError>,
+		ExportBenchmarkProjectCsvResponse,
+		ReturnType<typeof exportBenchmarkProjectCsvQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await exportBenchmarkProjectCsv({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: exportBenchmarkProjectCsvQueryKey(options),
 	});
 
 export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>

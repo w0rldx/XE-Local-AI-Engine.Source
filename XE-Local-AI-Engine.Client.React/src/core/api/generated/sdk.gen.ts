@@ -320,6 +320,12 @@ import type {
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileErrors,
 	ExploreInferenceProfileResponses,
+	ExportBenchmarkProjectCsvData,
+	ExportBenchmarkProjectCsvErrors,
+	ExportBenchmarkProjectCsvResponses,
+	ExportBenchmarkProjectData,
+	ExportBenchmarkProjectErrors,
+	ExportBenchmarkProjectResponses,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetErrors,
 	ExportTrainingDatasetResponses,
@@ -1164,6 +1170,10 @@ import {
 	zExecuteUnsavedPreviewWorkflowResponse,
 	zExploreInferenceProfileBody,
 	zExploreInferenceProfileResponse,
+	zExportBenchmarkProjectCsvPath,
+	zExportBenchmarkProjectCsvResponse,
+	zExportBenchmarkProjectPath,
+	zExportBenchmarkProjectResponse,
 	zExportTrainingDatasetPath,
 	zExportTrainingDatasetQuery,
 	zExportTrainingDatasetResponse,
@@ -7415,6 +7425,50 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/benchmarks/eligible-models",
+		...options,
+	});
+
+export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
+	options: Options<ExportBenchmarkProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zExportBenchmarkProjectPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zExportBenchmarkProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/export",
+		...options,
+	});
+
+export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
+	options: Options<ExportBenchmarkProjectCsvData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ExportBenchmarkProjectCsvResponses, ExportBenchmarkProjectCsvErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zExportBenchmarkProjectCsvPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "text",
+		responseValidator: async (data) => await zExportBenchmarkProjectCsvResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/export.csv",
 		...options,
 	});
 

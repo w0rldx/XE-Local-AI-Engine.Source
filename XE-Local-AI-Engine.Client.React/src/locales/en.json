@@ -4032,6 +4032,11 @@
 				"save": "Save score",
 				"clear": "Clear override"
 			},
+			"export": {
+				"json": "Export JSON",
+				"csv": "Export CSV",
+				"error": "Could not export this benchmark project."
+			},
 			"judge": {
 				"title": "Automated judge",
 				"score": "Judge score: {{score}} / 100",
@@ -4043,6 +4048,8 @@
 				"runtimeDiffersHint": "Re-judge the project to move the cohort.",
 				"attempt": "attempt #{{sequence}}",
 				"criterionScore": "{{score}} / 10",
+				"outputLength": "· {{tokens}} output tokens",
+				"familyWarning": "Judge model family '{{family}}' matches {{matches}} primary run(s); self-preference bias possible.",
 				"explanations": {
 					"none": "This run has not been judged under the current judge policy.",
 					"queued": "The judge is waiting in the durable queue.",

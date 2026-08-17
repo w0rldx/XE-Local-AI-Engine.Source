@@ -4032,6 +4032,11 @@
 				"save": "Bewertung speichern",
 				"clear": "Vorgabe entfernen"
 			},
+			"export": {
+				"json": "JSON exportieren",
+				"csv": "CSV exportieren",
+				"error": "Dieses Benchmark-Projekt konnte nicht exportiert werden."
+			},
 			"judge": {
 				"title": "Automatische Bewertung",
 				"score": "Bewertung: {{score}} / 100",
@@ -4043,6 +4048,8 @@
 				"runtimeDiffersHint": "Bewerten Sie das Projekt neu, um die Kohorte zu verschieben.",
 				"attempt": "Versuch #{{sequence}}",
 				"criterionScore": "{{score}} / 10",
+				"outputLength": "· {{tokens}} Ausgabetoken",
+				"familyWarning": "Die Modellfamilie '{{family}}' der Bewertung entspricht {{matches}} Primärlauf/-läufen; Selbstbevorzugung ist möglich.",
 				"explanations": {
 					"none": "Dieser Lauf wurde unter der aktuellen Bewertungsrichtlinie noch nicht bewertet.",
 					"queued": "Die Bewertung wartet in der dauerhaften Warteschlange.",

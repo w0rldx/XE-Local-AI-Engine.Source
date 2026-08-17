@@ -34,10 +34,12 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
+import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
+import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
 import type { BenchmarkKvCacheType, BenchmarkProjectDraft, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkErrorCode,
@@ -173,6 +175,19 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const editorDraft = editorMode === "edit" ? editDraft : emptyProject;
 	const judgeAttemptsActive = hasActiveJudgeAttempt(runs);
 	const affectedRunCount = succeededRunCount(runs);
+	// A judge from the same base family as the models it scores may prefer them. Advisory only, and dismissible per
+	// project rather than by a boolean flag, so switching projects surfaces the next project's overlap again.
+	const [familyWarningDismissedFor, setFamilyWarningDismissedFor] = useState<string | null>(null);
+	const judgeFamilyOverlap = useMemo(
+		() =>
+			detail?.judge.enabled === true
+				? benchmarkJudgeFamilyOverlap(
+						detail.judge.modelName,
+						runs.map((run) => run.primaryModelName),
+					)
+				: null,
+		[detail, runs],
+	);
 
 	// A judge change on a frozen project is refused until the operator confirms the re-judge it implies, and while any
 	// judging of the project is still running. Both come back as ProblemDetails 409s with their own code.
@@ -389,6 +404,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										<Text c="dimmed">{detail.coreTask}</Text>
 									</Stack>
 									<Group gap="xs">
+										<BenchmarkExportButtons projectId={detail.id} />
 										{detail.judge.enabled ? (
 											<Button
 												variant="default"
@@ -411,6 +427,22 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t(
 											"pages.benchmarks.project.frozenExplanation",
 											"This project is frozen while runs exist. Delete its terminal runs to edit it again.",
+										)}
+									</Alert>
+								) : null}
+								{judgeFamilyOverlap && familyWarningDismissedFor !== detail.id ? (
+									<Alert
+										color="yellow"
+										icon={<IconAlertTriangle size={16} />}
+										withCloseButton={true}
+										closeButtonLabel={t("common.close", "Close")}
+										onClose={() => setFamilyWarningDismissedFor(detail.id)}
+										data-testid="benchmark-judge-family-warning"
+									>
+										{t(
+											"pages.benchmarks.judge.familyWarning",
+											"Judge model family '{{family}}' matches {{matches}} primary run(s); self-preference bias possible.",
+											{ family: judgeFamilyOverlap.family, matches: judgeFamilyOverlap.matchCount },
 										)}
 									</Alert>
 								) : null}
