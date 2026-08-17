@@ -268,7 +268,7 @@ public sealed partial class InvocationRunner
     ///     emits a single sanitized <see cref="TurnNoticeKind.HistoryTruncated" /> chat notice carrying counts only —
     ///     never content. When the budgeter still reports <c>ExceedsBudget</c> after its two-pass truncation, this is a
     ///     HARD STOP: it throws <see cref="ContextBudgetExceededException" /> (a classified, pre-inference failure —
-    ///     see <see cref="MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
+    ///     see <see cref="InvocationFailureClassifier.MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
     ///     (reference-equal) when nothing was trimmed.
     ///     <para>
     ///         <paramref name="toolBudgetDefinitions" /> is built ONCE per turn by the caller rather than here: the
