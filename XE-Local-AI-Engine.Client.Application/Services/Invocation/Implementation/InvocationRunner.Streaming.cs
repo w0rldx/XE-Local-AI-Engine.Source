@@ -6,7 +6,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -257,10 +256,4 @@ public sealed partial class InvocationRunner
             return value.Value > int.MaxValue ? int.MaxValue : (int)value.Value;
         }
     }
-
-    private sealed record PendingToolCall(
-        Guid InvocationId,
-        DateTimeOffset CreatedAt,
-        TaskCompletionSource<bool> ApprovalCompletion,
-        TaskCompletionSource<ToolCallResultEvent> ResultCompletion);
 }
