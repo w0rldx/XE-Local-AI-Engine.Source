@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
