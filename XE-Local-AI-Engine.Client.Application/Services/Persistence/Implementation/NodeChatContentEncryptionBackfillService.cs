@@ -229,7 +229,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
     // Runs PRAGMA wal_checkpoint(TRUNCATE) and inspects its result row (busy, log, checkpointed). The pragma does NOT
     // reliably throw when it cannot complete: busy != 0 means SQLITE_BUSY (a concurrent reader blocked the truncate) and
     // log > 0 with checkpointed < log means WAL frames were left behind — both are cleanup failures. The node default is
-    // now WAL (AUD4-08 / NodeSqlitePragmas), so this truncate actually reclaims the plaintext-bearing WAL frames; if WAL
+    // now WAL (see NodeSqlitePragmas), so this truncate actually reclaims the plaintext-bearing WAL frames; if WAL
     // could not be enabled and the file is still in a non-WAL journal, the pragma is a no-op returning (0, -1, -1) — also
     // treated as success.
     private static async Task<bool> CheckpointTruncatedFullyAsync(DbConnection connection, CancellationToken cancellationToken)

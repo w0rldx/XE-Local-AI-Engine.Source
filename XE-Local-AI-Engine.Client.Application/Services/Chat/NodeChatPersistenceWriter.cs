@@ -171,7 +171,7 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory,
         }
         catch (Exception exception)
         {
-            // AUD4-08: account raw-path SQLite write contention (SQLITE_BUSY/LOCKED surfacing past busy_timeout). No-op
+            // Account raw-path SQLite write contention (SQLITE_BUSY/LOCKED surfacing past busy_timeout). No-op
             // for any other failure. Reads never contend under WAL, so in practice this observes the write paths only.
             NodeSqliteContention.Record("raw", exception, _logger);
             throw;

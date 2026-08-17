@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>Validation + role-mapping coverage for <see cref="LlamaServerLaunchPolicyOptions" /> (AUD4-02/05/17).</summary>
+/// <summary>Validation + role-mapping coverage for <see cref="LlamaServerLaunchPolicyOptions" />.</summary>
 public sealed class LlamaServerLaunchPolicyOptionsTests
 {
     [Test]

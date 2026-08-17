@@ -12,7 +12,7 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
-// AUD4-13: a permanently-failing getConversation must surface an inline error + Retry — never an infinite spinner.
+// A permanently-failing getConversation must surface an inline error + Retry — never an infinite spinner.
 // This exercises the Chat-page wiring (query error state → messagesLoadFailed → ChatMessageList error surface), the
 // spinner-deadlock fix, retry-refetch recovery, and recovery when switching to a healthy conversation.
 

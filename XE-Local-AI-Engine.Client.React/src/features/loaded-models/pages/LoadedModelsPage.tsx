@@ -76,7 +76,7 @@ export function LoadedModelsPage() {
 	};
 
 	// Ejects a llama.cpp running model (separate runtime / endpoint from the Ollama eject above). A graceful eject
-	// (force=false) waits for any in-flight generation to drain; the outcome (AUD4-20) drives a distinct toast, and a
+	// (force=false) waits for any in-flight generation to drain; the outcome drives a distinct toast, and a
 	// timed-out-still-busy result offers a force eject that interrupts the run.
 	const handleEjectRunning = async (model: RunningModel, force = false): Promise<void> => {
 		if (!force) {

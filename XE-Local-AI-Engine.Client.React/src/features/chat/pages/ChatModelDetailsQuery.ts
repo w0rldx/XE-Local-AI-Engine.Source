@@ -41,7 +41,7 @@ export function shouldFetchLocalModelDetails(
 	return concreteModelInstalled;
 }
 
-// Resolves the context-usage meter's capacity from a model's details (AUD4-02/20): prefer the RUNNING process's
+// Resolves the context-usage meter's capacity from a model's details: prefer the RUNNING process's
 // effective window (the launched `-c`, reported once the model is warm) over the model's advertised train ceiling, then
 // undefined (unknown → the meter shows "—"). Kept pure so the preference is unit-testable without rendering the page.
 export function resolveContextCapacityTokens(

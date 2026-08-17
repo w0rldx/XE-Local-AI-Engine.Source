@@ -19,7 +19,7 @@ public sealed class McpOptions
     public int ConnectTimeoutSeconds { get; init; } = 30;
 
     /// <summary>
-    ///     Per-call timeout (seconds) for a single model-invoked MCP tool call (AUD4-18). Distinct from
+    ///     Per-call timeout (seconds) for a single model-invoked MCP tool call. Distinct from
     ///     <see cref="ConnectTimeoutSeconds" /> (which bounds only the one-shot connect/list-tools handshake): without
     ///     this a slow or wedged server's tool call is bounded only emergently by the 60 s stream watchdog / 300 s
     ///     invocation timeout, stalling the whole turn. On expiry the call returns a typed tool-failure result so the

@@ -59,7 +59,7 @@ public interface ILocalModelProviderResolver
     Task<ILocalModelProvider> ResolveProviderForModelAsync(string modelName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Drops the short-TTL <c>ModelName → ProviderName</c> cache the resolver keeps (AUD4-16). Callers that mutate the
+    ///     Drops the short-TTL <c>ModelName → ProviderName</c> cache the resolver keeps. Callers that mutate the
     ///     persisted per-model→provider map (a GGUF download mapping to <c>llamacpp</c>, the Ollama backfill mapping to
     ///     <c>ollama</c>) invoke this after a successful write so a subsequent lookup observes the new row immediately
     ///     rather than after the TTL. Cheap and idempotent; a no-op when nothing is cached.

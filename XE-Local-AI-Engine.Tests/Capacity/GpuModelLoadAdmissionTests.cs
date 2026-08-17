@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The process-wide GPU-load admission gate (AUD4-06): it serializes acquirers (a second waits for the first to
+///     The process-wide GPU-load admission gate: it serializes acquirers (a second waits for the first to
 ///     release), a cancelled waiter abandons the wait cleanly without stealing the gate, a bounded max-wait surfaces a
 ///     typed timeout rather than hanging, and it records the wait-duration + timeout metrics on the shared XE.Node meter.
 /// </summary>

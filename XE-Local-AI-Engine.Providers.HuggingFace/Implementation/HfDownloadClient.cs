@@ -270,7 +270,7 @@ internal sealed class HfDownloadClient
         {
             await using (source.ConfigureAwait(false))
             {
-                // AUD4-18: bound each body read against a read-idle deadline. ResponseHeadersRead means the HttpClient
+                // Bound each body read against a read-idle deadline. ResponseHeadersRead means the HttpClient
                 // timeout covered only the headers, so without this a CDN that stalls mid-body hangs the copy forever.
                 // ONE linked CTS re-armed per read (CancelAfter reschedules its timer) — cheap on the happy path, where
                 // it never fires; a genuine stall cancels the read, which we translate to a TRANSIENT network failure so

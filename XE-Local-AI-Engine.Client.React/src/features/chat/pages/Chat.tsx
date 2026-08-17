@@ -596,7 +596,7 @@ export function Chat() {
 		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
 		[activeConversation?.messages],
 	);
-	// Prefer the RUNNING process's effective context window (AUD4-02, the launched -c) over the model's advertised
+	// Prefer the RUNNING process's effective context window (the launched -c) over the model's advertised
 	// train ceiling, so the meter shows the real capacity once the model is warm; fall back to the ceiling, then unknown.
 	const effectiveMaxContextTokens = resolveContextCapacityTokens(selectedModelDetails);
 	const contextModelLabel =

@@ -16,7 +16,7 @@ using static NodeChatMetadataSerializer;
 /// </summary>
 internal static class NodeChatPersistenceSql
 {
-    // Opens the node chat connection if needed AND applies the WAL/busy_timeout/synchronous pragmas on the open (AUD4-08).
+    // Opens the node chat connection if needed AND applies the WAL/busy_timeout/synchronous pragmas on the open.
     // This is the single choke point every raw-ADO node-chat read/write routes through, so it is where the raw path gets
     // the same connection posture the EF interceptor applies to EF-initiated opens.
     internal static Task OpenIfNeededAsync(DbConnection? connection, CancellationToken cancellationToken)

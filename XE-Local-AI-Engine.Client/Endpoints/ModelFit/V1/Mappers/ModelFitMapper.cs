@@ -117,7 +117,7 @@ internal static class ModelFitMapper
     }
 
     /// <summary>
-    ///     Projects the PHYSICAL hardware profile plus the runtime device audit (AUD4-03) into the wire DTO. The profile
+    ///     Projects the PHYSICAL hardware profile plus the runtime device audit into the wire DTO. The profile
     ///     fields carry what hardware exists (a GPU may be physically present); the audit fields carry runtime truth —
     ///     whether the selected inference runtime actually uses it or has silently fallen back to the CPU.
     /// </summary>

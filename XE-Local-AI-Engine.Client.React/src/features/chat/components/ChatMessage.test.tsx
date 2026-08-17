@@ -472,7 +472,7 @@ describe("ChatMessage actions", () => {
 		expect(useNodeChatPreferencesStore.getState().showTokensPerSecond).toBe(true);
 	});
 
-	// AUD4-20.1: a user cancellation is a neutral, expected outcome — never the red "Response failed" alert.
+	// A user cancellation is a neutral, expected outcome — never the red "Response failed" alert.
 	it("renders a cancelled turn as a neutral 'Generation stopped' line, not the red error alert", () => {
 		renderWithProviders(
 			<ChatMessage message={assistantMessage({ content: "Partial answer…", status: "cancelled" })} />,

@@ -76,7 +76,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
         builder.Services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
 
-        // AUD4-08: node SQLite concurrency posture. Resolve the connection-time pragma settings once and (a) publish them
+        // Node SQLite concurrency posture. Resolve the connection-time pragma settings once and (a) publish them
         // to the static raw-open helpers (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path cannot take injected
         // options) and (b) register the interceptors that apply the pragmas on EF-initiated opens and account contention.
         var sqlitePragmaSettings = (configuration.GetSection(NodeSqliteOptions.Section).Get<NodeSqliteOptions>() ?? new NodeSqliteOptions()).ToSettings();
@@ -152,7 +152,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
         builder.Services.AddLlamaServerLocalModelProvider();
 
-        // AUD4-06: the process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
+        // The process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
         // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A
         // plain AddSingleton wins over each provider's TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>()
         // floor (last registration wins). The bounded max-wait is a backstop the size-aware readiness timeouts already
