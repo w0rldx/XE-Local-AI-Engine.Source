@@ -114,6 +114,14 @@ public sealed class InvocationState
     /// </summary>
     public long? GenerationDurationMs { get; set; }
 
+    /// <summary>
+    ///     The turn's separated throughput facts — time to first token, and the pp/tg split of tokens and milliseconds.
+    ///     Null for every turn whose provider reported no <c>timings</c> (all cloud providers, the orchestration path,
+    ///     and any turn that ended before a terminal update arrived). Never a ranking input: it describes how fast the
+    ///     answer arrived, not how good it is.
+    /// </summary>
+    public InvocationThroughput? Throughput { get; set; }
+
     public InvocationApprovalState? PendingApproval { get; set; }
 
     /// <summary>
@@ -167,6 +175,7 @@ public sealed class InvocationState
             ReasoningTokens = ReasoningTokens,
             GenerationDurationMs = GenerationDurationMs,
             FinishReason = FinishReason,
+            Throughput = Throughput,
             PendingApproval = PendingApproval,
             PendingQuestion = PendingQuestion,
             LastApprovalResolution = LastApprovalResolution,

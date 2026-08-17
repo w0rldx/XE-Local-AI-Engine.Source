@@ -36,6 +36,51 @@ describe("BenchmarkRunPane", () => {
 		expect(screen.getByText(/1.3s/)).toBeTruthy();
 	});
 
+	// The split behind the headline tok/s. It is display only — the pane must never imply it ranks anything.
+	it("breaks the throughput down into time to first token, prompt and generation", () => {
+		renderPane(run());
+
+		expect(screen.getByTestId("benchmark-throughput-ttft").textContent).toContain("180 ms");
+		expect(screen.getByTestId("benchmark-throughput-pp").textContent).toContain("640.0 tok/s");
+		expect(screen.getByTestId("benchmark-throughput-tg").textContent).toContain("24.0 tok/s");
+		// A cold prefill says nothing extra; only a cache hit needs explaining.
+		expect(screen.queryByTestId("benchmark-throughput-cached")).toBeNull();
+	});
+
+	it("warns when the prompt speed came off the KV cache rather than a cold prefill", () => {
+		renderPane(
+			run({
+				throughput: {
+					ttftMs: 40,
+					promptTokens: 512,
+					promptTokensPerSecond: 9000,
+					generationTokens: 30,
+					generationTokensPerSecond: 24,
+					cachedPromptTokens: 480,
+				},
+			}),
+		);
+
+		expect(screen.getByTestId("benchmark-throughput-cached").textContent).toMatch(/not a cold prefill/i);
+	});
+
+	it("hides the breakdown entirely for a runtime that reported no timings", () => {
+		renderPane(
+			run({
+				throughput: {
+					ttftMs: null,
+					promptTokens: null,
+					promptTokensPerSecond: null,
+					generationTokens: null,
+					generationTokensPerSecond: null,
+					cachedPromptTokens: null,
+				},
+			}),
+		);
+
+		expect(screen.queryByTestId("benchmark-throughput-breakdown")).toBeNull();
+	});
+
 	it("explains an unjudged run rather than leaving the judge panel blank", () => {
 		renderPane(run());
 

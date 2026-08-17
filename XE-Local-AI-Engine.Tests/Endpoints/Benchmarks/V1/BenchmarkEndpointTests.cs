@@ -89,6 +89,53 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetRun_ForAMeasuredRun_ServesTheThroughputSplitWithBothRatesDerived()
+    {
+        // The rates are NOT persisted — they are derived here from the tokens and milliseconds the runtime reported, so
+        // a stored rate can never drift out of step with the counts it was computed from. pp is 123 tokens over
+        // 456.5 ms and tg is 89 over 1011.5 ms; a single blended figure could produce neither.
+        await using var context = CreateContext();
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
+                   throughput: new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
+                       GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7)));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var run = document.RootElement;
+        AssertEx.Equal(180.25, run.GetProperty("ttftMs").GetDouble());
+        AssertEx.Equal(123, run.GetProperty("promptTokens").GetInt32());
+        AssertEx.Equal(89, run.GetProperty("generationTokens").GetInt32());
+        AssertEx.Equal(7, run.GetProperty("cachedPromptTokens").GetInt32());
+        AssertEx.Equal(123 * 1000d / 456.5, run.GetProperty("promptTokensPerSecond").GetDouble());
+        AssertEx.Equal(89 * 1000d / 1011.5, run.GetProperty("generationTokensPerSecond").GetDouble());
+    }
+
+    [Test]
+    public async Task GetRun_ForAnUnmeasuredRun_LeavesEveryThroughputFieldNull()
+    {
+        // A runtime that reports no timings must not be given a zero: the API says "not measured", and the UI shows a
+        // dash rather than a number nobody produced.
+        await using var context = CreateContext();
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(BenchmarkPrimaryStatus.Succeeded));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        foreach (var field in new[] { "ttftMs", "promptTokens", "promptTokensPerSecond", "generationTokens", "generationTokensPerSecond", "cachedPromptTokens" })
+        {
+            AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty(field).ValueKind, $"{field} must be null when nothing measured it.");
+        }
+    }
+
+    [Test]
     public async Task GetRun_ForASucceededJudge_ReturnsTheStoredVerdictOfTheAttempt()
     {
         // Round-tripped through the REAL writer: the stored blob is camelCase, and a reader using default options bound
@@ -441,7 +488,8 @@ public sealed class BenchmarkEndpointTests
         BenchmarkRunLaunchEvidence? evidence = null,
         Guid? judgeAttemptId = null,
         string? primaryStopReason = null,
-        string? rankExclusionReason = null) =>
+        string? rankExclusionReason = null,
+        BenchmarkRunThroughput? throughput = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -469,7 +517,8 @@ public sealed class BenchmarkEndpointTests
             evidence,
             PrimaryStopReason: primaryStopReason,
             Judge: new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false,
-                ExecutionCurrent: false, rankExclusionReason));
+                ExecutionCurrent: false, rankExclusionReason),
+            Throughput: throughput);
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.

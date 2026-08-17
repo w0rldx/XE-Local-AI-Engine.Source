@@ -4016,7 +4016,18 @@
 			"metrics": {
 				"duration": "Duration",
 				"tokens": "Tokens",
-				"speed": "tok/s"
+				"speed": "tok/s",
+				"speedColumn": "tok/s (tg)",
+				"ppAndTtft": "pp {{pp}} · {{ttft}}",
+				"ttft": "Time to first token",
+				"pp": "Prompt processing (pp)",
+				"tg": "Generation (tg)",
+				"tgTooltip": "Decode (tg): {{rate}}{{tokens}}",
+				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
+				"ttftTooltip": "Time to first token: {{value}}",
+				"cachedTooltip": "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.",
+				"cached": "{{tokens}} prompt tokens were reused from the KV cache — the prompt speed is not a cold prefill.",
+				"throughputDiffers": "Throughput differs: {{fields}}"
 			},
 			"connection": {
 				"live": "Live updates connected",

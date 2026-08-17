@@ -222,6 +222,42 @@ describe("toBenchmarkRunSummary", () => {
 		expect(mapped.totalTokens).toBeNull();
 		expect(mapped.tokensPerSecond).toBeNull();
 		expect(mapped.userScore).toBeNull();
+		// Same rule for the pp/tg split: a runtime that timed nothing leaves six nulls, not six zeros.
+		expect(mapped.throughput).toEqual({
+			ttftMs: null,
+			promptTokens: null,
+			promptTokensPerSecond: null,
+			generationTokens: null,
+			generationTokensPerSecond: null,
+			cachedPromptTokens: null,
+		});
+	});
+
+	// The node derives both rates from the counts and durations it measured, so the mapper carries them through rather
+	// than recomputing — a second computation here could disagree with the one the API served.
+	it("carries the throughput split through verbatim", () => {
+		const mapped = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				ttftMs: 180.25,
+				promptTokens: 123,
+				promptTokensPerSecond: 269.4,
+				generationTokens: 89,
+				generationTokensPerSecond: 88,
+				cachedPromptTokens: 7,
+			}),
+		);
+
+		expect(mapped.throughput).toEqual({
+			ttftMs: 180.25,
+			promptTokens: 123,
+			promptTokensPerSecond: 269.4,
+			generationTokens: 89,
+			generationTokensPerSecond: 88,
+			cachedPromptTokens: 7,
+		});
 	});
 
 	it("preserves a measured zero", () => {

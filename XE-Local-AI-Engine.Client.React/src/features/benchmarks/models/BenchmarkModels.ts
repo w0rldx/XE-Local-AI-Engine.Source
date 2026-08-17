@@ -269,6 +269,36 @@ export const noBenchmarkLaunchFacts: BenchmarkLaunchFacts = {
  */
 export type BenchmarkEvidenceObject = Readonly<Record<string, unknown>>;
 
+/**
+ * The separated throughput facts of one run. `tg` is DECODE speed and `pp` is PREFILL speed; the node measures and
+ * reports them apart because the single blended figure they replaced conflated the two, making the same model's runs on
+ * a long and a short prompt incomparable. Every member is null for a runtime that reports no per-request timings (every
+ * cloud provider) and for runs measured before the node recorded them. Display only — never a ranking input.
+ */
+export interface BenchmarkRunThroughput {
+	/** Milliseconds the caller waited for the first token, measured client-side (network and adapter overhead included). */
+	ttftMs: number | null;
+	/** Prompt tokens the runtime evaluated, cached ones included. */
+	promptTokens: number | null;
+	/** Prompt-processing throughput (pp). */
+	promptTokensPerSecond: number | null;
+	/** Tokens the runtime decoded. */
+	generationTokens: number | null;
+	/** Decode throughput (tg). Equal to {@link BenchmarkRunSummary.tokensPerSecond} whenever the split exists. */
+	generationTokensPerSecond: number | null;
+	/** Prompt tokens served from the KV cache. Above zero means the pp numbers describe a partially cached prefill. */
+	cachedPromptTokens: number | null;
+}
+
+export const noBenchmarkRunThroughput: BenchmarkRunThroughput = {
+	ttftMs: null,
+	promptTokens: null,
+	promptTokensPerSecond: null,
+	generationTokens: null,
+	generationTokensPerSecond: null,
+	cachedPromptTokens: null,
+};
+
 export interface BenchmarkRunSummary {
 	id: string;
 	projectId: string;
@@ -296,7 +326,9 @@ export interface BenchmarkRunSummary {
 	effectiveContextTokens: number | null;
 	durationMs: number | null;
 	totalTokens: number | null;
+	/** Decode throughput (tg) when the runtime timed prefill and decode apart, otherwise the blended fallback. */
 	tokensPerSecond: number | null;
+	throughput: BenchmarkRunThroughput;
 	userScore: number | null;
 	lastStreamSequence: number;
 	version: number;
@@ -345,6 +377,12 @@ export const benchmarkRunEventSchema = z.object({
 		totalTokens: z.number().int().nullish(),
 		tokensPerSecond: z.number().nullish(),
 		runVersion: z.number().int().nullish(),
+		ttftMs: z.number().nullish(),
+		promptTokens: z.number().int().nullish(),
+		promptTokensPerSecond: z.number().nullish(),
+		generationTokens: z.number().int().nullish(),
+		generationTokensPerSecond: z.number().nullish(),
+		cachedPromptTokens: z.number().int().nullish(),
 	}),
 });
 export type BenchmarkRunEvent = z.infer<typeof benchmarkRunEventSchema>;
@@ -367,6 +405,8 @@ export interface BenchmarkRunLiveOverlay {
 	durationMs: number | null;
 	totalTokens: number | null;
 	tokensPerSecond: number | null;
+	/** Null until a `Metrics` event has arrived; the durable snapshot's own breakdown stays authoritative until then. */
+	throughput: BenchmarkRunThroughput | null;
 }
 
 export const noBenchmarkRunLiveOverlay: BenchmarkRunLiveOverlay = {
@@ -375,6 +415,7 @@ export const noBenchmarkRunLiveOverlay: BenchmarkRunLiveOverlay = {
 	durationMs: null,
 	totalTokens: null,
 	tokensPerSecond: null,
+	throughput: null,
 };
 
 /** Applies the streamed corrections on top of the durable snapshot. Absent members leave the snapshot untouched. */
@@ -386,6 +427,7 @@ export function applyBenchmarkLiveOverlay<T extends BenchmarkRunSummary>(run: T,
 		durationMs: overlay.durationMs ?? run.durationMs,
 		totalTokens: overlay.totalTokens ?? run.totalTokens,
 		tokensPerSecond: overlay.tokensPerSecond ?? run.tokensPerSecond,
+		throughput: overlay.throughput ?? run.throughput,
 	};
 }
 
@@ -400,6 +442,14 @@ export function benchmarkLiveOverlayPatch(event: BenchmarkRunEvent): Partial<Ben
 			durationMs: event.payload.durationMs ?? null,
 			totalTokens: event.payload.totalTokens ?? null,
 			tokensPerSecond: event.payload.tokensPerSecond ?? null,
+			throughput: {
+				ttftMs: event.payload.ttftMs ?? null,
+				promptTokens: event.payload.promptTokens ?? null,
+				promptTokensPerSecond: event.payload.promptTokensPerSecond ?? null,
+				generationTokens: event.payload.generationTokens ?? null,
+				generationTokensPerSecond: event.payload.generationTokensPerSecond ?? null,
+				cachedPromptTokens: event.payload.cachedPromptTokens ?? null,
+			},
 		};
 	}
 	return null;

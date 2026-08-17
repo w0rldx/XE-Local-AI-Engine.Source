@@ -43,7 +43,13 @@ public sealed record BenchmarkRunStreamPayload(
     long? DurationMs = null,
     int? TotalTokens = null,
     double? TokensPerSecond = null,
-    long? RunVersion = null);
+    long? RunVersion = null,
+    double? TtftMs = null,
+    int? PromptTokens = null,
+    double? PromptTokensPerSecond = null,
+    int? GenerationTokens = null,
+    double? GenerationTokensPerSecond = null,
+    int? CachedPromptTokens = null);
 
 public sealed record BenchmarkRunStreamEvent(
     Guid RunId,

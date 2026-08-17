@@ -23,7 +23,26 @@ internal sealed record class BenchmarkRun
     public int? EffectiveContextTokens { get; set; }
     public long? DurationMs { get; set; }
     public int? TotalTokens { get; set; }
+    /// <summary>
+    ///     Decode throughput (tg) when the runtime reported <see cref="GenerationTokens" />/<see cref="GenerationMs" />,
+    ///     otherwise the legacy blended <c>total_tokens / duration_ms</c>. Kept under its original name and column so
+    ///     every existing reader is unaffected.
+    /// </summary>
     public double? TokensPerSecond { get; set; }
+
+    /// <summary>
+    ///     The separated throughput measurement: time to first token (client-side wall clock), and the prompt-processing
+    ///     (pp) versus generation (tg) split of tokens and milliseconds as the runtime itself timed them. All null for
+    ///     runs frozen before these columns existed and for any runtime that reports no per-request timings — never
+    ///     inferred from the blended numbers. Display only: throughput is not a ranking input.
+    /// </summary>
+    public double? TtftMs { get; set; }
+
+    public int? PromptTokens { get; set; }
+    public double? PromptMs { get; set; }
+    public int? GenerationTokens { get; set; }
+    public double? GenerationMs { get; set; }
+    public int? CachedPromptTokens { get; set; }
 
     /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column

@@ -4016,7 +4016,18 @@
 			"metrics": {
 				"duration": "Dauer",
 				"tokens": "Tokens",
-				"speed": "Tok/s"
+				"speed": "Tok/s",
+				"speedColumn": "Tok/s (tg)",
+				"ppAndTtft": "pp {{pp}} · {{ttft}}",
+				"ttft": "Zeit bis zum ersten Token",
+				"pp": "Prompt-Verarbeitung (pp)",
+				"tg": "Generierung (tg)",
+				"tgTooltip": "Dekodierung (tg): {{rate}}{{tokens}}",
+				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
+				"ttftTooltip": "Zeit bis zum ersten Token: {{value}}",
+				"cachedTooltip": "{{tokens}} Prompt-Tokens kamen aus dem KV-Cache, die Prompt-Geschwindigkeit ist daher kein kalter Prefill.",
+				"cached": "{{tokens}} Prompt-Tokens wurden aus dem KV-Cache wiederverwendet — die Prompt-Geschwindigkeit ist kein kalter Prefill.",
+				"throughputDiffers": "Durchsatz unterscheidet sich: {{fields}}"
 			},
 			"connection": {
 				"live": "Live-Aktualisierungen verbunden",

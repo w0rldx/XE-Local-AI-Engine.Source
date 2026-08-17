@@ -100,7 +100,18 @@ public interface IWorkerEventDispatcher
     ///     Recorded on the terminal state as <see cref="Events.InvocationState.FinishReason" />; it never changes the
     ///     status, so a turn cut off at the token budget still completes.
     /// </param>
-    Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null, string? finishReason = null);
+/// <param name="throughput">
+    ///     The turn's separated throughput facts (TTFT, pp/tg tokens and milliseconds), or null when the provider
+    ///     reported none. Recorded on the terminal state as <see cref="Events.InvocationState.Throughput" />.
+    /// </param>
+    Task ReportInvocationCompletedAsync(Guid invocationId,
+        int? inputTokens = null,
+        int? outputTokens = null,
+        int? totalTokens = null,
+        int? reasoningTokens = null,
+        long? generationDurationMs = null,
+        string? finishReason = null,
+        InvocationThroughput? throughput = null);
 
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);
 

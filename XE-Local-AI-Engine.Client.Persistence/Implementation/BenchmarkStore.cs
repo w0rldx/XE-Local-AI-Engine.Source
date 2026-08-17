@@ -393,6 +393,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.TotalTokens = null;
             run.TokensPerSecond = null;
             run.PrimaryStopReason = null;
+            ApplyThroughput(run, throughput: null);
             run.PrimaryCompletedAtUtc = cancelledAt;
             run.Version++;
             run.UpdatedAtUtc = cancelledAt;
@@ -412,6 +413,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.TotalTokens = command.TotalTokens;
         run.TokensPerSecond = command.TokensPerSecond;
         run.PrimaryStopReason = command.PrimaryStopReason;
+        ApplyThroughput(run, command.Throughput);
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
@@ -1818,6 +1820,29 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens);
 
+    // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
+    // about which of them a run carries.
+    private static void ApplyThroughput(BenchmarkRun run, BenchmarkRunThroughput? throughput)
+    {
+        run.TtftMs = throughput?.TtftMs;
+        run.PromptTokens = throughput?.PromptTokens;
+        run.PromptMs = throughput?.PromptMs;
+        run.GenerationTokens = throughput?.GenerationTokens;
+        run.GenerationMs = throughput?.GenerationMs;
+        run.CachedPromptTokens = throughput?.CachedPromptTokens;
+    }
+
+    private static BenchmarkRunThroughput? ToThroughput(BenchmarkRun entity) =>
+        entity.TtftMs is null
+        && entity.PromptTokens is null
+        && entity.PromptMs is null
+        && entity.GenerationTokens is null
+        && entity.GenerationMs is null
+        && entity.CachedPromptTokens is null
+            ? null
+            : new BenchmarkRunThroughput(entity.TtftMs, entity.PromptTokens, entity.PromptMs, entity.GenerationTokens,
+                entity.GenerationMs, entity.CachedPromptTokens);
+
     private static BenchmarkRunRecord ToRecord(BenchmarkRun entity) =>
         new(entity.Id, entity.ProjectId, entity.RuntimeSnapshotJson.ToArray(), entity.PrimaryModelName, entity.PrimaryModelOrigin,
             entity.ModelContentFingerprint, entity.AgentName, entity.AgentVersion, entity.RequestedContextTokens, entity.PrimaryStatus,
@@ -1830,7 +1855,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
                 entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
                 entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource),
-            entity.PrimaryStopReason);
+            entity.PrimaryStopReason,
+            Throughput: ToThroughput(entity));
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed partial class InvocationRunner
 {
@@ -60,6 +61,52 @@ public sealed partial class InvocationRunner
         public int TotalResponseBytes { get; set; }
 
         public int TotalReasoningBytes { get; set; }
+
+        // llama-server's own pp/tg timings, accumulated across the turn's segments. A tool-calling turn is several
+        // provider requests, each carrying its own `timings` object, so the token counts and durations SUM: the turn
+        // spent that much total time prefilling and that much decoding. TTFT is deliberately NOT summed —
+        // FirstOutputLatencyMs above is already one-shot on the first emitted chunk, which belongs to the first segment,
+        // which is when the caller first saw output. Every field stays null for a provider that reports no timings.
+        public int? PromptTokens { get; private set; }
+
+        public double? PromptMs { get; private set; }
+
+        public int? GenerationTokens { get; private set; }
+
+        public double? GenerationMs { get; private set; }
+
+        public int? CachedPromptTokens { get; private set; }
+
+        /// <summary>Folds one segment's timings into the turn totals. A null segment (no timings reported) is a no-op.</summary>
+        public void AddSegmentTimings(LlamaServerGenerationTimings? timings)
+        {
+            if (timings is null)
+            {
+                return;
+            }
+
+            PromptTokens = Add(PromptTokens, timings.PromptTokens);
+            PromptMs = Add(PromptMs, timings.PromptMs);
+            GenerationTokens = Add(GenerationTokens, timings.GenerationTokens);
+            GenerationMs = Add(GenerationMs, timings.GenerationMs);
+            CachedPromptTokens = Add(CachedPromptTokens, timings.CachedPromptTokens);
+        }
+
+        /// <summary>The terminal throughput snapshot, or null when the turn produced no measurement at all.</summary>
+        public InvocationThroughput? ToThroughput()
+        {
+            var throughput = new InvocationThroughput(FirstOutputLatencyMs,
+                PromptTokens,
+                PromptMs,
+                GenerationTokens,
+                GenerationMs,
+                CachedPromptTokens);
+            return throughput.IsEmpty ? null : throughput;
+        }
+
+        private static int? Add(int? total, int? value) => value is null ? total : (total ?? 0) + value.Value;
+
+        private static double? Add(double? total, double? value) => value is null ? total : (total ?? 0) + value.Value;
     }
 
     // The single emit path both branches use: it appends to the accumulator, enforces the response/reasoning byte

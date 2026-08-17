@@ -57,6 +57,45 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task MarkPrimarySucceeded_RoundTripsTheThroughputSplitAndClearsItOnCancellation()
+    {
+        // Two halves of one invariant. Written: the six columns survive a read back, so the pp/tg split the runtime
+        // measured is what the API later serves. Cleared: a run that cancels mid-flight must not keep a throughput
+        // reading from a generation that never completed — the same reset the blended columns already get.
+        var databasePath = GetDatabasePath("throughput.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        var throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
+            GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7);
+
+        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88, Throughput: throughput));
+
+        var persisted = AssertEx.NotNull(succeeded.Throughput);
+        AssertEx.Equal<double?>(180.25, persisted.TtftMs);
+        AssertEx.Equal<int?>(123, persisted.PromptTokens);
+        AssertEx.Equal<double?>(456.5, persisted.PromptMs);
+        AssertEx.Equal<int?>(89, persisted.GenerationTokens);
+        AssertEx.Equal<double?>(1011.5, persisted.GenerationMs);
+        AssertEx.Equal<int?>(7, persisted.CachedPromptTokens);
+        AssertEx.Equal<double?>(89 * 1000d / 1011.5, persisted.GenerationTokensPerSecond);
+        AssertEx.Equal<double?>(123 * 1000d / 456.5, persisted.PromptTokensPerSecond);
+
+        // A run that never reported timings carries no split at all, rather than a row of zeros.
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var second = await store.StartRunAsync(CreateRun(project));
+        var secondClaim = AssertEx.NotNull(await store.ClaimNextAsync());
+        var untimed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(second.Id, secondClaim.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        AssertEx.Null(untimed.Throughput, "An unmeasured run must stay unmeasured, never be given an invented split.");
+    }
+
+    [Test]
     public async Task ClaimNext_ConcurrentConsumers_ClaimsLowestSequenceOnce()
     {
         var databasePath = GetDatabasePath("fifo.sqlite");

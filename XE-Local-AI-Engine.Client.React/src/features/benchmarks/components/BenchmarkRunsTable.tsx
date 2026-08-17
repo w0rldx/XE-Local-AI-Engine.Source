@@ -10,6 +10,7 @@ import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge, BenchmarkTruncatedBadge
 import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { isBenchmarkRunTruncated, isRunTerminal } from "@/features/benchmarks/models/BenchmarkModels";
 import { groupBenchmarkRunsByModel, rankExclusionAction, sortBenchmarkRuns } from "@/features/benchmarks/models/BenchmarkRanking";
+import { formatLatencyMs, formatTokensPerSecond } from "@/features/benchmarks/models/BenchmarkThroughput";
 
 interface BenchmarkRunsTableProps {
 	runs: readonly BenchmarkRunSummary[];
@@ -23,6 +24,45 @@ interface BenchmarkRunsTableProps {
 
 const formatDuration = (durationMs: number | null): string => (durationMs === null ? "—" : `${(durationMs / 1000).toFixed(1)}s`);
 const formatTimestamp = (epochMs: number): string => (epochMs > 0 ? new Date(epochMs).toLocaleString() : "—");
+
+// tg (decode) leads because it is the number an operator compares models by; pp and TTFT ride under it because a fast
+// decode over a slow prefill is a different machine from a fast one, and the blended figure this replaced hid that.
+// Exact values live in the tooltip so the column stays narrow without rounding away the measurement.
+function ThroughputCell({ run }: { run: BenchmarkRunSummary }) {
+	const { t } = useTranslation();
+	const { ttftMs, promptTokens, promptTokensPerSecond, generationTokens, cachedPromptTokens } = run.throughput;
+	const tooltip = [
+		t("pages.benchmarks.metrics.tgTooltip", "Decode (tg): {{rate}}{{tokens}}", {
+			rate: formatTokensPerSecond(run.tokensPerSecond),
+			tokens: generationTokens === null ? "" : ` over ${generationTokens} tokens`,
+		}),
+		t("pages.benchmarks.metrics.ppTooltip", "Prompt (pp): {{rate}}{{tokens}}", {
+			rate: formatTokensPerSecond(promptTokensPerSecond),
+			tokens: promptTokens === null ? "" : ` over ${promptTokens} tokens`,
+		}),
+		t("pages.benchmarks.metrics.ttftTooltip", "Time to first token: {{value}}", { value: formatLatencyMs(ttftMs) }),
+		cachedPromptTokens !== null && cachedPromptTokens > 0
+			? t("pages.benchmarks.metrics.cachedTooltip", "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.", {
+					tokens: cachedPromptTokens,
+				})
+			: null,
+	]
+		.filter((line): line is string => line !== null)
+		.join("\n");
+	return (
+		<Tooltip label={tooltip} multiline={true} w={300} data-testid={`benchmark-throughput-tooltip-${run.id}`}>
+			<Stack gap={0} data-testid={`benchmark-throughput-${run.id}`}>
+				<Text size="sm">{run.tokensPerSecond?.toFixed(1) ?? "—"}</Text>
+				<Text size="xs" c="dimmed">
+					{t("pages.benchmarks.metrics.ppAndTtft", "pp {{pp}} · {{ttft}}", {
+						pp: promptTokensPerSecond === null ? "—" : promptTokensPerSecond.toFixed(0),
+						ttft: formatLatencyMs(ttftMs),
+					})}
+				</Text>
+			</Stack>
+		</Tooltip>
+	);
+}
 
 function QualityScoreCell({ run }: { run: BenchmarkRunSummary }) {
 	const { t } = useTranslation();
@@ -137,7 +177,7 @@ function RunRow({
 				<Text size="sm">{run.userScore ?? "—"}</Text>
 			</Table.Td>
 			<Table.Td>
-				<Text size="sm">{run.tokensPerSecond?.toFixed(1) ?? "—"}</Text>
+				<ThroughputCell run={run} />
 			</Table.Td>
 			<Table.Td>
 				<Text size="sm">{formatDuration(run.durationMs)}</Text>
@@ -261,7 +301,7 @@ export function BenchmarkRunsTable({
 							<Table.Th>{t("pages.benchmarks.rank.quality", "Quality")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.judgeScore", "Judge")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.userScore", "Operator")}</Table.Th>
-							<Table.Th>{t("pages.benchmarks.metrics.speed", "tok/s")}</Table.Th>
+							<Table.Th>{t("pages.benchmarks.metrics.speedColumn", "tok/s (tg)")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.metrics.duration", "Duration")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.launch", "KV / context")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.created", "Created")}</Table.Th>

@@ -261,6 +261,13 @@ public interface IBenchmarkFreezeCommitGuard
     Task<bool> IsCurrentAsync(CancellationToken cancellationToken);
 }
 
+/// <param name="TokensPerSecond">
+///     Decode throughput (tg) when <paramref name="Throughput" /> carries the split, otherwise the blended
+///     <c>TotalTokens / DurationMs</c>. Same column, same name, same meaning for every existing reader.
+/// </param>
+/// <param name="Throughput">
+///     The separated throughput measurement, or <see langword="null" /> when the runtime reported none.
+/// </param>
 public sealed record BenchmarkPrimarySuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
@@ -271,7 +278,34 @@ public sealed record BenchmarkPrimarySuccessCommand(
     int? TotalTokens,
     double? TokensPerSecond,
     string? PrimaryStopReason = null,
-    BenchmarkJudgeAttemptSeed? JudgeAttempt = null);
+    BenchmarkJudgeAttemptSeed? JudgeAttempt = null,
+    BenchmarkRunThroughput? Throughput = null);
+
+/// <summary>
+///     One run's separated throughput facts: how long the caller waited for the first token, and how the turn's tokens
+///     and milliseconds split between prompt processing (pp) and generation (tg). Persisted as plaintext numerics
+///     alongside the blended figures the columns already carried, never instead of them.
+///     <para>
+///         Display only, by operator decision: no member of this record is a ranking input. <see cref="CachedPromptTokens" />
+///         above zero means <see cref="PromptMs" /> measured a partially cached prefill rather than a cold one.
+///     </para>
+/// </summary>
+public sealed record BenchmarkRunThroughput(
+    double? TtftMs = null,
+    int? PromptTokens = null,
+    double? PromptMs = null,
+    int? GenerationTokens = null,
+    double? GenerationMs = null,
+    int? CachedPromptTokens = null)
+{
+    /// <summary>Prompt-processing throughput (pp) in tokens per second, or null when either input is absent.</summary>
+    public double? PromptTokensPerSecond =>
+        PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
+
+    /// <summary>Decode throughput (tg) in tokens per second, or null when either input is absent.</summary>
+    public double? GenerationTokensPerSecond =>
+        GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
+}
 
 /// <summary>
 ///     What the run executor resolved for the automatic first judging, carried into the same transaction that commits
@@ -398,7 +432,8 @@ public sealed record BenchmarkRunRecord(
     BenchmarkRunJudgeView? Judge = null,
     int? QualityScore = null,
     string? QualityScoreSource = null,
-    int? Rank = null);
+    int? Rank = null,
+    BenchmarkRunThroughput? Throughput = null);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
