@@ -159,12 +159,15 @@ Everything below runs **on your own machine** unless you deliberately connect an
 <details open>
 <summary><b>The basics</b> — what most people will use</summary>
 
-- **Chat** with AI models running locally, with streaming answers
+- **Chat** with AI models running locally, with streaming answers — including sending an image to a
+  model that can see
 - **Find and download models** from Hugging Face without leaving the app
+- **Import a GGUF you already have** — one file at a time, copied into the app's own models folder
 - **Hardware-fit advice** — the app measures your RAM, VRAM and GPU, then recommends models that
   genuinely fit, including which quality/size trade-off ("quantization") to pick. *(VRAM can't be read
   on AMD/Intel under Windows yet, so advice there is less precise.)*
-- **Documents & knowledge bases** — add your own files and ask questions about them
+- **Documents & knowledge bases** — add your own files, or index a Git repository, and ask questions
+  about them
 
 </details>
 
@@ -180,6 +183,10 @@ Everything below runs **on your own machine** unless you deliberately connect an
 - **MCP servers** — connect external tool servers to your agents
 - **Custom tools** — author an HTTP request or direct host-program launch for an agent. The node feature starts off and the built-in form initializes new tools as disabled. Every tool stays approval-wrapped: fixed tools may reuse an explicit session approval until edited, while parameterized tools ask on every call
 - **Skills** — a local library of capabilities agents can load on demand
+- **Benchmarks** — freeze one task of your own and run it against several models, with launch evidence,
+  your own score, and an optional second model acting as judge
+- **Local model proxy** — expose your local models over an OpenAI-compatible API so other programs on
+  this machine can use them. Off until you generate a key, and loopback-only
 
 </details>
 
@@ -192,6 +199,9 @@ Everything below runs **on your own machine** unless you deliberately connect an
   **Read the [security boundary](docs/privacy-and-data.md#development-mode-and-its-limits) before you
   register one. Never point it at code you do not trust.**
 - **Image generation** — generate images locally. Grouped as a preview feature in the app.
+- **Fine-tuning (Training)** — build a training set with a local model, fine-tune a model on it, then
+  score the result against the original on held-back samples. **Linux with an NVIDIA graphics card
+  only**, and a run takes the whole GPU while it works.
 - **Canvas** — a visual workspace for wiring up multi-step workflows
 - **Read answers aloud** — text-to-speech through voices exposed by your browser and operating system.
   Availability, quality, and whether a system voice uses the network depend on that platform's speech

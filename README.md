@@ -44,6 +44,11 @@ running them. Signing is planned.
   the process provider exactly as described above. On a node that *does* select it, **a running Docker daemon is a hard requirement** — there is deliberately no unisolated fallback, so a machine without one gets no
   Development Mode rather than a quietly weaker one. Docker stays scoped to this feature: chat, embeddings, model acquisition and image generation never require it. See
   [Development Mode container implementation status](docs/roadmaps/development-mode-container-status.md) for the maintained record of what is implemented.
+- **Training** — node-local fine-tuning of a downloaded Hugging Face base checkpoint: dataset definition and generation, training runs, GGUF export with a smoke gate before promotion into the local model
+  store, evaluation, and run-to-run comparison. Training semantics live in a `uv`-managed Python runtime provisioned from a repo-committed lockfile rather than the host interpreter, and a single node-wide
+  admission gate (`IGpuWorkGate`) makes a run, an evaluation or an export an **exclusive** GPU tenant, so chat, embeddings, benchmarks, dataset generation and image jobs cannot overlap it. The nav group ships
+  **on by default** (`XE-Local-AI-Engine.Providers.Training`, `Services/Training`, `Endpoints/Training`, `tools/training`, `src/features/training`). See
+  [ADR 0005](docs/adr/0005-training-runtime-python-exclusivity-and-project-placement.md).
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
 - **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
 
@@ -67,8 +72,11 @@ security/privacy, and testing. Start at [`docs/wiki/Home.md`](docs/wiki/Home.md)
 For a baseline-scoped external review, use the
 **[Technical/Security Architecture Dossier](docs/audits/technical-security-architecture/README.md)**.
 It describes the implementation at commit `7e64ed589e14eecc0e522e807d2e531a1095d19a` as reviewed on
-2026-07-28. It is not a certification, compliance mapping, penetration-test report, or operating-
-effectiveness assurance package; each chapter labels evidence availability and known gaps.
+2026-07-28. (That hash belongs to the pre-consolidation history and does not resolve in this repository, which is now
+the single home for source and releases — see `docs/agent-knowledge.md`, "Consolidated to one repo." Read the dossier
+as a dated snapshot, not as something you can `git checkout`.) It is not a certification, compliance mapping,
+penetration-test report, or operating-effectiveness assurance package; each chapter labels evidence availability and
+known gaps.
 
 Supporting notes:
 
@@ -105,8 +113,9 @@ scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
   dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
 
-The lock prevents cooperating builds from rewriting test assemblies mid-run; the assembly guard
-detects an unwrapped concurrent build. Exit `69` means the lock was not acquired and nothing ran.
+That backend command is restated from [`AGENTS.md`](AGENTS.md#validation), which is authoritative for it and explains
+why CI's per-project test loop differs. The lock prevents cooperating builds from rewriting test assemblies mid-run;
+the assembly guard detects an unwrapped concurrent build. Exit `69` means the lock was not acquired and nothing ran.
 Exit `75` means the result was **CONTAMINATED and void**—rerun it rather than treating it as red or
 green.
 

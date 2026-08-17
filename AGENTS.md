@@ -44,11 +44,13 @@ Backend:
 
 - `dotnet restore XE-Local-AI-Engine.slnx`
 - `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
-- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 2 --maximum-parallel-tests 8`
+- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
 
 **The `--configuration Release` in those commands is load-bearing — always finish with it.** Local Debug builds skip analyzer execution (`Directory.Build.targets`; 84s → 10s on the Tests module), so SonarAnalyzer, Meziantou, BannedApiAnalyzers and the `IDExxxx` code-style rules — including the "no bare `TODO`" rule — only fire in Release. Iterate in Debug, but a change is not verified until a Release build passes, or the packaging script will reject what compiled fine for you. `XE_FULL_ANALYSIS=1` forces the full pass in Debug.
 
-Backend tests are TUnit on Microsoft.Testing.Platform. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: on TUnit 1.58, `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers 15 tests — the exact union of the two classes' 9 and 6.
+This solution-wide command is the canonical local backend gate; `README.md`, `CONTRIBUTING.md`, `XE-Local-AI-Engine.Client/README.md` and `XE-Local-AI-Engine.Client.React/AGENTS.md` all restate it and defer here. **CI runs something different on purpose:** `build-and-test` loops one `dotnet test` per test project auto-enrolled from `XE-Local-AI-Engine.slnx` (E2E excluded), with `--maximum-parallel-tests 8` and no `--max-parallel-test-modules`, because MTP resolves `--coverage-output` relative to `--results-directory` and parallel modules sharing one directory would overwrite each other's Cobertura report. `scripts/run-tests-memory-safe.sh` is the lower-memory local runner for the `XE-Local-AI-Engine.Tests` module specifically — it does not cover the other test projects, so run them too.
+
+Backend tests are TUnit on Microsoft.Testing.Platform — the pinned version is in `Directory.Packages.props`. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers exactly the union of the two classes' tests. `--list-tests` honors the filter and is authoritative for the current count; don't trust a count written down here.
 
 Never run a build and a test run concurrently — `dotnet test --no-build` reads `bin/`, and a build in another process rewrites those assemblies mid-run and produces phantom failures (or a phantom green). Two guards exist, and both are already wired into `scripts/run-tests-memory-safe.sh` and `scripts/run-e2e-local.sh`:
 

@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
@@ -45,7 +45,7 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 | Cloud chat provider (ChatGPT OAuth) | `XE-Local-AI-Engine.Providers.CodexOAuth` | `CodexOAuthChatClientFactory.cs` |
 | Hardware probing | `XE-Local-AI-Engine.Providers.Capabilities` | `HardwareProfiler.cs` |
 | SQLite persistence with selected per-column AEAD encryption | `XE-Local-AI-Engine.Client.Persistence` | `Client/Program.cs` migration runners; `NodeEncryptionSaveChangesInterceptor.cs` |
-| React management UI (27 feature directories) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
+| React management UI (one directory per feature) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
 | Dev orchestration only | `XE-Local-AI-Engine.AppHost` | `AppHost/AppHost.cs` |
 | Packaged Windows bootstrap | `XE-Local-AI-Engine.WindowsLauncher` | `WindowsLauncherApplication.RunAsync`; hands off to the `Client` host after Velopack lifecycle handling |
 
@@ -84,12 +84,13 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 - REST endpoints (FastEndpoints) under the prefix `LocalApiRoutes.Prefix` (`/api/local/v1`), with a
   global operationId name generator feeding the OpenAPI doc that generates the hey-api React SDK
   (`Program.cs`, `config.Endpoints.NameGenerator`).
-- **Eleven possible** local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`
-  (the `MapHub` block in `Client/Program.cs`): ten are unconditional (`LocalChatHub`, `SchedulerHub`,
-  `PreviewWorkflowHub`, `GgufDownloadHub`, `CudaBuildHub`, `LlamaCppSourceBuildHub`,
-  `RuntimeAcquisitionHub`, `KnowledgeBaseHub`, `ImageJobHub`, and
-  `StableDiffusionCppSourceBuildHub`); `DevelopmentAttemptHub` is the eleventh and is mapped only when
-  `Development:Enabled` (default `true`).
+- Local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. **The `MapHub`
+  block in `Client/Program.cs` is the inventory** — count it there rather than trusting a number here.
+  In registration order it maps `LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`, `BenchmarkRunHub`,
+  `DatasetGenerationHub`, `TrainingRuntimeHub`, `TrainingRunHub`, `GgufDownloadHub`, `CudaBuildHub`,
+  `LlamaCppSourceBuildHub`, `RuntimeAcquisitionHub`, `KnowledgeBaseHub`, `ImageJobHub` and
+  `StableDiffusionCppSourceBuildHub` unconditionally, then `DevelopmentAttemptHub` only when
+  `Development:Enabled` (default `true`) — so every hub but the Development one is always present.
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture
   (`ConfigureServices.cs`, `Program.cs`).
@@ -196,8 +197,15 @@ does not re-read the repository import file as its command source
 
 Inside the single host the code is layered so dependencies flow **one way** (host → application →
 agent/providers → persistence). The host only wires web-framework concerns; all node logic is registered
-through `AddNodeApplication`, which composes 26 `AddNode*` feature modules
-(`NodeApplicationServiceCollectionExtensions.cs`).
+through `AddNodeApplication`, which composes the `AddNode*` feature modules in one ordered list —
+`NodeApplicationServiceCollectionExtensions.AddNodeApplication` is the inventory, and the ordering comments
+there are load-bearing (`AddNodeImages` and `AddNodeTrainingRuntime` reuse the Hugging Face download client
+`AddNodeModelRuntime` registers; `AddNodeTrainingRuns` needs the llama.cpp supervisor's runtime-mutation
+lease). Today it covers core options, auth/connection, invocation, workspace/agents, analysis, adaptive
+memory, drafting, eval, golden harvest, scheduling stores, model fit, benchmarks, training datasets,
+capacity, MCP agent runs, playbook retrieval/monitoring, worker infrastructure, model capabilities/MCP,
+AgentHome, Coder, preview workflows, document ingestion, knowledge base, chat, chat stream budget,
+development, the container sandbox, model runtime, images, the training runtime, and training runs.
 
 ```
                          ┌──────────────────────────────────────────────────────┐
@@ -208,9 +216,9 @@ through `AddNodeApplication`, which composes 26 `AddNode*` feature modules
   └────────────┘  node)  │  └───────────────────────┬────────────────────────┘  │
                          │                          │ AddNodeApplication         │
    Browser SPA           │  ┌───────────────────────▼────────────────────────┐  │
-  ┌────────────┐  REST + │  │ Client.Application  (38 service areas)          │  │
+  ┌────────────┐  REST + │  │ Client.Application  (Services/* areas)          │  │
   │  React UI  │◀──hubs──┼─▶│ chat · agents · scheduler · model-fit · capacity│  │
-  │ (loopback) │ (local) │  │ connection · mcp · eval · adaptive-memory …     │  │
+  │ (loopback) │ (local) │  │ connection · mcp · eval · training · benchmarks…│  │
   └────────────┘         │  └───────┬───────────────────────────┬────────────┘  │
                          │          │                           │               │
                          │  ┌───────▼────────┐         ┌────────▼────────────┐  │
@@ -223,8 +231,9 @@ through `AddNodeApplication`, which composes 26 `AddNode*` feature modules
                          │  │ Client.        │◀─────────┤  ├ Ollama (optional) │  │
                          │  │ Persistence    │  EF/state│  ├ CodexOAuth (cloud)│  │
                          │  │ (SQLite;       │          │  ├ Capabilities (HW) │  │
-                         │  │ selected AEAD) │          │  └ StableDiffusionCpp│  │
-                         │  └────────────────┘          └────┬────────────┬────┘  │
+                         │  │ selected AEAD) │          │  ├ StableDiffusionCpp│  │
+                         │  └────────────────┘          │  └ Training (SFT)    │  │
+                         │                              └────┬────────────┬────┘  │
                          │                                   │ spawn      │ spawn │
                          │                       ┌───────────▼──────┐ ┌───▼─────┐ │
                          │                       │ host llama-server│ │sd-server│ │
@@ -251,11 +260,13 @@ Application and agent code depend only on `ILocalModelProvider` / `IChatClient` 
 `Pull/Delete/Warm/UnloadModelAsync`). **Provider-specific SDK types never leak across this seam** —
 they stay inside the provider projects (`LlamaServerLocalModelProvider`, `OllamaLocalModelProvider`).
 Exactly **two** classes implement `ILocalModelProvider` — `LlamaServerLocalModelProvider` (`llamacpp`, the
-default) and `OllamaLocalModelProvider` (`ollama`, the gated secondary). The other five `Providers.*`
+default) and `OllamaLocalModelProvider` (`ollama`, the gated secondary). The remaining `Providers.*`
 projects sit alongside that seam rather than on it: `Abstractions` (contracts), `HuggingFace` (the
 `IGgufModelStore` the llama-server provider delegates model acquisition to), `CodexOAuth` (a cloud
-`IChatClient` factory, not an `ILocalModelProvider`), `Capabilities` (hardware probing), and
-`StableDiffusionCpp` (`IImageRuntime`, the image daemon — see [Image Generation](14-image-generation.md)).
+`IChatClient` factory, not an `ILocalModelProvider`), `Capabilities` (hardware probing),
+`StableDiffusionCpp` (`IImageRuntime`, the image daemon — see [Image Generation](14-image-generation.md)),
+and `Training` (`ITrainingRuntimeService`, the uv-provisioned Python fine-tuning runtime — see
+[Training](18-training.md)).
 See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 
 ### Launch-args seam — the inference profile resolver
@@ -360,8 +371,8 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
 4. Build the HTTP pipeline: exception handler (RFC7807), HTTPS/HSTS (skipped in desktop), antiforgery,
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar, SPA fallback.
 
-Persistence specifics (selected per-column encryption, 53 migration implementations plus 2 model
-snapshots, and recovery services) are covered in
+Persistence specifics (selected per-column encryption, the migrations under
+`Client.Persistence/Migrations/` plus 2 model snapshots, and recovery services) are covered in
 [Data & Persistence](08-data-and-persistence.md).
 
 ---
@@ -394,4 +405,7 @@ snapshots, and recovery services) are covered in
 - [Testing & Validation](13-testing-and-validation.md)
 - [Image Generation](14-image-generation.md)
 - [Knowledge Base / RAG](15-knowledge-base.md)
-- ADRs: [0001 — Development Mode restart recovery](../adr/0001-development-mode-restart-recovery.md), [0002 — Development cloud-egress carrier](../adr/0002-development-cloud-egress-carrier.md)
+- [Code Organization Conventions](16-code-conventions.md)
+- [Writing Tests](17-writing-tests.md)
+- [Training](18-training.md)
+- ADRs: [0001 — Development Mode restart recovery](../adr/0001-development-mode-restart-recovery.md), [0002 — Development cloud-egress carrier](../adr/0002-development-cloud-egress-carrier.md), [0003 — Six-plan implementation scope](../adr/0003-six-plan-operator-decisions.md), [0004 — Development Mode container execution](../adr/0004-development-mode-container-execution-docker-stopgap.md), [0005 — Training runtime Python exclusivity](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md)

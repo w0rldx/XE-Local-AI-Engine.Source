@@ -33,8 +33,10 @@ scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
   dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
 ```
 
-Exit `69` means the build lock was not acquired. Exit `75` means the test result was contaminated and is void; rerun
-it. `scripts/run-tests-memory-safe.sh` is the lower-memory full-suite alternative.
+That backend command set is restated from [`AGENTS.md`](AGENTS.md#validation), which is authoritative for it. Exit `69`
+means the build lock was not acquired. Exit `75` means the test result was contaminated and is void; rerun it.
+`scripts/run-tests-memory-safe.sh` is the lower-memory alternative for the `XE-Local-AI-Engine.Tests` module; it does not
+cover the other test projects, so run those too.
 
 Frontend CI gates (run `dotnet tool restore --tool-manifest dotnet-tools.json` once from the repository root, then run
 these commands from `XE-Local-AI-Engine.Client.React/`):
