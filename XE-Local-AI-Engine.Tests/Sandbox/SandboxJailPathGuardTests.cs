@@ -141,6 +141,23 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
+    public async Task BothReadLegs_RefuseAFileThatGrewAfterItWasSized_RatherThanReturningAStaleCopy()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            // The reads go through the libc no-follow open on Linux only, and a second writable handle on the file
+            // being read is a Linux-shareable open — the Windows fallback denies it.
+            return;
+        }
+
+        await AssertGrowthAfterSizingIsRefusedAsync("jail-growing.bin",
+            path => SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(path, int.MaxValue, CancellationToken.None));
+
+        await AssertGrowthAfterSizingIsRefusedAsync("host-growing.bin",
+            path => Task.Run(() => SandboxJailPathGuard.ReadHostFileUnderGuard(path, long.MaxValue)));
+    }
+
+    [Test]
     public async Task EnsureNoSymbolicLinkComponents_RejectsALinkedTrustedHostWorkspaceComponent()
     {
         SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(_jailRoot);
@@ -156,6 +173,58 @@ public sealed class SandboxJailPathGuardTests : IDisposable
         AssertEx.Throws<UnauthorizedAccessException>(() => SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(linked));
 
         await Task.CompletedTask;
+    }
+
+    // The growth check is a TOCTOU detector, so pinning it means racing it: there is no seam to synchronise on,
+    // because the whole point is to catch a writer the reader cannot see. The read is therefore given a
+    // multi-megabyte file — the guard sizes it, copies that many bytes, then probes one byte past the sized length,
+    // so the window spans milliseconds — while an appender spins for the whole read. Each attempt is retried a few
+    // times so one scheduling hiccup cannot turn the pin into a flake.
+    private async Task AssertGrowthAfterSizingIsRefusedAsync(string fileName, Func<string, Task> readAsync)
+    {
+        var target = Path.Combine(_jailRoot, fileName);
+        await File.WriteAllBytesAsync(target, new byte[8 * 1024 * 1024]);
+
+        using var appending = new ManualResetEventSlim(false);
+        using var stop = new ManualResetEventSlim(false);
+        var appender = Task.Run(() =>
+        {
+            using var handle = File.OpenHandle(target, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            var offset = RandomAccess.GetLength(handle);
+            var oneByte = new byte[] { 0x41 };
+            while (!stop.IsSet)
+            {
+                RandomAccess.Write(handle, oneByte, offset);
+                offset++;
+                appending.Set();
+            }
+        });
+
+        try
+        {
+            AssertEx.True(appending.Wait(TimeSpan.FromSeconds(10)), "the appender never started");
+
+            InvalidDataException? refusal = null;
+            for (var attempt = 0; attempt < 10 && refusal is null; attempt++)
+            {
+                try
+                {
+                    await readAsync(target);
+                }
+                catch (InvalidDataException exception)
+                {
+                    refusal = exception;
+                }
+            }
+
+            AssertEx.Contains(AssertEx.NotNull(refusal, "a file growing under the read was copied instead of refused").Message,
+                "grew while");
+        }
+        finally
+        {
+            stop.Set();
+            await appender;
+        }
     }
 
     private sealed class TempDir : IDisposable
