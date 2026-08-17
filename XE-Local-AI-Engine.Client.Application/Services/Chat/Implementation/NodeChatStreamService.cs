@@ -88,28 +88,9 @@ public sealed class NodeChatStreamService(
     {
         var harnessStartedTimestamp = Stopwatch.GetTimestamp();
 
-        // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
-        // authoritative; throwing here propagates to the hub caller.
-        await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
-
-        // A selection map on the request is the authoritative, just-clicked path: persist it BEFORE reading the
-        // conversation. The write also CLEARS the stored compaction synopsis (a synopsis built on the previous path can
-        // misrepresent the newly selected branch), and the turn-scoped read below skips exactly the blobs that synopsis
-        // covers — so reading first would build the turn from a synopsis the database no longer has, on top of history
-        // whose covered messages were never decrypted.
-        var persistedSelectedPath = request.SelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
-            : null;
-
-        // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
-        // conversation's compaction synopsis has already replaced — BuildConversationContext drops them by sequence and
-        // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
-        // conversation that will be rendered or re-persisted.
-        var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
-                           ?? throw new InvalidOperationException("The node chat conversation was not found.");
-
-        // With no map on the request, fall back to the selection already persisted on the conversation (loaded above).
-        var selectedPath = persistedSelectedPath ?? conversation.SelectedPath;
+        var turn = await LoadTurnAsync(request, cancellationToken).ConfigureAwait(false);
+        var conversation = turn.Conversation;
+        var selectedPath = turn.SelectedPath;
 
         var trimmedContent = request.Content.Trim();
         var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
@@ -130,20 +111,7 @@ public sealed class NodeChatStreamService(
         // AssistantQueued.
         var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken).ConfigureAwait(false);
 
-        var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
-                assistantMessageId,
-                requestId,
-                NowUnixMilliseconds(),
-                // Stamp the placeholder with the model that will actually run (the agent pin when honored, the user's
-                // explicit dropdown pick when it suppressed the pin, else the local-default) — never the raw request
-                // model — so the attribution shown in the UI matches the run from the first pending frame.
-                resolution.EffectiveModel,
-                AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
-                AgentName: resolution.Resolved?.AgentName,
-                // Persist the effort that actually drives this turn — an agent's pinned effort wins over the request's
-                // selection (same precedence as the runtime package built below). Survives reload off the metadata blob.
-                ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? request.ReasoningEffort),
-            cancellationToken).ConfigureAwait(false);
+        var assistantPlaceholder = await PersistAssistantPlaceholderAsync(request, resolution, assistantMessageId, requestId, cancellationToken).ConfigureAwait(false);
 
         // The assistant row now exists as Pending, but run ownership (the pump + runner + their protective finally) is
         // not wired until further below. If the client disconnects in this window — including during the awaited
@@ -208,172 +176,22 @@ public sealed class NodeChatStreamService(
         // writing, which is exactly the case Detach() in this method's finally exists to stop retaining.
         var eventSink = new ChatStreamEventSink(correlation, sequence, streamBudgetOptions.Value, timeProvider);
 
-        void OnInvocationStateChanged(object? _, InvocationStateChangedEventArgs args)
-        {
-            if (args.State.InvocationId == requestId)
-            {
-                stateChannel.Writer.TryWrite(args.State);
-            }
-        }
-
         // Accumulates the ordered reasoning/tool interleave so the terminal persist can write parts[] (the reload
-        // render source). Fed by BOTH producers: the tool handler below and the reasoning deltas in the pump loop.
+        // render source). Fed by BOTH producers: the forwarder's tool/notice handlers and the reasoning deltas in the
+        // pump loop.
         var parts = new NodeChatPartAccumulator();
-
-        void OnToolCallLifecycleChanged(object? _, ToolCallLifecycleChangedEventArgs args)
-        {
-            if (args.Payload.InvocationId == requestId)
-            {
-                var toolSequence = sequence.Next();
-                ChatStreamEventMapper.AccumulateToolPart(parts, args.Payload, toolSequence);
-                eventSink.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
-                    toolSequence));
-            }
-        }
-
-        void OnTurnNoticeChanged(object? _, TurnNoticeChangedEventArgs args)
-        {
-            if (args.Payload.InvocationId == requestId)
-            {
-                var noticeSequence = sequence.Next();
-                ChatStreamEventMapper.AccumulateNotice(parts, args.Payload, noticeSequence);
-                eventSink.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
-                    noticeSequence));
-            }
-        }
-
-        // A pending tool-approval. Unlike tool-call/notice events this is NOT accumulated into the ordered
-        // parts[]: the approval prompt is transient live state that the loopback resolve endpoint clears, and a reloaded
-        // terminal turn shows the executed/rejected tool result rather than a lingering prompt. It only rides the live
-        // event channel so the browser can render Approve/Deny on the matching tool-call card.
-        void OnApprovalRequestedChanged(object? _, ApprovalRequestedChangedEventArgs args)
-        {
-            if (args.Payload.InvocationId == requestId)
-            {
-                eventSink.TryWrite(ChatStreamEventMapper.ApprovalRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
-                    NowUnixMilliseconds(), sequence.Next()));
-            }
-        }
-
-        // A pending ask_user question. Same transient-live-state rule as the approval above: never accumulated into
-        // parts[], because the resolve endpoint clears it and the reloaded terminal turn shows the tool result (the
-        // answer, or the not-answered sentinel) instead of a lingering form. A question that is STILL pending when the
-        // browser reconnects is replayed from InvocationState.PendingQuestion by the resume registry.
-        void OnUserQuestionRequestedChanged(object? _, UserQuestionRequestedChangedEventArgs args)
-        {
-            if (args.Payload.InvocationId == requestId)
-            {
-                eventSink.TryWrite(ChatStreamEventMapper.QuestionRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
-                    NowUnixMilliseconds(), sequence.Next()));
-            }
-        }
 
         // Subscribe before pre-run notice production (cloud attachment/knowledge withholding) so those notices reach
         // the stream. The scope also covers every pre-ownership exit, preventing handler leaks when staging or package
         // construction fails before the pump/runner teardown exists.
-        eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
-        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
-        eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
-        eventDispatcher.ApprovalRequestedChanged += OnApprovalRequestedChanged;
-        eventDispatcher.UserQuestionRequestedChanged += OnUserQuestionRequestedChanged;
-        using var eventSubscription = new CallbackDisposable(() =>
-        {
-            eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
-            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
-            eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
-            eventDispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
-            eventDispatcher.UserQuestionRequestedChanged -= OnUserQuestionRequestedChanged;
-        });
+        using var eventSubscription = new ChatStreamEventForwarder(eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, timeProvider);
 
-        // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
-        // front (ResolveTurnAsync) so the placeholder could be stamped with the resolved agent's attribution; reuse
-        // those results here unchanged.
-        var activeModel = resolution.ActiveModel;
-        var resolved = resolution.Resolved;
-        var orchestration = resolution.Orchestration;
+        var toolOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken).ConfigureAwait(false);
+        var offerTools = toolOffer.OfferTools;
+        var allowedTools = toolOffer.AllowedTools;
 
-        // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
-        // tool engine enabled AND the active model advertises the Ollama tools capability. When offered, the catalog's
-        // local tools travel in the runtime package as the offer list; the invocation factory resolves the matching
-        // executables from the registry by name. A bound definition narrows that offer to its allowed set (and the
-        // resolver already withheld the offer for a non-tools model); an unbound conversation uses the full offer.
-        var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
-        var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
-        // When a bound definition resolved, its AllowedTools already ran through the node approval policy in the resolver.
-        // The unbound/deleted-agent fallback builds the raw offer here, so it must apply the SAME node policy (tighten-only)
-        // — otherwise a node-wide policy is bypassable by a plain unbound chat turn. With no policy configured the
-        // Permissive floor is identity, so the fallback offer stays byte-identical to today.
-        // When a bound definition resolved, its AllowedTools already ran through the node approval policy in the resolver
-        // (custom tools merged there). The unbound/deleted-agent fallback builds the raw offer here via the async provider
-        // (so its custom tools merge in too) and applies the SAME node policy (tighten-only) — otherwise a node-wide policy
-        // is bypassable by a plain unbound chat turn. A custom tool called on this agentless path is not session-approvable
-        // (the package carries no CustomTools without a resolved agent), so it re-prompts each time — the safe direction.
-        IReadOnlyList<AllowedToolDto>? allowedTools;
-        if (!offerTools)
-        {
-            allowedTools = null;
-        }
-        else if (resolved?.AllowedTools is { } resolvedAllowedTools)
-        {
-            allowedTools = resolvedAllowedTools;
-        }
-        else
-        {
-            var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
-            allowedTools =
-            [
-                .. fallbackOffer.Select(tool => tool with
-                {
-                    RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-                })
-            ];
-        }
-
-        // G16: an Orchestrator agent whose orchestration did not compile runs as a lone single agent. That used to be
-        // visible only in a server log, so an operator saw an ordinary answer and no hint that the team never ran. Emit
-        // ONE notice naming the typed reason. NotOrchestrated (a Single-kind agent, or no bound agent) has no notice, so
-        // the overwhelmingly common path stays silent.
-        if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
-        {
-            await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                                 {
-                                     InvocationId = requestId,
-                                     Kind = TurnNoticeKind.OrchestrationDegraded,
-                                     Message = orchestrationDegradedMessage,
-                                     Detail = resolution.OrchestrationOutcome.Reason.ToString()
-                                 })
-                                 .ConfigureAwait(false);
-        }
-
-        // Cloud-egress consent: node-local conversation attachments are private data. When a cloud model would receive
-        // this turn's attachment context and the operator has NOT opted in (KnowledgeBase:AllowCloudModelAccess),
-        // attachments are withheld — neither staged for the file tools nor inlined into the prompt — and the user gets a
-        // visible notice naming the cloud model. "A cloud model would receive it" is not only the orchestrator's own
-        // effective model: an ORCHESTRATION broadcasts ONE shared seed to every participant (per-participant tool
-        // stripping cannot redact content already in the seed), so a single cloud PARTICIPANT — even under a local root —
-        // must withhold the shared attachment context too. This is the load-bearing egress gate; the offer provider
-        // additionally withholds the file/knowledge tools for a cloud model.
-        var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
-        var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
-        var attachmentsAllowed = !turnReachesCloud || knowledgeOptions.Value.AllowCloudModelAccess;
-        if (!attachmentsAllowed)
-        {
-            // Name the model the notice is about: the orchestrator's own cloud model when that is what reaches the
-            // cloud, otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
-            var cloudModelForNotice = resolution.EffectiveModelIsCloud
-                ? resolution.EffectiveModel
-                : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
-            await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
-
-            // KB grounding rides the SAME cloud-egress gate as attachments: when the user opted into knowledge
-            // grounding for a plain-chat turn but the turn reaches a cloud model without the operator's data-access
-            // opt-in, no retrieval runs and a visible notice names the model. Plain chat only — agent mode uses the
-            // gated search_knowledge_base tool (withheld by the offer provider), so this notice is not duplicated there.
-            if (request.UseKnowledgeBase && !offerTools)
-            {
-                await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
-            }
-        }
+        var attachmentsAllowed = AreAttachmentsAllowed(resolution);
+        await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken).ConfigureAwait(false);
 
         // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
         // read-only coder tools or run_in_agent_home), re-stage the sandbox with THIS conversation's uploaded attachments
@@ -381,137 +199,43 @@ public sealed class NodeChatStreamService(
         // returns the exact staged paths (empty when Agent Mode is off, there are no extracted files, OR attachments are
         // withheld from a cloud effective model).
         var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
-        ConversationSandboxPreparation? sandboxPreparation = null;
-        string? sandboxPreparationError = null;
-        if (isAgentHomeTurn && attachmentsAllowed)
-        {
-            try
-            {
-                sandboxPreparation = await conversationSandboxStager.PrepareConversationAttachmentsAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false);
-                if (sandboxPreparation is null)
-                {
-                    sandboxPreparationError = "The AgentHome workspace could not be prepared for this response.";
-                }
-                else if (sandboxPreparation.IsBusy)
-                {
-                    sandboxPreparationError = "The AgentHome workspace is busy. Try again after the current operation finishes.";
-                }
-            }
-            catch (OperationCanceledException) when (runCancellation.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                logger.LogWarning(exception, "AgentHome attachment staging failed for conversation {ConversationId}.", request.ConversationId);
-                sandboxPreparationError = "The AgentHome workspace could not be prepared for this response.";
-            }
-        }
+        var staging = isAgentHomeTurn && attachmentsAllowed
+            ? await StageConversationAttachmentsAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false)
+            : null;
 
-        await using var sandboxPreparationLease = sandboxPreparation;
-        if (sandboxPreparationError is not null)
+        await using var sandboxPreparationLease = staging?.Preparation;
+        if (staging?.Error is { } sandboxPreparationError)
         {
-            var failedMessage = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                    NodeChatMessageStatusValues.Failed,
-                    NowUnixMilliseconds(),
-                    Error: sandboxPreparationError,
-                    Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L)),
-                CancellationToken.None).ConfigureAwait(false);
+            var failedMessage = await TerminalizeAssistantFailureAsync(correlation, sandboxPreparationError).ConfigureAwait(false);
             preOwnershipGuard.TerminalizationHandled();
             yield return ToMessageEvent(ChatStreamEventTypes.AssistantFailed, correlation, failedMessage, sequence.Next());
             yield break;
         }
 
-        var stagedAttachmentPaths = sandboxPreparation?.StagedPaths ?? [];
+        var stagedAttachmentPaths = staging?.Preparation?.StagedPaths ?? [];
 
-        // The synthetic prepended context differs by mode: plain chat inlines the extracted text directly; agent mode
-        // injects only a short pointer naming the staged files (the agent reads their content through its tools, so the
-        // text is not double-fed). The pointer is what stops a weak model from guessing a wrong file name. When
-        // attachments are withheld from a cloud effective model, neither path composes anything (staged paths are empty
-        // and the plain-chat inline is skipped).
-        ConversationMessageDto? attachmentContext;
-        // Knowledge-base grounding: a second synthetic context message inlined into plain chat when the user
-        // opted in, plus the provenance of the inlined hits so the terminal row records them as sources. Null on
-        // every path that does not ground on the knowledge base (agent mode, opt-out, cloud-withheld, empty retrieval).
-        ConversationMessageDto? knowledgeContext = null;
-        IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
-        if (offerTools)
-        {
-            attachmentContext = BuildAgentAttachmentHint(stagedAttachmentPaths, fenceSeedProvider.DeriveSeed(request.ConversationId));
-        }
-        else if (attachmentsAllowed)
-        {
-            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+        var turnContext = await BuildTurnContextAsync(request,
+            resolution,
+            offerTools,
+            attachmentsAllowed,
+            stagedAttachmentPaths,
+            userMessage.Content,
+            runCancellation,
+            cancellationToken).ConfigureAwait(false);
 
-            // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
-            // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
-            if (request.UseKnowledgeBase)
-            {
-                var knowledge = await BuildKnowledgeContextMessageAsync(userMessage.Content, runCancellation.Token).ConfigureAwait(false);
-                if (knowledge is not null)
-                {
-                    knowledgeContext = knowledge.Message;
-                    knowledgeSources = knowledge.Sources;
-                }
-            }
-        }
-        else
-        {
-            attachmentContext = null;
-        }
-
-        // Image parts are attached INDEPENDENTLY of the tool/text branch above so a vision model receives them in plain
-        // chat, tool-enabled chat, AND agent mode (the offerTools branch only stages TEXT for the file tools; images have
-        // no Markdown to stage and would otherwise be silently dropped). Gated on the same cloud-egress guard as
-        // attachments and on the effective model actually being vision-capable.
-        ConversationMessageDto? imageContext = null;
-        if (attachmentsAllowed && resolution.SupportsVision)
-        {
-            imageContext = await BuildImageAttachmentMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
-        }
-
-        var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
-            request.ConversationId,
-            resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildConversationContext(conversation, userMessage, selectedPath, attachmentContext, imageContext, knowledgeContext),
-            resolution.EffectiveModel,
-            resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
-            LocalChatLoopbackDefaults.ClientNodeId,
+        var package = BuildRuntimePackage(request,
+            resolution,
+            BuildConversationContext(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
             allowedTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: new TimeoutSettings
-            {
-                InvocationTimeoutSeconds = runtimeNodeSettings.MaxMessageRequestTimeoutSeconds
-            },
-            ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
-            OrchestrationSpec: orchestration?.Spec,
-            SupportsThinking: resolution.SupportsThinking,
-            SamplingOptions: request.SamplingOptions,
-            Skills: resolved?.Skills,
-            CustomTools: resolved?.CustomTools));
+            runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
+            requestId);
         var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
 
-        // Post-run adaptive-memory hook: fired once when the pump persists a Completed/Failed terminal, but ONLY when the
-        // resolved agent has the playbook enabled AND opts into extraction. Retrieval/injection rides PlaybookEnabled
-        // alone (already baked into the resolved prompt above); MemoryExtractionEnabled additionally gates whether this
-        // run mines NEW candidates, so a retrieval-only agent (extraction off) still uses its memory but learns nothing
-        // new — and skips the extraction round-trip entirely. Built here (not inside the pump) so it closes over the run
-        // context the stream service already holds (resolved agent, conversation temp flag, user turns, package config
-        // hash); the pump stays content-free. The dispatch is fire-and-forget (its own scope + fresh CT) so it never
-        // delays the SSE.
-        var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
-                memoryAgent,
-                conversation.ConversationId,
-                conversation.MemoryExcluded,
-                package,
-                resolution.EffectiveModel,
-                () => CollectUserTurns(conversation, userMessage, selectedPath))
-            : null;
+        var onTerminal = BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package);
 
         Task pumpTask;
         Task runTask;
-        using var invocationScope = sandboxPreparation?.EnterInvocationScope();
+        using var invocationScope = staging?.Preparation?.EnterInvocationScope();
         pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
             eventSink,
             correlation,
@@ -524,7 +248,7 @@ public sealed class NodeChatStreamService(
             runCancellation.Token,
             // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
-            knowledgeSources);
+            turnContext.KnowledgeSources);
         runTask = RunInvocationAsync(package,
             assistantMessageId,
             stateChannel.Writer,
@@ -574,42 +298,7 @@ public sealed class NodeChatStreamService(
             // InvocationStateChanged (the Completed terminal) after the SSE loop exits. If we unsubscribe first,
             // the terminal state never reaches the stateChannel, the pump ends without a terminal, and the message
             // is falsely persisted as interrupted.
-            try
-            {
-                // Observe the pump first: on a persistence fault it faults here; cancel the run so the
-                // still-generating runner stops promptly rather than producing output that can no longer be persisted. A
-                // user cancel or normal completion leaves the pump task completed (not faulted).
-                try
-                {
-                    await pumpTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    // The cancelled/interrupted terminal is persisted by the pump.
-                }
-                catch (Exception exception)
-                {
-                    logger.LogError(exception, "Local node chat stream pump faulted; cancelling the run. RequestId={RequestId}", requestId);
-                    await runCancellation.CancelAsync().ConfigureAwait(false);
-                }
-
-                try
-                {
-                    await runTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    // The runner unwound on cancellation; its terminal is persisted by the pump.
-                }
-                catch (Exception exception)
-                {
-                    logger.LogDebug(exception, "Local node chat stream run completed with an exception after teardown. RequestId={RequestId}", requestId);
-                }
-            }
-            finally
-            {
-                eventSubscription.Dispose();
-            }
+            await DrainRunAsync(pumpTask, runTask, runCancellation, eventSubscription, requestId).ConfigureAwait(false);
         }
     }
 
@@ -1041,19 +730,374 @@ public sealed class NodeChatStreamService(
         };
     }
 
+    /// <summary>
+    ///     Reads the conversation this send belongs to and settles which variant branch shapes its history. A selection
+    ///     map on the request is the authoritative, just-clicked path: it is persisted BEFORE the conversation is read.
+    ///     That write also CLEARS the stored compaction synopsis (a synopsis built on the previous path can misrepresent
+    ///     the newly selected branch), and the turn-scoped read skips exactly the blobs that synopsis covers — so
+    ///     reading first would build the turn from a synopsis the database no longer has, on top of history whose
+    ///     covered messages were never decrypted. With no map on the request, the selection already persisted on the
+    ///     conversation wins.
+    /// </summary>
+    private async Task<ChatTurnLoad> LoadTurnAsync(NodeChatStreamRequest request, CancellationToken cancellationToken)
+    {
+        // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
+        // authoritative; throwing here propagates to the hub caller.
+        await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+
+        var persistedSelectedPath = request.SelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : null;
+
+        // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
+        // conversation's compaction synopsis has already replaced — BuildConversationContext drops them by sequence and
+        // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
+        // conversation that will be rendered or re-persisted.
+        var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
+                           ?? throw new InvalidOperationException("The node chat conversation was not found.");
+
+        return new ChatTurnLoad(conversation, persistedSelectedPath ?? conversation.SelectedPath);
+    }
+
+    // Mints the assistant row this turn streams into. It is stamped with the model that will actually run (the agent pin
+    // when honored, the user's explicit dropdown pick when it suppressed the pin, else the local-default) — never the
+    // raw request model — so the attribution shown in the UI matches the run from the first pending frame. The effort is
+    // stamped with the same precedence as the runtime package: an agent's pinned effort wins over the request's
+    // selection, and it survives reload off the metadata blob.
+    private Task<NodeChatPersistedMessageDto> PersistAssistantPlaceholderAsync(NodeChatStreamRequest request,
+        ChatTurnResolution resolution,
+        Guid assistantMessageId,
+        Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        return persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
+                assistantMessageId,
+                requestId,
+                NowUnixMilliseconds(),
+                resolution.EffectiveModel,
+                AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
+                AgentName: resolution.Resolved?.AgentName,
+                ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? request.ReasoningEffort),
+            cancellationToken);
+    }
+
+    /// <summary>
+    ///     Resolves whether this turn offers tools and, if so, which ones travel in the runtime package. Tools are
+    ///     offered only when the client asked for them AND the node has the agent tool engine enabled AND the active
+    ///     model advertises the tools capability; the invocation factory resolves the matching executables from the
+    ///     registry by name. A bound definition narrows the offer to its allowed set (already run through the node
+    ///     approval policy, custom tools merged, in <see cref="ChatTurnResolver" />).
+    ///     <para>
+    ///         The unbound/deleted-agent fallback builds the raw offer here via the async provider (so its custom tools
+    ///         merge in too) and applies the SAME node policy (tighten-only) — otherwise a node-wide policy would be
+    ///         bypassable by a plain unbound chat turn. With no policy configured the Permissive floor is identity, so
+    ///         the fallback offer is byte-identical to the raw catalog offer. A custom tool called on this agentless
+    ///         path is not session-approvable (the package carries no CustomTools without a resolved agent), so it
+    ///         re-prompts each time — the safe direction.
+    ///     </para>
+    /// </summary>
+    private async Task<ChatToolOffer> ResolveToolOfferAsync(NodeChatStreamRequest request, ChatTurnResolution resolution, CancellationToken cancellationToken)
+    {
+        var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
+        var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
+        if (!offerTools)
+        {
+            return new ChatToolOffer(OfferTools: false, AllowedTools: null);
+        }
+
+        if (resolution.Resolved?.AllowedTools is { } resolvedAllowedTools)
+        {
+            return new ChatToolOffer(OfferTools: true, resolvedAllowedTools);
+        }
+
+        var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+        return new ChatToolOffer(OfferTools: true,
+        [
+            .. fallbackOffer.Select(tool => tool with
+            {
+                RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+            })
+        ]);
+    }
+
+    /// <summary>
+    ///     Cloud-egress consent: node-local conversation attachments are private data, so they reach a cloud model only
+    ///     when the operator opted in (<c>KnowledgeBase:AllowCloudModelAccess</c>). "A cloud model would receive it" is
+    ///     not only the orchestrator's own effective model: an ORCHESTRATION broadcasts ONE shared seed to every
+    ///     participant (per-participant tool stripping cannot redact content already in the seed), so a single cloud
+    ///     PARTICIPANT — even under a local root — must withhold the shared attachment context too. This is the
+    ///     load-bearing egress gate; the offer provider additionally withholds the file/knowledge tools for a cloud
+    ///     model.
+    /// </summary>
+    private bool AreAttachmentsAllowed(ChatTurnResolution resolution)
+    {
+        var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
+        var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
+        return !turnReachesCloud || knowledgeOptions.Value.AllowCloudModelAccess;
+    }
+
+    // The notices produced before the invocation starts, in wire order: the orchestration-degraded notice, then the
+    // cloud-egress withhold notices. Both ride the same turn-notice fan-out as the runner's own notices.
+    private async Task ReportPreRunNoticesAsync(NodeChatStreamRequest request,
+        ChatTurnResolution resolution,
+        bool offerTools,
+        bool attachmentsAllowed,
+        Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        // An Orchestrator agent whose orchestration did not compile runs as a lone single agent. That used to be
+        // visible only in a server log, so an operator saw an ordinary answer and no hint that the team never ran. Emit
+        // ONE notice naming the typed reason. NotOrchestrated (a Single-kind agent, or no bound agent) has no notice, so
+        // the overwhelmingly common path stays silent.
+        if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
+        {
+            await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                                 {
+                                     InvocationId = requestId,
+                                     Kind = TurnNoticeKind.OrchestrationDegraded,
+                                     Message = orchestrationDegradedMessage,
+                                     Detail = resolution.OrchestrationOutcome.Reason.ToString()
+                                 })
+                                 .ConfigureAwait(false);
+        }
+
+        if (attachmentsAllowed)
+        {
+            return;
+        }
+
+        // Name the model the notice is about: the orchestrator's own cloud model when that is what reaches the
+        // cloud, otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
+        var cloudModelForNotice = resolution.EffectiveModelIsCloud
+            ? resolution.EffectiveModel
+            : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
+        await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
+
+        // KB grounding rides the SAME cloud-egress gate as attachments: when the user opted into knowledge
+        // grounding for a plain-chat turn but the turn reaches a cloud model without the operator's data-access
+        // opt-in, no retrieval runs and a visible notice names the model. Plain chat only — agent mode uses the
+        // gated search_knowledge_base tool (withheld by the offer provider), so this notice is not duplicated there.
+        if (request.UseKnowledgeBase && !offerTools)
+        {
+            await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    // Re-stages the AgentHome sandbox with THIS conversation's uploaded attachments. Returns the lease the caller must
+    // dispose alongside the user-visible reason the turn must fail; a busy workspace yields BOTH (the lease still has to
+    // be released). A staging failure is never fatal to the process — it terminalizes this one turn — but a genuine
+    // cancel propagates untouched.
+    private async Task<SandboxStagingOutcome> StageConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        ConversationSandboxPreparation? preparation = null;
+        string? error = null;
+        try
+        {
+            preparation = await conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            if (preparation is null)
+            {
+                error = "The AgentHome workspace could not be prepared for this response.";
+            }
+            else if (preparation.IsBusy)
+            {
+                error = "The AgentHome workspace is busy. Try again after the current operation finishes.";
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "AgentHome attachment staging failed for conversation {ConversationId}.", conversationId);
+            error = "The AgentHome workspace could not be prepared for this response.";
+        }
+
+        return new SandboxStagingOutcome(preparation, error);
+    }
+
+    // Terminalizes the assistant row Failed for a pre-run refusal (no invocation ever started, hence the zero-duration
+    // content-free envelope). Uses CancellationToken.None deliberately: the row must reach a terminal even when the
+    // caller's token has already fired.
+    private Task<NodeChatPersistedMessageDto> TerminalizeAssistantFailureAsync(NodeChatMessageCorrelation correlation, string error)
+    {
+        return persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Failed,
+                NowUnixMilliseconds(),
+                Error: error,
+                Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L)),
+            CancellationToken.None);
+    }
+
+    // Composes the synthetic context messages prepended to this turn. Two cancellation surfaces are in play and the
+    // distinction is load-bearing: the attachment/image reads follow the CLIENT token (a disconnect stops them), while
+    // knowledge retrieval follows the RUN token so a user stop aborts the search.
+    private async Task<ChatTurnContext> BuildTurnContextAsync(NodeChatStreamRequest request,
+        ChatTurnResolution resolution,
+        bool offerTools,
+        bool attachmentsAllowed,
+        IReadOnlyList<string> stagedAttachmentPaths,
+        string knowledgeQuery,
+        CancellationTokenSource runCancellation,
+        CancellationToken cancellationToken)
+    {
+        // The synthetic prepended context differs by mode: plain chat inlines the extracted text directly; agent mode
+        // injects only a short pointer naming the staged files (the agent reads their content through its tools, so the
+        // text is not double-fed). The pointer is what stops a weak model from guessing a wrong file name. When
+        // attachments are withheld from a cloud effective model, neither path composes anything (staged paths are empty
+        // and the plain-chat inline is skipped).
+        ConversationMessageDto? attachmentContext;
+        // Knowledge-base grounding: a second synthetic context message inlined into plain chat when the user
+        // opted in, plus the provenance of the inlined hits so the terminal row records them as sources. Null on
+        // every path that does not ground on the knowledge base (agent mode, opt-out, cloud-withheld, empty retrieval).
+        ConversationMessageDto? knowledgeContext = null;
+        IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
+        if (offerTools)
+        {
+            attachmentContext = BuildAgentAttachmentHint(stagedAttachmentPaths, fenceSeedProvider.DeriveSeed(request.ConversationId));
+        }
+        else if (attachmentsAllowed)
+        {
+            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+
+            // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
+            // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
+            if (request.UseKnowledgeBase)
+            {
+                var knowledge = await BuildKnowledgeContextMessageAsync(knowledgeQuery, runCancellation.Token).ConfigureAwait(false);
+                if (knowledge is not null)
+                {
+                    knowledgeContext = knowledge.Message;
+                    knowledgeSources = knowledge.Sources;
+                }
+            }
+        }
+        else
+        {
+            attachmentContext = null;
+        }
+
+        // Image parts are attached INDEPENDENTLY of the tool/text branch above so a vision model receives them in plain
+        // chat, tool-enabled chat, AND agent mode (the offerTools branch only stages TEXT for the file tools; images have
+        // no Markdown to stage and would otherwise be silently dropped). Gated on the same cloud-egress guard as
+        // attachments and on the effective model actually being vision-capable.
+        ConversationMessageDto? imageContext = null;
+        if (attachmentsAllowed && resolution.SupportsVision)
+        {
+            imageContext = await BuildImageAttachmentMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new ChatTurnContext(attachmentContext, imageContext, knowledgeContext, knowledgeSources);
+    }
+
+    // Assembles the runtime package the invocation runs from. The active-model precedence, the effective-agent
+    // resolution and the orchestration spec were all settled up front by ResolveTurnAsync (so the placeholder could be
+    // stamped with the resolved agent's attribution); they are reused here unchanged. Only the invocation timeout is
+    // operator-controlled — the tool-call and stream-idle timeouts keep their defaults, and when the operator's value
+    // equals the TimeoutSettings default the package (and therefore its config hash) is byte-identical to one built
+    // without an explicit Timeouts.
+    private RuntimePackage BuildRuntimePackage(NodeChatStreamRequest request,
+        ChatTurnResolution resolution,
+        IReadOnlyList<ConversationMessageDto> conversationContext,
+        IReadOnlyList<AllowedToolDto>? allowedTools,
+        int invocationTimeoutSeconds,
+        Guid requestId)
+    {
+        var resolved = resolution.Resolved;
+        return runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
+            request.ConversationId,
+            resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
+            conversationContext,
+            resolution.EffectiveModel,
+            resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
+            LocalChatLoopbackDefaults.ClientNodeId,
+            allowedTools,
+            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts: new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = invocationTimeoutSeconds
+            },
+            ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
+            OrchestrationSpec: resolution.Orchestration?.Spec,
+            SupportsThinking: resolution.SupportsThinking,
+            SamplingOptions: request.SamplingOptions,
+            Skills: resolved?.Skills,
+            CustomTools: resolved?.CustomTools));
+    }
+
+    /// <summary>
+    ///     The post-run adaptive-memory hook, fired once when the pump persists a Completed/Failed terminal — but ONLY
+    ///     when the resolved agent has the playbook enabled AND opts into extraction. Retrieval/injection rides
+    ///     <c>PlaybookEnabled</c> alone (already baked into the resolved prompt); <c>MemoryExtractionEnabled</c>
+    ///     additionally gates whether this run mines NEW candidates, so a retrieval-only agent still uses its memory but
+    ///     learns nothing new — and skips the extraction round-trip entirely. Built here rather than inside the pump so
+    ///     it closes over the run context the stream service already holds (resolved agent, conversation temp flag, user
+    ///     turns, package config hash) and the pump stays content-free. The dispatch is fire-and-forget (its own scope +
+    ///     fresh CT) so it never delays the SSE.
+    /// </summary>
+    private Action<InvocationState, NodeChatPumpTerminalResult>? BuildMemoryExtractionHook(ChatTurnResolution resolution,
+        NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto userMessage,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath,
+        RuntimePackage package)
+    {
+        return resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
+            ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
+                memoryAgent,
+                conversation.ConversationId,
+                conversation.MemoryExcluded,
+                package,
+                resolution.EffectiveModel,
+                () => CollectUserTurns(conversation, userMessage, selectedPath))
+            : null;
+    }
+
+    // Drains the run after the SSE consumer is gone. The pump is observed FIRST: on a persistence fault it faults here,
+    // so cancel the run rather than let a still-generating runner produce output that can no longer be persisted (a user
+    // cancel or a normal completion leaves the pump task completed, not faulted). The event subscription is disposed
+    // only once BOTH tasks are observed — the runner may fire InvocationStateChanged (the Completed terminal) after the
+    // SSE loop exits, and unsubscribing earlier would leave the pump without a terminal and the row falsely persisted as
+    // interrupted.
+    private async Task DrainRunAsync(Task pumpTask, Task runTask, CancellationTokenSource runCancellation, IDisposable eventSubscription, Guid requestId)
+    {
+        try
+        {
+            try
+            {
+                await pumpTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // The cancelled/interrupted terminal is persisted by the pump.
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Local node chat stream pump faulted; cancelling the run. RequestId={RequestId}", requestId);
+                await runCancellation.CancelAsync().ConfigureAwait(false);
+            }
+
+            try
+            {
+                await runTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // The runner unwound on cancellation; its terminal is persisted by the pump.
+            }
+            catch (Exception exception)
+            {
+                logger.LogDebug(exception, "Local node chat stream run completed with an exception after teardown. RequestId={RequestId}", requestId);
+            }
+        }
+        finally
+        {
+            eventSubscription.Dispose();
+        }
+    }
+
     private static bool OffersAgentHomeTools(IReadOnlyList<AllowedToolDto>? allowedTools)
     {
         return allowedTools is not null && allowedTools.Any(tool => AgentHomeCapableToolNames.Contains(tool.Name));
-    }
-
-    private sealed class CallbackDisposable(Action callback) : IDisposable
-    {
-        private Action? _callback = callback;
-
-        public void Dispose()
-        {
-            Interlocked.Exchange(ref _callback, null)?.Invoke();
-        }
     }
 
     // Builds the agent-mode pointer message naming the staged attachment paths, so a weak model reads the exact staged
@@ -1211,6 +1255,23 @@ public sealed class NodeChatStreamService(
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
+
+    // The conversation this send turn is built from, plus the variant selection that shapes its history.
+    private sealed record ChatTurnLoad(NodeChatConversationDto Conversation, IReadOnlyDictionary<Guid, Guid>? SelectedPath);
+
+    // The tool offer for one turn: whether tools are offered at all, and the allow-list that travels in the runtime
+    // package (null whenever nothing is offered).
+    private sealed record ChatToolOffer(bool OfferTools, IReadOnlyList<AllowedToolDto>? AllowedTools);
+
+    // The outcome of staging a conversation's attachments into the AgentHome sandbox. A busy workspace yields BOTH a
+    // lease to dispose and a refusal reason, so neither field implies the other is null.
+    private sealed record SandboxStagingOutcome(ConversationSandboxPreparation? Preparation, string? Error);
+
+    // The synthetic context messages prepended to one turn, plus the provenance of any inlined knowledge hits.
+    private sealed record ChatTurnContext(ConversationMessageDto? Attachment,
+        ConversationMessageDto? Image,
+        ConversationMessageDto? Knowledge,
+        IReadOnlyList<NodeChatMessageSource>? KnowledgeSources);
 
     // The composed knowledge-base grounding for one plain-chat turn: the synthetic context message prepended to the
     // conversation, and the provenance of the inlined hits threaded to the terminal row as the turn's sources.
