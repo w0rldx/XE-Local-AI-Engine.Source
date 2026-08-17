@@ -68,7 +68,7 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
     public const int DefaultMaxTerminalCount = 256;
     public static readonly TimeSpan DefaultTerminalMaxAge = TimeSpan.FromHours(24);
 
-    private readonly ConcurrentDictionary<(GgufAcquisitionOperationKind Kind, string ModelKey), Guid> _active = new();
+    private readonly ConcurrentDictionary<AcquisitionKey, Guid> _active = new();
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _cancellations = new();
     private readonly ConcurrentDictionary<Guid, GgufAcquisitionStatus> _statuses = new();
     private readonly int _maxTerminalCount;
@@ -101,7 +101,7 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         PruneTerminals();
         var normalizedName = modelName.Trim();
-        var activeKey = (operationKind, normalizedName.ToUpperInvariant());
+        var activeKey = new AcquisitionKey(operationKind, normalizedName.ToUpperInvariant());
         while (true)
         {
             if (_active.TryGetValue(activeKey, out var existingId)
@@ -161,7 +161,7 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
     public bool CancelNewest(GgufAcquisitionOperationKind operationKind, string modelName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        var key = (operationKind, modelName.Trim().ToUpperInvariant());
+        var key = new AcquisitionKey(operationKind, modelName.Trim().ToUpperInvariant());
         return _active.TryGetValue(key, out var operationId) && Cancel(operationId);
     }
 
@@ -254,7 +254,7 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
         var result = updated ?? throw new InvalidOperationException("The acquisition status update did not produce a result.");
         if (!IsActive(phase))
         {
-            var key = (result.OperationKind, result.ModelName.ToUpperInvariant());
+            var key = new AcquisitionKey(result.OperationKind, result.ModelName.ToUpperInvariant());
             _active.TryRemove(KeyValuePair.Create(key, operationId));
             if (_cancellations.TryRemove(operationId, out var cancellation))
             {
@@ -314,4 +314,8 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
             }
         }
     }
+
+    // At most one acquisition of a given kind may be in flight per model. The key upper-cases the model name so two
+    // requests that differ only in casing collapse onto the same in-flight operation.
+    private readonly record struct AcquisitionKey(GgufAcquisitionOperationKind Kind, string ModelKey);
 }

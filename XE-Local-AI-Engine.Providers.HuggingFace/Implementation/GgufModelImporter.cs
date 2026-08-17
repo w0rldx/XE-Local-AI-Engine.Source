@@ -12,6 +12,10 @@ internal sealed class GgufModelImporter(
     HuggingFaceOptions options,
     TimeProvider timeProvider) : IGgufModelImporter
 {
+    // Names this pipeline in the compensation failure so the inner exception still says which transaction
+    // could not clean up after itself.
+    private const string CleanupOwnership = "import";
+
     public async Task<PreparedGgufImport> PrepareAsync(GgufImportSource source,
         GgufImportDestination destination,
         IProgress<GgufImportProgress>? progress,
@@ -138,7 +142,7 @@ internal sealed class GgufModelImporter(
         }
         catch (Exception exception)
         {
-            var cleanupFailure = TryDeleteOwnedArtifacts((temporaryPath, true), (temporarySidecarPath, true));
+            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll(new OwnedArtifact(temporaryPath, Owned: true), new OwnedArtifact(temporarySidecarPath, Owned: true));
             if (cleanupFailure is not null)
             {
                 throw new GgufAcquisitionCleanupException("Import cleanup requires recovery.",
@@ -235,8 +239,8 @@ internal sealed class GgufModelImporter(
                     "The committed import registry identity changed during rollback.");
             }
 
-            DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
-                (commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
+                new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
             return;
         }
 
@@ -265,11 +269,11 @@ internal sealed class GgufModelImporter(
                     "The committed import artifact identity no longer matches the rollback receipt.");
             }
 
-            DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
         }
         else if (commitReceipt.OwnsFinalGguf && Directory.Exists(commitReceipt.FinalGgufPath))
         {
-            DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
         }
 
         if (commitReceipt.OwnsFinalSidecar && File.Exists(commitReceipt.FinalSidecarPath))
@@ -286,11 +290,11 @@ internal sealed class GgufModelImporter(
                     "The committed import recovery metadata no longer matches the rollback receipt.");
             }
 
-            DeleteOwnedArtifacts((commitReceipt.FinalSidecarPath, true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
         }
         else if (commitReceipt.OwnsFinalSidecar && Directory.Exists(commitReceipt.FinalSidecarPath))
         {
-            DeleteOwnedArtifacts((commitReceipt.FinalSidecarPath, true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
         }
     }
 
@@ -303,11 +307,11 @@ internal sealed class GgufModelImporter(
     public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedImport);
-        DeleteOwnedArtifacts((preparedImport.TemporarySidecarPath, true), (preparedImport.TemporaryGgufPath, true));
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(preparedImport.TemporarySidecarPath, Owned: true), new OwnedArtifact(preparedImport.TemporaryGgufPath, Owned: true));
         return Task.CompletedTask;
     }
 
-    private static async Task<(string Hash, long Bytes)> CopyAndHashAsync(ValidatedGgufImportSource source,
+    private static async Task<CopiedFile> CopyAndHashAsync(ValidatedGgufImportSource source,
         string destinationPath,
         long expectedBytes,
         IProgress<GgufImportProgress>? progress,
@@ -342,7 +346,7 @@ internal sealed class GgufModelImporter(
 
         source.VerifyStillCurrent();
 
-        return (Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
+        return new CopiedFile(Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
     }
 
     /// <summary>
@@ -431,47 +435,6 @@ internal sealed class GgufModelImporter(
                && GgufQuantDetector.IsCanonical(selectedQuantization);
     }
 
-    private static Exception? TryDeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
-    {
-        List<Exception>? failures = null;
-        foreach (var artifact in artifacts)
-        {
-            try
-            {
-                DeleteOwned(artifact.Path, artifact.Owned);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
-            {
-                (failures ??= []).Add(exception);
-            }
-        }
-
-        return failures is null ? null : new AggregateException(failures);
-    }
-
-    private static void DeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
-    {
-        var failure = TryDeleteOwnedArtifacts(artifacts);
-        if (failure is not null)
-        {
-            throw new IOException("One or more import-owned artifacts could not be removed.", failure);
-        }
-    }
-
-    private static void DeleteOwned(string path, bool owned)
-    {
-        if (!owned)
-        {
-            return;
-        }
-
-        File.Delete(path);
-        if (File.Exists(path) || Directory.Exists(path))
-        {
-            throw new IOException("An import-owned artifact could not be removed.");
-        }
-    }
-
     // FlushAsync drains managed buffers but exposes no flush-to-disk overload. This short synchronous durability
     // boundary runs only after the async flush and before the staged file can be committed by rename.
     private static void FlushToDisk(FileStream stream) =>
@@ -498,4 +461,7 @@ internal sealed class GgufModelImporter(
                         .Select(Path.GetFileName)
                         .Any(existing => string.Equals(existing, fileName, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>The SHA-256 (lowercase hex) and byte count of the copy this importer just wrote.</summary>
+    private sealed record CopiedFile(string Hash, long Bytes);
 }

@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// Asserts the AUD4-19 observability instruments are published on the shared "XE.Node" meter and carry their documented,
+// Asserts the observability instruments are published on the shared "XE.Node" meter and carry their documented,
 // bounded tags. A wrong meter name or a dropped tag would silently strip the signal from the exporter; capturing through
 // a real MeterListener (the same surface OpenTelemetry attaches) catches that. Serial so a sibling test's node-meter
 // emission cannot bleed into a capture window.
 [NotInParallel]
-public sealed class NodeMetricsAud4InstrumentsTests
+public sealed class NodeMetricsInstrumentPublicationTests
 {
     [Test]
     public void TurnToModelLoadStartMs_RecordsOnNodeMeter_WithProviderTag()

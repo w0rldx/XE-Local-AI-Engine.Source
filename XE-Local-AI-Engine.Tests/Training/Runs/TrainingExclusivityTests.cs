@@ -263,7 +263,7 @@ public sealed class TrainingExclusivityTests
     }
 
     /// <summary>
-    ///     The Slice 5 split. An evaluation loads a model through the ordinary chat path, and the runtime-mutation
+    ///     The evaluation split. An evaluation loads a model through the ordinary chat path, and the runtime-mutation
     ///     lease forbids exactly that, so the evaluation branch takes the gate and NOT the lease. Taking the lease
     ///     would deadlock an evaluation against its own model load.
     /// </summary>

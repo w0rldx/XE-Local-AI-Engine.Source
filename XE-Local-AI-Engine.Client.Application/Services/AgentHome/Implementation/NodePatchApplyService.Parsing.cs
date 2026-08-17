@@ -57,34 +57,34 @@ internal sealed partial class NodePatchApplyService
         // unified-diff sigils appearing inline.
         const string prefixSource = "---";
         const string prefixDest = "+++";
-        var bodyPaths = new List<(string Prefix, string Raw)>();
+        var bodyPaths = new List<BodyPath>();
         foreach (var line in lines)
         {
             if (line.StartsWith("--- ", StringComparison.Ordinal)
                 && !line.StartsWith("--- /dev/null", StringComparison.Ordinal))
             {
-                bodyPaths.Add((prefixSource, line[4..]));
+                bodyPaths.Add(new BodyPath(prefixSource, line[4..]));
             }
             else if (line.StartsWith("+++ ", StringComparison.Ordinal)
                      && !line.StartsWith("+++ /dev/null", StringComparison.Ordinal))
             {
-                bodyPaths.Add((prefixDest, line[4..]));
+                bodyPaths.Add(new BodyPath(prefixDest, line[4..]));
             }
             else if (line.StartsWith("rename from ", StringComparison.Ordinal))
             {
-                bodyPaths.Add(("rename from", line[12..]));
+                bodyPaths.Add(new BodyPath("rename from", line[12..]));
             }
             else if (line.StartsWith("rename to ", StringComparison.Ordinal))
             {
-                bodyPaths.Add(("rename to", line[10..]));
+                bodyPaths.Add(new BodyPath("rename to", line[10..]));
             }
             else if (line.StartsWith("copy from ", StringComparison.Ordinal))
             {
-                bodyPaths.Add(("copy from", line[10..]));
+                bodyPaths.Add(new BodyPath("copy from", line[10..]));
             }
             else if (line.StartsWith("copy to ", StringComparison.Ordinal))
             {
-                bodyPaths.Add(("copy to", line[8..]));
+                bodyPaths.Add(new BodyPath("copy to", line[8..]));
             }
         }
 
@@ -99,7 +99,7 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected("a mode-only patch block has an unparseable or missing header path.");
             }
 
-            var (headerAlias, headerRelative) = headerPath.Value;
+            var (headerAlias, headerRelative) = headerPath;
             if (ContainsTraversal(headerRelative))
             {
                 return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
@@ -116,7 +116,7 @@ internal sealed partial class NodePatchApplyService
         }
 
         // Step 2: split each body path into alias + relative; validate traversal and cross-alias.
-        var allAliasResults = new List<(string Prefix, string Alias, string Relative)>();
+        var allAliasResults = new List<BodyAliasPath>();
         foreach (var (prefix, raw) in bodyPaths)
         {
             // Unified-diff body paths carry an "a/" or "b/" diff prefix; rename/copy lines do not.
@@ -132,14 +132,14 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected("a patch block has a path with no alias segment.");
             }
 
-            var (alias, relative) = split.Value;
+            var (alias, relative) = split;
 
             if (ContainsTraversal(relative))
             {
                 return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
             }
 
-            allAliasResults.Add((prefix, alias, relative));
+            allAliasResults.Add(new BodyAliasPath(prefix, alias, relative));
         }
 
         // All paths in the block must belong to the same alias (cross-alias rename/copy is a path-escape vector).
@@ -156,7 +156,7 @@ internal sealed partial class NodePatchApplyService
         // (e.g. "dir b/file"), so it is not used as the authoritative source. When a body plus-plus path is
         // present the header alias should agree; a mismatch is a crafted-patch signal and is rejected.
         var destBodyPath = allAliasResults.FirstOrDefault(result => result.Prefix == prefixDest);
-        if (destBodyPath != default)
+        if (destBodyPath is not null)
         {
             var headerBAlias = ExtractAliasFromHeader(lines[0]);
             if (headerBAlias is not null && !string.Equals(headerBAlias, blockAlias, StringComparison.Ordinal))
@@ -228,12 +228,12 @@ internal sealed partial class NodePatchApplyService
     }
 
     /// <summary>
-    ///     Parses the <c>a/…</c> path from a <c>diff --git a/… b/…</c> header into <c>(alias, relative)</c> using
+    ///     Parses the <c>a/…</c> path from a <c>diff --git a/… b/…</c> header into an <see cref="AliasPath" /> using
     ///     <see cref="SplitAlias" />. Used for mode-only blocks that carry no <c>---</c>/<c>+++</c> body lines; the
     ///     result is fed through the same traversal and within-root guards as all other target paths.
     ///     Returns <see langword="null" /> when the header cannot be parsed.
     /// </summary>
-    private static (string Alias, string Relative)? TryParseHeaderAPath(string header)
+    private static AliasPath? TryParseHeaderAPath(string header)
     {
         if (!header.StartsWith(DiffHeaderPrefix, StringComparison.Ordinal))
         {
@@ -285,7 +285,7 @@ internal sealed partial class NodePatchApplyService
         return "modified";
     }
 
-    private static (string Alias, string Relative)? SplitAlias(string path)
+    private static AliasPath? SplitAlias(string path)
     {
         // Path arrives with the a/ or b/ diff prefix already stripped. Split on the first '/' into alias + relative.
         var normalized = path.Replace(oldChar: '\\', newChar: '/');
@@ -297,7 +297,7 @@ internal sealed partial class NodePatchApplyService
 
         var alias = normalized[..separatorIndex];
         var relative = normalized[(separatorIndex + 1)..];
-        return relative.Length == 0 ? null : (alias, relative);
+        return relative.Length == 0 ? null : new AliasPath(alias, relative);
     }
 
     private static bool ContainsTraversal(string relativePath)
@@ -305,6 +305,15 @@ internal sealed partial class NodePatchApplyService
         var segments = relativePath.Replace(oldChar: '\\', newChar: '/').Split('/');
         return segments.Any(segment => segment is "..");
     }
+
+    // One raw path line lifted out of a patch block's body, tagged with the unified-diff prefix it came from.
+    private sealed record BodyPath(string Prefix, string Raw);
+
+    // A repo path split at its first segment: the selected-folder alias that owns it, and the path within that folder.
+    private sealed record AliasPath(string Alias, string Relative);
+
+    // A body path after the split, still carrying the prefix so the destination side can be told from the source side.
+    private sealed record BodyAliasPath(string Prefix, string Alias, string Relative);
 
     private sealed record ParsedBlock
     {

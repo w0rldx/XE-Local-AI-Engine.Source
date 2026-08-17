@@ -5,25 +5,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
-/// <summary>
-///     The operator-editable judge configuration. Everything here is inside the policy hash, so any change to it is a
-///     new policy revision and — on a project that already has runs — a re-judge.
-/// </summary>
-/// <param name="Rubric">The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</param>
-public sealed record BenchmarkJudgePolicyDraft(
-    string ModelName,
-    int ContextTokens,
-    BenchmarkJudgeRubricV1? Rubric = null,
-    string? ReferenceAnswer = null);
-
-public sealed record BenchmarkProjectDraft(
-    Guid Id,
-    string Name,
-    string CoreTask,
-    int ContextTokens,
-    Guid AgentDefinitionId,
-    BenchmarkJudgePolicyDraft? Judge = null);
-
 public interface IBenchmarkProjectService
 {
     Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default);

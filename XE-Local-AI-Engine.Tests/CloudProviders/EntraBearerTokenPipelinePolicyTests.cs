@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
 using System.ClientModel.Primitives;
 using Azure.Core;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -96,7 +97,7 @@ public sealed class EntraBearerTokenPipelinePolicyTests
     {
         var credential = new RecordingTokenCredential("token-value");
         var bearerPolicy = new EntraBearerTokenPipelinePolicy(credential, "api://backend/.default");
-        var headerPolicy = new CustomHeaderPipelinePolicy([("X-Tenant", "tenant-a")]);
+        var headerPolicy = new CustomHeaderPipelinePolicy([new ResolvedCustomHeader("X-Tenant", "tenant-a")]);
         using var message = CreateMessage();
         var pipeline = new PipelinePolicy[]
         {

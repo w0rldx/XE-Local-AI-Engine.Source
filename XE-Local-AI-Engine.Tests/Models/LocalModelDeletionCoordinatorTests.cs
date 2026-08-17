@@ -59,6 +59,33 @@ public sealed class LocalModelDeletionCoordinatorTests
     }
 
     [Test]
+    public async Task RollbackFailure_SurfacesTheOriginalFailureAndRetainsTheJournal()
+    {
+        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        var calls = 0;
+        context.ProviderResolver.When(static resolver => resolver.InvalidateModelProviderMap()).Do(_ =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                throw new InvalidOperationException("injected cache failure");
+            }
+
+            throw new IOException("injected rollback failure");
+        });
+
+        // The compensation failure must not become the caller's exception: the endpoint discriminates on the
+        // ORIGINAL type to answer its 409, and the journal left behind is what startup recovery replays.
+        var thrown = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+                                       context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal("injected cache failure", thrown.Message);
+        var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
+        AssertEx.True(Directory.Exists(deleteRoot) && Directory.EnumerateFiles(deleteRoot, "journal.json", SearchOption.AllDirectories).Any(),
+            "A failed rollback must retain the journal for startup recovery.");
+    }
+
+    [Test]
     public async Task ReconcileCommittedJournal_PurgesAfterSimulatedResponseCrash()
     {
         await using var context = await CreateContextAsync().ConfigureAwait(false);
@@ -98,11 +125,12 @@ public sealed class LocalModelDeletionCoordinatorTests
             BaseModelName = context.ModelName
         }, CancellationToken.None).ConfigureAwait(false);
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                                          context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
-                                      .ConfigureAwait(false);
+        // The TYPE is the contract: ConflictExceptionHandler discriminates on it to answer 409
+        // InstalledModelHasDependentAdapters instead of the 500 a bare InvalidOperationException would produce.
+        _ = await AssertEx.ThrowsAsync<InstalledModelDependentAdaptersException>(() =>
+                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
+                          .ConfigureAwait(false);
 
-        AssertEx.Equal("InstalledModelHasDependentAdapters", exception.Message);
         AssertEx.True(File.Exists(context.WeightPath), "A refused delete must not touch the base weights.");
         AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
         AssertEx.True(context.MapStore.HasMapping(context.ModelName));

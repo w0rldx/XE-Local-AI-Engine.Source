@@ -242,9 +242,9 @@ public sealed class SandboxOrphanReaperTests : IDisposable
             _ = _markers.Remove(markerId);
         }
 
-        public IReadOnlyList<(string MarkerId, SandboxProcessMarker Marker)> ReadAll()
+        public IReadOnlyList<SandboxMarkerEntry> ReadAll()
         {
-            return [.. _markers.Select(entry => (entry.Key, entry.Value))];
+            return [.. _markers.Select(entry => new SandboxMarkerEntry(entry.Key, entry.Value))];
         }
     }
 
@@ -260,7 +260,7 @@ public sealed class SandboxOrphanReaperTests : IDisposable
             // Not reached.
         }
 
-        public IReadOnlyList<(string MarkerId, SandboxProcessMarker Marker)> ReadAll()
+        public IReadOnlyList<SandboxMarkerEntry> ReadAll()
         {
             throw new IOException("the marker directory is unreadable");
         }

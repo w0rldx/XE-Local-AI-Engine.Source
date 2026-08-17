@@ -2043,11 +2043,6 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse 
 	deleted: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse = {
-	reason: string;
-	message: string;
-};
-
 export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = {
 	[key: string]: never;
 };
@@ -8606,7 +8601,7 @@ export type DeleteLocalModelErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
-	409: XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
 export type DeleteLocalModelError = DeleteLocalModelErrors[keyof DeleteLocalModelErrors];

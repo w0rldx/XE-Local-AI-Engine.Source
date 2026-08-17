@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -38,7 +39,7 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(variant);
 
         // A CPU build never replays a frozen GPU profile (its -ngl/-ts/-ot/-ctk are GPU-specific), so the CPU spawn
-        // always gets the deterministic policy context (the AUD4-02 fix) plus the CPU thread policy — regardless of
+        // always gets the deterministic policy context plus the CPU thread policy — regardless of
         // whether a profile exists.
         if (variant == GpuVariant.Cpu)
         {
@@ -99,12 +100,12 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         return _fallbackStore.DisableOptimizedConfigAsync(variant, ct);
     }
 
-    /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets (null, null) — no thread flags.</summary>
-    private (int? Threads, int? ThreadsBatch) ResolveCpuThreads(GpuVariant variant)
+    /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets both null — no thread flags.</summary>
+    private CpuThreadPlan ResolveCpuThreads(GpuVariant variant)
     {
         if (variant != GpuVariant.Cpu || !_options.EnableCpuThreadPolicy)
         {
-            return (null, null);
+            return new CpuThreadPlan(Threads: null, ThreadsBatch: null);
         }
 
         // Environment.ProcessorCount is the LOGICAL core count; estimate physical cores by halving it when SMT is
@@ -122,6 +123,10 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
             ? explicitBatch
             : physical;
 
-        return (threads, threadsBatch);
+        return new CpuThreadPlan(threads, threadsBatch);
     }
+
+    /// <summary>The llama-server generation (<c>-t</c>) and prompt-batch (<c>-tb</c>) thread counts; both null on a GPU build.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct CpuThreadPlan(int? Threads, int? ThreadsBatch);
 }

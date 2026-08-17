@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-09: the size-aware readiness-timeout computation and the options validation added to
+///     The size-aware readiness-timeout computation and the options validation added to
 ///     <see cref="LlamaServerSupervisorOptions" />.
 /// </summary>
 public sealed class LlamaServerSupervisorOptionsTests

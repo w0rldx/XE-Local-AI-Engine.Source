@@ -82,7 +82,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
 
         foreach (var model in models)
         {
-            var modelName = ReadModelName(model);
+            var modelName = model.ReadModelName();
             if (string.IsNullOrWhiteSpace(modelName))
             {
                 continue;
@@ -241,10 +241,5 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         {
             return null;
         }
-    }
-
-    private static string? ReadModelName(Model model)
-    {
-        return !string.IsNullOrWhiteSpace(model.ModelName) ? model.ModelName : model.Name;
     }
 }

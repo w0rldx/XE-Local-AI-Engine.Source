@@ -24,7 +24,7 @@ public sealed class HeuristicTokenEstimatorTests
     [Test]
     public void EstimateTokens_IsMemoizedPerInstanceWithoutChangingTheResult()
     {
-        // AUD4-16: per-message estimates are memoized by instance so the budgeter's repeated re-estimation across rounds
+        // Per-message estimates are memoized by instance so the budgeter's repeated re-estimation across rounds
         // is cheap. The memo must be transparent: repeated calls on one instance and a fresh instance with identical
         // content all yield the same value the formula produces.
         var estimator = new HeuristicTokenEstimator();

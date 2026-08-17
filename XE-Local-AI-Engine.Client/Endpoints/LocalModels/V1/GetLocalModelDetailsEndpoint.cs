@@ -89,7 +89,7 @@ public sealed class GetLocalModelDetailsEndpoint(
 
     // Builds the details response for a llama.cpp-served GGUF from the installed-model registry — no Ollama probe.
     // Maps onto the SAME LocalModelDetailsResponse shape the Ollama branch returns: MaxContextTokens (advertised train
-    // ceiling) is read from the descriptor, and EffectiveContextTokens (the RUNNING process's launched -c, AUD4-02) from
+    // ceiling) is read from the descriptor, and EffectiveContextTokens (the RUNNING process's launched -c) from
     // the provider's runtime info when a chat process is warm. Template/System/License are Ollama Modelfile concepts a
     // GGUF has no equivalent of, so they stay null. A model that resolves to llamacpp but isn't in the installed
     // registry (a stale map row, or one removed on disk) has no details — a clean 404, matching Ollama's "no entry".

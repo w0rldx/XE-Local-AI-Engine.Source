@@ -9,9 +9,9 @@ using System.ClientModel.Primitives;
 /// </summary>
 internal sealed class CustomHeaderPipelinePolicy : PipelinePolicy
 {
-    private readonly IReadOnlyList<(string Name, string Value)> _headers;
+    private readonly IReadOnlyList<ResolvedCustomHeader> _headers;
 
-    public CustomHeaderPipelinePolicy(IReadOnlyList<(string Name, string Value)> headers)
+    public CustomHeaderPipelinePolicy(IReadOnlyList<ResolvedCustomHeader> headers)
     {
         ArgumentNullException.ThrowIfNull(headers);
 

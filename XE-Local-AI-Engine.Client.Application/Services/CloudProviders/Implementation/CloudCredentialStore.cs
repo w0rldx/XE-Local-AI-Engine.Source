@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Configuration;
@@ -94,7 +91,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         try
         {
             await WriteProtectedPayloadAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
-            ApplyPlatformFileSecurity();
+            SecureFilePermissions.Apply(_credentialsPath);
         }
         finally
         {
@@ -410,13 +407,13 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     ///     Writes the protected blob, creating the file 0600 on *nix in the same syscall that creates it.
     ///     <para>
     ///         <c>File.WriteAllBytesAsync</c> creates at the process umask — 0644 on a default Linux/macOS box — and
-    ///         <see cref="ApplyPlatformFileSecurity" /> then narrows it, leaving a window in which any other local user
+    ///         <see cref="SecureFilePermissions.Apply" /> then narrows it, leaving a window in which any other local user
     ///         can read the file. Passing <see cref="FileStreamOptions.UnixCreateMode" /> closes the window by making
     ///         the mode part of the create. This mirrors <c>DesktopBootstrap.TryCreateNewSecretFile</c>, which already
     ///         does exactly this for <c>node.key</c>.
     ///     </para>
     ///     <para>
-    ///         <c>UnixCreateMode</c> applies only when the file is created, so <see cref="ApplyPlatformFileSecurity" />
+    ///         <c>UnixCreateMode</c> applies only when the file is created, so <see cref="SecureFilePermissions.Apply" />
     ///         still runs afterwards: it narrows a file left behind at 0644 by an older build, and it is the only thing
     ///         that applies the Windows ACL.
     ///     </para>
@@ -441,39 +438,6 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         {
             await stream.WriteAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    private void ApplyPlatformFileSecurity()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            ApplyWindowsFileSecurity();
-            return;
-        }
-
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_credentialsPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private void ApplyWindowsFileSecurity()
-    {
-        var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-        var currentIdentity = WindowsIdentity.GetCurrent();
-        if (currentIdentity.User is not null)
-        {
-            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User,
-                FileSystemRights.FullControl,
-                AccessControlType.Allow));
-        }
-
-        var fileInfo = new FileInfo(_credentialsPath);
-        fileInfo.SetAccessControl(fileSecurity);
     }
 
     private void ClearCredentialsFileBestEffort()

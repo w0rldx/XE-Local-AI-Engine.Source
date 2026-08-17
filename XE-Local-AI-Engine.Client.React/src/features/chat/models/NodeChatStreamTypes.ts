@@ -84,7 +84,7 @@ export interface NodeChatStreamEventDto {
 	// `noticeMessage` is the sanitized, user-facing sentence to display verbatim.
 	noticeKind?: string | null;
 	noticeMessage?: string | null;
-	// Runtime phase: present on the `assistant-phase` event only (AUD4-20). One of "preparing_runtime" |
+	// Runtime phase: present on the `assistant-phase` event only. One of "preparing_runtime" |
 	// "loading_model" | "generating" — emitted before the first token while a local model cold-loads, so the UI can
 	// show a distinct "Loading model…" indicator instead of the generic typing dots. Absent for cloud/Ollama turns.
 	runtimePhase?: string | null;

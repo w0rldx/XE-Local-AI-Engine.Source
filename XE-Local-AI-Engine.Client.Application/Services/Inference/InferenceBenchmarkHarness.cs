@@ -791,7 +791,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         };
     }
 
-    private static async Task<(double TtftMs, string Text)> StreamStageAsync(IChatClient chatClient,
+    private static async Task<StreamStageResult> StreamStageAsync(IChatClient chatClient,
         IReadOnlyList<ChatMessage> messages,
         ChatOptions options,
         CancellationToken ct)
@@ -806,7 +806,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             builder.Append(update.Text);
         }
 
-        return (firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, builder.ToString());
+        return new StreamStageResult(firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, builder.ToString());
     }
 
     private async Task<string?> ScrapeMetricsAsync(Uri metricsUri, CancellationToken ct)
@@ -1061,4 +1061,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         double? SpeculativeAcceptedTokens,
         double? SpeculativeVerificationSteps,
         double? SpeculativeAcceptanceRate);
+
+    // One streamed stage of the benchmark: the time to the first update, and the full text the stage produced.
+    private sealed record StreamStageResult(double TtftMs, string Text);
 }

@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-08: proves the node SQLite connection posture — WAL journaling, a native busy_timeout, and synchronous=NORMAL
+///     Proves the node SQLite connection posture — WAL journaling, a native busy_timeout, and synchronous=NORMAL
 ///     — is applied on both the raw-ADO open path and the EF connection interceptor, that an existing non-WAL database
 ///     converts safely, and that busy_timeout lets a second writer wait rather than fail instantly.
 /// </summary>

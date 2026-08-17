@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     The two round-trip tests are SKIPPED in CI (they require a live llama-server); the transport-policy tests
-///     (<c>BuildClientOptions_*</c> / <c>BuiltClient_DoesNotRetry_*</c>) run everywhere — they assert the AUD4-18 pinned
+///     (<c>BuildClientOptions_*</c> / <c>BuiltClient_DoesNotRetry_*</c>) run everywhere — they assert the pinned
 ///     NetworkTimeout + no-retry policy without a server. Set <c>RUN_LLAMASERVER_INTEGRATION=true</c> and provide the chat /
 ///     embedding base URLs + model ids (<c>LLAMASERVER_CHAT_BASEURL</c>, <c>LLAMASERVER_CHAT_MODEL</c>,
 ///     <c>LLAMASERVER_EMBED_BASEURL</c>, <c>LLAMASERVER_EMBED_MODEL</c>; base URLs default to

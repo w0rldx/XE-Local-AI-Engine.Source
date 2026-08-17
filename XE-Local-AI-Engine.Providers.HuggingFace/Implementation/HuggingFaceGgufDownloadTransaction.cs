@@ -12,6 +12,10 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
     HuggingFaceOptions options,
     TimeProvider timeProvider) : IGgufDownloadTransaction
 {
+    // Names this pipeline in the compensation failure so the inner exception still says which transaction
+    // could not clean up after itself.
+    private const string CleanupOwnership = "download";
+
     public async Task<ResolvedGgufDownload> ResolveAsync(GgufModelRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -221,19 +225,19 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
         }
         catch (Exception exception)
         {
-            var artifacts = new List<(string Path, bool Owned)>
+            var artifacts = new List<OwnedArtifact>
             {
-                (temporarySidecarPath, true),
-                (temporaryWeightPath, true),
-                (temporaryWeightPath + ".part", true)
+                new(temporarySidecarPath, Owned: true),
+                new(temporaryWeightPath, Owned: true),
+                new(temporaryWeightPath + ".part", Owned: true)
             };
             if (temporaryProjectorPath is not null)
             {
-                artifacts.Add((temporaryProjectorPath, true));
-                artifacts.Add((temporaryProjectorPath + ".part", true));
+                artifacts.Add(new OwnedArtifact(temporaryProjectorPath, Owned: true));
+                artifacts.Add(new OwnedArtifact(temporaryProjectorPath + ".part", Owned: true));
             }
 
-            var cleanupFailure = TryDeleteOwnedArtifacts(artifacts.ToArray());
+            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll([.. artifacts]);
             if (cleanupFailure is not null)
             {
                 throw new GgufAcquisitionCleanupException("Download cleanup requires recovery.",
@@ -353,28 +357,28 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             }
         }
 
-        DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
-            (commitReceipt.FinalProjectorPath ?? string.Empty,
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
+            new OwnedArtifact(commitReceipt.FinalProjectorPath ?? string.Empty,
                 commitReceipt.FinalProjectorPath is not null && commitReceipt.OwnsFinalProjector),
-            (commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
+            new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
     }
 
     public Task DiscardPreparedAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedDownload);
-        var artifacts = new List<(string Path, bool Owned)>
+        var artifacts = new List<OwnedArtifact>
         {
-            (preparedDownload.TemporarySidecarPath, true),
-            (preparedDownload.TemporaryGgufPath, true),
-            (preparedDownload.TemporaryGgufPath + ".part", true)
+            new(preparedDownload.TemporarySidecarPath, Owned: true),
+            new(preparedDownload.TemporaryGgufPath, Owned: true),
+            new(preparedDownload.TemporaryGgufPath + ".part", Owned: true)
         };
         if (preparedDownload.TemporaryProjectorPath is not null)
         {
-            artifacts.Add((preparedDownload.TemporaryProjectorPath, true));
-            artifacts.Add((preparedDownload.TemporaryProjectorPath + ".part", true));
+            artifacts.Add(new OwnedArtifact(preparedDownload.TemporaryProjectorPath, Owned: true));
+            artifacts.Add(new OwnedArtifact(preparedDownload.TemporaryProjectorPath + ".part", Owned: true));
         }
 
-        DeleteOwnedArtifacts(artifacts.ToArray());
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, [.. artifacts]);
         return Task.CompletedTask;
     }
 
@@ -454,45 +458,4 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
 
     private static HuggingFaceDownloadException IntegrityFailure(string message) =>
         new(HuggingFaceDownloadFailure.HashMismatch, message);
-
-    private static Exception? TryDeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
-    {
-        List<Exception>? failures = null;
-        foreach (var artifact in artifacts)
-        {
-            try
-            {
-                DeleteOwned(artifact.Path, artifact.Owned);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
-            {
-                (failures ??= []).Add(exception);
-            }
-        }
-
-        return failures is null ? null : new AggregateException(failures);
-    }
-
-    private static void DeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
-    {
-        var failure = TryDeleteOwnedArtifacts(artifacts);
-        if (failure is not null)
-        {
-            throw new IOException("One or more download-owned artifacts could not be removed.", failure);
-        }
-    }
-
-    private static void DeleteOwned(string path, bool owned)
-    {
-        if (!owned)
-        {
-            return;
-        }
-
-        File.Delete(path);
-        if (File.Exists(path) || Directory.Exists(path))
-        {
-            throw new IOException("A download-owned artifact could not be removed.");
-        }
-    }
 }

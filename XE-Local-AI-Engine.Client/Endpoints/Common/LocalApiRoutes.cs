@@ -701,8 +701,8 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Training group routes. Slice 1 owns the dataset half (definitions, datasets, samples, mocks); the runtime and
-    ///     base-artifact halves append their own constants here.
+    ///     Training group routes. The dataset half (definitions, datasets, samples, mocks) is declared here; the
+    ///     runtime and base-artifact halves append their own constants.
     /// </summary>
     public static class Training
     {

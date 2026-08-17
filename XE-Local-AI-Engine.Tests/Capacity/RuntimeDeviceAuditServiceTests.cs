@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The runtime device audit (AUD4-03). Its pure <see cref="RuntimeDeviceAuditService.BuildState" /> decides a silent
+///     The runtime device audit. Its pure <see cref="RuntimeDeviceAuditService.BuildState" /> decides a silent
 ///     CPU fallback from (host profile, selected variant, enumerated devices): a GPU box whose runtime enumerates the GPU
 ///     is fine; a CPU variant on a GPU box, or a GPU variant that RAN and saw zero devices, is a fallback; an
 ///     indeterminate probe never raises a false alarm; and a CPU-only host is never flagged. The effective-profile

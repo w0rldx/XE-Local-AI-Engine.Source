@@ -64,7 +64,7 @@ internal sealed class PlaybookAnalysisService(
                 continue;
             }
 
-            if (!dedupKeys.Add(DedupKey(proposal.Behavior, proposal.Scope)))
+            if (!dedupKeys.Add(ToDedupKey(proposal.Behavior, proposal.Scope)))
             {
                 // Matches an existing Suggested/Enabled action (or an earlier proposal in this same run) — skip it so
                 // repeat analysis runs don't flood the staging list.
@@ -123,20 +123,25 @@ internal sealed class PlaybookAnalysisService(
                        .ToHashSet();
     }
 
-    private static HashSet<(string Scope, string Behavior)> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
+    private static HashSet<DedupKey> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
     {
         // Only live actions matter for dedup: a rejected (Archived) or disabled action should not block re-proposing.
         return existing
                .Where(static action => action.State is PlaybookActionState.Suggested or PlaybookActionState.Enabled)
-               .Select(static action => DedupKey(action.Behavior, action.Scope))
+               .Select(static action => ToDedupKey(action.Behavior, action.Scope))
                .ToHashSet();
     }
 
-    private static (string Scope, string Behavior) DedupKey(string behavior, string? scope)
+    private static DedupKey ToDedupKey(string behavior, string? scope)
     {
-        // A (scope, behavior) tuple keys the dedup set, so there is no separator char to collide with content.
-        return (NormalizeText(scope), NormalizeText(behavior));
+        // A (scope, behavior) pair keys the dedup set, so there is no separator char to collide with content.
+        return new DedupKey(NormalizeText(scope), NormalizeText(behavior));
     }
+
+    // The normalized identity a proposal dedupes on. Not shared with MemoryExtractionService's same-named key: that
+    // one scopes by the MemoryScope enum, and widening either to fit the other would let an untyped playbook scope
+    // and a typed memory scope collide.
+    private readonly record struct DedupKey(string Scope, string Behavior);
 
     private static string NormalizeText(string? value)
     {

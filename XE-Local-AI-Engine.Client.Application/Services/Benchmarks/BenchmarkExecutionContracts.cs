@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IBenchmarkRunExecutor
@@ -346,4 +347,38 @@ public static class BenchmarkExecutionSerialization
     public static IReadOnlyList<BenchmarkOutputPart> DeserializeParts(ReadOnlySpan<byte> payload) =>
         JsonSerializer.Deserialize<BenchmarkOutputPart[]>(payload, JsonOptions)
         ?? throw new BenchmarkSnapshotException("Benchmark output parts are invalid.");
+}
+
+public sealed record BenchmarkEligibleAgent(Guid Id, string Name, int Version);
+
+public sealed record BenchmarkEligibleModel(
+    string ModelName,
+    int? MaxContextTokens,
+    int? EffectiveContextTokens,
+    LocalModelOrigin? Origin,
+    string ModelContentFingerprint,
+    bool SupportsTools);
+
+/// <summary>
+///     The operator-editable judge configuration. Everything here is inside the policy hash, so any change to it is a
+///     new policy revision and — on a project that already has runs — a re-judge.
+/// </summary>
+/// <param name="Rubric">The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</param>
+public sealed record BenchmarkJudgePolicyDraft(
+    string ModelName,
+    int ContextTokens,
+    BenchmarkJudgeRubricV1? Rubric = null,
+    string? ReferenceAnswer = null);
+
+public sealed record BenchmarkProjectDraft(
+    Guid Id,
+    string Name,
+    string CoreTask,
+    int ContextTokens,
+    Guid AgentDefinitionId,
+    BenchmarkJudgePolicyDraft? Judge = null);
+
+public sealed class BenchmarkQueueOptions
+{
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
 }

@@ -12,6 +12,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>One phase's frozen launch vector plus the intent scalars the row records beside it.</summary>
 public sealed record BenchmarkFrozenLaunch(BenchmarkLlamaRuntimeSnapshotV1 Runtime, BenchmarkRunLaunchIntent Intent);
 
+// The KV-cache type a launch will actually use: the effective type, whether it was picked explicitly or resolved by
+// Auto, and — for Auto — the reason it degraded (null when it did not).
+internal sealed record KvCacheResolution(string Effective, string Source, string? Reason);
+
 /// <summary>
 ///     Resolves what one benchmark phase will launch with: the profile replay, the KV-cache type it will run with, and
 ///     the launch identity that vector is INTENDED to produce. Shared by the primary freeze and the judge, because both
@@ -139,7 +143,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
     ///     explicit quantized pick the selected binary cannot be shown to accept is refused (422) rather than
     ///     discovered as a failed spawn.
     /// </summary>
-    private static (string Effective, string Source, string? Reason) ResolveKvCacheType(string? requested,
+    private static KvCacheResolution ResolveKvCacheType(string? requested,
         GpuVariant variant,
         LlamaServerLaunchCapabilities? capabilities,
         bool optimizedDisabled)
@@ -150,27 +154,27 @@ public sealed class BenchmarkPhaseLaunchResolver(
         {
             if (!isGpu)
             {
-                return (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonCpuVariant);
+                return new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonCpuVariant);
             }
 
             if (!probed)
             {
-                return (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonProbeUnavailable);
+                return new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonProbeUnavailable);
             }
 
             if (optimizedDisabled)
             {
-                return (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonFallbackDisabled);
+                return new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonFallbackDisabled);
             }
 
             return Accepts(capabilities!, BenchmarkKvCacheType.Q8_0)
-                ? (BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto, null)
-                : (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonManifestUnsupported);
+                ? new KvCacheResolution(BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto, null)
+                : new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonManifestUnsupported);
         }
 
         if (!BenchmarkKvCacheType.IsQuantized(requested))
         {
-            return (requested, BenchmarkKvCacheType.SourceExplicit, null);
+            return new KvCacheResolution(requested, BenchmarkKvCacheType.SourceExplicit, null);
         }
 
         if (!isGpu)
@@ -191,7 +195,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
                 $"The selected llama.cpp binary does not accept a {requested} KV cache with flash attention. Pick f16.");
         }
 
-        return (requested, BenchmarkKvCacheType.SourceExplicit, null);
+        return new KvCacheResolution(requested, BenchmarkKvCacheType.SourceExplicit, null);
     }
 
     private static bool Accepts(LlamaServerLaunchCapabilities capabilities, string cacheType) =>

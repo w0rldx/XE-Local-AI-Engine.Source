@@ -24,7 +24,7 @@ export const nodeChatStreamEventTypes = {
 	assistantPending: "assistant-pending",
 	assistantQueued: "assistant-queued",
 	assistantStreaming: "assistant-streaming",
-	// A pre-first-token runtime-phase transition (AUD4-20). Never mutates content/status — it only carries the
+	// A pre-first-token runtime-phase transition. Never mutates content/status — it only carries the
 	// runtime phase forward so the UI can show a "Loading model…" indicator during a local cold load.
 	assistantPhase: "assistant-phase",
 	assistantDelta: "assistant-delta",
@@ -630,7 +630,7 @@ export function applyNodeChatStreamEvent(
 		};
 	}
 
-	// A pre-first-token runtime-phase transition (AUD4-20): carry the phase forward on the streaming state without
+	// A pre-first-token runtime-phase transition: carry the phase forward on the streaming state without
 	// touching content/status/parts, so the composer shows a "Loading model…" indicator during a local cold load.
 	// The phase clears naturally once the first content delta lands (the main path returns no runtimePhase).
 	if (event.type === nodeChatStreamEventTypes.assistantPhase) {

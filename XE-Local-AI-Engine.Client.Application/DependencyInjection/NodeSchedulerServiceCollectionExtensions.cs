@@ -42,7 +42,7 @@ public static class NodeSchedulerServiceCollectionExtensions
                     // time would throw under WebApplicationFactory, whose connection string is layered in after services
                     // are registered.
                     //
-                    // Concurrency posture (AUD4-08): the scheduler deliberately shares the node.sqlite file with chat/KB
+                    // Concurrency posture: the scheduler deliberately shares the node.sqlite file with chat/KB
                     // rather than owning its own DB. WAL is a persistent, file-level property that NodeSqlitePragmas sets
                     // once (via the EF connection interceptor during the startup migration, before this hosted service
                     // begins firing jobs), so Quartz's connections run under WAL automatically — its frequent polling reads

@@ -68,13 +68,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         the whole feature is built on.
     ///     </para>
     /// </summary>
-    private static readonly (string FileName, string Content)[] BuildConfigurationBarrier =
+    private static readonly ConfigurationFile[] BuildConfigurationBarrier =
     [
-        ("Directory.Build.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
-        ("Directory.Build.targets", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
-        ("Directory.Packages.props",
+        new("Directory.Build.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
+        new("Directory.Build.targets", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
+        new("Directory.Packages.props",
             "<Project>\n  <PropertyGroup>\n    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>\n  </PropertyGroup>\n</Project>\n"),
-        ("Directory.Solution.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n")
+        new("Directory.Solution.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n")
     ];
 
     private readonly INodeDataDirectory _dataDirectory;
@@ -557,6 +557,10 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(first)),
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(second)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    // One barrier file written above the workspace: the name MSBuild/NuGet would search upward for, and the inert
+    // content that stops the search there.
+    private sealed record ConfigurationFile(string FileName, string Content);
 
     private sealed record WorkspaceManifest(
         int Version,
