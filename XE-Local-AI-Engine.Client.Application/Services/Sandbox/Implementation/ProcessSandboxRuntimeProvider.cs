@@ -4,16 +4,12 @@ using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.Win32.SafeHandles;
-using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
 ///     The <c>process</c> sandbox <see cref="ISandboxRuntimeProvider" /> — the <b>process-jail provider</b>: backs
@@ -27,8 +23,9 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///         ADR 0004. Those two are SIBLINGS behind one SPI, chosen per feature: Development Mode
 ///         gets the container provider, while AgentHome (4 injection sites) and Coder (3 sites) stay here.
 ///         All soft-guard logic (working-dir jail, path canonicalization, no-follow open, byte budgets, timeout,
-///         tree-kill) lives INSIDE this class; a future hardware-isolated (MXC) provider replaces the whole provider,
-///         not the contract.
+///         tree-kill) is owned by this provider — the path/symlink/no-follow half factored out into
+///         <see cref="SandboxJailPathGuard" /> so the guard pair is one audit target; a future hardware-isolated (MXC)
+///         provider replaces the whole provider, not the contract.
 ///     </para>
 ///     <para>
 ///         Security posture (v1): this is supervised execution, NOT an OS isolation boundary. That has not changed,
@@ -85,17 +82,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     // Default captured-output ceiling per stream (stdout / stderr). Mirrors the container provider's bounded transfer
     // posture: capture is capped, and reading stops once the cap is reached so a runaway command cannot exhaust memory.
     private const int DefaultMaxCapturedOutputBytes = 4 * 1024 * 1024;
-
-    // O_RDONLY (0x0) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux — the same flag set the deleted container
-    // provider used. A raw (FileOptions) cast for O_NOFOLLOW throws, so the libc open() DllImport below is required
-    // (parity with AgentHome's host-file no-follow guard).
-    private const int ReadOnlyNoFollowCloseOnExecFlags = 0x0 | 0x20000 | 0x80000;
-
-    // O_WRONLY (0x1) | O_CREAT (0x40) | O_TRUNC (0x200) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux. A
-    // no-follow create fails with ELOOP if the leaf already exists as a symlink, so the copy-into write cannot be
-    // redirected through a planted leaf symlink. 0o644 mode for the created file.
-    private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
-    private const int DefaultCreateFileMode = 0b110_100_100;
 
     // SECURITY INVARIANT: a sandboxed child NEVER inherits the worker process environment. The worker holds secrets
     // (cloud API keys, OAuth tokens, the node SQLite key, connection strings) as environment variables; forwarding the
@@ -544,32 +530,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var destination = ResolveJailPath(state, request.DestinationPath);
-
-        // SECURITY (hard reject): a sandboxed command can plant a symlink inside the jail, so the destination's parent
-        // chain — and the leaf if it already exists — must contain no symlink that would redirect the write outside the
-        // jail. The parent dirs are created first so they exist (and are re-checked) before the no-follow create.
-        var parent = Path.GetDirectoryName(destination);
-        if (parent is not null)
-        {
-            // Validate the existing prefix BEFORE Directory.CreateDirectory: that API follows an intermediate
-            // symlink, so creating first could mutate an outside directory before the later rejection. Re-check after
-            // creation to cover every newly materialized component and a concurrent swap.
-            EnsureNoSymlinkComponentsUnderJail(state.JailRoot, parent, request.DestinationPath);
-            Directory.CreateDirectory(parent);
-            EnsureNoSymlinkComponentsUnderJail(state.JailRoot, parent, request.DestinationPath);
-        }
-
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, destination, request.DestinationPath);
-
-        // Re-open the host source under the no-follow / byte-cap-on-re-read guard ported from the container provider:
-        // never trust a path string sized by an earlier walk. A swap-to-symlink, over-cap file, or growth-after-sizing
-        // throws so the workspace preparation cannot report a successful snapshot for bytes that were never copied.
-        var content = ReadHostFileUnderGuard(request.SourcePath);
-
-        // No-follow create on Linux: if the leaf was swapped for a symlink between the component check and the write,
-        // O_NOFOLLOW makes the create fail rather than write through the link.
-        await WriteJailFileNoFollowAsync(destination, content, cancellationToken).ConfigureAwait(false);
+        await SandboxFileSurveyOperations.CopyIntoAsync(state.JailRoot, request, _maxCopyFileBytes, cancellationToken).ConfigureAwait(false);
     }
 
     public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -579,24 +540,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var resolved = ResolveJailPath(state, sandboxPath);
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
-
-        if (Directory.Exists(resolved))
-        {
-            StandaloneGitClone.Delete(resolved);
-        }
-        else if (File.Exists(resolved))
-        {
-            throw new UnauthorizedAccessException("The requested sandbox directory is occupied by a file.");
-        }
-
-        Directory.CreateDirectory(resolved);
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
-        if (Directory.EnumerateFileSystemEntries(resolved).Any())
-        {
-            throw new IOException("The sandbox directory could not be proven empty after reset.");
-        }
+        SandboxFileSurveyOperations.ResetDirectory(state.JailRoot, sandboxPath);
 
         return Task.CompletedTask;
     }
@@ -617,44 +561,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var resolved = ResolveJailPath(state, sandboxPath);
-
-        // SECURITY: reject any symlink component (a sandboxed command can plant one), then read through a no-follow
-        // open so a leaf swapped to a symlink after the component check cannot redirect the read outside the jail.
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
-        if (!File.Exists(resolved))
-        {
-            throw new FileNotFoundException($"Sandbox path '{sandboxPath}' was not found.", sandboxPath);
-        }
-
-        var bytes = await ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken).ConfigureAwait(false);
-        return Encoding.UTF8.GetString(bytes);
+        return await SandboxFileSurveyOperations.ReadFileAsync(state.JailRoot, sandboxPath, maxBytes, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    ///     Lists the jail's regular files. Resolves the directory through the SAME two controls a read goes through —
-    ///     <c>ResolveJailPath</c> for the lexical escape and <c>EnsureNoSymlinkComponentsUnderJail</c> for a planted
-    ///     link — and then walks it with <see cref="WorkspaceFileScanner" />, which follows no link it meets on the way
-    ///     down either.
-    ///     <para>
-    ///         This used to be the caller's <c>find</c> shell-out. Doing it here is what makes the operation exist on a
-    ///         host with no findutils, and it also moves the confinement from an argument vector the caller had to get
-    ///         right into the provider that owns the jail.
-    ///     </para>
-    /// </summary>
+    /// <inheritdoc cref="ISandboxRuntimeProvider.ListFilesAsync" />
     public Task<IReadOnlyList<string>> ListFilesAsync(SandboxHandle handle,
         SandboxListFilesRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var root = ResolveSurveyDirectory(handle, request.DirectoryPath, cancellationToken);
+        var state = ResolveSurveyState(handle, request.DirectoryPath, cancellationToken);
 
-        IReadOnlyList<string> entries = WorkspaceFileScanner.ListFiles(root,
-            request.MaxEntries,
-            request.IsPathSuppressed ?? (static _ => false),
-            request.NameGlob,
-            cancellationToken);
-        return Task.FromResult(entries);
+        return Task.FromResult(SandboxFileSurveyOperations.ListFiles(state.JailRoot, request, cancellationToken));
     }
 
     /// <inheritdoc cref="ISandboxRuntimeProvider.SearchTextAsync" />
@@ -663,43 +581,23 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var root = ResolveSurveyDirectory(handle, request.DirectoryPath, cancellationToken);
+        var state = ResolveSurveyState(handle, request.DirectoryPath, cancellationToken);
 
-        IReadOnlyList<string> matches = WorkspaceFileScanner.SearchText(root,
-            request.Pattern,
-            request.IsRegex,
-            request.MaxMatches,
-            request.MaxOutputBytes,
-            request.IsPathSuppressed ?? (static _ => false),
-            cancellationToken);
-        return Task.FromResult(matches);
+        return Task.FromResult(SandboxFileSurveyOperations.SearchText(state.JailRoot, request, cancellationToken));
     }
 
     /// <summary>
-    ///     The survey's own confinement, identical to the read leg's. Kept in one place so the two surveys cannot drift
-    ///     apart from each other or from <c>ReadFileAsync</c>.
-    ///     <para>
-    ///         Suppression of secrets is deliberately NOT applied here: which entries a feature may see is that
-    ///         feature's policy, not the jail's, and the two callers do not agree — Development gates on
-    ///         <c>IsSecret</c> while Coder additionally drops its whole copy-filter set. The provider's job is
-    ///         containment; the caller's is redaction, and it applies it to what comes back.
-    ///     </para>
+    ///     The handle-side half of a survey's entry checks — argument validation and the live-sandbox lookup — kept
+    ///     together so both surveys enter <see cref="SandboxFileSurveyOperations" /> under identical conditions. The
+    ///     jail-side half (path resolution + symlink walk) lives with the survey itself.
     /// </summary>
-    private string ResolveSurveyDirectory(SandboxHandle handle, string directoryPath, CancellationToken cancellationToken)
+    private JailState ResolveSurveyState(SandboxHandle handle, string directoryPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
-        var resolved = ResolveJailPath(state, directoryPath);
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, directoryPath);
-        if (!Directory.Exists(resolved))
-        {
-            throw new DirectoryNotFoundException($"Sandbox path '{directoryPath}' was not found.");
-        }
-
-        return resolved;
+        return GetAliveState(handle);
     }
 
     public async Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -709,20 +607,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var source = ResolveJailPath(state, request.SourcePath);
-
-        // SECURITY: reject any symlink component on the jail-side source, then read through a no-follow open so an
-        // escaping symlink cannot copy a host file outside the jail out to the caller's destination.
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, source, request.SourcePath);
-        if (!File.Exists(source))
-        {
-            throw new FileNotFoundException($"Sandbox path '{request.SourcePath}' was not found.", request.SourcePath);
-        }
-
-        // Read the raw bytes from inside the jail and write them to the host destination so a binary artifact survives
-        // the round trip unchanged (parity with the container provider's copy-out).
-        var content = await ReadJailFileBytesNoFollowAsync(source, int.MaxValue, cancellationToken).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken).ConfigureAwait(false);
+        await SandboxFileSurveyOperations.CopyOutAsync(state.JailRoot, request, cancellationToken).ConfigureAwait(false);
     }
 
     public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default)
@@ -1084,25 +969,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             throw new DirectoryNotFoundException("The trusted host workspace must be an existing canonical directory.");
         }
 
-        EnsureNoSymbolicLinkComponents(canonical);
+        SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(canonical);
 
         return canonical;
-    }
-
-    private static void EnsureNoSymbolicLinkComponents(string canonicalPath)
-    {
-        var root = Path.GetPathRoot(canonicalPath)
-                   ?? throw new UnauthorizedAccessException("The trusted host workspace must have a rooted canonical path.");
-        var current = root;
-        foreach (var segment in canonicalPath[root.Length..].Split(Path.DirectorySeparatorChar,
-                     StringSplitOptions.RemoveEmptyEntries))
-        {
-            current = Path.Combine(current, segment);
-            if (File.ResolveLinkTarget(current, returnFinalTarget: false) is not null)
-            {
-                throw new UnauthorizedAccessException("A trusted host workspace path cannot contain symbolic links.");
-            }
-        }
     }
 
     private void EvictOwnerConflicts(SandboxAttachKey attachKey)
@@ -1165,87 +1034,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             return state.JailRoot;
         }
 
-        var canonicalPath = ResolveJailPath(state, requestedWorkingDirectory);
-        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, canonicalPath, requestedWorkingDirectory);
+        var canonicalPath = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, requestedWorkingDirectory);
+        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, canonicalPath, requestedWorkingDirectory);
         return canonicalPath;
-    }
-
-    /// <summary>
-    ///     Canonicalizes a (possibly sandbox-absolute) path into a host path that MUST live under the jail root. Any
-    ///     path that escapes the jail — via <c>..</c> traversal or an absolute path outside it — is rejected lexically
-    ///     (<see cref="Path.GetFullPath(string)" /> collapses <c>..</c>). This is the load-bearing jail control. It does
-    ///     NOT resolve symlinks; a path under the jail can still TRAVERSE a planted symlink (a command running with the
-    ///     jail as CWD can create one). The caller must additionally pass the canonical path through
-    ///     <see cref="EnsureNoSymlinkComponentsUnderJail" /> (read/write legs) before opening to close that escape.
-    /// </summary>
-    private static string ResolveJailPath(JailState state, string sandboxPath)
-    {
-        // AgentHome addresses files with sandbox-absolute paths (e.g. /agent-home/workspace/...). Treat a leading
-        // separator as jail-relative so an absolute sandbox path maps under the jail rather than at the host root.
-        var relative = sandboxPath.TrimStart('/', '\\');
-        var combined = Path.Combine(state.JailRoot, relative);
-        var canonical = Path.GetFullPath(combined);
-
-        if (!IsUnderJailRoot(state.JailRoot, canonical))
-        {
-            throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' escapes the jail and is rejected.");
-        }
-
-        return canonical;
-    }
-
-    private static bool IsUnderJailRoot(string jailRoot, string canonicalPath)
-    {
-        var jailPrefix = jailRoot.EndsWith(Path.DirectorySeparatorChar)
-            ? jailRoot
-            : jailRoot + Path.DirectorySeparatorChar;
-
-        return string.Equals(canonicalPath, jailRoot, StringComparison.Ordinal)
-               || canonicalPath.StartsWith(jailPrefix, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    ///     Rejects a jail-relative path whose final component, or ANY component between the jail root and the leaf, is a
-    ///     symlink (reparse point). A command running with the jail as its working directory can legitimately plant a
-    ///     symlink inside the jail (e.g. <c>workspace/x -&gt; /etc</c>); the lexical <see cref="ResolveJailPath" /> check
-    ///     passes such a path, but opening through it would read/write OUTSIDE the jail. Walking each component with a
-    ///     no-follow probe (<see cref="File.ResolveLinkTarget(string, bool)" /> returns non-null for a symlink) closes
-    ///     that escape for both the read legs and the copy-into write. <paramref name="canonicalPath" /> must already be
-    ///     proven under the jail by <see cref="ResolveJailPath" />. Only existing components are probed (a not-yet-created
-    ///     copy-into leaf cannot be a symlink). Throws <see cref="UnauthorizedAccessException" /> on the first symlink
-    ///     component — a swap/plant-after-resolve escape signal.
-    /// </summary>
-    private static void EnsureNoSymlinkComponentsUnderJail(string jailRoot, string canonicalPath, string sandboxPath)
-    {
-        // Walk from the leaf upward; stop at the jail root (the jail root itself is trusted — it is created by this
-        // provider, not by a sandboxed command).
-        var jailRootFull = Path.GetFullPath(jailRoot);
-        var current = canonicalPath;
-        while (!string.Equals(current, jailRootFull, StringComparison.Ordinal))
-        {
-            // A component above the jail root means the path escaped (defense in depth; ResolveJailPath already
-            // rejected escapes, but never walk past the trusted boundary).
-            if (!IsUnderJailRoot(jailRootFull, current))
-            {
-                throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' escapes the jail and is rejected.");
-            }
-
-            // Probe only existing components. A symlink (file or directory) returns a non-null link target under a
-            // no-follow resolve; a real file/dir or a not-yet-created leaf returns null.
-            if ((File.Exists(current) || Directory.Exists(current))
-                && File.ResolveLinkTarget(current, returnFinalTarget: false) is not null)
-            {
-                throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' traverses or targets a symlink inside the jail and is rejected.");
-            }
-
-            var parent = Path.GetDirectoryName(current);
-            if (parent is null || string.Equals(parent, current, StringComparison.Ordinal))
-            {
-                break;
-            }
-
-            current = parent;
-        }
     }
 
     private static void TerminateState(JailState state)
@@ -1317,176 +1108,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 // Already exited.
             }
         }
-    }
-
-    // ---- ported host-file no-follow / byte-cap guard (same pattern as the deleted LocalContainerSandboxProvider) ----
-
-    /// <summary>
-    ///     Reads the host file under the no-follow / byte-recheck guards. Throws <see cref="InvalidDataException" />
-    ///     when the file exceeds the per-file cap on this re-read or grew after sizing. Throws
-    ///     <see cref="UnauthorizedAccessException" /> when the final path component is a symlink or the open cannot be
-    ///     performed safely — a swap-after-walk attack signal.
-    /// </summary>
-    private byte[] ReadHostFileUnderGuard(string sourcePath)
-    {
-        var fileHandle = OpenNoFollow(sourcePath);
-
-        using (fileHandle)
-        {
-            var length = RandomAccess.GetLength(fileHandle);
-            if (length > _maxCopyFileBytes)
-            {
-                throw new InvalidDataException("The copy source exceeds the configured per-file byte limit.");
-            }
-
-            var content = new byte[length];
-            var read = 0;
-            while (read < content.Length)
-            {
-                var chunk = RandomAccess.Read(fileHandle, content.AsSpan(read), read);
-                if (chunk == 0)
-                {
-                    // The file shrank after the length read; copy only what is actually present.
-                    return content[..read];
-                }
-
-                read += chunk;
-            }
-
-            // Growth-after-sizing check: a single probe byte past the sized length means the file grew between the
-            // length read and the copy. Block (null) rather than silently truncate to the stale size.
-            Span<byte> probe = stackalloc byte[1];
-            if (RandomAccess.Read(fileHandle, probe, length) > 0)
-            {
-                throw new InvalidDataException("The copy source grew while it was being read.");
-            }
-
-            return content;
-        }
-    }
-
-    /// <summary>
-    ///     Opens the host file refusing a symlink at the final component. On Linux this is an atomic <c>open(2)</c> with
-    ///     <c>O_NOFOLLOW</c> (the kernel fails with <c>ELOOP</c> if the leaf is a symlink), closing the check-then-open
-    ///     race a managed <c>lstat</c> + open would leave. A raw <c>(FileOptions)</c> cast for <c>O_NOFOLLOW</c> throws,
-    ///     so the libc <c>open()</c> DllImport is required (the same guard AgentHome uses). On a
-    ///     non-Linux host this provider is not the primary runtime, so it falls back to a plain open and relies on the
-    ///     canonicalized jail check plus the byte re-check. Throws <see cref="UnauthorizedAccessException" /> when the
-    ///     leaf is a symlink or the open otherwise fails.
-    /// </summary>
-    private static SafeFileHandle OpenNoFollow(string sourcePath)
-    {
-        if (!OperatingSystem.IsLinux())
-        {
-            try
-            {
-                return File.OpenHandle(sourcePath);
-            }
-            catch (IOException exception)
-            {
-                throw new UnauthorizedAccessException("a selected file could not be opened safely for copy.", exception);
-            }
-            catch (UnauthorizedAccessException exception)
-            {
-                throw new UnauthorizedAccessException("a selected file could not be opened safely for copy (access denied).", exception);
-            }
-        }
-
-        // Null-terminate the UTF-8 path for libc.
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(sourcePath) + 1];
-        Encoding.UTF8.GetBytes(sourcePath, pathBytes);
-        var fileDescriptor = open(pathBytes, ReadOnlyNoFollowCloseOnExecFlags);
-        if (fileDescriptor < 0)
-        {
-            var error = Marshal.GetLastPInvokeError();
-            throw new UnauthorizedAccessException(string.Create(CultureInfo.InvariantCulture,
-                $"a selected file could not be opened safely for copy (it may have been replaced by a link; errno {error})."));
-        }
-
-        return new SafeFileHandle(fileDescriptor, ownsHandle: true);
-    }
-
-    // A single libc open(). The path is marshalled by the caller into a null-terminated UTF-8 byte array so any
-    // filename round-trips correctly; the import takes the raw bytes. DllImport (not source-generated LibraryImport)
-    // keeps the project free of AllowUnsafeBlocks — the source generator buys nothing for one call.
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags);
-
-    // The 3-arg open() used for O_CREAT (the mode is honored only when the file is created).
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags, int mode);
-
-    /// <summary>
-    ///     Reads a jail-side file's raw bytes through a no-follow open. On Linux the open is atomic with
-    ///     <c>O_NOFOLLOW</c> so a leaf swapped to a symlink after the per-component check fails the open instead of
-    ///     redirecting the read. On a non-Linux host (not the primary runtime) it falls back to a plain handle and
-    ///     relies on the per-component symlink check plus the jail canonicalization. Throws
-    ///     <see cref="UnauthorizedAccessException" /> when the leaf is a symlink or the open otherwise fails.
-    /// </summary>
-    private static async Task<byte[]> ReadJailFileBytesNoFollowAsync(string jailPath,
-        int maxBytes,
-        CancellationToken cancellationToken)
-    {
-        using var handle = OpenNoFollow(jailPath);
-        var length = RandomAccess.GetLength(handle);
-        if (length > maxBytes)
-        {
-            throw new InvalidDataException("The sandbox file exceeds the requested read bound.");
-        }
-
-        var buffer = new byte[length];
-        var read = 0;
-        while (read < buffer.Length)
-        {
-            var chunk = await RandomAccess.ReadAsync(handle, buffer.AsMemory(read), read, cancellationToken).ConfigureAwait(false);
-            if (chunk == 0)
-            {
-                return buffer[..read];
-            }
-
-            read += chunk;
-        }
-
-        Memory<byte> probe = new byte[1];
-        if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken).ConfigureAwait(false) > 0)
-        {
-            throw new InvalidDataException("The sandbox file grew while it was read under the requested bound.");
-        }
-
-        return buffer;
-    }
-
-    /// <summary>
-    ///     Writes bytes to a jail-side path through a no-follow create. On Linux <c>O_NOFOLLOW</c> makes the create fail
-    ///     (ELOOP) if the leaf already exists as a symlink, so a planted leaf symlink cannot redirect the copy-into write
-    ///     outside the jail. On a non-Linux host it falls back to a plain create (the per-component symlink check still
-    ///     guards intermediate components). Throws <see cref="UnauthorizedAccessException" /> when the leaf is a symlink
-    ///     or the create otherwise fails.
-    /// </summary>
-    private static async Task WriteJailFileNoFollowAsync(string jailPath, byte[] content, CancellationToken cancellationToken)
-    {
-        if (!OperatingSystem.IsLinux())
-        {
-            // Non-Linux fallback: the per-component symlink check already ran; a final-component existing symlink would
-            // have been rejected there. Plain write.
-            await File.WriteAllBytesAsync(jailPath, content, cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(jailPath) + 1];
-        Encoding.UTF8.GetBytes(jailPath, pathBytes);
-        var fileDescriptor = open(pathBytes, WriteCreateNoFollowCloseOnExecFlags, DefaultCreateFileMode);
-        if (fileDescriptor < 0)
-        {
-            var error = Marshal.GetLastPInvokeError();
-            throw new UnauthorizedAccessException(string.Create(CultureInfo.InvariantCulture,
-                $"the copy-into destination could not be created safely (it may be a symlink; errno {error})."));
-        }
-
-        using var handle = new SafeFileHandle(fileDescriptor, ownsHandle: true);
-        await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
