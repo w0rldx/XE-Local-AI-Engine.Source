@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Unit coverage for the ONE session-approval eligibility predicate shared by
-///     <c>InvocationRunner.TryResolveSessionApprovalKey</c> (which turns an eligible call into a memo key) and the node
+///     <c>ToolApprovalCoordinator.TryResolveSessionApprovalKey</c> (which turns an eligible call into a memo key) and the node
 ///     tool-catalog response (which exposes the same answer so the chat card only offers "Approve for this session"
 ///     where the node honors it). The two must never drift, so the rule is pinned here once.
 /// </summary>
