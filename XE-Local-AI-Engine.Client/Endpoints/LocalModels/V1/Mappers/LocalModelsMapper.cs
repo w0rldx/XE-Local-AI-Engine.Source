@@ -213,15 +213,21 @@ internal static class LocalModelsMapper
             ? ggufItems.Concat(cloudModels).ToArray()
             : ggufItems;
 
+        // IsAvailable reflects whether a node-local runtime can serve a chat: true once at least one GGUF is
+        // installed (llama.cpp can serve it), even though Ollama itself is down. Cloud-only (no GGUF) keeps the
+        // local runtime reported unavailable.
+        var isAvailable = ggufItems.Count > 0;
+
         return new ListLocalModelsResponse
         {
-            // IsAvailable reflects whether a node-local runtime can serve a chat: true once at least one GGUF is
-            // installed (llama.cpp can serve it), even though Ollama itself is down. Cloud-only (no GGUF) keeps the
-            // local runtime reported unavailable.
-            IsAvailable = ggufItems.Count > 0,
+            IsAvailable = isAvailable,
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
-            Error = error,
+
+            // The unavailability sentence belongs to an unavailable list only: reporting a local runtime that IS
+            // available alongside "Local model provider is unavailable." is a contradiction any client reading `error`
+            // would render as a false alarm.
+            Error = isAvailable ? null : error,
             Items = items
         };
     }
