@@ -8,6 +8,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
+/// <summary>
+///     Journalled deletion of an installed model: stage the members, remove the registry aliases, remove the provider-map
+///     rows, commit. A failure compensates in reverse, and when that compensation itself fails it is logged and the
+///     ORIGINAL failure is rethrown, so the caller keeps its typed reason and the retained journal drives
+///     <see cref="ReconcileAsync" /> on the next start.
+/// </summary>
 public sealed class LocalModelDeletionCoordinator(
     IInstalledModelSnapshotCoordinator snapshotCoordinator,
     IInstalledGgufDeletionStore deletionStore,
