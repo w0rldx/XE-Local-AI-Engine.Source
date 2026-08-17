@@ -89,8 +89,8 @@ public sealed class LlamaServerSupervisorOptions
     ///     left unset so the name is resolved on the spawn path. Ignored by every other
     ///     <see cref="SpeculativeModeClass" />, including <c>draft-mtp</c>. The draft model loads
     ///     inside the chat process and is never separately ledgered or footprint-estimated; on the primary NVIDIA path its
-    ///     resident VRAM is still reflected in <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>),
-    ///     but on the non-NVIDIA total-minus-ledger fallback it stays uncounted (see supervisor spawn path).
+    ///     resident VRAM is reflected in <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>).
+    ///     A non-NVIDIA profile without a free-VRAM reading therefore rejects this mode rather than undercounting it.
     /// </summary>
     public string? SpeculativeDraftModelPath { get; init; }
 

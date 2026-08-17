@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Training.Evaluations.V1;
 
+using FastEndpoints;
+using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
 public sealed class CreateEvaluationRequest
@@ -9,8 +11,22 @@ public sealed class CreateEvaluationRequest
     /// <summary>Which side of the comparison to score: the run's base model, or what it produced.</summary>
     public required EvaluationTarget Target { get; init; }
 
-    /// <summary>Overrides the model the target implies — for an artifact promoted under a custom registry name.</summary>
+    /// <summary>Selects an installed base model. Tuned evaluation instead requires <see cref="ArtifactId" />.</summary>
     public string? ModelName { get; init; }
+
+    /// <summary>Required for a tuned evaluation; the staged GGUF is scored before registry activation.</summary>
+    public Guid? ArtifactId { get; init; }
+}
+
+public sealed class CreateEvaluationRequestValidator : Validator<CreateEvaluationRequest>
+{
+    public CreateEvaluationRequestValidator()
+    {
+        RuleFor(static request => request.TrainingRunId).NotEmpty().WithMessage("A training run id is required.");
+        RuleFor(static request => request.Target)
+            .Must(static target => target is EvaluationTarget.Base or EvaluationTarget.Tuned)
+            .WithMessage("An evaluation target is required.");
+    }
 }
 
 public sealed class EvaluationByIdRequest
@@ -51,6 +67,8 @@ public sealed class EvaluationResponse
 
     public required string ModelName { get; init; }
     public string? ModelContentFingerprint { get; init; }
+    public required string TargetKind { get; init; }
+    public Guid? SourceArtifactId { get; init; }
     public required Guid DatasetId { get; init; }
 
     /// <summary>

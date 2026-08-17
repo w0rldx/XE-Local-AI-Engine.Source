@@ -1,9 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type UseMutationOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import {
+	beginTrainingArtifactQualityRevalidationMutation,
+	decideTrainingArtifactQualityMutation,
 	deleteTrainingArtifactMutation,
+	discardTrainingArtifactQualityMutation,
 	listTrainingArtifactsOptions,
+	overrideTrainingArtifactQualityMutation,
 	promoteTrainingArtifactMutation,
 	runTrainingArtifactSmokeMutation,
 	startTrainingExportMutation,
@@ -20,6 +24,18 @@ const artifactQueryId = "listTrainingArtifacts";
 function invalidate(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
 	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return queryClient.invalidateQueries({ queryKey: [{ _id: artifactQueryId }] });
+}
+
+function useArtifactMutation<TData, TError, TVariables, TContext>(
+	options: UseMutationOptions<TData, TError, TVariables, TContext>,
+) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...options,
+		onSuccess: async () => {
+			await invalidate(queryClient);
+		},
+	});
 }
 
 export function useTrainingArtifacts(runId: string | null, pollWhileExporting = false) {
@@ -47,23 +63,11 @@ export function useRefreshTrainingArtifacts(): () => void {
 }
 
 export function useStartTrainingExport() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		...startTrainingExportMutation(),
-		onSuccess: async () => {
-			await invalidate(queryClient);
-		},
-	});
+	return useArtifactMutation(startTrainingExportMutation());
 }
 
 export function useRunTrainingArtifactSmoke() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		...runTrainingArtifactSmokeMutation(),
-		onSuccess: async () => {
-			await invalidate(queryClient);
-		},
-	});
+	return useArtifactMutation(runTrainingArtifactSmokeMutation());
 }
 
 export function usePromoteTrainingArtifact() {
@@ -79,12 +83,22 @@ export function usePromoteTrainingArtifact() {
 	});
 }
 
+export function useDecideTrainingArtifactQuality() {
+	return useArtifactMutation(decideTrainingArtifactQualityMutation());
+}
+
+export function useBeginTrainingArtifactQualityRevalidation() {
+	return useArtifactMutation(beginTrainingArtifactQualityRevalidationMutation());
+}
+
+export function useOverrideTrainingArtifactQuality() {
+	return useArtifactMutation(overrideTrainingArtifactQualityMutation());
+}
+
+export function useDiscardTrainingArtifactQuality() {
+	return useArtifactMutation(discardTrainingArtifactQualityMutation());
+}
+
 export function useDeleteTrainingArtifact() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		...deleteTrainingArtifactMutation(),
-		onSuccess: async () => {
-			await invalidate(queryClient);
-		},
-	});
+	return useArtifactMutation(deleteTrainingArtifactMutation());
 }

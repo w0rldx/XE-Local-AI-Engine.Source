@@ -22,6 +22,13 @@ import { useTrainingRuns } from "@/features/training/queries/useTrainingRuns";
 interface ComparisonCreateDialogProps {
 	opened: boolean;
 	onClose: () => void;
+	/** Preselects and locks the originating run when validation starts from a staged artifact. */
+	initialRunId?: string;
+	/** Binds the tuned evaluation to these exact staged bytes instead of an installed model name. */
+	artifactId?: string;
+	/** Requires two newly-created evaluation ids, ignoring any evaluations already bound to an older report. */
+	freshEvaluations?: boolean;
+	onComparisonCreated?: (comparisonId: string) => void;
 }
 
 /**
@@ -29,13 +36,14 @@ interface ComparisonCreateDialogProps {
  * two into a report. The evaluations are the slow part — they load the model and replay every frozen hold-out sample —
  * so this dialog shows their live progress rather than blocking on them.
  */
-export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDialogProps) {
+export function ComparisonCreateDialog({ opened, onClose, initialRunId, artifactId, freshEvaluations = false, onComparisonCreated }: ComparisonCreateDialogProps) {
 	const { t } = useTranslation();
-	const [runId, setRunId] = useState<string | null>(null);
+	const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
 	const [name, setName] = useState("");
 	const [baseBenchmarkRunId, setBaseBenchmarkRunId] = useState<string | null>(null);
 	const [tunedBenchmarkRunId, setTunedBenchmarkRunId] = useState<string | null>(null);
 	const [benchmarkProjectId, setBenchmarkProjectId] = useState<string | null>(null);
+	const [freshEvaluationIds, setFreshEvaluationIds] = useState<Partial<Record<"Base" | "Tuned", string>>>({});
 
 	const runsQuery = useTrainingRuns();
 	const suggestionQuery = useComparisonSuggestion(runId);
@@ -60,9 +68,27 @@ export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDial
 
 	const findByModel = (modelName: string | null): EvaluationRun | null =>
 		modelName == null ? null : (rows.find((evaluation) => evaluation.modelName === modelName) ?? null);
-	const baseEvaluation = findByModel(suggestion?.baseModelName ?? null);
-	const tunedEvaluation = findByModel(suggestion?.tunedModelName ?? null);
+	const baseEvaluation = freshEvaluations
+		? (rows.find((evaluation) => evaluation.id === freshEvaluationIds.Base) ?? null)
+		: findByModel(suggestion?.baseModelName ?? null);
+	const tunedEvaluation =
+		freshEvaluations
+			? (rows.find((evaluation) => evaluation.id === freshEvaluationIds.Tuned) ?? null)
+			: artifactId == null
+			? findByModel(suggestion?.tunedModelName ?? null)
+			: (rows.find(
+					(evaluation) => evaluation.targetKind === "StagedTrainingArtifact" && evaluation.sourceArtifactId === artifactId,
+				) ?? null);
 	const canCreate = isEvaluationUsable(baseEvaluation) && isEvaluationUsable(tunedEvaluation) && name.trim().length > 0;
+
+	useEffect(() => {
+		if (opened && initialRunId != null) {
+			setRunId(initialRunId);
+		}
+		if (opened && freshEvaluations) {
+			setFreshEvaluationIds({});
+		}
+	}, [opened, initialRunId, freshEvaluations]);
 
 	useEffect(() => {
 		// The suggested name is a starting point, not a lock: replacing it only while the operator has not typed keeps
@@ -73,11 +99,12 @@ export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDial
 	}, [suggestion, name]);
 
 	const close = (): void => {
-		setRunId(null);
+		setRunId(initialRunId ?? null);
 		setName("");
 		setBenchmarkProjectId(null);
 		setBaseBenchmarkRunId(null);
 		setTunedBenchmarkRunId(null);
+		setFreshEvaluationIds({});
 		onClose();
 	};
 
@@ -86,8 +113,13 @@ export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDial
 			return;
 		}
 		createEvaluation.mutate(
-			{ body: { trainingRunId: runId, target } },
+			{ body: { trainingRunId: runId, target, artifactId: target === "Tuned" ? artifactId : undefined } },
 			{
+				onSuccess: (response) => {
+					if (freshEvaluations) {
+						setFreshEvaluationIds((current) => ({ ...current, [target]: response.id }));
+					}
+				},
 				onError: (error) =>
 					toast.error(apiErrorMessage(error, t("training.comparisons.create.evaluateFailed", "Could not start the evaluation."))),
 			},
@@ -110,7 +142,10 @@ export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDial
 				},
 			},
 			{
-				onSuccess: close,
+				onSuccess: (response) => {
+					onComparisonCreated?.(response.id);
+					close();
+				},
 				onError: (error) =>
 					toast.error(apiErrorMessage(error, t("training.comparisons.create.failed", "Could not create the comparison report."))),
 			},
@@ -124,6 +159,7 @@ export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDial
 			<Stack gap="md">
 				<Select
 					data={(runsQuery.data ?? []).map((run) => ({ value: run.id, label: `${run.status} · ${run.id.slice(0, 8)}` }))}
+					disabled={initialRunId != null}
 					label={t("training.comparisons.create.run", "Training run")}
 					onChange={setRunId}
 					placeholder={t("training.comparisons.create.runPlaceholder", "Pick a finished training run")}

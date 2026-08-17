@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
+using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -130,13 +131,55 @@ public sealed class ComparisonReportServiceTests
     }
 
     [Test]
-    public async Task Create_WhenTheMembershipsMatchButTheRunsDiffer_IsAccepted()
+    [Arguments(TrainingEvaluationStatus.Queued, TrainingWorkStatus.Queued, 0)]
+    [Arguments(TrainingEvaluationStatus.Running, TrainingWorkStatus.Running, 1)]
+    [Arguments(TrainingEvaluationStatus.Failed, TrainingWorkStatus.Failed, 2)]
+    public async Task Create_WhenAnEvaluationIsNotSuccessfullyComplete_IsRejected(
+        TrainingEvaluationStatus status,
+        TrainingWorkStatus workStatus,
+        int scoredCount)
+    {
+        var membership = Membership([SampleId(1), SampleId(2)]);
+        var baseEvaluation = Evaluation("base-model",
+            membership,
+            [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]);
+        var tunedEvaluation = Evaluation("tuned-model",
+            membership,
+            [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]) with
+        {
+            Status = status,
+            WorkStatus = workStatus,
+            ScoredCount = scoredCount
+        };
+
+        var rejection = await AssertRejectedAsync(baseEvaluation, tunedEvaluation);
+
+        AssertEx.Contains(rejection.Message, "successfully scored every frozen hold-out sample");
+    }
+
+    [Test]
+    public async Task Create_WhenSucceededCountersClaimCompletionButResultsArePartial_IsRejected()
+    {
+        var membership = Membership([SampleId(1), SampleId(2)]);
+        var baseEvaluation = Evaluation("base-model",
+            membership,
+            [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]);
+        var tunedEvaluation = Evaluation("tuned-model", membership, [Verdict(1, "tool-call", passed: true)]) with
+        {
+            ScoredCount = 2
+        };
+
+        var rejection = await AssertRejectedAsync(baseEvaluation, tunedEvaluation);
+
+        AssertEx.Contains(rejection.Message, "successfully scored every frozen hold-out sample");
+    }
+
+    [Test]
+    public async Task Create_WhenTheMembershipsMatchButTheRunsDiffer_IsRejected()
     {
         var membership = Membership([SampleId(1), SampleId(2)]);
         var baseEvaluation = Evaluation("base-model", membership, [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: false)]);
 
-        // Same freeze reached through a different run, and the ids in the other order. Neither makes the two sides
-        // incomparable — the fingerprint plus the id SET is the invariant, not the run id or the ordering.
         var reordered = membership with
         {
             TrainingRunId = Guid.NewGuid(),
@@ -144,16 +187,28 @@ public sealed class ComparisonReportServiceTests
         };
         var tunedEvaluation = Evaluation("tuned-model", reordered, [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]);
 
+        var rejection = await AssertRejectedAsync(baseEvaluation, tunedEvaluation);
+
+        AssertEx.Contains(rejection.Message, "training run", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task Create_DerivesRunFromValidatedEvaluationsInsteadOfCallerAssociation()
+    {
+        var membership = Membership([SampleId(1)]);
+        var baseEvaluation = Evaluation("base-model", membership, CompleteVerdicts(membership));
+        var tunedEvaluation = Evaluation("tuned-model", membership, CompleteVerdicts(membership));
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
         _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
         _ = evaluations.CreateComparisonAsync(Arg.Any<TrainingComparisonInput>(), Arg.Any<CancellationToken>())
                        .Returns(callInfo => Report(callInfo.Arg<TrainingComparisonInput>()));
-
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
-        var report = await service.CreateAsync(new CreateComparisonCommand("cross-run", baseEvaluation.Id, tunedEvaluation.Id));
 
-        AssertEx.Equal(baseEvaluation.Id, report.BaseEvaluationRunId);
+        var report = await service.CreateAsync(new CreateComparisonCommand("derived-run", baseEvaluation.Id, tunedEvaluation.Id,
+            TrainingRunId: Guid.NewGuid()));
+
+        AssertEx.Equal(membership.TrainingRunId, report.TrainingRunId);
     }
 
     [Test]
@@ -181,7 +236,7 @@ public sealed class ComparisonReportServiceTests
         var runId = Guid.NewGuid();
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.GetAsync(runId, Arg.Any<CancellationToken>()).Returns(Run(runId, linkedModelName: "base-model"));
-        _ = runs.ListArtifactsAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingArtifactRecord>>([Artifact(runId, committed: null)]);
+        _ = runs.ListArtifactsAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingArtifactRecord>>([Artifact(runId, completed: false)]);
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
         _ = evaluations.ListAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingEvaluationRecord>>([]);
 
@@ -189,18 +244,23 @@ public sealed class ComparisonReportServiceTests
         var unpromoted = await service.SuggestAsync(runId);
 
         AssertEx.Equal("base-model", unpromoted.BaseModelName!);
-        AssertEx.Null(unpromoted.TunedModelName, "Nothing promoted means no tuned model to evaluate yet.");
+        AssertEx.Null(unpromoted.TunedModelName, "An incomplete export is not a staged evaluation target.");
         AssertEx.NotNull(unpromoted.UnavailableReason);
 
-        // Promote the artifact and an existing evaluation is matched to it by model name.
+        // Complete the staged artifact and match its evaluation by immutable source-artifact identity.
+        var staged = Artifact(runId, completed: true);
         _ = runs.ListArtifactsAsync(runId, Arg.Any<CancellationToken>())
-                .Returns<IReadOnlyList<TrainingArtifactRecord>>([Artifact(runId, "tuned-model")]);
-        var tuned = Evaluation("tuned-model", Membership([SampleId(1)]), [Verdict(1, "tool-call", passed: true)]);
+                .Returns<IReadOnlyList<TrainingArtifactRecord>>([staged]);
+        var tuned = Evaluation("tuned-model.gguf", Membership([SampleId(1)]), [Verdict(1, "tool-call", passed: true)]) with
+        {
+            TargetKind = EvaluationModelTargetKind.StagedTrainingArtifact,
+            SourceArtifactId = staged.Id
+        };
         _ = evaluations.ListAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingEvaluationRecord>>([tuned]);
 
         var complete = await service.SuggestAsync(runId);
 
-        AssertEx.Equal("tuned-model", complete.TunedModelName!);
+        AssertEx.Equal("tuned-model.gguf", complete.TunedModelName!);
         AssertEx.Equal(tuned.Id, complete.TunedEvaluationRunId!.Value);
         AssertEx.Null(complete.BaseEvaluationRunId, "The base has not been evaluated yet.");
         AssertEx.Null(complete.UnavailableReason, "With both sides nameable there is nothing to warn about.");
@@ -223,10 +283,56 @@ public sealed class ComparisonReportServiceTests
         AssertEx.True(suggestion.UnavailableReason!.Contains("accuracy comparison is unavailable", StringComparison.Ordinal));
     }
 
+    [Test]
+    public async Task Delete_WhenComparisonIsInArtifactQualityHistory_IsRejectedAndAuditRetained()
+    {
+        var runId = Guid.NewGuid();
+        var historicalComparisonId = Guid.NewGuid();
+        var currentComparisonId = Guid.NewGuid();
+        var wrongStoredRunId = Guid.NewGuid();
+        var membership = Membership([SampleId(1)]) with { TrainingRunId = runId };
+        var baseEvaluation = Evaluation("base", membership, CompleteVerdicts(membership));
+        var tunedEvaluation = Evaluation("tuned", membership, CompleteVerdicts(membership));
+        var evaluations = Substitute.For<ITrainingEvaluationStore>();
+        _ = evaluations.GetComparisonAsync(historicalComparisonId, Arg.Any<CancellationToken>()).Returns(new TrainingComparisonRecord(
+            historicalComparisonId, "historical", baseEvaluation.Id, tunedEvaluation.Id, null, null, wrongStoredRunId, "{}"u8.ToArray(), 1, 1, 1));
+        _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
+        _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
+        var runs = Substitute.For<ITrainingRunStore>();
+        var artifact = Artifact(runId, completed: true) with
+        {
+            QualityComparisonId = currentComparisonId,
+            QualityDecisionJson = JsonSerializer.SerializeToUtf8Bytes(new ArtifactQualityDecisionV1
+            {
+                ArtifactId = Guid.NewGuid(),
+                ArtifactSha256 = new string('a', 64),
+                ComparisonId = currentComparisonId,
+                Outcome = ArtifactQualityOutcome.Pending,
+                History =
+                [
+                    new ArtifactQualityDecisionAuditV1
+                    {
+                        ComparisonId = historicalComparisonId,
+                        Outcome = ArtifactQualityOutcome.Passed
+                    }
+                ]
+            }, TrainingJson.Options)
+        };
+        _ = runs.ListArtifactsAsync(runId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingArtifactRecord>>([artifact]);
+        var service = new ComparisonReportService(evaluations, runs, Substitute.For<IBenchmarkStore>());
+
+        _ = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.DeleteAsync(historicalComparisonId, expectedVersion: 1));
+
+        _ = evaluations.DidNotReceiveWithAnyArgs().DeleteComparisonAsync(Guid.Empty, default, default);
+    }
+
     private static Task<EvaluationRejectedException> AssertRejectedAsync(TrainingEvaluationMembershipV1 baseMembership,
         TrainingEvaluationMembershipV1 tunedMembership) =>
-        AssertRejectedAsync(Evaluation("base-model", baseMembership, [Verdict(1, "tool-call", passed: true)]),
-            Evaluation("tuned-model", tunedMembership, [Verdict(1, "tool-call", passed: true)]));
+        AssertRejectedAsync(Evaluation("base-model", baseMembership, CompleteVerdicts(baseMembership)),
+            Evaluation("tuned-model", tunedMembership, CompleteVerdicts(tunedMembership)));
+
+    private static IReadOnlyList<TrainingEvaluationResultEntry> CompleteVerdicts(TrainingEvaluationMembershipV1 membership) =>
+        membership.HoldoutSampleIds.Select(sampleId => new TrainingEvaluationResultEntry(sampleId, "tool-call", true, "deterministic")).ToArray();
 
     /// <summary>A refused comparison must also persist nothing — a stored report is what later reads are trusted from.</summary>
     private static async Task<EvaluationRejectedException> AssertRejectedAsync(TrainingEvaluationRecord baseEvaluation,
@@ -317,16 +423,16 @@ public sealed class ComparisonReportServiceTests
             TrainingWorkStatus.Succeeded,
             WorkErrorMessage: null);
 
-    private static TrainingArtifactRecord Artifact(Guid runId, string? committed) =>
+    private static TrainingArtifactRecord Artifact(Guid runId, bool completed) =>
         new(Guid.NewGuid(),
             runId,
             TrainingArtifactKind.AdapterGguf,
-            "adapter.gguf",
-            Sha256: null,
+            "tuned-model.gguf",
+            Sha256: completed ? new string('a', count: 64) : null,
             SizeBytes: 0,
             TrainingArtifactSmokeState.Passed,
             SmokeReason: null,
-            committed,
+            CommittedModelName: null,
             Version: 1,
             CreatedAtUtc: 1,
             UpdatedAtUtc: 1);

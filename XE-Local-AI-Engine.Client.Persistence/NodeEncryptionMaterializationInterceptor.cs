@@ -291,6 +291,11 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     Guid.Empty,
                     evaluation.Id,
                     "training_evaluation_results_json");
+                evaluation.ExecutionProvenanceJson = DecryptIfPresent(evaluation.ExecutionProvenanceJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    evaluation.Id,
+                    "training_evaluation_execution_provenance_json");
                 break;
             case TrainingComparisonReport comparison:
                 comparison.DeltasJson = NodePayloadProtector.Decrypt(comparison.DeltasJson,
@@ -298,6 +303,13 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     Guid.Empty,
                     comparison.Id,
                     "training_comparison_deltas_json");
+                break;
+            case TrainingArtifact artifact:
+                artifact.QualityDecisionJson = DecryptIfPresent(artifact.QualityDecisionJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    artifact.Id,
+                    "training_artifact_quality_decision_json");
                 break;
         }
 

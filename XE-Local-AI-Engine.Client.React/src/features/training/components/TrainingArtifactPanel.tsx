@@ -5,10 +5,24 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { toast } from "@/core/ui/notifications/Toast";
+import { ComparisonCreateDialog } from "@/features/training/components/ComparisonCreateDialog";
 import type { TrainingArtifactKindValue, TrainingArtifactView } from "@/features/training/models/TrainingModels";
-import { canPromote, formatBytes, isExportedArtifact, shortDigest } from "@/features/training/models/TrainingModels";
 import {
+	canDiscardArtifactQuality,
+	canOverrideArtifactQuality,
+	canPromote,
+	canRetryArtifactDiscardCleanup,
+	canValidateArtifact,
+	formatBytes,
+	isExportedArtifact,
+	shortDigest,
+} from "@/features/training/models/TrainingModels";
+import {
+	useDecideTrainingArtifactQuality,
+	useBeginTrainingArtifactQualityRevalidation,
 	useDeleteTrainingArtifact,
+	useDiscardTrainingArtifactQuality,
+	useOverrideTrainingArtifactQuality,
 	usePromoteTrainingArtifact,
 	useRunTrainingArtifactSmoke,
 	useStartTrainingExport,
@@ -24,6 +38,13 @@ const smokeColors: Record<string, string> = {
 	Passed: "green",
 	Failed: "red",
 	Skipped: "yellow",
+};
+
+const qualityColors: Record<string, string> = {
+	Pending: "gray",
+	Passed: "green",
+	Failed: "red",
+	Overridden: "yellow",
 };
 
 interface TrainingArtifactPanelProps {
@@ -46,6 +67,12 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 	const [quantType, setQuantType] = useState<string>(quantizations[0]);
 	const [promoting, setPromoting] = useState<TrainingArtifactView | null>(null);
 	const [modelName, setModelName] = useState("");
+	const [validating, setValidating] = useState<TrainingArtifactView | null>(null);
+	const [overriding, setOverriding] = useState<TrainingArtifactView | null>(null);
+	const [overrideReason, setOverrideReason] = useState("");
+	const [discarding, setDiscarding] = useState<TrainingArtifactView | null>(null);
+	const [discardReason, setDiscardReason] = useState("");
+	const [revalidatingArtifactId, setRevalidatingArtifactId] = useState<string | null>(null);
 
 	const exporting = exportPhase != null;
 	const artifactsQuery = useTrainingArtifacts(runId, exporting);
@@ -55,6 +82,10 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 	const runSmoke = useRunTrainingArtifactSmoke();
 	const promote = usePromoteTrainingArtifact();
 	const remove = useDeleteTrainingArtifact();
+	const decideQuality = useDecideTrainingArtifactQuality();
+	const beginRevalidation = useBeginTrainingArtifactQualityRevalidation();
+	const overrideQuality = useOverrideTrainingArtifactQuality();
+	const discardQuality = useDiscardTrainingArtifactQuality();
 
 	const failed = (error: unknown) => toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed.")));
 
@@ -82,6 +113,19 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 					<Badge color={smokeColors[artifact.smokeState] ?? "gray"} variant="light">
 						{t(`training.artifacts.smoke.${artifact.smokeState}`, artifact.smokeState)}
 					</Badge>
+					<Badge color={qualityColors[artifact.qualityOutcome] ?? "gray"} variant="light">
+						{t(`training.artifacts.quality.${artifact.qualityOutcome}`, artifact.qualityOutcome)}
+					</Badge>
+					{artifact.discardedAtUtc == null ? null : (
+						<Badge color="red" variant="light">
+							{t("training.artifacts.discarded", "Discarded")}
+						</Badge>
+					)}
+					{artifact.discardCleanupPending ? (
+						<Badge color="orange" variant="light">
+							{t("training.artifacts.cleanupPending", "Cleanup pending")}
+						</Badge>
+					) : null}
 					<Text size="sm">{artifact.fileName}</Text>
 					<Text c="dimmed" size="xs">
 						{formatBytes(artifact.sizeBytes)}
@@ -93,7 +137,7 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 						</Badge>
 					)}
 					<Button
-						disabled={artifact.committedModelName != null}
+						disabled={artifact.committedModelName != null || artifact.discardedAtUtc != null}
 						loading={runSmoke.isPending}
 						onClick={() =>
 							runSmoke.mutate(
@@ -107,7 +151,81 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 						{t("training.artifacts.retestSmoke", "Re-run smoke test")}
 					</Button>
 					<Button
-						disabled={!canPromote(artifact)}
+						disabled={!canValidateArtifact(artifact)}
+						loading={revalidatingArtifactId === artifact.id}
+						onClick={() => {
+							if (artifact.qualityComparisonId == null || artifact.qualityOutcome === "Pending") {
+								setValidating(artifact);
+								return;
+							}
+							setRevalidatingArtifactId(artifact.id);
+							beginRevalidation.mutate(
+								{ path: { artifactId: artifact.id }, body: { expectedVersion: artifact.version } },
+								{
+									onError: (error) => {
+										setRevalidatingArtifactId(null);
+										failed(error);
+									},
+									onSuccess: (response) => {
+										setRevalidatingArtifactId(null);
+										setValidating({ ...artifact, version: response.version, qualityOutcome: "Pending" });
+									},
+								},
+							);
+						}}
+						size="compact-xs"
+						variant="subtle"
+					>
+						{artifact.qualityComparisonId == null
+							? t("training.artifacts.validate", "Validate quality")
+							: t("training.artifacts.revalidate", "Revalidate quality")}
+					</Button>
+					{canOverrideArtifactQuality(artifact) ? (
+						<Button
+							onClick={() => {
+								setOverriding(artifact);
+								setOverrideReason("");
+							}}
+							size="compact-xs"
+							variant="subtle"
+						>
+							{t("training.artifacts.override", "Override failure")}
+						</Button>
+					) : null}
+					{canDiscardArtifactQuality(artifact) ? (
+						<Button
+							color="red"
+							onClick={() => {
+								setDiscarding(artifact);
+								setDiscardReason("");
+							}}
+							size="compact-xs"
+							variant="subtle"
+						>
+							{t("training.artifacts.discard", "Discard staged file")}
+						</Button>
+					) : null}
+					{canRetryArtifactDiscardCleanup(artifact) ? (
+						<Button
+							color="orange"
+							loading={discardQuality.isPending}
+							onClick={() =>
+								discardQuality.mutate(
+									{
+										path: { artifactId: artifact.id },
+										body: { expectedVersion: artifact.version, reason: artifact.discardReason },
+									},
+									{ onError: failed },
+								)
+							}
+							size="compact-xs"
+							variant="subtle"
+						>
+							{t("training.artifacts.retryCleanup", "Retry cleanup")}
+						</Button>
+					) : null}
+					<Button
+							disabled={!canPromote(artifact) || revalidatingArtifactId === artifact.id}
 						onClick={() => {
 							setPromoting(artifact);
 							setModelName("");
@@ -119,7 +237,7 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 					</Button>
 					<Button
 						color="red"
-						disabled={artifact.committedModelName != null}
+						disabled={artifact.committedModelName != null || artifact.discardedAtUtc != null}
 						loading={remove.isPending}
 						onClick={() =>
 							remove.mutate(
@@ -135,6 +253,11 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 					{artifact.smokeReason == null ? null : (
 						<Text c="dimmed" size="xs" w="100%">
 							{artifact.smokeReason}
+						</Text>
+					)}
+					{artifact.discardReason == null ? null : (
+						<Text c="dimmed" size="xs" w="100%">
+							{artifact.discardReason}
 						</Text>
 					)}
 				</Group>
@@ -179,6 +302,97 @@ export function TrainingArtifactPanel({ runId, exportPhase, onExportStarted }: T
 						}
 					>
 						{t("training.artifacts.startExport", "Start export")}
+					</Button>
+				</Stack>
+			</DialogShell>
+
+			<ComparisonCreateDialog
+				artifactId={validating?.id}
+				freshEvaluations={validating?.qualityOutcome === "Pending" && validating?.qualityComparisonId != null}
+				initialRunId={validating?.runId}
+				onClose={() => setValidating(null)}
+				onComparisonCreated={(comparisonId) => {
+					const artifact = validating;
+					if (artifact == null) {
+						return;
+					}
+					decideQuality.mutate(
+						{
+							path: { artifactId: artifact.id },
+							body: { comparisonId, expectedVersion: artifact.version },
+						},
+						{
+							onError: failed,
+							onSuccess: () => setValidating(null),
+						},
+					);
+				}}
+				opened={validating !== null}
+			/>
+
+			<DialogShell
+				onClose={() => setOverriding(null)}
+				opened={overriding !== null}
+				title={t("training.artifacts.overrideTitle", "Override failed quality decision")}
+			>
+				<Stack gap="sm">
+					<TextInput
+						label={t("training.artifacts.overrideReason", "Override reason")}
+						onChange={(event) => setOverrideReason(event.currentTarget.value)}
+						value={overrideReason}
+					/>
+					<Button
+						disabled={overrideReason.trim().length === 0}
+						loading={overrideQuality.isPending}
+						onClick={() => {
+							const artifact = overriding;
+							if (artifact == null) {
+								return;
+							}
+							overrideQuality.mutate(
+								{
+									path: { artifactId: artifact.id },
+									body: { expectedVersion: artifact.version, reason: overrideReason.trim() },
+								},
+								{ onError: failed, onSuccess: () => setOverriding(null) },
+							);
+						}}
+					>
+						{t("training.artifacts.recordOverride", "Record override")}
+					</Button>
+				</Stack>
+			</DialogShell>
+
+			<DialogShell
+				onClose={() => setDiscarding(null)}
+				opened={discarding !== null}
+				title={t("training.artifacts.discardTitle", "Discard staged artifact")}
+			>
+				<Stack gap="sm">
+					<TextInput
+						label={t("training.artifacts.discardReason", "Discard reason")}
+						onChange={(event) => setDiscardReason(event.currentTarget.value)}
+						value={discardReason}
+					/>
+					<Button
+						color="red"
+						disabled={discardReason.trim().length === 0}
+						loading={discardQuality.isPending}
+						onClick={() => {
+							const artifact = discarding;
+							if (artifact == null) {
+								return;
+							}
+							discardQuality.mutate(
+								{
+									path: { artifactId: artifact.id },
+									body: { expectedVersion: artifact.version, reason: discardReason.trim() },
+								},
+								{ onError: failed, onSuccess: () => setDiscarding(null) },
+							);
+						}}
+					>
+						{t("training.artifacts.confirmDiscard", "Confirm discard")}
 					</Button>
 				</Stack>
 			</DialogShell>

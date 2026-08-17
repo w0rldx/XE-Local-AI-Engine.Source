@@ -87,6 +87,12 @@ public enum TrainingEvaluationStatus
     Cancelled
 }
 
+public enum EvaluationModelTargetKind
+{
+    InstalledModel,
+    StagedTrainingArtifact
+}
+
 /// <summary>What a <c>TrainingWorkItem</c> row's target id points at.</summary>
 public enum TrainingWorkKind
 {

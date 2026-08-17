@@ -48,6 +48,37 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
         return false;
     }
 
+    public async Task<bool> WaitForReadyAndVerifyModelAliasAsync(Uri baseAddress,
+        string expectedModelAlias,
+        TimeSpan readinessTimeout,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedModelAlias);
+        var modelsUri = ModelsUri(baseAddress);
+        using var deadlineCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadlineCts.CancelAfter(readinessTimeout);
+
+        try
+        {
+            while (!deadlineCts.IsCancellationRequested)
+            {
+                if (await TryVerifyModelAliasAsync(modelsUri, expectedModelAlias, deadlineCts.Token).ConfigureAwait(false))
+                {
+                    return true;
+                }
+
+                await Task.Delay(PollInterval, deadlineCts.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
     /// <inheritdoc />
     public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
     {
@@ -131,6 +162,44 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
         }
     }
 
+    private async Task<bool> TryVerifyModelAliasAsync(Uri modelsUri, string expectedModelAlias, CancellationToken ct)
+    {
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        attemptCts.CancelAfter(PerAttemptTimeout);
+        try
+        {
+            using var response = await _httpClient.GetAsync(modelsUri, attemptCts.Token).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(attemptCts.Token).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: attemptCts.Token).ConfigureAwait(false);
+            return document.RootElement.TryGetProperty("data", out var models)
+                   && models.ValueKind == JsonValueKind.Array
+                   && models.EnumerateArray().Any(model => model.TryGetProperty("id", out var id)
+                                                            && id.ValueKind == JsonValueKind.String
+                                                            && string.Equals(id.GetString(), expectedModelAlias, StringComparison.Ordinal));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     // The endpoint base ends with /v1; /health is a sibling at the server root.
     private static Uri HealthUri(Uri baseAddress)
     {
@@ -141,5 +210,10 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
     private static Uri PropsUri(Uri baseAddress)
     {
         return new Uri(baseAddress, "/props");
+    }
+
+    private static Uri ModelsUri(Uri baseAddress)
+    {
+        return new Uri(baseAddress, "/v1/models");
     }
 }

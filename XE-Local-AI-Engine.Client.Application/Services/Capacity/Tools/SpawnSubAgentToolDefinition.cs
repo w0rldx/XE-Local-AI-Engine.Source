@@ -8,6 +8,11 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 /// </summary>
 internal static class SpawnSubAgentToolDefinition
 {
+    public const int BindingMaxLength = 256;
+    public const int TaskMaxLength = 8000;
+    public const int InstructionsMaxLength = 8000;
+    public const int MaxJsonArgumentsLength = (BindingMaxLength * 2) + TaskMaxLength + InstructionsMaxLength + 1024;
+
     public const string ToolName = "spawn_subagent";
 
     public const string Description =

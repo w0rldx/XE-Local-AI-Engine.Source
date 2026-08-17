@@ -24,6 +24,10 @@ internal sealed record class TrainingEvaluationRun
     /// <summary>Content fingerprint of <see cref="ModelName" /> at evaluation time. Lineage only, so nullable.</summary>
     public string? ModelContentFingerprint { get; set; }
 
+    public EvaluationModelTargetKind TargetKind { get; set; } = EvaluationModelTargetKind.InstalledModel;
+
+    public Guid? SourceArtifactId { get; set; }
+
     /// <summary>Where the hold-out samples are read from. Real FK to <c>training_datasets.id</c>, restricted delete.</summary>
     public Guid DatasetId { get; set; }
 
@@ -59,6 +63,9 @@ internal sealed record class TrainingEvaluationRun
     ///     kind is a vocabulary label, not operator content, and the comparison report reads it on every list.
     /// </summary>
     public string? PerKindJson { get; set; }
+
+    /// <summary>Encrypted runtime/model provenance captured by the controlled evaluation harness.</summary>
+    public byte[]? ExecutionProvenanceJson { get; set; }
 
     /// <summary>Sanitized failure message. Plaintext and bounded — operator-facing, not model output.</summary>
     public string? ErrorMessage { get; set; }

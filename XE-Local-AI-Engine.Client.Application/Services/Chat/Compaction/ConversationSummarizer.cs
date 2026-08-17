@@ -41,6 +41,9 @@ internal sealed class ConversationSummarizer(
                                         """;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly int MinimumRequestOverhead = SystemPrompt.Length
+                                                         + JsonSerializer.Serialize(ToPromptModel(string.Empty,
+                                                             [new ConversationSummarizerMessage("user", "😀")]), SerializerOptions).Length;
     private readonly ILogger<ConversationSummarizer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
 
@@ -65,23 +68,53 @@ internal sealed class ConversationSummarizer(
         // IChatClient is IDisposable — dispose the per-run node-local client.
         using var chatClient = provider.CreateChatClient(selection);
 
-        // Fold the span in batches bounded by the per-call char budget so no single request overruns the model's
-        // context window; each pass carries the running summary forward (prior summary + next batch -> new summary).
+        // Fold the span in batches bounded by the TOTAL model-facing character budget (system prompt + serialized
+        // user JSON, including the running summary) so no single request overruns the model's context window. An
+        // individually oversized message is split into contiguous fragments; sending it alone would still violate the
+        // bound this option promises.
         // If ANY pass yields nothing, abort the whole summarization (return null) — a partial summary that silently
         // omits a failed batch would let the caller advance the covered-sequence past messages that were never
         // summarized, dropping them from every later prompt. Failing whole leaves coverage unchanged; the user retries.
         var budget = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
         var running = string.IsNullOrWhiteSpace(input.PriorSummary) ? null : input.PriorSummary;
         var batch = new List<ConversationSummarizerMessage>();
-        var batchChars = 0;
 
         foreach (var message in input.Messages)
         {
-            var messageChars = message.Content?.Length ?? 0;
-            // Flush before adding when the batch already holds something and this message would push it over budget —
-            // but always keep at least one message per batch, so an oversized single message still goes out alone.
-            if (batch.Count > 0 && batchChars + messageChars > budget)
+            var remainingContent = message.Content ?? string.Empty;
+            do
             {
+                var wholeRemainder = new ConversationSummarizerMessage(message.Role, remainingContent);
+                if (RequestFitsBudget(running, [.. batch, wholeRemainder], budget))
+                {
+                    batch.Add(wholeRemainder);
+                    break;
+                }
+
+                if (batch.Count > 0)
+                {
+                    running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+                    if (running is null)
+                    {
+                        return null;
+                    }
+
+                    batch.Clear();
+                    continue;
+                }
+
+                var prefixLength = FindLargestFittingPrefix(message.Role, remainingContent, running, budget);
+                if (prefixLength == 0)
+                {
+                    _logger.LogWarning("Conversation summarization request overhead exceeded the configured {Budget}-character total request budget; aborting without advancing coverage.", budget);
+                    return null;
+                }
+
+                batch.Add(new ConversationSummarizerMessage(message.Role, remainingContent[..prefixLength]));
+                remainingContent = remainingContent[prefixLength..];
+
+                // A fragment was necessary, so flush it before considering the rest. The returned synopsis becomes
+                // the prior summary of the next request and is included in that request's budget calculation.
                 running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
                 if (running is null)
                 {
@@ -89,11 +122,8 @@ internal sealed class ConversationSummarizer(
                 }
 
                 batch.Clear();
-                batchChars = 0;
             }
-
-            batch.Add(message);
-            batchChars += messageChars;
+            while (remainingContent.Length > 0);
         }
 
         if (batch.Count > 0)
@@ -127,7 +157,65 @@ internal sealed class ConversationSummarizer(
             return null;
         }
 
-        return text;
+        return TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
+    }
+
+    internal static long GetMinimumRequestBudget(int maxSummaryChars) => MinimumRequestOverhead + (long)Math.Max(0, maxSummaryChars);
+
+    private static int FindLargestFittingPrefix(string role, string content, string? priorSummary, int budget)
+    {
+        var low = 1;
+        var high = content.Length;
+        var best = 0;
+        while (low <= high)
+        {
+            var midpoint = low + ((high - low) / 2);
+            var candidateLength = MoveBeforeSplitSurrogate(content, midpoint);
+            if (candidateLength == 0)
+            {
+                low = midpoint + 1;
+                continue;
+            }
+
+            var candidate = new ConversationSummarizerMessage(role, content[..candidateLength]);
+            if (RequestFitsBudget(priorSummary, [candidate], budget))
+            {
+                best = candidateLength;
+                low = midpoint + 1;
+            }
+            else
+            {
+                high = midpoint - 1;
+            }
+        }
+
+        return best;
+    }
+
+    private static string TruncateAtRuneBoundary(string value, int maximumChars)
+    {
+        if (value.Length <= maximumChars)
+        {
+            return value;
+        }
+
+        return value[..MoveBeforeSplitSurrogate(value, maximumChars)];
+    }
+
+    private static int MoveBeforeSplitSurrogate(string value, int index)
+    {
+        return index > 0
+               && index < value.Length
+               && char.IsHighSurrogate(value[index - 1])
+               && char.IsLowSurrogate(value[index])
+            ? index - 1
+            : index;
+    }
+
+    private static bool RequestFitsBudget(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, int budget)
+    {
+        var serializedPrompt = JsonSerializer.Serialize(ToPromptModel(priorSummary, batch), SerializerOptions);
+        return SystemPrompt.Length + serializedPrompt.Length <= budget;
     }
 
     private static object ToPromptModel(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> messages)

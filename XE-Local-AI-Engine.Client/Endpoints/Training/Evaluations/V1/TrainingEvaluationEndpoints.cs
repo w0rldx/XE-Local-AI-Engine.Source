@@ -28,13 +28,13 @@ public sealed class CreateEvaluationEndpoint(IEvaluationRunService evaluations) 
     {
         try
         {
-            var created = await _evaluations.CreateAsync(new CreateEvaluationCommand(req.TrainingRunId, req.Target, req.ModelName), ct)
+            var created = await _evaluations.CreateAsync(new CreateEvaluationCommand(req.TrainingRunId, req.Target, req.ModelName, req.ArtifactId), ct)
                                             .ConfigureAwait(false);
             await Send.ResultAsync(TypedResults.Accepted((string?)null, created.ToResponse())).ConfigureAwait(false);
         }
         catch (EvaluationRejectedException exception)
         {
-            // Rejections are operator-facing by construction: no installed base model, nothing promoted yet, or a run
+            // Rejections are operator-facing by construction: no installed base model, no completed staged artifact, or a run
             // that held nothing back.
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);

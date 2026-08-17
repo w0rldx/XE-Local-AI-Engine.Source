@@ -12,9 +12,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Creation-time refusals. The one pinned here is the drift guard: scoring reads the LIVE hold-out rows, so an
-///     evaluation created after the dataset moved would answer different questions from one created before it while
-///     the comparison still treated both as the same frozen membership.
+///     Evaluation creation always borrows the training run's immutable membership. A later live review edit must not
+///     prevent a base or tuned evaluation from replaying the exact corpus that run trained against.
 /// </summary>
 public sealed class EvaluationRunServiceTests
 {
@@ -24,15 +23,16 @@ public sealed class EvaluationRunServiceTests
     private static readonly string FrozenFingerprint = "v1:" + new string('a', count: 64);
 
     [Test]
-    public async Task Create_WhenTheDatasetDriftedSinceTheFreeze_IsRefusedWithTheDriftReason()
+    public async Task Create_WhenTheLiveDatasetChangedSinceTheFreeze_StillEnqueuesTheFrozenMembership()
     {
         var harness = Harness.Create(datasetFingerprint: "v1:" + new string('b', count: 64));
 
-        var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() =>
-            harness.Service.CreateAsync(new CreateEvaluationCommand(RunId, EvaluationTarget.Base)));
+        _ = await harness.Service.CreateAsync(new CreateEvaluationCommand(RunId, EvaluationTarget.Base));
 
-        AssertEx.Equal(EvaluationRunService.DriftedDatasetReason, rejection.Message);
-        _ = await harness.Evaluations.DidNotReceiveWithAnyArgs().CreateAndEnqueueAsync(default!, default);
+        var enqueued = AssertEx.NotNull(harness.Enqueued);
+        AssertEx.Equal(FrozenFingerprint, enqueued.DatasetContentFingerprint);
+        var membership = JsonSerializer.Deserialize<TrainingEvaluationMembershipV1>(enqueued.MembershipJson.Span, TrainingJson.Options)!;
+        AssertEx.Equal(HoldoutSampleId, membership.HoldoutSampleIds.Single());
     }
 
     [Test]
@@ -49,7 +49,20 @@ public sealed class EvaluationRunServiceTests
         AssertEx.Equal(HoldoutSampleId, membership.HoldoutSampleIds.Single());
     }
 
-    /// <summary>One service over substituted stores; only the dataset's live fingerprint varies between tests.</summary>
+    [Test]
+    public async Task Create_WhenTargetIsUndefined_IsRejectedBeforeEnqueue()
+    {
+        var harness = Harness.Create(datasetFingerprint: FrozenFingerprint);
+
+        var exception = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() =>
+            harness.Service.CreateAsync(new CreateEvaluationCommand(RunId, EvaluationTarget.Undefined)));
+
+        AssertEx.Contains(exception.Message, "target is required", StringComparison.OrdinalIgnoreCase);
+        _ = await harness.Evaluations.DidNotReceiveWithAnyArgs()
+                                     .CreateAndEnqueueAsync(default!, CancellationToken.None);
+    }
+
+    /// <summary>One service over substituted stores; only the irrelevant live dataset fingerprint varies.</summary>
     private sealed class Harness
     {
         private Harness(EvaluationRunService service, ITrainingEvaluationStore evaluations)

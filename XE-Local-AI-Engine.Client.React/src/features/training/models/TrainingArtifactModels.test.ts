@@ -23,6 +23,11 @@ function artifact(overrides: Partial<TrainingArtifactView> = {}): TrainingArtifa
 		smokeState: "Passed",
 		smokeReason: null,
 		committedModelName: null,
+		qualityComparisonId: null,
+		qualityOutcome: "Pending",
+		discardedAtUtc: null,
+		discardReason: null,
+		discardCleanupPending: false,
 		version: 3,
 		...overrides,
 	};
@@ -37,6 +42,7 @@ describe("staged artifact view", () => {
 			fileName: "adapter-F16.gguf",
 			sizeBytes: 512,
 			smokeState: "Pending",
+			discardCleanupPending: false,
 			version: 1,
 			createdAtUtc: 0,
 			updatedAtUtc: 0,
@@ -45,15 +51,23 @@ describe("staged artifact view", () => {
 		expect(view.sha256).toBeNull();
 		expect(view.smokeReason).toBeNull();
 		expect(view.committedModelName).toBeNull();
+		expect(view.qualityComparisonId).toBeNull();
+		expect(view.qualityOutcome).toBe("Pending");
+		expect(view.discardedAtUtc).toBeNull();
+		expect(view.discardReason).toBeNull();
+		expect(view.discardCleanupPending).toBe(false);
 	});
 
-	it("only offers promotion for a smoke-passed artifact that is not registered yet", () => {
-		expect(canPromote(artifact())).toBe(true);
+	it("only offers promotion for a validated smoke-passed artifact that is not registered yet", () => {
+		expect(canPromote(artifact())).toBe(false);
+		expect(canPromote(artifact({ qualityOutcome: "Passed" }))).toBe(true);
+		expect(canPromote(artifact({ qualityOutcome: "Overridden" }))).toBe(true);
+		expect(canPromote(artifact({ qualityOutcome: "Failed" }))).toBe(false);
 		expect(canPromote(artifact({ smokeState: "Failed" }))).toBe(false);
 		expect(canPromote(artifact({ smokeState: "Skipped" }))).toBe(false);
 		expect(canPromote(artifact({ smokeState: "Pending" }))).toBe(false);
 		// Already in the registry: promoting again would be a second entry over the same bytes.
-		expect(canPromote(artifact({ committedModelName: "tuned:Q4_K_M" }))).toBe(false);
+		expect(canPromote(artifact({ qualityOutcome: "Passed", committedModelName: "tuned:Q4_K_M" }))).toBe(false);
 	});
 
 	it("hides the trainer's own adapter directory, which is an export INPUT rather than a result", () => {

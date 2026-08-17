@@ -3811,6 +3811,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<bool>("DiscardCleanupPending")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("discard_cleanup_pending");
+
+                    b.Property<string>("DiscardReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("discard_reason");
+
+                    b.Property<long?>("DiscardedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("discarded_at_utc");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -3822,6 +3835,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT")
                         .HasColumnName("path");
+
+                    b.Property<Guid?>("QualityComparisonId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("quality_comparison_id");
+
+                    b.Property<byte[]>("QualityDecisionJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("quality_decision_json");
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT")
@@ -3857,6 +3878,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnName("version");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("QualityComparisonId")
+                        .HasDatabaseName("ix_training_artifacts_quality_comparison");
 
                     b.HasIndex("RunId")
                         .HasDatabaseName("ix_training_artifacts_run");
@@ -4239,6 +4263,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("error_message");
 
+                    b.Property<byte[]>("ExecutionProvenanceJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("execution_provenance_json");
+
                     b.Property<byte[]>("MembershipJson")
                         .IsRequired()
                         .HasColumnType("BLOB")
@@ -4272,11 +4300,23 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("scored_count");
 
+                    b.Property<Guid?>("SourceArtifactId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_artifact_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("TEXT")
                         .HasColumnName("status");
+
+                    b.Property<string>("TargetKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("InstalledModel")
+                        .HasColumnName("target_kind");
 
                     b.Property<int>("TotalCount")
                         .HasColumnType("INTEGER")
@@ -4301,6 +4341,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDatabaseName("ix_training_evaluation_runs_comparison");
 
                     b.HasIndex("DatasetId");
+
+                    b.HasIndex("SourceArtifactId")
+                        .HasDatabaseName("ix_training_evaluation_runs_source_artifact");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_training_evaluation_runs_status");
