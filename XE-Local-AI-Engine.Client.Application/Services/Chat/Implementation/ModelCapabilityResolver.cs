@@ -9,13 +9,9 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 ///     Default <see cref="IModelCapabilityResolver" />. Routes the capability lookup by the model's provider so an id is
 ///     never classified against a runtime that has never seen it: Codex and Azure Foundry ids use their declared
 ///     capability matrices, a llama.cpp GGUF reads its offline chat-template capabilities (no Ollama probe, no network),
-///     and only an Ollama-routed model hits <c>/api/show</c> (cache-first). Used by the orchestration resolver to
-///     resolve each participant's thinking capability from its OWN effective model.
-///     <para>
-///         This is the SAME provider-routing decision that <see cref="ChatTurnResolver" />'s private
-///         <c>ResolveModelCapabilitiesAsync</c> makes for the active model. The two are intentionally kept in step —
-///         a change to the routing here MUST be mirrored there, and vice versa.
-///     </para>
+///     and only an Ollama-routed model hits <c>/api/show</c> (cache-first). This is the one provider-routing decision in
+///     the codebase: the orchestration resolver resolves each participant's capabilities from its OWN effective model
+///     through it, and <see cref="ChatTurnResolver" /> resolves the chat turn's active model through it too.
 /// </summary>
 public sealed class ModelCapabilityResolver(
     IModelClassificationService modelClassificationService,
@@ -74,9 +70,13 @@ public sealed class ModelCapabilityResolver(
             var ggufCapabilities = await ggufModelCapabilityResolver
                                          .TryResolveAsync(model, cancellationToken)
                                          .ConfigureAwait(false);
-            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL.
+            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL. Vision rides the GGUF descriptor's
+            // projector-gated flag — the only path that can advertise it (cloud/Ollama stay non-vision here).
             return ggufCapabilities is { } caps
                 ? new ModelCapabilitySnapshot(caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
+                {
+                    SupportsVision = caps.SupportsVision
+                }
                 : NotCapableLocal;
         }
 
@@ -88,7 +88,8 @@ public sealed class ModelCapabilityResolver(
             return NotCapableLocal;
         }
 
-        // An Ollama-routed model runs on the node — local.
+        // An Ollama-routed model runs on the node — local. Vision is not resolved on the Ollama path (llama.cpp is the
+        // default runtime and the mmproj-gated GGUF path owns vision); it stays the safe non-vision default here.
         return new ModelCapabilitySnapshot(ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities),
             IsCloud: false);

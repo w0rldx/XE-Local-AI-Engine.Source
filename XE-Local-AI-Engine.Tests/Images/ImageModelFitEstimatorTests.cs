@@ -24,9 +24,9 @@ public sealed class ImageModelFitEstimatorTests
         // though the set totals ~18 GB. Charging the total would wrongly report WontFit.
         var parts = new[]
         {
-            (ImageModelPartRole.Diffusion, 13 * Gb),
-            (ImageModelPartRole.Vae, Gb / 4),
-            (ImageModelPartRole.Llm, 5 * Gb)
+            new ImageModelPartSize(ImageModelPartRole.Diffusion, 13 * Gb),
+            new ImageModelPartSize(ImageModelPartRole.Vae, Gb / 4),
+            new ImageModelPartSize(ImageModelPartRole.Llm, 5 * Gb)
         };
 
         var estimate = ImageModelFitEstimator.Estimate(parts, NvidiaProfile(freeVramBytes: 24 * Gb));
@@ -41,7 +41,7 @@ public sealed class ImageModelFitEstimatorTests
     {
         var parts = new[]
         {
-            (ImageModelPartRole.Diffusion, 13 * Gb)
+            new ImageModelPartSize(ImageModelPartRole.Diffusion, 13 * Gb)
         };
 
         var estimate = ImageModelFitEstimator.Estimate(parts, NvidiaProfile(freeVramBytes: 8 * Gb));
@@ -56,7 +56,7 @@ public sealed class ImageModelFitEstimatorTests
         // close, rather than being given a flat green badge that hides the risk.
         var parts = new[]
         {
-            (ImageModelPartRole.Diffusion, 7 * Gb)
+            new ImageModelPartSize(ImageModelPartRole.Diffusion, 7 * Gb)
         };
 
         var estimate = ImageModelFitEstimator.Estimate(parts, NvidiaProfile(freeVramBytes: 8 * Gb));
@@ -70,8 +70,8 @@ public sealed class ImageModelFitEstimatorTests
         // There is no diffusion/encoder split without a GPU: everything is resident in RAM.
         var parts = new[]
         {
-            (ImageModelPartRole.Diffusion, 6 * Gb),
-            (ImageModelPartRole.T5, 3 * Gb)
+            new ImageModelPartSize(ImageModelPartRole.Diffusion, 6 * Gb),
+            new ImageModelPartSize(ImageModelPartRole.T5, 3 * Gb)
         };
 
         var estimate = ImageModelFitEstimator.Estimate(parts, CpuProfile(availableRamBytes: 10 * Gb));
@@ -98,7 +98,7 @@ public sealed class ImageModelFitEstimatorTests
             FreeDiskBytes = 500 * Gb
         };
 
-        var estimate = ImageModelFitEstimator.Estimate([(ImageModelPartRole.Diffusion, Gb)], profile);
+        var estimate = ImageModelFitEstimator.Estimate([new ImageModelPartSize(ImageModelPartRole.Diffusion, Gb)], profile);
 
         AssertEx.Equal(ImageModelFitVerdict.Unknown, estimate.Verdict);
         AssertEx.Equal(expected: 0L, estimate.BudgetBytes, "No budget was measured, so none may be reported.");
@@ -107,7 +107,7 @@ public sealed class ImageModelFitEstimatorTests
     [Test]
     public void Estimate_WhenTheHardwareProbeItselfFailed_ReportsUnknown()
     {
-        var estimate = ImageModelFitEstimator.Estimate([(ImageModelPartRole.Diffusion, Gb)], profile: null);
+        var estimate = ImageModelFitEstimator.Estimate([new ImageModelPartSize(ImageModelPartRole.Diffusion, Gb)], profile: null);
 
         AssertEx.Equal(ImageModelFitVerdict.Unknown, estimate.Verdict);
     }
@@ -121,7 +121,7 @@ public sealed class ImageModelFitEstimatorTests
             FreeDiskBytes = 5 * Gb
         };
 
-        var estimate = ImageModelFitEstimator.Estimate([(ImageModelPartRole.Diffusion, 13 * Gb)], profile);
+        var estimate = ImageModelFitEstimator.Estimate([new ImageModelPartSize(ImageModelPartRole.Diffusion, 13 * Gb)], profile);
 
         AssertEx.Equal(ImageModelFitVerdict.Fits, estimate.Verdict);
         AssertEx.False(estimate.FitsOnDisk);

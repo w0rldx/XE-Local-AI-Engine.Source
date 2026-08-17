@@ -202,7 +202,7 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
         return -1;
     }
 
-    private static (string Name, bool IsClosing) ParseTag(ReadOnlySpan<char> tag)
+    private static ParsedTag ParseTag(ReadOnlySpan<char> tag)
     {
         tag = tag.Trim();
         var isClosing = tag.Length > 0 && tag[0] == '/';
@@ -217,7 +217,7 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
             length++;
         }
 
-        return (tag[..length].ToString(), isClosing);
+        return new ParsedTag(tag[..length].ToString(), isClosing);
     }
 
     private static int SkipRawElement(string html, int position, string tagName)
@@ -256,4 +256,8 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
                || tagName.Equals("tr", StringComparison.OrdinalIgnoreCase)
                || tagName.Equals("hr", StringComparison.OrdinalIgnoreCase);
     }
+
+    // A tag's element name (lower/upper as written, matched case-insensitively downstream) and whether it opened with
+    // a slash — i.e. whether it closes an element rather than opening one.
+    private sealed record ParsedTag(string Name, bool IsClosing);
 }

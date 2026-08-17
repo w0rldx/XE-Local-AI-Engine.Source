@@ -274,20 +274,22 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
     ///         open, so without <c>CloseWrite</c> the command hangs rather than completes.
     ///     </para>
     /// </summary>
-    private static async Task<(string StandardOutput, string StandardError)> PumpAsync(MultiplexedStream stream,
+    private static async Task<ExecOutput> PumpAsync(MultiplexedStream stream,
         string? standardInput,
         CancellationToken cancellationToken)
     {
         if (standardInput is null)
         {
-            return await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+            var (readStandardOutput, readStandardError) = await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+            return new ExecOutput(readStandardOutput, readStandardError);
         }
 
         var payload = Encoding.UTF8.GetBytes(standardInput);
         var writeTask = SendAsync(stream, payload, cancellationToken);
         try
         {
-            return await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+            var (standardOutput, standardError) = await stream.ReadOutputToEndAsync(cancellationToken).ConfigureAwait(false);
+            return new ExecOutput(standardOutput, standardError);
         }
         finally
         {
@@ -345,18 +347,24 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
         };
     }
 
-    private static (string Text, bool Truncated) Truncate(string value, int maxBytes)
+    private static TruncatedText Truncate(string value, int maxBytes)
     {
         if (Encoding.UTF8.GetByteCount(value) <= maxBytes)
         {
-            return (value, false);
+            return new TruncatedText(value, Truncated: false);
         }
 
         var bytes = Encoding.UTF8.GetBytes(value);
         // Decode with a replacement fallback so a cut through a multi-byte sequence yields a replacement character
         // rather than throwing — truncation is a bounded-capture policy, not a data-integrity failure.
-        return (Encoding.UTF8.GetString(bytes, 0, maxBytes), true);
+        return new TruncatedText(Encoding.UTF8.GetString(bytes, 0, maxBytes), Truncated: true);
     }
+
+    // Both captured streams of one exec, before the per-stream capture ceiling is applied.
+    private sealed record ExecOutput(string StandardOutput, string StandardError);
+
+    // A captured stream after the ceiling: the text actually kept, and whether anything was dropped to fit.
+    private sealed record TruncatedText(string Text, bool Truncated);
 
     /// <summary>
     ///     Classify a transport or API failure into the operator-actionable outcome behind it. The socket error code

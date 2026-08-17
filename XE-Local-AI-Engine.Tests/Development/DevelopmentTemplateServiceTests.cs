@@ -89,17 +89,17 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         // The created repository carries the template's .xe-dev/profile.json, so the project-creation import path — which reads
         // it from the registered repository root at project creation — resolves the template's declared profile.
         var import = DevelopmentCommandProfileImport.TryRead(destination);
-        AssertEx.True(import.HasValue, "The template's .xe-dev/profile.json must survive into the created repository.");
-        AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx, import!.Value.Document.ProfileId);
-        AssertEx.Equal("Fixture.slnx", import.Value.Document.BuildTarget);
+        AssertEx.NotNull(import, "The template's .xe-dev/profile.json must survive into the created repository.");
+        AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx, import!.Document.ProfileId);
+        AssertEx.Equal("Fixture.slnx", import.Document.BuildTarget);
 
-        var profile = DevelopmentCommandProfileCatalog.Materialize(import.Value.Document.ProfileId!,
-            import.Value.Document.BuildTarget,
+        var profile = DevelopmentCommandProfileCatalog.Materialize(import.Document.ProfileId!,
+            import.Document.BuildTarget,
             TemplateId.ToString(),
-            import.Value.Digest);
+            import.Digest);
         AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx, profile.ProfileId);
         AssertEx.Equal(TemplateId.ToString(), profile.TemplateId);
-        AssertEx.Equal(import.Value.Digest, profile.ImportDigest);
+        AssertEx.Equal(import.Digest, profile.ImportDigest);
     }
 
     [Test]

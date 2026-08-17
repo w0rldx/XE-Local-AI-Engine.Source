@@ -143,7 +143,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         };
     }
 
-    private async Task<(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate, long SignalVersion)> ComputeAsync(CancellationToken ct)
+    private async Task<DeviceAuditComputation> ComputeAsync(CancellationToken ct)
     {
         // The raw profile is read non-force here (the audit only needs the vendor / total-VRAM presence, not a live free
         // figure); the free figures are re-probed by GetEffectiveProfileAsync when a caller needs them live.
@@ -166,7 +166,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         // Determinate = safe to memoize: the audit for a CPU variant never depends on the probe, and a GPU variant's
         // audit is only trustworthy when the probe actually ran.
         var determinate = variant == GpuVariant.Cpu || inventory.ProbeSucceeded;
-        return (state, reasonCode, determinate, signalVersion);
+        return new DeviceAuditComputation(state, reasonCode, determinate, signalVersion);
     }
 
     /// <summary>Pure audit decision over (host profile, selected variant, enumerated devices) — unit-testable without I/O.</summary>
@@ -181,7 +181,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         var zeroDevices = !cpuVariant && inventory.ProbeSucceeded && inventory.Devices.Count == 0;
         var cpuFallback = gpuExpected && (cpuVariant || zeroDevices);
 
-        var (reason, remediation) = cpuFallback ? BuildFallbackText(raw.GpuVendor, variant, cpuVariant) : (null, (string?)null);
+        var fallbackText = cpuFallback ? BuildFallbackText(raw.GpuVendor, variant, cpuVariant) : null;
 
         var backend = ResolveInferenceBackend(variant, inventory);
         return new RuntimeDeviceAuditState
@@ -189,8 +189,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             InferenceBackend = backend,
             GpuExpected = gpuExpected,
             CpuFallback = cpuFallback,
-            Reason = reason,
-            Remediation = remediation,
+            Reason = fallbackText?.Reason,
+            Remediation = fallbackText?.Remediation,
             BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant) : null,
             Devices = [.. inventory.Devices.Select(static device => new RuntimeAuditDevice(device.Name, device.TotalBytes, device.FreeBytes))]
         };
@@ -239,7 +239,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         return variant == GpuVariant.Cuda ? "cuda" : "vulkan";
     }
 
-    private static (string Reason, string? Remediation) BuildFallbackText(GpuVendor vendor, GpuVariant variant, bool cpuVariant)
+    private static FallbackText BuildFallbackText(GpuVendor vendor, GpuVariant variant, bool cpuVariant)
     {
         var reason = cpuVariant
             ? $"A {VendorName(vendor)} GPU was detected, but the CPU llama.cpp runtime is selected — inference is running on the CPU."
@@ -251,7 +251,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             + "NVIDIA build is Vulkan, which needs a Vulkan ICD; if a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH "
             + "points to a valid GPU-capable binary.";
 
-        return (reason, Remediation);
+        return new FallbackText(reason, Remediation);
     }
 
     private static string VendorName(GpuVendor vendor)
@@ -300,4 +300,11 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         _logger.LogWarning("Runtime device audit detected a CPU fallback (backend {Backend}): {Reason} {Remediation}",
             state.InferenceBackend, state.Reason, state.Remediation);
     }
+
+    // One audit pass: the decided state, the fallback reason code when it fell back, whether the pass is safe to
+    // memoize, and the managed-CUDA signal stamp the pass is valid for.
+    private sealed record DeviceAuditComputation(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate, long SignalVersion);
+
+    // Operator-facing prose for a detected CPU fallback: what happened, and what to do about it.
+    private sealed record FallbackText(string Reason, string? Remediation);
 }
