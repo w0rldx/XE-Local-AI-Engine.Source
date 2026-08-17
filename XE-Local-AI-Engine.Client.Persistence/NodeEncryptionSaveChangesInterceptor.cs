@@ -517,6 +517,12 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 entry.Entity.Id,
                 "training_evaluation_results_json",
                 trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ExecutionProvenanceJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_evaluation_execution_provenance_json",
+                trackedProperties);
         }
 
         foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingComparisonReport>())
@@ -526,6 +532,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 Guid.Empty,
                 entry.Entity.Id,
                 "training_comparison_deltas_json",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingArtifact>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.QualityDecisionJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "training_artifact_quality_decision_json",
                 trackedProperties);
         }
 

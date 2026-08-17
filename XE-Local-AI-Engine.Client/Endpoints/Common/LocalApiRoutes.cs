@@ -776,6 +776,10 @@ public static class LocalApiRoutes
         public const string ArtifactById = "training/artifacts/{artifactId}";
         public const string ArtifactSmoke = "training/artifacts/{artifactId}/smoke";
         public const string ArtifactPromote = "training/artifacts/{artifactId}/promote";
+        public const string ArtifactQuality = "training/artifacts/{artifactId}/quality";
+        public const string ArtifactQualityRevalidation = "training/artifacts/{artifactId}/quality/revalidation";
+        public const string ArtifactQualityOverride = "training/artifacts/{artifactId}/quality/override";
+        public const string ArtifactQualityDiscard = "training/artifacts/{artifactId}/quality/discard";
     }
 
     public static class Automation

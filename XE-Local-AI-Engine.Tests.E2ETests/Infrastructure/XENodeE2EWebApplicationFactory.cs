@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
@@ -20,13 +21,24 @@ using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Client.Services.Training.Export;
+using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 
 /// <summary>
@@ -412,6 +424,71 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
+
+            // Training lifecycle E2E: production run/export/evaluation/promotion services stay registered. Only the
+            // unavailable Python, transient llama.cpp and final registry-I/O boundaries are deterministic.
+            services.AddSingleton<TrainingLifecycleE2ETestDoubles.Verdicts>();
+            services.RemoveAll<ITrainingOptionDefaultsCalculator>();
+            services.AddSingleton<ITrainingOptionDefaultsCalculator, TrainingLifecycleE2ETestDoubles.Defaults>();
+            services.RemoveAll<IInstalledBaseModelLinker>();
+            services.AddSingleton<IInstalledBaseModelLinker, TrainingLifecycleE2ETestDoubles.Linker>();
+
+            services.RemoveAll<ITrainingRuntimeService>();
+            services.AddSingleton<ITrainingRuntimeService, TrainingLifecycleE2ETestDoubles.Runtime>();
+            services.RemoveAll<ITrainingCapacityGate>();
+            services.AddSingleton<ITrainingCapacityGate, TrainingLifecycleE2ETestDoubles.Capacity>();
+            services.RemoveAll<ITrainingProcessSpawner>();
+            services.AddSingleton<ITrainingProcessSpawner, TrainingLifecycleE2ETestDoubles.ProcessSpawner>();
+            services.RemoveAll<IConvertScriptProvisioner>();
+            services.AddSingleton<IConvertScriptProvisioner, TrainingLifecycleE2ETestDoubles.ConvertScripts>();
+            services.RemoveAll<ILlamaCppBinaryManager>();
+            services.AddSingleton<ILlamaCppBinaryManager>(_ => new TrainingLifecycleE2ETestDoubles.BinaryManager(_fixtureDataRoot));
+            services.RemoveAll<IGpuVariantSelector>();
+            services.AddSingleton<IGpuVariantSelector, TrainingLifecycleE2ETestDoubles.VariantSelector>();
+            services.RemoveAll<IGgufImportInspector>();
+            services.AddSingleton<IGgufImportInspector, TrainingLifecycleE2ETestDoubles.Inspector>();
+            services.RemoveAll<ITransientLlamaServerLauncher>();
+            services.AddSingleton<ITransientLlamaServerLauncher, TrainingLifecycleE2ETestDoubles.TransientLauncher>();
+            services.RemoveAll<ITrainedModelSmokeGate>();
+            services.AddSingleton<ITrainedModelSmokeGate>(provider => new TrainedModelSmokeGate(
+                provider.GetRequiredService<ITransientLlamaServerLauncher>(),
+                provider.GetRequiredService<IInferenceChatClientFactory>(),
+                new TrainingLifecycleE2ETestDoubles.PropsHttpClientFactory(),
+                provider.GetRequiredService<IGpuModelLoadAdmission>(),
+                provider.GetRequiredService<ILogger<TrainedModelSmokeGate>>()));
+
+            var runtimeSupervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+            runtimeSupervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                             .Returns(_ => Substitute.For<ILlamaServerRuntimeMutationLease>());
+            services.RemoveAll<ILlamaServerProcessSupervisor>();
+            services.AddSingleton(runtimeSupervisor);
+
+            services.AddSingleton(_ => new TrainingLifecycleE2ETestDoubles.InstalledModels(_fixtureDataRoot));
+            services.RemoveAll<ITrainingEvaluationInstalledModelLeaseProvider>();
+            services.AddSingleton<ITrainingEvaluationInstalledModelLeaseProvider>(provider =>
+                provider.GetRequiredService<TrainingLifecycleE2ETestDoubles.InstalledModels>());
+            services.RemoveAll<ITransientLlamaServerEvaluationHarness>();
+            services.AddSingleton<ITransientLlamaServerEvaluationHarness, TrainingLifecycleE2ETestDoubles.EvaluationHarness>();
+            services.RemoveAll<IInferenceChatClientFactory>();
+            services.AddSingleton<IInferenceChatClientFactory, TrainingLifecycleE2ETestDoubles.ChatFactory>();
+            services.RemoveAll<IEvaluationRunService>();
+            services.AddScoped<IEvaluationRunService>(provider => new EvaluationRunService(
+                provider.GetRequiredService<ITrainingEvaluationStore>(),
+                provider.GetRequiredService<ITrainingRunStore>(),
+                provider.GetRequiredService<ITrainingDatasetStore>(),
+                provider.GetRequiredService<TrainingLifecycleE2ETestDoubles.InstalledModels>(),
+                provider.GetRequiredService<TrainingRunCancellationRegistry>(),
+                provider.GetRequiredService<ITrainingRunQueueSignal>()));
+
+            services.AddSingleton<TrainingLifecycleE2ETestDoubles.Importer>();
+            services.RemoveAll<IArtifactPromotionService>();
+            services.AddScoped<IArtifactPromotionService>(provider => new ArtifactPromotionService(
+                provider.GetRequiredService<ITrainingRunStore>(),
+                provider.GetRequiredService<ITrainingBaseArtifactStore>(),
+                provider.GetRequiredService<TrainingLifecycleE2ETestDoubles.InstalledModels>(),
+                provider.GetRequiredService<IGgufAcquisitionPreflight>(),
+                provider.GetRequiredService<TrainingLifecycleE2ETestDoubles.Importer>(),
+                provider.GetRequiredService<ILogger<ArtifactPromotionService>>()));
 
             // Benchmarks: the only two seams on the benchmark path that require a real llama.cpp install. Everything
             // else — policy hashing, revisions, attempts, the ranking SQL, the endpoints and the page — stays

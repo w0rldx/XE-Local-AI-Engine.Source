@@ -20,6 +20,9 @@ import type {
 	ArchiveNodeChatConversationData,
 	ArchiveNodeChatConversationErrors,
 	ArchiveNodeChatConversationResponses,
+	BeginTrainingArtifactQualityRevalidationData,
+	BeginTrainingArtifactQualityRevalidationErrors,
+	BeginTrainingArtifactQualityRevalidationResponses,
 	BenchmarkInferenceProfileData,
 	BenchmarkInferenceProfileErrors,
 	BenchmarkInferenceProfileResponses,
@@ -182,6 +185,9 @@ import type {
 	CreateWorkspaceData,
 	CreateWorkspaceErrors,
 	CreateWorkspaceResponses,
+	DecideTrainingArtifactQualityData,
+	DecideTrainingArtifactQualityErrors,
+	DecideTrainingArtifactQualityResponses,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
@@ -269,6 +275,9 @@ import type {
 	DisableScheduledJobData,
 	DisableScheduledJobErrors,
 	DisableScheduledJobResponses,
+	DiscardTrainingArtifactQualityData,
+	DiscardTrainingArtifactQualityErrors,
+	DiscardTrainingArtifactQualityResponses,
 	DisconnectConnectionData,
 	DisconnectConnectionErrors,
 	DisconnectConnectionResponses,
@@ -723,6 +732,9 @@ import type {
 	NodeSetupData,
 	NodeSetupErrors,
 	NodeSetupResponses,
+	OverrideTrainingArtifactQualityData,
+	OverrideTrainingArtifactQualityErrors,
+	OverrideTrainingArtifactQualityResponses,
 	PinNodeChatConversationData,
 	PinNodeChatConversationErrors,
 	PinNodeChatConversationResponses,
@@ -976,6 +988,9 @@ import {
 	zArchiveNodeChatConversationBody,
 	zArchiveNodeChatConversationPath,
 	zArchiveNodeChatConversationResponse,
+	zBeginTrainingArtifactQualityRevalidationBody,
+	zBeginTrainingArtifactQualityRevalidationPath,
+	zBeginTrainingArtifactQualityRevalidationResponse,
 	zBenchmarkInferenceProfileBody,
 	zBenchmarkInferenceProfileResponse,
 	zBranchNodeChatConversationBody,
@@ -1081,6 +1096,9 @@ import {
 	zCreateTrainingRunResponse,
 	zCreateWorkspaceBody,
 	zCreateWorkspaceResponse,
+	zDecideTrainingArtifactQualityBody,
+	zDecideTrainingArtifactQualityPath,
+	zDecideTrainingArtifactQualityResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
 	zDeleteBaseArtifactPath,
@@ -1147,6 +1165,9 @@ import {
 	zDisableAutoConnectResponse,
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
+	zDiscardTrainingArtifactQualityBody,
+	zDiscardTrainingArtifactQualityPath,
+	zDiscardTrainingArtifactQualityResponse,
 	zDisconnectConnectionResponse,
 	zDownloadRecommendedEmbeddingResponse,
 	zDownloadRecommendedRerankerResponse,
@@ -1392,6 +1413,9 @@ import {
 	zNodeRefreshResponse,
 	zNodeSetupBody,
 	zNodeSetupResponse,
+	zOverrideTrainingArtifactQualityBody,
+	zOverrideTrainingArtifactQualityPath,
+	zOverrideTrainingArtifactQualityResponse,
 	zPinNodeChatConversationBody,
 	zPinNodeChatConversationPath,
 	zPinNodeChatConversationResponse,
@@ -2165,6 +2189,114 @@ export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/promote",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
+	options: Options<DecideTrainingArtifactQualityData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<DecideTrainingArtifactQualityResponses, DecideTrainingArtifactQualityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDecideTrainingArtifactQualityBody,
+					path: zDecideTrainingArtifactQualityPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDecideTrainingArtifactQualityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/artifacts/{artifactId}/quality",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
+	options: Options<OverrideTrainingArtifactQualityData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<OverrideTrainingArtifactQualityResponses, OverrideTrainingArtifactQualityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zOverrideTrainingArtifactQualityBody,
+					path: zOverrideTrainingArtifactQualityPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zOverrideTrainingArtifactQualityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/artifacts/{artifactId}/quality/override",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends boolean = false>(
+	options: Options<BeginTrainingArtifactQualityRevalidationData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		BeginTrainingArtifactQualityRevalidationResponses,
+		BeginTrainingArtifactQualityRevalidationErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zBeginTrainingArtifactQualityRevalidationBody,
+					path: zBeginTrainingArtifactQualityRevalidationPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zBeginTrainingArtifactQualityRevalidationResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/artifacts/{artifactId}/quality/revalidation",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
+	options: Options<DiscardTrainingArtifactQualityData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<DiscardTrainingArtifactQualityResponses, DiscardTrainingArtifactQualityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDiscardTrainingArtifactQualityBody,
+					path: zDiscardTrainingArtifactQualityPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDiscardTrainingArtifactQualityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/training/artifacts/{artifactId}/quality/discard",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

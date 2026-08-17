@@ -41,7 +41,9 @@ public sealed record TrainingRunOptionsV1
 /// </summary>
 public sealed record TrainingRunFreezeV1
 {
-    public int SchemaVersion { get; init; } = 1;
+    public const int CurrentSchemaVersion = 2;
+
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
     /// <summary>Names the frozen copy on disk. See <c>TrainingRunWorkspace.FrozenDatasetPath</c> for why it is not the run id.</summary>
     public Guid FreezeId { get; init; }

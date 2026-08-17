@@ -289,6 +289,23 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_WhenLocalSameAsRunningWithDifferentCasing_ReturnsQueueSameModel()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            RunningLlama = [new LlamaServerProcessHealth(Model.ToUpperInvariant(), ModelRole.Chat, IsResponsive: true, "ok")]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.QueueSameModel, decision.Verdict);
+        await harness.FootprintProvider.DidNotReceive()
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Capacity_WhenLocalDifferentNoFit_ReturnsRejectInsufficient()
     {
         var harness = new Harness
@@ -505,8 +522,8 @@ public sealed class CapacityServiceTests
     [Test]
     public async Task Capacity_NonNvidiaGpu_WhenFreeVramUnknown_FallsBackToTotalVram()
     {
-        // Free-VRAM probe unavailable (AvailableVramBytes null) → degraded fallback uses total VRAM minus the ledger.
-        // Total = 64 GB, footprint = 8 GB → admit (the documented over-admission risk; process cap is the backstop).
+        // With no known resident and no external draft, the first degraded non-NVIDIA load can use total VRAM minus
+        // the in-flight ledger. Total = 64 GB, footprint = 8 GB → admit.
         var harness = new Harness
         {
             Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
@@ -520,6 +537,92 @@ public sealed class CapacityServiceTests
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+    }
+
+    [Test]
+    public async Task Capacity_NonNvidiaGpu_WhenFreeVramUnknownAndModelResident_Rejects()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
+            {
+                GpuVendor = GpuVendor.Amd
+            },
+            Footprint = GpuFootprint(8 * Gb),
+            RunningLlama = [new LlamaServerProcessHealth("resident/model", ModelRole.Chat, IsResponsive: true, "ok")],
+            MaxLoadedProcesses = 5
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_NonNvidiaGpu_WhenFreeVramUnknownAndExternalDraftConfigured_Rejects()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
+            {
+                GpuVendor = GpuVendor.Amd
+            },
+            Footprint = GpuFootprint(8 * Gb),
+            SupervisorOptions = new LlamaServerSupervisorOptions
+            {
+                SpeculativeMode = "draft-simple",
+                SpeculativeDraftModelName = "draft/model"
+            }
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_NonNvidiaGpu_WhenSupervisorResidencyProbeFails_Rejects()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
+            {
+                GpuVendor = GpuVendor.Amd
+            },
+            Footprint = GpuFootprint(8 * Gb),
+            SupervisorProbeThrows = true
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_NonNvidiaGpu_WhenOllamaResidencyProbeFails_Rejects()
+    {
+        var harness = new Harness
+        {
+            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
+            {
+                GpuVendor = GpuVendor.Intel
+            },
+            Footprint = GpuFootprint(8 * Gb),
+            OllamaProbeThrows = true
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
     }
 
     [Test]
@@ -709,7 +812,10 @@ public sealed class CapacityServiceTests
         public ModelFootprint Footprint { get; init; } = ModelFootprint.Unknown;
         public IReadOnlyList<LlamaServerProcessHealth> RunningLlama { get; init; } = [];
         public IReadOnlyList<RunningModelSnapshot> RunningOllama { get; init; } = [];
+        public bool SupervisorProbeThrows { get; init; }
+        public bool OllamaProbeThrows { get; init; }
         public LlamaServerExternalEndpointOptions ExternalEndpoints { get; init; } = new();
+        public LlamaServerSupervisorOptions SupervisorOptions { get; init; } = new();
 
         public IRuntimeDeviceAudit RuntimeAudit { get; } = Substitute.For<IRuntimeDeviceAudit>();
         public ILlamaServerProcessSupervisor Supervisor { get; } = Substitute.For<ILlamaServerProcessSupervisor>();
@@ -739,7 +845,9 @@ public sealed class CapacityServiceTests
                             CpuFallback = false
                         }));
             Supervisor.CheckHealthAsync(Arg.Any<CancellationToken>())
-                      .Returns(Task.FromResult(RunningLlama));
+                      .Returns(SupervisorProbeThrows
+                          ? Task.FromException<IReadOnlyList<LlamaServerProcessHealth>>(new InvalidOperationException("Synthetic supervisor probe failure."))
+                          : Task.FromResult(RunningLlama));
             FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(),
                                  Arg.Any<ModelRole>(),
                                  Arg.Any<HardwareProfile>(),
@@ -768,7 +876,9 @@ public sealed class CapacityServiceTests
 
             var ollama = Substitute.For<IOllamaModelService>();
             ollama.ListRunningModelsAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult(RunningOllama));
+                  .Returns(OllamaProbeThrows
+                      ? Task.FromException<IReadOnlyList<RunningModelSnapshot>>(new InvalidOperationException("Synthetic Ollama probe failure."))
+                      : Task.FromResult(RunningOllama));
 
             return new CapacityService(cloud,
                 resolver,
@@ -778,7 +888,8 @@ public sealed class CapacityServiceTests
                 FootprintProvider,
                 Ledger,
                 LaunchAdmissions,
-                ExternalEndpoints);
+                ExternalEndpoints,
+                SupervisorOptions);
         }
     }
 }

@@ -44,6 +44,17 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         {
             throw new TrainingNotFoundException("The training run was not found.");
         }
+        if (command.TargetKind == EvaluationModelTargetKind.StagedTrainingArtifact)
+        {
+            var artifact = command.SourceArtifactId is { } sourceId
+                ? await _dbContext.TrainingArtifacts.AsNoTracking().FirstOrDefaultAsync(item => item.Id == sourceId, cancellationToken)
+                                  .ConfigureAwait(false)
+                : null;
+            if (artifact is null || !string.Equals(artifact.Sha256, command.ModelContentFingerprint, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new TrainingConflictException("ArtifactIdentityMismatch");
+            }
+        }
 
         var now = Now();
         var evaluation = new TrainingEvaluationRun
@@ -52,6 +63,8 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             TrainingRunId = command.TrainingRunId,
             ModelName = command.ModelName,
             ModelContentFingerprint = command.ModelContentFingerprint,
+            TargetKind = command.TargetKind,
+            SourceArtifactId = command.SourceArtifactId,
             DatasetId = command.DatasetId,
             DatasetContentFingerprint = command.DatasetContentFingerprint,
             MembershipJson = command.MembershipJson.ToArray(),
@@ -118,6 +131,11 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
     {
         ArgumentNullException.ThrowIfNull(entries);
         var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (evaluation.ExecutionProvenanceJson is null)
+        {
+            throw new TrainingConflictException("EvaluationExecutionProvenanceUnbound");
+        }
+
         var merged = TrainingEvaluationResults.Read(OptionalBlob.AsOptionalMemory(evaluation.ResultsJson)).ToList();
         var scored = new HashSet<Guid>(merged.Select(entry => entry.SampleId));
         var added = false;
@@ -147,6 +165,40 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         evaluation.ScoredCount = merged.Count;
         evaluation.PassedCount = merged.Count(entry => entry.Passed);
         evaluation.PerKindJson = TrainingEvaluationResults.WriteTally(tally);
+        evaluation.UpdatedAtUtc = Now();
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+        return ToRecord(evaluation, work?.Status);
+    }
+
+    public async Task<TrainingEvaluationRecord> BindExecutionProvenanceAsync(Guid evaluationId,
+        ReadOnlyMemory<byte> provenanceJson,
+        CancellationToken cancellationToken = default)
+    {
+        if (provenanceJson.IsEmpty)
+        {
+            throw new TrainingValidationException("Evaluation execution provenance cannot be empty.");
+        }
+
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (IsTerminal(evaluation.Status))
+        {
+            throw new TrainingConflictException("EvaluationTerminal");
+        }
+
+        if (evaluation.ResultsJson is not null)
+        {
+            if (evaluation.ExecutionProvenanceJson is null
+                || !evaluation.ExecutionProvenanceJson.AsSpan().SequenceEqual(provenanceJson.Span))
+            {
+                throw new TrainingConflictException("EvaluationAttemptProvenanceMismatch");
+            }
+
+            var unchangedWork = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+            return ToRecord(evaluation, unchangedWork?.Status);
+        }
+
+        evaluation.ExecutionProvenanceJson = provenanceJson.ToArray();
         evaluation.UpdatedAtUtc = Now();
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
@@ -365,6 +417,10 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
                                      .ConfigureAwait(false)
                      ?? throw new TrainingNotFoundException("The comparison report was not found.");
         EnsureVersion(report.Version, expectedVersion);
+        if (await _dbContext.TrainingArtifacts.AnyAsync(item => item.QualityComparisonId == comparisonId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TrainingConflictException("ComparisonQualityReferenced");
+        }
 
         // Unbind first: an evaluation still pointing at a deleted report would be undeletable forever.
         var now = Now();
@@ -447,7 +503,8 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         new(entity.Id, entity.TrainingRunId, entity.ComparisonId, entity.ModelName, entity.ModelContentFingerprint, entity.DatasetId,
             entity.DatasetContentFingerprint, entity.MembershipJson.ToArray(), entity.Status,
             OptionalBlob.AsOptionalMemory(entity.ResultsJson), entity.TotalCount, entity.ScoredCount, entity.PassedCount,
-            entity.PerKindJson, entity.ErrorMessage, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus);
+            entity.PerKindJson, entity.ErrorMessage, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus,
+            entity.TargetKind, entity.SourceArtifactId, OptionalBlob.AsOptionalMemory(entity.ExecutionProvenanceJson));
 
     private static TrainingComparisonRecord ToRecord(TrainingComparisonReport entity) =>
         new(entity.Id, entity.Name, entity.BaseEvaluationRunId, entity.TunedEvaluationRunId, entity.BaseBenchmarkRunId,

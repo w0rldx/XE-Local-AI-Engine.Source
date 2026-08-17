@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
+using XE_Local_AI_Engine.Client.Services.Training.Export;
 
 /// <summary>What the operator asked to compare. The benchmark ids are optional and validated to exist before binding.</summary>
 public sealed record CreateComparisonCommand(
@@ -58,7 +60,9 @@ public sealed class ComparisonReportService(
         var tunedEvaluation = await _evaluations.GetAsync(command.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false)
                               ?? throw new EvaluationRejectedException("The tuned evaluation run was not found.");
 
-        EnsureComparable(baseEvaluation, tunedEvaluation);
+        EnsureSuccessfullyComplete(baseEvaluation, "base");
+        EnsureSuccessfullyComplete(tunedEvaluation, "tuned");
+        var trainingRunId = EnsureComparable(baseEvaluation, tunedEvaluation);
 
         var baseBenchmark = await RequireBenchmarkAsync(command.BaseBenchmarkRunId, cancellationToken).ConfigureAwait(false);
         var tunedBenchmark = await RequireBenchmarkAsync(command.TunedBenchmarkRunId, cancellationToken).ConfigureAwait(false);
@@ -70,7 +74,7 @@ public sealed class ComparisonReportService(
                                          JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options),
                                          command.BaseBenchmarkRunId,
                                          command.TunedBenchmarkRunId,
-                                         command.TrainingRunId ?? tunedEvaluation.TrainingRunId ?? baseEvaluation.TrainingRunId),
+                                         trainingRunId),
                                      cancellationToken)
                                  .ConfigureAwait(false);
     }
@@ -81,8 +85,30 @@ public sealed class ComparisonReportService(
     public Task<TrainingComparisonRecord?> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default) =>
         _evaluations.GetComparisonAsync(comparisonId, cancellationToken);
 
-    public Task DeleteAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default) =>
-        _evaluations.DeleteComparisonAsync(comparisonId, expectedVersion, cancellationToken);
+    public async Task DeleteAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default)
+    {
+        var comparison = await _evaluations.GetComparisonAsync(comparisonId, cancellationToken).ConfigureAwait(false);
+        if (comparison is not null)
+        {
+            var baseEvaluation = await _evaluations.GetAsync(comparison.BaseEvaluationRunId, cancellationToken).ConfigureAwait(false);
+            var tunedEvaluation = await _evaluations.GetAsync(comparison.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false);
+            var possibleRunIds = new[] { comparison.TrainingRunId, baseEvaluation?.TrainingRunId, tunedEvaluation?.TrainingRunId }
+                                 .OfType<Guid>()
+                                 .Distinct();
+            foreach (var runId in possibleRunIds)
+            {
+                var artifacts = await _runs.ListArtifactsAsync(runId, cancellationToken).ConfigureAwait(false);
+                if (artifacts.Select(ArtifactQualityService.ReadDecision)
+                             .Where(static decision => decision is not null)
+                             .Any(decision => decision!.History.Any(item => item.ComparisonId == comparisonId)))
+                {
+                    throw new EvaluationRejectedException("A comparison retained in artifact quality audit history cannot be deleted.");
+                }
+            }
+        }
+
+        await _evaluations.DeleteComparisonAsync(comparisonId, expectedVersion, cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task<ComparisonSuggestion> SuggestAsync(Guid trainingRunId, CancellationToken cancellationToken = default)
     {
@@ -90,14 +116,17 @@ public sealed class ComparisonReportService(
                   ?? throw new EvaluationRejectedException("The training run was not found.");
 
         var artifacts = await _runs.ListArtifactsAsync(trainingRunId, cancellationToken).ConfigureAwait(false);
-        var tunedModelName = artifacts.Select(artifact => artifact.CommittedModelName)
-                                      .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+        var tunedArtifact = artifacts.FirstOrDefault(artifact => artifact.Kind != TrainingArtifactKind.HfAdapterDir
+                                                                  && artifact.DiscardedAtUtc is null
+                                                                  && !string.IsNullOrWhiteSpace(artifact.Sha256));
+        var tunedModelName = tunedArtifact is null ? null : Path.GetFileName(tunedArtifact.Path);
         var existing = await _evaluations.ListAsync(trainingRunId, cancellationToken).ConfigureAwait(false);
 
         // Matched by model name rather than by a stored "side" flag: the side an evaluation is on IS which model it
         // scored, and one stored flag that disagreed with the model name would be a second truth to keep in sync.
         var baseEvaluation = existing.FirstOrDefault(item => Matches(item.ModelName, run.LinkedInstalledModelName));
-        var tunedEvaluation = existing.FirstOrDefault(item => Matches(item.ModelName, tunedModelName));
+        var tunedEvaluation = existing.FirstOrDefault(item => item.TargetKind == EvaluationModelTargetKind.StagedTrainingArtifact
+                                                               && item.SourceArtifactId == tunedArtifact?.Id);
 
         var reason = UnavailableReason(run.LinkedInstalledModelName, tunedModelName);
         return new ComparisonSuggestion(trainingRunId,
@@ -113,15 +142,18 @@ public sealed class ComparisonReportService(
     ///     same dataset. Subtracting two accuracies measured over different sample sets produces a number that looks
     ///     exactly like a real improvement, so this is refused rather than reported.
     /// </summary>
-    /// <remarks>
-    ///     Deliberately NOT keyed on <c>TrainingRunId</c>: a base and a tuned evaluation of the same freeze normally
-    ///     share the run, but the fingerprint plus the id set is the real invariant, and two evaluations that agree on
-    ///     both are comparable whatever run produced them.
-    /// </remarks>
-    private static void EnsureComparable(TrainingEvaluationRecord baseEvaluation, TrainingEvaluationRecord tunedEvaluation)
+    private static Guid EnsureComparable(TrainingEvaluationRecord baseEvaluation, TrainingEvaluationRecord tunedEvaluation)
     {
         var left = ReadMembership(baseEvaluation, "base");
         var right = ReadMembership(tunedEvaluation, "tuned");
+
+        if (baseEvaluation.TrainingRunId is not { } trainingRunId
+            || tunedEvaluation.TrainingRunId != trainingRunId
+            || left.TrainingRunId != trainingRunId
+            || right.TrainingRunId != trainingRunId)
+        {
+            throw new EvaluationRejectedException("Both evaluations must belong to the same training run and frozen run lineage.");
+        }
 
         if (left.DatasetId != right.DatasetId)
         {
@@ -138,6 +170,28 @@ public sealed class ComparisonReportService(
         if (!left.HoldoutSampleIds.ToHashSet().SetEquals(right.HoldoutSampleIds))
         {
             throw new EvaluationRejectedException("The two evaluations scored different hold-out samples, so their accuracies are not comparable. Both sides must come from the same freeze.");
+        }
+
+        return trainingRunId;
+    }
+
+    private static void EnsureSuccessfullyComplete(TrainingEvaluationRecord evaluation, string side)
+    {
+        var membership = ReadMembership(evaluation, side);
+        var entries = TrainingEvaluationResults.Read(evaluation.ResultsJson);
+        var resultIds = entries.Select(entry => entry.SampleId).ToHashSet();
+        var fullyScored = evaluation.Status == TrainingEvaluationStatus.Succeeded
+                          && evaluation.WorkStatus == TrainingWorkStatus.Succeeded
+                          && evaluation.TotalCount > 0
+                          && evaluation.ScoredCount == evaluation.TotalCount
+                          && evaluation.PassedCount == entries.Count(entry => entry.Passed)
+                          && entries.Count == evaluation.TotalCount
+                          && resultIds.Count == entries.Count
+                          && resultIds.SetEquals(membership.HoldoutSampleIds);
+        if (!fullyScored)
+        {
+            throw new EvaluationRejectedException(
+                $"The {side} evaluation must have successfully scored every frozen hold-out sample before it can be compared.");
         }
     }
 
@@ -168,7 +222,7 @@ public sealed class ComparisonReportService(
         }
 
         return tunedModelName is null
-            ? "No artifact from this run has been promoted to the registry yet, so there is no tuned model to evaluate."
+            ? "No completed staged GGUF exists for this run yet, so there is no tuned artifact to evaluate."
             : null;
     }
 

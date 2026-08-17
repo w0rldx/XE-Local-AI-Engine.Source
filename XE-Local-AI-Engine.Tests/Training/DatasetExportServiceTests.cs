@@ -41,11 +41,14 @@ public sealed class DatasetExportServiceTests
     [Test]
     public async Task DatasetExport_Jsonl_IsCanonicalAndTemplateAgnostic()
     {
-        var export = Create(Sample(0, TrainingSampleReviewState.Approved));
+        var sample = Sample(0, TrainingSampleReviewState.Approved);
+        var export = Create(sample);
 
         var content = await export.ExportAsync(DatasetId, DatasetExportFormat.Jsonl);
 
         using var document = JsonDocument.Parse(content.Split('\n', StringSplitOptions.RemoveEmptyEntries).Single());
+        AssertEx.Equal(expected: 2, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(sample.Id, document.RootElement.GetProperty("sampleId").GetGuid());
         AssertEx.Equal(expected: 0, document.RootElement.GetProperty("sequence").GetInt32());
         AssertEx.Equal("tool-call", document.RootElement.GetProperty("kind").GetString());
         AssertEx.Equal("Good", document.RootElement.GetProperty("label").GetString());

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 public enum DatasetExportFormat
 {
@@ -91,15 +92,7 @@ public sealed class DatasetExportService(ITrainingDatasetStore store) : IDataset
     }
 
     private static string ToCanonicalLine(TrainingSampleRecord sample, TrainingSampleContentV1 content) =>
-        JsonSerializer.Serialize(new
-        {
-            sequence = sample.Sequence,
-            kind = sample.Kind,
-            label = sample.Label.ToString(),
-            reviewState = sample.ReviewState.ToString(),
-            systemInstructions = content.SystemInstructions,
-            parts = content.Parts
-        }, TrainingJson.Options);
+        FrozenTrainingCorpus.WriteLine(sample, content);
 
     private static string ToHermesLine(TrainingSampleContentV1 content)
     {

@@ -59,8 +59,9 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
 }
 
 /// <summary>An in-memory process handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
+internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true) : ILlamaServerProcessHandle
 {
+    private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _exited;
     private int _killed;
 
@@ -75,7 +76,23 @@ internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
     public void TreeKill()
     {
         Interlocked.Exchange(ref _killed, value: 1);
-        Interlocked.Exchange(ref _exited, value: 1);
+        if (exitOnTreeKill)
+        {
+            SimulateExit();
+        }
+    }
+
+    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        try
+        {
+            await _exitSignal.Task.WaitAsync(timeout, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
     }
 
     public void Dispose()
@@ -87,6 +104,7 @@ internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
     public void SimulateExit()
     {
         Interlocked.Exchange(ref _exited, value: 1);
+        _exitSignal.TrySetResult();
     }
 }
 
@@ -99,6 +117,10 @@ internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true)
 
     /// <summary>The effective context window /props reports; null (default) means "unknown" for the effective-ctx read.</summary>
     public int? EffectiveContextTokens { get; set; }
+
+    public bool EndpointIdentityMatches { get; set; } = true;
+
+    public string? ExpectedModelAlias { get; private set; }
 
     public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
@@ -113,6 +135,15 @@ internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true)
     public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
     {
         return Task.FromResult(EffectiveContextTokens);
+    }
+
+    public Task<bool> WaitForReadyAndVerifyModelAliasAsync(Uri baseAddress,
+        string expectedModelAlias,
+        TimeSpan readinessTimeout,
+        CancellationToken ct)
+    {
+        ExpectedModelAlias = expectedModelAlias;
+        return Task.FromResult(Ready && EndpointIdentityMatches);
     }
 }
 

@@ -88,14 +88,20 @@ public sealed class TrainingRunWorkspace
     /// <summary>Decrypts the frozen copy into the run's owner-only work directory and returns the path written.</summary>
     public async Task<string> MaterializeWorkCopyAsync(Guid datasetId, Guid freezeId, Guid runId, CancellationToken cancellationToken)
     {
-        var frozen = await File.ReadAllBytesAsync(FrozenDatasetPath(datasetId, freezeId), cancellationToken).ConfigureAwait(false);
-        var plaintext = _protector.Decrypt(Guid.Empty, freezeId, FrozenDatasetColumn, frozen);
+        var plaintext = await ReadFrozenDatasetAsync(datasetId, freezeId, cancellationToken).ConfigureAwait(false);
         var workDirectory = WorkDirectory(runId);
         CreateOwnerOnlyDirectory(workDirectory);
         var target = WorkDatasetPath(runId);
         await File.WriteAllBytesAsync(target, plaintext, cancellationToken).ConfigureAwait(false);
         ApplyOwnerOnly(target);
         return target;
+    }
+
+    /// <summary>Reads and decrypts the immutable corpus in memory for evaluation; no plaintext scratch file is created.</summary>
+    public async Task<ReadOnlyMemory<byte>> ReadFrozenDatasetAsync(Guid datasetId, Guid freezeId, CancellationToken cancellationToken)
+    {
+        var frozen = await File.ReadAllBytesAsync(FrozenDatasetPath(datasetId, freezeId), cancellationToken).ConfigureAwait(false);
+        return _protector.Decrypt(Guid.Empty, freezeId, FrozenDatasetColumn, frozen);
     }
 
     public void DeleteFrozenDataset(Guid datasetId, Guid freezeId) =>

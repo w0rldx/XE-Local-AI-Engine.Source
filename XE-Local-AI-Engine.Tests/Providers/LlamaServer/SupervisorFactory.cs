@@ -28,7 +28,8 @@ internal static class SupervisorFactory
         IProcessLaunchAdmissionRegistry? launchAdmissions = null,
         ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
         ILlamaServerCapabilityManifestProbe? capabilityManifestProbe = null,
-        ILlamaServerLoadTelemetry? loadTelemetry = null)
+        ILlamaServerLoadTelemetry? loadTelemetry = null,
+        TaskScheduler? detachedSpawnScheduler = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -55,6 +56,7 @@ internal static class SupervisorFactory
             layerPlacementReport: layerPlacementReport,
             launchAdmissions: launchAdmissions,
             extraArgumentsResolver: extraArgumentsResolver,
-            loadTelemetry: loadTelemetry);
+            loadTelemetry: loadTelemetry,
+            detachedSpawnScheduler: detachedSpawnScheduler);
     }
 }

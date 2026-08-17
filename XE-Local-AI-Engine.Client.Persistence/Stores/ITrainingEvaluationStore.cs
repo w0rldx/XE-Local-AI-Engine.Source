@@ -42,6 +42,14 @@ public interface ITrainingEvaluationStore
         IReadOnlyList<TrainingEvaluationResultEntry> entries,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Binds the runtime identity before the first verdict is appended. A partial evaluation may resume only when
+    ///     the new attempt presents byte-identical provenance; otherwise verdicts from two runtimes would be mixed.
+    /// </summary>
+    Task<TrainingEvaluationRecord> BindExecutionProvenanceAsync(Guid evaluationId,
+        ReadOnlyMemory<byte> provenanceJson,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Moves a queued evaluation to <see cref="TrainingEvaluationStatus.Running" />. Terminal is rejected here.</summary>
     Task<TrainingEvaluationRecord> TransitionAsync(Guid evaluationId,
         long expectedVersion,
@@ -60,8 +68,9 @@ public interface ITrainingEvaluationStore
     /// <summary>
     ///     Re-queues a terminated evaluation without discarding what it already scored. The frozen queue semantics pin
     ///     attempt to 1 and never retry a work item in place, so resume REPLACES the terminal work item with a fresh
-    ///     queued one; the executor then continues from the next unscored sample. Refused while the evaluation is still
-    ///     in flight, and refused once it has finished scoring its whole membership.
+    ///     queued one. Before continuing from the next unscored sample, the executor must bind byte-identical execution
+    ///     provenance to the partial attempt; a different runtime identity is refused rather than mixing verdicts.
+    ///     Refused while the evaluation is still in flight, and refused once it has finished scoring its whole membership.
     /// </summary>
     Task<TrainingEvaluationRecord> ResumeAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default);
 
@@ -97,7 +106,9 @@ public sealed record TrainingEvaluationEnqueueCommand(
     Guid DatasetId,
     string DatasetContentFingerprint,
     ReadOnlyMemory<byte> MembershipJson,
-    int TotalCount);
+    int TotalCount,
+    EvaluationModelTargetKind TargetKind = EvaluationModelTargetKind.InstalledModel,
+    Guid? SourceArtifactId = null);
 
 /// <summary>
 ///     An evaluation as the application layer sees it. The membership and the verdicts are carried as
@@ -122,7 +133,10 @@ public sealed record TrainingEvaluationRecord(
     long Version,
     long CreatedAtUtc,
     long UpdatedAtUtc,
-    TrainingWorkStatus? WorkStatus);
+    TrainingWorkStatus? WorkStatus,
+    EvaluationModelTargetKind TargetKind = EvaluationModelTargetKind.InstalledModel,
+    Guid? SourceArtifactId = null,
+    ReadOnlyMemory<byte>? ExecutionProvenanceJson = null);
 
 /// <summary>
 ///     One sample's verdict. <paramref name="ScoredBy" /> carries provenance in the <c>DefaultPlaybookEvalJudge</c>

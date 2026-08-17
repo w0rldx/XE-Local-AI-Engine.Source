@@ -90,9 +90,10 @@ public sealed class DatasetGenerationExecutor(
         catch (Exception exception)
         {
             _logger.LogError(exception, "Dataset generation failed for dataset {DatasetId}.", work.DatasetId);
+            var reason = exception is TrainingStoreException ? exception.Message : "Dataset generation failed.";
             _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State,
-                new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Failed), Reason: exception.Message));
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, exception.Message, CancellationToken.None)
+                new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Failed), Reason: reason));
+            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None)
                             .ConfigureAwait(false);
         }
         finally

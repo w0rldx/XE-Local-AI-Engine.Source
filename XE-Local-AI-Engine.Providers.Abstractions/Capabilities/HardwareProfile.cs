@@ -26,8 +26,8 @@ public sealed record HardwareProfile
     ///     This nets out VRAM already resident in loaded processes (the main chat model and any warm sub-agent
     ///     servers), so it is the GPU-mode fit budget — the direct analogue of <see cref="AvailableRamBytes" /> for
     ///     CPU mode. Only measured for NVIDIA (via <c>nvidia-smi memory.free</c>); <see langword="null" /> for every
-    ///     other vendor even when <see cref="VramBytes" /> (total) is known, which forces the capacity gate onto its
-    ///     total-VRAM fallback.
+    ///     other vendor even when <see cref="VramBytes" /> (total) is known. The capacity gate may use that total only
+    ///     for a first, single-model load; once an unledgered resident or external draft exists it rejects conservatively.
     /// </summary>
     public long? AvailableVramBytes { get; init; }
 

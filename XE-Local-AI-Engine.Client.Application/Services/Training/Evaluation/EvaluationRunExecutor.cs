@@ -1,14 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public interface IEvaluationRunExecutor
 {
@@ -22,34 +23,34 @@ public interface IEvaluationRunExecutor
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <strong>Exclusivity (plan decision #13): activity yes, runtime-mutation lease NO.</strong> An evaluation
-///         holds <c>ITrainingActivity</c> for the whole run, so no training run, dataset generation, benchmark or image
-///         job can start beside it — and it cannot start beside one of them. It deliberately does NOT hold the
-///         llama.cpp runtime-mutation lease, because that lease exists to keep the runtime binaries still while nothing
-///         is loaded: it refuses while an inference process is running, and a model load refuses while it is held. An
-///         evaluation's entire job is to LOAD a model and ask it one question per sample, so holding the lease would
-///         deadlock it against itself. The queue is what enforces this split — it takes the lease only for the
-///         <see cref="TrainingWorkKind.TrainingRun" /> branch.
+///         <strong>Exclusivity:</strong> an evaluation holds <c>ITrainingActivity</c> for the whole run, so no training
+///         run, dataset generation, benchmark or image job can start beside it. The executor does not separately take
+///         runtime-mutation or model-load admission; <c>ITransientLlamaServerEvaluationHarness</c> owns those leases in
+///         launch-safe order. An installed base also keeps its coordinated read snapshot through harness teardown, so
+///         replacement cannot race the path-addressed load.
 ///     </para>
 ///     <para>
-///         <strong>A dataset that moved since the freeze fails the run.</strong> The hold-out samples are read from
-///         the LIVE dataset rows, so <see cref="LoadAsync" /> compares the dataset's current
-///         <c>ContentFingerprint</c> against the membership's frozen one and terminalizes Failed with
-///         <see cref="EvaluationRunService.DriftedDatasetReason" /> when they differ — the per-sample "no longer in
-///         the dataset" verdict below only covers a membership id that vanished while the fingerprint still matches.
+///         <strong>Scoring reads the run-owned immutable corpus, never live sample rows.</strong> The corpus digest,
+///         freeze id and stable sample ids are checked before the first model call. A live review edit after the
+///         evaluation was queued therefore cannot change the question being scored.
 ///     </para>
 ///     <para>
-///         The model is reached through the ordinary node-local chat path (the same
-///         <c>ILocalModelProviderResolver</c> seam <c>DatasetGenerationExecutor</c> uses), NOT through an agent: an
-///         agent would invoke the tools it was offered. Here the offers are declaration-only
+///         Installed-base and staged-tuned evaluations both run through
+///         <c>ITransientLlamaServerEvaluationHarness</c> with the same frozen context and launch policy. Model bytes,
+///         runtime provenance and teardown are bound before the result becomes quality evidence. Neither path uses an agent: an agent would invoke the tools it was
+///         offered. Here the offers are declaration-only
 ///         (<see cref="DeclaredOnlyAIFunction" />) and the raw client returns the call unexecuted, which is the whole
 ///         question an evaluation asks — "which call would this model make".
 ///     </para>
 /// </remarks>
 public sealed class EvaluationRunExecutor(
     ITrainingEvaluationStore store,
+    ITrainingRunStore runs,
     ITrainingDatasetStore datasets,
-    ILocalModelProviderResolver providerResolver,
+    TrainingRunWorkspace workspace,
+    ITransientLlamaServerEvaluationHarness evaluationHarness,
+    IInferenceChatClientFactory chatClientFactory,
+    ITrainingEvaluationInstalledModelLeaseProvider installedModels,
     ITrainingRunEventBuffer events,
     TrainingRunCancellationRegistry cancellations,
     ILogger<EvaluationRunExecutor> logger) : IEvaluationRunExecutor
@@ -58,8 +59,15 @@ public sealed class EvaluationRunExecutor(
     private readonly ITrainingDatasetStore _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
     private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly ILogger<EvaluationRunExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private const int EvaluationContextTokens = 4096;
+    private readonly ITransientLlamaServerEvaluationHarness _evaluationHarness =
+        evaluationHarness ?? throw new ArgumentNullException(nameof(evaluationHarness));
+    private readonly IInferenceChatClientFactory _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
+    private readonly ITrainingEvaluationInstalledModelLeaseProvider _installedModels =
+        installedModels ?? throw new ArgumentNullException(nameof(installedModels));
+    private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
     private readonly ITrainingEvaluationStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
 
     public async Task ExecuteAsync(TrainingWorkClaim claim, CancellationToken stoppingToken)
     {
@@ -112,13 +120,252 @@ public sealed class EvaluationRunExecutor(
         // interruption continues at the next unscored sample instead of re-running the whole hold-out set.
         var scored = TrainingEvaluationResults.Read(running.ResultsJson).Select(entry => entry.SampleId).ToHashSet();
 
-        var provider = await _providerResolver.ResolveProviderForModelAsync(running.ModelName, cancellationToken).ConfigureAwait(false);
-        // One node-local client for the whole evaluation; IChatClient is IDisposable and this one is ours.
-        using var chatClient = provider.CreateChatClient(new LocalModelSelection
+        await using var target = await ResolveExecutionTargetAsync(running, cancellationToken).ConfigureAwait(false);
+        var request = new TransientLlamaServerEvaluationRequest(target.ModelPath,
+            target.AdapterPath,
+            EvaluationContextTokens,
+            TimeSpan.FromMinutes(10),
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1)
         {
-            ModelName = running.ModelName,
-            ProviderName = provider.ProviderName
-        });
+            TeardownTimeout = TimeSpan.FromSeconds(5)
+        };
+        var result = await _evaluationHarness.RunAsync(request,
+            async (provisional, _) =>
+            {
+                var validated = ValidateLaunchEvidence(provisional.Model, provisional.Launch, target);
+                await _store.BindExecutionProvenanceAsync(running.Id,
+                        JsonSerializer.SerializeToUtf8Bytes(validated, TrainingJson.Options),
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
+            },
+            async (session, token) =>
+            {
+                using var client = _chatClientFactory.CreateChatClient(session.BaseAddress, session.ModelId);
+                await ScoreWithClientAsync(running, membership, context, scored, client, token).ConfigureAwait(false);
+                return session;
+            }, cancellationToken).ConfigureAwait(false);
+        _ = ValidateExecutionEvidence(result, target);
+    }
+
+    private async Task<EvaluationExecutionTarget> ResolveExecutionTargetAsync(TrainingEvaluationRecord evaluation,
+        CancellationToken cancellationToken)
+    {
+        if (evaluation.TargetKind == EvaluationModelTargetKind.InstalledModel)
+        {
+            var lease = await AcquireInstalledAsync(evaluation.ModelName,
+                evaluation.ModelContentFingerprint,
+                cancellationToken).ConfigureAwait(false);
+            return new EvaluationExecutionTarget(lease.ModelFilePath,
+                AdapterPath: null,
+                ArtifactSha256: null,
+                ArtifactSizeBytes: null,
+                lease.ModelSha256,
+                lease.ModelSizeBytes,
+                lease);
+        }
+
+        var artifact = evaluation.SourceArtifactId is { } artifactId
+            ? await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+            : null;
+        if (artifact is null || artifact.DiscardedAtUtc is not null
+            || !string.Equals(artifact.Sha256, evaluation.ModelContentFingerprint, StringComparison.OrdinalIgnoreCase)
+            || !File.Exists(artifact.Path))
+        {
+            throw new EvaluationRejectedException("The staged evaluation target no longer matches its recorded artifact identity.");
+        }
+        var artifactSha256 = artifact.Sha256
+                             ?? throw new EvaluationRejectedException("The staged evaluation target has no recorded content identity.");
+
+        await using (var stream = File.OpenRead(artifact.Path))
+        {
+            var digest = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+            if (!string.Equals(digest, artifactSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new EvaluationRejectedException("The staged evaluation target changed after evaluation creation.");
+            }
+        }
+
+        string modelPath;
+        string? adapterPath;
+        if (artifact.Kind == TrainingArtifactKind.AdapterGguf)
+        {
+            var run = await _runs.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false)
+                      ?? throw new EvaluationRejectedException("The training run behind the staged artifact no longer exists.");
+            var baseName = run.LinkedInstalledModelName
+                           ?? throw new EvaluationRejectedException("The staged adapter has no installed base counterpart.");
+            var lease = await AcquireInstalledAsync(baseName, run.LinkedModelContentFingerprint, cancellationToken).ConfigureAwait(false);
+            modelPath = lease.ModelFilePath;
+            adapterPath = artifact.Path;
+            return new EvaluationExecutionTarget(modelPath,
+                adapterPath,
+                artifactSha256,
+                artifact.SizeBytes,
+                lease.ModelSha256,
+                lease.ModelSizeBytes,
+                lease);
+        }
+        else
+        {
+            modelPath = artifact.Path;
+            adapterPath = null;
+        }
+
+        return new EvaluationExecutionTarget(modelPath,
+            adapterPath,
+            artifactSha256,
+            artifact.SizeBytes,
+            ExpectedModelSha256: artifactSha256,
+            ExpectedModelSizeBytes: artifact.SizeBytes,
+            InstalledLease: null);
+    }
+
+    private static TrainingEvaluationExecutionProvenanceV1 ValidateExecutionEvidence(
+        TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession> result,
+        EvaluationExecutionTarget target)
+    {
+        var session = result.Value;
+        var sessionProjection = session.Launch.LaunchProjection.ComputeIdentity();
+        var resultProjection = result.Launch.LaunchProjection.ComputeIdentity();
+        if (session.Model != result.Model
+            || session.Launch.Variant != result.Launch.Variant
+            || !string.Equals(session.Launch.ExecutableVersion, result.Launch.ExecutableVersion, StringComparison.Ordinal)
+            || !string.Equals(session.Launch.ExecutableSha256, result.Launch.ExecutableSha256, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(session.Launch.ManifestSha256, result.Launch.ManifestSha256, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(sessionProjection, resultProjection, StringComparison.Ordinal)
+            || session.Launch.BenchmarkLaunchPolicy != result.Launch.BenchmarkLaunchPolicy
+            || result.Launch.ReceiptVersion != LlamaServerLaunchReceipt.CurrentVersion
+            || result.Launch.BenchmarkLaunchPolicy != LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+            || result.Launch.EffectiveContextTokens != EvaluationContextTokens
+            || string.IsNullOrWhiteSpace(result.Launch.ExecutableVersion)
+            || string.IsNullOrWhiteSpace(result.Launch.ExecutableSha256)
+            || string.IsNullOrWhiteSpace(result.Launch.ManifestSha256)
+            || !string.Equals(result.Launch.ExecutableSha256, result.Launch.ManifestSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new EvaluationRejectedException("The transient evaluation runtime returned incomplete or mismatched launch provenance.");
+        }
+
+        if (!result.Teardown.TreeKillRequested || !result.Teardown.ProcessExitObserved || result.Teardown.ExitObservationTimedOut
+            || !result.Teardown.HandleDisposed)
+        {
+            throw new EvaluationRejectedException("The transient evaluation runtime did not provide complete teardown evidence.");
+        }
+
+        if (target.ArtifactSha256 is { } artifactSha256)
+        {
+            var actualSha256 = target.AdapterPath is null ? result.Model.ModelSha256 : result.Model.AdapterSha256;
+            var actualSize = target.AdapterPath is null ? result.Model.ModelSizeBytes : result.Model.AdapterSizeBytes;
+            if (!string.Equals(actualSha256, artifactSha256, StringComparison.OrdinalIgnoreCase)
+                || actualSize != target.ArtifactSizeBytes)
+            {
+                throw new EvaluationRejectedException("The transient evaluation target does not match the staged artifact identity.");
+            }
+        }
+
+        if (!string.Equals(result.Model.ModelSha256, target.ExpectedModelSha256, StringComparison.OrdinalIgnoreCase)
+            || result.Model.ModelSizeBytes != target.ExpectedModelSizeBytes)
+        {
+            throw new EvaluationRejectedException("The transient evaluation base model does not match the coordinated installed identity.");
+        }
+
+        return ValidateLaunchEvidence(result.Model, result.Launch, target);
+    }
+
+    private static TrainingEvaluationExecutionProvenanceV1 ValidateLaunchEvidence(
+        TransientLlamaServerModelProvenance model,
+        LlamaServerLaunchReceipt launch,
+        EvaluationExecutionTarget target)
+    {
+        var projectionIdentity = launch.LaunchProjection.ComputeIdentity();
+        if (launch.ReceiptVersion != LlamaServerLaunchReceipt.CurrentVersion
+            || launch.BenchmarkLaunchPolicy != LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+            || launch.EffectiveContextTokens != EvaluationContextTokens
+            || string.IsNullOrWhiteSpace(launch.ExecutableVersion)
+            || string.IsNullOrWhiteSpace(launch.ExecutableSha256)
+            || string.IsNullOrWhiteSpace(launch.ManifestSha256)
+            || !string.Equals(launch.ExecutableSha256, launch.ManifestSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new EvaluationRejectedException("The transient evaluation runtime returned incomplete or mismatched launch provenance.");
+        }
+
+        if (target.ArtifactSha256 is { } artifactSha256)
+        {
+            var actualSha256 = target.AdapterPath is null ? model.ModelSha256 : model.AdapterSha256;
+            var actualSize = target.AdapterPath is null ? model.ModelSizeBytes : model.AdapterSizeBytes;
+            if (!string.Equals(actualSha256, artifactSha256, StringComparison.OrdinalIgnoreCase)
+                || actualSize != target.ArtifactSizeBytes)
+            {
+                throw new EvaluationRejectedException("The transient evaluation target does not match the staged artifact identity.");
+            }
+        }
+
+        if (!string.Equals(model.ModelSha256, target.ExpectedModelSha256, StringComparison.OrdinalIgnoreCase)
+            || model.ModelSizeBytes != target.ExpectedModelSizeBytes)
+        {
+            throw new EvaluationRejectedException("The transient evaluation base model does not match the coordinated installed identity.");
+        }
+
+        var policy = launch.BenchmarkLaunchPolicy;
+        return new TrainingEvaluationExecutionProvenanceV1
+        {
+            Variant = launch.Variant.ToString(),
+            ExecutableVersion = launch.ExecutableVersion,
+            ExecutableSha256 = launch.ExecutableSha256,
+            ManifestSha256 = launch.ManifestSha256,
+            LaunchProjectionIdentity = projectionIdentity,
+            ContextTokens = EvaluationContextTokens,
+            LaunchPolicyVersion = policy.Version,
+            LaunchPolicyChatCacheReuse = policy.ChatCacheReuse,
+            LaunchPolicyChatCacheRamMiB = policy.ChatCacheRamMiB,
+            LaunchPolicySpeculativeDecoding = policy.SpeculativeDecodingEnabled,
+            ModelSha256 = model.ModelSha256,
+            ModelSizeBytes = model.ModelSizeBytes,
+            AdapterSha256 = model.AdapterSha256,
+            AdapterSizeBytes = model.AdapterSizeBytes
+        };
+    }
+
+    private async Task<ITrainingEvaluationInstalledModelLease> AcquireInstalledAsync(string modelName,
+        string? expectedFingerprint,
+        CancellationToken cancellationToken)
+    {
+        ITrainingEvaluationInstalledModelLease lease;
+        try
+        {
+            lease = await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException)
+        {
+            throw new EvaluationRejectedException("The exact installed model identity recorded for this evaluation is no longer available.");
+        }
+
+        if (string.IsNullOrWhiteSpace(expectedFingerprint)
+            || !string.Equals(lease.ModelContentFingerprint, expectedFingerprint, StringComparison.Ordinal))
+        {
+            await lease.DisposeAsync().ConfigureAwait(false);
+            throw new EvaluationRejectedException("The exact installed model identity recorded for this evaluation is no longer available.");
+        }
+
+        return lease;
+    }
+
+    private sealed record EvaluationExecutionTarget(string ModelPath,
+        string? AdapterPath,
+        string? ArtifactSha256,
+        long? ArtifactSizeBytes,
+        string ExpectedModelSha256,
+        long ExpectedModelSizeBytes,
+        ITrainingEvaluationInstalledModelLease? InstalledLease) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => InstalledLease?.DisposeAsync() ?? ValueTask.CompletedTask;
+    }
+
+    private async Task ScoreWithClientAsync(TrainingEvaluationRecord running,
+        TrainingEvaluationMembershipV1 membership,
+        EvaluationContext context,
+        HashSet<Guid> scored,
+        IChatClient chatClient,
+        CancellationToken cancellationToken)
+    {
 
         foreach (var sampleId in membership.HoldoutSampleIds)
         {
@@ -144,10 +391,10 @@ public sealed class EvaluationRunExecutor(
     {
         if (!context.Samples.TryGetValue(sampleId, out var sample))
         {
-            // The membership named a sample the dataset no longer has. That is a real miss, not a reason to abandon
-            // the run: recording it keeps ScoredCount reaching TotalCount, which is what the resume cursor bounds on.
+            // Defensive fallback for a malformed legacy corpus. New freezes validate complete membership before the
+            // loop, but preserving a verdict here keeps an old resume cursor able to reach TotalCount.
             return new TrainingEvaluationResultEntry(sampleId, "unknown", Passed: false, EvaluationScorer.Deterministic,
-                "The hold-out sample is no longer in the dataset.");
+                "The hold-out sample is not present in the frozen corpus.");
         }
 
         var content = Read<TrainingSampleContentV1>(sample.ContentJson);
@@ -176,14 +423,9 @@ public sealed class EvaluationRunExecutor(
             new(ChatRole.User, prompt)
         ];
 
-        var options = new ChatOptions
-        {
-            ModelId = modelName,
-            // Temperature 0 plus the definition's own seed: a re-run of the same evaluation has to reach the same
-            // verdicts, or a comparison is measuring sampling noise rather than the tuning.
-            Temperature = 0f,
-            Tools = context.Offers
-        };
+        // Temperature 0 plus the definition's own seed: a re-run of the same evaluation has to reach the same
+        // verdicts, or a comparison is measuring sampling noise rather than the tuning.
+        var options = TrainingAiClientPolicy.CreateOptions(modelName, temperature: 0f, context.Offers);
         if (TryParseSeed(context.Seed, out var seed))
         {
             options.Seed = seed;
@@ -192,11 +434,12 @@ public sealed class EvaluationRunExecutor(
         ChatResponse response;
         // Same per-turn bound the teacher runner carries: a completion that never returns must be this sample's
         // verdict, not a queue wedge that also blocks every training run behind it.
-        using var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        turnCancellation.CancelAfter(StructuredAgentRunner.TurnTimeout);
+        using var activity = TrainingAiClientPolicy.StartActivity("evaluation");
+        using var turnCancellation = TrainingAiClientPolicy.CreateTurnCancellation(cancellationToken);
         try
         {
             response = await chatClient.GetResponseAsync(messages, options, turnCancellation.Token).ConfigureAwait(false);
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -207,7 +450,7 @@ public sealed class EvaluationRunExecutor(
         {
             // One sample's transport or model failure is that sample's verdict, never the evaluation's.
             return new TrainingEvaluationResultEntry(sampleId, sample.Kind, Passed: false, EvaluationScorer.Deterministic,
-                $"The model could not be reached for this sample: {exception.Message}");
+                TrainingAiClientPolicy.TranslateProviderFailure(activity, exception));
         }
 
         var calls = response.Messages
@@ -224,23 +467,50 @@ public sealed class EvaluationRunExecutor(
     {
         var dataset = await _datasets.GetDatasetAsync(evaluation.DatasetId, cancellationToken).ConfigureAwait(false)
                       ?? throw new EvaluationRejectedException("The evaluated dataset no longer exists.");
-        // Re-checked HERE and not only at create: the dataset can be edited between the create and the claim, and a
-        // resume re-enters this method long after either. The hold-out samples below are the LIVE rows, so a moved
-        // fingerprint means this evaluation would answer different questions from one created before the edit — and
-        // the comparison would still treat both as the same frozen membership.
-        if (!string.Equals(dataset.ContentFingerprint, membership.DatasetContentFingerprint, StringComparison.Ordinal))
-        {
-            throw new EvaluationRejectedException(EvaluationRunService.DriftedDatasetReason);
-        }
 
         // The body the dataset PINNED at creation, which is also what generation ran against. Reading the live
         // definition would score the model against tools and instructions this dataset never demonstrated.
         var definition = DatasetDefinitionService.ReadPinnedBody(dataset)
                          ?? throw new EvaluationRejectedException(DatasetDefinitionService.UnpinnedDatasetReason);
 
+        var run = await _runs.GetAsync(membership.TrainingRunId, cancellationToken).ConfigureAwait(false)
+                  ?? throw new EvaluationRejectedException("The training run behind the frozen corpus no longer exists.");
+        var freeze = Read<TrainingRunFreezeV1>(run.FreezeJson)
+                     ?? throw new EvaluationRejectedException("The training run's frozen corpus metadata could not be read.");
+        if (freeze.FreezeId != membership.FreezeId)
+        {
+            throw new EvaluationRejectedException("The evaluation membership does not name the training run's frozen corpus.");
+        }
+
+        if (!string.Equals(run.DatasetContentFingerprint, membership.DatasetContentFingerprint, StringComparison.Ordinal)
+            || !string.Equals(freeze.DatasetContentFingerprint, membership.DatasetContentFingerprint, StringComparison.Ordinal))
+        {
+            throw new EvaluationRejectedException("The evaluation membership does not match the training run's frozen corpus version.");
+        }
+
+        var plaintext = await _workspace.ReadFrozenDatasetAsync(evaluation.DatasetId, freeze.FreezeId, cancellationToken).ConfigureAwait(false);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(plaintext.Span));
+        if (!string.Equals(digest, freeze.FrozenCopySha256, StringComparison.Ordinal))
+        {
+            throw new EvaluationRejectedException("The immutable training corpus failed its integrity check.");
+        }
+
+        IReadOnlyList<TrainingSampleRecord> frozenSamples;
+        try
+        {
+            frozenSamples = FrozenTrainingCorpus.Read(plaintext.Span, freeze);
+        }
+        catch (Exception exception) when (exception is JsonException or FormatException or InvalidOperationException or KeyNotFoundException or ArgumentException)
+        {
+            throw new EvaluationRejectedException("The immutable training corpus could not be read.", exception);
+        }
+
         var wanted = membership.HoldoutSampleIds.ToHashSet();
-        var samples = await _datasets.ListAllSamplesAsync(evaluation.DatasetId, cancellationToken).ConfigureAwait(false);
-        var byId = samples.Where(sample => wanted.Contains(sample.Id)).ToDictionary(sample => sample.Id);
+        var byId = frozenSamples.Where(sample => wanted.Contains(sample.Id)).ToDictionary(sample => sample.Id);
+        if (byId.Count != wanted.Count)
+        {
+            throw new EvaluationRejectedException("The immutable training corpus does not contain every frozen hold-out sample.");
+        }
 
         // The SAME snapshot the samples were generated against, declaration-only. Offering the live catalog instead
         // would score the model against tools the dataset never demonstrated.

@@ -138,6 +138,26 @@ public interface ITrainingRunStore
         string? committedModelName,
         CancellationToken cancellationToken = default);
 
+    Task<TrainingArtifactRecord> SetArtifactQualityDecisionAsync(Guid artifactId,
+        long expectedVersion,
+        Guid comparisonId,
+        ReadOnlyMemory<byte> decisionJson,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Atomically turns an unpromoted quality-decided artifact into an audit tombstone. The decision history is
+    ///     retained, while its live comparison reference is released so the comparison can be deleted independently.
+    /// </summary>
+    Task<TrainingArtifactRecord> DiscardArtifactQualityAsync(Guid artifactId,
+        long expectedVersion,
+        string reason,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Idempotently records that a tombstone's staged bytes are absent without rewriting its audit fields.</summary>
+    Task<TrainingArtifactRecord> CompleteArtifactDiscardCleanupAsync(Guid artifactId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Deletes a staged artifact row. Refused once it has been promoted.</summary>
     Task DeleteArtifactAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default);
 }
@@ -210,4 +230,9 @@ public sealed record TrainingArtifactRecord(
     string? CommittedModelName,
     long Version,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    Guid? QualityComparisonId = null,
+    ReadOnlyMemory<byte>? QualityDecisionJson = null,
+    long? DiscardedAtUtc = null,
+    string? DiscardReason = null,
+    bool DiscardCleanupPending = false);

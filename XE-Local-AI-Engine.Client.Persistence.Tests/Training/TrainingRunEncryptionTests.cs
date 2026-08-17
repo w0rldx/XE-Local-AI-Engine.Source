@@ -20,6 +20,7 @@ public sealed class TrainingRunEncryptionTests : IDisposable
     private const string ProgressJson = """{"step":12,"totalSteps":100,"loss":0.42}""";
     private const string LogTail = "trainer: step 12/100 loss=0.42\n";
     private const string LaunchReceiptJson = """{"pid":4242,"pgid":4242,"executable":"/opt/uv/python","startTimeTicks":7,"runToken":"t"}""";
+    private const string QualityDecisionJson = """{"schemaVersion":1,"policyVersion":1,"outcome":"Passed"}""";
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -85,6 +86,27 @@ public sealed class TrainingRunEncryptionTests : IDisposable
     }
 
     [Test]
+    public async Task ArtifactQualityDecision_IsEncryptedAtRestAndRoundTrips()
+    {
+        var databasePath = GetDatabasePath("quality-at-rest.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        await SeedAsync(databasePath, keyHolder);
+
+        await using (var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder))
+        {
+            var artifact = AssertEx.NotNull(await readContext.TrainingArtifacts.SingleAsync());
+            AssertEx.Equal(QualityDecisionJson, Encoding.UTF8.GetString(artifact.QualityDecisionJson!));
+        }
+
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT quality_decision_json FROM training_artifacts LIMIT 1;";
+        var stored = (byte[])(await command.ExecuteScalarAsync())!;
+        AssertEx.False(stored.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(QualityDecisionJson)));
+    }
+
+    [Test]
     public async Task RunCiphertext_WhenMovedToAnotherRunRow_FailsToDecrypt()
     {
         var databasePath = GetDatabasePath("run-swap.sqlite");
@@ -94,7 +116,7 @@ public sealed class TrainingRunEncryptionTests : IDisposable
 
         // The AAD binds each column to its own run id, so a writer cannot copy one run's freeze onto another row and
         // have it read back as that run's frozen membership.
-        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        await using (var connection = new SqliteConnection($"Data Source={databasePath};Foreign Keys=False"))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
@@ -168,11 +190,27 @@ public sealed class TrainingRunEncryptionTests : IDisposable
             CreatedAtUtc = 1,
             UpdatedAtUtc = 1
         };
+        var artifact = new TrainingArtifact
+        {
+            Id = Guid.NewGuid(),
+            RunId = run.Id,
+            Kind = TrainingArtifactKind.MergedGguf,
+            Path = "staged.gguf",
+            Sha256 = new string('c', count: 64),
+            SizeBytes = 1,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            QualityComparisonId = Guid.NewGuid(),
+            QualityDecisionJson = Encoding.UTF8.GetBytes(QualityDecisionJson),
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 
         _ = context.TrainingDatasetDefinitions.Add(definition);
         _ = context.TrainingDatasets.Add(dataset);
         _ = context.TrainingBaseArtifacts.Add(baseArtifact);
         _ = context.TrainingRuns.Add(run);
+        _ = context.TrainingArtifacts.Add(artifact);
         _ = context.TrainingWorkItems.Add(new TrainingWorkItem
         {
             Kind = TrainingWorkKind.TrainingRun,

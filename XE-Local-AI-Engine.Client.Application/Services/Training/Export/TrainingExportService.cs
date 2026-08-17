@@ -192,6 +192,32 @@ public sealed class TrainingExportService(
         }
     }
 
+    public async Task<TrainingArtifactRecord> DiscardArtifactQualityAsync(Guid artifactId,
+        long expectedVersion,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
+        var current = await store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+                      ?? throw new TrainingNotFoundException("The training artifact was not found.");
+        if (current.Version != expectedVersion)
+        {
+            throw new TrainingConflictException("VersionConflict");
+        }
+
+        var discarded = current.DiscardedAtUtc is null
+            ? await store.DiscardArtifactQualityAsync(artifactId, expectedVersion, reason, cancellationToken).ConfigureAwait(false)
+            : current;
+        if (!discarded.DiscardCleanupPending || !DeleteStagedBytes(discarded))
+        {
+            return discarded;
+        }
+
+        return await store.CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version, CancellationToken.None)
+                          .ConfigureAwait(false);
+    }
+
     /// <summary>
     ///     Validates the run and decides every path the pipeline will use, before any exclusivity is taken. A refusal
     ///     here has nothing to clean up.
@@ -253,15 +279,16 @@ public sealed class TrainingExportService(
         // deterministic, so a second export overwrites the bytes and the old row's digest would silently stop
         // describing them — but a start that got refused for a busy GPU must not have destroyed the old row on its
         // way out.
-        await DeleteStaleArtifactsAsync(store, plan).ConfigureAwait(false);
-
-        // Created up front so EVERY outcome — including a merge that never produces a file — is durably visible on
-        // the run rather than surviving only as a hub event the operator may not have been watching for.
-        var artifact = await store.CreateArtifactAsync(new TrainingArtifactInput(plan.RunId, plan.Kind, plan.OutputPath), CancellationToken.None)
-                                  .ConfigureAwait(false);
-        Publish(plan.RunId, "preparing", null);
+        TrainingArtifactRecord? artifact = null;
         try
         {
+            await DeleteStaleArtifactsAsync(store, plan).ConfigureAwait(false);
+
+            // Created up front so EVERY outcome — including a merge that never produces a file — is durably visible
+            // on the run rather than surviving only as a hub event the operator may not have been watching for.
+            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput(plan.RunId, plan.Kind, plan.OutputPath), CancellationToken.None)
+                                  .ConfigureAwait(false);
+            Publish(plan.RunId, "preparing", null);
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(_workspace.WorkDirectory(plan.RunId));
             var scripts = await _convertScripts.EnsureAsync(cancellationToken).ConfigureAwait(false);
             await ProduceGgufAsync(plan, interpreter, scripts, cancellationToken).ConfigureAwait(false);
@@ -295,7 +322,9 @@ public sealed class TrainingExportService(
             _logger.LogError(exception, "The export for training run {RunId} failed.", plan.RunId);
             try
             {
-                var current = await store.GetArtifactAsync(artifact.Id, CancellationToken.None).ConfigureAwait(false);
+                var current = artifact is null
+                    ? null
+                    : await store.GetArtifactAsync(artifact.Id, CancellationToken.None).ConfigureAwait(false);
                 if (current is not null)
                 {
                     _ = await store.SetArtifactSmokeStateAsync(current.Id, current.Version, TrainingArtifactSmokeState.Failed, reason,
@@ -326,7 +355,9 @@ public sealed class TrainingExportService(
     private async Task DeleteStaleArtifactsAsync(ITrainingRunStore store, ExportPlan plan)
     {
         var artifacts = await store.ListArtifactsAsync(plan.RunId, CancellationToken.None).ConfigureAwait(false);
-        foreach (var stale in artifacts.Where(item => item.Kind == plan.Kind && item.CommittedModelName is null))
+        foreach (var stale in artifacts.Where(item => item.Kind == plan.Kind
+                                                       && item.CommittedModelName is null
+                                                       && item.DiscardedAtUtc is null))
         {
             await store.DeleteArtifactAsync(stale.Id, stale.Version, CancellationToken.None).ConfigureAwait(false);
             DeleteStagedBytes(stale);
@@ -340,7 +371,7 @@ public sealed class TrainingExportService(
     ///     somewhere else on the box. A failure is logged for the same reason: the row is gone either way, so leaked
     ///     bytes must at least be visible.
     /// </summary>
-    private void DeleteStagedBytes(TrainingArtifactRecord artifact)
+    private bool DeleteStagedBytes(TrainingArtifactRecord artifact)
     {
         var staged = Path.GetFullPath(_workspace.StagedDirectory(artifact.RunId));
         var path = Path.GetFullPath(artifact.Path);
@@ -348,7 +379,7 @@ public sealed class TrainingExportService(
         {
             _logger.LogWarning("Artifact {ArtifactId} of run {RunId} was deleted, but its path is not inside the run's staged directory, so the bytes were left in place.",
                 artifact.Id, artifact.RunId);
-            return;
+            return false;
         }
 
         try
@@ -361,11 +392,14 @@ public sealed class TrainingExportService(
             {
                 File.Delete(path);
             }
+
+            return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(exception, "The staged bytes of artifact {ArtifactId} could not be deleted; the row is gone and the files are leaked.",
+            _logger.LogWarning(exception, "The staged bytes of artifact {ArtifactId} could not be deleted; cleanup remains pending when an audit tombstone exists.",
                 artifact.Id);
+            return false;
         }
     }
 

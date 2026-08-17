@@ -224,10 +224,22 @@ function appendReasoningDelta(
 
 /** Merges a tool call (collapsed requested→completed by id) into the ordered tool entries, preserving its slot. */
 function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatToolCall, sequence: number): ToolEntryInput[] {
-	const existingIndex = toolEntries.findIndex((entry) => entry.id === toolCall.id);
+	// A prompt replay that cannot be correlated to a persisted call is represented by a generic request-id-keyed card.
+	// Once a terminal tool event arrives, replace that fallback with the real call/result rather than leaving an empty
+	// generic card beside it. Request-id-keyed entries are distinguishable from correlated cards because their id is
+	// exactly their pending approval/question request id.
+	const entriesWithoutResolvedGenericPrompt =
+		toolCall.state === "received" || toolCall.state === "failed"
+			? toolEntries.filter((entry) => {
+					const promptRequestId = entry.pendingApprovalRequestId ?? entry.pendingQuestion?.requestId;
+					const isGenericPrompt = promptRequestId !== undefined && entry.id === promptRequestId;
+					return !isGenericPrompt || (entry.name !== "tool" && entry.name !== toolCall.name);
+				})
+			: toolEntries;
+	const existingIndex = entriesWithoutResolvedGenericPrompt.findIndex((entry) => entry.id === toolCall.id);
 	if (existingIndex < 0) {
 		return [
-			...toolEntries,
+			...entriesWithoutResolvedGenericPrompt,
 			{
 				id: toolCall.id,
 				sequence,
@@ -240,7 +252,7 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 		];
 	}
 
-	return toolEntries.map((entry, index) =>
+	return entriesWithoutResolvedGenericPrompt.map((entry, index) =>
 		index === existingIndex
 			? {
 					...entry,
@@ -277,19 +289,56 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
  */
 function mergePendingPromptIntoToolEntries(
 	toolEntries: readonly ToolEntryInput[],
-	callId: string,
-	toolName: string,
+	callId: string | undefined,
+	toolName: string | undefined,
 	sequence: number,
 	prompt: Pick<ToolEntryInput, "pendingApprovalRequestId" | "pendingApprovalSessionScopeEligible" | "pendingQuestion">,
 ): ToolEntryInput[] {
-	const existingIndex = toolEntries.findIndex((entry) => entry.id === callId);
+	const normalizedCallId = callId?.trim() || undefined;
+	const normalizedToolName = toolName?.trim() || undefined;
+	const promptRequestId = prompt.pendingApprovalRequestId?.trim() || prompt.pendingQuestion?.requestId.trim() || undefined;
+	let existingIndex = normalizedCallId ? toolEntries.findIndex((entry) => entry.id === normalizedCallId) : -1;
+	if (existingIndex < 0 && !normalizedCallId && promptRequestId) {
+		existingIndex = toolEntries.findIndex((entry) => entry.id === promptRequestId);
+	}
+
+	// A reconnect replay can lack call metadata even though the just-refetched persisted parts already carry the
+	// unresolved tool card. Reuse that card only when the target is unambiguous; inventing an event-sequence id here
+	// creates a second uncategorized card that survives after the real call completes. If several live cards exist and
+	// the replay cannot identify one, leave them unchanged rather than attach approval controls to the wrong tool.
+	if (existingIndex < 0 && !normalizedCallId) {
+		const unresolvedIndexes = toolEntries
+			.map((entry, index) => ({ entry, index }))
+			.filter(({ entry }) => entry.state === "requesting" || entry.state === "waiting")
+			.filter(({ entry }) => !normalizedToolName || entry.name === normalizedToolName)
+			.map(({ index }) => index);
+		const unresolvedIndex = unresolvedIndexes[0];
+		if (unresolvedIndexes.length !== 1 || unresolvedIndex === undefined) {
+			return promptRequestId
+				? [
+						...toolEntries,
+						{
+							id: promptRequestId,
+							sequence,
+							name: normalizedToolName ?? "tool",
+							state: "waiting",
+							requiresApproval: true,
+							...prompt,
+						},
+					]
+				: [...toolEntries];
+		}
+
+		existingIndex = unresolvedIndex;
+	}
+
 	if (existingIndex < 0) {
 		return [
 			...toolEntries,
 			{
-				id: callId,
+				id: normalizedCallId ?? promptRequestId ?? `${normalizedToolName ?? "tool"}:${sequence}`,
 				sequence,
-				name: toolName,
+				name: normalizedToolName ?? "tool",
 				state: "waiting",
 				requiresApproval: true,
 				...prompt,
@@ -303,7 +352,7 @@ function mergePendingPromptIntoToolEntries(
 					...entry,
 					// Preserve the original slot's sequence so the card never reorders; flip it into the waiting state
 					// and attach the prompt payload + approval flag.
-					name: toolName || entry.name,
+					name: normalizedToolName ?? entry.name,
 					state: "waiting",
 					requiresApproval: true,
 					...prompt,
@@ -555,12 +604,11 @@ export function applyNodeChatStreamEvent(
 	// the operator decides/answers. No timeline entry is returned.
 	if (event.type === nodeChatStreamEventTypes.approvalRequested || event.type === nodeChatStreamEventTypes.questionRequested) {
 		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
-		const callId = event.toolCallId ?? `${event.messageId}:${event.sequence}`;
 		const { reasoningSegments, toolEntries, textSegments, noticeEntries } = decomposeParts(current?.parts);
 		const nextToolEntries = mergePendingPromptIntoToolEntries(
 			toolEntries,
-			callId,
-			event.toolName ?? "tool",
+			event.toolCallId ?? undefined,
+			event.toolName ?? undefined,
 			event.sequence,
 			event.type === nodeChatStreamEventTypes.questionRequested
 				? { pendingQuestion: parsePendingUserQuestion(event) }

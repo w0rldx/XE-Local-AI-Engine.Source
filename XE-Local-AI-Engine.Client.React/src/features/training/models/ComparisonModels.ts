@@ -20,6 +20,8 @@ export interface EvaluationRun {
 	trainingRunId: string | null;
 	comparisonId: string | null;
 	modelName: string;
+	targetKind: string;
+	sourceArtifactId: string | null;
 	datasetId: string;
 	/** The dataset fingerprint frozen when this evaluation took its hold-out set. */
 	datasetContentFingerprint: string;
@@ -108,6 +110,8 @@ export function toEvaluationRun(response: EvaluationResponse): EvaluationRun {
 		trainingRunId: response.trainingRunId ?? null,
 		comparisonId: response.comparisonId ?? null,
 		modelName: response.modelName,
+		targetKind: response.targetKind,
+		sourceArtifactId: response.sourceArtifactId ?? null,
 		datasetId: response.datasetId,
 		datasetContentFingerprint: response.datasetContentFingerprint,
 		status: toEvaluationStatus(response.status),

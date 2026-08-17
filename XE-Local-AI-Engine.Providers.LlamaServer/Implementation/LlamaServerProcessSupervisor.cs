@@ -93,6 +93,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
+    private readonly TaskScheduler _detachedSpawnScheduler;
 
     // The process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
     // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
@@ -126,7 +127,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaLayerPlacementReport? layerPlacementReport = null,
         IProcessLaunchAdmissionRegistry? launchAdmissions = null,
         ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
-        ILlamaServerLoadTelemetry? loadTelemetry = null)
+        ILlamaServerLoadTelemetry? loadTelemetry = null,
+        TaskScheduler? detachedSpawnScheduler = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -144,6 +146,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
+        _detachedSpawnScheduler = detachedSpawnScheduler ?? TaskScheduler.Default;
 
         // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
         // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.
@@ -410,34 +413,37 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
     private void StartDetachedSpawn(ProcessKey key, InflightSpawn inflight)
     {
-        _ = Task.Run(async () =>
-        {
-            RunningProcess? running = null;
-            Exception? failure = null;
-            try
+        _ = Task.Factory.StartNew(async () =>
             {
-                running = await SpawnWithRestartAsync(key, inflight.Admission, _shutdownCts.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                failure = ex;
-            }
-            finally
-            {
-                // Remove THIS immutable in-flight record (key+value) so a newer record under the same key is untouched.
-                _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight));
-                inflight.LaunchTicket.Dispose();
-            }
+                RunningProcess? running = null;
+                Exception? failure = null;
+                try
+                {
+                    running = await SpawnWithRestartAsync(key, inflight.Admission, _shutdownCts.Token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+                finally
+                {
+                    // Remove THIS immutable in-flight record (key+value) so a newer record under the same key is untouched.
+                    _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, InflightSpawn>(key, inflight));
+                    inflight.LaunchTicket.Dispose();
+                }
 
-            if (failure is not null)
-            {
-                inflight.Completion.SetException(failure);
-            }
-            else
-            {
-                inflight.Completion.SetResult(running!);
-            }
-        }, _shutdownCts.Token);
+                if (failure is not null)
+                {
+                    inflight.Completion.SetException(failure);
+                }
+                else
+                {
+                    inflight.Completion.SetResult(running!);
+                }
+            },
+            CancellationToken.None,
+            TaskCreationOptions.DenyChildAttach,
+            _detachedSpawnScheduler).Unwrap();
     }
 
     /// <summary>
@@ -1900,7 +1906,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
                     // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
                     var siblingSpawns = _inflightSpawns
-                                        .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.Ordinal))
+                                        .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.OrdinalIgnoreCase))
                                         .Select(static pair => pair.Value.Task)
                                         .ToArray();
                     foreach (var siblingSpawn in siblingSpawns)

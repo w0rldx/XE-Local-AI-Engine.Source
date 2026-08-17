@@ -31,6 +31,7 @@ public sealed class CapacityService : ICapacityService
     private readonly IPendingFootprintLedger _ledger;
     private readonly IProcessLaunchAdmissionRegistry _launchAdmissions;
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
+    private readonly LlamaServerSupervisorOptions _supervisorOptions;
     private readonly ILocalModelProviderResolver _localProviderResolver;
     private readonly IOllamaModelService _ollamaModelService;
     private readonly ILlamaServerProcessSupervisor _supervisor;
@@ -43,7 +44,8 @@ public sealed class CapacityService : ICapacityService
         IModelFootprintProvider footprintProvider,
         IPendingFootprintLedger ledger,
         IProcessLaunchAdmissionRegistry launchAdmissions,
-        LlamaServerExternalEndpointOptions externalEndpoints)
+        LlamaServerExternalEndpointOptions externalEndpoints,
+        LlamaServerSupervisorOptions supervisorOptions)
     {
         _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
         _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
@@ -54,6 +56,7 @@ public sealed class CapacityService : ICapacityService
         _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
         _launchAdmissions = launchAdmissions ?? throw new ArgumentNullException(nameof(launchAdmissions));
         _externalEndpoints = externalEndpoints ?? throw new ArgumentNullException(nameof(externalEndpoints));
+        _supervisorOptions = supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
     }
 
     /// <inheritdoc />
@@ -108,7 +111,8 @@ public sealed class CapacityService : ICapacityService
         // pass on the same snapshot. Held only for this short sequence — no inference runs under it.
         using var gate = await _ledger.EnterDecisionAsync(ct).ConfigureAwait(false);
 
-        var running = await SnapshotRunningKeysAsync(isOllama, ct).ConfigureAwait(false);
+        var runningSnapshot = await SnapshotRunningKeysAsync(isOllama, ct).ConfigureAwait(false);
+        var running = runningSnapshot.Keys;
 
         // Already running for this (model, role): serialize on that process; no fit math, no second load.
         if (running.Contains(new RunningKey(modelName, role)))
@@ -158,7 +162,12 @@ public sealed class CapacityService : ICapacityService
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectProcessCap, ollamaWarning);
         }
 
-        while (!FitsResourceBudget(profile, footprint.Resources))
+        var hasUnmeasuredGpuLoad = !runningSnapshot.IsKnown
+                                   || running.Count > 0
+                                   || isLlamaServer
+                                   && role == ModelRole.Chat
+                                   && _supervisorOptions.Speculative.RequiresExternalDraftModel;
+        while (!FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
             if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
@@ -180,7 +189,7 @@ public sealed class CapacityService : ICapacityService
         }
 
         if (!_footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint)
-            || !FitsResourceBudget(profile, footprint.Resources))
+            || !FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
         }
@@ -204,7 +213,7 @@ public sealed class CapacityService : ICapacityService
     // Each non-zero resource axis is checked against its live free baseline, which already nets out resident loaded
     // models, then reduced only by in-flight ledger reservations. A zero axis needs no measurement: fully GPU-resident
     // llama.cpp allocations memory-map the GGUF and therefore carry no committed-RAM reservation.
-    private bool FitsResourceBudget(HardwareProfile profile, ResourceFootprint footprint)
+    private bool FitsResourceBudget(HardwareProfile profile, ResourceFootprint footprint, bool hasUnmeasuredGpuLoad)
     {
         var reserved = _ledger.Reserved;
         if (footprint.RamBytes > 0)
@@ -228,8 +237,15 @@ public sealed class CapacityService : ICapacityService
 
             // NVIDIA has an authoritative global-free reader. If that measurement is absent, fail closed: total VRAM
             // cannot reveal residents outside the ledger and would over-admit. Other vendors currently expose only total
-            // VRAM, so retain the documented degraded fallback there; the process-count cap remains its backstop.
+            // VRAM. Their degraded fallback is safe only for a first, non-external-draft launch: a known resident process
+            // or a second draft GGUF lives outside the ledger, and without a free-VRAM reading there is no byte-accurate
+            // value to subtract. Reject those cases rather than treating the process-count cap as memory accounting.
             if (profile.GpuVendor == GpuVendor.Nvidia)
+            {
+                return false;
+            }
+
+            if (hasUnmeasuredGpuLoad)
             {
                 return false;
             }
@@ -242,34 +258,47 @@ public sealed class CapacityService : ICapacityService
 
     // The running (model, role) keys for the relevant local provider. llama.cpp: the supervisor's per-process health
     // rows. Ollama: the running-models snapshot (role is not modeled by Ollama → treat every running model as a Chat
-    // process, which is the only role a sub-agent chat spawn competes with). Probe failure degrades to "nothing running".
-    private async Task<IReadOnlySet<RunningKey>> SnapshotRunningKeysAsync(bool isOllama, CancellationToken ct)
+    // process, which is the only role a sub-agent chat spawn competes with). Probe failure returns an explicit unknown
+    // state: CPU/free-VRAM decisions still have authoritative byte baselines, while the non-NVIDIA total-VRAM fallback
+    // must reject because it cannot establish whether unledgered residents already consume that total.
+    private async Task<RunningSnapshot> SnapshotRunningKeysAsync(bool isOllama, CancellationToken ct)
     {
         try
         {
             if (isOllama)
             {
                 var snapshot = await _ollamaModelService.ListRunningModelsAsync(ct).ConfigureAwait(false);
-                return snapshot
-                       .Select(model => new RunningKey(model.ModelName ?? model.Name ?? string.Empty, ModelRole.Chat))
-                       .ToHashSet();
+                return new RunningSnapshot(snapshot
+                                           .Select(model => new RunningKey(model.ModelName ?? model.Name ?? string.Empty, ModelRole.Chat))
+                                           .ToHashSet(),
+                    IsKnown: true);
             }
 
             var health = await _supervisor.CheckHealthAsync(ct).ConfigureAwait(false);
-            return health
-                   .Select(process => new RunningKey(process.ModelName, process.Role))
-                   .ToHashSet();
+            return new RunningSnapshot(health
+                                       .Select(process => new RunningKey(process.ModelName, process.Role))
+                                       .ToHashSet(),
+                IsKnown: true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A probe failure must not throw out of the gate; degrade to "nothing running" (the byte/process checks
-            // still apply against the live profile, and the supervisor cap is the real load-time enforcer).
-            return new HashSet<RunningKey>();
+            // A probe failure must not throw out of the gate. Preserve the uncertainty so any decision relying on
+            // total VRAM rather than a live free-VRAM/RAM baseline can fail closed instead of treating unknown as empty.
+            return new RunningSnapshot(new HashSet<RunningKey>(), IsKnown: false);
         }
     }
 
-    // A running model identity keyed on (model, role); Ordinal so identity matches the supervisor's keying.
-    private readonly record struct RunningKey(string ModelName, ModelRole Role);
+    // A running model identity keyed on (model, role), matching the supervisor's case-insensitive process identity.
+    private readonly record struct RunningKey(string ModelName, ModelRole Role)
+    {
+        public bool Equals(RunningKey other) =>
+            Role == other.Role && string.Equals(ModelName, other.ModelName, StringComparison.OrdinalIgnoreCase);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), Role);
+    }
+
+    private readonly record struct RunningSnapshot(IReadOnlySet<RunningKey> Keys, bool IsKnown);
 
     private sealed class AdmissionReservation(IDisposable footprintReservation) : IDisposable
     {
