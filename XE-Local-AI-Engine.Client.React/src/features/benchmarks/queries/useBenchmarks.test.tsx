@@ -9,6 +9,7 @@ import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/Benchma
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
+	useBenchmarkRun,
 	useBenchmarkRuns,
 	useClearBenchmarkRunScore,
 	useEligibleBenchmarkModels,
@@ -353,6 +354,31 @@ describe("benchmark queries over the real client", () => {
 		expect(bodies[0]).toEqual({ policy, expectedVersion: 2, confirmRejudge: false });
 		expect(bodies[1]).toEqual({ policy, expectedVersion: 2, confirmRejudge: true });
 		expect(result.current.data?.enqueuedRunCount).toBe(1);
+	});
+
+	// A run's detail query polls only while that run is active, so after a project-wide re-judge its open pane would
+	// otherwise sit on the finished previous judging forever: nothing schedules another read of a run believed idle.
+	it("refetches the detail of every run a project re-judge enqueued", async () => {
+		let runReads = 0;
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+				runReads += 1;
+				return HttpResponse.json(runRow({ primaryStatus: "Succeeded" }));
+			}),
+			http.post(localApiPath(`benchmarks/projects/${projectId}/rejudge`), () =>
+				HttpResponse.json({ project: projectDetail({ version: 3 }), enqueuedRunIds: [runId] }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const detail = renderHook(() => useBenchmarkRun(runId), { wrapper });
+		await waitFor(() => expect(detail.result.current.isSuccess).toBe(true));
+		expect(runReads).toBe(1);
+
+		const rejudge = renderHook(() => useRejudgeBenchmarkProject(), { wrapper });
+		rejudge.result.current.mutate({ projectId, expectedVersion: 2 });
+
+		await waitFor(() => expect(runReads).toBeGreaterThan(1));
 	});
 
 	it("re-judges a whole project and reports how many runs were enqueued", async () => {
