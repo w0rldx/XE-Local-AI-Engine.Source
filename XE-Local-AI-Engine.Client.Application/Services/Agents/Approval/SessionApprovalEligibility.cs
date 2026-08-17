@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 
 /// <summary>
 ///     The single place the "can a session-scoped approval ever be remembered for THIS tool?" rule lives. Two callers
-///     share it and must not drift: <c>InvocationRunner.TryResolveSessionApprovalKey</c>, which turns an eligible call
+///     share it and must not drift: <c>ToolApprovalCoordinator.TryResolveSessionApprovalKey</c>, which turns an eligible call
 ///     into an <see cref="ApprovalMemoKey" />, and the node tool-catalog response, which exposes the same answer as a
 ///     boolean so the chat approval card only offers "Approve for this session" where the node will honor it. Before
 ///     the boolean existed the card offered session scope on EVERY approval and silently behaved as "Once" for the

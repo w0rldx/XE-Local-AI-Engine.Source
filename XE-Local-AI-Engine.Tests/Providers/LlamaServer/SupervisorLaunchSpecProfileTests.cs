@@ -120,7 +120,7 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.Equal("1", explore.Arguments[IndexOf(explore.Arguments, "--parallel") + 1]);
         AssertEx.Contains(explore.Arguments, "--no-warmup");
 
-        var cpu = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var cpu = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/model.gguf",
             port: 8080,
@@ -136,7 +136,7 @@ public sealed class SupervisorLaunchSpecProfileTests
     {
         // Even with a replay profile, the CPU variant stays a pure CPU run: no gpu/fit args at all.
         var resolved = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24);
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/model.gguf",
             port: 8080,
@@ -176,7 +176,7 @@ public sealed class SupervisorLaunchSpecProfileTests
     {
         // Embedding servers do one-shot forward passes with no shared conversational prefix — cache-reuse is
         // meaningless there and must never be emitted, even with a positive window configured.
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(EmbeddingKey,
             "/fake/bin/llama-server",
             "/fake/models/embed.gguf",
             port: 8080,
@@ -299,7 +299,7 @@ public sealed class SupervisorLaunchSpecProfileTests
     public void LaunchSpec_WhenEmbeddingRole_NeverEmitsSpecFlags()
     {
         // Speculative decoding is chat-only; an embedding server must never carry --spec-* even if a mode is configured.
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(EmbeddingKey,
             "/fake/bin/llama-server",
             "/fake/models/embed.gguf",
             port: 8080,
@@ -325,7 +325,7 @@ public sealed class SupervisorLaunchSpecProfileTests
             SpeculativeDraftGpuLayers = 12
         };
 
-        var benchmark = LlamaServerProcessSupervisor.ResolveChatLaunchTuning(LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
+        var benchmark = LlamaServerLaunchArgumentComposer.ResolveChatLaunchTuning(LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             liveOptions);
         var spec = BuildGpuSpec(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24),
             benchmark.ChatCacheReuse,
@@ -338,7 +338,7 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.False(spec.Arguments.Any(argument => argument.StartsWith("--spec-", StringComparison.Ordinal)),
             "The frozen benchmark policy must not inherit live speculative decoding or its draft model.");
 
-        var ordinary = LlamaServerProcessSupervisor.ResolveChatLaunchTuning(benchmarkPolicy: null, liveOptions);
+        var ordinary = LlamaServerLaunchArgumentComposer.ResolveChatLaunchTuning(benchmarkPolicy: null, liveOptions);
         AssertEx.Equal(777, ordinary.ChatCacheReuse);
         AssertEx.Equal(4096, ordinary.ChatCacheRamMiB);
         AssertEx.Equal("draft-simple", ordinary.Speculative.Mode);
@@ -519,7 +519,7 @@ public sealed class SupervisorLaunchSpecProfileTests
         SpeculativeDecodingSettings speculative = default,
         int chatCacheRamMiB = 0)
     {
-        return LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        return LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/model.gguf",
             port: 8080,

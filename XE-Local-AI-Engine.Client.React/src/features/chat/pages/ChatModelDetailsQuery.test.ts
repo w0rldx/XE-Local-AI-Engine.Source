@@ -20,7 +20,7 @@ describe("shouldFetchLocalModelDetails", () => {
 		expect(shouldFetchLocalModelDetails("llama3:8b", option({ isAvailable: false }), false, true)).toBe(false);
 	});
 
-	it("fetches for an available, installed GGUF (llamacpp) selection — CL-4 serves its details as a 200", () => {
+	it("fetches for an available, installed GGUF (llamacpp) selection — the node serves its details as a 200", () => {
 		expect(
 			shouldFetchLocalModelDetails("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", option({ provider: "llamacpp", isAvailable: true }), false, true),
 		).toBe(true);
@@ -42,7 +42,7 @@ describe("shouldFetchLocalModelDetails", () => {
 });
 
 describe("resolveContextCapacityTokens", () => {
-	it("prefers the running effective context window over the advertised ceiling (AUD4-02)", () => {
+	it("prefers the running effective context window over the advertised ceiling", () => {
 		expect(resolveContextCapacityTokens({ effectiveContextTokens: 16384, maxContextTokens: 262144 })).toBe(16384);
 	});
 

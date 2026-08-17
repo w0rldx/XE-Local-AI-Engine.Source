@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +23,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///         All process launch / tree-kill / health I/O is delegated to the <see cref="ILlamaServerProcessLauncher" />
 ///         and <see cref="ILlamaServerHealthProbe" /> seams so this lifecycle logic is unit-tested without real
 ///         processes or network. The launch argument vector — including the mandatory <c>--jinja</c> (chat) and
-///         non-<c>none</c> <c>--pooling</c> (embedding) flags — is built here by <see cref="BuildLaunchSpec" />.
+///         non-<c>none</c> <c>--pooling</c> (embedding) flags — is built by <see cref="LlamaServerLaunchArgumentComposer.BuildLaunchSpec" />.
 ///     </para>
 /// </remarks>
 public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor, IAsyncDisposable
@@ -55,18 +53,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>Base delay between crash-restart attempts; grows linearly per attempt.</summary>
     private static readonly TimeSpan RestartBackoffStep = TimeSpan.FromMilliseconds(250);
 
-    // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
-    private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
-
-    // Orders ordinary ensures against the rare operator runtime MUTATION (runtime install/remove, source build,
-    // exclusive profiling). Ensures take it SHARED and proceed concurrently; a mutation takes it EXCLUSIVE. What an
-    // exclusive holder relies on is unchanged from the single semaphore this replaces — a mutation waits for every
-    // in-flight ensure DECISION, and no new decision starts while it holds the gate — but an ensure no longer
-    // head-of-line blocks an unrelated role behind its liveness probe (up to ReuseLivenessProbeTimeout, 2 s).
-    // Single-flight per process is NOT this gate's job: _ensureGates already provides it per (model, role).
-    private readonly AsyncSharedExclusiveGate _runtimeMutationGate = new();
-    private readonly Lock _runtimeOperationSync = new();
-    private readonly HashSet<int> _allocatedPorts = [];
+    private readonly LlamaServerRuntimeMutationGate _runtimeMutationGate;
+    private readonly LlamaServerIdleReaper _reaper;
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe;
 
@@ -114,10 +102,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // runtime device audit; the composition root injects the singleton both sides share.
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private readonly ILlamaServerLoadTelemetry _loadTelemetry;
-    private int _disposed;
-    private int _runtimeOperationCount;
-    private int _runtimeMutationActivityCount;
-    private TaskCompletionSource? _runtimeOperationsDrained;
 
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
@@ -172,20 +156,23 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
 
-        _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
+        _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token);
+        _reaper = new LlamaServerIdleReaper(_processes,
+            new LlamaServerPortAllocator(_options),
+            _layerPlacementReport,
+            _options,
+            _timeProvider,
+            _logger);
+
+        _reaperLoop = Task.Run(() => _reaper.ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        lock (_runtimeOperationSync)
+        if (!_runtimeMutationGate.TryMarkDisposed())
         {
-            if (_disposed != 0)
-            {
-                return;
-            }
-
-            _disposed = 1;
+            return;
         }
 
         await _shutdownCts.CancelAsync().ConfigureAwait(false);
@@ -198,11 +185,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Expected on shutdown.
         }
 
-        await WaitForRuntimeOperationsDrainedAsync().ConfigureAwait(false);
+        await _runtimeMutationGate.WaitForOperationsDrainedAsync().ConfigureAwait(false);
 
-        // No new operation can enter after _disposed is set, and the separate operation barrier above proves every
-        // admitted operation has finished. Own the runtime gate exclusively through teardown and dispose it in-place.
-        await _runtimeMutationGate.EnterExclusiveAsync(CancellationToken.None).ConfigureAwait(false);
+        // No new operation can enter after the disposed flag is latched, and the separate operation barrier above
+        // proves every admitted operation has finished. Own the runtime gate exclusively through teardown and dispose
+        // it in-place.
+        await _runtimeMutationGate.EnterExclusiveForTeardownAsync().ConfigureAwait(false);
         var inflightSpawns = _inflightSpawns.Values.Select(static inflight => inflight.Task).ToArray();
 
         try
@@ -218,13 +206,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         foreach (var (key, running) in _processes.ToArray())
         {
-            if (DetachProcess(key, running) is { } detached)
+            if (_reaper.DetachProcess(key, running) is { } detached)
             {
-                KillDetachedProcess(detached);
+                LlamaServerIdleReaper.KillDetachedProcess(detached);
             }
         }
 
-        _admissionGate.Dispose();
+        _reaper.Dispose();
         foreach (var gate in _ensureGates.Values)
         {
             gate.Dispose();
@@ -238,7 +226,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             EnsureDecision decision;
@@ -247,7 +235,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // touches is already safe under concurrency — the reuse probe claim is a CAS, the spawn decision runs under
             // the per-key _ensureGates single-flight, and the process/spawn tables are concurrent — so two ensures for
             // different roles run side by side instead of queueing behind each other's liveness probe.
-            await EnterSharedRuntimeGateAsync(ct).ConfigureAwait(false);
+            await _runtimeMutationGate.EnterSharedAsync(ct).ConfigureAwait(false);
             try
             {
                 // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
@@ -296,159 +284,28 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
     /// <inheritdoc />
-    public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
+    public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
     {
-        BeginRuntimeOperation();
-        var operationTransferred = false;
-        Interlocked.Increment(ref _runtimeMutationActivityCount);
-        try
-        {
-            // EXCLUSIVE: the mutation about to run replaces the runtime binaries under the supervisor, so it must see a
-            // quiet supervisor — every in-flight ensure decision has finished and no new one can start.
-            await EnterExclusiveRuntimeGateAsync(ct).ConfigureAwait(false);
-
-            if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
-            {
-                _runtimeMutationGate.ExitExclusive();
-                return null;
-            }
-
-            var lease = new RuntimeMutationLease(_runtimeMutationGate,
-                () =>
-                {
-                    Interlocked.Decrement(ref _runtimeMutationActivityCount);
-                    EndRuntimeOperation();
-                });
-            operationTransferred = true;
-            return lease;
-        }
-        finally
-        {
-            if (!operationTransferred)
-            {
-                Interlocked.Decrement(ref _runtimeMutationActivityCount);
-                EndRuntimeOperation();
-            }
-        }
-    }
-
-    private void BeginRuntimeOperation()
-    {
-        lock (_runtimeOperationSync)
-        {
-            ObjectDisposedException.ThrowIf(_disposed != 0, this);
-            if (_runtimeOperationCount++ == 0)
-            {
-                _runtimeOperationsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            }
-        }
-    }
-
-    private void EndRuntimeOperation()
-    {
-        TaskCompletionSource? drained = null;
-        lock (_runtimeOperationSync)
-        {
-            _runtimeOperationCount--;
-            if (_runtimeOperationCount == 0)
-            {
-                drained = _runtimeOperationsDrained;
-                _runtimeOperationsDrained = null;
-            }
-        }
-
-        drained?.TrySetResult();
-    }
-
-    private Task WaitForRuntimeOperationsDrainedAsync()
-    {
-        lock (_runtimeOperationSync)
-        {
-            return _runtimeOperationCount == 0 ? Task.CompletedTask : _runtimeOperationsDrained!.Task;
-        }
-    }
-
-    /// <summary>
-    ///     Enters the runtime gate SHARED for an ordinary ensure: concurrent with other ensures, excluded by (and
-    ///     excluding) an operator runtime mutation. Pairs with <see cref="AsyncSharedExclusiveGate.ExitShared" />.
-    /// </summary>
-    private Task EnterSharedRuntimeGateAsync(CancellationToken ct)
-    {
-        return EnterRuntimeGateAsync(shared: true, ct);
-    }
-
-    /// <summary>
-    ///     Enters the runtime gate EXCLUSIVE for an operator runtime mutation or an exclusive profiling spawn: waits
-    ///     for every in-flight ensure decision to finish and holds off every new one. Pairs with
-    ///     <see cref="AsyncSharedExclusiveGate.ExitExclusive" />.
-    /// </summary>
-    private Task EnterExclusiveRuntimeGateAsync(CancellationToken ct)
-    {
-        return EnterRuntimeGateAsync(shared: false, ct);
-    }
-
-    private async Task EnterRuntimeGateAsync(bool shared, CancellationToken ct)
-    {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
-        try
-        {
-            var entering = shared
-                ? _runtimeMutationGate.EnterSharedAsync(linkedCancellation.Token)
-                : _runtimeMutationGate.EnterExclusiveAsync(linkedCancellation.Token);
-            await entering.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new ObjectDisposedException(GetType().FullName);
-        }
-
-        if (Volatile.Read(ref _disposed) == 0)
-        {
-            return;
-        }
-
-        if (shared)
-        {
-            _runtimeMutationGate.ExitShared();
-        }
-        else
-        {
-            _runtimeMutationGate.ExitExclusive();
-        }
-
-        throw new ObjectDisposedException(GetType().FullName);
+        // A live or in-flight process blocks the mutation: swapping the runtime binaries under a loaded model would
+        // pull them out from under it.
+        return _runtimeMutationGate.TryAcquireLeaseAsync(
+            () => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
+            ct);
     }
 
     /// <inheritdoc />
     public bool IsKeepWarmSuppressed()
     {
-        return Volatile.Read(ref _runtimeMutationActivityCount) > 0;
+        return _runtimeMutationGate.IsMutationActive;
     }
 
     internal int CountInflightSpawns() =>
         _inflightSpawns.Count;
-
-    private sealed class RuntimeMutationLease(AsyncSharedExclusiveGate gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
-    {
-        private int _disposed;
-
-        public ValueTask DisposeAsync()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            {
-                gate.ExitExclusive();
-                onDisposed();
-            }
-
-            return ValueTask.CompletedTask;
-        }
-    }
 
     /// <summary>
     ///     The single-flight decision, taken under the per-key gate held only briefly: reuse a now-registered process,
@@ -477,7 +334,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // torn down by TryReuseAsync; RemoveProcessAsync is idempotent on the instance so the extra call is a no-op).
             if (existing is not null)
             {
-                await RemoveProcessAsync(key, existing).ConfigureAwait(false);
+                await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
             }
 
             // Join the in-flight detached spawn or start one. GetOrAdd runs its factory at most once here because we hold
@@ -647,7 +504,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // of being handed the hung endpoint forever.
         _logger.LogWarning("llama-server for model {ModelName} role {Role} is wedged ({Failures} consecutive failed liveness probes); tree-killing to respawn.",
             key.ModelName, key.Role, failures);
-        await RemoveProcessAsync(key, existing).ConfigureAwait(false);
+        await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
         return null;
     }
 
@@ -675,14 +532,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task EvictAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             await EvictCoreAsync(modelName, role).ConfigureAwait(false);
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
@@ -691,7 +548,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var key = new ProcessKey(modelName, role);
         if (_processes.TryGetValue(key, out var running))
         {
-            await RemoveProcessAsync(key, running).ConfigureAwait(false);
+            await _reaper.RemoveProcessAsync(key, running).ConfigureAwait(false);
         }
     }
 
@@ -699,14 +556,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task EvictAllRolesAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             await EvictAllRolesCoreAsync(modelName).ConfigureAwait(false);
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
@@ -722,14 +579,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             return await EjectCoreAsync(modelName, role, force, ct).ConfigureAwait(false);
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
@@ -741,7 +598,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Nothing live to eject. Reap a lingering dead entry so its slot/port frees, then report an idempotent no-op.
             if (target is not null)
             {
-                await RemoveProcessAsync(key, target).ConfigureAwait(false);
+                await _reaper.RemoveProcessAsync(key, target).ConfigureAwait(false);
             }
 
             return LlamaServerEjectOutcome.NotRunning;
@@ -768,7 +625,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         if (drained)
         {
-            await RemoveProcessAsync(key, target).ConfigureAwait(false);
+            await _reaper.RemoveProcessAsync(key, target).ConfigureAwait(false);
             _logger.LogInformation("Operator eject completed for model {ModelName} role {Role}: drained and torn down.", key.ModelName, key.Role);
             return LlamaServerEjectOutcome.Ejected;
         }
@@ -778,7 +635,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Force: tear down despite in-flight work. Mark ejected FIRST so the interrupted request's leaseholder can
             // classify the resulting connection failure as an operator eject rather than a generic provider drop.
             target.MarkEjected();
-            await RemoveProcessAsync(key, target).ConfigureAwait(false);
+            await _reaper.RemoveProcessAsync(key, target).ConfigureAwait(false);
             _logger.LogWarning("Operator eject FORCED for model {ModelName} role {Role}: {ActiveLeases} in-flight request(s) interrupted.",
                 key.ModelName, key.Role, target.ActiveLeases);
             return LlamaServerEjectOutcome.ForcedWhileBusy;
@@ -1081,7 +938,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // The operator selects a draft model by NAME (installed chat model); resolve it to its on-disk GGUF the same way
         // the target model is resolved above so the effective launch args carry a real path. An explicit path override
         // (SpeculativeDraftModelPath), when set, wins and skips resolution.
-        var launchTuning = ResolveChatLaunchTuning(benchmarkPolicy, _options);
+        var launchTuning = LlamaServerLaunchArgumentComposer.ResolveChatLaunchTuning(benchmarkPolicy, _options);
         var speculative = launchTuning.Speculative;
         if (key.Role == ModelRole.Chat && speculative.RequiresExternalDraftModel)
         {
@@ -1191,7 +1048,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             var candidate = planCandidates[attempt];
             var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
-            var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
+            var port = await _reaper.AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
             ILlamaServerProcessHandle? handle = null;
             long? readinessStartedTimestamp = null;
@@ -1209,7 +1066,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             var servingWindow = new DiagnosticVerbosityWindow();
             try
             {
-                var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
+                var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
                     launchTuning.ChatCacheReuse,
                     speculative,
                     candidate.Plan,
@@ -1256,7 +1113,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 if ((fitParamsCapture is null || benchmarkPolicy is not null)
                     && placementSniffer is not null
                     && variant != GpuVariant.Cpu
-                    && !HasVerbosityArgument(spec.Arguments))
+                    && !LlamaServerLaunchArgumentComposer.HasVerbosityArgument(spec.Arguments))
                 {
                     spec = spec with
                     {
@@ -1342,7 +1199,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 readinessStartedTimestamp = _timeProvider.GetTimestamp();
                 handle = _launcher.Launch(spec);
                 _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
-                    key.ModelName, key.Role, handle.ProcessId, port, DescribeLaunchPlan(candidate.Plan));
+                    key.ModelName, key.Role, handle.ProcessId, port, LlamaServerLaunchArgumentComposer.DescribeLaunchPlan(candidate.Plan));
 
                 await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
                 var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
@@ -1436,7 +1293,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
                 handle?.TreeKill();
                 handle?.Dispose();
-                await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+                await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex)
@@ -1446,7 +1303,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 // admission gate, since the reserved-port set backs the cap count) before deciding whether to fall back.
                 handle?.TreeKill();
                 handle?.Dispose();
-                await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+                await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
 
                 // A capability rejection is known before process launch, so retrying an optimized/safe candidate cannot
                 // change the outcome. Other non-retryable errors can still be caused by the optimized child exiting
@@ -1600,25 +1457,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         return new LaunchPlanSet(allocation, [new(resolved, plan, LlamaServerLoadAttemptKind.Primary)]);
-    }
-
-    internal static LlamaServerChatLaunchTuning ResolveChatLaunchTuning(LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy,
-        LlamaServerSupervisorOptions liveOptions)
-    {
-        ArgumentNullException.ThrowIfNull(liveOptions);
-        if (benchmarkPolicy is null)
-        {
-            return new LlamaServerChatLaunchTuning(liveOptions.ChatCacheReuse, liveOptions.ChatCacheRamMiB, liveOptions.Speculative);
-        }
-
-        if (!benchmarkPolicy.IsSupported)
-        {
-            throw new ArgumentException("The frozen benchmark launch policy is unsupported.", nameof(benchmarkPolicy));
-        }
-
-        return new LlamaServerChatLaunchTuning(benchmarkPolicy.ChatCacheReuse,
-            benchmarkPolicy.ChatCacheRamMiB,
-            SpeculativeDecodingSettings.Disabled);
     }
 
     /// <summary>One ordered launch attempt: the explore/replay args to emit and the policy plan to emit them under.</summary>
@@ -1795,13 +1633,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return observation;
     }
 
-    /// <summary>Whether the argument vector already sets a log verbosity, in which case the caller must not add one.</summary>
-    private static bool HasVerbosityArgument(IReadOnlyList<string> arguments)
-    {
-        return arguments.Any(static argument =>
-            argument is "-v" or "--verbose" or "--log-verbose" or "-lv" or "--verbosity" or "--log-verbosity");
-    }
-
     /// <summary>
     ///     One spawn's "is this child serving yet" latch. The launcher reads it per forwarded line via
     ///     <see cref="IsServing" /> to decide Information vs Debug; the supervisor flips it exactly once, after
@@ -1928,33 +1759,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    /// <summary>A compact, path-free launch-plan summary appended to the spawn log line (empty for a policy-less spawn).</summary>
-    private static string DescribeLaunchPlan(LlamaServerLaunchPlan? plan)
-    {
-        if (plan is not { } resolvedPlan)
-        {
-            return string.Empty;
-        }
-
-        var parts = new List<string>(capacity: 3);
-        if (resolvedPlan.RequestedContextTokens is { } ctx)
-        {
-            parts.Add($"ctx={ctx.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        if (resolvedPlan.UseKvCacheQuantization)
-        {
-            parts.Add($"kv={resolvedPlan.KvCacheType}+fa");
-        }
-
-        if (resolvedPlan.CpuThreads is { } threads)
-        {
-            parts.Add($"threads={threads.ToString(CultureInfo.InvariantCulture)}/{resolvedPlan.CpuThreadsBatch?.ToString(CultureInfo.InvariantCulture) ?? "-"}");
-        }
-
-        return parts.Count == 0 ? string.Empty : " [" + string.Join(", ", parts) + "]";
-    }
-
     /// <summary>
     ///     Waits for a freshly launched process to pass its readiness probe, racing that wait against the process
     ///     exiting. A child that dies during load (an incompatible model, or a context that will not fit in the
@@ -2075,12 +1879,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(launchArgs);
         ArgumentNullException.ThrowIfNull(body);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             // EXCLUSIVE: a profiling spawn must be the only model loading on the box for its measurement to mean
             // anything, so it excludes every ensure for its whole eviction + spawn window.
-            await EnterExclusiveRuntimeGateAsync(ct).ConfigureAwait(false);
+            await _runtimeMutationGate.EnterExclusiveAsync(ct).ConfigureAwait(false);
             var runtimeGateHeld = true;
             try
             {
@@ -2181,7 +1985,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                         {
                             // Always unpin + evict the transient profiling process, even on body throw or cancellation.
                             running.Unpin();
-                            await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                            await _reaper.RemoveProcessAsync(key, running).ConfigureAwait(false);
                         }
                     }
                     finally
@@ -2204,708 +2008,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
-    }
-
-    /// <summary>
-    ///     Reserves a slot under the loaded-cap (evicting an idle LRU process to make room when possible) and allocates
-    ///     a free localhost port. The admission gate serializes the cap decision so it can never be raced past.
-    /// </summary>
-    /// <remarks>
-    ///     The cap is measured by the <em>reserved-port</em> count, not the registered-process count. A port is
-    ///     allocated here (under the gate) and held until the process registers, fails, or is evicted — so the count
-    ///     already includes in-flight spawns. Counting registered processes instead would let two concurrent distinct
-    ///     <c>(model, role)</c> spawns (which take distinct ensure-gates) both pass the check at count <c>N</c> before
-    ///     either registers, overrunning the cap.
-    /// </remarks>
-    private async Task<int> AdmitAndAllocatePortAsync(CancellationToken ct)
-    {
-        // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
-        var detached = new List<RunningProcess>();
-        await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
-            PruneExitedProcesses(detached);
-
-            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
-            {
-                throw CapReached();
-            }
-
-            return AllocatePort();
-        }
-        finally
-        {
-            _admissionGate.Release();
-
-            // The gate is free BEFORE any child is killed: tree-killing a multi-GB model is slow, and under the gate it
-            // serialized every unrelated model's port allocation and release behind it. This spawn still waits for its
-            // own victim to die before it proceeds to launch, so the VRAM the victim held is genuinely released first.
-            KillDetachedProcesses(detached);
-        }
-    }
-
-    /// <summary>
-    ///     Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.
-    ///     <paramref name="chatCacheReuse" /> is the chat-role <c>--cache-reuse</c> window
-    ///     (<see cref="LlamaServerSupervisorOptions.ChatCacheReuse" />); <c>0</c> omits the flag.
-    ///     <paramref name="speculative" /> is the chat-role speculative-decoding config
-    ///     (<see cref="LlamaServerSupervisorOptions.Speculative" />); disabled/default emits no <c>--spec-*</c> flags.
-    /// </summary>
-    internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key,
-        string executablePath,
-        string modelFilePath,
-        int port,
-        GpuVariant variant,
-        ResolvedLaunchArguments resolved,
-        int chatCacheReuse,
-        SpeculativeDecodingSettings speculative = default,
-        LlamaServerLaunchPlan? plan = null,
-        int chatCacheRamMiB = 0,
-        string? projectorFilePath = null,
-        string? adapterFilePath = null)
-    {
-        var args = new List<string>
-        {
-            "-m",
-            modelFilePath,
-            "--host",
-            "127.0.0.1", // localhost-only bind
-            "--port",
-            port.ToString(CultureInfo.InvariantCulture),
-
-            // Single-slot serving (the locked design — one in-flight request per (model, role) process). Pinning
-            // --parallel 1 stops llama-server from auto-selecting n_parallel=4, which reserves 4x the KV cache and
-            // starves --fit's weight offload: with the auto default, fit spills weights to system RAM to make room for
-            // KV slots that are never used, so a model that would fit on the GPU runs slow on the CPU instead.
-            "--parallel",
-            "1",
-
-            // Skip the empty-run warmup. On a large model it can take 45-110s and overrun the readiness budget, which
-            // tree-kills the half-ready process and respawns it in a loop (observed as a chat inter-chunk stall and an
-            // explore "did not become ready in time"). The model serves correctly without it — the readiness probe and
-            // the first real request warm it naturally — so dropping it makes startup fast and reliable at any size.
-            "--no-warmup"
-        };
-
-        // Context (-c), placement, KV-cache/flash-attention, and CPU threads. The variant selects the llama.cpp BUILD
-        // (Cuda/Vulkan vs pure CPU). Precedence lives in the launch policy that produced `plan`; here we just emit:
-        //  - GPU explore: --fit on (auto-fit places layers/experts around the explicit -c), plus the policy -c and the
-        //    KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim. Both carry --metrics.
-        //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
-        //    KV stays f16 and flash-attention stays auto.
-        // A null plan (replay profiling) reproduces the supplied replay vector byte-for-byte.
-        //
-        // Everything below is emitted from ONE projection of this spawn's launch shape, so the vector that goes to the
-        // process and the shape a receipt records can never drift apart into two independent derivations.
-        var projection = LlamaServerLaunchProjection.From(variant, resolved, plan, key.Role, chatCacheReuse, chatCacheRamMiB);
-        AppendContextPlacementAndThreadArgs(args, projection);
-
-        // LoRA adapter. `-m` above is the BASE model this adapter was trained against (resolved by the caller); the
-        // adapter is applied on top at load. Role-agnostic on purpose: an adapter changes the weights, not the serving
-        // mode, so it belongs on whatever role the merged model would have served.
-        if (!string.IsNullOrWhiteSpace(adapterFilePath))
-        {
-            args.Add("--lora");
-            args.Add(adapterFilePath);
-        }
-
-        if (key.Role == ModelRole.Chat)
-        {
-            // Mandatory for tool/function calling — without it llama-server ignores the GGUF tool grammar.
-            args.Add("--jinja");
-
-            // Vision model: the mmproj projector is what makes llama-server accept image input (OpenAI image_url content
-            // parts) — without it an image in the request body is rejected. Present only for a model whose projector
-            // companion was resolved locally (see IGgufModelStore.ResolveProjectorFilePathAsync); a text-only model
-            // passes null and gets no flag. Chat role only — embedding/reranker servers never take images.
-            if (!string.IsNullOrWhiteSpace(projectorFilePath))
-            {
-                args.Add("--mmproj");
-                args.Add(projectorFilePath);
-            }
-
-            // Prompt-cache prefix reuse. The app resends the full selected-path history every turn, so cache-reuse
-            // lets llama-server reuse the unchanged prompt prefix via KV cache shifting instead of reprocessing it —
-            // a large time-to-first-token win on multi-turn chat/agent conversations. A positive window enables the
-            // flag; 0 (upstream default) omits it. Chat role only: an embedding server does one-shot forward passes
-            // with no shared conversational prefix to reuse, so the flag is meaningless there. This is a server-launch
-            // flag independent of the OpenAI-compat request body (which exposes no cache_prompt/n_keep field).
-            if (chatCacheReuse > 0)
-            {
-                args.Add("--cache-reuse");
-                args.Add(chatCacheReuse.ToString(CultureInfo.InvariantCulture));
-            }
-
-            // Host-RAM prompt-cache budget. Emitted EXPLICITLY on every chat spawn because the pinned build's
-            // implicit default is 8192 MiB — half the RAM of a 16 GB machine — and its limit enforcement is
-            // known-ineffective on Linux under default overcommit (upstream #22629: the OOM killer fires before
-            // std::bad_alloc, SIGKILLing the server past its own eviction). 0 disables the cache.
-            args.Add("--cache-ram");
-            args.Add(chatCacheRamMiB.ToString(CultureInfo.InvariantCulture));
-
-            AppendSpeculativeArgs(args, speculative);
-        }
-        else if (key.Role == ModelRole.Embedding)
-        {
-            // /v1/embeddings is exposed only with --embeddings + a non-`none` pooling type.
-            args.Add("--embeddings");
-            args.Add("--pooling");
-            args.Add("mean");
-            AppendPooledForwardPassBatchArgs(args, projection);
-
-            // One-shot forward passes have no prompt state worth caching — disable the host prompt cache instead of
-            // inheriting the upstream 8192 MiB default (see the chat branch).
-            args.Add("--cache-ram");
-            args.Add("0");
-        }
-        else if (key.Role == ModelRole.Reranker)
-        {
-            // Reranker role. POST /v1/rerank is exposed only with --rerank (alias --reranking) + `--pooling rank`
-            // (verified against b9692, re-confirmed against the pinned b10201 --help). This is MUTUALLY EXCLUSIVE with
-            // the embedding branch above —
-            // a rerank server scores (query, document) pairs and never gets --embeddings — and carries none of the
-            // chat-only flags (--jinja, --cache-reuse, speculative). Because each role is its own branch, a single
-            // process can only ever receive one role's flags, so --embeddings and --rerank never coexist.
-            args.Add("--rerank");
-            args.Add("--pooling");
-            args.Add("rank");
-            AppendPooledForwardPassBatchArgs(args, projection);
-
-            // One-shot scoring passes have no prompt state worth caching — disable the host prompt cache instead of
-            // inheriting the upstream 8192 MiB default (see the chat branch).
-            args.Add("--cache-ram");
-            args.Add("0");
-        }
-        else
-        {
-            // Explicit guard: a ModelRole added later must not silently inherit the reranker flags. Fail loudly so the
-            // new role's launch args are a deliberate decision here rather than an accident of the branch order.
-            throw new ArgumentOutOfRangeException(nameof(key),
-                key.Role,
-                $"No llama-server launch arguments are defined for model role '{key.Role}'.");
-        }
-
-        var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? Environment.CurrentDirectory;
-        return new LlamaServerLaunchSpec(key.ModelName, key.Role, executablePath, args, port, workingDirectory);
-    }
-
-    /// <summary>
-    ///     Emits the context (<c>-c</c>), placement, KV-cache/flash-attention, and CPU-thread args for a spawn from its
-    ///     <see cref="LlamaServerLaunchProjection" />. The projection already encodes the variant + explore/replay
-    ///     matrix, so the vector below is a straight rendering of it rather than a second copy of the precedence rules.
-    /// </summary>
-    /// <remarks>
-    ///     Two spellings of the same KV vector exist upstream and both are kept: an auto-fit spawn writes
-    ///     <c>-fa on -ctk T -ctv T</c>, a replay writes <c>-ctk K -ctv V --flash-attn on</c>.
-    ///     <see cref="LlamaServerLaunchProjection.AutoFit" /> is what tells them apart. CPU carries no
-    ///     <c>--metrics</c>/<c>--fit</c>/placement/KV args at all — a frozen GPU profile does not transfer to a CPU
-    ///     spawn — and is the only shape that carries thread counts.
-    /// </remarks>
-    private static void AppendContextPlacementAndThreadArgs(List<string> args, LlamaServerLaunchProjection projection)
-    {
-        // --metrics on BOTH GPU modes. The /metrics gauges (KV bytes, slot state, cache-reused tokens) are the only
-        // in-app view of what a spawn actually did, and a frozen-profile replay — the steady state on a machine that
-        // has been tuned once — was previously the one GPU path that exposed none of them.
-        if (projection.Metrics)
-        {
-            args.Add("--metrics");
-        }
-
-        if (projection.AutoFit)
-        {
-            // Let llama.cpp auto-fit choose + print placement. The explicit -c is RESPECTED by --fit, which fits
-            // ngl/batch around it, and the KV/FA flags are not placement flags, so auto-fit stays active. Verified
-            // against b9692; the pinned b10201 --help confirms --fit adjusts only UNSET arguments.
-            args.Add("--fit");
-            args.Add("on");
-        }
-
-        if (projection.ContextTokens is { } contextTokens)
-        {
-            args.Add("-c");
-            args.Add(contextTokens.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (projection.GpuLayers is { } gpuLayers)
-        {
-            args.Add("--n-gpu-layers");
-            args.Add(gpuLayers.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (projection.TensorSplit is { } tensorSplit)
-        {
-            args.Add("-ts");
-            args.Add(tensorSplit);
-        }
-
-        if (projection.OverrideTensor is { } overrideTensor)
-        {
-            args.Add("-ot");
-            args.Add(overrideTensor);
-        }
-
-        // Matching-type rule + flash-attention invariant (enforced upstream in ResolvedLaunchArguments.Replay and in the
-        // launch policy): the fused FA path needs equal K/V types and flash attention on.
-        if (projection.KvCacheTypeK is { } kvCacheTypeK && projection.KvCacheTypeV is { } kvCacheTypeV)
-        {
-            if (projection.AutoFit)
-            {
-                args.Add("-fa");
-                args.Add("on");
-                args.Add("-ctk");
-                args.Add(kvCacheTypeK);
-                args.Add("-ctv");
-                args.Add(kvCacheTypeV);
-            }
-            else
-            {
-                args.Add("-ctk");
-                args.Add(kvCacheTypeK);
-                args.Add("-ctv");
-                args.Add(kvCacheTypeV);
-                args.Add("--flash-attn");
-                args.Add("on");
-            }
-        }
-
-        if (projection.Threads is { } threads)
-        {
-            args.Add("-t");
-            args.Add(threads.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (projection.ThreadsBatch is { } threadsBatch)
-        {
-            args.Add("-tb");
-            args.Add(threadsBatch.ToString(CultureInfo.InvariantCulture));
-        }
-    }
-
-    /// <summary>
-    ///     Appends the physical/logical batch sizes (<c>-b</c>/<c>-ub</c>) for the POOLED roles (Embedding, Reranker),
-    ///     raising them from llama.cpp's 512-token default to this spawn's context size.
-    /// </summary>
-    /// <remarks>
-    ///     <para>
-    ///         <strong>This is a correctness flag, not a tuning flag.</strong> A pooled embedding/rerank forward pass is
-    ///         non-causal: the whole input must sit inside ONE physical micro-batch, because pooling has no way to carry
-    ///         attention state across <c>n_ubatch</c> boundaries. llama-server therefore rejects — it does not split —
-    ///         any single input longer than <c>n_ubatch</c>, with
-    ///         <c>500 {"error":{"code":500,"message":"input (N tokens) is too large to process. increase the physical
-    ///         batch size (current batch size: 512)"}}</c>.
-    ///     </para>
-    ///     <para>
-    ///         Without this, the usable embedding input was llama.cpp's DEFAULT <c>n_ubatch</c> of <strong>512</strong>
-    ///         tokens — NOT the <c>-c</c> we ask for (2048 by default, see
-    ///         <c>LlamaServerLaunchPolicyOptions.EmbeddingContextTokens</c>) and NOT the window the model advertises.
-    ///         Nothing upstream knew that: the knowledge-base chunker sizes chunks against the model's CONTEXT window,
-    ///         so ordinary 2000-character markdown chunks (~520-680 real tokens) exceeded the silent 512 ceiling and
-    ///         every knowledge-base document failed to index on a default node. Measured against
-    ///         <c>nomic-embed-text-v1.5.Q4_K_M</c>: 11 of 12 consecutive real markdown chunks were rejected at the
-    ///         default, 0 of 12 with these flags.
-    ///     </para>
-    ///     <para>
-    ///         Safe by construction: llama.cpp CLAMPS both values down to the effective context, so requesting more than
-    ///         the model supports is a no-op rather than an error (verified: <c>-ub 8192</c> against a 2048-window model
-    ///         starts and reports <c>n_ctx_slot = 2048</c>). The flags also compose with <c>--fit on</c> — auto-fit sizes
-    ///         placement around them rather than overriding them (verified against the in-app source build, pin b10201).
-    ///         Chat is deliberately excluded: a causal decode splits across micro-batches correctly, so raising its batch
-    ///         is a memory/throughput trade-off rather than a correctness fix, and <c>--fit</c> owns that decision.
-    ///     </para>
-    /// </remarks>
-    private static void AppendPooledForwardPassBatchArgs(List<string> args, LlamaServerLaunchProjection projection)
-    {
-        // The projection already mirrors whichever -c this spawn emits (the policy context, or the frozen replay's own)
-        // and leaves both sizes null for a non-pooled role. A pooled role must be able to embed anything that fits the
-        // context it advertises. -b (logical) must be >= -ub (physical); the projection pins both to the same context.
-        if (projection.BatchSize is not { } batchSize || projection.UbatchSize is not { } ubatchSize)
-        {
-            return;
-        }
-
-        args.Add("-b");
-        args.Add(batchSize.ToString(CultureInfo.InvariantCulture));
-        args.Add("-ub");
-        args.Add(ubatchSize.ToString(CultureInfo.InvariantCulture));
-    }
-
-    /// <summary>
-    ///     Appends the chat-role speculative-decoding flags, one branch per <see cref="SpeculativeModeClass" />.
-    ///     Disabled/default (<c>none</c>) emits nothing. A configured mode is validated first (unknown mode, or an
-    ///     external-draft mode with no draft path, is a deterministic misconfiguration surfaced as a NON-RETRYABLE error
-    ///     rather than a server that dies cryptically on launch). Then:
-    ///     <list type="bullet">
-    ///         <item>
-    ///             <see cref="SpeculativeModeClass.Draftless" /> (<c>ngram-*</c>) self-speculates from context: only
-    ///             <c>--spec-type</c>.
-    ///         </item>
-    ///         <item>
-    ///             <see cref="SpeculativeModeClass.MainModelHeads" /> (<c>draft-mtp</c>) drafts from MTP heads in the main
-    ///             GGUF, so NO <c>--spec-draft-model</c> and no <c>--spec-draft-ngl</c> (that knob sizes a draft-model load
-    ///             that never happens). <c>--spec-draft-n-max</c> IS honoured — b10201's <c>common_speculative_n_max</c>
-    ///             reads <c>draft.n_max</c> for <c>DRAFT_MTP</c> — so it is still emitted.
-    ///         </item>
-    ///         <item>
-    ///             <see cref="SpeculativeModeClass.ExternalDraft" /> additionally emits <c>--spec-draft-model</c> and
-    ///             <c>--spec-draft-ngl</c>. That drafter loads inside the chat process and is never separately ledgered or
-    ///             footprint-estimated; on the primary NVIDIA path its resident VRAM is still reflected in
-    ///             <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>) so a later sub-agent
-    ///             admission accounts for it, but on the non-NVIDIA total-minus-ledger fallback it stays invisible.
-    ///         </item>
-    ///     </list>
-    /// </summary>
-    private static void AppendSpeculativeArgs(List<string> args, in SpeculativeDecodingSettings speculative)
-    {
-        if (!speculative.IsEnabled)
-        {
-            return;
-        }
-
-        if (!speculative.TryValidate(out var error))
-        {
-            throw NonRetryable(error!);
-        }
-
-        args.Add("--spec-type");
-        args.Add(speculative.NormalizedMode);
-
-        if (speculative.ModeClass is SpeculativeModeClass.Draftless)
-        {
-            return;
-        }
-
-        if (speculative.RequiresExternalDraftModel)
-        {
-            // Validated non-empty above; the file's existence on disk is enforced on the spawn path before launch.
-            args.Add("--spec-draft-model");
-            args.Add(speculative.DraftModelPath!);
-        }
-
-        if (speculative.DraftMaxTokens > 0)
-        {
-            args.Add("--spec-draft-n-max");
-            args.Add(speculative.DraftMaxTokens.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (speculative.RequiresExternalDraftModel && speculative.DraftGpuLayers is { } draftGpuLayers)
-        {
-            args.Add("--spec-draft-ngl");
-            args.Add(draftGpuLayers.ToString(CultureInfo.InvariantCulture));
-        }
-    }
-
-    /// <summary>Background reaper: evicts processes idle beyond <see cref="LlamaServerSupervisorOptions.IdleTimeToLive" />.</summary>
-    private async Task ReapIdleLoopAsync(CancellationToken ct)
-    {
-        // Re-check at a fraction of the TTL so eviction latency stays bounded without busy-spinning.
-        var interval = TimeSpan.FromTicks(Math.Max(_options.IdleTimeToLive.Ticks / 4, TimeSpan.FromSeconds(1).Ticks));
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(interval, _timeProvider, ct).ConfigureAwait(false);
-                await ReapIdleOnceAsync().ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Normal shutdown.
-        }
-    }
-
-    private async Task ReapIdleOnceAsync()
-    {
-        var now = _timeProvider.GetUtcNow();
-        foreach (var (key, running) in _processes.ToArray())
-        {
-            // A live profiling-pinned process is never idle-evicted mid-benchmark; an EXITED one is still reaped below
-            // so a dead handle never leaks even while pinned.
-            if (running.IsProfilingPinned && !running.Handle.HasExited)
-            {
-                continue;
-            }
-
-            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL:
-            // LastUsedUtc is stamped per ensure/reuse, not per token, so a single generation that legitimately outruns
-            // the idle window (a raised invocation timeout on a slow CPU box) looks idle here while a request is
-            // mid-flight — tree-killing it would cut a running turn off.
-            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
-            {
-                continue;
-            }
-
-            if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
-            {
-                if (!running.Handle.HasExited)
-                {
-                    _logger.LogInformation("Evicting idle llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
-                        key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, _options.IdleTimeToLive.TotalSeconds);
-                }
-
-                await RemoveProcessAsync(key, running).ConfigureAwait(false);
-            }
-        }
-    }
-
-    /// <summary>
-    ///     Evicts the least-recently-used process that is currently idle (caller holds the admission gate). The victim
-    ///     is detached here — its slot and port are free the moment this returns <see langword="true" /> — and appended
-    ///     to <paramref name="detached" /> for the caller to tree-kill once the gate is released.
-    /// </summary>
-    private bool TryEvictIdleLeastRecentlyUsed(List<RunningProcess> detached)
-    {
-        var now = _timeProvider.GetUtcNow();
-        ProcessKey? victimKey = null;
-        RunningProcess? victim = null;
-        var victimRank = int.MaxValue;
-        foreach (var (key, running) in _processes)
-        {
-            // A live profiling-pinned process is reserved for its benchmark — never select it as a cap-admission victim
-            // (an EXITED pinned process is a dead handle and stays eligible so its slot/port is reclaimed).
-            if (running.IsProfilingPinned && !running.Handle.HasExited)
-            {
-                continue;
-            }
-
-            // In-flight inference disqualifies a live process as a capacity-eviction victim for the same reason the
-            // idle reaper skips it: past-TTL only means "no new request started", not "not mid-generation". This is a
-            // best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
-            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
-            {
-                continue;
-            }
-
-            // Victim preference, best first:
-            //   0 — exited or idle past the TTL (any role): the reaper would take it anyway.
-            //   1 — in-window but unleased POOLED role (embedding/reranker). Background indexing/search touches these
-            //       continuously, so on the default cap (3 = the number of roles) they otherwise pin all slots and a
-            //       foreground chat model switch hard-fails for up to a full TTL window ("maximum number of local
-            //       models are already loaded") — the most likely user-visible runtime failure on consumer hardware.
-            //       A pooled reload costs ~1s against a chat reload's tens of seconds, so the pooled process yields.
-            //   An in-window CHAT process is never a victim: keep-warm recency protection is deliberate there (the
-            //   cheap error beats silently evicting a multi-GB model the user is about to reuse), and admission
-            //   rejects as before when no rank qualifies.
-            var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive;
-            var isPooledRole = key.Role is ModelRole.Embedding or ModelRole.Reranker;
-            if (!isIdlePastTtl && !isPooledRole)
-            {
-                continue; // An in-window chat process is never a victim.
-            }
-
-            var rank = isIdlePastTtl ? 0 : 1;
-
-            // A better rank always wins; within the same rank, least-recently-used wins.
-            if (victim is not null && (rank != victimRank ? rank > victimRank : running.LastUsedUtc >= victim.LastUsedUtc))
-            {
-                continue;
-            }
-
-            victimKey = key;
-            victim = running;
-            victimRank = rank;
-        }
-
-        if (victimKey is null || victim is null)
-        {
-            return false;
-        }
-
-        // Atomically latch the chosen victim before tearing it down. If a request acquired a lease on it between the
-        // heuristic scan and here, TryBeginEvict fails and no victim is admitted this round — the caller surfaces the
-        // cap error rather than tree-killing a process under an active lease. An EXITED victim holds no real lease,
-        // so it is torn down regardless.
-        if (!victim.Handle.HasExited && !victim.TryBeginEvict())
-        {
-            return false;
-        }
-
-        // Free the slot/port under the gate so the new admission proceeds immediately; the kill follows outside it.
-        // A lost removal race (a concurrent eject/reap already detached this victim) frees no slot of OUR doing, so
-        // report no admission rather than letting the cap be overrun on someone else's teardown.
-        if (DetachProcess(victimKey.Value, victim) is not { } evicted)
-        {
-            return false;
-        }
-
-        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
-            _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled", victimKey.Value.ModelName, victimKey.Value.Role);
-
-        detached.Add(evicted);
-        return true;
-    }
-
-    private void PruneExitedProcesses(List<RunningProcess> detached)
-    {
-        foreach (var (key, running) in _processes)
-        {
-            if (running.Handle.HasExited && DetachProcess(key, running) is { } exited)
-            {
-                detached.Add(exited);
-            }
-        }
-    }
-
-    private async Task RemoveProcessAsync(ProcessKey key, RunningProcess running)
-    {
-        // Teardown must complete even during shutdown, so it is not bound to a caller cancellation token.
-        RunningProcess? detached;
-        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-        try
-        {
-            detached = DetachProcess(key, running);
-        }
-        finally
-        {
-            _admissionGate.Release();
-        }
-
-        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions — but still awaited
-        // by this caller, because callers (notably the profiling path's ambient-VRAM baseline) rely on the child being
-        // gone when this returns.
-        if (detached is not null)
-        {
-            KillDetachedProcess(detached);
-        }
-    }
-
-    /// <summary>
-    ///     Removes a process from the table, retires its measured layer placement, and releases its port reservation —
-    ///     everything that makes the slot available to the next admission — WITHOUT touching the child. Caller holds
-    ///     the admission gate. Returns the process when this call won the removal race (the caller then owes it a
-    ///     <see cref="KillDetachedProcess" />), or <see langword="null" /> when a concurrent path already removed it.
-    /// </summary>
-    /// <remarks>
-    ///     <para>
-    ///         This is the ONLY place a process leaves <see cref="_processes" />, so it is also the only place the layer
-    ///         placement has to be retired: cap-admission eviction, the idle reaper, exited-process pruning, operator
-    ///         eject (drained and forced), wedged-process respawn, the pre-respawn reap of a dead entry, the profiling
-    ///         teardown, and shutdown all funnel through here.
-    ///     </para>
-    ///     <para>
-    ///         The measured placement described THIS process. Once it is gone the reading is history — and because the
-    ///         report ranks any partial reading above every full one, leaving it behind would keep telling an operator
-    ///         that a model they unloaded is running partly from system RAM, for the rest of the app's lifetime and
-    ///         even while the model actually loaded is fully GPU-resident.
-    ///     </para>
-    ///     <para>
-    ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
-    ///         (which is what bounds the loaded-model CAP) never counts a process that is on its way out. That does not
-    ///         hand the next spawn a port the dying child still holds: <see cref="AllocatePort" /> bind-probes every
-    ///         candidate (<see cref="IsPortFree" />) and skips one that is still bound. The bind probe was always the
-    ///         real guard — <c>TreeKill</c> (<c>kill(-pgid)</c> / closing the Windows job) returns before the OS
-    ///         reclaims the socket, so releasing the port after the kill never proved availability either.
-    ///     </para>
-    /// </remarks>
-    private RunningProcess? DetachProcess(ProcessKey key, RunningProcess running)
-    {
-        if (!_processes.TryRemove(new KeyValuePair<ProcessKey, RunningProcess>(key, running)))
-        {
-            return null; // Already removed by a concurrent path.
-        }
-
-        _layerPlacementReport.Remove(key.Role, key.ModelName);
-        ReleasePort(running.Port);
-        return running;
-    }
-
-    /// <summary>Tree-kills + disposes a detached process. Never called while the admission gate is held.</summary>
-    private static void KillDetachedProcess(RunningProcess running)
-    {
-        try
-        {
-            running.Handle.TreeKill();
-        }
-        finally
-        {
-            running.Handle.Dispose();
-        }
-    }
-
-    /// <summary>
-    ///     Tree-kills every process detached during an admission decision. A teardown failure is logged, never
-    ///     rethrown: the admission it trails has already succeeded (or failed with its own cap error), and turning a
-    ///     kill failure into the caller's exception would both mask that error and skip the remaining victims.
-    /// </summary>
-    private void KillDetachedProcesses(List<RunningProcess> detached)
-    {
-        foreach (var running in detached)
-        {
-            try
-            {
-                KillDetachedProcess(running);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(exception, "Tearing down an evicted llama-server (pid {ProcessId}) failed; its slot and port were already released.",
-                    running.Handle.ProcessId);
-            }
-        }
-    }
-
-    /// <summary>Allocates a free port from the configured range (caller holds the admission gate).</summary>
-    private int AllocatePort()
-    {
-        for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
-        {
-            if (_allocatedPorts.Contains(port) || !IsPortFree(port))
-            {
-                continue;
-            }
-
-            _allocatedPorts.Add(port);
-            return port;
-        }
-
-        throw NonRetryable("No free local port is available for the model runtime.");
-    }
-
-    private void ReleasePort(int port)
-    {
-        _allocatedPorts.Remove(port);
-    }
-
-    /// <summary>
-    ///     Releases a reserved port for a spawn that never registered (launch/readiness failure), taking the admission
-    ///     gate so the reserved-port set (which backs the cap count) is mutated under the same lock as allocation.
-    /// </summary>
-    private async Task ReleaseReservedPortAsync(int port)
-    {
-        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-        try
-        {
-            ReleasePort(port);
-        }
-        finally
-        {
-            _admissionGate.Release();
-        }
-    }
-
-    private static bool IsPortFree(int port)
-    {
-        // Probe by binding loopback; collision (another process owns it) means skip-and-retry.
-        try
-        {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
-    }
-
-    private static LlamaRuntimeException CapReached()
-    {
-        return NonRetryable("The maximum number of local models are already loaded. Unload a model or raise the limit, then try again.");
     }
 
     /// <summary>Builds a sanitized failure flagged as a deterministic (non-retryable) policy/config outcome.</summary>
-    private static LlamaRuntimeException NonRetryable(string sanitizedMessage)
+    internal static LlamaRuntimeException NonRetryable(string sanitizedMessage)
     {
         var ex = new LlamaRuntimeException(sanitizedMessage);
         ex.Data[NonRetryableMarker] = true;
@@ -2985,7 +2093,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>A live, registered process and its last-used timestamp (drives idle-TTL + LRU eviction).</summary>
-    private sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
+    internal sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
     {
         private long _lastUsedTicks = startedUtc.UtcTicks;
 
@@ -3139,8 +2247,3 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 }
-
-internal readonly record struct LlamaServerChatLaunchTuning(
-    int ChatCacheReuse,
-    int ChatCacheRamMiB,
-    SpeculativeDecodingSettings Speculative);

@@ -110,7 +110,7 @@ public sealed class OverrideSelectorAndOptionsTests
     public void BuildLaunchSpec_WhenVariantCuda_EmitsGpuPlacementArgs()
     {
         // Composes with selector→Cuda: a Cuda spawn with no frozen profile lets llama.cpp auto-fit (--fit on + --metrics).
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/model.gguf",
             port: 8080,
@@ -125,7 +125,7 @@ public sealed class OverrideSelectorAndOptionsTests
     [Test]
     public void BuildLaunchSpec_WhenVariantCpu_OmitsGpuPlacementArgs()
     {
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/model.gguf",
             port: 8080,

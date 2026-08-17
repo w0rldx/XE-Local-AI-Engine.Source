@@ -59,7 +59,7 @@ function renderCard(overrides: Partial<HardwareProfile> = {}) {
 	);
 }
 
-describe("HardwareProfileCard CPU-fallback alert (AUD4-20)", () => {
+describe("HardwareProfileCard CPU-fallback alert", () => {
 	beforeEach(() => {
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,

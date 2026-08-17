@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -119,11 +121,30 @@ public sealed class ChatTurnContextBuilderTests
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
                      .Returns<Task<KnowledgeSearchResult>>(_ => throw new InvalidOperationException("embedding provider is down"));
-        var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
+        var logger = new CapturingLogger<ChatTurnContextBuilder>();
+        var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
         var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?").ConfigureAwait(false);
 
         AssertEx.Null(grounding);
+        AssertEx.True(logger.AllText.Contains("failed for the plain-chat turn", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task BuildKnowledgeContextAsync_WhenRetrievalThrowsForARerun_NamesTheRegeneratedTurnInTheWarning()
+    {
+        // The send and the rerun share this builder, so the warning has to keep naming which one degraded — a support
+        // read of the log otherwise cannot tell a failed rerun from a failed send.
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns<Task<KnowledgeSearchResult>>(_ => throw new InvalidOperationException("embedding provider is down"));
+        var logger = new CapturingLogger<ChatTurnContextBuilder>();
+        var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
+
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", isRegeneratedTurn: true).ConfigureAwait(false);
+
+        AssertEx.Null(grounding);
+        AssertEx.True(logger.AllText.Contains("failed for the regenerated plain-chat turn", StringComparison.Ordinal));
     }
 
     [Test]
@@ -158,13 +179,14 @@ public sealed class ChatTurnContextBuilderTests
 
     private static ChatTurnContextBuilder CreateBuilder(IConversationUploadedFileStore? uploadedFileStore = null,
         LocalChatAgentOptions? options = null,
-        IServiceScopeFactory? scopeFactory = null)
+        IServiceScopeFactory? scopeFactory = null,
+        ILogger<ChatTurnContextBuilder>? logger = null)
     {
         return new ChatTurnContextBuilder(uploadedFileStore ?? Substitute.For<IConversationUploadedFileStore>(),
             CreateFenceSeedProvider(),
             scopeFactory ?? Substitute.For<IServiceScopeFactory>(),
             Options.Create(options ?? new LocalChatAgentOptions()),
-            NullLogger<ChatTurnContextBuilder>.Instance);
+            logger ?? NullLogger<ChatTurnContextBuilder>.Instance);
     }
 
     private static IServiceScopeFactory ScopeFactoryFor(IKnowledgeSearchService searchService)

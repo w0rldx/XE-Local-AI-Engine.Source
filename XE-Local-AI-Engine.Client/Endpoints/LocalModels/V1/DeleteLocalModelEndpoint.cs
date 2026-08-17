@@ -43,6 +43,7 @@ public sealed class DeleteLocalModelEndpoint(
 
         var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
         CommittedModelDeletion? committed = null;
+        var deleted = true;
         if (string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
         {
             try
@@ -51,7 +52,9 @@ public sealed class DeleteLocalModelEndpoint(
             }
             catch (KeyNotFoundException)
             {
-                // Delete is idempotent: an already-ejected/uninstalled model still reports success rather than 500ing.
+                // Delete is idempotent: an already-ejected/uninstalled model answers 200 rather than 500ing. It reports
+                // Deleted=false because this call removed nothing — the caller can tell a real delete from a no-op.
+                deleted = false;
             }
         }
         else
@@ -63,7 +66,7 @@ public sealed class DeleteLocalModelEndpoint(
         await Send.OkAsync(new DeleteLocalModelResponse
         {
             ModelName = modelName,
-            Deleted = true
+            Deleted = deleted
         }, ct).ConfigureAwait(false);
         if (committed is not null)
         {

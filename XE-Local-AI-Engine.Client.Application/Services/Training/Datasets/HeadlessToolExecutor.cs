@@ -38,7 +38,7 @@ public interface IHeadlessToolExecutor
 
 /// <summary>
 ///     The policy-aware execution seam for dataset generation (plan invariant #4). It deliberately does NOT go through
-///     <c>InvocationRunner.ExecuteApiToolCallAsync</c>: that overload is a hub/worker round-trip (it registers a pending
+///     <c>ApiToolCallBridge.ExecuteApiToolCallAsync</c>: that overload is a hub/worker round-trip (it registers a pending
 ///     tool call, sends a payload over SignalR and awaits a remote result) and executes nothing in-process. This resolves
 ///     the executable <see cref="AIFunction" /> from the registry and invokes it directly, after its own
 ///     <see cref="IToolApprovalPolicy.RequiresApproval" /> call — that call is the tested enforcement point.

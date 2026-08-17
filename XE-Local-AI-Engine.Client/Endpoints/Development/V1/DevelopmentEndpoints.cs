@@ -13,13 +13,11 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
-// Every endpoint in this file resolves its service from HttpContext.RequestServices instead of taking it through a
-// primary constructor the way the rest of the API does. That deviation is load-bearing, not an oversight:
-// FastEndpoints activates each endpoint once while MapFastEndpoints runs, so a constructor parameter must be
-// resolvable at STARTUP. AddNodeDevelopment registers IDevelopmentManagementService / IDevelopmentTemplateService only
-// when Development:Enabled is true, so constructor injection makes a node with the feature switched off fail to boot
-// rather than serve the 404 the request-path middleware in Program is there to give it. Converting these to
-// constructor injection therefore requires filtering IDevelopmentEndpoint out of endpoint registration first.
+// Constructor injection here is only safe because the IDevelopmentEndpoint marker keeps these endpoints out of
+// FastEndpoints discovery when Development:Enabled is false (see the EndpointDiscoveryOptions.Filter in
+// ConfigureServices): FastEndpoints activates every discovered endpoint once at startup, while AddNodeDevelopment
+// registers their services only when the feature is on. GetDevelopmentCapabilityEndpoint must stay reachable with the
+// feature off and therefore must NOT carry the marker — its dependencies are all registered unconditionally.
 
 /// <summary>
 ///     Reports Development Mode's availability, and the state of the runtime it will actually execute on.
@@ -31,10 +29,20 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///         running perfectly well on the supervised process sandbox. An over-reported dependency is not a harmless
 ///         extra field: it is a false blocker on a working feature.
 ///     </para>
+///     <para>
+///         The one endpoint in this file without the <c>IDevelopmentEndpoint</c> marker: it stays registered with
+///         Development Mode switched off, which is exactly when an operator needs to be told the feature is off.
+///     </para>
 /// </summary>
-public sealed class GetDevelopmentCapabilityEndpoint
-    : EndpointWithoutRequest<DevelopmentCapabilityResponse>, IDevelopmentEndpoint
+public sealed class GetDevelopmentCapabilityEndpoint(
+    IOptions<DevelopmentOptions> options,
+    IDevelopmentSandboxRuntimeProvider sandboxRuntimeProvider,
+    IDockerDaemonPreflightService dockerDaemonPreflight) : EndpointWithoutRequest<DevelopmentCapabilityResponse>
 {
+    private readonly IOptions<DevelopmentOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider = sandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(sandboxRuntimeProvider));
+    private readonly IDockerDaemonPreflightService _dockerDaemonPreflight = dockerDaemonPreflight ?? throw new ArgumentNullException(nameof(dockerDaemonPreflight));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.Capability);
@@ -43,17 +51,15 @@ public sealed class GetDevelopmentCapabilityEndpoint
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var enabled = HttpContext.RequestServices.GetRequiredService<IOptions<DevelopmentOptions>>().Value.Enabled;
-        var providerName = HttpContext.RequestServices.GetRequiredService<IDevelopmentSandboxRuntimeProvider>().ProviderName;
+        var enabled = _options.Value.Enabled;
+        var providerName = _sandboxRuntimeProvider.ProviderName;
         if (!string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal))
         {
             await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null), ct).ConfigureAwait(false);
             return;
         }
 
-        var preflight = await HttpContext.RequestServices.GetRequiredService<IDockerDaemonPreflightService>()
-                                         .InspectAsync(ct)
-                                         .ConfigureAwait(false);
+        var preflight = await _dockerDaemonPreflight.InspectAsync(ct).ConfigureAwait(false);
 
         await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse()), ct).ConfigureAwait(false);
     }
@@ -67,9 +73,11 @@ public sealed class GetDevelopmentCapabilityEndpoint
 ///         whatever daemon happened to be answering.
 ///     </para>
 /// </summary>
-public sealed class ConfirmDevelopmentContainerRuntimeEndpoint
+public sealed class ConfirmDevelopmentContainerRuntimeEndpoint(IDockerDaemonPreflightService dockerDaemonPreflight)
     : Endpoint<ConfirmDevelopmentContainerRuntimeRequest, DevelopmentContainerRuntimeResponse>, IDevelopmentEndpoint
 {
+    private readonly IDockerDaemonPreflightService _dockerDaemonPreflight = dockerDaemonPreflight ?? throw new ArgumentNullException(nameof(dockerDaemonPreflight));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.ContainerRuntimeConfirmation);
@@ -85,17 +93,17 @@ public sealed class ConfirmDevelopmentContainerRuntimeEndpoint
             return;
         }
 
-        var preflight = await HttpContext.RequestServices.GetRequiredService<IDockerDaemonPreflightService>()
-                                         .ConfirmAsync(req.DaemonId, ct)
-                                         .ConfigureAwait(false);
+        var preflight = await _dockerDaemonPreflight.ConfirmAsync(req.DaemonId, ct).ConfigureAwait(false);
 
         await Send.OkAsync(preflight.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
-public sealed class ListDevelopmentRepositoriesEndpoint
+public sealed class ListDevelopmentRepositoriesEndpoint(IDevelopmentManagementService service)
     : EndpointWithoutRequest<ListDevelopmentRepositoriesResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.Repositories);
@@ -104,16 +112,17 @@ public sealed class ListDevelopmentRepositoriesEndpoint
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
-        var repositories = await service.ListRepositoriesAsync(ct).ConfigureAwait(false);
+        var repositories = await _service.ListRepositoriesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListDevelopmentRepositoriesResponse(repositories.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct)
                   .ConfigureAwait(false);
     }
 }
 
-public sealed class RegisterDevelopmentRepositoryEndpoint
+public sealed class RegisterDevelopmentRepositoryEndpoint(IDevelopmentManagementService service)
     : Endpoint<RegisterDevelopmentRepositoryRequest, DevelopmentRepositoryResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.Repositories);
@@ -127,8 +136,7 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
     {
         try
         {
-            var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
-            var repository = await service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
+            var repository = await _service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
             await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
@@ -143,9 +151,11 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
     }
 }
 
-public sealed class ListDevelopmentTemplatesEndpoint
+public sealed class ListDevelopmentTemplatesEndpoint(IDevelopmentTemplateService service)
     : EndpointWithoutRequest<ListDevelopmentTemplatesResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.Templates);
@@ -154,16 +164,17 @@ public sealed class ListDevelopmentTemplatesEndpoint
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
-        var templates = await service.ListTemplatesAsync(ct).ConfigureAwait(false);
+        var templates = await _service.ListTemplatesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListDevelopmentTemplatesResponse(templates.Select(template => template.ToResponse()).ToArray()), ct)
                   .ConfigureAwait(false);
     }
 }
 
-public sealed class RegisterDevelopmentTemplateEndpoint
+public sealed class RegisterDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
     : Endpoint<RegisterDevelopmentTemplateRequest, DevelopmentTemplateResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.Templates);
@@ -174,8 +185,7 @@ public sealed class RegisterDevelopmentTemplateEndpoint
     {
         try
         {
-            var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
-            var template = await service.AddTemplateAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
+            var template = await _service.AddTemplateAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
             await Send.OkAsync(template.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
@@ -189,9 +199,11 @@ public sealed class RegisterDevelopmentTemplateEndpoint
     }
 }
 
-public sealed class RemoveDevelopmentTemplateEndpoint
+public sealed class RemoveDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
     : Endpoint<DevelopmentTemplateRequest>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Delete(LocalApiRoutes.Development.TemplateById);
@@ -200,8 +212,7 @@ public sealed class RemoveDevelopmentTemplateEndpoint
 
     public override async Task HandleAsync(DevelopmentTemplateRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
-        if (!await service.RemoveTemplateAsync(req.TemplateId, ct).ConfigureAwait(false))
+        if (!await _service.RemoveTemplateAsync(req.TemplateId, ct).ConfigureAwait(false))
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
             return;
@@ -211,9 +222,11 @@ public sealed class RemoveDevelopmentTemplateEndpoint
     }
 }
 
-public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
+public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopmentTemplateService service)
     : Endpoint<CreateDevelopmentRepositoryFromTemplateRequest, DevelopmentRepositoryFromTemplateResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.RepositoriesFromTemplate);
@@ -225,10 +238,9 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
 
     public override async Task HandleAsync(CreateDevelopmentRepositoryFromTemplateRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentTemplateService>();
         try
         {
-            var result = await service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct)
+            var result = await _service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct)
                                       .ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse(result.Repository.ToResponse(),
                     result.TemplateAlias,
@@ -256,9 +268,11 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint
     }
 }
 
-public sealed class DetectDevelopmentRepositoryProfileEndpoint
+public sealed class DetectDevelopmentRepositoryProfileEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentProfileDetectionRequest, DevelopmentProfileDetectionResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.RepositoryProfileDetection);
@@ -270,10 +284,9 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint
 
     public override async Task HandleAsync(DevelopmentProfileDetectionRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var detection = await service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct).ConfigureAwait(false);
+            var detection = await _service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentProfileDetectionResponse(detection.ProfileId, detection.BuildTarget, detection.Candidates), ct)
                       .ConfigureAwait(false);
         }
@@ -293,9 +306,11 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint
     }
 }
 
-public sealed class ListDevelopmentProjectsEndpoint
+public sealed class ListDevelopmentProjectsEndpoint(IDevelopmentManagementService service)
     : EndpointWithoutRequest<ListDevelopmentProjectsResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.Projects);
@@ -304,15 +319,16 @@ public sealed class ListDevelopmentProjectsEndpoint
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
-        var projects = await service.ListProjectsAsync(ct).ConfigureAwait(false);
+        var projects = await _service.ListProjectsAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListDevelopmentProjectsResponse(projects.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
     }
 }
 
-public sealed class CreateDevelopmentProjectEndpoint
+public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementService service)
     : Endpoint<CreateDevelopmentProjectRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.Projects);
@@ -324,7 +340,6 @@ public sealed class CreateDevelopmentProjectEndpoint
 
     public override async Task HandleAsync(CreateDevelopmentProjectRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         if (!Enum.TryParse<DevelopmentEgressPolicy>(req.EgressPolicy, ignoreCase: true, out var egressPolicy))
         {
             AddError("The Development egress policy is invalid.");
@@ -334,7 +349,7 @@ public sealed class CreateDevelopmentProjectEndpoint
 
         try
         {
-            var result = await service.CreateProjectAsync(new DevelopmentCreateProjectInput(req.OperationId,
+            var result = await _service.CreateProjectAsync(new DevelopmentCreateProjectInput(req.OperationId,
                                               req.SelectedFolderId,
                                               req.Objective,
                                               req.BaseBranch,
@@ -365,9 +380,11 @@ public sealed class CreateDevelopmentProjectEndpoint
     }
 }
 
-public sealed class GetDevelopmentProjectEndpoint
+public sealed class GetDevelopmentProjectEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentProjectRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.ProjectById);
@@ -376,10 +393,9 @@ public sealed class GetDevelopmentProjectEndpoint
 
     public override async Task HandleAsync(DevelopmentProjectRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            await Send.OkAsync((await service.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
+            await Send.OkAsync((await _service.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
         {
@@ -388,9 +404,11 @@ public sealed class GetDevelopmentProjectEndpoint
     }
 }
 
-public sealed class GetDevelopmentTaskEndpoint
+public sealed class GetDevelopmentTaskEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentTaskRequest, DevelopmentTaskDetailResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.TaskById);
@@ -399,10 +417,9 @@ public sealed class GetDevelopmentTaskEndpoint
 
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            await Send.OkAsync((await service.GetTaskAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
+            await Send.OkAsync((await _service.GetTaskAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
         {
@@ -411,9 +428,11 @@ public sealed class GetDevelopmentTaskEndpoint
     }
 }
 
-public sealed class StartDevelopmentNextActionEndpoint
+public sealed class StartDevelopmentNextActionEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentActionRequest, DevelopmentNextActionResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.NextAction);
@@ -425,10 +444,9 @@ public sealed class StartDevelopmentNextActionEndpoint
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var result = await service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
+            var result = await _service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentNextActionResponse(result.Action,
                     result.ProjectId,
                     result.TaskId,
@@ -455,9 +473,11 @@ public sealed class StartDevelopmentNextActionEndpoint
     }
 }
 
-public sealed class CancelDevelopmentAttemptEndpoint
+public sealed class CancelDevelopmentAttemptEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentAttemptRequest>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.CancelAttempt);
@@ -467,10 +487,9 @@ public sealed class CancelDevelopmentAttemptEndpoint
 
     public override async Task HandleAsync(DevelopmentAttemptRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            if (!await service.CancelAttemptAsync(req.ProjectId, req.TaskId, req.AttemptId, ct).ConfigureAwait(false))
+            if (!await _service.CancelAttemptAsync(req.ProjectId, req.TaskId, req.AttemptId, ct).ConfigureAwait(false))
             {
                 await Send.NoContentAsync(ct).ConfigureAwait(false);
                 return;
@@ -485,9 +504,11 @@ public sealed class CancelDevelopmentAttemptEndpoint
     }
 }
 
-public sealed class ListDevelopmentEventsEndpoint
+public sealed class ListDevelopmentEventsEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentProjectRequest, ListDevelopmentEventsResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.Events);
@@ -496,10 +517,9 @@ public sealed class ListDevelopmentEventsEndpoint
 
     public override async Task HandleAsync(DevelopmentProjectRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var events = await service.ListEventsAsync(req.ProjectId, ct).ConfigureAwait(false);
+            var events = await _service.ListEventsAsync(req.ProjectId, ct).ConfigureAwait(false);
             await Send.OkAsync(new ListDevelopmentEventsResponse(events.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
@@ -509,9 +529,11 @@ public sealed class ListDevelopmentEventsEndpoint
     }
 }
 
-public sealed class ListDevelopmentArtifactsEndpoint
+public sealed class ListDevelopmentArtifactsEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentTaskRequest, ListDevelopmentArtifactsResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.TaskArtifacts);
@@ -520,10 +542,9 @@ public sealed class ListDevelopmentArtifactsEndpoint
 
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var artifacts = await service.ListArtifactsAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
+            var artifacts = await _service.ListArtifactsAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
             await Send.OkAsync(new ListDevelopmentArtifactsResponse(artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
@@ -533,9 +554,11 @@ public sealed class ListDevelopmentArtifactsEndpoint
     }
 }
 
-public sealed class GetDevelopmentArtifactEndpoint
+public sealed class GetDevelopmentArtifactEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentArtifactRequest, DevelopmentArtifactContentResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Development.ArtifactById);
@@ -544,10 +567,9 @@ public sealed class GetDevelopmentArtifactEndpoint
 
     public override async Task HandleAsync(DevelopmentArtifactRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var artifact = await service.ReadArtifactAsync(req.ProjectId, req.TaskId, req.ArtifactId, ct).ConfigureAwait(false);
+            var artifact = await _service.ReadArtifactAsync(req.ProjectId, req.TaskId, req.ArtifactId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentArtifactContentResponse(artifact.Artifact.ToResponse(), artifact.Content), ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
@@ -562,9 +584,11 @@ public sealed class GetDevelopmentArtifactEndpoint
     }
 }
 
-public sealed class PreviewDevelopmentPatchEndpoint
+public sealed class PreviewDevelopmentPatchEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentActionRequest, DevelopmentPatchPreviewResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.PatchPreview);
@@ -576,10 +600,9 @@ public sealed class PreviewDevelopmentPatchEndpoint
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var preview = await service.PreviewAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
+            var preview = await _service.PreviewAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentPatchPreviewResponse(preview.SubjectHash,
                     preview.PatchHash,
                     preview.ManifestHash,
@@ -604,9 +627,11 @@ public sealed class PreviewDevelopmentPatchEndpoint
     }
 }
 
-public sealed class ApplyDevelopmentPatchEndpoint
+public sealed class ApplyDevelopmentPatchEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentActionRequest, DevelopmentApplyResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.Apply);
@@ -618,10 +643,9 @@ public sealed class ApplyDevelopmentPatchEndpoint
 
     public override async Task HandleAsync(DevelopmentActionRequest req, CancellationToken ct)
     {
-        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var result = await service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
+            var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentApplyResponse(result.OperationId,
                     result.Phase,
                     result.Outcome,
@@ -648,9 +672,11 @@ public sealed class ApplyDevelopmentPatchEndpoint
     }
 }
 
-public sealed class ReconnectDevelopmentRepositoryEndpoint
+public sealed class ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagementService service)
     : Endpoint<ReconnectDevelopmentRepositoryRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
 {
+    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Development.RepositoryConnection);
@@ -664,8 +690,7 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
     {
         try
         {
-            var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
-            var project = await service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct)
+            var project = await _service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct)
                                        .ConfigureAwait(false);
             await Send.OkAsync(project.ToResponse(), ct).ConfigureAwait(false);
         }

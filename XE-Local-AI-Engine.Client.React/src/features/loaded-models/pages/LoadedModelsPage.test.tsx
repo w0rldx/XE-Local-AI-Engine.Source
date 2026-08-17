@@ -215,7 +215,7 @@ describe("LoadedModelsPage", () => {
 		);
 	});
 
-	it("surfaces a success toast when the graceful eject reports 'ejected' (AUD4-20)", async () => {
+	it("surfaces a success toast when the graceful eject reports 'ejected'", async () => {
 		const ejectRunning = makeEjectMutation();
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
 		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
@@ -231,7 +231,7 @@ describe("LoadedModelsPage", () => {
 		expect(toastMock.success).toHaveBeenCalled();
 	});
 
-	it("warns and offers a force eject when the graceful eject times out still busy (AUD4-20)", async () => {
+	it("warns and offers a force eject when the graceful eject times out still busy", async () => {
 		const ejectRunning = makeEjectMutation();
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
 		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);

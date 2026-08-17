@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Automation.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.Development;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -203,7 +204,8 @@ public static class ConfigureServices
         builder.Services.AddSingleton<ITrainingRuntimeEventPublisher, TrainingRuntimeEventPublisher>();
 
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
-        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
+        var developmentEnabled = configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
+        if (developmentEnabled)
         {
             builder.Services.AddSingleton<IDevelopmentAttemptLiveEventPublisher, DevelopmentAttemptLiveEventPublisher>();
         }
@@ -222,6 +224,16 @@ public static class ConfigureServices
         {
             options.DisableAutoDiscovery = true;
             options.Assemblies = [typeof(ConfigureServices).Assembly];
+
+            // Development Mode's endpoints are kept out of DISCOVERY — not out of routing — when the feature is off.
+            // The routing filter in UseFastEndpoints is too late: FastEndpoints instantiates every discovered endpoint
+            // at startup before evaluating that filter, and AddNodeDevelopment registers the services those endpoints
+            // take through their constructors only when the feature is on, so a discovered-but-unrouted Development
+            // endpoint would fail the node's boot. GetDevelopmentCapabilityEndpoint deliberately does not carry the
+            // marker: it stays discoverable and answers the disabled state. The 404 the other routes give while the
+            // feature is off still comes from the request-path middleware in Program, which runs before authentication
+            // and so is unaffected by whether the route exists.
+            options.Filter = type => developmentEnabled || !typeof(IDevelopmentEndpoint).IsAssignableFrom(type);
         });
         builder.Services.AddSignalR(options =>
         {

@@ -43,7 +43,7 @@ public sealed class RunSavedAgentHandlerTests
 
         AssertEx.Equal("run-agent", harness.Handler.TemplateId);
         AssertEx.Equal("run-agent", harness.Handler.Descriptor.TemplateId);
-        AssertEx.True(harness.Handler.Descriptor.AllowAgentCreation, "OPP-02 lets the AI agent schedule saved-agent runs.");
+        AssertEx.True(harness.Handler.Descriptor.AllowAgentCreation, "The saved-agent scheduler tool lets the AI agent schedule saved-agent runs.");
         AssertEx.True(harness.Handler.Descriptor.AllowManualTrigger, "operators may run a scheduled agent on demand.");
         AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, harness.Handler.Descriptor.DefaultMisfirePolicy);
         // No template default on purpose: the descriptor value pre-fills the per-schedule ceiling, and a fixed 600 s

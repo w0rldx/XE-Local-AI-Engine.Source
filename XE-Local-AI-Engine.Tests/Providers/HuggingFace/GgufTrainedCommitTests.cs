@@ -84,7 +84,7 @@ public sealed class GgufTrainedCommitTests
         var prepared = await importer.PrepareAsync(new GgufImportSource(source), AdapterDestination(), progress: null, CancellationToken.None);
         var entry = (await importer.CommitAsync(prepared, CancellationToken.None)).RegistryEntry;
 
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey(entry.ModelName, ModelRole.Chat),
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey(entry.ModelName, ModelRole.Chat),
             "/fake/bin/llama-server",
             "/models/base.gguf",
             port: 8080,

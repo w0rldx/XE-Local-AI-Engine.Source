@@ -17,7 +17,7 @@ public sealed class SupervisorLoraLaunchSpecTests
     [Test]
     public void LaunchSpec_WhenAdapterSupplied_EmitsLoraAgainstTheBaseModel()
     {
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/base.gguf",
             port: 8080,
@@ -33,7 +33,7 @@ public sealed class SupervisorLoraLaunchSpecTests
     [Test]
     public void LaunchSpec_WhenNoAdapter_EmitsNoLoraFlag()
     {
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/base.gguf",
             port: 8080,
@@ -48,7 +48,7 @@ public sealed class SupervisorLoraLaunchSpecTests
     public void LaunchSpec_WhenAdapterOnPooledRole_StillEmitsLora()
     {
         // An adapter changes the weights, not the serving mode, so it is not gated on the chat role the way --mmproj is.
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(EmbeddingKey,
             "/fake/bin/llama-server",
             "/fake/models/base.gguf",
             port: 8080,
