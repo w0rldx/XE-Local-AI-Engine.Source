@@ -1,6 +1,6 @@
 # React Client (Frontend)
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
@@ -22,7 +22,7 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | UI/session state | `zustand` 5 | Auth token, theme, sidebar, language, dev mode, pagination prefs. |
 | HTTP | `axios` 1 | One shared instance behind the generated client. |
 | Validation | `zod` 4 | Boundary parsing of API responses + form schemas. |
-| Realtime | `@microsoft/signalr` 10 | Shared connections for 11 possible hub paths: 10 unconditional (chat, scheduler, preview, GGUF download, CUDA build, llama.cpp source build, runtime acquisition, knowledge base, image jobs, stable-diffusion.cpp source build) plus Development attempts when enabled. |
+| Realtime | `@microsoft/signalr` 10 | Shared connections for the hub paths the backend maps (chat, scheduler, preview, benchmark runs, dataset generation, training runtime, training runs, GGUF download, CUDA build, llama.cpp source build, runtime acquisition, knowledge base, image jobs, stable-diffusion.cpp source build) plus Development attempts when enabled. The `MapHub<>` calls in `Program.cs` are the inventory — see [API & Hubs](09-api-and-hubs.md). |
 | Markdown | `react-markdown` + `remark-gfm` + `react-syntax-highlighter` | Chat + editor rendering. |
 | i18n | `i18next` + `react-i18next` + browser language detector | `en` / `de`. |
 | Canvas | `@xyflow/react` | Preview workflow builder (see [Agent Mode](04-agent-mode.md) / Preview). |
@@ -61,9 +61,9 @@ Two trees carry essentially all the code:
 
 Seven smaller siblings exist and are worth knowing before you put something in the wrong place: `src/capabilities/` (the central `nodeRoutePaths` + `nodeCapabilities` declaration), `src/routes/` + the generated `routeTree.gen.ts` (TanStack Router file routes — thin, one `createFileRoute` per page), `src/data/` (static navigation and language menu data), `src/components/` (the logo marks), `src/modules/` (the standalone theme configurator), `src/locales/` (the bundled `en`/`de` JSON), and `src/pages/` (the `Home` landing page).
 
-### The 27 feature folders
+### The feature folders
 
-Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/features` (27 at this baseline).
+Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/features` — `ls -d src/features/*/` is the inventory; the table below names all of them.
 
 | Feature | What it owns | Deep-dive |
 |---|---|---|
@@ -71,6 +71,8 @@ Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/f
 | `agents` | Agent definitions, templates, playbooks, golden conversations, feedback insights, execution logs, orchestration topology | [Agent Mode](04-agent-mode.md) |
 | `api-foundation` | Validation-problem probe (boundary/error-contract harness) | [API & Hubs](09-api-and-hubs.md) |
 | `app-update` | Velopack self-update UI: anonymous public-feed check and apply | [Hosting & Deployment](11-hosting-and-deployment.md) |
+| `assist` | AI-assisted drafting: the `GenerationAssistDialog` + `AssistActions` affordance that drafts an agent definition or a skill body from a local model, and the `useAssistDraft` query behind it. Rendered inside the agent and skill authoring forms rather than owning a route | [Agent Mode](04-agent-mode.md) |
+| `benchmarks` | Benchmark projects and runs at `/benchmarks`: project form, run pane and live pane (`useBenchmarkRunHub` — subscribe-then-replay, dedupe on sequence), status badges, manual score picker, judge panel, and the launch-evidence/receipt comparison views | [API & Hubs](09-api-and-hubs.md) |
 | `binding` | Node binding to the C0re platform | [Security & Privacy](12-security-and-privacy.md) |
 | `chat` | Streaming chat UI, SignalR adapter, reasoning/tool-call rendering, sampling options, file-upload attachments + pane drag-and-drop (`usePaneFileDrop`, `ChatAttachmentChips`) | [Chat](05-chat.md) |
 | `cloud-settings` | Cloud provider credentials/config (kept node-local) | [Security & Privacy](12-security-and-privacy.md) |
@@ -92,6 +94,7 @@ Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/f
 | `scheduler` | Quartz job management + run history | [Scheduler](06-scheduler.md) |
 | `skills` | Node skill library + per-agent skill picklist | [Agent Mode](04-agent-mode.md) |
 | `tools` | Tool catalog / capability surface | [Agent Mode](04-agent-mode.md) |
+| `training` | QLoRA fine-tuning at `/training`, `/training/datasets` and `/training/comparisons` (three **sibling** file routes, each with its own `beforeLoad` capability gate): the runtime install card, dataset definition editor and sample review, the run wizard and run list, the artifact panel, comparison creation, and three hubs (`useDatasetGenerationHub`, `useTrainingRunHub`, `useTrainingRuntimeHub`) | [Training](18-training.md) |
 | `usage-dashboard` | Agent token-usage dashboard at `/usage`, backed by the single `agents/usage-summary` endpoint. `models/UsageDashboardModel.ts` does all the aggregation **client-side** — `aggregateByDay` / `aggregateByModel`, `clampDateRange` against the server-reported retention floor (30-day fallback) — feeding `UsageTotalsCards`, `UsageDailyChart`, `UsageProviderBreakdown` and `UsageModelTable`. Like `/invocations` it carries no extra route guard: the authenticated `_layout` *is* the operator gate and the endpoint 401s otherwise | [Agent Mode](04-agent-mode.md) |
 | `voice` | Web Speech text-to-speech: node-settings feature gate, platform-voice catalog, preferences store, composer controls, per-message play button, and voice preview. Browser/OS voice behavior is outside repository control. | [Chat](05-chat.md) |
 
@@ -99,7 +102,7 @@ Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPa
 
 ### Feature ↔ route ↔ capability
 
-Route paths and their capability flags are declared centrally in `src/capabilities/NodeCapabilities.ts` (`nodeRoutePaths`, `nodeCapabilities`), not scattered across route files. Capability-flagged pages (`agents`, `skills`, `mcp`, `scheduler`, `modelFit`, `loadedModels`, `preview`, `knowledgeBase`, `images`, `development`) are all **on** by default; Custom Tools shares the `agentManagement` capability, while `commands`, `usage`, and `diagnostics` are authenticated but otherwise ungated. `development` additionally re-checks the *server* capability at runtime — a frontend flag alone is not treated as authoritative.
+Route paths and their capability flags are declared centrally in `src/capabilities/NodeCapabilities.ts` (`nodeRoutePaths`, `nodeCapabilities`), not scattered across route files. Capability-flagged pages (`agents`, `skills`, `mcp`, `scheduler`, `modelFit`, `loadedModels`, `preview`, `knowledgeBase`, `images`, `development`, `benchmarks`, `training`) are all **on** by default; Custom Tools shares the `agentManagement` capability, while `commands`, `usage`, and `diagnostics` are authenticated but otherwise ungated. `development` additionally re-checks the *server* capability at runtime — a frontend flag alone is not treated as authoritative.
 
 ---
 
@@ -108,7 +111,7 @@ Route paths and their capability flags are declared centrally in `src/capabiliti
 Two stores, strictly separated:
 
 1. **Server state → TanStack Query.** Every REST read/write is a query/mutation hook under a feature's `queries/` folder (e.g. `features/agents/queries/usePlaybookActions.ts`, `features/skills/queries/useSkills.ts`). The `QueryClient` is provided by `core/integrations/tanstack-query/Provider.tsx`. Server data is **not** mirrored into Zustand.
-2. **UI/session state → Zustand.** `find src -name "*Store.ts*"` returns **22** files, **21** of which are Zustand stores — e.g. `core/auth/stores/NodeAuthStore.tsx` (access token + actions), `core/theme/stores/ThemeStore.tsx`, `core/layout/stores/SidebarStore.tsx` + `DesktopNavigationBarStore.tsx`, `core/locales/stores/UserLanguageStore.tsx`, `core/dev-tools/stores/DeveloperModeStore.ts`, and `core/ui/components/TablePagination/useTablePaginationStore.ts`. The 22nd, `features/diagnostics/SnapshotStore.ts`, is **not** Zustand — it is the IndexedDB snapshot store and imports no state library. Don't include it when reasoning about the Zustand surface.
+2. **UI/session state → Zustand.** `find src -name "*Store.ts*"` is the inventory (a labelled snapshot: **24** files on 2026-08-17, **23** of them Zustand stores) — e.g. `core/auth/stores/NodeAuthStore.tsx` (access token + actions), `core/theme/stores/ThemeStore.tsx`, `core/layout/stores/SidebarStore.tsx` + `DesktopNavigationBarStore.tsx`, `core/locales/stores/UserLanguageStore.tsx`, `core/dev-tools/stores/DeveloperModeStore.ts`, and `core/ui/components/TablePagination/useTablePaginationStore.ts`. The one exception, `features/diagnostics/SnapshotStore.ts`, is **not** Zustand — it is the IndexedDB snapshot store and imports no state library. Don't include it when reasoning about the Zustand surface.
 
 Stores use the plain `create<T>()` factory with an `actions` sub-object (see `NodeAuthStore.tsx`). Components subscribe with field selectors (`useNodeAuthStore((s) => s.accessToken)`); `useShallow` is not currently in use, so object/array selectors must be hand-shaped to avoid re-render churn — a maintainer adding a multi-field selector should prefer separate selectors or introduce `useShallow` at that point.
 
@@ -234,12 +237,17 @@ In standalone dev the React app uses Vite's package-script port 5173; the Aspire
 app.UseStaticFiles();                 // serve hashed assets from wwwroot
 ...
 app.UseFastEndpoints(...);            // /api/local/v1/* (RoutePrefix = LocalApiRoutes.Prefix)
-app.MapHub<LocalChatHub>(...);        // one of 10 unconditional Operator-authorized hubs
+app.MapHub<LocalChatHub>(...);        // one of the unconditional Operator-authorized hubs
 app.MapHub<SchedulerHub>(...);
 app.MapHub<PreviewWorkflowHub>(...);
+app.MapHub<BenchmarkRunHub>(...);
+app.MapHub<DatasetGenerationHub>(...);
+app.MapHub<TrainingRuntimeHub>(...);
+app.MapHub<TrainingRunHub>(...);
 app.MapHub<GgufDownloadHub>(...);
 app.MapHub<CudaBuildHub>(...);
 app.MapHub<LlamaCppSourceBuildHub>(...);
+app.MapHub<RuntimeAcquisitionHub>(...);
 app.MapHub<KnowledgeBaseHub>(...);
 app.MapHub<ImageJobHub>(...);
 app.MapHub<StableDiffusionCppSourceBuildHub>(...);
@@ -252,7 +260,7 @@ app.MapFallbackToFile("index.html");  // SPA fallback → client-side routing
 Notes for maintainers:
 
 - This repo uses `UseStaticFiles()` + `MapFallbackToFile("index.html")`. There is **no** `UseDefaultFiles()` call in `Program.cs` — the fallback to `index.html` is what makes deep links resolve to the SPA. (The C0re "static files" convention is the same shape; the `UseDefaultFiles` step is not present here.)
-- Static files are mapped **before** the local-API security middleware; the API surface, auth and the hubs come after. All 10 unconditional hubs and the conditional Development hub call `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. Full ordering and the per-hub contracts: [API & Hubs](09-api-and-hubs.md).
+- Static files are mapped **before** the local-API security middleware; the API surface, auth and the hubs come after. Every unconditional hub and the conditional Development hub calls `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. Full ordering and the per-hub contracts: [API & Hubs](09-api-and-hubs.md).
 - Same-origin is the whole reason the axios `baseURL` is `""`: in production the SPA and the API share one origin, so relative paths just work.
 - HTTPS redirect/HSTS are skipped in desktop mode (`isDesktop`); Swagger/Scalar (`/scalar`) is a development-only surface.
 

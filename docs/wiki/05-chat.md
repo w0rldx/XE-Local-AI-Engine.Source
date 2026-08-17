@@ -1,6 +1,6 @@
 # Chat Subsystem
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to SQLite with titles and content protected by per-column AEAD. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, opt-in knowledge-base grounding and source attribution, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
 
@@ -25,6 +25,8 @@ The chat subsystem is the node's interactive conversation surface: a React featu
 | Bounded live delivery / resume | `ChatStreamEventSink` + `InvocationResumeRegistry` |
 | Inbound message-size cap | `SecurityOptions.MaxMessageSizeKb` + `LocalChatHub.EnsureMessageWithinSizeCap` |
 | Provider self-heal on eject/restart | `DeferredLlamaServerChatClient` (`Providers.LlamaServer`) |
+| Conversation compaction (non-destructive) | `ConversationCompactionService` + `ConversationSummarizer` (`Services/Chat/Compaction`), spliced by `CompactionContextResolver` |
+| Variant-sibling ordering (anchors) | `SelectedPathResolver.CreateAnchorResolver` (`Services/Chat/SelectedPathResolver.cs`) |
 | At-rest encryption | `NodeChatDbContext` + `NodePayloadProtector` (`Client.Persistence`) |
 | React feature | `Client.React/src/features/chat` |
 
@@ -195,6 +197,41 @@ Codex-only levels `minimal` and `xhigh` are offered only for Codex models; they 
 
 On the React side `clampReasoningEffort` (`stores/NodeChatPreferencesStore.ts`) maps a carried-over effort onto a different model's available set **without collapsing reasoning intent** (e.g. switching from a Codex model to a binary-only local model): a reasoning-OFF source (`none`) stays `none` when offered; any reasoning-ON source maps to the available reasoning-ON level of nearest intensity rank (`xhigh→high`, `minimal→low` onto a graded set; any graded level→`on` onto a binary set), falling back to the set's first entry only when no comparable level exists. The effort that actually drives the turn is persisted on the message metadata (`ReasoningEffort`, `NodeChatStreamService.cs`) so it survives reload.
 
+## Conversation compaction (non-destructive)
+
+A long conversation is kept inside the context window by **folding its older turns into a synopsis instead of
+deleting them**. `IConversationCompactionService` / `ConversationCompactionService`
+(`Services/Chat/Compaction/`) is operator-triggered — `POST` `chat/conversations/{conversationId}/compact`
+(`LocalApiRoutes.LocalChat.CompactConversation`, `CompactNodeChatConversationEndpoint`) — and idempotent when
+there is nothing new to fold. It selects the completed messages outside the recent-keep window that the existing
+synopsis does not already cover, summarizes them, and persists the result on the conversation
+(`CompactionSummary`, `CompactionSummaryCoversToSequence`, `CompactionSummaryUpdatedAtUtc` on
+`NodeConversation` — the summary column is encrypted like every other chat payload). **The original messages are
+never deleted; only what is *sent* on later turns changes.** The outcome is typed
+(`Compacted`, `NothingToCompact`, `NoLocalModel`, `SummarizerReturnedNothing`, `ConversationNotFound`).
+
+Two rules are load-bearing:
+
+- **Summarization stays on the node.** The requested model is used only when it is an installed *local* chat
+  model; a cloud or unknown selection is transparently downgraded to a node-local default so conversation
+  content never leaves the machine, and the result reports `ModelUsed` + `UsedFallbackModel` so the UI can say
+  so. With no local chat model installed, compaction refuses (`NoLocalModel`) rather than going to the cloud.
+- **Send and regenerate splice identically.** Both call the shared `CompactionContextResolver.Resolve`, which
+  mints the one synthetic `[Summary of the earlier conversation, …]` user message and returns the sequence it
+  covers; each caller prepends it and drops every message at or below that covered sequence
+  (`NodeChatStreamService.BuildConversationContext`, `NodeChatRegenerationService.BuildRegenerationContext`).
+  Without the shared resolver a regenerate would re-send the verbatim messages the synopsis already replaced.
+
+Two deliberate exceptions: regenerate keeps the verbatim pre-cutoff history when the synopsis already covers the
+user turn being re-answered (otherwise the rerun would have no question left), and the memory-extraction pass
+runs with `applyCompaction: false` because it mines *real* user turns and must never mine the synthetic synopsis.
+
+`ConversationCompactionOptions` (`Agent:ConversationCompaction`) carries the knobs:
+`RecentMessagesToKeepVerbatim` (default 8, minimum 2 so the latest user turn and its answer survive),
+`MaxSummaryChars` (default 4000), and `MaxInputCharsPerSummarizationCall` (default 6000 — a fold span larger than
+this is summarized in multiple running-summary passes so no single provider request overruns a small context
+window).
+
 ## Persistence
 
 `NodeChatPersistenceService` (`Services/Chat/Implementation/NodeChatPersistenceService.cs`) is a facade over focused collaborators (`NodeChatConversationCommands`, `NodeChatReadModel`, `NodeChatMessageCommands`, `NodeChatVariantBranchService`, `NodeChatFeedbackStore`), all composed from one `NodeChatPersistenceWriter` that owns per-conversation/per-message write-key serialization. It uses a **raw-ADO** path (`NodeChatPersistenceSql`) for the hot streaming writes.
@@ -202,6 +239,8 @@ On the React side `clampReasoningEffort` (`stores/NodeChatPreferencesStore.ts`) 
 Message lifecycle (from `NodeChatMessageCommands.cs`): `PersistUserMessageAsync` inserts a Completed user row; `CreateAssistantPlaceholderAsync` inserts a Pending assistant row carrying the agent attribution + effort; `MarkAssistantQueued/Streaming`, `FlushAssistantPartialAsync` (append or replace content/reasoning deltas), then `TerminalizeAssistantMessageAsync` writes the final status, token counts, ordered `parts`, and `generationDurationMs`.
 
 The `metadata_json` blob (`NodeChatMessageMetadata`, serialized by `NodeChatMetadataSerializer.SerializeMetadata`) carries the fields with no dedicated column: `reasoning`, `model`, token counts (`input/output/total/reasoning`), the ordered `parts[]`, `agentDefinitionId`, `agentName`, `reasoningEffort`, and `generationDurationMs`. The conversation's `selected_path_json` stores the `{variantGroupId → selectedMessageId}` map (`SerializeSelectedPath`) that collapses variant siblings to the chosen branch when building context (`BuildConversationContext`).
+
+**Gotcha — order by the variant *anchor*, never by the raw sequence.** `Sequence` is a physical insertion counter, so regenerating an **early** turn after later turns already exist mints a sibling whose sequence lands *past* them even though it still belongs to the early turn. Ordering by the raw sequence puts that sibling at the tail (breaking user/assistant alternation) and any `Sequence <= cutoff` filter drops it outright. `SelectedPathResolver.CreateAnchorResolver` (`Services/Chat/SelectedPathResolver.cs`) is the fix: a message's anchor is its variant group's **earliest** member sequence (ungrouped messages anchor at their own), and every path that builds model context or folds history runs in anchor space — the send context, the regenerate cutoff + context, and the compaction cutoff/`CompactionSummaryCoversToSequence` alike. It must be given **all** messages including the siblings the selected path omits, since the anchor is a property of the whole group. This matches what the frontend already renders (`MessageRevisionGrouping.ts`). Backward compatibility is by construction: with no variants, anchor == raw sequence, so previously persisted covered-sequence values are unchanged, and a conversation that had both variants and a synopsis self-heals at the next compaction (no migration).
 
 ### Encryption of titles and content (at-rest)
 

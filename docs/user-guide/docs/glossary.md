@@ -16,10 +16,13 @@ click the item inside. Written here as `Group → Item`.
 | **Home** | Landing page |
 | **Chat** | Talk to a model |
 | **Knowledge Base** | Your own documents |
-| **Development** | Development Mode ([read this first](privacy-and-data.md#development-mode-and-its-limits)) |
-| **Models → Installed** | Models you already have |
+| **Models → Installed** | Models you already have, and importing a `.gguf` you already own |
 | **Models → Recommendations** | **The advisor** — what fits your hardware |
 | **Models → Loaded** | What's in memory now, and eject |
+| **Settings → Node Settings** | Most settings, including voice and the local model proxy |
+| **Settings → Cloud Settings** | Optional external providers |
+| **Settings → Diagnostics** | Export a bug report |
+| **Automation → Commands** | Your own slash commands — a saved prompt you send in chat with one word |
 | **Automation → Agents** | Configurable assistants |
 | **Automation → Skills** | Loadable agent capabilities |
 | **Automation → Custom tools** | HTTP and host-command tools you define for agents (advanced and high-risk) |
@@ -28,9 +31,11 @@ click the item inside. Written here as `Group → Item`.
 | **Automation → Tools** | Available tools |
 | **Preview → Open Canvas** | Visual workflow builder (experimental) |
 | **Preview → Image Generation** | Local image generation |
-| **Settings → Node Settings** | Most settings, including voice |
-| **Settings → Cloud Settings** | Optional external providers |
-| **Settings → Diagnostics** | Export a bug report |
+| **Preview → Development** | Development Mode ([read this first](privacy-and-data.md#development-mode-and-its-limits)) |
+| **Benchmarks** | Compare models on one task of your own ([what it does](features.md#benchmarks)) |
+| **Training → Datasets** | Build a training set with a local model, and review every sample |
+| **Training → Training** | Fine-tune a model on it — **Linux + NVIDIA only** ([what it does](features.md#fine-tuning-training)) |
+| **Training → Comparisons** | Score the original model against your tuned one |
 | **Invocations** / **Usage** | History and local token accounting |
 
 > Looking for a **"Model Advisor"**? It is called **Models → Recommendations**.

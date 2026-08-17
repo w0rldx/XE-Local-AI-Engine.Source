@@ -14,6 +14,8 @@
 | Primary evidence | Repository implementation, tests, configuration, scripts, and documentation at the frozen baseline |
 | Excluded evidence | Production telemetry, host configuration, identity-provider records, release transcripts, incident records, restore exercises, access reviews, and control-owner attestations |
 
+The frozen baseline hash belongs to the pre-consolidation history and no longer resolves in this repository, which is now the single home for source and releases (see `docs/agent-knowledge.md`, “Consolidated to one repo.”). It identifies the reviewed snapshot; it is not a commit you can check out here.
+
 The source paths named in the chapters are internal traceability references. They identify where a statement was checked; they are not evidence assumed to be available to the recipient.
 
 ## How to read control statements
