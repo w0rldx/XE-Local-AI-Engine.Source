@@ -136,19 +136,8 @@ public sealed class GetBenchmarkRunEndpoint(IBenchmarkStore store)
             return;
         }
 
-        // The detail view is the only place the verdict is decrypted: a list of runs must not decrypt one blob per row.
-        await Send.OkAsync(run.ToDetail(await ReadVerdictAsync(run, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
-    }
-
-    private async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(BenchmarkRunRecord run, CancellationToken ct)
-    {
-        if (run.Judge?.AttemptId is not { } attemptId)
-        {
-            return null;
-        }
-
-        var attempt = await _store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
-        return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
+        // A detail response is the only place the verdict is decrypted: a list of runs must not decrypt one blob per row.
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
     }
 }
 
@@ -179,10 +168,11 @@ public sealed class DeleteBenchmarkRunEndpoint(IBenchmarkStore store)
     }
 }
 
-public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation)
+public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, IBenchmarkStore store)
     : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
     private readonly IBenchmarkCancellationService _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
+    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -197,7 +187,7 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
         try
         {
             var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct).ConfigureAwait(false);
-            await Send.OkAsync(run.ToDetail(), ct).ConfigureAwait(false);
+            await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
         {
@@ -233,7 +223,7 @@ public sealed class ScoreBenchmarkRunEndpoint(IBenchmarkStore store)
         try
         {
             var run = await _store.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.OkAsync(run.ToDetail(), ct).ConfigureAwait(false);
+            await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
         {
@@ -261,7 +251,7 @@ public sealed class ClearBenchmarkRunScoreEndpoint(IBenchmarkStore store)
         try
         {
             var run = await _store.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.OkAsync(run.ToDetail(), ct).ConfigureAwait(false);
+            await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
         {
@@ -292,7 +282,7 @@ public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService project
             _ = await _projects.RejudgeRunAsync(req.RunId, req.ExpectedVersion, req.Force, ct).ConfigureAwait(false);
             var run = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false)
                       ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-            await Send.OkAsync(run.ToDetail(), ct).ConfigureAwait(false);
+            await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
         {

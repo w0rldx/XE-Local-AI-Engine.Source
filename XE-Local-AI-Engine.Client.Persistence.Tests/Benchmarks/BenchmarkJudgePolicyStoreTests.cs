@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -477,6 +478,233 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonJudgeFailed, failed.RankExclusionReason);
     }
 
+    [Test]
+    public async Task ActivatePolicy_WithACohortSeed_EnqueuesEveryEligibleRunInTheNewGeneration()
+    {
+        await using var context = await CreateDatabaseAsync("activate-cohort.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var eligible = new List<Guid>();
+        for (var index = 0; index < 3; index++)
+        {
+            eligible.Add((await SucceedRunWithoutJudgeRuntimeAsync(store, project.Id).ConfigureAwait(false)).Id);
+        }
+
+        var ineligible = await FailRunAsync(store, project.Id).ConfigureAwait(false);
+
+        var activation = await store.ActivateJudgePolicyAsync(project.Id,
+                                        await CurrentVersionAsync(store, project.Id).ConfigureAwait(false),
+                                        PolicyB,
+                                        HashB,
+                                        Seed())
+                                    .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3, activation.SucceededRunIds.Count, "A cohort reset covers the complete eligible set, never a subset.");
+        foreach (var runId in eligible)
+        {
+            var attempts = await ReadAttemptsAsync(context, runId).ConfigureAwait(false);
+            AssertEx.Equal(expected: 2, attempts.Count, "The eligible run keeps its history and gains exactly one attempt.");
+            AssertEx.Equal(BenchmarkJudgeAttemptStatus.Queued, attempts[^1].Status);
+            AssertEx.Equal(activation.Revision.Id, attempts[^1].PolicyRevisionId);
+            AssertEx.Equal(activation.Revision.CohortGeneration, attempts[^1].CohortGeneration, "Every attempt of the reset belongs to one generation.");
+            AssertEx.Equal(attempts[^1].Id, AssertEx.NotNull(await store.GetRunAsync(runId).ConfigureAwait(false)).Judge?.AttemptId);
+        }
+
+        AssertEx.Empty(await ReadAttemptsAsync(context, ineligible.Id).ConfigureAwait(false),
+            "A run without stored output can never be judged, so it stays out of the cohort.");
+        context.ChangeTracker.Clear();
+        AssertEx.Equal(expected: 3,
+            await context.BenchmarkWorkItems.AsNoTracking()
+                         .CountAsync(entity => entity.Kind == BenchmarkWorkKind.Judge && entity.Status == BenchmarkWorkStatus.Queued)
+                         .ConfigureAwait(false),
+            "Each enqueued attempt carries its own queued work item.");
+    }
+
+    [Test]
+    public async Task ActivatePolicy_WithACohortSeed_WhenTheCommitFails_RollsBackTheResetToo()
+    {
+        var interceptor = new FailingSaveInterceptor();
+        await using var context = await CreateDatabaseAsync("activate-cohort-rollback.sqlite", interceptor).ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await SucceedRunWithoutJudgeRuntimeAsync(store, project.Id).ConfigureAwait(false);
+        var version = await CurrentVersionAsync(store, project.Id).ConfigureAwait(false);
+
+        // Fails the save that stores the attempts, after the staged save that created the new revision: the whole
+        // activation is one transaction, so a partially enqueued cohort must not survive it.
+        interceptor.FailAfter(saves: 1);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            store.ActivateJudgePolicyAsync(project.Id, version, PolicyB, HashB, Seed())).ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        AssertEx.Equal(expected: 1, (await store.ListJudgePolicyRevisionsAsync(project.Id).ConfigureAwait(false)).Count, "The new revision rolled back with the attempts.");
+        var current = AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false));
+        AssertEx.Equal(revision.Id, current.Id, "The pointer never moved.");
+        AssertEx.Equal(revision.CohortGeneration, current.CohortGeneration, "The cohort was not reset.");
+        AssertEx.Equal(version, await CurrentVersionAsync(store, project.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, (await ReadAttemptsAsync(context, run.Id).ConfigureAwait(false)).Count, "Attempts are all-or-nothing with the reset.");
+    }
+
+    [Test]
+    public async Task BeginProjectRejudge_WithACohortSeed_EnqueuesTheSetAndRefusesAStaleRevision()
+    {
+        await using var context = await CreateDatabaseAsync("rejudge-cohort.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await SucceedRunWithoutJudgeRuntimeAsync(store, project.Id).ConfigureAwait(false);
+
+        var version = await CurrentVersionAsync(store, project.Id).ConfigureAwait(false);
+        var stale = await AssertEx.ThrowsAsync<BenchmarkJudgePolicyChangedException>(() =>
+                                      store.BeginProjectRejudgeAsync(project.Id,
+                                          version,
+                                          new BenchmarkJudgeAttemptSeed(Guid.NewGuid(), new ReadOnlyMemory<byte>(JudgeRuntime))))
+                                  .ConfigureAwait(false);
+        AssertEx.True(stale.Message.Length > 0, "The refusal must say why.");
+        AssertEx.Equal(version, await CurrentVersionAsync(store, project.Id).ConfigureAwait(false), "A refused re-judge writes nothing.");
+        AssertEx.Equal(expected: 1, (await ReadAttemptsAsync(context, run.Id).ConfigureAwait(false)).Count, "A stale runtime enqueues nothing.");
+
+        var rejudge = await store.BeginProjectRejudgeAsync(project.Id,
+                                     await CurrentVersionAsync(store, project.Id).ConfigureAwait(false),
+                                     new BenchmarkJudgeAttemptSeed(revision.Id, new ReadOnlyMemory<byte>(JudgeRuntime)))
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, rejudge.SucceededRunIds.Count);
+        AssertEx.Equal(revision.CohortGeneration + 1, rejudge.Revision.CohortGeneration);
+        var attempts = await ReadAttemptsAsync(context, run.Id).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, attempts.Count);
+        AssertEx.Equal(BenchmarkJudgeAttemptStatus.Queued, attempts[^1].Status);
+        AssertEx.Equal(rejudge.Revision.CohortGeneration, attempts[^1].CohortGeneration);
+    }
+
+    [Test]
+    public async Task CreateProject_WithAJudgePolicy_ActivatesItInTheSameTransaction()
+    {
+        await using var context = await CreateDatabaseAsync("create-with-judge.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+
+        var project = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput(PolicyA, HashA)).ConfigureAwait(false);
+
+        AssertEx.True(project.JudgeEnabled, "A project created with a judge is never persisted with judging off.");
+        var current = AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false));
+        AssertEx.Equal(HashA, current.PolicyHash);
+        AssertEx.Equal(project.CurrentJudgePolicyRevisionId, current.Id);
+        AssertEx.Equal(expected: 1, project.Version, "Creation is one write, so it is version one.");
+    }
+
+    [Test]
+    public async Task CreateProject_WhenTheJudgePolicyIsRejected_PersistsNoProjectAtAll()
+    {
+        await using var context = await CreateDatabaseAsync("create-with-judge-rollback.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var input = NewProject();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            store.CreateProjectAsync(input, new BenchmarkJudgePolicyChangeInput(PolicyA, "not-a-policy-hash"))).ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        AssertEx.Null(await store.GetProjectAsync(input.Id).ConfigureAwait(false), "A retry must not have to work around a half-created project.");
+        AssertEx.Empty(await store.ListJudgePolicyRevisionsAsync(input.Id).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task UpdateProject_WithAJudgeChange_AppliesBothHalvesOrNeither()
+    {
+        await using var context = await CreateDatabaseAsync("update-with-judge.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var created = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput(PolicyA, HashA)).ConfigureAwait(false);
+
+        var renamed = await store.UpdateProjectAsync(created.Id,
+                                    created.Version,
+                                    NewProject(created.Id) with
+                                    {
+                                        Name = "Renamed"
+                                    },
+                                    new BenchmarkJudgePolicyChangeInput(PolicyB, HashB))
+                                .ConfigureAwait(false);
+
+        AssertEx.Equal("Renamed", renamed.Name);
+        AssertEx.Equal(HashB, AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(created.Id).ConfigureAwait(false)).PolicyHash);
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            store.UpdateProjectAsync(created.Id,
+                renamed.Version,
+                NewProject(created.Id) with
+                {
+                    Name = "Rolled back"
+                },
+                new BenchmarkJudgePolicyChangeInput(PolicyA, "not-a-policy-hash"))).ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        var unchanged = AssertEx.NotNull(await store.GetProjectAsync(created.Id).ConfigureAwait(false));
+        AssertEx.Equal("Renamed", unchanged.Name, "A rejected judge change takes the field edit down with it.");
+        AssertEx.Equal(renamed.Version, unchanged.Version);
+        AssertEx.Equal(HashB, AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(created.Id).ConfigureAwait(false)).PolicyHash);
+    }
+
+    [Test]
+    public async Task UpdateProject_WithADisablingChange_TurnsJudgingOffWithTheEdit()
+    {
+        await using var context = await CreateDatabaseAsync("update-disables-judge.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var created = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput(PolicyA, HashA)).ConfigureAwait(false);
+
+        var updated = await store.UpdateProjectAsync(created.Id, created.Version, NewProject(created.Id), BenchmarkJudgePolicyChangeInput.Disabled).ConfigureAwait(false);
+
+        AssertEx.False(updated.JudgeEnabled);
+        AssertEx.Null(await store.GetCurrentJudgePolicyRevisionAsync(created.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, (await store.ListJudgePolicyRevisionsAsync(created.Id).ConfigureAwait(false)).Count, "Revisions are history and stay.");
+    }
+
+    private static BenchmarkJudgeAttemptSeed Seed() =>
+        new(null, new ReadOnlyMemory<byte>(JudgeRuntime));
+
+    /// <summary>
+    ///     A succeeded run whose automatic judging failed for want of a runtime: eligible for a cohort reset, and
+    ///     terminal, so the reset is not refused for an active attempt.
+    /// </summary>
+    private static async Task<BenchmarkRunRecord> SucceedRunWithoutJudgeRuntimeAsync(BenchmarkStore store, Guid projectId)
+    {
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
+        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        return await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version)).ConfigureAwait(false);
+    }
+
+    private static async Task<BenchmarkRunRecord> FailRunAsync(BenchmarkStore store, Guid projectId)
+    {
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
+        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        return await store.MarkPrimaryFailedAsync(run.Id, primary.Run.Version, "boom").ConfigureAwait(false);
+    }
+
+    /// <summary>Fails one save inside the store's transaction, so a test can assert the rollback covers everything.</summary>
+    private sealed class FailingSaveInterceptor : SaveChangesInterceptor
+    {
+        private int _skip = -1;
+
+        public void FailAfter(int saves) =>
+            _skip = saves;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_skip < 0)
+            {
+                return base.SavingChangesAsync(eventData, result, cancellationToken);
+            }
+
+            if (_skip-- == 0)
+            {
+                _skip = -1;
+                throw new InvalidOperationException("Injected save failure.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
     private static BenchmarkLaunchReceiptCommand Receipt() =>
         new("{}", "{}", new string('e', count: 64), new string('r', count: 64), "identity", "cpu", null, null,
             new string('x', count: 64), false, "auto");
@@ -572,6 +800,14 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileName) =>
         await CreateDatabaseAsync(GetDatabasePath(fileName), create: true).ConfigureAwait(false);
+
+    private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileName, IInterceptor extraInterceptor)
+    {
+        var context = AgentDefinitionTestContextFactory.Create(GetDatabasePath(fileName), _keyHolder, extraInterceptor);
+        _ = await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        return context;
+    }
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string databasePath, bool create)
     {

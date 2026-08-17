@@ -5,10 +5,28 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 public interface IBenchmarkStore
 {
-    Task<BenchmarkProjectRecord> CreateProjectAsync(BenchmarkProjectInput input, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Creates the project and, with a <paramref name="judgePolicy" />, activates its judge in the SAME
+    ///     transaction: a project that persisted with judging off because a second transaction never ran is one an
+    ///     operator can only retry into a duplicate.
+    /// </summary>
+    Task<BenchmarkProjectRecord> CreateProjectAsync(BenchmarkProjectInput input,
+        BenchmarkJudgePolicyChangeInput? judgePolicy = null,
+        CancellationToken cancellationToken = default);
+
     Task<BenchmarkProjectRecord?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BenchmarkProjectRecord>> ListProjectsAsync(CancellationToken cancellationToken = default);
-    Task<BenchmarkProjectRecord> UpdateProjectAsync(Guid projectId, long expectedVersion, BenchmarkProjectInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Edits an unfrozen project and, with a <paramref name="judgePolicyChange" />, applies that judge change in
+    ///     the SAME transaction, for the same reason <see cref="CreateProjectAsync" /> does.
+    /// </summary>
+    Task<BenchmarkProjectRecord> UpdateProjectAsync(Guid projectId,
+        long expectedVersion,
+        BenchmarkProjectInput input,
+        BenchmarkJudgePolicyChangeInput? judgePolicyChange = null,
+        CancellationToken cancellationToken = default);
+
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
@@ -120,11 +138,18 @@ public interface IBenchmarkStore
     ///     resets nothing. Refused while any attempt of the project is Queued or Running, so a reset always covers the
     ///     complete eligible set.
     /// </summary>
-    /// <returns>The active revision, whether this call created it, and the runs the caller should re-judge.</returns>
+    /// <param name="cohortAttemptSeed">
+    ///     When supplied, one Queued attempt per eligible run is inserted in the same transaction as the reset, so a
+    ///     cohort is never left reset with only part of its set re-judged.
+    ///     <see cref="BenchmarkJudgeAttemptSeed.ExpectedJudgePolicyRevisionId" /> is ignored here — the hash already
+    ///     names the revision the runtime was resolved for.
+    /// </param>
+    /// <returns>The active revision, whether this call created it, and the eligible runs (enqueued, given a seed).</returns>
     Task<BenchmarkJudgePolicyActivation> ActivateJudgePolicyAsync(Guid projectId,
         long expectedProjectVersion,
         ReadOnlyMemory<byte> policyJson,
         string policyHash,
+        BenchmarkJudgeAttemptSeed? cohortAttemptSeed = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -172,11 +197,17 @@ public interface IBenchmarkStore
     /// <summary>
     ///     Opens a project-wide re-judge: refuses while any attempt of the project is active, resets the current
     ///     revision's cohort (reference key cleared, generation bumped), bumps the project version, and returns the
-    ///     succeeded runs the caller must enqueue attempts for. The reset and the eligible set are decided in one
-    ///     transaction, so a re-judge is never partial.
+    ///     succeeded runs. The reset and the eligible set are decided in one transaction, so a re-judge is never
+    ///     partial.
     /// </summary>
+    /// <param name="cohortAttemptSeed">
+    ///     When supplied, one Queued attempt per eligible run is inserted in the same transaction as the reset.
+    ///     <see cref="BenchmarkJudgeAttemptSeed.ExpectedJudgePolicyRevisionId" /> is honoured: a project that moved to
+    ///     another revision since the runtime was resolved throws <see cref="BenchmarkJudgePolicyChangedException" />.
+    /// </param>
     Task<BenchmarkJudgePolicyActivation> BeginProjectRejudgeAsync(Guid projectId,
         long expectedProjectVersion,
+        BenchmarkJudgeAttemptSeed? cohortAttemptSeed = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -186,6 +217,16 @@ public sealed record BenchmarkProjectInput(
     ReadOnlyMemory<byte> CoreTaskJson,
     int ContextTokens,
     Guid AgentDefinitionId);
+
+/// <summary>
+///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
+///     leaves the judge alone; an instance with a <see langword="null" /> <paramref name="PolicyJson" /> disables it.
+/// </summary>
+public sealed record BenchmarkJudgePolicyChangeInput(ReadOnlyMemory<byte>? PolicyJson, string? PolicyHash)
+{
+    /// <summary>Turns judging off as part of the project write.</summary>
+    public static BenchmarkJudgePolicyChangeInput Disabled { get; } = new(null, null);
+}
 
 public sealed record BenchmarkStartRunCommand(
     Guid RunId,
@@ -263,8 +304,8 @@ public sealed record BenchmarkJudgePolicyRevisionRecord(
     long CreatedAtUtc);
 
 /// <param name="SucceededRunIds">
-///     The project's succeeded runs with stored output, i.e. exactly what the caller should enqueue attempts for.
-///     Empty on a no-op activation.
+///     The project's succeeded runs with stored output — the complete eligible set. With a cohort attempt seed these
+///     are exactly the runs an attempt was enqueued for, in enqueue order. Empty on a no-op activation.
 /// </param>
 public sealed record BenchmarkJudgePolicyActivation(
     BenchmarkJudgePolicyRevisionRecord Revision,

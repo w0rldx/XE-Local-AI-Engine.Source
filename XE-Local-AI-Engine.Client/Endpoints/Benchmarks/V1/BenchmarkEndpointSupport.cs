@@ -11,6 +11,24 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 /// </summary>
 internal static class BenchmarkEndpointSupport
 {
+    /// <summary>
+    ///     The run's current judge verdict, decrypted, or null when it has no attempt or no stored result. EVERY
+    ///     endpoint that returns the run detail shape reads it here: a mutation response that skipped it would render
+    ///     as "not judged" for a run whose GET shows a full verdict.
+    /// </summary>
+    public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(IBenchmarkStore store, BenchmarkRunRecord run, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.Judge?.AttemptId is not { } attemptId)
+        {
+            return null;
+        }
+
+        var attempt = await store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
+        return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
+    }
+
     public static IResult Error(Exception exception) =>
         exception switch
         {
