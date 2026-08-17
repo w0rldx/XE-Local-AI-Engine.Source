@@ -556,7 +556,7 @@ public sealed class NodeChatStreamService(
         // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
         // conversation that will be rendered or re-persisted.
         var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
-                           ?? throw new InvalidOperationException("The node chat conversation was not found.");
+                           ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
 
         return new ChatTurnLoad(conversation, persistedSelectedPath ?? conversation.SelectedPath);
     }
