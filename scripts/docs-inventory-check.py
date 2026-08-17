@@ -160,12 +160,18 @@ def check_wiki_pages_linked(root: Path) -> CheckResult:
 
 
 def check_solution_projects(root: Path) -> CheckResult:
-    """Every project directory enrolled in the solution is named in 02-project-layout.md."""
+    """Every project (by .csproj name) enrolled in the solution is named in 02-project-layout.md."""
     check = "solution-projects"
     solution = read_text(root, SOLUTION_FILE)
-    # Paths in the .slnx mix both separators (`A/A.csproj` and `A\A.csproj`); only the leading
-    # directory is the project's identity in the layout page.
-    names = (re.split(r"[\\/]", match.group("path"))[0] for match in SOLUTION_PROJECT_RE.finditer(solution))
+    # Paths in the .slnx mix both separators (`A/A.csproj` and `A\A.csproj`). The project's identity is the
+    # project file's own name (its stem), never the leading directory: a project enrolled *beneath* an already
+    # documented directory (`Client/Plugins/NewPlugin.csproj`) must still be caught. Solution items that are
+    # not project files (`Directory.Build.props`, `README.md`, ...) are skipped.
+    names = (
+        re.split(r"[\\/]", match.group("path"))[-1].removesuffix(".csproj")
+        for match in SOLUTION_PROJECT_RE.finditer(solution)
+        if match.group("path").endswith(".csproj")
+    )
     inventory = require_non_empty(check, SOLUTION_FILE.as_posix(), names)
     return build_result(check, PROJECT_LAYOUT_PAGE, read_text(root, PROJECT_LAYOUT_PAGE), inventory)
 
