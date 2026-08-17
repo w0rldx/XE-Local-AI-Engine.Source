@@ -3323,7 +3323,7 @@ public sealed class NodeChatStreamServiceTests
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
                                    .ClassifyAsync(
-                                       Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
+                                       Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
                                        Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
@@ -3617,7 +3617,7 @@ public sealed class NodeChatStreamServiceTests
     {
         var resolved = capabilities.Length > 0 ? capabilities : ["completion", "tools", "thinking"];
         var service = Substitute.For<IModelClassificationService>();
-        service.ClassifyAsync(Arg.Any<IEnumerable<(string ModelName, string? Digest)>>(), Arg.Any<CancellationToken>())
+        service.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
                {
                    var models = callInfo.Arg<IEnumerable<(string ModelName, string? Digest)>>();

@@ -79,9 +79,9 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<(string MarkerId, SandboxProcessMarker Marker)> ReadAll()
+    public IReadOnlyList<SandboxMarkerEntry> ReadAll()
     {
-        var markers = new List<(string, SandboxProcessMarker)>();
+        var markers = new List<SandboxMarkerEntry>();
 
         try
         {
@@ -95,7 +95,7 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
                 var marker = TryRead(path);
                 if (marker is not null)
                 {
-                    markers.Add((Path.GetFileNameWithoutExtension(path), marker));
+                    markers.Add(new SandboxMarkerEntry(Path.GetFileNameWithoutExtension(path), marker));
                 }
             }
         }

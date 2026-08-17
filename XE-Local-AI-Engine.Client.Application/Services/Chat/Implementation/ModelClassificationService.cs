@@ -21,7 +21,7 @@ internal sealed class ModelClassificationService(
 
     private readonly IModelClassificationStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
-    public async Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(IEnumerable<(string ModelName, string? Digest)> models,
+    public async Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(IEnumerable<ModelIdentity> models,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(models);

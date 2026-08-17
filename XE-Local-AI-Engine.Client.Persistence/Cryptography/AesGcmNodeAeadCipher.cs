@@ -19,7 +19,7 @@ public sealed class AesGcmNodeAeadCipher : INodeAeadCipher
     public int TagSize => TagLength;
 
     /// <inheritdoc />
-    public (byte[] Ciphertext, byte[] Tag) Encrypt(ReadOnlySpan<byte> key,
+    public AeadCiphertext Encrypt(ReadOnlySpan<byte> key,
         ReadOnlySpan<byte> nonce,
         ReadOnlySpan<byte> plaintext,
         ReadOnlySpan<byte> associatedData)
@@ -30,7 +30,7 @@ public sealed class AesGcmNodeAeadCipher : INodeAeadCipher
         using var aesGcm = new AesGcm(key, TagLength);
         aesGcm.Encrypt(nonce, plaintext, ciphertext, tag, associatedData);
 
-        return (ciphertext, tag);
+        return new AeadCiphertext(ciphertext, tag);
     }
 
     /// <inheritdoc />

@@ -159,7 +159,7 @@ public sealed class ChatTurnResolver(
         // default rather than asserting a matrix for a model that could not be classified. IsCloud feeds ONLY the
         // node-local private-data gates here (attachments + knowledge/file tools) — thinking/tools are the separate first
         // two tuple slots — so failing IsCloud closed does not disturb reasoning or tool-capability detection.
-        var (routesToCloud, routingFaulted) = ClassifyCloudRouting(activeModel);
+        var (routesToCloud, routingFaulted) = CloudRoutingClassifier.Classify(activeCloudChatClientFactory, logger, activeModel);
         if (routesToCloud)
         {
             return routingFaulted
@@ -190,7 +190,7 @@ public sealed class ChatTurnResolver(
         }
 
         var classifications = await modelClassificationService
-                                    .ClassifyAsync([(activeModel, null)], cancellationToken)
+                                    .ClassifyAsync([new ModelIdentity(activeModel, Digest: null)], cancellationToken)
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(activeModel, out var classification))
         {
@@ -205,25 +205,6 @@ public sealed class ChatTurnResolver(
             IsCloud: false);
     }
 
-    /// <summary>
-    ///     Classifies whether <paramref name="activeModel" /> would ROUTE to a cloud provider, reading the cloud factory's
-    ///     shared short-TTL routing snapshot (the same source the send path routes from) so classification and routing
-    ///     cannot diverge. Returns <c>RoutesToCloud</c> plus a <c>Faulted</c> flag: on any snapshot read failure the
-    ///     result FAILS CLOSED (<c>RoutesToCloud: true, Faulted: true</c>) so the private-data gates withhold rather than
-    ///     leak, mirroring <see cref="ModelCapabilityResolver" /> — change both together.
-    /// </summary>
-    private (bool RoutesToCloud, bool Faulted) ClassifyCloudRouting(string activeModel)
-    {
-        try
-        {
-            return (activeCloudChatClientFactory.IsCloudProviderSelected(activeModel), Faulted: false);
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception, "Cloud routing for '{Model}' could not be resolved; failing closed to cloud for the private-data gate.", activeModel);
-            return (RoutesToCloud: true, Faulted: true);
-        }
-    }
 
     /// <summary>
     ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or a degraded
