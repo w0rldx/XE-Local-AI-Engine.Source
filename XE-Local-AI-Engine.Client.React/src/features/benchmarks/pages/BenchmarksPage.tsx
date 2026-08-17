@@ -18,6 +18,7 @@ import {
 	IconFlask,
 	IconLock,
 	IconPlus,
+	IconLayoutGrid,
 	IconRefresh,
 	IconRocket,
 	IconScale,
@@ -36,6 +37,8 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
+import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
@@ -47,6 +50,7 @@ import {
 	isUnsupportedKvCacheTypeError,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
+import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
@@ -58,6 +62,7 @@ import {
 	useRejudgeBenchmarkProject,
 	useRejudgeBenchmarkRun,
 	useStartBenchmarkRun,
+	useStartBenchmarkRunBatch,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
@@ -97,6 +102,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
 	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+	const [matrixOpen, setMatrixOpen] = useState(false);
+	const [matrixRejections, setMatrixRejections] = useState<BenchmarkBatchRejection[]>([]);
 	const projectQuery = useBenchmarkProject(selectedProjectId);
 	const runsQuery = useBenchmarkRuns(selectedProjectId);
 	const modelsQuery = useEligibleBenchmarkModels(projectQuery.data?.contextTokens);
@@ -110,6 +117,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const rejudgeRun = useRejudgeBenchmarkRun();
 	const deleteRun = useDeleteBenchmarkRun();
 	const startRun = useStartBenchmarkRun();
+	const startBatch = useStartBenchmarkRunBatch();
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
 
 	useEffect(() => {
@@ -309,6 +317,28 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			},
 		);
 	};
+	// One request for the whole matrix. The node answers per cell, so a refused combination is reported in the dialog
+	// beside the ones that started rather than failing everything the operator picked.
+	const startMatrix = (selection: BenchmarkMatrixSelection): void => {
+		if (!detail) {
+			return;
+		}
+		startBatch.mutate(
+			{ projectId: detail.id, expectedProjectVersion: detail.version, ...selection },
+			{
+				onSuccess: (result) => {
+					setMatrixRejections(result.rejected);
+					if (result.startedRunIds[0]) {
+						selectRun(result.startedRunIds[0]);
+					}
+					if (result.rejected.length === 0) {
+						setMatrixOpen(false);
+					}
+				},
+				onError: (error) => toast.error(startRunErrorMessage(error)),
+			},
+		);
+	};
 	const removeRun = (run: BenchmarkRunSummary): void => {
 		deleteRun.mutate(run, {
 			onError: (error) =>
@@ -496,6 +526,17 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 									>
 										{t("pages.benchmarks.run.start", "Start run")}
 									</Button>
+									<Button
+										variant="default"
+										leftSection={<IconLayoutGrid size={16} />}
+										onClick={() => {
+											setMatrixRejections([]);
+											setMatrixOpen(true);
+										}}
+										data-testid="benchmark-open-matrix"
+									>
+										{t("pages.benchmarks.matrix.open", "Batch runs…")}
+									</Button>
 								</Group>
 							</Stack>
 						) : !projectQuery.isLoading ? (
@@ -555,6 +596,22 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					isSaving={createProject.isPending || updateProject.isPending || updateJudge.isPending}
 					onSubmit={saveProject}
 					onCancel={() => setEditorMode(null)}
+				/>
+			</DialogShell>
+
+			<DialogShell
+				opened={matrixOpen && detail !== undefined}
+				onClose={() => setMatrixOpen(false)}
+				title={t("pages.benchmarks.matrix.title", "Batch benchmark runs")}
+				size="lg"
+				data-testid="benchmark-matrix-dialog"
+			>
+				<BenchmarkLaunchMatrix
+					models={modelsQuery.data ?? []}
+					rejected={matrixRejections}
+					isSubmitting={startBatch.isPending}
+					onSubmit={startMatrix}
+					onCancel={() => setMatrixOpen(false)}
 				/>
 			</DialogShell>
 

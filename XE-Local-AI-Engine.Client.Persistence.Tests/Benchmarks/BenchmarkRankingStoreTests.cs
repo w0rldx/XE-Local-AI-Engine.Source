@@ -196,6 +196,36 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Rank_ExcludesAWarmUpRunEvenWhenTheOperatorScoredIt()
+    {
+        await using var context = await CreateDatabaseAsync("rank-warmup.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+
+        // A warm-up is the ONE exclusion an operator score does not override: it exists to absorb the first-launch cost
+        // the repeats after it should not pay, so ranking it against them would rank the very thing it controls for.
+        var warmup = await ScoredRunAsync(store, project.Id, 95, warmup: true).ConfigureAwait(false);
+        var measured = await ScoredRunAsync(store, project.Id, 60).ConfigureAwait(false);
+
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+
+        var warmupRun = page.Items.Single(item => item.Id == warmup);
+        AssertEx.Null(warmupRun.Rank, "A warm-up never ranks.");
+        AssertEx.Null(warmupRun.QualityScore, "A warm-up carries no ranking value, even with an operator override.");
+        AssertEx.Equal(BenchmarkQualityScoreSources.None, warmupRun.QualityScoreSource);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonWarmup, warmupRun.Judge!.RankExclusionReason);
+        AssertEx.True(warmupRun.IsWarmup, "The flag round-trips through the list projection.");
+        AssertEx.Equal<int?>(0, warmupRun.RepeatIndex);
+        AssertEx.NotNull(warmupRun.RepeatGroupId?.ToString());
+
+        AssertEx.Equal<int?>(1, page.Items.Single(item => item.Id == measured).Rank,
+            "The measured run is rank 1 — the warm-up's higher score does not sit above it.");
+        AssertEx.Equal(expected: 1, AssertEx.NotNull(page.RankCohort).RankedCount);
+        AssertEx.Equal(expected: 1, page.RankCohort!.TotalScored,
+            "A warm-up must not inflate the denominator of \"n of m ranked\" with a run that can never be ranked.");
+    }
+
+    [Test]
     public async Task ListRuns_FiltersByModelGroupAndByScoredWithoutChangingTheRanking()
     {
         await using var context = await CreateDatabaseAsync("rank-filters.sqlite").ConfigureAwait(false);
@@ -206,7 +236,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         var unscored = await StartRunAsync(store, project.Id, Fingerprint('a')).ConfigureAwait(false);
 
         var sameModel = await store.ListRunsAsync(project.Id, skip: 0, take: 10, Fingerprint('a')).ConfigureAwait(false);
-        var scoredOnly = await store.ListRunsAsync(project.Id, skip: 0, take: 10, modelGroupKey: null, includeUnscored: false).ConfigureAwait(false);
+        var scoredOnly = await store.ListRunsAsync(project.Id, skip: 0, take: 10, modelContentFingerprint: null, includeUnscored: false).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 2, sameModel.TotalCount, "Same-model history counts only that model's runs.");
         AssertEx.True(sameModel.Items.Any(item => item.Id == scored) && sameModel.Items.Any(item => item.Id == unscored));
@@ -260,9 +290,10 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         Guid projectId,
         int score,
         string? fingerprint = null,
-        string stopReason = "stop")
+        string stopReason = "stop",
+        bool warmup = false)
     {
-        var runId = await StartRunAsync(store, projectId, fingerprint).ConfigureAwait(false);
+        var runId = await StartRunAsync(store, projectId, fingerprint, warmup).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
         var succeeded = await store.MarkPrimarySucceededAsync(PrimarySuccess(runId, primary.Run.Version) with
         {
@@ -272,12 +303,15 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         return runId;
     }
 
-    private static async Task<Guid> StartRunAsync(BenchmarkStore store, Guid projectId, string? fingerprint = null)
+    private static async Task<Guid> StartRunAsync(BenchmarkStore store, Guid projectId, string? fingerprint = null, bool warmup = false)
     {
         var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
         var run = await store.StartRunAsync(NewRun(project) with
         {
-            ModelContentFingerprint = fingerprint ?? Fingerprint('a')
+            ModelContentFingerprint = fingerprint ?? Fingerprint('a'),
+            RepeatGroupId = warmup ? Guid.NewGuid() : null,
+            RepeatIndex = warmup ? 0 : null,
+            IsWarmup = warmup
         }).ConfigureAwait(false);
         return run.Id;
     }

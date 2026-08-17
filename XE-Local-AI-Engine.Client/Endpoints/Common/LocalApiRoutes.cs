@@ -249,6 +249,10 @@ public static class LocalApiRoutes
         public const string ProjectById = "benchmarks/projects/{projectId}";
         public const string ProjectRuns = "benchmarks/projects/{projectId}/runs";
 
+        // The whole model x KV-type matrix in one call. Its own route rather than a flag on ProjectRuns: it answers
+        // 200 with a per-item outcome list, not the 202 + one run detail a single start answers with.
+        public const string ProjectRunsBatch = "benchmarks/projects/{projectId}/runs/batch";
+
         // One project's whole record as a downloadable file: the JSON export carries every run at full detail
         // (transcript and judge verdict included), the CSV the same runs as flat, spreadsheet-ready rows.
         public const string ProjectExport = "benchmarks/projects/{projectId}/export";

@@ -138,6 +138,8 @@ public sealed class BenchmarkExportEndpointTests
         ArrangeProject(context);
 
         // A comma in the model name is the case RFC 4180 exists for, and the quant tag rides after the last colon.
+        // The row also carries the throughput split and the repeat block, because a CSV that showed only the blended
+        // figure is the exact thing an operator would have to leave the tool to compute.
         ArrangeRuns(context,
             Run(BenchmarkPrimaryStatus.Succeeded, modelName: "owner/My,Model-GGUF:Q4_K_M") with
             {
@@ -145,7 +147,12 @@ public sealed class BenchmarkExportEndpointTests
                 TokensPerSecond = 41.5,
                 DurationMs = 12_340,
                 QualityScore = 73,
-                QualityScoreSource = BenchmarkQualityScoreSources.Judge
+                QualityScoreSource = BenchmarkQualityScoreSources.Judge,
+                Throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 500,
+                    GenerationTokens: 89, GenerationMs: 2000, CachedPromptTokens: 7),
+                RepeatGroupId = Guid.Parse("50000000-0000-0000-0000-000000000005"),
+                RepeatIndex = 2,
+                IsWarmup = false
             });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
@@ -157,11 +164,17 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal("text/csv", response.Content.Headers.ContentType?.MediaType);
         var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         AssertEx.Equal(expected: 2, lines.Length, "One header row and one run row.");
-        AssertEx.Equal("rank,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,totalTokens,"
-                       + "tokensPerSecond,durationMs,qualityScore,qualityScoreSource,judgeScore,userScore,rankExclusionReason,"
-                       + "launchIdentity,receiptHash",
+        AssertEx.Equal("rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
+                       + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
+                       + "generationTokens,generationTokensPerSecond,cachedPromptTokens,durationMs,qualityScore,qualityScoreSource,"
+                       + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash",
             lines[0]);
-        AssertEx.Equal("1,\"owner/My,Model-GGUF:Q4_K_M\",Q4_K_M,,,,,4096,succeeded,,512,41.5,12340,73,judge,,,,,", lines[1]);
+
+        // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
+        // quant is dropped from it and kept in its own column.
+        AssertEx.Equal("1,\"owner/My,Model-GGUF\",\"owner/My,Model-GGUF:Q4_K_M\",Q4_K_M,,,,,4096,succeeded,,"
+                       + "50000000-0000-0000-0000-000000000005,2,false,512,41.5,180.25,123,246,89,44.5,7,12340,73,judge,,,,,",
+            lines[1]);
     }
 
     private static void ArrangeProject(Context context) =>

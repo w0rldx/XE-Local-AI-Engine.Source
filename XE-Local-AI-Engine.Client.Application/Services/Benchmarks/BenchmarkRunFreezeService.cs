@@ -12,10 +12,32 @@ public interface IBenchmarkRunFreezeService
     ///     The KV-cache type the run asked for, or <see langword="null" /> for Auto (freeze picks). Must already be
     ///     canonical — see <see cref="BenchmarkKvCacheType.TryNormalize" />.
     /// </param>
-    Task<BenchmarkRunRecord> StartAsync(Guid projectId,
+    /// <param name="repeatCount">
+    ///     How many measured runs to enqueue, 1..<see cref="BenchmarkRunFreezeService.MaxRepeatCount" />. Everything is
+    ///     frozen ONCE and the repeats share that snapshot, so they differ only in what the machine did.
+    /// </param>
+    /// <param name="warmup">
+    ///     Prepends one more run at repeat index 0, flagged <c>IsWarmup</c>: never ranked, never counted in a group's
+    ///     statistics. It exists to absorb the first-launch costs (page cache cold, GPU clocks low) the measured
+    ///     repeats should not pay.
+    /// </param>
+    /// <returns>
+    ///     The created runs in queue order — the warm-up first when one was asked for, then repeats 1..N. Never empty.
+    /// </returns>
+    /// <remarks>
+    ///     A repeat is a fresh <c>llama-server</c> per run, by the unchanged design of the benchmark queue: each run
+    ///     claims the exclusive runtime, spawns, measures, and releases it. So repeats measure cold-launch to
+    ///     cold-launch variance INCLUDING model load, not steady-state variance within one process. That is deliberate
+    ///     and is what an operator comparing two models on this node actually experiences. And because the frozen
+    ///     sampling is deterministic (temperature 0, fixed seed), the ANSWER is the same across repeats — what repeats
+    ///     quantify is throughput jitter, not answer variance.
+    /// </remarks>
+    Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(Guid projectId,
         string primaryModelName,
         long expectedProjectVersion,
         string? kvCacheType = null,
+        int repeatCount = 1,
+        bool warmup = false,
         CancellationToken cancellationToken = default);
 }
 
@@ -56,13 +78,23 @@ public sealed class BenchmarkRunFreezeService(
     /// <inheritdoc cref="BenchmarkPhaseLaunchResolver.AutoReasonFallbackDisabled" />
     public const string AutoReasonFallbackDisabled = BenchmarkPhaseLaunchResolver.AutoReasonFallbackDisabled;
 
-    public async Task<BenchmarkRunRecord> StartAsync(Guid projectId,
+    /// <summary>The most repeats one request may enqueue. Ten cold launches of a large model is already ~an hour.</summary>
+    public const int MaxRepeatCount = 10;
+
+    public async Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(Guid projectId,
         string primaryModelName,
         long expectedProjectVersion,
         string? kvCacheType = null,
+        int repeatCount = 1,
+        bool warmup = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(primaryModelName);
+        if (repeatCount is < 1 or > MaxRepeatCount)
+        {
+            throw new BenchmarkValidationException($"Repeat count must be between 1 and {MaxRepeatCount}.");
+        }
+
         if (!BenchmarkKvCacheType.TryNormalize(kvCacheType, out var requestedKvCacheType))
         {
             throw new BenchmarkValidationException("The requested KV-cache type is not supported.");
@@ -136,21 +168,44 @@ public sealed class BenchmarkRunFreezeService(
                 dependencySet,
                 GetApplicationVersion(),
                 _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()));
-            var command = new BenchmarkStartRunCommand(Guid.NewGuid(),
-                project.Id,
-                expectedProjectVersion,
-                _snapshots.Serialize(snapshot),
-                primary.ModelName,
-                primary.Origin,
-                primary.ModelContentFingerprint,
-                eligible.AgentName,
-                eligible.AgentDefinitionVersion,
-                project.ContextTokens,
-                new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName, judgeModelName: null),
-                primaryLaunch.Intent);
-            var run = await _benchmarkStore.StartRunAsync(command, cancellationToken).ConfigureAwait(false);
+            var serializedSnapshot = _snapshots.Serialize(snapshot);
+            var guard = new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName,
+                judgeModelName: null);
+
+            // A group only exists when there is something to group: a plain single run keeps NULL in all three columns
+            // so nothing about the old shape changes for it.
+            var isGroup = repeatCount > 1 || warmup;
+            var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
+
+            // The work queue is FIFO by queue sequence, so inserting in this order is what makes the repeats run
+            // back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
+            // Each insert bumps the project version by exactly one, so the expected version for insert i is
+            // `expectedProjectVersion + i`: the CAS of the FIRST insert is the caller's, and every later one is this
+            // method's own predecessor. A conflict therefore still surfaces on the very first insert, before anything
+            // was created.
+            var runs = new List<BenchmarkRunRecord>(repeatCount + (warmup ? 1 : 0));
+            foreach (var repeatIndex in RepeatIndexes(repeatCount, warmup))
+            {
+                var command = new BenchmarkStartRunCommand(Guid.NewGuid(),
+                    project.Id,
+                    expectedProjectVersion + runs.Count,
+                    serializedSnapshot,
+                    primary.ModelName,
+                    primary.Origin,
+                    primary.ModelContentFingerprint,
+                    eligible.AgentName,
+                    eligible.AgentDefinitionVersion,
+                    project.ContextTokens,
+                    guard,
+                    primaryLaunch.Intent,
+                    repeatGroupId,
+                    isGroup ? repeatIndex : null,
+                    warmup && repeatIndex == 0);
+                runs.Add(await _benchmarkStore.StartRunAsync(command, cancellationToken).ConfigureAwait(false));
+            }
+
             _queueSignal?.Wake();
-            return run;
+            return runs;
         }
         finally
         {
@@ -160,6 +215,10 @@ public sealed class BenchmarkRunFreezeService(
             }
         }
     }
+
+    /// <summary>Warm-up is index 0 when requested; the measured repeats are always 1..N.</summary>
+    private static IEnumerable<int> RepeatIndexes(int repeatCount, bool warmup) =>
+        Enumerable.Range(warmup ? 0 : 1, repeatCount + (warmup ? 1 : 0));
 
     private static string GetApplicationVersion() =>
         typeof(BenchmarkRunFreezeService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
