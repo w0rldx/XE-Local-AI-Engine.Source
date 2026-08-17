@@ -230,6 +230,7 @@ describe("toBenchmarkRunSummary", () => {
 			generationTokens: null,
 			generationTokensPerSecond: null,
 			cachedPromptTokens: null,
+			segmentCount: null,
 		});
 	});
 
@@ -247,6 +248,7 @@ describe("toBenchmarkRunSummary", () => {
 				generationTokens: 89,
 				generationTokensPerSecond: 88,
 				cachedPromptTokens: 7,
+				segmentCount: 2,
 			}),
 		);
 
@@ -257,6 +259,7 @@ describe("toBenchmarkRunSummary", () => {
 			generationTokens: 89,
 			generationTokensPerSecond: 88,
 			cachedPromptTokens: 7,
+			segmentCount: 2,
 		});
 	});
 

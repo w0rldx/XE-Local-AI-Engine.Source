@@ -62,10 +62,10 @@ public sealed partial class InvocationRunner
 
         public int TotalReasoningBytes { get; set; }
 
-        // llama-server's own pp/tg timings, accumulated across the turn's segments. A tool-calling turn is several
-        // provider requests, each carrying its own `timings` object, so the token counts and durations SUM: the turn
-        // spent that much total time prefilling and that much decoding. TTFT is deliberately NOT summed —
-        // FirstOutputLatencyMs above is already one-shot on the first emitted chunk, which belongs to the first segment,
+        // llama-server's own pp/tg timings, accumulated across every provider REQUEST the turn made. A tool-calling
+        // turn is several requests, each carrying its own `timings` object, so the token counts and durations SUM: the
+        // turn spent that much total time prefilling and that much decoding. TTFT is deliberately NOT summed —
+        // FirstOutputLatencyMs above is already one-shot on the first emitted chunk, which belongs to the first request,
         // which is when the caller first saw output. Every field stays null for a provider that reports no timings.
         public int? PromptTokens { get; private set; }
 
@@ -77,7 +77,10 @@ public sealed partial class InvocationRunner
 
         public int? CachedPromptTokens { get; private set; }
 
-        /// <summary>Folds one segment's timings into the turn totals. A null segment (no timings reported) is a no-op.</summary>
+        /// <summary>How many provider requests reported timings — 1 for a plain turn, more once tools are called.</summary>
+        public int SegmentCount { get; private set; }
+
+        /// <summary>Folds one request's timings into the turn totals. A null reading (none reported) is a no-op.</summary>
         public void AddSegmentTimings(LlamaServerGenerationTimings? timings)
         {
             if (timings is null)
@@ -85,6 +88,7 @@ public sealed partial class InvocationRunner
                 return;
             }
 
+            SegmentCount++;
             PromptTokens = Add(PromptTokens, timings.PromptTokens);
             PromptMs = Add(PromptMs, timings.PromptMs);
             GenerationTokens = Add(GenerationTokens, timings.GenerationTokens);
@@ -100,7 +104,8 @@ public sealed partial class InvocationRunner
                 PromptMs,
                 GenerationTokens,
                 GenerationMs,
-                CachedPromptTokens);
+                CachedPromptTokens,
+                SegmentCount);
             return throughput.IsEmpty ? null : throughput;
         }
 

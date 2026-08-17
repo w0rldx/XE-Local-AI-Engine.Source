@@ -36,12 +36,12 @@ public interface IBenchmarkStore
     ///     columns are NOT read: a list of runs must not decrypt every snapshot, output and receipt on the way to
     ///     rendering a table.
     /// </summary>
-    /// <param name="modelGroupKey">Only runs of this model content fingerprint (same-model history), or null for all.</param>
+    /// <param name="modelContentFingerprint">Only runs of this exact model content, or null for all.</param>
     /// <param name="includeUnscored">False drops runs that carry no quality score at all.</param>
     Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
         int skip,
         int take,
-        string? modelGroupKey = null,
+        string? modelContentFingerprint = null,
         bool includeUnscored = true,
         CancellationToken cancellationToken = default);
 
@@ -249,7 +249,10 @@ public sealed record BenchmarkStartRunCommand(
     long AgentVersion,
     int RequestedContextTokens,
     IBenchmarkFreezeCommitGuard? FreezeCommitGuard = null,
-    BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null);
+    BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
+    Guid? RepeatGroupId = null,
+    int? RepeatIndex = null,
+    bool IsWarmup = false);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
@@ -287,16 +290,23 @@ public sealed record BenchmarkPrimarySuccessCommand(
 ///     alongside the blended figures the columns already carried, never instead of them.
 ///     <para>
 ///         Display only, by operator decision: no member of this record is a ranking input. <see cref="CachedPromptTokens" />
-///         above zero means <see cref="PromptMs" /> measured a partially cached prefill rather than a cold one.
+///         above zero means <see cref="PromptMs" /> measured a partially cached prefill rather than a cold one — it
+///         counts tokens served from the prompt cache across ALL of the turn's requests.
 ///     </para>
 /// </summary>
+/// <param name="SegmentCount">
+///     How many provider requests the turn made, i.e. how many readings the sums are made of. Null on runs recorded
+///     before the column existed; 1 for a plain turn; more once the agent called tools, because each tool round is
+///     another request that re-sends the conversation and prefills again.
+/// </param>
 public sealed record BenchmarkRunThroughput(
     double? TtftMs = null,
     int? PromptTokens = null,
     double? PromptMs = null,
     int? GenerationTokens = null,
     double? GenerationMs = null,
-    int? CachedPromptTokens = null)
+    int? CachedPromptTokens = null,
+    int? SegmentCount = null)
 {
     /// <summary>Prompt-processing throughput (pp) in tokens per second, or null when either input is absent.</summary>
     public double? PromptTokensPerSecond =>
@@ -433,7 +443,10 @@ public sealed record BenchmarkRunRecord(
     int? QualityScore = null,
     string? QualityScoreSource = null,
     int? Rank = null,
-    BenchmarkRunThroughput? Throughput = null);
+    BenchmarkRunThroughput? Throughput = null,
+    Guid? RepeatGroupId = null,
+    int? RepeatIndex = null,
+    bool IsWarmup = false);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
@@ -500,7 +513,8 @@ public sealed record BenchmarkLaunchReceiptCommand(
 /// <param name="RankExclusionReason">
 ///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked. One of <c>no-score</c>,
 ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
-///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>, <c>truncated</c>.
+///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>, <c>truncated</c>,
+///     <c>warmup</c>.
 /// </param>
 public sealed record BenchmarkRunJudgeView(
     string State,
@@ -555,6 +569,13 @@ public static class BenchmarkRunJudgeStates
     ///     ranked against complete ones, whatever the judge scored it. An operator score still overrides.
     /// </summary>
     public const string ReasonTruncated = "truncated";
+
+    /// <summary>
+    ///     A warm-up run. It is a real measurement, kept and shown, but it is exactly the first-launch cost the repeats
+    ///     after it were meant NOT to pay — ranking it against them would rank the thing being controlled for. Unlike
+    ///     every other reason here, an operator score does not override it: a warm-up is not a contender.
+    /// </summary>
+    public const string ReasonWarmup = "warmup";
 }
 
 /// <summary>

@@ -18,7 +18,11 @@ public sealed class AddBenchmarkRunThroughputBreakdownMigrationTests
         "prompt_ms",
         "generation_tokens",
         "generation_ms",
-        "cached_prompt_tokens"
+        "cached_prompt_tokens",
+        // AddBenchmarkRunSegmentCount: how many provider requests the sums above are made of. Added once a live run
+        // showed prompt + cached + generated summing exactly to the usage total — two requests, one recorded — so the
+        // request count is what makes the sums readable rather than merely plausible.
+        "segment_count"
     ];
 
     [Test]

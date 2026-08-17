@@ -28061,6 +28061,11 @@
             "format": "int32",
             "nullable": true
           },
+          "segmentCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "userScore": {
             "type": "integer",
             "format": "int32",

@@ -32,7 +32,8 @@ interface BenchmarkRunPaneProps {
 // no prefill/decode timings, and a row of dashes would read as a measurement of zero rather than as no measurement.
 function ThroughputBreakdown({ run }: { run: BenchmarkRunDetail }) {
 	const { t } = useTranslation();
-	const { ttftMs, promptTokens, promptTokensPerSecond, generationTokens, generationTokensPerSecond, cachedPromptTokens } = run.throughput;
+	const { ttftMs, promptTokens, promptTokensPerSecond, generationTokens, generationTokensPerSecond, cachedPromptTokens, segmentCount } =
+		run.throughput;
 	if (!hasThroughputBreakdown(run.throughput)) {
 		return null;
 	}
@@ -58,6 +59,13 @@ function ThroughputBreakdown({ run }: { run: BenchmarkRunDetail }) {
 					</Text>
 				))}
 			</Group>
+			{segmentCount !== null && segmentCount > 1 ? (
+				<Text size="xs" c="dimmed" data-testid="benchmark-throughput-segments">
+					{t("pages.benchmarks.metrics.segments", "Summed over {{count}} model requests — the agent called tools, and every round prefilled again.", {
+						count: segmentCount,
+					})}
+				</Text>
+			) : null}
 			{cachedPromptTokens !== null && cachedPromptTokens > 0 ? (
 				<Text size="xs" c="dimmed" data-testid="benchmark-throughput-cached">
 					{t(

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel.Primitives;
 using System.Collections;
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -3127,7 +3128,39 @@ public sealed class InvocationRunnerTests
                                                        && throughput.GenerationTokens == 89
                                                        && IsClose(throughput.GenerationMs, 1011.5)
                                                        && throughput.CachedPromptTokens == 7
+                                                       && throughput.SegmentCount == 1
                                                        && throughput.TimeToFirstTokenMs > 0));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenOneTurnMakesSeveralProviderRequests_SumsEveryReading()
+    {
+        // The live bug this exists for: a tool-calling turn is SEVERAL llama-server requests inside ONE
+        // RunStreamingAsync (FunctionInvokingChatClient owns that loop), and only the LAST request's timings were kept.
+        // A real run reported prompt 283 + cached 2346 + generated 1720 against a usage total of 4349 — those three
+        // summed to the total precisely because a second request had happened and the first had been thrown away.
+        // Every reading must fold in, and the request count must be visible so the sums can be read honestly.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: TwoRequestTimingsUpdates());
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Is<InvocationThroughput?>(throughput => throughput != null
+                                                       && throughput.PromptTokens == 40 + 283
+                                                       && IsClose(throughput.PromptMs, 12.5 + 456.5)
+                                                       && throughput.GenerationTokens == 89 + 1720
+                                                       && IsClose(throughput.GenerationMs, 200.25 + 1011.5)
+                                                       && throughput.CachedPromptTokens == 2346
+                                                       && throughput.SegmentCount == 2));
     }
 
     [Test]
@@ -3156,6 +3189,32 @@ public sealed class InvocationRunnerTests
     }
 
     private static bool IsClose(double? actual, double expected) => actual is { } value && Math.Abs(value - expected) < 0.0001;
+
+    /// <summary>
+    ///     One stream carrying TWO terminal readings, i.e. what a tool-calling turn looks like on the wire: the second
+    ///     request re-sends the conversation, so its prompt is mostly served from the prompt cache.
+    /// </summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> TwoRequestTimingsUpdates()
+    {
+        await Task.Yield();
+        yield return TimingsUpdate("first", cacheN: 0, promptN: 40, promptMs: 12.5, predictedN: 89, predictedMs: 200.25);
+        yield return TimingsUpdate("second", cacheN: 2346, promptN: 283, promptMs: 456.5, predictedN: 1720, predictedMs: 1011.5);
+    }
+
+    private static AgentResponseUpdate TimingsUpdate(string text, int cacheN, int promptN, double promptMs, int predictedN, double predictedMs)
+    {
+        var json = string.Create(CultureInfo.InvariantCulture,
+            $"{{\"id\":\"chunk\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\","
+            + $"\"choices\":[{{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{{}}}}],"
+            + $"\"timings\":{{\"cache_n\":{cacheN},\"prompt_n\":{promptN},\"prompt_ms\":{promptMs},"
+            + $"\"predicted_n\":{predictedN},\"predicted_ms\":{predictedMs}}}}}");
+        var chunk = ModelReaderWriter.Read<OpenAI.Chat.StreamingChatCompletionUpdate>(BinaryData.FromString(json))
+                    ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
+        return new AgentResponseUpdate(new ChatResponseUpdate(ChatRole.Assistant, text)
+        {
+            RawRepresentation = chunk
+        });
+    }
 
     /// <summary>
     ///     A two-chunk stream shaped like a real llama-server one: the timings ride the FINAL chunk only, on the OpenAI

@@ -3556,6 +3556,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	generationTokens?: number | null;
 	generationTokensPerSecond?: number | null;
 	cachedPromptTokens?: number | null;
+	segmentCount?: number | null;
 	userScore?: number | null;
 	lastStreamSequence?: number;
 	version?: number;

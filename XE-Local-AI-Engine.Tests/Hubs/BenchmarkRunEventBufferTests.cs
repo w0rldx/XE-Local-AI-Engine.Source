@@ -100,7 +100,8 @@ public sealed class BenchmarkRunEventBufferTests
             nameof(BenchmarkRunStreamPayload.PromptTokensPerSecond),
             nameof(BenchmarkRunStreamPayload.GenerationTokens),
             nameof(BenchmarkRunStreamPayload.GenerationTokensPerSecond),
-            nameof(BenchmarkRunStreamPayload.CachedPromptTokens)
+            nameof(BenchmarkRunStreamPayload.CachedPromptTokens),
+            nameof(BenchmarkRunStreamPayload.SegmentCount)
         };
 
         AssertEx.True(actual.SetEquals(expected),

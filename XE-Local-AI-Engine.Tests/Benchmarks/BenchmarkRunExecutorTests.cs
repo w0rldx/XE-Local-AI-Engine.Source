@@ -176,7 +176,8 @@ public sealed class BenchmarkRunExecutorTests
             PromptMs: 456.5,
             GenerationTokens: 89,
             GenerationMs: 1011.5,
-            CachedPromptTokens: 7);
+            CachedPromptTokens: 7,
+            SegmentCount: 2);
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
               .Returns(async call =>
@@ -208,6 +209,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal<int?>(89, measured.GenerationTokens);
         AssertEx.Equal<double?>(1011.5, measured.GenerationMs);
         AssertEx.Equal<int?>(7, measured.CachedPromptTokens);
+        AssertEx.Equal<int?>(2, measured.SegmentCount, "A tool-calling turn's request count must reach the store, or its sums cannot be read honestly.");
         AssertEx.Equal<double?>(89 * 1000d / 1011.5, persisted.TokensPerSecond,
             "tokens/second is decode throughput now, not the turn's total tokens over its wall clock.");
         // The blended numbers stay exactly as they were, so nothing downstream that already read them changes meaning.

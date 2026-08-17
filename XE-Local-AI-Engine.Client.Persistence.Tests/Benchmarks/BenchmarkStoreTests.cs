@@ -71,7 +71,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var run = await store.StartRunAsync(CreateRun(project));
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
         var throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
-            GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7);
+            GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 2);
 
         var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
             Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88, Throughput: throughput));
@@ -83,6 +83,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Equal<int?>(89, persisted.GenerationTokens);
         AssertEx.Equal<double?>(1011.5, persisted.GenerationMs);
         AssertEx.Equal<int?>(7, persisted.CachedPromptTokens);
+        AssertEx.Equal<int?>(2, persisted.SegmentCount);
         AssertEx.Equal<double?>(89 * 1000d / 1011.5, persisted.GenerationTokensPerSecond);
         AssertEx.Equal<double?>(123 * 1000d / 456.5, persisted.PromptTokensPerSecond);
 
@@ -93,6 +94,43 @@ public sealed class BenchmarkStoreTests : IDisposable
         var untimed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(second.Id, secondClaim.Run.Version,
             Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
         AssertEx.Null(untimed.Throughput, "An unmeasured run must stay unmeasured, never be given an invented split.");
+    }
+
+    [Test]
+    public async Task ListRuns_ProjectsTheThroughputSplitAndTheRepeatGroup()
+    {
+        // The LIST is what the runs table, the CSV export and the client-side repeat statistics all read. Its column
+        // projection deliberately skips the encrypted payloads — but skipping the throughput columns too left every
+        // row's pp/TTFT empty in exactly the three places that display them, while a single-run read showed them fine.
+        var databasePath = GetDatabasePath("list-projection.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var groupId = Guid.NewGuid();
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            RepeatGroupId = groupId,
+            RepeatIndex = 2,
+            IsWarmup = false
+        });
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88,
+            Throughput: new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5, GenerationTokens: 89,
+                GenerationMs: 1011.5, CachedPromptTokens: 7)));
+
+        var listed = (await store.ListRunsAsync(project.Id, skip: 0, take: 10)).Items.Single(item => item.Id == run.Id);
+
+        var throughput = AssertEx.NotNull(listed.Throughput);
+        AssertEx.Equal<double?>(180.25, throughput.TtftMs);
+        AssertEx.Equal<int?>(123, throughput.PromptTokens);
+        AssertEx.Equal<int?>(89, throughput.GenerationTokens);
+        AssertEx.Equal<int?>(7, throughput.CachedPromptTokens);
+        AssertEx.Equal<Guid?>(groupId, listed.RepeatGroupId);
+        AssertEx.Equal<int?>(2, listed.RepeatIndex);
+        AssertEx.False(listed.IsWarmup);
     }
 
     [Test]

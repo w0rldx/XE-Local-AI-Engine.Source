@@ -44,6 +44,9 @@ internal sealed record class BenchmarkRun
     public double? GenerationMs { get; set; }
     public int? CachedPromptTokens { get; set; }
 
+    /// <summary>How many provider requests the turn made; above 1 means the sums above span a tool-calling loop.</summary>
+    public int? SegmentCount { get; set; }
+
     /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
     ///     <c>benchmark_output_parts_json</c>.
@@ -52,6 +55,25 @@ internal sealed record class BenchmarkRun
 
     public long LastStreamSequence { get; set; }
     public int? UserScore { get; set; }
+
+    /// <summary>
+    ///     The repeat group this run belongs to, or <see langword="null" /> for a single run. Every run a batch of
+    ///     repeats created shares one id, so a reader can tell "three measurements of one launch" from "three
+    ///     unrelated runs that happen to name the same model".
+    /// </summary>
+    public Guid? RepeatGroupId { get; set; }
+
+    /// <summary>
+    ///     Position inside <see cref="RepeatGroupId" />: <c>0</c> is the warm-up run (only when one was requested),
+    ///     and the measured repeats are <c>1..N</c>. Null exactly when <see cref="RepeatGroupId" /> is null.
+    /// </summary>
+    public int? RepeatIndex { get; set; }
+
+    /// <summary>
+    ///     A warm-up run: measured and stored like any other, but never ranked and never counted in a group's
+    ///     statistics. Its whole purpose is to absorb the first-launch costs the runs after it should not pay for.
+    /// </summary>
+    public bool IsWarmup { get; set; }
 
     /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
     public Guid? CurrentJudgeAttemptId { get; set; }
