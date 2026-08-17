@@ -17,7 +17,7 @@ public sealed class ModelClassificationServiceTests
         var (service, store, ollama) = CreateService();
         StubDetails(ollama, "llama3.1", "completion", "tools");
 
-        var results = await service.ClassifyAsync([("llama3.1", "sha256:a")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("llama3.1", "sha256:a")]).ConfigureAwait(false);
 
         var result = results["llama3.1"];
         AssertEx.Equal(ModelKind.Chat, result.Kind);
@@ -39,7 +39,7 @@ public sealed class ModelClassificationServiceTests
         var (service, store, ollama) = CreateService();
         _ = await store.UpsertDetectedAsync("phi3", "sha256:same", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
 
-        var results = await service.ClassifyAsync([("phi3", "sha256:same")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("phi3", "sha256:same")]).ConfigureAwait(false);
 
         AssertEx.Equal(ModelKind.Chat, results["phi3"].Kind);
         // Record present with a matching digest is a cache hit — no /api/show call is issued.
@@ -53,7 +53,7 @@ public sealed class ModelClassificationServiceTests
         _ = await store.UpsertDetectedAsync("gemma", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
         StubDetails(ollama, "gemma", "embedding");
 
-        var results = await service.ClassifyAsync([("gemma", "sha256:new")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("gemma", "sha256:new")]).ConfigureAwait(false);
 
         // The digest moved, so the cache is stale and a fresh probe reclassifies the model.
         AssertEx.Equal(ModelKind.Embedding, results["gemma"].Kind);
@@ -71,7 +71,7 @@ public sealed class ModelClassificationServiceTests
         _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
         _ = await store.SetOverrideAsync("mistral", ModelKind.Embedding).ConfigureAwait(false);
 
-        var results = await service.ClassifyAsync([("mistral", "sha256:m")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("mistral", "sha256:m")]).ConfigureAwait(false);
 
         var result = results["mistral"];
         AssertEx.Equal(ModelKind.Embedding, result.Kind, "The override must win over the detected kind.");
@@ -89,7 +89,7 @@ public sealed class ModelClassificationServiceTests
               .Returns<OllamaModelDetails>(_ => throw new HttpRequestException("daemon offline"));
 
         // A new digest forces a probe, but the probe fails; the call must not throw and must keep the cached kind.
-        var results = await service.ClassifyAsync([("llava", "sha256:new")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("llava", "sha256:new")]).ConfigureAwait(false);
 
         AssertEx.Equal(ModelKind.Chat, results["llava"].Kind, "An offline probe falls back to the cached classification.");
     }
@@ -101,7 +101,7 @@ public sealed class ModelClassificationServiceTests
         ollama.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
               .Returns<OllamaModelDetails>(_ => throw new HttpRequestException("daemon offline"));
 
-        var results = await service.ClassifyAsync([("unseen", "sha256:x")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("unseen", "sha256:x")]).ConfigureAwait(false);
 
         var result = results["unseen"];
         AssertEx.Equal(ModelKind.Unknown, result.Kind, "An unclassifiable, uncached model resolves to Unknown.");
@@ -157,7 +157,7 @@ public sealed class ModelClassificationServiceTests
         await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
 
         // The next list lazily detects with the REAL live digest — exactly one probe across the whole reset+list flow.
-        var listed = await service.ClassifyAsync([("solar", "sha256:live")]).ConfigureAwait(false);
+        var listed = await service.ClassifyAsync([new ModelIdentity("solar", "sha256:live")]).ConfigureAwait(false);
 
         AssertEx.Equal(ModelKind.Embedding, listed["solar"].Kind, "The next list probes and surfaces the real detected kind.");
         await ollama.Received(1).ShowModelDetailsAsync("solar", Arg.Any<CancellationToken>()).ConfigureAwait(false);

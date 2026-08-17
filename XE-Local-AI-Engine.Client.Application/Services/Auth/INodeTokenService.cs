@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 public interface INodeTokenService
 {
-    (string AccessToken, DateTime ExpiresAtUtc) CreateAccessToken(NodeUser user, IEnumerable<string> roles);
+    AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles);
 
     string CreateRefreshTokenRaw();
 
