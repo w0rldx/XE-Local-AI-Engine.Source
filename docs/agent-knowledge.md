@@ -156,7 +156,7 @@ The **architecture tests are a real gate** — but because they are ordinary tes
 the code and fails when a member is missing from the `docs/wiki/` page that claims to enumerate it: every `MapHub<>`
 registration under `XE-Local-AI-Engine.Client/` and every nested `public static class` in `LocalApiRoutes.cs` against
 `09-api-and-hubs.md`, every directory under the React client's `src/features/` against `10-react-client.md`, every
-numbered wiki page against a markdown link in `Home.md`, and every project directory in `XE-Local-AI-Engine.slnx`
+numbered wiki page against a markdown link in `Home.md`, and every project (`.csproj` name) enrolled in `XE-Local-AI-Engine.slnx`
 against `02-project-layout.md`.
 
 The failure it prevents: a wiki page that still *reads* as a complete list while the code has moved on — drift that

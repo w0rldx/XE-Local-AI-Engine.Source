@@ -68,9 +68,13 @@ public static class LocalApiRoutes
 """
 
 SOLUTION_XML = """<Solution>
+    <Folder Name="/Solution Items/">
+        <Project Path="Directory.Build.props"/>
+    </Folder>
     <Folder Name="/Src/">
         <Project Path="Contoso.One/Contoso.One.csproj"/>
         <Project Path="Contoso.Two\\Contoso.Two.csproj"/>
+        <Project Path="Contoso.One/Plugins/Contoso.Nested.csproj"/>
     </Folder>
 </Solution>
 """
@@ -99,6 +103,7 @@ PROJECT_LAYOUT_MD = """# Project Layout
 
 - `Contoso.One/` — one
 - `Contoso.Two/` — two
+- `Contoso.One/Plugins/Contoso.Nested/` — nested project (`Contoso.Nested`)
 """
 
 
@@ -204,11 +209,21 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
         self.assertEqual(["09-api-and-hubs.md"], [item.name for item in result.missing])
 
-    def test_solution_projects_split_both_path_separators(self) -> None:
+    def test_solution_projects_use_the_project_file_stem_as_identity(self) -> None:
         result = MODULE.check_solution_projects(self.make_repo())
 
-        self.assertEqual(("Contoso.One", "Contoso.Two"), result.inventory)
+        # Both path separators, a project nested beneath an already documented directory (its own name must
+        # still be checked), and non-project solution items (skipped).
+        self.assertEqual(("Contoso.Nested", "Contoso.One", "Contoso.Two"), result.inventory)
         self.assertEqual((), result.missing)
+
+    def test_solution_projects_report_a_nested_project_missing_from_the_layout_page(self) -> None:
+        root = self.make_repo()
+        self.drop(root, "docs/wiki/02-project-layout.md", "Contoso.Nested")
+
+        result = MODULE.check_solution_projects(root)
+
+        self.assertEqual(["Contoso.Nested"], [item.name for item in result.missing])
 
     def test_solution_projects_report_a_project_missing_from_the_layout_page(self) -> None:
         root = self.make_repo()
