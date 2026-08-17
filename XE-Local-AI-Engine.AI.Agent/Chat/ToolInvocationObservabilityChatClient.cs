@@ -137,10 +137,10 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
     /// <summary>
     ///     Reduces a tool-call payload (arguments or result — potentially raw model-supplied PII/file contents) to a
     ///     safe correlation summary: the serialized UTF-8 byte length plus a truncated SHA-256 hash prefix. Never returns
-    ///     or logs the value itself. A non-serializable graph yields the sentinel <c>(-1, "unserializable")</c> rather
-    ///     than faulting the response stream.
+    ///     or logs the value itself. A non-serializable graph yields the sentinel <c>Length = -1</c> with the
+    ///     <c>"unserializable"</c> marker rather than faulting the response stream.
     /// </summary>
-    private static (int Length, string HashPrefix) SummarizePayload(object? value)
+    private static PayloadSummary SummarizePayload(object? value)
     {
         string serialized;
         try
@@ -151,16 +151,20 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         {
             // Observability is best-effort: a non-serializable graph (e.g. a reference cycle) must never fault the
             // response stream. Report a sentinel length and a fixed marker instead of a real length/hash.
-            return (-1, "unserializable");
+            return new PayloadSummary(-1, "unserializable");
         }
 
         var bytes = Encoding.UTF8.GetBytes(serialized);
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
 
-        return (bytes.Length, hash[..12]);
+        return new PayloadSummary(bytes.Length, hash[..12]);
     }
 
     // A requested tool call awaiting its result: the tool name (so the completion span need not re-read it) plus the
     // Stopwatch timestamp captured when the request was first observed.
     private readonly record struct RequestedCall(string Name, long StartTimestamp);
+
+    // A tool-call payload reduced to a loggable summary: serialized UTF-8 byte length plus a truncated SHA-256 hash
+    // prefix. Length is -1 when the payload could not be serialized.
+    private readonly record struct PayloadSummary(int Length, string HashPrefix);
 }
