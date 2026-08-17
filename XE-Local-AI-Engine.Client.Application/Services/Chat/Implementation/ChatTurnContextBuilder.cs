@@ -148,7 +148,7 @@ public sealed class ChatTurnContextBuilder(
     }
 
     /// <inheritdoc />
-    public async Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, CancellationToken cancellationToken = default)
+    public async Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, bool isRegeneratedTurn = false, CancellationToken cancellationToken = default)
     {
         var validation = KnowledgeQueryLimits.ValidateAndNormalize(query, out var normalizedQuery);
         if (validation != KnowledgeQueryValidation.Valid)
@@ -194,8 +194,17 @@ public sealed class ChatTurnContextBuilder(
         catch (Exception exception)
         {
             // Retrieval is a best-effort supplement: a failure (embedding provider down, connection error, etc.) must
-            // never fail the send. Log and proceed with no knowledge context.
-            logger.LogWarning(exception, "Knowledge-base grounding failed for the plain-chat turn; proceeding without it.");
+            // never fail the send or the rerun. Log and proceed with no knowledge context. The two sentences are kept
+            // distinct so a log search still separates a send from a regenerate.
+            if (isRegeneratedTurn)
+            {
+                logger.LogWarning(exception, "Knowledge-base grounding failed for the regenerated plain-chat turn; proceeding without it.");
+            }
+            else
+            {
+                logger.LogWarning(exception, "Knowledge-base grounding failed for the plain-chat turn; proceeding without it.");
+            }
+
             return null;
         }
     }

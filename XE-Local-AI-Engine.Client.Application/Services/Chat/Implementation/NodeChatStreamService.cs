@@ -766,7 +766,7 @@ public sealed class NodeChatStreamService(
             // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
             if (request.UseKnowledgeBase)
             {
-                var knowledge = await turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery, runCancellation.Token).ConfigureAwait(false);
+                var knowledge = await turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery, isRegeneratedTurn: false, runCancellation.Token).ConfigureAwait(false);
                 if (knowledge is not null)
                 {
                     knowledgeContext = knowledge.Message;

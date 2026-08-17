@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 internal interface IDevelopmentPatchEvidenceService
@@ -189,7 +190,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         }
         catch
         {
-            TryKill(process);
+            ProcessTermination.TryKill(process);
             throw;
         }
     }
@@ -296,22 +297,6 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         if (value is not null)
         {
             startInfo.Environment[name] = value;
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // The exact evidence command already exited.
-        }
-        catch (Win32Exception)
-        {
-            // Best-effort termination after a failed exact evidence export.
         }
     }
 

@@ -44,9 +44,10 @@ public interface IChatTurnContextBuilder
     ///     message alongside the provenance of the inlined hits. Returns <see langword="null" /> when grounding produces
     ///     nothing: a blank/oversized query, no matching chunks, an empty compose, or ANY retrieval failure — grounding
     ///     is a best-effort supplement and must never fail the turn. The caller applies the cloud-egress locality gate
-    ///     before calling.
+    ///     before calling. <paramref name="isRegeneratedTurn" /> only picks which of the two retrieval-failure warnings
+    ///     is logged, so a support read of the log still tells a send apart from a rerun.
     /// </summary>
-    Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, CancellationToken cancellationToken = default);
+    Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, bool isRegeneratedTurn = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The agent-mode pointer message naming the staged attachment paths, so a weak model reads the exact staged

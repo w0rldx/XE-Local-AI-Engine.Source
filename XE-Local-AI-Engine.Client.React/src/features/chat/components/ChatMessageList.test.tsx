@@ -118,7 +118,7 @@ describe("ChatMessageList failed-turn rendering", () => {
 	});
 });
 
-describe("ChatMessageList conversation-load failure (AUD4-13)", () => {
+describe("ChatMessageList conversation-load failure", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		Object.defineProperty(window, "matchMedia", {
