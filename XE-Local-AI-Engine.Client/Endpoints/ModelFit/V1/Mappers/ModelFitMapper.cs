@@ -117,7 +117,7 @@ internal static class ModelFitMapper
     }
 
     /// <summary>
-    ///     Projects the PHYSICAL hardware profile plus the runtime device audit (AUD4-03) into the wire DTO. The profile
+    ///     Projects the PHYSICAL hardware profile plus the runtime device audit into the wire DTO. The profile
     ///     fields carry what hardware exists (a GPU may be physically present); the audit fields carry runtime truth —
     ///     whether the selected inference runtime actually uses it or has silently fallen back to the CPU.
     /// </summary>
@@ -188,7 +188,7 @@ internal static class ModelFitMapper
             RepoId = detail.RepoId,
             // Base quants first (smallest-first so the picker leads with the lightest), then the speculative-decoding
             // drafters. A drafter is a fraction of the real weights' size, so a pure size sort put all of them at the
-            // TOP of the ladder — the F-011 defect, where the first three rows of gemma-4-12b were 0.4-0.8 GB drafters.
+            // TOP of the ladder — the defect where the first three rows of gemma-4-12b were 0.4-0.8 GB drafters.
             Files =
             [
                 .. detail.Files

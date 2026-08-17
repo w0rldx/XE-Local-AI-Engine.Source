@@ -4,8 +4,8 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
-///     A <see cref="DelegatingAIFunction" /> that bounds a single model-invoked MCP tool call with a per-call deadline
-///     (AUD4-18). The MCP SDK's <c>McpClientTool</c> carries no per-call timeout of its own, so without this a slow or
+///     A <see cref="DelegatingAIFunction" /> that bounds a single model-invoked MCP tool call with a per-call deadline.
+///     The MCP SDK's <c>McpClientTool</c> carries no per-call timeout of its own, so without this a slow or
 ///     wedged server's tool call is bounded only emergently by the stream watchdog / invocation timeout, stalling the
 ///     whole turn. This wraps the innermost MCP executable (below the argument-repair and result-budget wrappers) and
 ///     runs the server round-trip under a linked <see cref="CancellationTokenSource.CancelAfter(System.TimeSpan)" />.

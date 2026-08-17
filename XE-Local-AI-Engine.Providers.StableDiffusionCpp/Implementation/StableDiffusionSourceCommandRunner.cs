@@ -3,19 +3,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
-
-internal interface IStableDiffusionSourceCommandRunner
-{
-    Task<StableDiffusionSourceCommandResult> RunAsync(string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        Action<string> onOutput,
-        TimeSpan timeout,
-        bool captureOutput,
-        CancellationToken ct);
-}
-
-internal sealed record StableDiffusionSourceCommandResult(int ExitCode, string StandardOutput, string StandardError);
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 internal sealed class StableDiffusionSourceCommandRunner : IStableDiffusionSourceCommandRunner
 {

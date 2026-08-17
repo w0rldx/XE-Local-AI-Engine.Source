@@ -249,16 +249,16 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         // Directly, because the sweep is the part that stops being correct when a third target is added by hand: the
         // colliding pair here is (second, third), which no (first, N) comparison reaches.
         AssertEx.Null(ContainerSandboxOptionsValidator.FindOverlap([
-            ("a", "/workspace"), ("b", "/scratch"), ("c", "/xe-runtime")
+            new ContainerMountTarget("a", "/workspace"), new ContainerMountTarget("b", "/scratch"), new ContainerMountTarget("c", "/xe-runtime")
         ]));
 
         var collision = ContainerSandboxOptionsValidator.FindOverlap([
-            ("a", "/workspace"), ("b", "/xe-runtime"), ("c", "/xe-runtime/home")
+            new ContainerMountTarget("a", "/workspace"), new ContainerMountTarget("b", "/xe-runtime"), new ContainerMountTarget("c", "/xe-runtime/home")
         ]);
 
-        AssertEx.True(collision.HasValue, "the third pair was not swept.");
-        AssertEx.Equal("b", collision!.Value.First);
-        AssertEx.Equal("c", collision.Value.Second);
+        AssertEx.NotNull(collision, "the third pair was not swept.");
+        AssertEx.Equal("b", collision!.First.Name);
+        AssertEx.Equal("c", collision.Second.Name);
     }
 
     private (DockerSandboxRuntimeProvider Provider, FakeDockerRuntimeClient Client, string Workspace) CreateProvider()

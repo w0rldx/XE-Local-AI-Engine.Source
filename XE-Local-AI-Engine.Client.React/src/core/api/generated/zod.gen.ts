@@ -2495,11 +2495,6 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRespons
 	deleted: z.boolean(),
 });
 
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse = z.object({
-	reason: z.string(),
-	message: z.string(),
-});
-
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.object({

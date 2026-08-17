@@ -435,7 +435,7 @@ public sealed class AgentDefinitionResolverTests
         // agent leaks node-local documents.
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(CloudPinnedModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)));
 
         var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, capabilityResolver);
         var definition = CreateDefinition(allowedTools: [KnowledgeSearchToolName, "GetCurrentTime"], modelProfile: CloudPinnedModel);
@@ -455,7 +455,7 @@ public sealed class AgentDefinitionResolverTests
     {
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(CloudPinnedModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)));
 
         var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: true, capabilityResolver);
         var definition = CreateDefinition(allowedTools: [KnowledgeSearchToolName, "GetCurrentTime"], modelProfile: CloudPinnedModel);

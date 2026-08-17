@@ -126,6 +126,24 @@ internal static class CloudSettingsEndpointDtoMapper
         };
     }
 
+    /// <summary>
+    ///     Whether the request asks for Entra ID + AuthorizationCode exactly as typed, before the secret-driven
+    ///     coercion in <see cref="ParseEntraSignInMethod" /> can rewrite it. Lives here, next to the parsers
+    ///     <see cref="ToStoredConfig" /> uses, so a caller's pre-check reads the request the same way the persisted
+    ///     config will be built rather than re-implementing the parse.
+    /// </summary>
+    internal static bool RequestsAuthorizationCode(SaveCloudSettingsRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return ParseAuthMode(request.AuthMode) == AzureFoundryAuthMode.EntraId
+               && TryParseSignInMethod(request.EntraSignInMethod, out var signInMethod)
+               && signInMethod == EntraSignInMethod.AuthorizationCode;
+    }
+
+    private static bool TryParseSignInMethod(string? signInMethod, out EntraSignInMethod parsed) =>
+        Enum.TryParse(signInMethod?.Trim(), ignoreCase: true, out parsed);
+
     private static AzureFoundryAuthMode ParseAuthMode(string? authMode)
     {
         return Enum.TryParse<AzureFoundryAuthMode>(authMode?.Trim(), ignoreCase: true, out var parsed)
@@ -146,7 +164,7 @@ internal static class CloudSettingsEndpointDtoMapper
     // value with a secret present still coerces to ClientSecret, regardless of what the UI last had selected.
     private static EntraSignInMethod ParseEntraSignInMethod(string? signInMethod, bool hasSecret)
     {
-        var parsedOk = Enum.TryParse<EntraSignInMethod>(signInMethod?.Trim(), ignoreCase: true, out var parsed);
+        var parsedOk = TryParseSignInMethod(signInMethod, out var parsed);
 
         if (hasSecret)
         {

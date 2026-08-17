@@ -165,9 +165,9 @@ public sealed class OrchestrationResolverTests
 
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(thinkingModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: true, SupportsTools: true, IsCloud: false)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)));
         capabilityResolver.ResolveAsync(nonThinkingModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: false)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: false)));
 
         var resolver = new OrchestrationResolver(store,
             playbookStore,
@@ -269,9 +269,9 @@ public sealed class OrchestrationResolverTests
 
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: true, SupportsTools: true, IsCloud: false)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)));
         capabilityResolver.ResolveAsync(CloudParticipantModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)));
 
         var resolver = new OrchestrationResolver(store,
             playbookStore,
@@ -672,7 +672,7 @@ public sealed class OrchestrationResolverTests
     {
         var resolver = Substitute.For<IModelCapabilityResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: false)));
+                .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: false)));
         return resolver;
     }
 

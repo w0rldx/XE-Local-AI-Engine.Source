@@ -17,7 +17,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         The other mappings are pinned where they are provoked end to end:
 ///         <c>ReadOnlyConversation</c> in <c>NodeChatReadOnlyEndpointTests</c>, <c>WorkspaceRevocationBusy</c> in
-///         <c>WorkspaceEndpointTests</c>, and the worker/image conflicts in <c>ConnectionEndpointTests</c>.
+///         <c>WorkspaceEndpointTests</c>, the worker/image conflicts in <c>ConnectionEndpointTests</c>, and
+///         <c>InstalledModelHasDependentAdapters</c> in <c>LocalModelEndpointTests</c>.
 ///     </para>
 /// </summary>
 public sealed class ConflictExceptionHandlerTests

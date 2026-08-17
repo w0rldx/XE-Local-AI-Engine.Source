@@ -69,7 +69,7 @@ public sealed class StableDiffusionCppRuntimeTests
     }
 
     /// <summary>
-    ///     F-030: sd-server rounds a requested latent grid up to a multiple of 64, so a requested 100x512 comes back as a
+    ///     sd-server rounds a requested latent grid up to a multiple of 64, so a requested 100x512 comes back as a
     ///     128x512 PNG. The result must describe the bytes that arrived, not the request that was sent — echoing the
     ///     request made the job card state a false fact about its own output.
     /// </summary>

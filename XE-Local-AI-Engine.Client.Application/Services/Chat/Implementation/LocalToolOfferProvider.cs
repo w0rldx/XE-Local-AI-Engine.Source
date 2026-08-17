@@ -201,7 +201,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     ///         This used to be a <c>HashSet</c> captured at DI composition, with the rationale "singleton + synchronous
     ///         hot path, so a runtime edit applies on the next process restart". That produced a P1: an operator added
     ///         their model in Node Settings, saved successfully, and tool calling still silently returned nothing —
-    ///         with no restart hint on the field, unlike four of its neighbours (F-001/F-025, live eval 2026-07-31).
+    ///         with no restart hint on the field, unlike four of its neighbours.
     ///     </para>
     ///     <para>
     ///         The seeded design was also internally inconsistent, which is what made it user-visible rather than merely

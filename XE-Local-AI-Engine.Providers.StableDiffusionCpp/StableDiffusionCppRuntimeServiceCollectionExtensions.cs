@@ -63,7 +63,7 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         services.TryAddSingleton(static sp =>
             new SdServerJobClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(RuntimeHttpClientName)));
 
-        // AUD4-06 GPU-load admission floor: a no-op serializer so an image-only host resolves the gate. The composition
+        // GPU-load admission floor: a no-op serializer so an image-only host resolves the gate. The composition
         // root overrides it (plain AddSingleton, last-wins) with the real singleton shared with the llama-server supervisor.
         services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
 

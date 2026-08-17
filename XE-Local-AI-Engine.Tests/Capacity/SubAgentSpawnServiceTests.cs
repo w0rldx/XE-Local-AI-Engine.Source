@@ -994,7 +994,7 @@ public sealed class SubAgentSpawnServiceTests
             // Default: the child model advertises the thinking capability, so a resolved reasoning effort is honored on
             // the Ollama think key. A test can flip this to prove a non-thinking model omits the field.
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                                    .Returns((SupportsThinking: true, SupportsTools: true, IsCloud: false));
+                                    .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
             WithMaxMessageRequestTimeoutSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds);
         }
 
@@ -1013,7 +1013,7 @@ public sealed class SubAgentSpawnServiceTests
         public void WithThinkingCapability(bool supportsThinking)
         {
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                                    .Returns((SupportsThinking: supportsThinking, SupportsTools: true, IsCloud: false));
+                                    .Returns(new ModelCapabilitySnapshot(SupportsThinking: supportsThinking, SupportsTools: true, IsCloud: false));
         }
 
         public GateableChatClient ChatClient => _chatClient;

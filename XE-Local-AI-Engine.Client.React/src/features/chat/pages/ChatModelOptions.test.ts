@@ -47,7 +47,7 @@ describe("toModelOption capability mapping", () => {
 		expect(option.isToolCapable).toBe(false);
 	});
 
-	// F-014: a native-reasoning model (harmony/gpt-oss) reasons, but on a template-baked channel with no graded
+	// A native-reasoning model (harmony/gpt-oss) reasons, but on a template-baked channel with no graded
 	// switch. It must surface as its OWN capability and must NOT be folded into isReasoningModel — that flag drives
 	// the graded think:<level> menu and the backend branch that writes `think` / `enable_thinking=false`.
 	it("maps isNativeReasoningCapable to its own flag without setting isReasoningModel", () => {

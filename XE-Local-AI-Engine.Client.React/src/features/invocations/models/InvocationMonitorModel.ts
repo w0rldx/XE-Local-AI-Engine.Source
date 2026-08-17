@@ -26,7 +26,7 @@ export interface InvocationCurrentDto {
 	// True while the turn is parked on an `ask_user` question. Content-free by design — the question text never
 	// travels on this ops endpoint, only the fact that the run is waiting on a person.
 	hasPendingQuestion: boolean;
-	// W3C trace id of the run (AUD4-19), for correlating a failed row's "See local logs" line with exported traces.
+	// W3C trace id of the run, for correlating a failed row's "See local logs" line with exported traces.
 	// Null when no activity was in scope. Rendered as copyable text.
 	traceId: string | null;
 }
@@ -43,7 +43,7 @@ export interface InvocationHistoryDto {
 	failureCategory: InvocationFailureCategoryDto;
 	streamedChunkCount: number;
 	streamedThinkingChunkCount: number;
-	// W3C trace id of the run (AUD4-19); null when no activity was in scope. Rendered as copyable text.
+	// W3C trace id of the run; null when no activity was in scope. Rendered as copyable text.
 	traceId: string | null;
 }
 

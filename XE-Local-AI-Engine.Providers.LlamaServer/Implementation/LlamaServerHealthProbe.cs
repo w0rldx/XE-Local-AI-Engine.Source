@@ -12,7 +12,7 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
-    // AUD4-15: a hard per-attempt bound so ONE probe can never stall the poll loop for the whole readiness budget when
+    // A hard per-attempt bound so ONE probe can never stall the poll loop for the whole readiness budget when
     // the server accepts the socket but never answers. Combined with a dedicated resilience-free HttpClient (see the DI
     // registration), the supervisor's poll cadence — not a hung/retried request — controls readiness-detection timing.
     private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(1);

@@ -1305,9 +1305,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             _ = _live.Remove(markerId);
         }
 
-        public IReadOnlyList<(string MarkerId, SandboxProcessMarker Marker)> ReadAll()
+        public IReadOnlyList<SandboxMarkerEntry> ReadAll()
         {
-            return [.. _live.Select(entry => (entry.Key, entry.Value))];
+            return [.. _live.Select(entry => new SandboxMarkerEntry(entry.Key, entry.Value))];
         }
     }
 

@@ -247,13 +247,13 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         }
     }
 
-    private static IReadOnlyList<(string Name, string Value)> ResolveHeaders(IReadOnlyList<StoredAzureFoundryHeader> headers)
+    private static IReadOnlyList<ResolvedCustomHeader> ResolveHeaders(IReadOnlyList<StoredAzureFoundryHeader> headers)
     {
         return
         [
             .. headers
                .Where(static header => !string.IsNullOrWhiteSpace(header.Name))
-               .Select(static header => (header.Name.Trim(), header.Value ?? string.Empty))
+               .Select(static header => new ResolvedCustomHeader(header.Name.Trim(), header.Value ?? string.Empty))
         ];
     }
 

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-08 instrumentation: classifies SQLITE_BUSY / SQLITE_LOCKED failures and records them on the
+///     Instrumentation: classifies SQLITE_BUSY / SQLITE_LOCKED failures and records them on the
 ///     <c>sqlite_busy_total</c> counter with bounded dimensions. A real busy is provoked with two connections so the
 ///     classifier is exercised against an actual <see cref="SqliteException" />, not a synthetic one.
 /// </summary>

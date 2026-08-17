@@ -124,7 +124,7 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "Explore mode must not emit an explicit -ngl (it disables auto-fit).");
         AssertEx.False(spec.Arguments.Contains("999"), "The forced -ngl 999 placement is removed.");
 
-        // AUD4-02/05: the policy adds the deterministic chat context and the KV-cache quant + flash-attention optimization.
+        // The policy adds the deterministic chat context and the KV-cache quant + flash-attention optimization.
         var ctxIndex = IndexOf(spec.Arguments, "-c");
         AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
         AssertEx.Contains(spec.Arguments, "-fa");
@@ -248,11 +248,11 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(spec.Arguments.Contains("--metrics"), "The CPU variant must not emit --metrics.");
         AssertEx.False(spec.Arguments.Contains("-ctk"), "The CPU variant keeps f16 KV — no -ctk.");
 
-        // AUD4-02: the CPU variant DOES get a deterministic -c (previously it emitted none → full-train-ctx KV in RAM).
+        // The CPU variant DOES get a deterministic -c (previously it emitted none → full-train-ctx KV in RAM).
         var ctxIndex = IndexOf(spec.Arguments, "-c");
         AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
 
-        // AUD4-17: the CPU thread policy.
+        // The CPU thread policy.
         AssertEx.Equal("6", spec.Arguments[IndexOf(spec.Arguments, "-t") + 1]);
         AssertEx.Equal("8", spec.Arguments[IndexOf(spec.Arguments, "-tb") + 1]);
     }

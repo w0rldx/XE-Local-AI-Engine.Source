@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
 using System.ClientModel.Primitives;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -13,7 +14,7 @@ public sealed class CustomHeaderPipelinePolicyTests
     [Test]
     public void Process_WhenHeadersSet_AppendsAllToRequest()
     {
-        var policy = new CustomHeaderPipelinePolicy([("X-Alpha", "one"), ("X-Beta", "two")]);
+        var policy = new CustomHeaderPipelinePolicy([new ResolvedCustomHeader("X-Alpha", "one"), new ResolvedCustomHeader("X-Beta", "two")]);
         using var message = CreateMessage();
         var pipeline = new PipelinePolicy[]
         {
@@ -31,7 +32,7 @@ public sealed class CustomHeaderPipelinePolicyTests
     public void Process_WhenReservedName_SkipsIt()
     {
         // "authorization" is reserved (case-insensitive) and must never be overridden by an operator header.
-        var policy = new CustomHeaderPipelinePolicy([("authorization", "attacker"), ("X-Ok", "ok")]);
+        var policy = new CustomHeaderPipelinePolicy([new ResolvedCustomHeader("authorization", "attacker"), new ResolvedCustomHeader("X-Ok", "ok")]);
         using var message = CreateMessage();
         var pipeline = new PipelinePolicy[]
         {

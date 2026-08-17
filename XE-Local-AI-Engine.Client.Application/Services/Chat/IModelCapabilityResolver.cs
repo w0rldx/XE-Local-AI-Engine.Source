@@ -16,5 +16,5 @@ public interface IModelCapabilityResolver
     ///     locality is resolved from the SAME provider-routing decision, so a caller gating on the EFFECTIVE (post-pin)
     ///     model gets both capability and locality from one lookup.
     /// </summary>
-    Task<(bool SupportsThinking, bool SupportsTools, bool IsCloud)> ResolveAsync(string? model, CancellationToken cancellationToken);
+    Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken);
 }

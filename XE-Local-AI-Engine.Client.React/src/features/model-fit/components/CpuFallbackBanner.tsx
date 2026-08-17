@@ -17,7 +17,7 @@ export function CpuFallbackBanner() {
 	const dismiss = useCpuFallbackBannerStore((state) => state.dismiss);
 
 	const profile = hardwareQuery.data;
-	// Show when the runtime is on CPU: either a silent GPU→CPU fallback (AUD4-03, the authoritative device-audit flag)
+	// Show when the runtime is on CPU: either a silent GPU→CPU fallback (the authoritative device-audit flag)
 	// or no supported GPU at all. The former carries an actionable reason/remediation, so prefer that text when present.
 	const shouldShow = (profile?.cpuFallback === true || profile?.gpuAccelAvailable === false) && !dismissed;
 

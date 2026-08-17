@@ -7081,9 +7081,9 @@
           "409": {
             "description": "",
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -22827,22 +22827,6 @@
           },
           "deleted": {
             "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelBlockedResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "reason",
-          "message"
-        ],
-        "properties": {
-          "reason": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
           }
         }
       },

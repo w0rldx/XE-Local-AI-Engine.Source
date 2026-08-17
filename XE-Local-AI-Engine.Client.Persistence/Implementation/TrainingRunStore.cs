@@ -16,9 +16,6 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
     ///     would split a multi-byte codepoint and the column would no longer decode.</summary>
     public const int MaxLogTailLength = 16384;
 
-    /// <summary>Matches the <c>error_message</c> and <c>smoke_reason</c> columns' declared max length.</summary>
-    private const int MaxErrorMessageLength = 1024;
-
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -330,7 +327,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             TrainingWorkStatus.Cancelled => TrainingRunStatus.Cancelled,
             _ => TrainingRunStatus.Failed
         };
-        run.ErrorMessage = Sanitize(errorMessage);
+        run.ErrorMessage = ErrorMessageTruncation.Truncate(errorMessage);
         // The trainer process is gone by the time a run terminalizes; a stale receipt would point the reaper at a PID
         // the operating system is free to have reused.
         run.LaunchReceiptJson = null;
@@ -504,7 +501,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         EnsureVersion(artifact.Version, expectedVersion);
         artifact.SmokeState = state;
-        artifact.SmokeReason = Sanitize(reason);
+        artifact.SmokeReason = ErrorMessageTruncation.Truncate(reason);
         artifact.Version++;
         artifact.UpdatedAtUtc = Now();
         await SaveAsync(cancellationToken).ConfigureAwait(false);
@@ -556,7 +553,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         }
 
         work.Status = status;
-        work.ErrorMessage = Sanitize(errorMessage);
+        work.ErrorMessage = ErrorMessageTruncation.Truncate(errorMessage);
         work.FinishedAtUtc = now;
         work.Version++;
     }
@@ -566,16 +563,6 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
     private static bool IsTerminal(TrainingRunStatus status) =>
         status is TrainingRunStatus.Succeeded or TrainingRunStatus.Failed or TrainingRunStatus.Cancelled;
-
-    private static string? Sanitize(string? message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return null;
-        }
-
-        return message.Length > MaxErrorMessageLength ? message[..MaxErrorMessageLength] : message;
-    }
 
     private async Task<TrainingRun> RequireRunAsync(Guid runId, bool tracking, CancellationToken cancellationToken)
     {

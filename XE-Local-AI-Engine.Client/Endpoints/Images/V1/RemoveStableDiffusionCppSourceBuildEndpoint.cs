@@ -27,12 +27,10 @@ public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(
         var result = await buildService.RemoveAsync(ct).ConfigureAwait(false);
         if (result.Outcome == StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy)
         {
-            await Send.ResultAsync(Results.Conflict(new ImageRuntimeBlockedResponse
-            {
-                Reason = "runtime-busy",
-                Message = "Wait for active image jobs and image-runtime processes to finish before removing the managed runtime.",
-                Activity = (result.Activity ?? activityGate.GetSnapshot()).ToResponse()
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(
+                          "Wait for active image jobs and image-runtime processes to finish before removing the managed runtime.",
+                          result.Activity ?? activityGate.GetSnapshot()))
+                      .ConfigureAwait(false);
             return;
         }
 

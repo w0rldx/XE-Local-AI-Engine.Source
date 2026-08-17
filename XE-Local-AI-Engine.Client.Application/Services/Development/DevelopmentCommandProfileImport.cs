@@ -35,7 +35,7 @@ internal static class DevelopmentCommandProfileImport
     ///     Returns the declared profile id and build target plus the digest of the exact bytes read, or null when the
     ///     repository ships no import file.
     /// </summary>
-    public static (DevelopmentProfileImportDocument Document, string Digest)? TryRead(string repositoryRoot)
+    public static ImportedProfile? TryRead(string repositoryRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         var path = Path.Combine(repositoryRoot, ".xe-dev", "profile.json");
@@ -56,7 +56,7 @@ internal static class DevelopmentCommandProfileImport
             throw new DevelopmentWorkspaceSecurityException("The repository command-profile import file is not valid JSON.");
         }
 
-        return (document, ComputeDigest(bytes));
+        return new ImportedProfile(document, ComputeDigest(bytes));
     }
 
     /// <summary>
@@ -85,4 +85,10 @@ internal static class DevelopmentCommandProfileImport
 
     private static string ComputeDigest(byte[] bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    /// <summary>
+    ///     A repository's declared command profile plus the digest of the exact bytes it was read from — the digest
+    ///     rides on the resolved profile so the workspace invariant can detect a command rewriting the file mid-attempt.
+    /// </summary>
+    internal sealed record ImportedProfile(DevelopmentProfileImportDocument Document, string Digest);
 }

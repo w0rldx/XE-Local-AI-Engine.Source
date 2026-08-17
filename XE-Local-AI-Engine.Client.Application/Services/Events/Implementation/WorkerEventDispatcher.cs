@@ -34,7 +34,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
 
-    // AUD4-18: cancelled when the worker stops accepting remote invocations (drain), so a remote assignment still
+    // Cancelled when the worker stops accepting remote invocations (drain), so a remote assignment still
     // BLOCKED on the invocation slot is abandoned instead of waiting forever — the previously uncancelable
     // `_remoteInvocationQueue.WaitAsync()` on the two remote paths could hang a draining node indefinitely. A running
     // invocation (past the wait) is unaffected: it runs under its own token, not this one.

@@ -527,7 +527,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
     [Test]
     public async Task PreviewExec_AbandonedPausedRun_ReleasesItsSlot_AfterGrace()
     {
-        // F-048, the whole defect: execute → pause → reload. The run parks on Pause (exempt from the idle clock AND
+        // The whole defect: execute → pause → reload. The run parks on Pause (exempt from the idle clock AND
         // the wall-clock cap, both deliberately) and NOBODY is subscribed, because the reloaded page never learned the
         // runId. Against the old code the sweep could never touch it and the slot was held until a node restart.
         var provider = new FakeLocalModelProvider();
@@ -640,7 +640,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
     [Test]
     public async Task PreviewExec_ListRuns_ExposesLiveRun_AndGetRunResolvesItById()
     {
-        // F-049: before this, a runId that left the client's memory was unreachable — no list, no get, no cancel.
+        // Before this, a runId that left the client's memory was unreachable — no list, no get, no cancel.
         var provider = new FakeLocalModelProvider();
         var publisher = new RecordingPreviewEventPublisher();
         var runner = new FakePreviewWorkflowRunner((_, _) =>

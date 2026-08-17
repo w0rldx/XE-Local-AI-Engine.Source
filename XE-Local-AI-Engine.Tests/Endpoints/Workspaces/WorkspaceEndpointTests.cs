@@ -118,6 +118,24 @@ public sealed class WorkspaceEndpointTests
         AssertEx.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
     }
 
+    // The 400 arm of the selected-folder triad on this route. The conflict test above covers 409 and the endpoint
+    // shares one mapper with the Development routes, so the aggregate type must not answer 409 or 500 here.
+    [Test]
+    public async Task Create_WhenHostPathIsRelative_ReturnsBadRequest()
+    {
+        await using var factory = CreateFactory(out _);
+        using var client = factory.CreateClient();
+        using var request = OperatorRequest(factory, HttpMethod.Post, Route, new
+        {
+            alias = "repo-one",
+            hostPath = "relative/path"
+        });
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Test]
     public async Task Delete_WhenWorkspaceIdIsMalformed_ReturnsBadRequest()
     {

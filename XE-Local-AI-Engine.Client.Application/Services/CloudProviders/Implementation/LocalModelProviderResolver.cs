@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     default provider.
 /// </summary>
 /// <remarks>
-///     AUD4-16: the <c>ModelName → ProviderName</c> lookup is memoized in a short-TTL, bounded cache. Provider
+///     The <c>ModelName → ProviderName</c> lookup is memoized in a short-TTL, bounded cache. Provider
 ///     resolution runs several times per chat turn (capability gating, model resolution, per-orchestration-participant),
 ///     each previously opening a fresh DI scope + coordinated map read; the map is effectively
 ///     write-once per model (a GGUF is always <c>llamacpp</c>, an Ollama model always <c>ollama</c>), so caching the name

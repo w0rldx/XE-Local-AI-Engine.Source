@@ -27,7 +27,7 @@ public sealed class AgentModelCapabilities
 ///     tool loop replays the encrypted reasoning item via MEAI's verbatim <c>RawRepresentation is ResponseItem</c>
 ///     path. <c>SupportsParallelToolCalls</c> stays <see langword="false" /> — single-call first. Every Codex tool
 ///     consumer (the chat capability gate in
-///     <c>NodeChatStreamService.ResolveModelCapabilitiesAsync</c> and the <c>/models</c> <c>IsToolCapable</c> tag in
+///     <c>ModelCapabilityResolver.ResolveAsync</c> and the <c>/models</c> <c>IsToolCapable</c> tag in
 ///     <c>LocalModelsMapper</c>) reads <see cref="V0" /> directly, so this single flag governs both surfaces.
 /// </summary>
 public static class CodexProviderCapabilities

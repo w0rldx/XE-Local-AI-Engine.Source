@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 ///         vice versa. Script-category weighting is shared through <see cref="TokenCharacterProfile" />.
 ///     </para>
 ///     <para>
-///         AUD4-16: per-message script-category profiles are memoized by message instance in a
+///         Per-message script-category profiles are memoized by message instance in a
 ///         <see cref="ConditionalWeakTable{TKey,TValue}" /> (no leak — the entry dies with the message). This hop
 ///         re-estimates the full message list on EVERY inner tool-loop round, and those rounds reuse the same
 ///         <see cref="ChatMessage" /> instances (the function-invocation loop appends but never mutates prior messages),

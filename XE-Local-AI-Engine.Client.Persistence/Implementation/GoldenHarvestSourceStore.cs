@@ -95,7 +95,7 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
 
     private static Task OpenIfNeededAsync(DbConnection? connection, CancellationToken cancellationToken)
     {
-        // AUD4-08: open-if-needed AND apply the shared WAL/busy_timeout/synchronous pragmas on the open.
+        // Open-if-needed AND apply the shared WAL/busy_timeout/synchronous pragmas on the open.
         return NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken);
     }
 

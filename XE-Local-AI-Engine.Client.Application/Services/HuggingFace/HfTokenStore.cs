@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.HuggingFace;
 
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -91,7 +88,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
         try
         {
             await File.WriteAllBytesAsync(_tokenPath, protectedPayload, ct).ConfigureAwait(false);
-            ApplyPlatformFileSecurity();
+            SecureFilePermissions.Apply(_tokenPath);
         }
         finally
         {
@@ -121,38 +118,6 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     {
         var token = await GetTokenAsync(ct).ConfigureAwait(false);
         return token is not null;
-    }
-
-    private void ApplyPlatformFileSecurity()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            ApplyWindowsFileSecurity();
-            return;
-        }
-
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_tokenPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private void ApplyWindowsFileSecurity()
-    {
-        var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-        var currentIdentity = WindowsIdentity.GetCurrent();
-        if (currentIdentity.User is not null)
-        {
-            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User,
-                FileSystemRights.FullControl,
-                AccessControlType.Allow));
-        }
-
-        var fileInfo = new FileInfo(_tokenPath);
-        fileInfo.SetAccessControl(fileSecurity);
     }
 
     private void ClearTokenFileBestEffort()

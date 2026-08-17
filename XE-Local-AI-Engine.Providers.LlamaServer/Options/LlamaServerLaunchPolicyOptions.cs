@@ -44,7 +44,7 @@ public sealed class LlamaServerLaunchPolicyOptions
     ///     stable tier in <see cref="ChatContextTiers" />. Worked example — with q8_0 KV (1 byte/element) and a typical 8B model
     ///     (32 layers, GQA n_head_kv = 8, head_dim = 128): per-token KV = 2 × 32 × 8 × 128 × 1 B = 64 KiB, so 16384
     ///     tokens ≈ 1 GiB of KV cache — comfortably within budget. Was silently the model's full train context (e.g.
-    ///     262144 ⇒ ~9 GB of KV+compute) before this policy, because no <c>-c</c> was emitted (AUD4-02). Must be positive.
+    ///     262144 ⇒ ~9 GB of KV+compute) before this policy, because no <c>-c</c> was emitted. Must be positive.
     /// </summary>
     public int ChatContextTokens { get; init; } = DefaultChatContextTokens;
 
@@ -80,7 +80,7 @@ public sealed class LlamaServerLaunchPolicyOptions
     /// <summary>
     ///     When set (the default), a GPU build (CUDA/Vulkan) launches with the fused flash-attention path and quantized
     ///     KV cache (<c>-fa on -ctk &lt;type&gt; -ctv &lt;type&gt;</c>), roughly halving KV-cache VRAM versus f16 — the
-    ///     single biggest VRAM lever on 12–24 GB consumer GPUs (AUD4-05). A one-shot safe fallback (no <c>-ctk/-ctv</c>,
+    ///     single biggest VRAM lever on 12–24 GB consumer GPUs. A one-shot safe fallback (no <c>-ctk/-ctv</c>,
     ///     <c>-fa auto</c>) is recorded per backend if the optimized config fails to reach readiness, so a backend that
     ///     cannot serve it is never re-tried. Frozen profiles bypass this entirely (they pin their own KV/FA).
     /// </summary>
@@ -96,7 +96,7 @@ public sealed class LlamaServerLaunchPolicyOptions
     /// <summary>
     ///     When set (the default), a CPU build emits an explicit thread policy (<c>-t</c>/<c>-tb</c>) derived from the
     ///     host's estimated physical-core count rather than letting llama.cpp pick. A GPU build never gets <c>-t</c>
-    ///     (the compute runs on the GPU). AUD4-17: no thread flag was passed, so llama.cpp auto-selected a subset of the
+    ///     (the compute runs on the GPU). Before this policy no thread flag was passed, so llama.cpp auto-selected a subset of the
     ///     logical cores.
     /// </summary>
     public bool EnableCpuThreadPolicy { get; init; } = true;

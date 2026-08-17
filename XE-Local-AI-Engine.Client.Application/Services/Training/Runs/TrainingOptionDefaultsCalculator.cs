@@ -162,7 +162,7 @@ public sealed class TrainingOptionDefaultsCalculator(
     private static long AvailableVramBytes(HardwareProfile profile) =>
         profile.VramKnown ? profile.AvailableVramBytes ?? 0 : 0;
 
-    private async Task<(BaseCheckpointConfigV1 Config, long ParameterCount)> ReadCheckpointAsync(Guid baseArtifactId,
+    private async Task<CheckpointFacts> ReadCheckpointAsync(Guid baseArtifactId,
         CancellationToken cancellationToken)
     {
         var artifact = await _store.GetAsync(baseArtifactId, cancellationToken).ConfigureAwait(false)
@@ -184,6 +184,10 @@ public sealed class TrainingOptionDefaultsCalculator(
             throw new TrainingRunRejectedException("The base checkpoint declares no safetensors weights, so its size cannot be estimated.");
         }
 
-        return (config, parameterCount);
+        return new CheckpointFacts(config, parameterCount);
     }
+
+    // What a base checkpoint contributes to a footprint estimate: its architecture config and the parameter count
+    // derived from its safetensors index.
+    private sealed record CheckpointFacts(BaseCheckpointConfigV1 Config, long ParameterCount);
 }

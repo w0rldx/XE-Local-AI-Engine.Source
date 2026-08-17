@@ -32,7 +32,7 @@ public sealed class LlamaCppPinConsistencyTests
     public void DefaultRecommendedTag_IsAliasedToThePinnedTag_NotReLiteralled()
     {
         // The UI's "Recommended" value comes from StoredNodeSettings, not from the pin table. It was once an
-        // independent literal, and it drifted (F-007). It is now a const alias, so this cannot fail by drift — it fails
+        // independent literal, and it drifted. It is now a const alias, so this cannot fail by drift — it fails
         // if someone re-introduces a literal, which is the actual regression to prevent.
         AssertEx.Equal(LlamaCppReleasePins.PinnedTag,
             StoredNodeSettings.DefaultRecommendedLlamaCppTag,

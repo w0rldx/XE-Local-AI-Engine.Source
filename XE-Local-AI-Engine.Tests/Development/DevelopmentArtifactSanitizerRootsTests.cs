@@ -52,7 +52,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     {
         // Container-internal paths never match a host root, so the targeted pass is a silent no-op here and the
         // GENERIC pattern handles the diagnostic instead. That used to swallow it whole; it now keeps the trailing
-        // segments, so the file and line survive even on the degraded path — this is the F-057 remedy, and asserting
+        // segments, so the file and line survive even on the degraded path — this is the remedy, and asserting
         // it here is what stops the two passes from being confused for one another.
         var sanitized = DevelopmentArtifactSanitizer.Sanitize(Evidence(ContainerBuildReport),
             RepositoryRoot,
@@ -68,7 +68,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     }
 
     /// <summary>
-    ///     F-057, as measured live: every <c>dotnet</c> command in the container gate died on a read-only <c>/tmp</c>,
+    ///     As measured live: every <c>dotnet</c> command in the container gate died on a read-only <c>/tmp</c>,
     ///     and the stored report named no directory at all, so the one token that identified the fault was the one
     ///     token the sanitizer had removed.
     /// </summary>

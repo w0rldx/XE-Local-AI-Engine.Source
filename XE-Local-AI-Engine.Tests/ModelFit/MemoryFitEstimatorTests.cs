@@ -357,7 +357,7 @@ public sealed class MemoryFitEstimatorTests
     [Test]
     public void MemoryFit_ExplicitKeyValueLength_OverridesDerivedHeadDim_Qwen3()
     {
-        // AUD4-11: Qwen3-family pins head_dim independently of the embedding width, so the derived
+        // Qwen3-family pins head_dim independently of the embedding width, so the derived
         // head_dim = embedding_length / n_heads UNDER-estimates the KV cache. Here embedding 1024 / 32 heads = derived 32,
         // while the explicit key/value length is 128 (4× the derived per-head dimension).
         const long paramCount = 600_000_000L;
@@ -396,7 +396,7 @@ public sealed class MemoryFitEstimatorTests
     [Test]
     public void MemoryFit_SlidingWindowAttention_CapsWindowLimitedLayers_Gemma3()
     {
-        // AUD4-11: Gemma3-12B-like — 48 layers, key/value length 256, sliding_window 1024, pattern 6 (5:1 local:global).
+        // Gemma3-12B-like — 48 layers, key/value length 256, sliding_window 1024, pattern 6 (5:1 local:global).
         // At ctx 8192 only the 8 global layers hold the full context; the other 40 window-limited layers hold ≤ 1024
         // positions, cutting the KV cache far below the naive "every layer × full ctx" figure.
         const long paramCount = 12_000_000_000L;

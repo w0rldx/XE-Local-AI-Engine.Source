@@ -23,7 +23,7 @@ internal static class GgufFileSelector
     ///     quant) it returns the smallest fitting one so the repo still surfaces. Returns <see langword="null" /> when
     ///     nothing at or above the floor fits.
     /// </summary>
-    public static (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFit(MemoryFitEstimator estimator,
+    public static SelectedGgufFile? SelectBestFit(MemoryFitEstimator estimator,
         IReadOnlyList<GgufRepoFile> files,
         string quant,
         int ctxTarget,
@@ -77,7 +77,7 @@ internal static class GgufFileSelector
             ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
             : guarded.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
 
-        return (chosen.file, chosen.estimate);
+        return new SelectedGgufFile(chosen.file, chosen.estimate);
     }
 
     private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
@@ -85,3 +85,6 @@ internal static class GgufFileSelector
         return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern);
     }
 }
+
+/// <summary>The GGUF variant the ladder walk picked for a repo, together with the fit estimate it was picked on.</summary>
+internal sealed record SelectedGgufFile(GgufRepoFile File, MemoryFitEstimate Estimate);

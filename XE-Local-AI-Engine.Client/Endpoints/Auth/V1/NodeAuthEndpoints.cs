@@ -74,38 +74,7 @@ public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<N
     public override async Task HandleAsync(NodeLoginRequest req, CancellationToken ct)
     {
         var result = await authService.LoginAsync(req.Email, req.Password, ct).ConfigureAwait(false);
-        await SendTokenResultAsync(result, ct).ConfigureAwait(false);
-    }
-
-    private async Task SendTokenResultAsync(NodeAuthTokenResult result, CancellationToken cancellationToken)
-    {
-        if (!TryWriteRefreshCookie(result))
-        {
-            NodeAuthCookie.ClearRefreshToken(HttpContext.Response);
-            await Send.UnauthorizedAsync(cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        await Send.OkAsync(new NodeAccessTokenResponse
-        {
-            AccessToken = result.AccessToken!,
-            ExpiresAtUtc = result.AccessTokenExpiresAtUtc!.Value
-        }, cancellationToken).ConfigureAwait(false);
-    }
-
-    private bool TryWriteRefreshCookie(NodeAuthTokenResult result)
-    {
-        if (!result.Succeeded
-            || string.IsNullOrWhiteSpace(result.AccessToken)
-            || !result.AccessTokenExpiresAtUtc.HasValue
-            || string.IsNullOrWhiteSpace(result.RefreshToken)
-            || !result.RefreshTokenExpiresAtUtc.HasValue)
-        {
-            return false;
-        }
-
-        NodeAuthCookie.AppendRefreshToken(HttpContext.Response, result.RefreshToken, result.RefreshTokenExpiresAtUtc.Value);
-        return true;
+        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct).ConfigureAwait(false);
     }
 }
 
@@ -123,38 +92,7 @@ public sealed class NodeRefreshEndpoint(INodeAuthService authService) : Endpoint
     {
         var refreshToken = HttpContext.Request.Cookies[NodeAuthCookie.RefreshCookieName];
         var result = await authService.RefreshAsync(refreshToken, ct).ConfigureAwait(false);
-        await SendTokenResultAsync(result, ct).ConfigureAwait(false);
-    }
-
-    private async Task SendTokenResultAsync(NodeAuthTokenResult result, CancellationToken cancellationToken)
-    {
-        if (!TryWriteRefreshCookie(result))
-        {
-            NodeAuthCookie.ClearRefreshToken(HttpContext.Response);
-            await Send.UnauthorizedAsync(cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        await Send.OkAsync(new NodeAccessTokenResponse
-        {
-            AccessToken = result.AccessToken!,
-            ExpiresAtUtc = result.AccessTokenExpiresAtUtc!.Value
-        }, cancellationToken).ConfigureAwait(false);
-    }
-
-    private bool TryWriteRefreshCookie(NodeAuthTokenResult result)
-    {
-        if (!result.Succeeded
-            || string.IsNullOrWhiteSpace(result.AccessToken)
-            || !result.AccessTokenExpiresAtUtc.HasValue
-            || string.IsNullOrWhiteSpace(result.RefreshToken)
-            || !result.RefreshTokenExpiresAtUtc.HasValue)
-        {
-            return false;
-        }
-
-        NodeAuthCookie.AppendRefreshToken(HttpContext.Response, result.RefreshToken, result.RefreshTokenExpiresAtUtc.Value);
-        return true;
+        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct).ConfigureAwait(false);
     }
 }
 

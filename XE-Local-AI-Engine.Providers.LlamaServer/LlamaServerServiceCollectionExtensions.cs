@@ -109,7 +109,7 @@ public static class LlamaServerServiceCollectionExtensions
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
         services.AddSingleton<IProcessVramBudgetProbe, LlamaListDevicesProcessVramBudgetProbe>();
 
-        // AUD4-03 device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
+        // Device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
         // (sharing the process runner with the VRAM probe), cached per resolved binary. The Application-layer runtime
         // device audit consumes it to detect a GPU-variant binary that enumerates zero devices (a silent CPU fallback).
         services.TryAddSingleton<ILlamaDeviceInventoryProbe, LlamaDeviceInventoryProbe>();
@@ -127,7 +127,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaCppBinaryManager>(),
                 sp.GetRequiredService<ILlamaServerCapabilityManifestProbe>()));
 
-        // AUD4-06 GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
+        // GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
         // application layer has not registered the real, metric-emitting serializer. The composition root overrides this
         // with a plain AddSingleton (last-wins) so both the LLM and image supervisors share ONE process-wide gate.
         services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
@@ -137,7 +137,7 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
         services.TryAddSingleton<ILlamaServerEndpointBinding, LlamaServerEndpointBinding>();
 
-        // AUD4-02/05/17: the central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
+        // The central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
         // CPU threads) plus its persistent safe-fallback store. Options default here; the host overrides from node config.
         services.TryAddSingleton(new LlamaServerLaunchPolicyOptions());
         services.TryAddSingleton<IProcessLaunchAdmissionRegistry, ProcessLaunchAdmissionRegistry>();
@@ -152,7 +152,7 @@ public static class LlamaServerServiceCollectionExtensions
         // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
 
-        // AUD4-15: the readiness/liveness probe gets a DEDICATED HttpClient that bypasses the app's IHttpClientFactory,
+        // The readiness/liveness probe gets a DEDICATED HttpClient that bypasses the app's IHttpClientFactory,
         // so it never inherits the standard resilience handler's exponential retries — the audited cause of a single
         // logical probe firing at +0.2/2.4/5.1/10.2 s and detecting readiness up to ~5 s late. The probe issues exactly
         // one bounded request per poll (its own per-attempt timeout), and the supervisor's 250 ms cadence controls

@@ -121,7 +121,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     ///     bus is reachable AND that the cgroup-v2 controllers backing those properties are delegated to the user slice —
     ///     the two conditions a presence check cannot establish.
     /// </summary>
-    private static (bool Active, string? Reason, IReadOnlyDictionary<string, string> UserBusEnvironment) MeasureResourceLimits(string? setsid,
+    private static ResourceLimitProbe MeasureResourceLimits(string? setsid,
         string? systemdRun,
         string? envBinary,
         string trueBinary)
@@ -130,7 +130,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 
         if (systemdRun is null)
         {
-            return (false, "systemd-run is not installed", empty);
+            return new ResourceLimitProbe(Active: false, "systemd-run is not installed", empty);
         }
 
         if (envBinary is null)
@@ -138,12 +138,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             // The env(1) layer is what strips the user-bus address back out before the sandboxed executable runs.
             // Without it the resource-limit wrapper would leave the child able to reach the user systemd bus and start a
             // unit outside its own scope, so the mechanism is refused rather than shipped with that hole.
-            return (false, "env(1) is not installed, so the user-bus address could not be stripped from the child", empty);
+            return new ResourceLimitProbe(Active: false, "env(1) is not installed, so the user-bus address could not be stripped from the child", empty);
         }
 
         if (setsid is null)
         {
-            return (false, "setsid is not installed", empty);
+            return new ResourceLimitProbe(Active: false, "setsid is not installed", empty);
         }
 
         // systemd-run --user reaches the per-user manager over the session bus. The worker's own environment is the only
@@ -151,7 +151,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         var userBusEnvironment = CollectUserBusEnvironment();
         if (userBusEnvironment.Count == 0)
         {
-            return (false, "neither XDG_RUNTIME_DIR nor DBUS_SESSION_BUS_ADDRESS is set, so the user systemd bus is unreachable", empty);
+            return new ResourceLimitProbe(Active: false, "neither XDG_RUNTIME_DIR nor DBUS_SESSION_BUS_ADDRESS is set, so the user systemd bus is unreachable", empty);
         }
 
         // Exercise the WHOLE chain the launch path builds — scope properties AND the env(1) strip layer — not a
@@ -191,8 +191,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         var probed = RunProbe(systemdRun, probeArguments, userBusEnvironment);
 
         return probed
-            ? (true, null, userBusEnvironment)
-            : (false, "a transient systemd user scope carrying MemoryMax/TasksMax/CPUQuota could not be started", empty);
+            ? new ResourceLimitProbe(Active: true, Reason: null, userBusEnvironment)
+            : new ResourceLimitProbe(Active: false, "a transient systemd user scope carrying MemoryMax/TasksMax/CPUQuota could not be started", empty);
     }
 
     /// <summary>
@@ -200,11 +200,11 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     ///     covers the several ways it can be unavailable that a presence check misses: user namespaces disabled by
     ///     sysctl or seccomp, an exhausted <c>max_user_namespaces</c>, or a container runtime that blocks the syscall.
     /// </summary>
-    private static (bool Active, string? Reason) MeasureNetworkIsolation(string? unshare, string trueBinary)
+    private static NetworkIsolationProbe MeasureNetworkIsolation(string? unshare, string trueBinary)
     {
         if (unshare is null)
         {
-            return (false, "unshare is not installed");
+            return new NetworkIsolationProbe(Active: false, "unshare is not installed");
         }
 
         var probed = RunProbe(unshare,
@@ -218,8 +218,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             environment: null);
 
         return probed
-            ? (true, null)
-            : (false, "an unprivileged empty network namespace could not be created (user namespaces may be restricted)");
+            ? new NetworkIsolationProbe(Active: true, Reason: null)
+            : new NetworkIsolationProbe(Active: false, "an unprivileged empty network namespace could not be created (user namespaces may be restricted)");
     }
 
     /// <summary>
@@ -381,4 +381,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             return null;
         }
     }
+
+    // Outcome of the resource-limit probe: whether a real ceiling can be imposed, why not when it cannot, and the
+    // user-bus variables the launch path must carry into the scope (empty whenever the mechanism is unavailable).
+    private sealed record ResourceLimitProbe(bool Active, string? Reason, IReadOnlyDictionary<string, string> UserBusEnvironment);
+
+    // Outcome of the network-isolation probe: whether an empty network namespace can be created, and why not when it
+    // cannot.
+    private sealed record NetworkIsolationProbe(bool Active, string? Reason);
 }

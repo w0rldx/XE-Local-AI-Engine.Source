@@ -162,7 +162,7 @@ describe("ImageModelManager", () => {
 		fireEvent.click(screen.getByTestId("image-model-download-submit"));
 	}
 
-	// F-031: a download that fails must stop the spinner and tell the operator why. Before the fix the UI had no way to
+	// A download that fails must stop the spinner and tell the operator why. Before the fix the UI had no way to
 	// learn about a failure at all — it polled the installed-models list and waited forever for a model that never arrived.
 	describe("failed download reporting", () => {
 		it("surfaces the sanitized reason and clears the pending state when the download fails", async () => {

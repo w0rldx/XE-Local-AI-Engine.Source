@@ -25,18 +25,18 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         ArgumentException.ThrowIfNullOrWhiteSpace(commitSha);
 
         var environment = BuildScrubbedGitEnvironment(destinationDirectory);
-        IReadOnlyList<(IReadOnlyList<string> Args, TimeSpan Timeout)> steps =
+        IReadOnlyList<GitStep> steps =
         [
-            (["-C", destinationDirectory, "init", "--quiet"], ShortCommandTimeout),
-            (["-C", destinationDirectory, "remote", "add", "origin", Repository], ShortCommandTimeout),
-            (["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], FetchTimeout),
-            (["-C", destinationDirectory, "checkout", "--detach", commitSha], ShortCommandTimeout)
+            new(["-C", destinationDirectory, "init", "--quiet"], ShortCommandTimeout),
+            new(["-C", destinationDirectory, "remote", "add", "origin", Repository], ShortCommandTimeout),
+            new(["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], FetchTimeout),
+            new(["-C", destinationDirectory, "checkout", "--detach", commitSha], ShortCommandTimeout)
         ];
 
-        foreach (var (args, timeout) in steps)
+        foreach (var step in steps)
         {
-            var (exitCode, _) = await RunAsync(args, environment, destinationDirectory, timeout, ct).ConfigureAwait(false);
-            if (exitCode != 0)
+            var result = await RunAsync(step.Args, environment, destinationDirectory, step.Timeout, ct).ConfigureAwait(false);
+            if (result.ExitCode != 0)
             {
                 throw new LlamaRuntimeException("Fetching the pinned llama.cpp conversion scripts failed.");
             }
@@ -73,7 +73,7 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         return scrubbed;
     }
 
-    private static async Task<(int ExitCode, string Stdout)> RunAsync(IReadOnlyList<string> args,
+    private static async Task<ProcessCaptureResult> RunAsync(IReadOnlyList<string> args,
         IReadOnlyDictionary<string, string> environment,
         string workingDirectory,
         TimeSpan timeout,
@@ -108,7 +108,7 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         {
             if (!process.Start())
             {
-                return (-1, string.Empty);
+                return new ProcessCaptureResult(ExitCode: -1, string.Empty);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -124,7 +124,7 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
             var stderr = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             _ = await stderr.ConfigureAwait(false);
-            return (process.ExitCode, await stdout.ConfigureAwait(false));
+            return new ProcessCaptureResult(process.ExitCode, await stdout.ConfigureAwait(false));
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
@@ -132,22 +132,10 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         }
         finally
         {
-            TryKill(process);
+            ProcessCaptureRunner.TryKill(process);
         }
     }
 
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best effort: the process can exit between the check and the kill, or the OS can deny the reap.
-        }
-    }
+    /// <summary>One git invocation of the pinned fetch sequence: its argument vector and the timeout it may take.</summary>
+    private sealed record GitStep(IReadOnlyList<string> Args, TimeSpan Timeout);
 }

@@ -85,7 +85,7 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
         }
         finally
         {
-            TryKill(process);
+            ProcessCaptureRunner.TryKill(process);
         }
     }
 
@@ -189,18 +189,4 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
             : string.Concat(excerpt.AsSpan(0, MaxStandardErrorExcerptLength - 1), "…");
     }
 
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best-effort: the process may exit between the check and kill, or may already be unavailable.
-        }
-    }
 }

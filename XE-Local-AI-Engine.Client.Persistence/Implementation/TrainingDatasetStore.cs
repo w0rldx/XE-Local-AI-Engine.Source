@@ -19,9 +19,6 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
     private const char FieldSeparator = '\u001f';
 
-    /// <summary>Matches the <c>error_message</c> column's declared max length.</summary>
-    private const int MaxErrorMessageLength = 1024;
-
     private static readonly byte[] RecordSeparator = [0x1e];
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -650,23 +647,13 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         }
 
         work.Status = status;
-        work.ErrorMessage = Sanitize(errorMessage);
+        work.ErrorMessage = ErrorMessageTruncation.Truncate(errorMessage);
         work.FinishedAtUtc = now;
         work.Version++;
     }
 
     private static bool IsTerminal(DatasetGenerationWorkStatus status) =>
         status is DatasetGenerationWorkStatus.Succeeded or DatasetGenerationWorkStatus.Failed or DatasetGenerationWorkStatus.Cancelled;
-
-    private static string? Sanitize(string? message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return null;
-        }
-
-        return message.Length > MaxErrorMessageLength ? message[..MaxErrorMessageLength] : message;
-    }
 
     private async Task<TrainingDatasetDefinition> RequireDefinitionAsync(Guid definitionId, CancellationToken cancellationToken) =>
         await _dbContext.TrainingDatasetDefinitions.FirstOrDefaultAsync(item => item.Id == definitionId, cancellationToken).ConfigureAwait(false)
