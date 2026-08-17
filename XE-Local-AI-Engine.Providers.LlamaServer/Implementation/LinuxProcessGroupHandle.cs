@@ -26,6 +26,28 @@ internal sealed partial class LinuxProcessGroupHandle(Process process) : ILlamaS
 
     public bool HasExited => SafeHasExited(_process);
 
+    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        if (SafeHasExited(_process))
+        {
+            return true;
+        }
+
+        try
+        {
+            await _process.WaitForExitAsync(ct).WaitAsync(timeout, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
     public void TreeKill()
     {
         if (SafeHasExited(_process))

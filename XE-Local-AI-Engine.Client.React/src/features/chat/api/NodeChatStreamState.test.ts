@@ -7,7 +7,7 @@ import {
 	markNodeChatStreamTerminated,
 	nodeChatStreamEventTypes,
 } from "@/features/chat/api/NodeChatStreamState";
-import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatToolPart } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 const conversation: ChatConversationModel = {
@@ -30,6 +30,24 @@ function streamEvent(overrides: Partial<NodeChatStreamEventDto> = {}): NodeChatS
 		delta: "he",
 		content: "he",
 		...overrides,
+	};
+}
+
+function reloadedConversationWithTools(parts: ChatToolPart[] = []): ChatConversationModel {
+	return {
+		...conversation,
+		messages: [
+			{
+				id: "assistant-1",
+				conversationId: conversation.id,
+				role: "assistant",
+				content: "",
+				status: "streaming",
+				createdAt: "2026-05-24T00:00:01.000Z",
+				sortOrder: 1,
+				parts,
+			},
+		],
 	};
 }
 
@@ -615,6 +633,222 @@ describe("node chat stream state", () => {
 			requiresApproval: true,
 			pendingApprovalRequestId: "approval-77",
 		});
+	});
+
+	it("keeps a metadata-poor approval replay actionable when no persisted tool card exists", () => {
+		const approval = applyNodeChatStreamEvent(
+			reloadedConversationWithTools(),
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				sequence: 8,
+				toolCallId: null,
+				toolName: null,
+				approvalRequestId: "approval-generic",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(approval.streamingMessage.parts?.filter((part) => part.kind === "tool")).toEqual([
+			expect.objectContaining({
+				id: "approval-generic",
+				name: "tool",
+				state: "waiting",
+				requiresApproval: true,
+				pendingApprovalRequestId: "approval-generic",
+			}),
+		]);
+	});
+
+	it("keeps an ambiguous metadata-poor question replay actionable without mutating either unresolved card", () => {
+		const approval = applyNodeChatStreamEvent(
+			reloadedConversationWithTools([
+				{
+					kind: "tool",
+					id: "call-1",
+					sequence: 4,
+					name: "read_file",
+					state: "waiting",
+					args: '{"path":"one.txt"}',
+				},
+				{
+					kind: "tool",
+					id: "call-2",
+					sequence: 5,
+					name: "write_file",
+					state: "requesting",
+					args: '{"path":"two.txt"}',
+				},
+			]),
+			streamEvent({
+				type: nodeChatStreamEventTypes.questionRequested,
+				sequence: 8,
+				toolCallId: null,
+				toolName: null,
+				questionRequestId: "question-generic",
+				questions: '[{"question":"Continue?","options":[{"label":"Yes"},{"label":"No"}]}]',
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolParts = approval.streamingMessage.parts?.filter((part) => part.kind === "tool");
+		expect(toolParts).toHaveLength(3);
+		expect(toolParts?.slice(0, 2)).toMatchObject([
+			{ id: "call-1", name: "read_file", args: '{"path":"one.txt"}' },
+			{ id: "call-2", name: "write_file", args: '{"path":"two.txt"}' },
+		]);
+		expect(toolParts?.[2]).toMatchObject({
+			id: "question-generic",
+			name: "tool",
+			state: "waiting",
+			pendingQuestion: { requestId: "question-generic", questions: [{ question: "Continue?" }] },
+		});
+	});
+
+	it("removes a generic replay card when the approved tool completion arrives", () => {
+		const approval = applyNodeChatStreamEvent(
+			reloadedConversationWithTools(),
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				sequence: 8,
+				toolCallId: null,
+				toolName: null,
+				approvalRequestId: "approval-generic",
+				content: null,
+				delta: null,
+			}),
+		);
+		expect(approval.streamingMessage.parts?.filter((part) => part.kind === "tool")).toHaveLength(1);
+
+		const completed = applyNodeChatStreamEvent(
+			approval.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 9,
+				toolCallId: "call-9",
+				toolName: "delete_file",
+				result: "deleted",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolParts = completed.streamingMessage.parts?.filter((part) => part.kind === "tool");
+		expect(toolParts).toHaveLength(1);
+		expect(toolParts?.[0]).toMatchObject({ id: "call-9", name: "delete_file", state: "received", result: "deleted" });
+	});
+
+	it("reattaches a metadata-poor approval replay to the persisted unresolved tool card", () => {
+		const reloaded: ChatConversationModel = {
+			...conversation,
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: conversation.id,
+					role: "assistant",
+					content: "",
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:01.000Z",
+					sortOrder: 1,
+					parts: [
+						{
+							kind: "tool",
+							id: "call-1",
+							sequence: 4,
+							name: "mcp__files__write_file",
+							state: "waiting",
+							args: '{"path":"notes.txt"}',
+							requiresApproval: true,
+						},
+					],
+				},
+			],
+		};
+
+		const approval = applyNodeChatStreamEvent(
+			reloaded,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				sequence: 8,
+				toolCallId: null,
+				toolName: null,
+				approvalRequestId: "approval-replayed",
+				sessionScopeEligible: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolParts = approval.streamingMessage.parts?.filter((part) => part.kind === "tool");
+		expect(toolParts).toHaveLength(1);
+		expect(toolParts?.[0]).toMatchObject({
+			id: "call-1",
+			name: "mcp__files__write_file",
+			state: "waiting",
+			args: '{"path":"notes.txt"}',
+			requiresApproval: true,
+			pendingApprovalRequestId: "approval-replayed",
+			pendingApprovalSessionScopeEligible: false,
+		});
+	});
+
+	it("does not leave a synthetic empty tool card after a rehydrated approval completes", () => {
+		const reloaded: ChatConversationModel = {
+			...conversation,
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: conversation.id,
+					role: "assistant",
+					content: "",
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:01.000Z",
+					sortOrder: 1,
+					parts: [
+						{
+							kind: "tool",
+							id: "call-1",
+							sequence: 4,
+							name: "delete_file",
+							state: "waiting",
+							args: '{"path":"notes.txt"}',
+							requiresApproval: true,
+						},
+					],
+				},
+			],
+		};
+		const approval = applyNodeChatStreamEvent(
+			reloaded,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				sequence: 8,
+				toolCallId: null,
+				toolName: null,
+				approvalRequestId: "approval-replayed",
+				content: null,
+				delta: null,
+			}),
+		);
+		const completed = applyNodeChatStreamEvent(
+			approval.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 9,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				result: "deleted",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolParts = completed.streamingMessage.parts?.filter((part) => part.kind === "tool");
+		expect(toolParts).toHaveLength(1);
+		expect(toolParts?.[0]).toMatchObject({ id: "call-1", name: "delete_file", state: "received", result: "deleted" });
 	});
 
 	it("clears the pending approval once the approved tool completes", () => {

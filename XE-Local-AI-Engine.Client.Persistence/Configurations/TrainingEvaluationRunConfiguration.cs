@@ -17,6 +17,9 @@ internal sealed class TrainingEvaluationRunConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.ComparisonId).HasColumnName("comparison_id");
         builder.Property(entity => entity.ModelName).HasColumnName("model_name").HasMaxLength(255).IsRequired();
         builder.Property(entity => entity.ModelContentFingerprint).HasColumnName("model_content_fingerprint").HasMaxLength(67);
+        builder.Property(entity => entity.TargetKind).HasColumnName("target_kind").HasConversion<string>().HasMaxLength(32)
+               .HasDefaultValue(EvaluationModelTargetKind.InstalledModel);
+        builder.Property(entity => entity.SourceArtifactId).HasColumnName("source_artifact_id");
         builder.Property(entity => entity.DatasetId).HasColumnName("dataset_id");
 
         // Same width as training_datasets.content_fingerprint — "v1:" plus 64 hex characters.
@@ -28,6 +31,7 @@ internal sealed class TrainingEvaluationRunConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.ScoredCount).HasColumnName("scored_count");
         builder.Property(entity => entity.PassedCount).HasColumnName("passed_count");
         builder.Property(entity => entity.PerKindJson).HasColumnName("per_kind_json").HasMaxLength(4096);
+        builder.Property(entity => entity.ExecutionProvenanceJson).HasColumnName("execution_provenance_json");
         builder.Property(entity => entity.ErrorMessage).HasColumnName("error_message").HasMaxLength(1024);
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
@@ -49,5 +53,6 @@ internal sealed class TrainingEvaluationRunConfiguration : IEntityTypeConfigurat
         builder.HasIndex(entity => entity.TrainingRunId).HasDatabaseName("ix_training_evaluation_runs_training_run");
         builder.HasIndex(entity => entity.ComparisonId).HasDatabaseName("ix_training_evaluation_runs_comparison");
         builder.HasIndex(entity => entity.Status).HasDatabaseName("ix_training_evaluation_runs_status");
+        builder.HasIndex(entity => entity.SourceArtifactId).HasDatabaseName("ix_training_evaluation_runs_source_artifact");
     }
 }

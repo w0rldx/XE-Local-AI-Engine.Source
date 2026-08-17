@@ -203,6 +203,7 @@ public sealed class OpenApiDocumentTests
             "judge", "modelGroupKey", "primaryStopReason", "ttftMs", "repeatGroupId", "isWarmup", "lastStreamSequence",
             "version"
         ]);
+        AssertSchemaProperties(schemas, "BenchmarkRunJudgeResponse", ["state"]);
         AssertDeclaredSchemaProperties(schemas, "BenchmarkRunDetailResponse", ["outputParts", "judgeResult"]);
     }
 

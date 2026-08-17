@@ -9,6 +9,8 @@ import json
 from trainlib import collect_tools, delimiter_before, filter_samples, has_tool_calls, to_messages
 
 SAMPLE = {
+    "schemaVersion": 2,
+    "sampleId": "00000000-0000-0000-0000-000000000001",
     "sequence": 0,
     "kind": "tool-call",
     "label": "Good",
@@ -28,6 +30,14 @@ SAMPLE = {
         {"kind": "text", "sequence": 2, "content": "Here is the readme."},
     ],
 }
+
+
+def test_version_and_stable_id_metadata_are_tolerated_and_preserved():
+    kept = filter_samples([SAMPLE], [])
+
+    assert kept[0]["schemaVersion"] == 2
+    assert kept[0]["sampleId"] == SAMPLE["sampleId"]
+    assert to_messages(kept[0])[1]["content"] == "read the readme"
 
 
 def test_filter_drops_holdout_bad_and_rejected():

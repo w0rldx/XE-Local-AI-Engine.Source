@@ -89,6 +89,7 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         var fixture = await SeedAsync(context);
         var store = new TrainingEvaluationStore(context, TimeProvider.System);
         var evaluation = await store.CreateAndEnqueueAsync(Command(fixture));
+        _ = await BindAsync(store, evaluation.Id);
 
         var first = await store.AppendResultsAsync(evaluation.Id,
         [
@@ -137,6 +138,7 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
             AssertEx.Null(claimed.Run, "An evaluation claim carries no run — its target lives in another table.");
 
             var running = await store.TransitionAsync(evaluationId, evaluation.Version, TrainingEvaluationStatus.Running);
+            _ = await BindAsync(store, evaluationId);
             _ = await store.AppendResultsAsync(evaluationId,
                 [new TrainingEvaluationResultEntry(sampleIds[0], "tool-call", Passed: true, "deterministic")]);
             AssertEx.Equal(TrainingEvaluationStatus.Running, running.Status);
@@ -179,6 +181,7 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         var fixture = await SeedAsync(context);
         var store = new TrainingEvaluationStore(context, TimeProvider.System);
         var evaluation = await store.CreateAndEnqueueAsync(Command(fixture));
+        _ = await BindAsync(store, evaluation.Id);
 
         var queued = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.ResumeAsync(evaluation.Id, evaluation.Version));
         AssertEx.Equal("EvaluationActive", queued.Code);
@@ -194,6 +197,39 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         // Terminalizing an already-terminal work item is a silent no-op, so a startup retrace cannot double-transition.
         var again = await store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Failed, "late");
         AssertEx.Equal(TrainingEvaluationStatus.Succeeded, again.Status);
+    }
+
+    [Test]
+    public async Task PartialResults_RequireExactAttemptProvenanceOnResume()
+    {
+        await using var context = await CreateDatabaseAsync("resume-provenance.sqlite");
+        var fixture = await SeedAsync(context);
+        var store = new TrainingEvaluationStore(context, TimeProvider.System);
+        var evaluation = await store.CreateAndEnqueueAsync(Command(fixture));
+        _ = await BindAsync(store, evaluation.Id);
+        _ = await store.AppendResultsAsync(evaluation.Id,
+            [new TrainingEvaluationResultEntry(fixture.SampleIds[0], "tool-call", true, "deterministic")]);
+
+        _ = await store.BindExecutionProvenanceAsync(evaluation.Id, AttemptProvenance);
+        var mismatch = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
+            store.BindExecutionProvenanceAsync(evaluation.Id, Encoding.UTF8.GetBytes("different-attempt")));
+
+        AssertEx.Equal("EvaluationAttemptProvenanceMismatch", mismatch.Code);
+        AssertEx.Equal(expected: 1, (await store.GetAsync(evaluation.Id))!.ScoredCount);
+    }
+
+    [Test]
+    public async Task AppendBeforeAttemptProvenance_IsRefused()
+    {
+        await using var context = await CreateDatabaseAsync("unbound-provenance.sqlite");
+        var fixture = await SeedAsync(context);
+        var store = new TrainingEvaluationStore(context, TimeProvider.System);
+        var evaluation = await store.CreateAndEnqueueAsync(Command(fixture));
+
+        var failure = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.AppendResultsAsync(evaluation.Id,
+            [new TrainingEvaluationResultEntry(fixture.SampleIds[0], "tool-call", true, "deterministic")]));
+
+        AssertEx.Equal("EvaluationExecutionProvenanceUnbound", failure.Code);
     }
 
     [Test]
@@ -236,6 +272,64 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         await store.DeleteAsync(unbound.Id, unbound.Version);
         AssertEx.Equal(expected: 0, await context.TrainingEvaluationRuns.CountAsync(item => item.Id == unbound.Id));
         AssertEx.Equal(expected: 0, await context.TrainingWorkItems.CountAsync(item => item.TargetId == unbound.Id));
+    }
+
+    [Test]
+    public async Task QualityDiscard_RetainsAuditTombstoneAndReleasesComparisonDelete()
+    {
+        await using var context = await CreateDatabaseAsync("quality-references.sqlite");
+        var fixture = await SeedAsync(context);
+        var evaluations = new TrainingEvaluationStore(context, TimeProvider.System);
+        var runs = new TrainingRunStore(context, TimeProvider.System);
+        var staged = await runs.CreateArtifactAsync(new TrainingArtifactInput(fixture.TrainingRunId,
+            TrainingArtifactKind.MergedGguf, "staged.gguf"));
+        var hashed = await runs.SetArtifactDigestAsync(staged.Id, staged.Version, new string('a', count: 64), 1);
+        var baseEvaluation = await Scored(evaluations, fixture, "base-model");
+        var tunedEvaluation = await evaluations.CreateAndEnqueueAsync(Command(fixture) with
+        {
+            ModelName = "staged.gguf",
+            ModelContentFingerprint = hashed.Sha256,
+            TargetKind = EvaluationModelTargetKind.StagedTrainingArtifact,
+            SourceArtifactId = hashed.Id
+        });
+        _ = await BindAsync(evaluations, tunedEvaluation.Id);
+        _ = await evaluations.AppendResultsAsync(tunedEvaluation.Id,
+            fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry(id, "tool-call", true, "deterministic")).ToArray());
+        tunedEvaluation = await evaluations.CompleteAsync(tunedEvaluation.Id, TrainingWorkStatus.Succeeded, null);
+        var comparison = await evaluations.CreateComparisonAsync(Report(baseEvaluation.Id, tunedEvaluation.Id));
+        var decided = await runs.SetArtifactQualityDecisionAsync(hashed.Id, hashed.Version, comparison.Id,
+            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"outcome":"Passed"}"""));
+
+        var artifactGuard = await AssertEx.ThrowsAsync<TrainingConflictException>(() => runs.DeleteArtifactAsync(decided.Id, decided.Version));
+        AssertEx.Equal("ArtifactQualityReferenced", artifactGuard.Code);
+        var comparisonGuard = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
+            evaluations.DeleteComparisonAsync(comparison.Id, comparison.Version));
+        AssertEx.Equal("ComparisonQualityReferenced", comparisonGuard.Code);
+
+        var stale = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
+            runs.DiscardArtifactQualityAsync(decided.Id, decided.Version - 1, "failed quality"));
+        AssertEx.Equal("VersionConflict", stale.Code);
+
+        var discarded = await runs.DiscardArtifactQualityAsync(decided.Id, decided.Version, "failed quality");
+        AssertEx.Null(discarded.QualityComparisonId, "Discard releases the live comparison reference.");
+        AssertEx.True(discarded.DiscardedAtUtc.HasValue);
+        AssertEx.Equal("failed quality", discarded.DiscardReason!);
+        AssertEx.True(discarded.DiscardCleanupPending);
+        AssertEx.True(discarded.QualityDecisionJson.HasValue, "The encrypted decision remains as durable audit history.");
+
+        var immutable = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
+            runs.DiscardArtifactQualityAsync(discarded.Id, discarded.Version, "rewrite audit"));
+        AssertEx.Equal("ArtifactAlreadyDiscarded", immutable.Code);
+        var cleaned = await runs.CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version);
+        AssertEx.False(cleaned.DiscardCleanupPending);
+        AssertEx.Equal(discarded.DiscardedAtUtc!.Value, cleaned.DiscardedAtUtc!.Value);
+        AssertEx.Equal(discarded.DiscardReason!, cleaned.DiscardReason!);
+
+        await evaluations.DeleteComparisonAsync(comparison.Id, comparison.Version);
+        AssertEx.Null(await evaluations.GetComparisonAsync(comparison.Id));
+        var tombstone = AssertEx.NotNull(await runs.GetArtifactAsync(discarded.Id));
+        AssertEx.True(tombstone.DiscardedAtUtc.HasValue);
+        AssertEx.True(tombstone.QualityDecisionJson.HasValue);
     }
 
     [Test]
@@ -299,10 +393,16 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         {
             ModelName = modelName
         });
+        _ = await BindAsync(store, evaluation.Id);
         _ = await store.AppendResultsAsync(evaluation.Id,
             fixture.SampleIds.Select(id => new TrainingEvaluationResultEntry(id, "tool-call", Passed: true, "deterministic")).ToArray());
         return await store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Succeeded, errorMessage: null);
     }
+
+    private static readonly ReadOnlyMemory<byte> AttemptProvenance = Encoding.UTF8.GetBytes("attempt-v1");
+
+    private static Task<TrainingEvaluationRecord> BindAsync(TrainingEvaluationStore store, Guid evaluationId) =>
+        store.BindExecutionProvenanceAsync(evaluationId, AttemptProvenance);
 
     private static TrainingEvaluationEnqueueCommand Command(EvaluationFixture fixture) =>
         new(fixture.TrainingRunId,

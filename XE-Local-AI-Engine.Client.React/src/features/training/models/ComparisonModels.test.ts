@@ -14,6 +14,8 @@ describe("ComparisonModels", () => {
 		const run = toEvaluationRun({
 			id: "e1",
 			modelName: "base-model",
+			targetKind: "InstalledModel",
+			sourceArtifactId: null,
 			datasetId: "d1",
 			datasetContentFingerprint: "fp-1",
 			status: "Running",
@@ -35,9 +37,31 @@ describe("ComparisonModels", () => {
 		expect(run.datasetContentFingerprint).toBe("fp-1");
 	});
 
+	it("maps the evaluation target identity used to bind a tuned run to its staged artifact", () => {
+		const run = toEvaluationRun({
+			id: "e-artifact",
+			modelName: "merged-Q4_K_M.gguf",
+			targetKind: "StagedTrainingArtifact",
+			sourceArtifactId: "artifact-1",
+			datasetId: "d1",
+			datasetContentFingerprint: "fp-1",
+			status: "Succeeded",
+			totalCount: 10,
+			scoredCount: 10,
+			passedCount: 9,
+			perKind: [],
+			version: 2,
+			createdAtUtc: 1,
+			updatedAtUtc: 2,
+		});
+
+		expect(run.targetKind).toBe("StagedTrainingArtifact");
+		expect(run.sourceArtifactId).toBe("artifact-1");
+	});
+
 	it("degrades an unrecognized status to Queued rather than throwing", () => {
 		// A wire value this build does not know is not worth a blank page over.
-		expect(toEvaluationRun({ id: "e1", modelName: "m", datasetId: "d", datasetContentFingerprint: "fp", status: "Reticulating", totalCount: 1, scoredCount: 0, passedCount: 0, perKind: [], version: 1, createdAtUtc: 1, updatedAtUtc: 1 }).status).toBe(
+		expect(toEvaluationRun({ id: "e1", modelName: "m", targetKind: "InstalledModel", sourceArtifactId: null, datasetId: "d", datasetContentFingerprint: "fp", status: "Reticulating", totalCount: 1, scoredCount: 0, passedCount: 0, perKind: [], version: 1, createdAtUtc: 1, updatedAtUtc: 1 }).status).toBe(
 			"Queued",
 		);
 	});
@@ -86,6 +110,8 @@ const base = {
 	trainingRunId: null,
 	comparisonId: null,
 	modelName: "m",
+	targetKind: "InstalledModel",
+	sourceArtifactId: null,
 	datasetId: "d1",
 	datasetContentFingerprint: "fp-1",
 	status: "Succeeded" as const,

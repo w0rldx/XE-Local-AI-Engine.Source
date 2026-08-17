@@ -109,13 +109,10 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_pendingApprovals.TryRemove(requestId, out var request))
-        {
-            throw new InvalidOperationException($"No pending orchestration approval matches request id '{requestId}'.");
-        }
-
-        var response = BuildApprovalResponse(request, approved, reason);
-        await _run.SendResponseAsync(response).ConfigureAwait(false);
+        await CompletePendingApprovalAsync(_pendingApprovals,
+            requestId,
+            request => _run.SendResponseAsync(BuildApprovalResponse(request, approved, reason)),
+            SuspendIdleWatchdogForPendingApproval).ConfigureAwait(false);
 
         // The run resumes (the tool executes a later superstep); restart the idle clock the watch suspended while
         // this approval was outstanding, unless another approval is still pending.
@@ -124,6 +121,48 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             if (_idleCts is not null && _pendingApprovals.IsEmpty)
             {
                 _idleCts.CancelAfter(_idleTimeout);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Claims one pending approval while sending its workflow response. A failed send restores the exact request so
+    ///     the caller can retry and the watch's pending-approval watchdog suspension remains truthful.
+    /// </summary>
+    internal static async Task CompletePendingApprovalAsync<TRequest>(ConcurrentDictionary<string, TRequest> pendingApprovals,
+        string requestId,
+        Func<TRequest, ValueTask> sendAsync,
+        Action? afterRestore = null)
+        where TRequest : notnull
+    {
+        ArgumentNullException.ThrowIfNull(pendingApprovals);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentNullException.ThrowIfNull(sendAsync);
+
+        if (!pendingApprovals.TryRemove(requestId, out var request))
+        {
+            throw new InvalidOperationException($"No pending orchestration approval matches request id '{requestId}'.");
+        }
+
+        try
+        {
+            await sendAsync(request).ConfigureAwait(false);
+        }
+        catch
+        {
+            _ = pendingApprovals.TryAdd(requestId, request);
+            afterRestore?.Invoke();
+            throw;
+        }
+    }
+
+    private void SuspendIdleWatchdogForPendingApproval()
+    {
+        lock (_idleClockGate)
+        {
+            if (_idleCts is not null && !_pendingApprovals.IsEmpty)
+            {
+                _idleCts.CancelAfter(Timeout.InfiniteTimeSpan);
             }
         }
     }

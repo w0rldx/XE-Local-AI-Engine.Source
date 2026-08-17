@@ -363,6 +363,11 @@ export type XeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactRespo
 	smokeState: string;
 	smokeReason?: string | null;
 	committedModelName?: string | null;
+	qualityComparisonId?: string | null;
+	qualityOutcome?: string | null;
+	discardedAtUtc?: number | null;
+	discardReason?: string | null;
+	discardCleanupPending: boolean;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -393,12 +398,46 @@ export type XeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifa
 	modelName: string;
 };
 
+export type XeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse = {
+	artifactId: string;
+	comparisonId: string;
+	artifactSha256: string;
+	outcome: string;
+	failureCodes: Array<string>;
+	overrideReason?: string | null;
+	discardedAtUtc?: number | null;
+	discardReason?: string | null;
+	discardCleanupPending: boolean;
+	version: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingExportsV1DecideArtifactQualityRequest = {
+	comparisonId: string;
+	expectedVersion: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingExportsV1OverrideArtifactQualityRequest = {
+	expectedVersion: number;
+	reason: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingExportsV1BeginArtifactQualityRevalidationRequest = {
+	expectedVersion: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest = {
+	expectedVersion: number;
+	reason: string;
+};
+
 export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationResponse = {
 	id: string;
 	trainingRunId?: string | null;
 	comparisonId?: string | null;
 	modelName: string;
 	modelContentFingerprint?: string | null;
+	targetKind: string;
+	sourceArtifactId?: string | null;
 	datasetId: string;
 	datasetContentFingerprint: string;
 	status: string;
@@ -423,9 +462,10 @@ export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1CreateEvaluationR
 	trainingRunId: string;
 	target: XeLocalAiEngineClientServicesTrainingEvaluationEvaluationTarget;
 	modelName?: string | null;
+	artifactId?: string | null;
 };
 
-export type XeLocalAiEngineClientServicesTrainingEvaluationEvaluationTarget = "Base" | "Tuned";
+export type XeLocalAiEngineClientServicesTrainingEvaluationEvaluationTarget = "Undefined" | "Base" | "Tuned";
 
 export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationByIdRequest = {
 	[key: string]: never;
@@ -5034,6 +5074,173 @@ export type PromoteTrainingArtifactResponses = {
 };
 
 export type PromoteTrainingArtifactResponse = PromoteTrainingArtifactResponses[keyof PromoteTrainingArtifactResponses];
+
+export type DecideTrainingArtifactQualityData = {
+	body: XeLocalAiEngineClientEndpointsTrainingExportsV1DecideArtifactQualityRequest;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/artifacts/{artifactId}/quality";
+};
+
+export type DecideTrainingArtifactQualityErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type DecideTrainingArtifactQualityError = DecideTrainingArtifactQualityErrors[keyof DecideTrainingArtifactQualityErrors];
+
+export type DecideTrainingArtifactQualityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+};
+
+export type DecideTrainingArtifactQualityResponse =
+	DecideTrainingArtifactQualityResponses[keyof DecideTrainingArtifactQualityResponses];
+
+export type OverrideTrainingArtifactQualityData = {
+	body: XeLocalAiEngineClientEndpointsTrainingExportsV1OverrideArtifactQualityRequest;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/artifacts/{artifactId}/quality/override";
+};
+
+export type OverrideTrainingArtifactQualityErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type OverrideTrainingArtifactQualityError =
+	OverrideTrainingArtifactQualityErrors[keyof OverrideTrainingArtifactQualityErrors];
+
+export type OverrideTrainingArtifactQualityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+};
+
+export type OverrideTrainingArtifactQualityResponse =
+	OverrideTrainingArtifactQualityResponses[keyof OverrideTrainingArtifactQualityResponses];
+
+export type BeginTrainingArtifactQualityRevalidationData = {
+	body: XeLocalAiEngineClientEndpointsTrainingExportsV1BeginArtifactQualityRevalidationRequest;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/artifacts/{artifactId}/quality/revalidation";
+};
+
+export type BeginTrainingArtifactQualityRevalidationErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type BeginTrainingArtifactQualityRevalidationError =
+	BeginTrainingArtifactQualityRevalidationErrors[keyof BeginTrainingArtifactQualityRevalidationErrors];
+
+export type BeginTrainingArtifactQualityRevalidationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+};
+
+export type BeginTrainingArtifactQualityRevalidationResponse =
+	BeginTrainingArtifactQualityRevalidationResponses[keyof BeginTrainingArtifactQualityRevalidationResponses];
+
+export type DiscardTrainingArtifactQualityData = {
+	body: XeLocalAiEngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest;
+	path: {
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/artifacts/{artifactId}/quality/discard";
+};
+
+export type DiscardTrainingArtifactQualityErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type DiscardTrainingArtifactQualityError =
+	DiscardTrainingArtifactQualityErrors[keyof DiscardTrainingArtifactQualityErrors];
+
+export type DiscardTrainingArtifactQualityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+};
+
+export type DiscardTrainingArtifactQualityResponse =
+	DiscardTrainingArtifactQualityResponses[keyof DiscardTrainingArtifactQualityResponses];
 
 export type ListEvaluationsData = {
 	body?: never;
