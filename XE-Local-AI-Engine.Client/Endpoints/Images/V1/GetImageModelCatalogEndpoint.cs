@@ -74,7 +74,7 @@ public sealed class GetImageModelCatalogEndpoint(
         // The catalog passed validation, so every role parses; a defensive fallback keeps a hypothetical future role
         // from throwing out of a read endpoint.
         var sizedParts = entry.Parts
-                              .Select(part => (Role: Enum.TryParse<ImageModelPartRole>(part.Role, ignoreCase: true, out var role)
+                              .Select(part => new ImageModelPartSize(Enum.TryParse<ImageModelPartRole>(part.Role, ignoreCase: true, out var role)
                                       ? role
                                       : ImageModelPartRole.Diffusion,
                                   part.SizeBytes))

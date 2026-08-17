@@ -55,12 +55,12 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         // provider's mount broker, which sweeps these targets together with every engine-generated mount target — an
         // unbounded list that a fixed set of pairwise calls could never cover.
         if (FindOverlap([
-                (nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
-                (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
-                (nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
+                new ContainerMountTarget(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
+                new ContainerMountTarget(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
+                new ContainerMountTarget(nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
             ]) is { } collision)
         {
-            failures.Add($"'{collision.Second}' ('{collision.SecondPath}') and '{collision.First}' ('{collision.FirstPath}') must not "
+            failures.Add($"'{collision.Second.Name}' ('{collision.Second.Path}') and '{collision.First.Name}' ('{collision.First.Path}') must not "
                          + "overlap — one would shadow the other and the resulting container would not be the one that was verified.");
         }
 
@@ -77,7 +77,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
     ///     these as decimal-looking strings that are NOT decimals — 1.9 precedes 1.41 — so they are compared
     ///     component-wise as integers. Culture-invariant on purpose: the daemon's wire format is not localized.
     /// </summary>
-    internal static bool TryParseApiVersion(string? value, out (int Major, int Minor) version)
+    internal static bool TryParseApiVersion(string? value, out DockerApiVersion version)
     {
         version = default;
         if (string.IsNullOrWhiteSpace(value))
@@ -93,12 +93,12 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
             return false;
         }
 
-        version = (major, minor);
+        version = new DockerApiVersion(major, minor);
         return true;
     }
 
     /// <summary>Whether <paramref name="observed" /> is at least <paramref name="minimum" />, compared component-wise.</summary>
-    internal static bool IsApiVersionAtLeast((int Major, int Minor) observed, (int Major, int Minor) minimum)
+    internal static bool IsApiVersionAtLeast(DockerApiVersion observed, DockerApiVersion minimum)
     {
         return observed.Major != minimum.Major ? observed.Major > minimum.Major : observed.Minor >= minimum.Minor;
     }
@@ -141,7 +141,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
     ///         would have refused becomes reachable at create time.
     ///     </para>
     /// </summary>
-    internal static (string First, string FirstPath, string Second, string SecondPath)? FindOverlap(IReadOnlyList<(string Name, string? Path)> targets)
+    internal static ContainerMountOverlap? FindOverlap(IReadOnlyList<ContainerMountTarget> targets)
     {
         ArgumentNullException.ThrowIfNull(targets);
 
@@ -151,7 +151,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
             {
                 if (Overlaps(targets[outer].Path, targets[inner].Path))
                 {
-                    return (targets[outer].Name, targets[outer].Path!, targets[inner].Name, targets[inner].Path!);
+                    return new ContainerMountOverlap(targets[outer], targets[inner]);
                 }
             }
         }

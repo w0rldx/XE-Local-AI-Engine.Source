@@ -1144,7 +1144,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenModelForceEjectedMidRequest_MapsCancelledWithTruthfulMessage()
     {
-        // AUD4-04: an operator FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as
+        // An operator FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as
         // Cancelled (an operator action, not a generic provider failure) and surface the truthful "ejected" message
         // rather than a generic "provider unreachable".
         var sender = new MockHubMessageSender();
@@ -1164,7 +1164,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_LocalLlamaCppModel_WarmsToReadinessBeforeGenerating()
     {
-        // AUD4-01: for a local llama.cpp model the runner warms the model to readiness BEFORE the watched streaming pull
+        // For a local llama.cpp model the runner warms the model to readiness BEFORE the watched streaming pull
         // begins, so the cold load is never guarded by (and killed by) the stream-idle watchdog.
         var sender = new MockHubMessageSender();
         var events = new ConcurrentQueue<string>();
@@ -1199,7 +1199,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_OllamaModel_DoesNotWarmViaReadinessPhase()
     {
-        // AUD4-01: the readiness (warm) phase is llama.cpp-only. An Ollama model must NOT be warmed here (it warms
+        // The readiness (warm) phase is llama.cpp-only. An Ollama model must NOT be warmed here (it warms
         // cheaply on first send), so the phase is a no-op for it.
         var sender = new MockHubMessageSender();
         var provider = Substitute.For<ILocalModelProvider>();

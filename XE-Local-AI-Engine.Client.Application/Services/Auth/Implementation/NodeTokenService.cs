@@ -26,7 +26,7 @@ public sealed class NodeTokenService : INodeTokenService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    public (string AccessToken, DateTime ExpiresAtUtc) CreateAccessToken(NodeUser user, IEnumerable<string> roles)
+    public AccessTokenResult CreateAccessToken(NodeUser user, IEnumerable<string> roles)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(roles);
@@ -54,7 +54,7 @@ public sealed class NodeTokenService : INodeTokenService
                 Subject = new ClaimsIdentity(claims)
             };
 
-            return (TokenHandler.CreateToken(descriptor), expiresAt.UtcDateTime);
+            return new AccessTokenResult(TokenHandler.CreateToken(descriptor), expiresAt.UtcDateTime);
         }
         finally
         {

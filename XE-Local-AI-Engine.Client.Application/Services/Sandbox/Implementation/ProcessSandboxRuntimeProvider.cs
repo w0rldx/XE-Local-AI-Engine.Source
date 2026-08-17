@@ -88,7 +88,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     // O_RDONLY (0x0) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux — the same flag set the deleted container
     // provider used. A raw (FileOptions) cast for O_NOFOLLOW throws, so the libc open() DllImport below is required
-    // (parity with the AgentHome marker-J-local host-file no-follow guard).
+    // (parity with AgentHome's host-file no-follow guard).
     private const int ReadOnlyNoFollowCloseOnExecFlags = 0x0 | 0x20000 | 0x80000;
 
     // O_WRONLY (0x1) | O_CREAT (0x40) | O_TRUNC (0x200) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux. A
@@ -1319,7 +1319,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
     }
 
-    // ---- ported host-file no-follow / byte-cap guard (from LocalContainerSandboxProvider, marker-J-local pattern) ----
+    // ---- ported host-file no-follow / byte-cap guard (same pattern as the deleted LocalContainerSandboxProvider) ----
 
     /// <summary>
     ///     Reads the host file under the no-follow / byte-recheck guards. Throws <see cref="InvalidDataException" />
@@ -1369,7 +1369,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     Opens the host file refusing a symlink at the final component. On Linux this is an atomic <c>open(2)</c> with
     ///     <c>O_NOFOLLOW</c> (the kernel fails with <c>ELOOP</c> if the leaf is a symlink), closing the check-then-open
     ///     race a managed <c>lstat</c> + open would leave. A raw <c>(FileOptions)</c> cast for <c>O_NOFOLLOW</c> throws,
-    ///     so the libc <c>open()</c> DllImport is required (parity with the AgentHome marker-J-local guard). On a
+    ///     so the libc <c>open()</c> DllImport is required (the same guard AgentHome uses). On a
     ///     non-Linux host this provider is not the primary runtime, so it falls back to a plain open and relies on the
     ///     canonicalized jail check plus the byte re-check. Throws <see cref="UnauthorizedAccessException" /> when the
     ///     leaf is a symlink or the open otherwise fails.

@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 /// <summary>
 ///     FastEndpoints handler for the node hardware profile (GET model-fit/hardware-profile). Returns the sanitized
 ///     RAM/VRAM/GPU-vendor/CPU/free-disk aggregates the advisor sizes its memory-fit budget against — the PHYSICAL
-///     facts — PLUS the runtime device audit (AUD4-03): whether the selected inference runtime actually uses the
+///     facts — PLUS the runtime device audit: whether the selected inference runtime actually uses the
 ///     advertised GPU or has silently fallen back to the CPU (inferenceBackend, cpuFallback, reason, remediation).
 ///     Carries NO machine identifier (hostname/serial) — aggregates only. A <c>?refresh=true</c> query bypasses the
 ///     in-memory caches and re-probes.

@@ -36,7 +36,7 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
         "Resolved chat clients are cached and owned by this router (disposed in Dispose); the underlying model "
         + "processes are owned by the provider/supervisor. Disposing a resolved client per-call would be incorrect.";
 
-    private readonly ConcurrentDictionary<(string Provider, string Model), IChatClient> _clientsByProviderAndModel = new();
+    private readonly ConcurrentDictionary<ProviderModelKey, IChatClient> _clientsByProviderAndModel = new();
     private readonly string _defaultModelName;
 
     private readonly ILocalModelProviderResolver _resolver;
@@ -127,7 +127,7 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
         var modelName = string.IsNullOrWhiteSpace(options?.ModelId) ? _defaultModelName : options.ModelId;
         var providerName = await _resolver.ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
 
-        var cacheKey = (Provider: providerName, Model: modelName);
+        var cacheKey = new ProviderModelKey(providerName, modelName);
         if (_clientsByProviderAndModel.TryGetValue(cacheKey, out var cached))
         {
             return cached;
@@ -151,4 +151,8 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
 
         return stored;
     }
+
+    // Cache key for a resolved chat client: one client per (provider, model) pair, since the same model name can be
+    // served by different providers.
+    private readonly record struct ProviderModelKey(string Provider, string Model);
 }

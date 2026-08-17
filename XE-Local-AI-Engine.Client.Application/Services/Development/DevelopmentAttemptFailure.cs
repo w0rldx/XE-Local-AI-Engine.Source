@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Runtime.InteropServices;
+
 /// <summary>
 ///     Stable <see cref="DevelopmentAttemptEvidenceException.FailureCode" /> values, so a UI can localize them and an
 ///     operator can tell two different failures apart.
@@ -110,7 +112,7 @@ internal static class DevelopmentAttemptOutputBudget
     ///     Validates the usage a completed attempt reported, and returns the accepted (input, output) pair.
     ///     <paramref name="role" /> only names the failing role in the operator reason.
     /// </summary>
-    public static (long InputTokens, long OutputTokens) Accept(long? reportedInputTokens,
+    public static AcceptedTokenUsage Accept(long? reportedInputTokens,
         long? reportedOutputTokens,
         long? reportedTotalTokens,
         int maxOutputTokens,
@@ -141,6 +143,10 @@ internal static class DevelopmentAttemptOutputBudget
                 + "Raise the project's maximum-tokens budget, or give the task a narrower objective so it needs fewer rounds.");
         }
 
-        return (inputTokens, outputTokens);
+        return new AcceptedTokenUsage(inputTokens, outputTokens);
     }
 }
+
+/// <summary>The token counts a completed attempt reported, after they passed the budget checks.</summary>
+[StructLayout(LayoutKind.Auto)]
+internal readonly record struct AcceptedTokenUsage(long InputTokens, long OutputTokens);

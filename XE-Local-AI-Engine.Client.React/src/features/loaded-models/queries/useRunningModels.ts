@@ -47,7 +47,7 @@ export interface EjectRunningModelVariables {
 	force?: boolean;
 }
 
-// Ejects a running model from the llama.cpp runtime, returning what the eject actually did (AUD4-20: ejected /
+// Ejects a running model from the llama.cpp runtime, returning what the eject actually did (ejected /
 // timed_out_still_busy / forced / not_running) so the page can surface a distinct outcome toast. Invalidates the
 // running-models list so an ejected entry disappears.
 export function useEjectRunningModel() {

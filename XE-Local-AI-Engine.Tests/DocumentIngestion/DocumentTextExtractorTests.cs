@@ -264,10 +264,10 @@ public sealed class DocumentTextExtractorTests
         // Two individually-valid Zip64 uncompressed sizes that sum past long.MaxValue. Unchecked addition would wrap the
         // running total to a small (or negative) number and slip an oversize archive past the absolute ceiling; the
         // saturating aggregation must clamp at long.MaxValue and REJECT instead.
-        (long Length, long CompressedLength)[] entries =
+        DocumentTextExtractor.ZipEntrySize[] entries =
         [
-            (long.MaxValue - 10, 100),
-            (long.MaxValue - 10, 100)
+            new(long.MaxValue - 10, CompressedLength: 100),
+            new(long.MaxValue - 10, CompressedLength: 100)
         ];
 
         var reason = DocumentTextExtractor.EvaluateDeclaredZipSizes(entries,
@@ -282,7 +282,7 @@ public sealed class DocumentTextExtractorTests
     {
         // A high-bit-set Zip64 size reads back as a negative long. A negative term would drag the running total down and
         // mask an oversize archive, so hostile negative sizes must reject outright.
-        (long Length, long CompressedLength)[] entries = [(-1, 100)];
+        DocumentTextExtractor.ZipEntrySize[] entries = [new(Length: -1, CompressedLength: 100)];
 
         var reason = DocumentTextExtractor.EvaluateDeclaredZipSizes(entries,
             maxDeclaredUncompressedBytes: 512L * 1024 * 1024,

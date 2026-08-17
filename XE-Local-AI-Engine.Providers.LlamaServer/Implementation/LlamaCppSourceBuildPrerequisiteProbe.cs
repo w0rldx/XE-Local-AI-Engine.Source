@@ -193,7 +193,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         }
         finally
         {
-            TryKill(process);
+            ProcessCaptureRunner.TryKill(process);
         }
     }
 
@@ -249,21 +249,6 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         var newline = text.IndexOfAny(['\r', '\n']);
         var line = newline < 0 ? text : text[..newline];
         return line.Trim();
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best-effort: the tool may have exited between the check and the kill, or be unkillable.
-        }
     }
 
     private static string DefaultCacheRoot()

@@ -8,7 +8,7 @@ public sealed record LlamaGpuDevice(string Name, long? TotalBytes, long? FreeByt
 
 /// <summary>
 ///     The devices a specific llama.cpp binary actually enumerates for a given acceleration variant — the structured
-///     answer to "did the SELECTED runtime find the GPU?", used by the post-spawn device audit (AUD4-03). Distinguishes
+///     answer to "did the SELECTED runtime find the GPU?", used by the post-spawn device audit. Distinguishes
 ///     a probe that RAN and saw a (possibly empty) device list from a probe that could not run (timeout / failure):
 ///     <see cref="ProbeSucceeded" /> gates whether <see cref="Devices" /> is authoritative, so a failed probe never
 ///     raises a false CPU-fallback alarm.

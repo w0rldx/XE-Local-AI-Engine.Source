@@ -12,14 +12,14 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The SignalR-boundary half of the read-only (<c>Origin=Remote</c>) rejection. SignalR forwards the MESSAGE of a
-///     <see cref="HubException" /> and of nothing else, so the mutation guard's own exception — thrown lazily from
-///     inside the services' async iterators, long after the hub method returned its enumerable — reached the browser
-///     as the generic "An unexpected error occurred invoking 'SendMessage' on the server." while the REST path for the
-///     same conversation answered a 409 the SPA could read. These pin the conversion AND the discriminator token the
-///     SPA matches on, which is what keeps the two paths telling the user the same thing.
+///     The SignalR boundary's translation of the stream services' typed, caller-triggerable rejections. SignalR
+///     forwards the MESSAGE of a <see cref="HubException" /> and of nothing else, so each rejection — thrown lazily
+///     from inside the services' async iterators, long after the hub method returned its enumerable — otherwise
+///     reaches the browser as the generic "An unexpected error occurred invoking 'SendMessage' on the server." These
+///     pin the conversion, the discriminator token the SPA matches the read-only case on (which is what keeps the hub
+///     and the REST 409 telling the user the same thing), and the narrowness that keeps every OTHER fault opaque.
 /// </summary>
-public sealed class LocalChatHubReadOnlyConversationTests
+public sealed class LocalChatHubDomainRejectionTests
 {
     private const string ExpectedPrefix = $"{nameof(NodeConflictProblemType.ReadOnlyConversation)}: ";
 
@@ -81,6 +81,37 @@ public sealed class LocalChatHubReadOnlyConversationTests
     }
 
     [Test]
+    public async Task RegenerateMessage_WhenTheConversationIsGone_SurfacesTheSentenceInsteadOfSignalRsGenericError()
+    {
+        // Same failure mode the read-only case fixed, for the outcomes a stale tab actually hits: a deleted
+        // conversation, a deleted message, a correlation already generating. Untranslated they reach the browser as
+        // "An unexpected error occurred invoking 'RegenerateMessage' on the server." and the operator learns nothing.
+        var conversationId = Guid.NewGuid();
+
+        var exception = await RegenerateThrowingAsync(new NodeChatConversationNotFoundException(conversationId)).ConfigureAwait(false);
+
+        AssertEx.Equal(new NodeChatConversationNotFoundException(conversationId).Message, exception.Message);
+    }
+
+    [Test]
+    public async Task RegenerateMessage_WhenTheMessageIsGone_SurfacesTheSentenceInsteadOfSignalRsGenericError()
+    {
+        var messageId = Guid.NewGuid();
+
+        var exception = await RegenerateThrowingAsync(new NodeChatMessageNotFoundException(messageId)).ConfigureAwait(false);
+
+        AssertEx.Equal(new NodeChatMessageNotFoundException(messageId).Message, exception.Message);
+    }
+
+    [Test]
+    public async Task RegenerateMessage_WhenTheCorrelationIsAlreadyStreaming_SurfacesTheSentenceInsteadOfSignalRsGenericError()
+    {
+        var exception = await RegenerateThrowingAsync(new NodeChatStreamAlreadyActiveException()).ConfigureAwait(false);
+
+        AssertEx.Equal(new NodeChatStreamAlreadyActiveException().Message, exception.Message);
+    }
+
+    [Test]
     public async Task SendMessage_WhenTheStreamFailsForAnyOtherReason_LeavesTheExceptionAlone()
     {
         // The conversion must be narrow: turning every fault into a HubException would forward internal detail to the
@@ -100,6 +131,38 @@ public sealed class LocalChatHubReadOnlyConversationTests
         });
 
         AssertEx.Equal("model unavailable", exception.Message);
+    }
+
+    private static async Task<HubException> RegenerateThrowingAsync(Exception rejection)
+    {
+        var regenerationService = Substitute.For<INodeChatRegenerationService>();
+        regenerationService.RegenerateAsync(Arg.Any<Guid>(),
+                               Arg.Any<Guid>(),
+                               Arg.Any<string?>(),
+                               Arg.Any<bool>(),
+                               Arg.Any<bool>(),
+                               Arg.Any<IReadOnlyDictionary<Guid, Guid>?>(),
+                               Arg.Any<SamplingOptions?>(),
+                               Arg.Any<CancellationToken>())
+                           .Returns(_ => ThrowsAsync(rejection));
+
+        using var hub = CreateHub(Substitute.For<INodeChatStreamService>(), regenerationService);
+
+        return await AssertEx.ThrowsAsync<HubException>(async () =>
+        {
+            await foreach (var _ in hub.RegenerateMessage(Guid.NewGuid(),
+                                          Guid.NewGuid(),
+                                          reasoningEffort: null,
+                                          useLocalTools: false,
+                                          useKnowledgeBase: false,
+                                          selectedPath: null,
+                                          samplingOptions: null,
+                                          CancellationToken.None)
+                                      .ConfigureAwait(false))
+            {
+                // The rejection is thrown before the first event, so the body never runs.
+            }
+        }).ConfigureAwait(false);
     }
 
     private static void AssertReadOnlyMessage(HubException exception, Guid conversationId)

@@ -46,7 +46,7 @@ function errorMessage(error: unknown, t: TFunction): string {
 	return apiErrorMessage(error, t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded."));
 }
 
-// Copyable W3C trace id (AUD4-19) so a failed run's "See local logs" row correlates with the exported trace. Renders
+// Copyable W3C trace id so a failed run's "See local logs" row correlates with the exported trace. Renders
 // nothing when no trace id was captured (legacy/platform runs). Uses the app's idiomatic CopyButton affordance.
 function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
 	const { t } = useTranslation();

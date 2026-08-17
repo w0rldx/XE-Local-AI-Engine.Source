@@ -275,7 +275,7 @@ function ValidationCommandCard({ command }: { readonly command: DevelopmentValid
  *   answer, and it is authoritative about its own subject forever.
  * - `artifact.isValid` is CURRENCY — whether the working tree has since moved away from that subject.
  *
- * Conflating them is what produced F-056: a failed gate invalidates the approval evidence (correctly — a failed
+ * Conflating them is what dropped every failed report: a failed gate invalidates the approval evidence (correctly — a failed
  * validation must not stay approvable), which flips `isValid` to false, and the panel then dropped the report and
  * told the operator "no deterministic validation has run for this task yet" while the timeline beside it read
  * `ValidationFinalized — Failed`. The most prominent statement on the screen was the false one.
@@ -455,7 +455,7 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 	const validationArtifacts = artifacts.filter(
 		(artifact) => artifact.kind === "ValidationReport" || artifact.kind === "ReviewReport",
 	);
-	// The newest validation report, WHATEVER its validity. Selecting on `isValid` was the F-056 defect: a failed gate
+	// The newest validation report, WHATEVER its validity. Selecting on `isValid` was the defect: a failed gate
 	// invalidates the approval evidence, so every failed report was dropped here and the panel fell through to "no
 	// deterministic validation has run for this task yet" — the report that existed, was fetchable, and named the
 	// fault. Currency is a presentation decision made in ValidationReportView from the report's own verdict; it is

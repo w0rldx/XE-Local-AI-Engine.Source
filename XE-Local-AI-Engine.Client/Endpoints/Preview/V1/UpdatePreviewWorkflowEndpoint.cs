@@ -40,9 +40,7 @@ public sealed class UpdatePreviewWorkflowEndpoint(IPreviewWorkflowService previe
                 return;
 
             case PreviewWorkflowMutationOutcome.Conflict:
-                await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
-                              detail: "The workflow was modified by another writer; reload and retry."))
-                          .ConfigureAwait(false);
+                await Send.ConflictProblemAsync("The workflow was modified by another writer; reload and retry.").ConfigureAwait(false);
                 return;
 
             case PreviewWorkflowMutationOutcome.Invalid:

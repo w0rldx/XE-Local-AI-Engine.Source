@@ -200,7 +200,7 @@ public sealed class BenchmarkRunFreezeService(
         }
     }
 
-    private async Task<(BenchmarkJudgeSnapshotV1 Snapshot, BenchmarkFrozenLaunch? Launch)> CreateJudgeSnapshotAsync(BenchmarkProjectRecord project,
+    private async Task<FrozenJudge> CreateJudgeSnapshotAsync(BenchmarkProjectRecord project,
         InstalledModelSnapshot? judge,
         LlamaServerLaunchCapabilities? capabilities,
         GpuVariant variant,
@@ -213,14 +213,15 @@ public sealed class BenchmarkRunFreezeService(
 
         if (!project.JudgeEnabled)
         {
-            return (new BenchmarkJudgeSnapshotV1(false, null, project.JudgePromptVersion, project.JudgeOutputSchemaVersion, null,
+            return new FrozenJudge(new BenchmarkJudgeSnapshotV1(false, null, project.JudgePromptVersion, project.JudgeOutputSchemaVersion, null,
                 null, null, null, null,
                 Hash(new
                 {
                     project.JudgePromptVersion,
                     project.JudgeOutputSchemaVersion,
                     Enabled = false
-                })), null);
+                })),
+                Launch: null);
         }
 
         var model = ToSnapshot(judge ?? throw new BenchmarkEligibilityException("The selected judge model is not installed."));
@@ -230,7 +231,7 @@ public sealed class BenchmarkRunFreezeService(
         var launch = await ResolveRuntimeAsync(model.ModelName, contextTokens, requestedKvCacheType: null, capabilities, variant, cancellationToken).ConfigureAwait(false);
         var runtime = launch.Runtime;
         var sampling = BenchmarkFrozenPolicies.DeterministicSampling();
-        return (new BenchmarkJudgeSnapshotV1(true,
+        return new FrozenJudge(new BenchmarkJudgeSnapshotV1(true,
             model,
             project.JudgePromptVersion,
             project.JudgeOutputSchemaVersion,
@@ -249,7 +250,8 @@ public sealed class BenchmarkRunFreezeService(
                 Sampling = sampling,
                 BenchmarkFrozenPolicies.JudgeSystemPrompt,
                 BenchmarkFrozenPolicies.JudgeOutputSchemaJson
-            })), launch);
+            })),
+            launch);
     }
 
     /// <summary>
@@ -312,7 +314,7 @@ public sealed class BenchmarkRunFreezeService(
     ///     explicit quantized pick the selected binary cannot be shown to accept is refused (422) rather than
     ///     discovered as a failed spawn.
     /// </summary>
-    private static (string Effective, string Source, string? Reason) ResolveKvCacheType(string? requested,
+    private static KvCacheResolution ResolveKvCacheType(string? requested,
         GpuVariant variant,
         LlamaServerLaunchCapabilities? capabilities,
         bool optimizedDisabled)
@@ -323,27 +325,27 @@ public sealed class BenchmarkRunFreezeService(
         {
             if (!isGpu)
             {
-                return (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonCpuVariant);
+                return new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonCpuVariant);
             }
 
             if (!probed)
             {
-                return (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonProbeUnavailable);
+                return new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonProbeUnavailable);
             }
 
             if (optimizedDisabled)
             {
-                return (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonFallbackDisabled);
+                return new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonFallbackDisabled);
             }
 
             return Accepts(capabilities!, BenchmarkKvCacheType.Q8_0)
-                ? (BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto, null)
-                : (BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonManifestUnsupported);
+                ? new KvCacheResolution(BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto, null)
+                : new KvCacheResolution(BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, AutoReasonManifestUnsupported);
         }
 
         if (!BenchmarkKvCacheType.IsQuantized(requested))
         {
-            return (requested, BenchmarkKvCacheType.SourceExplicit, null);
+            return new KvCacheResolution(requested, BenchmarkKvCacheType.SourceExplicit, null);
         }
 
         if (!isGpu)
@@ -364,7 +366,7 @@ public sealed class BenchmarkRunFreezeService(
                 $"The selected llama.cpp binary does not accept a {requested} KV cache with flash attention. Pick f16.");
         }
 
-        return (requested, BenchmarkKvCacheType.SourceExplicit, null);
+        return new KvCacheResolution(requested, BenchmarkKvCacheType.SourceExplicit, null);
     }
 
     private static bool Accepts(LlamaServerLaunchCapabilities capabilities, string cacheType) =>
@@ -430,6 +432,14 @@ public sealed class BenchmarkRunFreezeService(
 
     private sealed record BenchmarkFrozenLaunch(BenchmarkLlamaRuntimeSnapshotV1 Runtime, BenchmarkRunLaunchIntent Intent);
 
+    // The frozen judge turn: its snapshot, plus the launch it needs when the judge is enabled (null when it is not, in
+    // which case no judge runtime is reserved).
+    private sealed record FrozenJudge(BenchmarkJudgeSnapshotV1 Snapshot, BenchmarkFrozenLaunch? Launch);
+
+    // The KV-cache type a launch will actually use: the effective type, whether it was picked explicitly or resolved by
+    // Auto, and — for Auto — the reason it degraded (null when it did not).
+    private sealed record KvCacheResolution(string Effective, string Source, string? Reason);
+
     private sealed class FreezeCommitGuard(
         IBenchmarkFreezeDependencyService dependencies,
         BenchmarkFreezeDependencySetV1 expected,
@@ -450,25 +460,6 @@ public sealed class BenchmarkRunFreezeService(
             {
                 return false;
             }
-        }
-    }
-}
-
-internal static class BenchmarkModelEligibility
-{
-    /// <summary>
-    ///     Admits local llama.cpp chat GGUFs only. An attached <c>mmproj</c> projector member is NOT disqualifying:
-    ///     the HF acquisition path auto-attaches one to modern text models (gemma-4, Qwen3.x), and it is an optional
-    ///     companion the chat runtime passes as <c>--mmproj</c> without changing text generation. The benchmark itself
-    ///     stays text-only — it never sends image content — so a projector-bearing chat model measures the same as a
-    ///     bare one. Genuine vision/projector-only models are excluded by their <see cref="GgufRole" />, not by this.
-    /// </summary>
-    public static void Validate(InstalledModelSnapshot snapshot, string role)
-    {
-        if (!string.Equals(snapshot.ProviderName, "llamacpp", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Role != GgufRole.Chat)
-        {
-            throw new BenchmarkEligibilityException($"The selected {role} model is not an eligible local text-generation GGUF.");
         }
     }
 }

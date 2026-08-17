@@ -163,7 +163,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             return null;
         }
 
-        var (file, estimate) = selected.Value;
+        var (file, estimate) = selected;
         var modelName = GgufModelName.Format(entry.GgufRepo, file.Quant);
         var kvQuantAdvisory = BuildKvQuantAdvisory(entry, file, ctxTarget, profile);
         return new CatalogRecommendationCandidate(entry, file, estimate, modelName, installedKeys.Contains(modelName), kvQuantAdvisory);

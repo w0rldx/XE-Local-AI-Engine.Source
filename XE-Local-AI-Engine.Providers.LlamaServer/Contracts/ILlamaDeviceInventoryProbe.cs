@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Probes the devices a llama.cpp binary actually enumerates for an acceleration variant, by running the SELECTED
 ///     binary's <c>llama-server --list-devices</c> and parsing its device table. Consumed by the runtime device audit
-///     (AUD4-03) to detect a silent CPU fallback — a GPU-variant binary that enumerates zero devices (e.g. the shipped
+///     to detect a silent CPU fallback — a GPU-variant binary that enumerates zero devices (e.g. the shipped
 ///     Vulkan build under WSL2 with no Vulkan ICD) still runs, but on the CPU.
 /// </summary>
 /// <remarks>

@@ -93,7 +93,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     public async Task TerminalizeAsync_CancelledRun_PersistsNullErrorSoNoBannerShows()
     {
         // A user cancel (or operator eject, also Cancelled-category) is an outcome, not a failure: the terminal row
-        // must carry NO error text, so the chat never shows a red error banner for a cancelled turn (AUD4-20 source fix).
+        // must carry NO error text, so the chat never shows a red error banner for a cancelled turn.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
@@ -191,7 +191,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor(string.Empty, string.Empty), wasCancelled: true);
 
-        // A user-cancelled interrupted stream also persists NO error text (AUD4-20 source fix), so no banner shows.
+        // A user-cancelled interrupted stream also persists NO error text, so no banner shows.
         await persistence.Received(1).TerminalizeAssistantMessageAsync(
             Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null && request.Envelope != null),
             Arg.Any<CancellationToken>());

@@ -282,7 +282,7 @@ export function applyGenerationEvent(current: DatasetGenerationProgress, event: 
 }
 
 // ---------------------------------------------------------------------------
-// Runtime + base-artifact view models (Slice 2 surface).
+// Runtime + base-artifact view models.
 // ---------------------------------------------------------------------------
 
 
@@ -482,7 +482,7 @@ export function formatBytes(bytes: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Training run view models (Slice 3 surface).
+// Training run view models.
 // ---------------------------------------------------------------------------
 
 export type TrainingRunStatusValue = "Queued" | "Preparing" | "Training" | "Exporting" | "Smoke" | "Succeeded" | "Failed" | "Cancelled";
@@ -703,7 +703,7 @@ export function isRunActive(status: TrainingRunStatusValue): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Staged export artifacts (Slice 4 surface).
+// Staged export artifacts.
 // ---------------------------------------------------------------------------
 
 export type TrainingArtifactKindValue = "AdapterGguf" | "MergedGguf" | "HfAdapterDir";

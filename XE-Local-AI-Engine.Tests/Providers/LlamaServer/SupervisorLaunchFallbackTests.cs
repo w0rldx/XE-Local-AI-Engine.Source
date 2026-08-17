@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-05: the one-shot KV-cache-quant + flash-attention fallback. When the optimized GPU launch cannot reach
+///     The one-shot KV-cache-quant + flash-attention fallback. When the optimized GPU launch cannot reach
 ///     readiness, the supervisor retries ONCE with the safe config and records the fallback per backend — but only when
 ///     the safe config then succeeds (so a genuinely broken model never poisons the backend's optimized-config state).
 /// </summary>

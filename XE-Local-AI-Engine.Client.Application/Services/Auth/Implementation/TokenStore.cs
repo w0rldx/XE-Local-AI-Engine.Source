@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Models;
@@ -106,7 +103,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
         try
         {
             await File.WriteAllBytesAsync(_credentialsPath, protectedPayload).ConfigureAwait(false);
-            ApplyPlatformFileSecurity();
+            SecureFilePermissions.Apply(_credentialsPath);
             _credentials = credentials;
         }
         finally
@@ -137,7 +134,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
             var payload = JsonSerializer.SerializeToUtf8Bytes(_credentials, SerializerOptions);
             var protectedPayload = _protector.Protect(payload);
             await File.WriteAllBytesAsync(_credentialsPath, protectedPayload).ConfigureAwait(false);
-            ApplyPlatformFileSecurity();
+            SecureFilePermissions.Apply(_credentialsPath);
         }
         finally
         {
@@ -261,39 +258,6 @@ public sealed class TokenStore : ITokenStore, IDisposable
     {
         var credentials = JsonSerializer.Deserialize<StoredWorkerCredentials>(payload, SerializerOptions);
         return credentials ?? throw new InvalidOperationException("Stored worker credentials could not be deserialized.");
-    }
-
-    private void ApplyPlatformFileSecurity()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            ApplyWindowsFileSecurity();
-            return;
-        }
-
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_credentialsPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private void ApplyWindowsFileSecurity()
-    {
-        var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-        var currentIdentity = WindowsIdentity.GetCurrent();
-        if (currentIdentity.User is not null)
-        {
-            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User,
-                FileSystemRights.FullControl,
-                AccessControlType.Allow));
-        }
-
-        var fileInfo = new FileInfo(_credentialsPath);
-        fileInfo.SetAccessControl(fileSecurity);
     }
 
     private void ClearCredentialsFileBestEffort()

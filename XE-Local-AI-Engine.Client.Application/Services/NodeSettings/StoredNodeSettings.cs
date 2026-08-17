@@ -63,7 +63,7 @@ public sealed partial record StoredNodeSettings
 
     // ALIASED, never re-literalled. This is the value the UI shows as "Recommended", and it used to be an independent
     // string literal that had to be bumped in lock-step with LlamaCppReleasePins.PinnedTag by hand — which is exactly
-    // how it went 509 builds stale while the engine's own pin had moved (F-007, live eval 2026-07-31). The layering
+    // how it went 509 builds stale while the engine's own pin had moved. The layering
     // permits the reference: the frozen direction forbids a PROVIDER depending on Client/Application, not the reverse,
     // and this assembly already references Providers.LlamaServer (see the Options using above). Const-to-const, so it
     // still inlines as a compile-time constant and stays usable in attributes and switch patterns.

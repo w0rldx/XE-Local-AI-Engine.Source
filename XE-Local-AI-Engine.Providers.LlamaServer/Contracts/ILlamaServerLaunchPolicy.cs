@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     The single component that owns every normal-spawn launch decision the audited defaults were missing: the requested
 ///     context window per role, the GPU KV-cache quantization + flash-attention defaults, the CPU thread policy, and the
 ///     persistent safe-fallback state. Consulted by the supervisor's launch-spec builder so these decisions are not spread
-///     across unrelated classes (AUD4-02/05/17).
+///     across unrelated classes.
 /// </summary>
 public interface ILlamaServerLaunchPolicy
 {

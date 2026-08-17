@@ -39,7 +39,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 
     /// <summary>
     ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
-    ///     explicit per-call HTTP network timeouts (AUD4-18) the deferred chat/embedding clients pin on the built OpenAI
+    ///     explicit per-call HTTP network timeouts the deferred chat/embedding clients pin on the built OpenAI
     ///     client; a null options bag falls back to the default policy. Chat and embedding take SEPARATE values on
     ///     purpose — a chat call also carries the invocation deadline, an embedding call has no other bound.
     /// </summary>

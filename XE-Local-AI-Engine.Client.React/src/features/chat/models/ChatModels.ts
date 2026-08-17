@@ -209,7 +209,7 @@ export interface ChatStreamingState {
 	// True while the assistant turn is queued behind another active invocation (before it starts streaming).
 	isQueued?: boolean;
 	// Pre-first-token runtime phase ("preparing_runtime" | "loading_model" | "generating"), set by an assistant-phase
-	// stream event (AUD4-20). Drives the "Loading model…" indicator during a local cold load; clears once content lands.
+	// stream event. Drives the "Loading model…" indicator during a local cold load; clears once content lands.
 	runtimePhase?: string;
 	error?: string;
 	failureCategory?: string;

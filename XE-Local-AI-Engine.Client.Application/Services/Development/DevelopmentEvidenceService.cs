@@ -11,7 +11,7 @@ internal interface IDevelopmentEvidenceService
         DevelopmentWorkspaceSession session,
         CancellationToken cancellationToken = default);
 
-    Task<(DevelopmentArtifactSnapshot Artifact, ReadOnlyMemory<byte> Content)> ReadLatestAsync(Guid taskId,
+    Task<DevelopmentArtifactWith<ReadOnlyMemory<byte>>> ReadLatestAsync(Guid taskId,
         DevelopmentArtifactKind kind,
         CancellationToken cancellationToken = default);
 
@@ -97,13 +97,13 @@ internal sealed class DevelopmentEvidenceService(
         }
     }
 
-    public async Task<(DevelopmentArtifactSnapshot Artifact, ReadOnlyMemory<byte> Content)> ReadLatestAsync(Guid taskId,
+    public async Task<DevelopmentArtifactWith<ReadOnlyMemory<byte>>> ReadLatestAsync(Guid taskId,
         DevelopmentArtifactKind kind,
         CancellationToken cancellationToken = default)
     {
         var artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false);
         var artifact = LatestValid(artifacts, kind);
-        return (artifact, await ReadRequiredAsync(artifact, cancellationToken).ConfigureAwait(false));
+        return new DevelopmentArtifactWith<ReadOnlyMemory<byte>>(artifact, await ReadRequiredAsync(artifact, cancellationToken).ConfigureAwait(false));
     }
 
     public async Task InvalidateApprovalEvidenceAsync(Guid taskId,

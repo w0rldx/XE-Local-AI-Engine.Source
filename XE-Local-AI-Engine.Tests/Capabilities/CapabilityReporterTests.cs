@@ -354,7 +354,7 @@ public sealed class CapabilityReporterTests
     public async Task CapabilityReporter_WhenNotPaired_SkipsOllamaProbeAndHubSend()
     {
         // Standalone/desktop mode (unpaired): ReportToApiAsync must short-circuit BEFORE the capability probe, so it
-        // neither probes Ollama (no /api/tags request) nor attempts the hub send. This is the CL-6 latency/noise fix.
+        // neither probes Ollama (no /api/tags request) nor attempts the hub send. This is the latency/noise fix.
         await using var context = await CreateContextAsync(paired: false);
         context.SetModelsResponse("qwen3.5:0.8b");
 
