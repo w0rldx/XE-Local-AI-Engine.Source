@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
 ///     Outcome of a host <c>git</c> invocation: exit code plus captured stdout/stderr.
@@ -83,28 +84,12 @@ internal sealed class HostGitRunner
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // The per-command timeout (not the caller) fired: kill the process and surface a non-zero result.
-            TryKill(process);
+            ProcessTermination.TryKill(process);
             return new HostGitResult(ExitCode: -1, string.Empty, "git timed out.");
         }
 
         var standardOutput = await stdoutTask.ConfigureAwait(false);
         var standardError = await stderrTask.ConfigureAwait(false);
         return new HostGitResult(process.ExitCode, standardOutput, standardError);
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            process.Kill(true);
-        }
-        catch (InvalidOperationException)
-        {
-            // Process already exited.
-        }
-        catch (Win32Exception)
-        {
-            // Could not signal the process; nothing more to do.
-        }
     }
 }

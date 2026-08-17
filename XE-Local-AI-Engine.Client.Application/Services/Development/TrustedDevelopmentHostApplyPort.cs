@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
@@ -223,7 +224,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         }
         catch
         {
-            TryKill(process);
+            ProcessTermination.TryKill(process);
             throw;
         }
     }
@@ -271,22 +272,6 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(first)),
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(second)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // Process already exited.
-        }
-        catch (Win32Exception)
-        {
-            // Best-effort cleanup preserves the original failure.
-        }
-    }
 
     private sealed record ResolvedApplyState(
         DevelopmentHostApplyState State,
