@@ -113,7 +113,7 @@ public sealed class RunSavedAgentHandlerTests
     {
         using var harness = new Harness();
         harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "azure-gpt"));
-        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((SupportsThinking: true, SupportsTools: true, IsCloud: true));
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true));
 
         await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
 
@@ -331,7 +331,7 @@ public sealed class RunSavedAgentHandlerTests
             NodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
             LocalDefault.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EffectiveLocalModel);
             Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: null));
-            Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((SupportsThinking: true, SupportsTools: true, IsCloud: false));
+            Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
             Capacity
                 .DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
                 .Returns(new CapacityDecision(CapacityVerdict.Allow, "Capacity available.", OllamaEvictionWarning: false, _reservation));

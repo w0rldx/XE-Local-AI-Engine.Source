@@ -67,41 +67,41 @@ public static class LlamaCppReleasePins
     private const string UnixServerPath = "build/bin/llama-server";
 
     // Keyed by (os, arch, variant). Verified against the b10201 release-assets digest API on 2026-07-31.
-    private static readonly IReadOnlyDictionary<(OSPlatform Os, Architecture Arch, GpuVariant Variant), LlamaCppAssetPin> Pins =
-        new Dictionary<(OSPlatform, Architecture, GpuVariant), LlamaCppAssetPin>
+    private static readonly IReadOnlyDictionary<PinKey, LlamaCppAssetPin> Pins =
+        new Dictionary<PinKey, LlamaCppAssetPin>
         {
             // Windows x64 — the CUDA pin also carries its companion runtime archive (cudart-…); both digests are from
             // the b10201 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream, and its digest is
             // unchanged from b9692 because upstream ships the same CUDA 12.4 runtime archive across those releases.
-            [(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
+            [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
                 new("llama-b10201-bin-win-cuda-12.4-x64.zip", "0b25fa35df1acb01a7bf0325fe554cbae1d7be39dfd630e979ad5a5ddc66599b", WindowsServerPath,
                     CudartAssetName: "cudart-llama-bin-win-cuda-12.4-x64.zip",
                     CudartSha256: "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
-            [(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
+            [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
                 new("llama-b10201-bin-win-vulkan-x64.zip", "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42", WindowsServerPath),
-            [(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
+            [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
                 new("llama-b10201-bin-win-cpu-x64.zip", "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833", WindowsServerPath),
 
             // Windows arm64 (CPU floor only)
-            [(OSPlatform.Windows, Architecture.Arm64, GpuVariant.Cpu)] =
+            [new PinKey(OSPlatform.Windows, Architecture.Arm64, GpuVariant.Cpu)] =
                 new("llama-b10201-bin-win-cpu-arm64.zip", "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8", WindowsServerPath),
 
             // Linux x64 (no prebuilt CUDA exists upstream)
-            [(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
+            [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
                 new("llama-b10201-bin-ubuntu-vulkan-x64.tar.gz", "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57", UnixServerPath),
-            [(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)] =
+            [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)] =
                 new("llama-b10201-bin-ubuntu-x64.tar.gz", "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797", UnixServerPath),
 
             // Linux arm64
-            [(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Vulkan)] =
+            [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Vulkan)] =
                 new("llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz", "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533", UnixServerPath),
-            [(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)] =
+            [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)] =
                 new("llama-b10201-bin-ubuntu-arm64.tar.gz", "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7", UnixServerPath),
 
             // macOS (CPU floor; llama.cpp uses Metal at runtime within the universal build)
-            [(OSPlatform.OSX, Architecture.Arm64, GpuVariant.Cpu)] =
+            [new PinKey(OSPlatform.OSX, Architecture.Arm64, GpuVariant.Cpu)] =
                 new("llama-b10201-bin-macos-arm64.tar.gz", "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e", UnixServerPath),
-            [(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
+            [new PinKey(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
                 new("llama-b10201-bin-macos-x64.tar.gz", "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf", UnixServerPath)
         };
 
@@ -151,13 +151,13 @@ public static class LlamaCppReleasePins
     /// </summary>
     public static LlamaCppAssetPin? Resolve(OSPlatform os, Architecture arch, GpuVariant variant)
     {
-        if (Pins.TryGetValue((os, arch, variant), out var pin))
+        if (Pins.TryGetValue(new PinKey(os, arch, variant), out var pin))
         {
             return pin;
         }
 
         // Fall back to the universal CPU floor for the host OS/arch.
-        return Pins.TryGetValue((os, arch, GpuVariant.Cpu), out var cpuPin) ? cpuPin : null;
+        return Pins.TryGetValue(new PinKey(os, arch, GpuVariant.Cpu), out var cpuPin) ? cpuPin : null;
     }
 
     /// <summary>
@@ -169,6 +169,10 @@ public static class LlamaCppReleasePins
     /// </summary>
     public static LlamaCppAssetPin? TryResolveExact(OSPlatform os, Architecture arch, GpuVariant variant)
     {
-        return Pins.TryGetValue((os, arch, variant), out var pin) ? pin : null;
+        return Pins.TryGetValue(new PinKey(os, arch, variant), out var pin) ? pin : null;
     }
+
+    /// <summary>The host shape one prebuilt asset is pinned for.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PinKey(OSPlatform Os, Architecture Arch, GpuVariant Variant);
 }

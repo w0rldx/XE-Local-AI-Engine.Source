@@ -63,7 +63,7 @@ public sealed class StructuredAgentRunnerTests
     public async Task CloudTeacher_IsRejected_BecauseTeachersAreNodeLocal()
     {
         var capabilities = Substitute.For<IModelCapabilityResolver>();
-        _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns((false, true, true));
+        _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(false, true, true));
         var runner = new StructuredAgentRunner(capabilities, NullLoggerFactory.Instance, new EmptyServiceProvider());
         using var client = new RecordingChatClient(SampleJson);
 
@@ -78,7 +78,7 @@ public sealed class StructuredAgentRunnerTests
         // Live-found: a lost non-streaming completion parked the generation queue with llama-server fully idle.
         using var client = new HangingChatClient();
         var capabilities = Substitute.For<IModelCapabilityResolver>();
-        _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns((false, true, false));
+        _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(false, true, false));
         var runner = new StructuredAgentRunner(capabilities, NullLoggerFactory.Instance, new EmptyServiceProvider(), TimeSpan.FromMilliseconds(200));
 
         var result = await runner.RunAsync(client, Request(TeacherOutputMode.Constrained));
@@ -101,7 +101,7 @@ public sealed class StructuredAgentRunnerTests
     private static StructuredAgentRunner CreateRunner(bool supportsThinking)
     {
         var capabilities = Substitute.For<IModelCapabilityResolver>();
-        _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns((supportsThinking, true, false));
+        _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(supportsThinking, true, false));
         return new StructuredAgentRunner(capabilities, NullLoggerFactory.Instance, new EmptyServiceProvider());
     }
 

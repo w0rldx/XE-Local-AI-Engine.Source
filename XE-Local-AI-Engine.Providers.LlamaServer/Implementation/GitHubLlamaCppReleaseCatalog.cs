@@ -227,15 +227,15 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
         return token.Length > 0 && token.All(static c => char.IsDigit(c) || c == '.');
     }
 
-    private static (string Stem, string Ext) SplitArchive(string name)
+    private static ArchiveName SplitArchive(string name)
     {
         if (name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
         {
-            return (name[..^".tar.gz".Length], ".tar.gz");
+            return new ArchiveName(name[..^".tar.gz".Length], ".tar.gz");
         }
 
         var dot = name.LastIndexOf('.');
-        return dot < 0 ? (name, string.Empty) : (name[..dot], name[dot..]);
+        return dot < 0 ? new ArchiveName(name, string.Empty) : new ArchiveName(name[..dot], name[dot..]);
     }
 
     /// <summary>
@@ -259,7 +259,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
         return value.Length == 64 && value.All(Uri.IsHexDigit) ? value : null;
     }
 
-    private async Task<(GitHubRelease? Release, LlamaCppReleaseResult? Signal)> GetReleaseByTagAsync(string tag, CancellationToken ct)
+    private async Task<ReleaseLookup> GetReleaseByTagAsync(string tag, CancellationToken ct)
     {
         var requestUrl = $"{ApiBase}/repos/{Owner}/{Repo}/releases/tags/{tag}";
         return await GetReleaseAsync(requestUrl, ct).ConfigureAwait(false);
@@ -270,7 +270,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     ///     no-live-data signal (offline / rate-limited) the caller should propagate. A <c>304</c> reuses the cached
     ///     parse; a <c>404</c> returns <c>(null, null)</c> so the caller treats it as "not found" and falls through.
     /// </summary>
-    private async Task<(GitHubRelease? Release, LlamaCppReleaseResult? Signal)> GetReleaseAsync(string requestUrl, CancellationToken ct)
+    private async Task<ReleaseLookup> GetReleaseAsync(string requestUrl, CancellationToken ct)
     {
         try
         {
@@ -286,36 +286,36 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
 
             if (response.StatusCode == HttpStatusCode.NotModified && cached is not null)
             {
-                return (cached.Release, null);
+                return new ReleaseLookup(cached.Release, Signal: null);
             }
 
             if (IsRateLimited(response))
             {
                 RateLimitResetUtc = ReadRateLimitReset(response);
-                return (null, LlamaCppReleaseResult.RateLimited());
+                return new ReleaseLookup(Release: null, LlamaCppReleaseResult.RateLimited());
             }
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                return (null, null);
+                return new ReleaseLookup(Release: null, Signal: null);
             }
 
             if (!response.IsSuccessStatusCode)
             {
                 // Any other non-success (5xx etc.) is treated as transient no-live-data, never thrown to the caller.
-                return (null, LlamaCppReleaseResult.Offline());
+                return new ReleaseLookup(Release: null, LlamaCppReleaseResult.Offline());
             }
 
             var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var release = JsonSerializer.Deserialize<GitHubRelease>(payload, JsonOptions);
             if (release is null)
             {
-                return (null, LlamaCppReleaseResult.NotFound());
+                return new ReleaseLookup(Release: null, LlamaCppReleaseResult.NotFound());
             }
 
             var etag = response.Headers.ETag?.ToString();
             _cache[requestUrl] = new CachedRelease(etag, release, DateTimeOffset.UtcNow);
-            return (release, null);
+            return new ReleaseLookup(release, Signal: null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -323,16 +323,16 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
         }
         catch (HttpRequestException)
         {
-            return (null, LlamaCppReleaseResult.Offline());
+            return new ReleaseLookup(Release: null, LlamaCppReleaseResult.Offline());
         }
         catch (TaskCanceledException)
         {
             // Request timeout (not caller cancellation) — treat as offline, no live data.
-            return (null, LlamaCppReleaseResult.Offline());
+            return new ReleaseLookup(Release: null, LlamaCppReleaseResult.Offline());
         }
         catch (JsonException)
         {
-            return (null, LlamaCppReleaseResult.NotFound());
+            return new ReleaseLookup(Release: null, LlamaCppReleaseResult.NotFound());
         }
     }
 
@@ -418,4 +418,13 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
         string? Digest,
         [property: JsonPropertyName("size")]
         long Size);
+
+    /// <summary>An archive file name split into its stem and its extension (<c>.tar.gz</c> counted as one extension).</summary>
+    private sealed record ArchiveName(string Stem, string Ext);
+
+    /// <summary>
+    ///     The outcome of one Releases-API read: the parsed release, or a no-live-data signal the caller propagates.
+    ///     Both <see langword="null" /> means "not found" (a 404), which the caller falls through on.
+    /// </summary>
+    private sealed record ReleaseLookup(GitHubRelease? Release, LlamaCppReleaseResult? Signal);
 }

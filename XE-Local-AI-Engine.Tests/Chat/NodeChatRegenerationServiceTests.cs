@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -61,8 +62,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var runner = new RegenCompletingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -75,9 +77,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -224,8 +226,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -238,9 +241,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -383,8 +386,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var runner = new RegenCompletingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -398,9 +402,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             // Resolver reports no installed GGUF chat model (null).
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -450,8 +454,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -467,9 +470,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -532,8 +535,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -546,9 +548,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -612,8 +614,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -626,9 +627,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -681,7 +682,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
-        // AUD4-16: the chat-turn resolver now gates the orchestration reload on the resolved runtime's Kind (it reuses the
+        // The chat-turn resolver now gates the orchestration reload on the resolved runtime's Kind (it reuses the
         // definition the resolver already loaded), so the resolver must surface Kind=Orchestrator for this bound agent.
         var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
         agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -695,8 +696,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -709,9 +709,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -764,8 +764,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -778,9 +777,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -825,8 +824,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -839,9 +837,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -881,8 +879,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var runner = new RegenToolEmittingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -895,9 +894,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -953,8 +952,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
@@ -967,9 +967,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(maxMessageRequestTimeoutSeconds: 900),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1017,8 +1017,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
@@ -1034,9 +1035,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1081,8 +1082,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
@@ -1098,9 +1100,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1139,8 +1141,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
@@ -1153,9 +1156,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1522,8 +1525,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
@@ -1536,9 +1540,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1574,8 +1578,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
@@ -1588,9 +1593,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1618,8 +1623,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             new RegenCompletingRunner(dispatcher),
@@ -1632,9 +1638,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1650,6 +1656,71 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             AssertEx.Equal(expected: 0, drained);
         }).ConfigureAwait(false);
     }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheConversationIsUnknown_ThrowsTheTypedNotFound()
+    {
+        // The type is the contract: LocalChatHub matches on it to forward a legible sentence, where a bare
+        // InvalidOperationException reaches the browser as SignalR's generic "An unexpected error occurred".
+        await using var provider = await BuildProviderAsync("regeneration-missing-conversation.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var service = CreateMinimalRegenerationService(persistence);
+
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(Guid.NewGuid(), Guid.NewGuid()).ConfigureAwait(false))
+            {
+                // Nothing is ever yielded.
+            }
+        }).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheOriginalMessageIsUnknown_ThrowsTheTypedNotFound()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-missing-message.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var service = CreateMinimalRegenerationService(persistence);
+
+        _ = await AssertEx.ThrowsAsync<NodeChatMessageNotFoundException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, Guid.NewGuid()).ConfigureAwait(false))
+            {
+                // Nothing is ever yielded.
+            }
+        }).ConfigureAwait(false);
+    }
+
+    // The regenerate rejects before any runner/dispatcher work, so the collaborators past persistence never run.
+    private static NodeChatRegenerationService CreateMinimalRegenerationService(NodeChatPersistenceService persistence)
+    {
+        var dispatcher = new RegenRecordingDispatcher();
+        return new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            new RegenCompletingRunner(dispatcher),
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+    }
+
 
     [Test]
     public async Task RegenerateAsync_WhenOriginalModelIsCodexCloudModel_OffersToolsAndSkipsOllamaClassification()
@@ -1680,8 +1751,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var classificationService = CreateModelClassificationService();
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), classificationService, CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(classification: classificationService),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -1697,9 +1769,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1715,7 +1787,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
                                    .ClassifyAsync(
-                                       Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
+                                       Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
                                        Arg.Any<CancellationToken>())
                                    .ConfigureAwait(false);
 
@@ -1872,8 +1944,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -1886,9 +1959,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1939,6 +2012,18 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         return factory;
     }
 
+    // The turn-context builder the regenerate shares with the send path. A regenerate reaches only its knowledge-base
+    // grounding (attachments are a send-only concern), so the attachment collaborators are bare substitutes and the
+    // scope factory is what decides whether grounding finds anything.
+    private static IChatTurnContextBuilder CreateTurnContextBuilder(IServiceScopeFactory? scopeFactory = null)
+    {
+        return new ChatTurnContextBuilder(Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IUntrustedContentFenceSeedProvider>(),
+            scopeFactory ?? CreateScopeFactory(),
+            Options.Create(new LocalChatAgentOptions()),
+            NullLogger<ChatTurnContextBuilder>.Instance);
+    }
+
     // A knowledge search service returning a fixed hit list, wired into a scope factory for the KB grounding tests.
     private static IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
     {
@@ -1963,8 +2048,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
-                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
@@ -1977,12 +2063,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(scopeFactory),
             Options.Create(new KnowledgeBaseOptions
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
             Options.Create(new ChatStreamBudgetOptions()),
-            scopeFactory,
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -2007,10 +2093,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static IModelClassificationService CreateModelClassificationService()
     {
         var service = Substitute.For<IModelClassificationService>();
-        service.ClassifyAsync(Arg.Any<IEnumerable<(string ModelName, string? Digest)>>(), Arg.Any<CancellationToken>())
+        service.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
                {
-                   var models = callInfo.Arg<IEnumerable<(string ModelName, string? Digest)>>();
+                   var models = callInfo.Arg<IEnumerable<ModelIdentity>>();
                    var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
                    foreach (var (modelName, _) in models)
                    {
@@ -2023,6 +2109,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                    return Task.FromResult<IReadOnlyDictionary<string, ModelClassificationResult>>(map);
                });
         return service;
+    }
+
+    // ChatTurnResolver resolves capabilities through the shared IModelCapabilityResolver, so these tests compose the
+    // real one over the same substituted collaborators they used to hand the turn resolver directly — the routing
+    // decision under test is unchanged, it just lives in one place now.
+    private static IModelCapabilityResolver CreateModelCapabilityResolver(IModelClassificationService? classification = null,
+        ILocalModelProviderResolver? providerResolver = null,
+        IGgufModelCapabilityResolver? gguf = null)
+    {
+        return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
+            providerResolver ?? CreateLocalModelProviderResolver(),
+            gguf ?? CreateGgufModelCapabilityResolver(),
+            Substitute.For<IActiveCloudChatClientFactory>(),
+            NullLogger<ModelCapabilityResolver>.Instance);
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so these Ollama-routed regen tests keep their

@@ -133,7 +133,7 @@ public sealed class ProviderCallBudgetChatClientTests
         using var inner = new FailIfCalledChatClient();
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
-        // AUD4-02: the effective launched window (num_ctx AdditionalProperties, fed by the runtime's /props value) is
+        // The effective launched window (num_ctx AdditionalProperties, fed by the runtime's /props value) is
         // tiny while the configured default is huge. An irreducible round must be rejected against the EFFECTIVE window
         // — proving the propagated effective context, not the config default, bounds the round.
         const int EffectiveWindow = 32;

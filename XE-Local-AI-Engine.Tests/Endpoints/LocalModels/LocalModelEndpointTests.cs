@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using OllamaSharp;
 using OllamaSharp.Models;
+using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -317,6 +318,36 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("ghost:model", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
+        await deletionCoordinator.DidNotReceiveWithAnyArgs()
+                                 .PurgeAfterSuccessAsync(Arg.Any<CommittedModelDeletion>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteLocalModel_WhenDependentAdaptersBlockIt_WritesTheConflictProblemDetailsEnvelope()
+    {
+        // The refusal is a typed conflict exception the endpoint must NOT catch: the global ConflictExceptionHandler
+        // answers the one 409 problem+json envelope every other conflict uses, discriminated by conflictType, with the
+        // refusal sentence as `detail` (which is what the SPA's apiErrorMessage toasts).
+        var deletionCoordinator = Substitute.For<ILocalModelDeletionCoordinator>();
+        deletionCoordinator.CommitDeleteAsync("base:model", Arg.Any<CancellationToken>())
+                           .Returns<Task<CommittedModelDeletion>>(_ => throw new InstalledModelDependentAdaptersException());
+        await using var context = CreateContext(Substitute.For<IOllamaModelService>(),
+            new StubNodeSettingsStore(new StoredNodeSettings()),
+            LlamaCppProviderName,
+            Substitute.For<IGgufModelStore>(),
+            deletionCoordinator);
+        using var client = context.Factory.CreateClient();
+
+        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/base:model");
+        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, deleteResponse.StatusCode);
+        AssertEx.Contains(deleteResponse.Content.Headers.ContentType?.ToString(), "problem+json", StringComparison.OrdinalIgnoreCase);
+        var problem = await ReadJsonAsync<DeleteConflictProblemBody>(deleteResponse).ConfigureAwait(false);
+        AssertEx.Equal(nameof(NodeConflictProblemType.InstalledModelHasDependentAdapters), problem.ConflictType);
+        AssertEx.Equal(expected: 409, problem.Status);
+        AssertEx.Contains(problem.Detail, "Remove them before deleting it", StringComparison.Ordinal);
+        AssertEx.NotEmpty(problem.TraceId);
         await deletionCoordinator.DidNotReceiveWithAnyArgs()
                                  .PurgeAfterSuccessAsync(Arg.Any<CommittedModelDeletion>(), Arg.Any<CancellationToken>());
     }
@@ -650,6 +681,9 @@ public sealed class LocalModelEndpointTests
     {
         return AssertEx.NotNull(JsonSerializer.Deserialize<T>(json, JsonOptions));
     }
+
+    /// <summary>The members of the shared <c>ConflictProblemDetails</c> envelope a blocked delete must carry.</summary>
+    private sealed record DeleteConflictProblemBody(string ConflictType, int Status, string Detail, string TraceId);
 
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class

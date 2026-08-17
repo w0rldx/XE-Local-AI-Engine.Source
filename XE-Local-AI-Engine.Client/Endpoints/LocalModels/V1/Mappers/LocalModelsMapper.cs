@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 internal static class LocalModelsMapper
 {
@@ -325,7 +326,7 @@ internal static class LocalModelsMapper
     /// <summary>
     ///     Maps an installed GGUF descriptor (served by llama.cpp) to the shared model-details response.
     ///     <see cref="LocalModelDetailsResponse.MaxContextTokens" /> is the descriptor's advertised train ceiling and
-    ///     <paramref name="effectiveContextTokens" /> the RUNNING process's launched context window (AUD4-02), when a
+    ///     <paramref name="effectiveContextTokens" /> the RUNNING process's launched context window, when a
     ///     chat process is warm. <c>Template</c>/<c>System</c>/<c>License</c> are Ollama Modelfile concepts a raw GGUF has
     ///     no equivalent of, so they stay null. Keeps the response shape aligned with the Ollama branch.
     /// </summary>
@@ -344,13 +345,6 @@ internal static class LocalModelsMapper
             System = null,
             License = null
         };
-    }
-
-    internal static string ReadModelName(this Model model)
-    {
-        return !string.IsNullOrWhiteSpace(model.ModelName)
-            ? model.ModelName
-            : model.Name ?? string.Empty;
     }
 
     private static string ReadRunningModelName(RunningModelSnapshot snapshot)

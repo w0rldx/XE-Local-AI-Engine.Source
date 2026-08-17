@@ -29,7 +29,7 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
         var connection = dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        var result = new Dictionary<KnowledgeChunkEmbeddingCacheKey, (byte[] Vector, long UpdatedAtUtc)>();
+        var result = new Dictionary<KnowledgeChunkEmbeddingCacheKey, CachedEmbedding>();
         const int batchSize = 500;
         for (var offset = 0; offset < hashes.Count; offset += batchSize)
         {
@@ -52,7 +52,7 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
     private static async Task ReadBatchAsync(DbConnection connection,
         IReadOnlyList<string> hashes,
         IReadOnlySet<KnowledgeChunkEmbeddingCacheKey> requested,
-        IDictionary<KnowledgeChunkEmbeddingCacheKey, (byte[] Vector, long UpdatedAtUtc)> result,
+        IDictionary<KnowledgeChunkEmbeddingCacheKey, CachedEmbedding> result,
         long cutoff,
         CancellationToken cancellationToken)
     {
@@ -95,7 +95,11 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
                 continue;
             }
 
-            result[key] = (vector.ToArray(), updatedAtUtc);
+            result[key] = new CachedEmbedding(vector.ToArray(), updatedAtUtc);
         }
     }
+
+    // A committed vector plus the document's update timestamp, which is what breaks a tie between two rows that match
+    // the same cache key: the most recently updated document wins.
+    private readonly record struct CachedEmbedding(byte[] Vector, long UpdatedAtUtc);
 }

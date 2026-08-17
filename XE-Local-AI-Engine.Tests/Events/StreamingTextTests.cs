@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the immutable append-only accumulator backing streamed content/reasoning (AUD4-10). The
+///     Unit coverage for the immutable append-only accumulator backing streamed content/reasoning. The
 ///     invariants here are what let a per-chunk snapshot clone copy the accumulator by reference without materializing the
 ///     whole string.
 /// </summary>

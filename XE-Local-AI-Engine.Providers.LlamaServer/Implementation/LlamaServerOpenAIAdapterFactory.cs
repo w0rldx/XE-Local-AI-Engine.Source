@@ -25,7 +25,7 @@ using OpenAI;
 ///         path (e.g. <c>/chat/completions</c>) to it.
 ///     </para>
 ///     <para>
-///         AUD4-18: the built client's transport policy is pinned EXPLICITLY rather than left to the System.ClientModel
+///         The built client's transport policy is pinned EXPLICITLY rather than left to the System.ClientModel
 ///         defaults. <c>NetworkTimeout</c> is set from <paramref name="networkTimeout" /> (a generous outer floor — see
 ///         <see cref="XE_Local_AI_Engine.Providers.LlamaServer.Options.LlamaServerSupervisorOptions.HttpNetworkTimeout" />)
 ///         so a single call never inherits the SDK's 100 s default and abort a legitimately long local generation, and the
@@ -63,7 +63,7 @@ internal static class LlamaServerOpenAIAdapterFactory
     }
 
     /// <summary>
-    ///     Builds the transport-policy-pinned <see cref="OpenAIClientOptions" /> (AUD4-18): explicit
+    ///     Builds the transport-policy-pinned <see cref="OpenAIClientOptions" />: explicit
     ///     <see cref="OpenAIClientOptions.NetworkTimeout" /> (never the SDK's 100 s default) and a
     ///     <c>ClientRetryPolicy(0)</c> so the SDK cannot re-issue a non-idempotent completion. Exposed internally so a test
     ///     can assert the pinned policy directly (per the pipeline-behavior lesson in agent-knowledge §4).

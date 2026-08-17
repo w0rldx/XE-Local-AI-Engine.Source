@@ -157,7 +157,7 @@ public sealed class LocalChatHub(
 
         try
         {
-            await foreach (var streamEvent in RejectReadOnlyConversation(source, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            await foreach (var streamEvent in TranslateDomainRejections(source, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 if (attachment is null)
                 {
@@ -181,26 +181,31 @@ public sealed class LocalChatHub(
     }
 
     /// <summary>
-    ///     Re-throws the read-only-conversation rejection as a <see cref="HubException" /> — the only exception type
-    ///     whose message SignalR forwards to the client (see <see cref="EnsureMessageWithinSizeCap" />). Without this,
-    ///     a send or regenerate against an <c>Origin=Remote</c> (view-only) conversation reaches the browser as the
-    ///     bare "An unexpected error occurred invoking 'SendMessage' on the server." instead of the view-only notice
-    ///     the REST 409 path already produces.
+    ///     Re-throws the stream services' TYPED caller-triggerable rejections as <see cref="HubException" />s — the
+    ///     only exception type whose message SignalR forwards to the client (see
+    ///     <see cref="EnsureMessageWithinSizeCap" />). Without this, a send or regenerate against an
+    ///     <c>Origin=Remote</c> (view-only) conversation, a deleted conversation/message, or a correlation already
+    ///     being generated all reach the browser as the bare "An unexpected error occurred invoking 'SendMessage' on
+    ///     the server." The conversion is deliberately narrow — matched by exception TYPE, never by inspecting a
+    ///     message string — because widening it to every fault would forward internal detail to the browser, which is
+    ///     what SignalR's generic message exists to prevent.
     ///     <para>
-    ///         The message is PREFIXED with the <see cref="NodeConflictProblemType.ReadOnlyConversation" /> name, which
-    ///         is the exact same discriminator token the REST 409 carries as <c>ConflictProblemDetails.conflictType</c>
-    ///         — so the SPA's <c>isNodeChatReadOnlyConflict</c> recognises both shapes off one constant. Referenced via
-    ///         the enum, never a literal, so a rename there cannot silently desynchronise the two paths.
+    ///         Only the read-only rejection is PREFIXED, with the <see cref="NodeConflictProblemType.ReadOnlyConversation" />
+    ///         name — the exact discriminator token the REST 409 carries as <c>ConflictProblemDetails.conflictType</c>,
+    ///         so the SPA's <c>isNodeChatReadOnlyConflict</c> recognises both shapes off one constant. Referenced via
+    ///         the enum, never a literal, so a rename there cannot silently desynchronise the two paths. The others
+    ///         carry no token: no caller discriminates on them, and an unstripped token would be the first thing the
+    ///         operator reads in the toast.
     ///     </para>
     ///     <para>
     ///         Composed into <see cref="TrackAttachment" /> rather than at the individual call sites, so all four stream
     ///         entry points are covered by one seam; it is a no-op for the resume paths, which never run the mutation
-    ///         guard. The guard throws LAZILY during enumeration (it lives inside the services' async iterators), so the
-    ///         conversion has to happen around <c>MoveNextAsync</c>; C# forbids <c>yield return</c> inside a <c>try</c>
-    ///         that has a <c>catch</c>, hence the manual enumeration with the yield outside the try.
+    ///         guard. The rejections are thrown LAZILY during enumeration (they live inside the services' async
+    ///         iterators), so the conversion has to happen around <c>MoveNextAsync</c>; C# forbids <c>yield return</c>
+    ///         inside a <c>try</c> that has a <c>catch</c>, hence the manual enumeration with the yield outside the try.
     ///     </para>
     /// </summary>
-    private static async IAsyncEnumerable<ChatStreamEvent> RejectReadOnlyConversation(
+    private static async IAsyncEnumerable<ChatStreamEvent> TranslateDomainRejections(
         IAsyncEnumerable<ChatStreamEvent> source,
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
@@ -218,6 +223,12 @@ public sealed class LocalChatHub(
                 catch (NodeChatReadOnlyConversationException exception)
                 {
                     throw new HubException($"{NodeConflictProblemType.ReadOnlyConversation}: {exception.Message}", exception);
+                }
+                catch (Exception exception) when (exception is NodeChatConversationNotFoundException
+                                                      or NodeChatMessageNotFoundException
+                                                      or NodeChatStreamAlreadyActiveException)
+                {
+                    throw new HubException(exception.Message, exception);
                 }
 
                 if (!hasNext)

@@ -557,7 +557,7 @@ public sealed class CapacityServiceTests
     [Test]
     public async Task Capacity_WhenDeviceAuditDegradesToCpuMode_SizesAgainstRam_NotPhantomVram()
     {
-        // AUD4-03: on a physical GPU box whose selected runtime silently fell back to the CPU, the device audit hands the
+        // On a physical GPU box whose selected runtime silently fell back to the CPU, the device audit hands the
         // gate a CPU-mode EFFECTIVE profile (VRAM unknown). A model that would fit the 16 GB GPU but not the 4 GB free RAM
         // must therefore be rejected on the byte budget — capacity must never pretend the unusable VRAM exists.
         var harness = new Harness
@@ -576,7 +576,7 @@ public sealed class CapacityServiceTests
     [Test]
     public async Task Capacity_Decision_ComposesWithGpuLoadAdmission_NoDeadlock()
     {
-        // AUD4-06 lock ordering: the capacity decision gate and the GPU-load admission gate are never nested — the
+        // Lock ordering: the capacity decision gate and the GPU-load admission gate are never nested — the
         // decision fully completes (releasing the ledger gate) BEFORE the supervisor spawn acquires the load gate. Prove
         // it composes deadlock-free: even while a GPU load holds the admission gate, a capacity decision still completes.
         using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());

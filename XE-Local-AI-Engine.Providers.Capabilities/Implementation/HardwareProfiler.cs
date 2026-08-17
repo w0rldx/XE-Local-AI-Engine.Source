@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -142,7 +143,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         };
     }
 
-    private (long TotalRamBytes, long AvailableRamBytes) ProbeRam()
+    private RamSnapshot ProbeRam()
     {
         if (_environment.IsLinux)
         {
@@ -151,12 +152,12 @@ internal sealed class HardwareProfiler : IHardwareProfiler
                 && TryParseMemInfoKilobytes(memInfo, "MemTotal", out var totalKb)
                 && TryParseMemInfoKilobytes(memInfo, "MemAvailable", out var availableKb))
             {
-                return (totalKb * 1024L, availableKb * 1024L);
+                return new RamSnapshot(totalKb * 1024L, availableKb * 1024L);
             }
         }
 
         // Windows (and Linux fallback when meminfo is unavailable): OS query.
-        return (_environment.GetTotalPhysicalMemoryBytes(), _environment.GetAvailableMemoryBytes());
+        return new RamSnapshot(_environment.GetTotalPhysicalMemoryBytes(), _environment.GetAvailableMemoryBytes());
     }
 
     // Non-NVIDIA vendor detection: Linux /sys/class/drm vendor ids, else the Windows adapter-name query. NVIDIA is
@@ -402,7 +403,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     ///         earlier on <c>PATH</c> cannot answer for it.
     ///     </para>
     /// </summary>
-    private static IEnumerable<(string FileName, IReadOnlyList<string> Arguments)> WindowsAdapterListCommands()
+    private static IEnumerable<AdapterListCommand> WindowsAdapterListCommands()
     {
         string[] cimArguments =
         [
@@ -415,11 +416,11 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         var systemDirectory = Environment.SystemDirectory;
         if (!string.IsNullOrEmpty(systemDirectory))
         {
-            yield return (Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"), cimArguments);
+            yield return new AdapterListCommand(Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"), cimArguments);
         }
 
-        yield return ("powershell", cimArguments);
-        yield return ("wmic", ["path", "win32_VideoController", "get", "name"]);
+        yield return new AdapterListCommand("powershell", cimArguments);
+        yield return new AdapterListCommand("wmic", ["path", "win32_VideoController", "get", "name"]);
     }
 
     private static bool TryParseMemInfoKilobytes(string memInfo, string key, out long kilobytes)
@@ -455,6 +456,13 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     // The single consolidated nvidia-smi read, projected: whether an NVIDIA GPU is present (vendor signal), its total /
     // free VRAM in bytes (first GPU wins; null when unparseable), and whether the probe was killed for overrunning its
     // deadline (the caller then degrades to the cached/CPU-safe profile).
+    // The host's physical memory in bytes as the probe read it: the installed total and the currently available slice.
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct RamSnapshot(long TotalRamBytes, long AvailableRamBytes);
+
+    // One Windows adapter-description source: the executable to run and its argument vector.
+    private sealed record AdapterListCommand(string FileName, IReadOnlyList<string> Arguments);
+
     private readonly record struct NvidiaProbe(bool Present, long? TotalVramBytes, long? FreeVramBytes, bool TimedOut)
     {
         public static NvidiaProbe Absent { get; } = new(Present: false, TotalVramBytes: null, FreeVramBytes: null, TimedOut: false);

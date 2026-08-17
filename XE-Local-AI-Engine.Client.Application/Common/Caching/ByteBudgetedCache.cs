@@ -124,7 +124,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
 
         var values = new TValue[keys.Count];
         var claimed = new List<Claim>();
-        List<(int Index, Task<Resolution> Wait)>? waits = null;
+        List<PendingWait>? waits = null;
 
         for (var index = 0; index < keys.Count; index++)
         {
@@ -146,7 +146,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
             }
             else
             {
-                (waits ??= []).Add((index, owner.Task));
+                (waits ??= []).Add(new PendingWait(index, owner.Task));
             }
         }
 
@@ -307,4 +307,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
     private readonly record struct Resolution(bool Resolved, TValue Value);
 
     private readonly record struct Claim(TKey Key, int Index, TaskCompletionSource<Resolution> Completion);
+
+    /// <summary>A batch slot whose value is being computed by another caller's in-flight claim.</summary>
+    private readonly record struct PendingWait(int Index, Task<Resolution> Wait);
 }

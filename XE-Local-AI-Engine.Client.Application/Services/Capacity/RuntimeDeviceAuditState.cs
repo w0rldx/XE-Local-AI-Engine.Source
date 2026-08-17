@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public sealed record RuntimeAuditDevice(string Name, long? TotalBytes, long? FreeBytes);
 
 /// <summary>
-///     The node-level runtime device audit (AUD4-03): whether the SELECTED inference runtime is actually using the GPU
+///     The node-level runtime device audit: whether the SELECTED inference runtime is actually using the GPU
 ///     the host advertises, or has silently fallen back to the CPU. Surfaced over REST for the operator UI and consumed
 ///     by the capacity gate + model advisor (via the audited effective hardware profile) so model sizing matches the
 ///     runtime that will actually run.

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -1179,14 +1180,14 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                                .ConfigureAwait(false);
     }
 
-    private async Task<(Guid ProjectId, Guid TaskId)> OwnershipForAttemptAsync(Guid attemptId, CancellationToken cancellationToken)
+    private async Task<AttemptOwnership> OwnershipForAttemptAsync(Guid attemptId, CancellationToken cancellationToken)
     {
         var taskId = await _dbContext.DevelopmentAttempts.AsNoTracking()
                                      .Where(entity => entity.Id == attemptId)
                                      .Select(entity => entity.TaskId)
                                      .SingleAsync(cancellationToken)
                                      .ConfigureAwait(false);
-        return (await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false), taskId);
+        return new AttemptOwnership(await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false), taskId);
     }
 
     private async Task<DevelopmentTask> LoadApplyTaskAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken)
@@ -1348,4 +1349,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
 
     private long Now() =>
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+    /// <summary>The task an attempt belongs to and the project that owns that task.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct AttemptOwnership(Guid ProjectId, Guid TaskId);
 }

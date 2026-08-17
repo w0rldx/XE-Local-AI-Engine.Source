@@ -387,28 +387,28 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         };
     }
 
-    private static (string ContentKind, string? Language) Classify(string extension)
+    private static ContentClassification Classify(string extension)
     {
         return extension.ToUpperInvariant() switch
         {
-            ".CS" => ("code", "csharp"),
-            ".TS" or ".TSX" => ("code", "typescript"),
-            ".JS" or ".JSX" or ".MJS" or ".CJS" => ("code", "javascript"),
-            ".PY" => ("code", "python"),
-            ".JAVA" => ("code", "java"),
-            ".GO" => ("code", "go"),
-            ".RS" => ("code", "rust"),
-            ".CPP" or ".CC" or ".CXX" or ".HPP" or ".HH" => ("code", "cpp"),
-            ".C" or ".H" => ("code", "c"),
-            ".FS" or ".FSX" => ("code", "fsharp"),
-            ".VB" => ("code", "visual-basic"),
-            ".SH" or ".BASH" or ".ZSH" => ("code", "shell"),
-            ".PS1" => ("code", "powershell"),
-            ".SQL" => ("code", "sql"),
-            ".LOG" => ("log", null),
-            ".MD" or ".MARKDOWN" or ".HTML" or ".HTM" or ".XAML" => ("markup", null),
-            ".JSON" or ".JSONC" or ".XML" or ".YAML" or ".YML" or ".TOML" or ".INI" or ".CFG" or ".CONF" => ("structured", null),
-            _ => ("text", null)
+            ".CS" => new ContentClassification("code", "csharp"),
+            ".TS" or ".TSX" => new ContentClassification("code", "typescript"),
+            ".JS" or ".JSX" or ".MJS" or ".CJS" => new ContentClassification("code", "javascript"),
+            ".PY" => new ContentClassification("code", "python"),
+            ".JAVA" => new ContentClassification("code", "java"),
+            ".GO" => new ContentClassification("code", "go"),
+            ".RS" => new ContentClassification("code", "rust"),
+            ".CPP" or ".CC" or ".CXX" or ".HPP" or ".HH" => new ContentClassification("code", "cpp"),
+            ".C" or ".H" => new ContentClassification("code", "c"),
+            ".FS" or ".FSX" => new ContentClassification("code", "fsharp"),
+            ".VB" => new ContentClassification("code", "visual-basic"),
+            ".SH" or ".BASH" or ".ZSH" => new ContentClassification("code", "shell"),
+            ".PS1" => new ContentClassification("code", "powershell"),
+            ".SQL" => new ContentClassification("code", "sql"),
+            ".LOG" => new ContentClassification("log", null),
+            ".MD" or ".MARKDOWN" or ".HTML" or ".HTM" or ".XAML" => new ContentClassification("markup", null),
+            ".JSON" or ".JSONC" or ".XML" or ".YAML" or ".YML" or ".TOML" or ".INI" or ".CFG" or ".CONF" => new ContentClassification("structured", null),
+            _ => new ContentClassification("text", null)
         };
     }
 
@@ -490,4 +490,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     }
 
     private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash);
+
+    // How a chunk's source file is labelled for retrieval: the coarse kind ("code", "log", "markup", "structured",
+    // "text") plus the concrete language when the extension names one.
+    private readonly record struct ContentClassification(string ContentKind, string? Language);
 }

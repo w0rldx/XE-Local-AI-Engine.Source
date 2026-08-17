@@ -26,12 +26,10 @@ public sealed class EjectImageRuntimeEndpoint(
         var result = await supervisor.EvictAllAsync(ct).ConfigureAwait(false);
         if (!result.Evicted)
         {
-            await Send.ResultAsync(Results.Conflict(new ImageRuntimeBlockedResponse
-            {
-                Reason = "runtime-busy",
-                Message = "Wait for active image jobs, image-runtime startup, or runtime mutation to finish before ejecting image processes.",
-                Activity = result.Activity.ToResponse()
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(
+                          "Wait for active image jobs, image-runtime startup, or runtime mutation to finish before ejecting image processes.",
+                          result.Activity))
+                      .ConfigureAwait(false);
             return;
         }
 

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-16: the resolver memoizes <c>ModelName → ProviderName</c> in a short-TTL cache so the several per-turn
+///     The resolver memoizes <c>ModelName → ProviderName</c> in a short-TTL cache so the several per-turn
 ///     lookups collapse to one persisted read, and an explicit invalidation makes a freshly-written mapping visible
 ///     immediately rather than after the TTL.
 /// </summary>

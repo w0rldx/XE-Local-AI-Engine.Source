@@ -5,6 +5,7 @@ using System.Collections.Frozen;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Parsed command-line surface reported by one resolved llama-server executable.</summary>
 internal sealed partial record LlamaServerCapabilityManifest

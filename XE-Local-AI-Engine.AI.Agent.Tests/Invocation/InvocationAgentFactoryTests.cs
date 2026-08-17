@@ -104,7 +104,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenEffectiveContextKnown_WritesItAsNumCtx()
     {
-        // AUD4-02: the runtime's effective context window is carried as num_ctx so the inner provider-round budgeter
+        // The runtime's effective context window is carried as num_ctx so the inner provider-round budgeter
         // sizes against the same window the outer conversation budgeter uses. No per-send override is set here.
         var definition = new InvocationAgentDefinition("llama3.2:3b",
             "Be helpful.",
@@ -259,7 +259,7 @@ public sealed class InvocationAgentFactoryTests
     }
 
     /// <summary>
-    ///     F-014 regression pin. A NATIVE-reasoning model (the OpenAI harmony family, e.g. gpt-oss-20b) reports
+    ///     Regression pin. A NATIVE-reasoning model (the OpenAI harmony family, e.g. gpt-oss-20b) reports
     ///     <c>SupportsThinking=false</c> by design — its template bakes reasoning onto a <c>&lt;|channel|&gt;analysis</c>
     ///     channel with no graded switch — and reasons only because this branch OMITS the think field. Detecting native
     ///     reasoning as a second capability must NOT change that: adding the harmony markers to the GRADED list instead

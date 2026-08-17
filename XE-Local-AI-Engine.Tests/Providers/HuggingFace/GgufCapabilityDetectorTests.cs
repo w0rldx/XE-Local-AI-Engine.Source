@@ -81,7 +81,7 @@ public sealed class GgufCapabilityDetectorTests
     }
 
     /// <summary>
-    ///     F-014: the harmony template reasons on its own channel, so the model MUST be reported reasoning-capable —
+    ///     The harmony template reasons on its own channel, so the model MUST be reported reasoning-capable —
     ///     but as the NATIVE capability, never the graded one. Flipping the graded flag here would route gpt-oss into
     ///     the <c>think</c>-writing branch and, on effort <c>none</c>, send an <c>enable_thinking=false</c> the harmony
     ///     template has no kwarg for.

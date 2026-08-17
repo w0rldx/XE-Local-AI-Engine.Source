@@ -24,7 +24,7 @@ internal static class CompactionContextResolver
     /// </summary>
     /// <param name="conversation">The conversation whose synopsis is being applied.</param>
     /// <param name="sortOrder">Slot the summary takes in the caller's leading context block.</param>
-    public static (ConversationMessageDto Summary, int CoveredSequence)? Resolve(NodeChatConversationDto conversation,
+    public static CompactionAnchor? Resolve(NodeChatConversationDto conversation,
         int sortOrder)
     {
         ArgumentNullException.ThrowIfNull(conversation);
@@ -34,12 +34,19 @@ internal static class CompactionContextResolver
             return null;
         }
 
-        return (new ConversationMessageDto
+        return new CompactionAnchor(new ConversationMessageDto
         {
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
             Content = $"[Summary of the earlier conversation, condensed to fit the context window]\n{summary}",
             SortOrder = sortOrder
-        }, coveredSequence);
+        },
+            coveredSequence);
     }
 }
+
+/// <summary>
+///     The synthetic summary message a compacted conversation sends in place of its covered history, plus the anchor
+///     sequence it covers — every verbatim message at or below it is dropped from the sent context.
+/// </summary>
+internal sealed record CompactionAnchor(ConversationMessageDto Summary, int CoveredSequence);

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The device-inventory probe (AUD4-03): its pure <c>--list-devices</c> parser turns each device line into a
+///     The device-inventory probe: its pure <c>--list-devices</c> parser turns each device line into a
 ///     structured {name, total, free}, a <c>cpu</c> variant short-circuits to a determinate empty list WITHOUT touching
 ///     the binary manager (no process spawned), and every real-probe failure (a non-existent binary) degrades to
 ///     <see cref="LlamaDeviceInventory.Unknown" /> rather than a false "no GPU". The process launch itself is not

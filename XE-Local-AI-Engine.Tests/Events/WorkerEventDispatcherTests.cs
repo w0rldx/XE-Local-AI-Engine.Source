@@ -342,7 +342,7 @@ public sealed class WorkerEventDispatcherTests
     [Test]
     public async Task StopAcceptingRemoteInvocations_AbandonsAnAssignmentBlockedOnTheInvocationSlot()
     {
-        // AUD4-18: a second remote assignment BLOCKED waiting for the invocation slot (held by a running one) must be
+        // A second remote assignment BLOCKED waiting for the invocation slot (held by a running one) must be
         // released by the drain instead of hanging forever on the previously-uncancelable slot wait — and it must never
         // start. The already-running first assignment is unaffected.
         var runner = Substitute.For<IInvocationRunner>();
@@ -411,7 +411,7 @@ public sealed class WorkerEventDispatcherTests
     [Test]
     public async Task ReportInvocationStreamChunkAsync_LongResponse_KeepsContentCorrectWithBoundedAllocations()
     {
-        // AUD4-10: every streamed chunk clones the invocation snapshot. Content is now backed by an immutable
+        // Every streamed chunk clones the invocation snapshot. Content is now backed by an immutable
         // StreamingText copied by REFERENCE on clone, so a clone no longer materializes the whole accumulated response
         // per chunk (the old O(n^2) hot path). Assert (a) the final content is exactly the concatenation and (b)
         // streaming 20k chunks stays far below the allocation the old per-chunk ToString would have cost.

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     F-031: a failed image-model weight download used to be swallowed into a log line, leaving the operator staring at
+///     A failed image-model weight download used to be swallowed into a log line, leaving the operator staring at
 ///     an optimistic "download started" toast forever. These tests pin the contract that every download reaches an
 ///     observable terminal phase — and that a failure is reported as <c>Failed</c> with an operator-safe reason rather
 ///     than staying <c>Running</c> indefinitely.

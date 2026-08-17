@@ -91,7 +91,7 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         ArgumentNullException.ThrowIfNull(tokenCounts);
 
         var (nonce, ciphertext) = EncryptPayload(plaintext, epochKey, BuildEnvelopeAad(conversationId, messageId, epochVersion));
-        (byte[] Nonce, byte[] Ciphertext)? reasoning = reasoningPlaintext is { } value
+        var reasoning = reasoningPlaintext is { } value
             ? EncryptPayload(value.Span, epochKey, BuildReasoningEnvelopeAad(conversationId, messageId, epochVersion))
             : null;
 
@@ -213,7 +213,7 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         return epochKey;
     }
 
-    private (byte[] Nonce, byte[] Ciphertext) EncryptPayload(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> epochKey, byte[] aad)
+    private EncryptedPayload EncryptPayload(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> epochKey, byte[] aad)
     {
         ValidateEpochKey(epochKey);
 
@@ -225,7 +225,7 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         var combined = new byte[ciphertext.Length + tag.Length];
         ciphertext.CopyTo(combined, index: 0);
         tag.CopyTo(combined, ciphertext.Length);
-        return (nonce, combined);
+        return new EncryptedPayload(nonce, combined);
     }
 
     private byte[] DecryptPayload(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> ciphertextWithTag, ReadOnlySpan<byte> epochKey, byte[] aad)
@@ -281,4 +281,7 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
     {
         return $"message|{conversationId:D}|{messageId:D}|{epochVersion}";
     }
+
+    // One AEAD-sealed payload: the per-encryption nonce, and the ciphertext with its authentication tag appended.
+    private sealed record EncryptedPayload(byte[] Nonce, byte[] Ciphertext);
 }

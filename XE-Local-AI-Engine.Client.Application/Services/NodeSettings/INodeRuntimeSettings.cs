@@ -110,8 +110,7 @@ public interface INodeRuntimeSettings
     // is synchronous by design. That is safe because the read resolves through CachedNodeSettingsStore, where Load is an
     // IMemoryCache.TryGetValue hit and SaveAsync invalidates AND re-primes the entry; the file is touched only on a cold
     // first read. What is NOT acceptable is a sync twin on a per-TOKEN path, or capturing the result in a singleton
-    // field to avoid the read — the latter is what silently required a node restart before an edit took effect
-    // (F-001/F-025).
+    // field to avoid the read — the latter is what silently required a node restart before an edit took effect.
 
     /// <inheritdoc cref="GetDefaultModelNameAsync" />
     string GetDefaultModelName();

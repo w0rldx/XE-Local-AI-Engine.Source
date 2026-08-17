@@ -60,8 +60,9 @@ internal static class AddNodeAgentHomeExtensions
                .Bind(configuration.GetSection(DevelopmentSandboxOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<DevelopmentSandboxOptions>, DevelopmentSandboxOptionsValidator>();
-        // Local-container provider options. Bound and validated unconditionally; the fail-closed validator matters only
-        // when the local-container provider is selected. The provider is a thin gRPC client that reuses HostAgent options.
+        // Local-container provider options (the copy-in and jail-growth byte budgets ProcessSandboxRuntimeProvider
+        // enforces). Bound and validated unconditionally; the fail-closed validator matters only when the
+        // local-container provider is selected.
         builder.Services.AddOptions<LocalContainerOptions>()
                .Bind(configuration.GetSection(LocalContainerOptions.SectionName))
                .ValidateOnStart();

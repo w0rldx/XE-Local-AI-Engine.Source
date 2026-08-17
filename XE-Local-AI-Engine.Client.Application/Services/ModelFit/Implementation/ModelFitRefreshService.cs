@@ -156,7 +156,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         try
         {
-            // AUD4-03: size against the EFFECTIVE profile — degraded to CPU-mode when the device audit reports a silent
+            // Size against the EFFECTIVE profile — degraded to CPU-mode when the device audit reports a silent
             // CPU fallback — so the advisor never recommends models that only fit in VRAM the runtime cannot actually use.
             var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken).ConfigureAwait(false);
             var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken)
@@ -579,7 +579,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             return null;
         }
 
-        var (file, estimate) = selected.Value;
+        var (file, estimate) = selected;
         var modelName = GgufModelName.Format(repoId, file.Quant);
         return new AdvisorRecommendation(repoId,
             modelName,
@@ -637,7 +637,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("best_quant", recommendation.Quant);
                 writer.WriteString("fit_level", estimate.Mode == FitMode.Gpu ? "GPU" : "CPU");
                 writer.WriteString("run_mode", estimate.Mode.ToString());
-                // Estimate confidence (AUD4-11): "Approximate" when the KV geometry leaned on a derived head_dim or the
+                // Estimate confidence: "Approximate" when the KV geometry leaned on a derived head_dim or the
                 // weights on the on-disk file size (missing explicit header metadata), so the UI can present the figure
                 // conservatively. native_format flags a non-requantizable quant (MXFP4) priced at its own density.
                 writer.WriteString("fit_confidence", estimate.Confidence.ToString());

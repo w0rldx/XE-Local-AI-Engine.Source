@@ -14,5 +14,5 @@ public interface ISandboxMarkerStore
     void Delete(string markerId);
 
     /// <summary>Reads every marker currently on disk, skipping any that cannot be parsed.</summary>
-    IReadOnlyList<(string MarkerId, SandboxProcessMarker Marker)> ReadAll();
+    IReadOnlyList<SandboxMarkerEntry> ReadAll();
 }

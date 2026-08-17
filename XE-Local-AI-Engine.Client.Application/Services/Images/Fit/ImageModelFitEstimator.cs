@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Images.Fit;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -37,6 +38,13 @@ public sealed record ImageModelFitEstimate(
     bool FitsOnDisk);
 
 /// <summary>
+///     One file of a diffusion set: the role it plays at run time (which decides whether it is charged against VRAM)
+///     and its size on disk.
+/// </summary>
+[StructLayout(LayoutKind.Auto)]
+public readonly record struct ImageModelPartSize(ImageModelPartRole Role, long SizeBytes);
+
+/// <summary>
 ///     Scores a diffusion file-set against the host's memory budget.
 /// </summary>
 /// <remarks>
@@ -66,7 +74,7 @@ public static class ImageModelFitEstimator
     ///     <see langword="null" /> when the hardware probe itself failed, which yields
     ///     <see cref="ImageModelFitVerdict.Unknown" />.
     /// </summary>
-    public static ImageModelFitEstimate Estimate(IReadOnlyList<(ImageModelPartRole Role, long SizeBytes)> parts, HardwareProfile? profile)
+    public static ImageModelFitEstimate Estimate(IReadOnlyList<ImageModelPartSize> parts, HardwareProfile? profile)
     {
         ArgumentNullException.ThrowIfNull(parts);
 

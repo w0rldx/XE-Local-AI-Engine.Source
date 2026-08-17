@@ -156,7 +156,7 @@ internal sealed class DevelopmentApplyService(
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(DevelopmentArtifactSnapshot Artifact, DevelopmentValidationReport Report)> ReadValidationAsync(Guid taskId,
+    private async Task<DevelopmentArtifactWith<DevelopmentValidationReport>> ReadValidationAsync(Guid taskId,
         DevelopmentEvidenceSet current,
         string expectedProfileDigest,
         CancellationToken cancellationToken)
@@ -190,10 +190,10 @@ internal sealed class DevelopmentApplyService(
         }
 
         EnsureInputs(artifact, current.PatchArtifact.Id, current.ManifestArtifact.Id);
-        return (artifact, report);
+        return new DevelopmentArtifactWith<DevelopmentValidationReport>(artifact, report);
     }
 
-    private async Task<(DevelopmentArtifactSnapshot Artifact, DevelopmentReviewReport Report)> ReadReviewAsync(Guid taskId,
+    private async Task<DevelopmentArtifactWith<DevelopmentReviewReport>> ReadReviewAsync(Guid taskId,
         DevelopmentEvidenceSet current,
         Guid validationArtifactId,
         string expectedProfileDigest,
@@ -216,7 +216,7 @@ internal sealed class DevelopmentApplyService(
         }
 
         EnsureInputs(artifact, current.PatchArtifact.Id, current.ManifestArtifact.Id, validationArtifactId);
-        return (artifact, report);
+        return new DevelopmentArtifactWith<DevelopmentReviewReport>(artifact, report);
     }
 
     private static void EnsureEvidenceMatches(DevelopmentArtifactSnapshot artifact,

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     into the persisted <c>AgentHome:ToolCapableModels</c> allow-list that gates tool calling.
 /// </summary>
 /// <remarks>
-///     REGRESSION (capture run 2026-08-01, previously filed as F-001). The shipped allow-list named two
+///     REGRESSION: the shipped allow-list named two
 ///     previous-generation models (<c>qwen3:8b</c>, a Qwen2.5-3B GGUF). None of the current models the advisor ranks and
 ///     downloads appeared in it — including tool-capable ones — so a user who followed the app's OWN recommendation got
 ///     no tool calling and no explanation. The capability was already detected by <c>GgufCapabilityDetector</c> and

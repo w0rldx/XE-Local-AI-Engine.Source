@@ -302,7 +302,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
     // The virtual filesystem is keyed by sandbox-absolute path, so "under this directory" is a prefix test — and the
     // directory itself is addressed the way every other operation addresses one.
-    private IEnumerable<(string Relative, string Content)> EnumerateUnder(SandboxHandle handle,
+    private IEnumerable<VirtualFile> EnumerateUnder(SandboxHandle handle,
         string directoryPath,
         CancellationToken cancellationToken)
     {
@@ -315,7 +315,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         return state.SandboxFiles
                     .Where(file => file.Key.StartsWith(prefix, StringComparison.Ordinal))
                     .OrderBy(static file => file.Key, StringComparer.Ordinal)
-                    .Select(file => (file.Key[prefix.Length..], file.Value));
+                    .Select(file => new VirtualFile(file.Key[prefix.Length..], file.Value));
     }
 
     public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -583,4 +583,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
     }
 
     private sealed record ScriptedCommand(bool Blocks, int ExitCode, string StandardOutput, string StandardError);
+
+    // One entry of the virtual filesystem as seen from the enumerated directory: its path relative to that directory,
+    // and the file's whole content.
+    private sealed record VirtualFile(string Relative, string Content);
 }
