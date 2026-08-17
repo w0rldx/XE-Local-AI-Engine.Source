@@ -164,9 +164,12 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 	});
 }
 
+// A run's DETAIL query polls only while that run is active, so a change made elsewhere (a project-wide judge change
+// or re-judge) can never be picked up by an open detail pane on its own: its cached copy says the run is finished, so
+// nothing schedules another read. Every mutation therefore names the runs it touched, not just the project.
 function useBenchmarkInvalidation() {
 	const queryClient = useQueryClient();
-	return async (projectId?: string, runId?: string): Promise<void> => {
+	return async (projectId?: string, ...runIds: readonly string[]): Promise<void> => {
 		await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.projects });
 		if (projectId) {
 			await Promise.all([
@@ -174,9 +177,7 @@ function useBenchmarkInvalidation() {
 				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runs(projectId) }),
 			]);
 		}
-		if (runId) {
-			await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.run(runId) });
-		}
+		await Promise.all(runIds.map((runId) => queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.run(runId) })));
 	};
 }
 
@@ -232,9 +233,10 @@ export function useUpdateBenchmarkProject() {
 	});
 }
 
-/** What a judge change did: the refreshed project plus how many runs it enqueued for re-judging. */
+/** What a judge change did: the refreshed project plus the runs it enqueued for re-judging. */
 export interface BenchmarkJudgeChange {
 	project: BenchmarkProjectDetail;
+	enqueuedRunIds: readonly string[];
 	enqueuedRunCount: number;
 }
 
@@ -261,9 +263,10 @@ export function useUpdateBenchmarkJudgePolicy() {
 			const { data } = await callWithResponseValidation(
 				updateBenchmarkJudgePolicy({ path: { projectId }, body: { policy, expectedVersion, confirmRejudge }, throwOnError: true }),
 			);
-			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunCount: (data.enqueuedRunIds ?? []).length };
+			const enqueuedRunIds = data.enqueuedRunIds ?? [];
+			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
 		},
-		onSuccess: (change) => invalidate(change.project.id),
+		onSuccess: (change) => invalidate(change.project.id, ...change.enqueuedRunIds),
 	});
 }
 
@@ -274,9 +277,10 @@ export function useRejudgeBenchmarkProject() {
 			const { data } = await callWithResponseValidation(
 				rejudgeBenchmarkProject({ path: { projectId }, body: { expectedVersion }, throwOnError: true }),
 			);
-			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunCount: (data.enqueuedRunIds ?? []).length };
+			const enqueuedRunIds = data.enqueuedRunIds ?? [];
+			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
 		},
-		onSuccess: (change) => invalidate(change.project.id),
+		onSuccess: (change) => invalidate(change.project.id, ...change.enqueuedRunIds),
 	});
 }
 

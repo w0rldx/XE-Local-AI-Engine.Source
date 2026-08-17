@@ -252,6 +252,12 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			? `${message} ${t("pages.benchmarks.errors.kvUnsupportedHint", "Pick f16 explicitly to run this model on this runtime.")}`
 			: message;
 	};
+	// One selection helper for both entry points. The auto-select effect above may already hold the id (a freshly
+	// started run is the newest one), so prepending it unguarded selected the same run twice: two identical detail
+	// panes, and a launch comparison of a run against itself.
+	const selectRun = (id: string): void => {
+		setSelectedRunIds((current) => [id, ...current.filter((item) => item !== id)].slice(0, 2));
+	};
 	const toggleRun = (id: string): void => {
 		setSelectedRunIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current].slice(0, 2)));
 	};
@@ -448,7 +454,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 													kvCacheType: selectedKvCacheType === autoKvCacheType ? null : selectedKvCacheType,
 												},
 												{
-													onSuccess: (run) => setSelectedRunIds((current) => [run.id, ...current].slice(0, 2)),
+													onSuccess: (run) => selectRun(run.id),
 													onError: (error) => toast.error(startRunErrorMessage(error)),
 												},
 											)
