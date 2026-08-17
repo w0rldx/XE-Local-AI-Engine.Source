@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    [Migration("20260817133652_AddBenchmarkRunStopReasonAndOutputBudget")]
-    partial class AddBenchmarkRunStopReasonAndOutputBudget
+    [Migration("20260817201241_AddBenchmarkReadiness")]
+    partial class AddBenchmarkReadiness
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -640,6 +640,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("current_judge_policy_revision_id");
 
+                    b.Property<int?>("InvocationTimeoutSeconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("invocation_timeout_seconds");
+
                     b.Property<int?>("MaxOutputTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_output_tokens");
@@ -668,6 +672,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         {
                             t.HasCheckConstraint("CK_benchmark_projects_context_tokens", "context_tokens > 0");
 
+                            t.HasCheckConstraint("CK_benchmark_projects_invocation_timeout", "invocation_timeout_seconds IS NULL OR (invocation_timeout_seconds >= 60 AND invocation_timeout_seconds <= 7200)");
+
                             t.HasCheckConstraint("CK_benchmark_projects_max_output_tokens", "max_output_tokens IS NULL OR (max_output_tokens > 0 AND max_output_tokens < context_tokens)");
                         });
                 });
@@ -689,6 +695,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("agent_version");
 
+                    b.Property<int?>("CachedPromptTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cached_prompt_tokens");
+
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
@@ -704,6 +714,24 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int?>("EffectiveContextTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("effective_context_tokens");
+
+                    b.Property<double?>("GenerationMs")
+                        .HasColumnType("REAL")
+                        .HasColumnName("generation_ms");
+
+                    b.Property<int?>("GenerationTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("generation_tokens");
+
+                    b.Property<int?>("InvocationTimeoutSeconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("invocation_timeout_seconds");
+
+                    b.Property<bool>("IsWarmup")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_warmup");
 
                     b.Property<long>("LastStreamSequence")
                         .HasColumnType("INTEGER")
@@ -839,6 +867,22 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("project_id");
 
+                    b.Property<double?>("PromptMs")
+                        .HasColumnType("REAL")
+                        .HasColumnName("prompt_ms");
+
+                    b.Property<int?>("PromptTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("prompt_tokens");
+
+                    b.Property<Guid?>("RepeatGroupId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("repeat_group_id");
+
+                    b.Property<int?>("RepeatIndex")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("repeat_index");
+
                     b.Property<int>("RequestedContextTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("requested_context_tokens");
@@ -847,6 +891,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsRequired()
                         .HasColumnType("BLOB")
                         .HasColumnName("runtime_snapshot_json");
+
+                    b.Property<int?>("SegmentCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("segment_count");
 
                     b.Property<long?>("StartedAtUtc")
                         .HasColumnType("INTEGER")
@@ -859,6 +907,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int?>("TotalTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("total_tokens");
+
+                    b.Property<double?>("TtftMs")
+                        .HasColumnType("REAL")
+                        .HasColumnName("ttft_ms");
 
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
@@ -874,6 +926,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnName("version");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RepeatGroupId")
+                        .HasDatabaseName("ix_benchmark_runs_repeat_group_id");
 
                     b.HasIndex("ProjectId", "CreatedAtUtc")
                         .HasDatabaseName("ix_benchmark_runs_project_created_at");
@@ -3825,6 +3880,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<bool>("DiscardCleanupPending")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("discard_cleanup_pending");
+
+                    b.Property<string>("DiscardReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("discard_reason");
+
+                    b.Property<long?>("DiscardedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("discarded_at_utc");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -3836,6 +3904,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT")
                         .HasColumnName("path");
+
+                    b.Property<Guid?>("QualityComparisonId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("quality_comparison_id");
+
+                    b.Property<byte[]>("QualityDecisionJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("quality_decision_json");
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT")
@@ -3871,6 +3947,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnName("version");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("QualityComparisonId")
+                        .HasDatabaseName("ix_training_artifacts_quality_comparison");
 
                     b.HasIndex("RunId")
                         .HasDatabaseName("ix_training_artifacts_run");
@@ -4253,6 +4332,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("error_message");
 
+                    b.Property<byte[]>("ExecutionProvenanceJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("execution_provenance_json");
+
                     b.Property<byte[]>("MembershipJson")
                         .IsRequired()
                         .HasColumnType("BLOB")
@@ -4286,11 +4369,23 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("scored_count");
 
+                    b.Property<Guid?>("SourceArtifactId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_artifact_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("TEXT")
                         .HasColumnName("status");
+
+                    b.Property<string>("TargetKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("InstalledModel")
+                        .HasColumnName("target_kind");
 
                     b.Property<int>("TotalCount")
                         .HasColumnType("INTEGER")
@@ -4315,6 +4410,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDatabaseName("ix_training_evaluation_runs_comparison");
 
                     b.HasIndex("DatasetId");
+
+                    b.HasIndex("SourceArtifactId")
+                        .HasDatabaseName("ix_training_evaluation_runs_source_artifact");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_training_evaluation_runs_status");
