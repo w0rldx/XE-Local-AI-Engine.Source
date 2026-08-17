@@ -25,7 +25,10 @@ public enum BenchmarkErrorCode
     JudgePolicyAlreadyApplied,
     JudgePolicyChanged,
     JudgeDisabled,
-    PrimaryNotSucceeded
+    PrimaryNotSucceeded,
+
+    /// <summary>Batch only: the cell never reached the freeze because an earlier cell stopped the batch.</summary>
+    NotAttempted
 }
 
 public class BenchmarkProjectMutationRequest
@@ -202,6 +205,12 @@ public sealed class RejectedBenchmarkRunBatchItemResponse
 
 public sealed class StartBenchmarkRunBatchResponse
 {
+    /// <summary>
+    ///     The project version after the last cell that started — the version the NEXT batch has to present. It is the
+    ///     only way a caller can resubmit the cells a partial batch left untried without re-reading the project.
+    /// </summary>
+    public long ProjectVersion { get; init; }
+
     public IReadOnlyList<StartedBenchmarkRunBatchItemResponse> Started { get; init; } = [];
     public IReadOnlyList<RejectedBenchmarkRunBatchItemResponse> Rejected { get; init; } = [];
 }

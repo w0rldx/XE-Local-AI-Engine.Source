@@ -28464,6 +28464,9 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "projectVersion": {
+            "type": "integer"
+          },
           "started": {
             "type": "array",
             "items": {

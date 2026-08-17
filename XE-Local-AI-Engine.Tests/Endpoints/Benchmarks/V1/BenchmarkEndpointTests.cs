@@ -264,6 +264,8 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(expected: 2, started[0].GetProperty("runIds").GetArrayLength());
         AssertEx.Equal("q8_0", started[1].GetProperty("kvCacheType").GetString(), "The KV type is canonicalized per cell.");
         AssertEx.Equal(expected: 0, document.RootElement.GetProperty("rejected").GetArrayLength());
+        AssertEx.Equal(expected: 8L, document.RootElement.GetProperty("projectVersion").GetInt64(),
+            "Four inserts off version 4 — what the NEXT batch has to present.");
 
         // Each cell's two inserts bump the project version by two, so the SECOND cell must present version 6. Getting
         // this wrong turns every batch past the first item into a version conflict.
@@ -341,6 +343,97 @@ public sealed class BenchmarkEndpointTests
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.VersionConflict,
             "The resource version changed. Refresh and retry.");
         _ = context.RunFreeze.DidNotReceive().StartAsync(ProjectId, "model-b", Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<int>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WhenTheProjectVersionMovedAfterACellStarted_AnswersPartiallyAndKeepsTheStartedRunIds()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model-a", 4, null, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
+        context.RunFreeze.StartAsync(ProjectId, "model-b", 5, null, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "model-a"
+                    },
+                    new
+                    {
+                        modelName = "model-b"
+                    },
+                    new
+                    {
+                        modelName = "model-c"
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // Runs are already queued: a top-level 409 carries no body, so it would discard their ids — the operator could
+        // not find them and a retry would enqueue duplicates. The started cell survives, the conflicting cell and every
+        // cell after it are reported, and projectVersion is what the resubmission has to present.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
+        AssertEx.Equal("model-a", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
+        AssertEx.Equal(expected: 5L, document.RootElement.GetProperty("projectVersion").GetInt64());
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 2, rejected.GetArrayLength());
+        AssertEx.Equal("model-b", rejected[0].GetProperty("modelName").GetString());
+        AssertEx.Equal(BenchmarkErrorCode.VersionConflict.ToString(), rejected[0].GetProperty("code").GetString());
+        AssertEx.Equal("model-c", rejected[1].GetProperty("modelName").GetString());
+        AssertEx.Equal(BenchmarkErrorCode.NotAttempted.ToString(), rejected[1].GetProperty("code").GetString());
+        AssertEx.Contains(rejected[1].GetProperty("message").GetString() ?? string.Empty, "resubmit the remaining items",
+            StringComparison.Ordinal);
+
+        // The batch stops at the conflict rather than hammering the freeze with cells that would all fail the same way.
+        _ = context.RunFreeze.DidNotReceive().StartAsync(ProjectId, "model-c", Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<int>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WithABlankModelName_RejectsThatCellWithoutTouchingTheFreeze()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model-b", 4, null, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "   "
+                    },
+                    new
+                    {
+                        modelName = "model-b"
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // A blank name used to reach the freeze and come back as an ArgumentException — a 500 for one operator typo in
+        // one cell. It is the same per-cell verdict an ineligible model gets, and the rest of the matrix still starts.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
+        AssertEx.Equal("model-b", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 1, rejected.GetArrayLength());
+        AssertEx.Equal(BenchmarkErrorCode.InvalidRequest.ToString(), rejected[0].GetProperty("code").GetString());
+        _ = context.RunFreeze.DidNotReceive().StartAsync(ProjectId, "   ", Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<int>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 

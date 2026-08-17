@@ -102,6 +102,17 @@ describe("benchmarkRepeatStats", () => {
 		expect(stats.size).toBe(3);
 	});
 
+	// A model deleted and reinstalled, or a repo tag repointed at new weights, keeps its NAME and changes its content
+	// fingerprint. Merging the two builds into one mean would report a spread that is really different weights.
+	it("keeps two builds of one model name in different cohorts", () => {
+		const rebuilt = measured("c", 40, { modelContentFingerprint: "v1:rebuilt" });
+		const stats = benchmarkRepeatStats([measured("a", 80), measured("b", 82), rebuilt]);
+
+		expect(stats.size).toBe(2);
+		expect(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond?.count).toBe(2);
+		expect(stats.get(benchmarkRepeatCohortKey(rebuilt))?.tokensPerSecond?.mean).toBe(40);
+	});
+
 	// "± 0 (n=1)" would state a certainty a single reading does not have, so a lone run renders nothing.
 	it("reports no spread below two samples", () => {
 		const stats = benchmarkRepeatStats([measured("a", 80)]);

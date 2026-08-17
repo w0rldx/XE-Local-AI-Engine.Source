@@ -159,8 +159,18 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
         // running total of runs created so far. Re-reading the project between items would be the same number with an
         // extra round trip and a wider race window.
         var expectedVersion = req.ExpectedProjectVersion;
-        foreach (var item in req.Items)
+        for (var index = 0; index < req.Items.Count; index++)
         {
+            var item = req.Items[index];
+
+            // Same rule as the single-run endpoint, as a per-cell verdict: a blank name would reach the freeze and come
+            // back as an ArgumentException, i.e. a 500 for what is one operator typo in one cell of a matrix.
+            if (string.IsNullOrWhiteSpace(item.ModelName))
+            {
+                rejected.Add(Rejection(item, BenchmarkErrorCode.InvalidRequest, "A primary model is required."));
+                continue;
+            }
+
             if (!BenchmarkKvCacheType.TryNormalize(item.KvCacheType, out var kvCacheType))
             {
                 rejected.Add(Rejection(item, BenchmarkErrorCode.InvalidRequest, "The requested KV-cache type is not supported."));
@@ -183,9 +193,25 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
             catch (Exception exception) when (IsWholeBatchFailure(exception))
             {
                 // A stale project version or a vanished project is a fact about the BATCH, not about one cell: every
-                // remaining item would fail the same way, and reporting nine identical rejections would bury it.
-                await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-                return;
+                // remaining item would fail the same way, and reporting nine identical rejections would bury it. That
+                // holds only while NOTHING has started — a top-level error carries no body, so once runs are queued it
+                // would discard their ids: the operator could not find them and a retry would enqueue duplicates.
+                if (started.Count == 0)
+                {
+                    await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
+                    return;
+                }
+
+                var (_, code, message) = BenchmarkEndpointSupport.Classify(exception);
+                rejected.Add(Rejection(item, code, message));
+                var stopped =
+                    $"The batch stopped after {started.Count} cell(s) started; re-read the project version and resubmit the remaining items.";
+                for (var untried = index + 1; untried < req.Items.Count; untried++)
+                {
+                    rejected.Add(Rejection(req.Items[untried], BenchmarkErrorCode.NotAttempted, stopped));
+                }
+
+                break;
             }
             catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception) || exception is KeyNotFoundException)
             {
@@ -200,6 +226,7 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
 
         await Send.OkAsync(new StartBenchmarkRunBatchResponse
                   {
+                      ProjectVersion = expectedVersion,
                       Started = started,
                       Rejected = rejected
                   }, ct)
@@ -210,7 +237,8 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
     ///     Facts about the BATCH rather than about one cell: a vanished project, or a project version that moved under
     ///     the caller. Every remaining item would fail identically, and burying that in N identical rejections would
     ///     hide the one thing the operator has to fix. A <see cref="KeyNotFoundException" /> is deliberately NOT here —
-    ///     that is the MODEL not being installed, which is exactly a per-cell verdict.
+    ///     that is the MODEL not being installed, which is exactly a per-cell verdict. Only fails the WHOLE batch while
+    ///     nothing has started; after that the batch stops and answers partially, so the started run ids survive.
     /// </summary>
     private static bool IsWholeBatchFailure(Exception exception) =>
         exception is BenchmarkNotFoundException
