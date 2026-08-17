@@ -116,7 +116,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     // encrypted token-cache persistence is unavailable, that surfaces as CredentialUnavailableException before (or
     // instead of) the device-code callback firing, in which case a single retry rebuilds the credential without
     // persistence (in-memory only, logged) — never unencrypted-on-disk.
-    private async Task<(DeviceCodeInfo Info, DeviceCodeCredential Credential, Task<AuthenticationRecord> Completion)> BeginDeviceCodeFlowAsync(StoredAzureFoundryConnection connection,
+    private async Task<DeviceCodeFlowHandle> BeginDeviceCodeFlowAsync(StoredAzureFoundryConnection connection,
         bool allowPersistence,
         CancellationToken cancellationToken)
     {
@@ -151,7 +151,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         try
         {
             var info = await deviceCodeReady.Task.ConfigureAwait(false);
-            return (info, credential, authenticateTask);
+            return new DeviceCodeFlowHandle(info, credential, authenticateTask);
         }
         // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
         // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
@@ -255,4 +255,8 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             // Already completed and disposed by its own tracking task; nothing to cancel.
         }
     }
+
+    // An initiated device-code flow: the code to show the operator, the credential that must stay alive to hold the
+    // MSAL token cache, and the still-running authentication whose completion carries the record to persist.
+    private sealed record DeviceCodeFlowHandle(DeviceCodeInfo Info, DeviceCodeCredential Credential, Task<AuthenticationRecord> Completion);
 }
