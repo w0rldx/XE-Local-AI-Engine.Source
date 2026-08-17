@@ -352,7 +352,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     // Resolves the concrete .gguf file for the request: an explicit FileName is used verbatim; otherwise the repo is
     // inspected and the file whose quant matches (request.Quant ?? DefaultQuant) is selected.
-    private async Task<(string FileName, string Quant, long SizeBytes, string? Sha256, string Revision)> ResolveTargetAsync(GgufModelRequest request,
+    private async Task<ResolvedTarget> ResolveTargetAsync(GgufModelRequest request,
         CancellationToken ct)
     {
         // The header-free listing suffices — resolution only needs file name / quant / size / sha / revision, never the
@@ -370,7 +370,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             }
 
             EnsureSafeFileName(byName.FileName);
-            return (byName.FileName, byName.Quant, byName.SizeBytes, byName.Sha256, request.Revision ?? byName.Revision);
+            return new ResolvedTarget(byName.FileName, byName.Quant, byName.SizeBytes, byName.Sha256, request.Revision ?? byName.Revision);
         }
 
         var targetQuant = request.Quant ?? _options.DefaultQuant;
@@ -393,7 +393,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         }
 
         EnsureSafeFileName(byQuant.FileName);
-        return (byQuant.FileName, byQuant.Quant, byQuant.SizeBytes, byQuant.Sha256, request.Revision ?? byQuant.Revision);
+        return new ResolvedTarget(byQuant.FileName, byQuant.Quant, byQuant.SizeBytes, byQuant.Sha256, request.Revision ?? byQuant.Revision);
     }
 
     // Downloads the repo's mmproj projector companion (when it ships one) next to the model and returns its filename +
@@ -655,4 +655,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             EmbeddingLength: null, ContextLength: null, AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
             Architecture: null, ExpertCount: null, ExpertUsedCount: null);
     }
+
+    /// <summary>The concrete repo file a model request resolves to, with the revision the download will pin.</summary>
+    private sealed record ResolvedTarget(string FileName, string Quant, long SizeBytes, string? Sha256, string Revision);
 }

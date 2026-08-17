@@ -4,6 +4,10 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
+/// <summary>Process-group id and start time as read from <c>/proc/[pid]/stat</c>.</summary>
+[StructLayout(LayoutKind.Auto)]
+internal readonly record struct TrainingProcessStat(int Pgid, long StartTicks);
+
 /// <summary>
 ///     Reads trainer-process identity out of <c>/proc</c> and signals process groups. The receipt-validation half of the
 ///     <c>SandboxOrphanReaper</c> model: identity is proven from several independent fields before anything is
@@ -61,7 +65,7 @@ internal sealed partial class LinuxTrainingProcessInspector(TimeProvider? timePr
     }
 
     /// <summary>Process-group id (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when gone.</summary>
-    public static (int Pgid, long StartTicks)? TryReadStat(int processId)
+    public static TrainingProcessStat? TryReadStat(int processId)
     {
         string raw;
         try
@@ -92,7 +96,7 @@ internal sealed partial class LinuxTrainingProcessInspector(TimeProvider? timePr
             return null;
         }
 
-        return (pgid, startTicks);
+        return new TrainingProcessStat(pgid, startTicks);
     }
 
     public static string? ResolveExecutablePath(int processId)

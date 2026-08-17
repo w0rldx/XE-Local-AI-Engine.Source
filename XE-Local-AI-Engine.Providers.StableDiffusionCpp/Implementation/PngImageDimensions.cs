@@ -1,6 +1,11 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
+
+/// <summary>The pixel dimensions declared by a PNG's IHDR header.</summary>
+[StructLayout(LayoutKind.Auto)]
+internal readonly record struct ImageDimensions(int Width, int Height);
 
 /// <summary>
 ///     Reads the pixel dimensions out of a PNG's IHDR header. stable-diffusion.cpp silently rounds a requested latent
@@ -33,7 +38,7 @@ internal static class PngImageDimensions
     ///     not a PNG with a readable IHDR (too short, wrong signature, wrong first chunk, or a non-positive/oversized
     ///     dimension). Never throws.
     /// </summary>
-    public static (int Width, int Height)? TryRead(ReadOnlySpan<byte> imageBytes)
+    public static ImageDimensions? TryRead(ReadOnlySpan<byte> imageBytes)
     {
         if (imageBytes.Length < MinimumHeaderLength
             || !imageBytes[..Signature.Length].SequenceEqual(Signature)
@@ -51,6 +56,6 @@ internal static class PngImageDimensions
             return null;
         }
 
-        return ((int)width, (int)height);
+        return new ImageDimensions((int)width, (int)height);
     }
 }
