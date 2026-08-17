@@ -322,7 +322,7 @@ public sealed class GgufStoreTests
     [Test]
     public async Task Download_WhenBodyStallsMidCopy_ReadIdleTimeoutSurfacesTransientFailureAndRetryResumes()
     {
-        // AUD4-18: ResponseHeadersRead means the HttpClient timeout covers only the headers; a CDN that stalls mid-body
+        // ResponseHeadersRead means the HttpClient timeout covers only the headers; a CDN that stalls mid-body
         // must be bounded by the read-idle timeout, surfaced as a TRANSIENT failure so the existing retry/resume path
         // completes the download rather than hanging forever.
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

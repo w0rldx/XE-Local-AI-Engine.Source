@@ -101,7 +101,7 @@ public sealed class NodeChatInvocationPump(
             state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
             provider);
 
-        // AUD4-20 (lane-C source fix): a cancelled turn persists NO error text — a user cancel (or an operator eject,
+        // A cancelled turn persists NO error text — a user cancel (or an operator eject,
         // also Cancelled-category) is an outcome, not a failure, so it must not leave a red error banner on the row.
         // Failures keep their classified message. Derived from the winning terminal status the state maps to, so the
         // envelope's FailureCategory (a content-free ledger field) is untouched — only the user-facing Error is cleared.
@@ -158,7 +158,7 @@ public sealed class NodeChatInvocationPump(
         // status (derived from the winning row) carries the interrupted/cancelled outcome.
         var envelope = new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId());
 
-        // A user cancel persists NO error text (AUD4-20 / lane-C source fix); an interrupted stream (process/stream
+        // A user cancel persists NO error text; an interrupted stream (process/stream
         // loss) records the interrupted marker so the row is distinguishable on reload. Failures never reach this path.
         var interruptedError = wasCancelled ? null : terminalStatus;
 

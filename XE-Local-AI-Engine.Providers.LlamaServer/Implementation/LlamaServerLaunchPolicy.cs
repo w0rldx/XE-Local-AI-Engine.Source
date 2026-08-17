@@ -38,7 +38,7 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(variant);
 
         // A CPU build never replays a frozen GPU profile (its -ngl/-ts/-ot/-ctk are GPU-specific), so the CPU spawn
-        // always gets the deterministic policy context (the AUD4-02 fix) plus the CPU thread policy — regardless of
+        // always gets the deterministic policy context plus the CPU thread policy — regardless of
         // whether a profile exists.
         if (variant == GpuVariant.Cpu)
         {

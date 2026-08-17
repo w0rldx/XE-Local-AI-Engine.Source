@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 /* eslint-disable react-doctor/no-many-boolean-props -- These flags are independent wire states (active, queued, delayed, content) rather than one mutually exclusive mode. */
 
-// The runtime phases that precede the first token while a local model cold-loads (AUD4-20). Generating and absent
+// The runtime phases that precede the first token while a local model cold-loads. Generating and absent
 // phases fall through to the normal typing/streaming affordance.
 const modelLoadingPhases = new Set(["preparing_runtime", "loading_model"]);
 

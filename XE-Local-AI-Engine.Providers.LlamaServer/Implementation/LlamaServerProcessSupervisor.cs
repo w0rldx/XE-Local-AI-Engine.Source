@@ -106,7 +106,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
 
-    // AUD4-06: the process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
+    // The process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
     // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
     private readonly IGpuModelLoadAdmission _loadAdmission;
 
@@ -1069,7 +1069,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             ? await _modelStore.ResolveProjectorFilePathAsync(key.ModelName, ct).ConfigureAwait(false)
             : null;
 
-        // AUD4-09: the cold-start readiness deadline scales with the on-disk model size — a large model loads
+        // The cold-start readiness deadline scales with the on-disk model size — a large model loads
         // proportionally slower, so a fixed constant would kill and retry it before it can finish (the audited hang). A
         // missing/unreadable size (0) falls back to the base timeout.
         var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath) + adapterSizeBytes);
@@ -1157,7 +1157,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             ? await _extraArgumentsResolver.ResolveAsync(key.ModelName, key.Role, ct).ConfigureAwait(false)
             : [];
 
-        // AUD4-06: serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
+        // Serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
         // supervisor) so two --fit loads never read the same free-VRAM snapshot at once and oversubscribe the device.
         // CPU loads bypass — they do not contend for VRAM. The gate is acquired here (after variant selection + arg
         // resolution, immediately before the admission cap decision that may evict an idle process to free VRAM) so the
@@ -1171,7 +1171,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             ? null
             : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
 
-        // AUD4-02/05/17: the central launch policy fills in the deterministic context (-c), the GPU KV-cache
+        // The central launch policy fills in the deterministic context (-c), the GPU KV-cache
         // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
         // Replay profiling bypasses it so the supplied frozen args ARE the experiment. Explore profiling applies the
         // production policy because the helper and server must observe the same concrete context/KV/FA vector as normal
@@ -1378,7 +1378,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     }
                 }
 
-                // AUD4-02: read the effective per-slot context the server actually loaded (best-effort) so both app-side
+                // Read the effective per-slot context the server actually loaded (best-effort) so both app-side
                 // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
                 var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
 

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-06 cross-supervisor serialization: an image (stable-diffusion.cpp) load and an LLM (llama-server) load share
+///     Cross-supervisor serialization: an image (stable-diffusion.cpp) load and an LLM (llama-server) load share
 ///     ONE process-wide GPU-load admission gate, so a GPU-backed image spawn does not begin while a GPU-backed LLM spawn
 ///     holds the gate — the two never race two <c>--fit</c> / free-VRAM reads.
 /// </summary>

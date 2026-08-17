@@ -305,7 +305,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         var package = context.Package;
 
-        // AUD4-23: mark the turn's processing start (baseline for the pre-spawn latency + TTFT metrics) and open a
+        // Mark the turn's processing start (baseline for the pre-spawn latency + TTFT metrics) and open a
         // coarse span for the whole turn, so the audited "silent pre-spawn gap" (a first send stalled several seconds
         // before the model spawn with zero log lines) surfaces as timed child spans rather than an apparent hang.
         var turnStartedTimestamp = Stopwatch.GetTimestamp();
@@ -403,7 +403,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // AsyncLocal through the function-invocation pipeline; disposal restores the prior ambient value.
             using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
 
-            // AUD4-01: warm the local model to readiness BEFORE the watched streaming pull begins, so a cold big-model
+            // Warm the local model to readiness BEFORE the watched streaming pull begins, so a cold big-model
             // load happens in its OWN size-aware window (owned by the supervisor) and is never killed by the shorter
             // stream-idle watchdog — the primary cause of the audited "big model can never load through chat" hang.
             // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
@@ -412,7 +412,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var localRuntime = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
             var effectiveContextTokens = localRuntime.EffectiveContextTokens;
 
-            // AUD4-02: fold the launched effective context window into the turn policy so the OUTER conversation
+            // Fold the launched effective context window into the turn policy so the OUTER conversation
             // budgeter sizes history against the real window rather than the configured default (see
             // TurnPolicy.WithEffectiveContext for the precedence). The same value is threaded into the agent definition
             // below so the INNER provider-round budgeter (num_ctx side channel) resolves the identical window.
@@ -533,7 +533,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // one the operator stopped, and one the detached-run reaper collected were indistinguishable in the persisted
             // failure — which is exactly why a live turn reported "Cancelled" at ~550s could not be attributed to anything.
             var cancellationMessage = DescribeCancellation(cancellationOrigin, turnPolicy.InvocationTimeout);
-            // AUD4-19: count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
+            // Count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory(cancellationOrigin)));
@@ -744,7 +744,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     }
 
     /// <summary>
-    ///     AUD4-01 model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog
+    ///     Model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog
     ///     is armed, so a cold big-model load runs in its own size-aware window (owned by the supervisor) instead of
     ///     being killed by the shorter no-first-chunk watchdog. Cloud (Codex/Azure) and Ollama models route elsewhere or
     ///     warm cheaply on first send, so they are a no-op here. Surfaces the phase into the invocation state (so the UI
@@ -776,7 +776,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             return new LocalRuntimePreparationResult(EffectiveContextTokens: null, ProviderName: null, WarmFailure: null);
         }
 
-        // AUD4-19: this turn pays a real local cold-load. Record how long the turn waited before the load even began
+        // This turn pays a real local cold-load. Record how long the turn waited before the load even began
         // (the audited silent pre-spawn gap), tag the provider dimension "local", and measure TTFT from readiness.
         stream.ProviderTag = "local";
         NodeMetrics.TurnToModelLoadStartMs.Record(Stopwatch.GetElapsedTime(turnStartedTimestamp).TotalMilliseconds,
@@ -825,7 +825,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating).ConfigureAwait(false);
 
-        // AUD4-02: with the model now ready, read the effective per-slot context window it actually loaded so the turn's
+        // With the model now ready, read the effective per-slot context window it actually loaded so the turn's
         // budgeters + the num_ctx side channel size against the REAL window (llama.cpp's -c) rather than the app default.
         // Best-effort — a null here just keeps the configured default. A cancellation propagates (the turn is terminating).
         var effectiveContextTokens = await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
@@ -989,7 +989,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             .ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
-        // Coarse span over the MAF agent build (AUD4-23) — another pre-first-token stage. Disposed right after the
+        // Coarse span over the MAF agent build — another pre-first-token stage. Disposed right after the
         // build so it does not enclose the streaming loop; the agent context keeps its normal await-using scope.
         var buildAgentActivity = NodeActivitySource.Source.StartActivity("chat.invocation.build_agent");
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
@@ -2217,7 +2217,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         };
     }
 
-    // The cancellation cause for the invocation_cancelled_total metric (AUD4-19): an explicit user cancel, the
+    // The cancellation cause for the invocation_cancelled_total metric: an explicit user cancel, the
     // invocation-level timeout firing ("watchdog"), or an external cancellation — the caller/host token or a
     // disconnect-driven CancelAll — reported as "shutdown".
     private static string ClassifyCancellationMetricCategory(CancellationOrigin origin)

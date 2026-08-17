@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-02: <see cref="LlamaServerHealthProbe.TryReadEffectiveContextTokensAsync" /> parses the effective per-slot
+///     <see cref="LlamaServerHealthProbe.TryReadEffectiveContextTokensAsync" /> parses the effective per-slot
 ///     context window from the server's <c>/props</c> endpoint (<c>default_generation_settings.n_ctx</c>), degrading to
 ///     <see langword="null" /> on any unavailability rather than throwing.
 /// </summary>

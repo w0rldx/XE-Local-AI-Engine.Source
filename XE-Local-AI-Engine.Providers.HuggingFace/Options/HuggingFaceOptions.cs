@@ -31,7 +31,7 @@ public sealed class HuggingFaceOptions
     public int MaxDownloadRetries { get; set; } = 4;
 
     /// <summary>
-    ///     Read-idle timeout (seconds) for the download body-copy loop (AUD4-18). The download uses
+    ///     Read-idle timeout (seconds) for the download body-copy loop. The download uses
     ///     <c>HttpCompletionOption.ResponseHeadersRead</c>, so the HttpClient timeout covers only the response HEADERS; a
     ///     CDN that accepts the connection and then stalls mid-body would otherwise hang the copy forever with no deadline
     ///     on <c>Stream.ReadAsync</c>. This bounds the gap between two successful reads: if no bytes arrive within the

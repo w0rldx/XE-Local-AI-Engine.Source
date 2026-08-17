@@ -15,7 +15,7 @@ public sealed partial class WorkerEventDispatcher
             InvocationId = runtimePackage.InvocationId,
             ConversationId = runtimePackage.ConversationId,
             // Capture the W3C trace id of the ambient (request/hub) activity so the invocation monitor can surface a
-            // copyable correlation id. The pre-spawn spans (AUD4-23) start as children of this same activity, so they
+            // copyable correlation id. The pre-spawn spans start as children of this same activity, so they
             // share this trace id — the monitor row therefore links straight to the run's exported trace. A default
             // (all-zero) id is treated as absent.
             TraceId = Activity.Current is { } activity && activity.TraceId != default ? activity.TraceId.ToString() : null,

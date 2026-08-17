@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-18: the MCP options validator rejects a non-positive per-call tool timeout (alongside the existing connect
+///     The MCP options validator rejects a non-positive per-call tool timeout (alongside the existing connect
 ///     timeout and loopback-host checks), so a misconfiguration fails fast at startup.
 /// </summary>
 public sealed class McpOptionsValidatorTests

@@ -180,7 +180,7 @@ public sealed class LlamaServerSupervisorOptions
     public TimeSpan EjectDrainTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEjectDrainTimeoutSeconds);
 
     /// <summary>
-    ///     Network timeout for a single <em>chat</em> call to the llama-server OpenAI-compatible surface (AUD4-18).
+    ///     Network timeout for a single <em>chat</em> call to the llama-server OpenAI-compatible surface.
     ///     Set EXPLICITLY on the built OpenAI client so it never inherits System.ClientModel's 100 s
     ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS:
     ///     streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and a non-streaming

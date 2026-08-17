@@ -104,7 +104,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenEffectiveContextKnown_WritesItAsNumCtx()
     {
-        // AUD4-02: the runtime's effective context window is carried as num_ctx so the inner provider-round budgeter
+        // The runtime's effective context window is carried as num_ctx so the inner provider-round budgeter
         // sizes against the same window the outer conversation budgeter uses. No per-send override is set here.
         var definition = new InvocationAgentDefinition("llama3.2:3b",
             "Be helpful.",

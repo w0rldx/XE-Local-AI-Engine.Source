@@ -48,7 +48,7 @@ public sealed class HardwareProfilerTests
     [Test]
     public async Task HardwareProfiler_Nvidia_SingleInvocation_ConsolidatedQuery()
     {
-        // AUD4-07: the former three sequential nvidia-smi calls (name, memory.total, memory.free) collapse into ONE
+        // The former three sequential nvidia-smi calls (name, memory.total, memory.free) collapse into ONE
         // consolidated query — one process spawn per probe, all three fields in a single csv line.
         var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
         var environment = new FakeEnvironment
