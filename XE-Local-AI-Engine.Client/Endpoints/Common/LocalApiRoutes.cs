@@ -248,6 +248,11 @@ public static class LocalApiRoutes
         public const string Projects = "benchmarks/projects";
         public const string ProjectById = "benchmarks/projects/{projectId}";
         public const string ProjectRuns = "benchmarks/projects/{projectId}/runs";
+
+        // One project's whole record as a downloadable file: the JSON export carries every run at full detail
+        // (transcript and judge verdict included), the CSV the same runs as flat, spreadsheet-ready rows.
+        public const string ProjectExport = "benchmarks/projects/{projectId}/export";
+        public const string ProjectExportCsv = "benchmarks/projects/{projectId}/export.csv";
         public const string RunById = "benchmarks/runs/{runId}";
         public const string RunCancel = "benchmarks/runs/{runId}/cancel";
         public const string RunScore = "benchmarks/runs/{runId}/score";

@@ -222,9 +222,21 @@ public static class BenchmarkJudgePromptV2
         WriteIndented = false
     };
 
+    /// <summary>
+    ///     The instruction every judging gets. The length-neutrality sentence is fixed and unconditional: rewarding a
+    ///     longer answer for being longer is an LLM judge's best-documented bias, and telling it not to is the only
+    ///     cheap counter. Stating it unconditionally is safe BECAUSE this text is hashed nowhere — the policy hash
+    ///     covers <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> (an integer), the rubric, the judge model
+    ///     identity, the sampling and the reference answer, and the <c>JudgeExecutionKey</c> covers runtime and hardware
+    ///     identity only. The flip side of that is the consequence to know: changing this text changes what every
+    ///     FUTURE judging is asked without any version moving, so verdicts taken either side of such a change share a
+    ///     cohort key without being strictly comparable. Bump
+    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> for a change that must force a re-judge.
+    /// </summary>
     public const string SystemPrompt =
         "Evaluate only the supplied benchmark task and primary output against the supplied rubric. "
         + "Score every rubric criterion from 0 to 10 and give a short rationale for each score. "
+        + "Do not reward length or verbosity for its own sake; score only against the rubric. "
         + "Return exactly one JSON object matching the supplied output schema. Return no markdown and no extra properties.";
 
     /// <summary>

@@ -11,6 +11,12 @@ interface BenchmarkJudgePanelProps {
 	judge: BenchmarkRunJudge;
 	/** The primary answer was cut off by the token budget, so this verdict graded a fragment. */
 	primaryTruncated?: boolean;
+	/**
+	 * Tokens the graded answer ran to, shown beside the score. Rewarding a longer answer for being longer is an LLM
+	 * judge's best-documented bias, so the length sits next to the number it may have inflated: "88 / 100 · 4200 tokens"
+	 * beside "85 / 100 · 300 tokens" is a comparison the reader can make without opening either transcript.
+	 */
+	outputTokens?: number | null;
 	/** Only a succeeded primary has stored output to judge, so only then can a re-judge be offered. */
 	canRejudge: boolean;
 	isBusy?: boolean;
@@ -30,6 +36,7 @@ export function BenchmarkJudgePanel({
 	judge,
 	canRejudge,
 	primaryTruncated = false,
+	outputTokens = null,
 	isBusy = false,
 	onCancel,
 	onRejudge,
@@ -93,9 +100,16 @@ export function BenchmarkJudgePanel({
 				</Alert>
 			) : null}
 			{judge.score === null ? null : (
-					<Text fw={700} data-testid="benchmark-judge-score">
-						{t("pages.benchmarks.judge.score", "Judge score: {{score}} / 100", { score: judge.score })}
-					</Text>
+					<Group gap="xs" align="baseline">
+						<Text fw={700} data-testid="benchmark-judge-score">
+							{t("pages.benchmarks.judge.score", "Judge score: {{score}} / 100", { score: judge.score })}
+						</Text>
+						{outputTokens === null ? null : (
+							<Text size="sm" c="dimmed" data-testid="benchmark-judge-output-length">
+								{t("pages.benchmarks.judge.outputLength", "· {{tokens}} output tokens", { tokens: outputTokens })}
+							</Text>
+						)}
+					</Group>
 				)}
 				{judge.summary ? <Text size="sm">{judge.summary}</Text> : null}
 				{judge.criteria.length > 0 ? (
