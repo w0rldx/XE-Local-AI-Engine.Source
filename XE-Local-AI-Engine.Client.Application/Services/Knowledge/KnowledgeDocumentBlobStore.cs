@@ -242,7 +242,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 
     private async Task UpdateRepositoryDocumentAsync(DbConnection connection,
         NodeChatDbContext dbContext,
-        (Guid DocumentId, string Extension, string ContentHash) row,
+        DocumentIdentity row,
         KnowledgeDocumentInput input,
         string collectionId,
         string sourceKind,
@@ -363,7 +363,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         }
     }
 
-    private static async Task<(Guid DocumentId, string Extension, string ContentHash)?> SelectDocumentByIdentityAsync(DbConnection connection,
+    private static async Task<DocumentIdentity?> SelectDocumentByIdentityAsync(DbConnection connection,
         string collectionId,
         string sourceKind,
         string? sourceId,
@@ -404,7 +404,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         var storedContentHash = await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false)
             ? string.Empty
             : reader.GetString(2);
-        return (documentId, extension, storedContentHash);
+        return new DocumentIdentity(documentId, extension, storedContentHash);
     }
 
     private static async Task<string?> SelectExtensionAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
@@ -527,4 +527,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 
         return sourceId.Trim().Normalize(NormalizationForm.FormC);
     }
+
+    // An already-stored document matched by identity: its id plus the extension and content hash the row currently
+    // carries — the extension locates the existing blob, the hash decides whether a repository re-add is an update.
+    private sealed record DocumentIdentity(Guid DocumentId, string Extension, string ContentHash);
 }

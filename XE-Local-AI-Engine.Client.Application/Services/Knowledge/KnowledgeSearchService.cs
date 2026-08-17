@@ -227,7 +227,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     // Semantic arm wrapper: times the query-embedding round trip. Only calls the embedding provider — never the DB — so it
     // is safe to overlap with the lexical arm above.
-    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> RunEmbedArmAsync(string query,
+    private async Task<QueryEmbedding> RunEmbedArmAsync(string query,
         CancellationToken cancellationToken)
     {
         var start = Stopwatch.GetTimestamp();
@@ -397,7 +397,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
     // degrade path the vector is empty and the resolved name falls back to the configured name (unused, since the vector
     // arm is skipped when the vector is empty).
-    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity)> TryEmbedQueryAsync(string query,
+    private async Task<QueryEmbedding> TryEmbedQueryAsync(string query,
         CancellationToken cancellationToken)
     {
         try
@@ -418,7 +418,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                     resolution,
                     _options.EmbeddingVectorMode))
             {
-                return (cached.Vector, embeddingModelName, cached.VectorIdentity);
+                return new QueryEmbedding(cached.Vector, embeddingModelName, cached.VectorIdentity);
             }
 
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
@@ -431,7 +431,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             var generated = await generator.GenerateAsync([_prefixer.ForQuery(query)], options: null, cancellationToken).ConfigureAwait(false);
             if (generated.Count == 0)
             {
-                return (ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+                return new QueryEmbedding(ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
             }
 
             var transformed = KnowledgeEmbeddingVectorPolicy.Transform(resolution, generated[0].Vector, _options.EmbeddingVectorMode);
@@ -441,7 +441,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             _queryEmbeddingCache.Store(cacheFamilyIdentity,
                 query,
                 new KnowledgeQueryEmbeddingCacheEntry(transformed.Values, transformed.Identity));
-            return (transformed.Values, embeddingModelName, transformed.Identity);
+            return new QueryEmbedding(transformed.Values, embeddingModelName, transformed.Identity);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException or KnowledgeIngestionException)
         {
@@ -449,7 +449,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // Log the exception type only — never its message, never the query.
             _logger.LogWarning("Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.",
                 exception.GetType().Name);
-            return (ReadOnlyMemory<float>.Empty, _options.EmbeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+            return new QueryEmbedding(ReadOnlyMemory<float>.Empty, _options.EmbeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
         }
     }
 
@@ -573,4 +573,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
     // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).
     private sealed record ChunkSelection(Guid ChunkId, HydratedChunk Row, double Score);
+
+    // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm),
+    // the resolved model name that scopes which stored chunk vectors it may be compared against, and the vector
+    // identity that pins the embedding policy the vector was produced under.
+    private sealed record QueryEmbedding(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity);
 }
