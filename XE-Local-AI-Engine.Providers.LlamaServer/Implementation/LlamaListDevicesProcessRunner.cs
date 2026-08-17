@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Shared runner for a short-lived <c>llama-server --list-devices</c> probe. Both the process-budget probe
