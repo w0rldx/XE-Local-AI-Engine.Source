@@ -46,7 +46,7 @@ public interface IChatTurnContextBuilder
     ///     is a best-effort supplement and must never fail the turn. The caller applies the cloud-egress locality gate
     ///     before calling.
     /// </summary>
-    Task<KnowledgeChatContext?> BuildKnowledgeContextAsync(string query, CancellationToken cancellationToken = default);
+    Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The agent-mode pointer message naming the staged attachment paths, so a weak model reads the exact staged
@@ -61,4 +61,4 @@ public interface IChatTurnContextBuilder
 ///     The composed knowledge-base grounding for one turn: the synthetic context message prepended to the conversation,
 ///     and the provenance of the inlined hits threaded to the terminal row as the turn's sources.
 /// </summary>
-public sealed record KnowledgeChatContext(ConversationMessageDto Message, IReadOnlyList<NodeChatMessageSource> Sources);
+public sealed record KnowledgeChatGrounding(ConversationMessageDto Message, IReadOnlyList<NodeChatMessageSource> Sources);
