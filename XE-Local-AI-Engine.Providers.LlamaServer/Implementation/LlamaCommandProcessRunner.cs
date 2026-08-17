@@ -58,22 +58,8 @@ internal sealed class LlamaCommandProcessRunner(ILogger logger) : ILlamaCommandP
         }
         finally
         {
-            TryKill(process);
+            ProcessCaptureRunner.TryKill(process);
         }
     }
 
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best effort: the process can exit between HasExited and Kill, or the OS can deny the reap.
-        }
-    }
 }
