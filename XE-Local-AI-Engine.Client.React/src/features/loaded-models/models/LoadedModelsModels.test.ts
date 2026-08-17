@@ -39,7 +39,7 @@ describe("toLoadedModelsSnapshot", () => {
 		expect(snapshot.models).toEqual([]);
 	});
 
-	it("surfaces ollamaConfigured:false so the page can stop polling an off runtime (AUD4-20)", () => {
+	it("surfaces ollamaConfigured:false so the page can stop polling an off runtime", () => {
 		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, ollamaConfigured: false, error: null, items: [] });
 
 		expect(snapshot.ollamaConfigured).toBe(false);
