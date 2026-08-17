@@ -184,14 +184,14 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             _drainTasks[runId] = drainTask;
             _ = drainTask.ContinueWith((t, state) =>
                 {
-                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))(state ?? throw new ArgumentNullException(nameof(state)));
+                    var (svc, id) = (DrainContinuationState)(state ?? throw new ArgumentNullException(nameof(state)));
                     svc._drainTasks.TryRemove(id, out _);
                     if (t.IsFaulted)
                     {
                         svc._logger.LogError(t.Exception, "Preview run {RunId} drain task faulted unexpectedly.", id);
                     }
                 },
-                (Service: this, RunId: runId),
+                new DrainContinuationState(this, runId),
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
@@ -270,14 +270,14 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             _drainTasks[runId] = drainTask;
             _ = drainTask.ContinueWith((t, state) =>
                 {
-                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))(state ?? throw new ArgumentNullException(nameof(state)));
+                    var (svc, id) = (DrainContinuationState)(state ?? throw new ArgumentNullException(nameof(state)));
                     svc._drainTasks.TryRemove(id, out _);
                     if (t.IsFaulted)
                     {
                         svc._logger.LogError(t.Exception, "Preview run {RunId} resume drain task faulted unexpectedly.", id);
                     }
                 },
-                (Service: this, RunId: runId),
+                new DrainContinuationState(this, runId),
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
@@ -927,6 +927,10 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
     /// <summary>One buffered event in a run's replay log: the SignalR method name, the seq-stamped payload, and its seq.</summary>
     private sealed record BufferedPreviewEvent(string MethodName, object Payload, long Seq);
+
+    // The boxed state a drain task's continuation is handed. A named type instead of a cast to an anonymous tuple
+    // shape: the continuation runs on a plain object?, and the cast has to match the boxed type exactly.
+    private sealed record DrainContinuationState(PreviewWorkflowExecutionService Service, Guid RunId);
 
     /// <summary>
     ///     A per-run ordered, bounded event log for late-subscriber replay. Seq assignment + append are atomic under a

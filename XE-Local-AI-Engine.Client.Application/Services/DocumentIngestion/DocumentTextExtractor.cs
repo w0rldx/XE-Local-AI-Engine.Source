@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.DataIngestion;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Core;
@@ -181,7 +182,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         }
     }
 
-    private async Task<(IngestionDocument Document, long InputBytes)> ReadStructuredAsync(IngestionDocumentReader reader,
+    private async Task<ExtractedDocument> ReadStructuredAsync(IngestionDocumentReader reader,
         Stream content,
         string fileName,
         string normalizedExtension,
@@ -209,7 +210,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
 
         buffer.Position = 0;
         var document = await reader.ReadAsync(buffer, fileName, normalizedExtension, cancellationToken).ConfigureAwait(false);
-        return (document, inputBytes);
+        return new ExtractedDocument(document, inputBytes);
     }
 
     // Dispatches the cheap pre-parse bounds check by format. Only compressed containers carry metadata worth
@@ -264,7 +265,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             // Length is the declared uncompressed size from the central directory (cheap, and may be a lie — the
             // post-parse guards are the backstop). CompressedLength is the on-disk size of the same entry. Both are
             // aggregated overflow-safely in the seam below.
-            return EvaluateDeclaredZipSizes(archive.Entries.Select(static entry => (entry.Length, entry.CompressedLength)),
+            return EvaluateDeclaredZipSizes(archive.Entries.Select(static entry => new ZipEntrySize(entry.Length, entry.CompressedLength)),
                 _maxDeclaredUncompressedBytes,
                 _maxCompressionRatio);
         }
@@ -282,7 +283,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     // seam (internal + InternalsVisibleTo) so the Zip64 overflow/negative-size rejection paths can be exercised without
     // forging a binary archive that a real ZipArchive would parse. Returns a content-free rejection reason, or null when
     // the declared totals are within bounds.
-    internal static string? EvaluateDeclaredZipSizes(IEnumerable<(long Length, long CompressedLength)> entries,
+    internal static string? EvaluateDeclaredZipSizes(IEnumerable<ZipEntrySize> entries,
         long maxDeclaredUncompressedBytes,
         int maxCompressionRatio)
     {
@@ -547,4 +548,12 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         var trimmed = extension.Trim();
         return trimmed.StartsWith('.') ? trimmed : "." + trimmed;
     }
+
+    // One ZIP central-directory entry's declared sizes. Both may be hostile: negative (a high-bit-set Zip64 value read
+    // as signed) or summing past long.MaxValue, which is why the aggregation saturates rather than wrapping.
+    [StructLayout(LayoutKind.Auto)]
+    internal readonly record struct ZipEntrySize(long Length, long CompressedLength);
+
+    // A parsed structured document plus the raw byte count buffered to produce it (the expansion-ratio denominator).
+    private sealed record ExtractedDocument(IngestionDocument Document, long InputBytes);
 }

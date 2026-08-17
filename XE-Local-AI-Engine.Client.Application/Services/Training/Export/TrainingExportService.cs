@@ -196,7 +196,7 @@ public sealed class TrainingExportService(
     ///     Validates the run and decides every path the pipeline will use, before any exclusivity is taken. A refusal
     ///     here has nothing to clean up.
     /// </summary>
-    private async Task<(ExportPlan? Value, TrainingExportStart? Refusal)> BuildPlanAsync(Guid runId,
+    private async Task<PlanOrRefusal> BuildPlanAsync(Guid runId,
         TrainingArtifactKind kind,
         string quantization,
         CancellationToken cancellationToken)
@@ -206,7 +206,7 @@ public sealed class TrainingExportService(
         var run = await store.GetAsync(runId, cancellationToken).ConfigureAwait(false);
         if (run is null || run.Status != TrainingRunStatus.Succeeded)
         {
-            return (null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
+            return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
                 "Only a run that finished successfully can be exported."));
         }
 
@@ -214,13 +214,13 @@ public sealed class TrainingExportService(
         if (artifacts.FirstOrDefault(item => item.Kind == TrainingArtifactKind.HfAdapterDir) is not { } adapter
             || !Directory.Exists(adapter.Path))
         {
-            return (null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
+            return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
                 "The run has no staged adapter to export."));
         }
 
         if (artifacts.Any(item => item.Kind == kind && item.CommittedModelName is not null))
         {
-            return (null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
+            return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
                 "This export was already promoted. Delete the registered model first."));
         }
 
@@ -228,14 +228,15 @@ public sealed class TrainingExportService(
         var fileName = kind == TrainingArtifactKind.MergedGguf
             ? TrainingExportPaths.MergedGgufName(quantization)
             : TrainingExportPaths.AdapterGgufName();
-        return (new ExportPlan(runId,
+        return new PlanOrRefusal(new ExportPlan(runId,
             kind,
             quantization,
             adapter.Path,
             BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
             staged,
             Path.Combine(staged, fileName),
-            run.LinkedInstalledModelName), null);
+            run.LinkedInstalledModelName),
+            Refusal: null);
     }
 
     private async Task RunPipelineAsync(ExportPlan plan,
@@ -589,7 +590,7 @@ public sealed class TrainingExportService(
         return path;
     }
 
-    private static async Task<(string Sha256, long SizeBytes)> ComputeDigestAsync(string path, CancellationToken cancellationToken)
+    private static async Task<FileDigest> ComputeDigestAsync(string path, CancellationToken cancellationToken)
     {
         if (!File.Exists(path))
         {
@@ -599,7 +600,7 @@ public sealed class TrainingExportService(
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
-        return (Convert.ToHexStringLower(hash), stream.Length);
+        return new FileDigest(Convert.ToHexStringLower(hash), stream.Length);
     }
 
     private async Task AppendLogAsync(Guid runId, string step, IEnumerable<string> tail)
@@ -656,4 +657,11 @@ public sealed class TrainingExportService(
         string StagedDirectory,
         string OutputPath,
         string? LinkedInstalledModelName);
+
+    // The outcome of planning an export: exactly one side is set — a plan the pipeline can run, or the refusal to
+    // return to the caller. A refusal happens before any exclusivity is taken, so it has nothing to clean up.
+    private sealed record PlanOrRefusal(ExportPlan? Value, TrainingExportStart? Refusal);
+
+    // A produced export file's content digest and size on disk.
+    private sealed record FileDigest(string Sha256, long SizeBytes);
 }
