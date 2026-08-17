@@ -148,6 +148,37 @@ describe("BenchmarkRunsTable", () => {
 		expect(screen.getByTestId("benchmark-run-row-older")).toBeTruthy();
 	});
 
+	// The regression this pins: quants of ONE model must fold into ONE group header, not one header per quant. The key
+	// is the server's base-model modelGroupKey, so two rows that differ only in quant share it — and the quant, which
+	// is then the only thing telling the rows apart, has to be visible on each row.
+	it("folds a model's quants into one group and names the quant on each row", () => {
+		const quant = (id: string, modelName: string, rank: number, createdAtUtc: number) =>
+			benchmarkRunSummaryFixture({
+				id,
+				primaryModelName: modelName,
+				modelGroupKey: "unsloth/qwen3.8-27b-gguf",
+				rank,
+				createdAtUtc,
+			});
+		renderTable([
+			quant("q4", "unsloth/Qwen3.8-27B-GGUF:Q4_K_M", 2, 1),
+			quant("q6", "unsloth/Qwen3.8-27B-GGUF:Q6_K", 1, 2),
+		]);
+
+		fireEvent.click(screen.getByTestId("benchmark-group-by-model"));
+
+		// One header, and it is the group's BEST quant — which is what "best quant of this model" now means.
+		expect(screen.getAllByTestId(/^benchmark-group-toggle-/)).toHaveLength(1);
+		expect(screen.getByText("2 runs of this model")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-run-quant-q6").textContent).toBe("Q6_K");
+		// The header shows the base model, not the leader's full tagged name.
+		expect(screen.getByTestId("benchmark-run-row-q6").textContent).toContain("unsloth/Qwen3.8-27B-GGUF");
+
+		fireEvent.click(screen.getByTestId("benchmark-group-toggle-unsloth/qwen3.8-27b-gguf"));
+
+		expect(screen.getByTestId("benchmark-run-quant-q4").textContent).toBe("Q4_K_M");
+	});
+
 	it.each([
 		["Re-judge run", "onRejudgeRun"],
 		["Delete terminal run", "onDeleteRun"],
