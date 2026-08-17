@@ -31,6 +31,7 @@ public sealed class BenchmarkJudgeExecutor(
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
+    BenchmarkAdmissionRetry admissionRetry,
     ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
@@ -115,26 +116,24 @@ public sealed class BenchmarkJudgeExecutor(
             // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒
             // f16), not the project's request.
             // No launch admission — see BenchmarkRunExecutor: the judge spawns its own process from frozen arguments.
-            var decision = await capacity.DecideAsync(new CapacityRequest(runtime.Model.ModelName,
-                                             ModelRole.Chat,
-                                             runtime.Runtime.ContextTokens,
-                                             PublishLaunchAdmission: false,
-                                             runtime.Runtime.KvTypeK), token)
-                                         .ConfigureAwait(false);
-            logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
-                                  + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
-                work.RunId,
-                "judge",
-                runtime.Model.ModelName,
-                runtime.RequestedContextTokens,
-                runtime.Runtime.ContextTokens,
-                runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                decision.Verdict,
-                decision.Reason);
-            if (decision.Verdict == CapacityVerdict.RejectInsufficient)
-            {
-                throw new BenchmarkExecutionException(CapacityRejectedMessage);
-            }
+            // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — and the judge is
+            // dequeued by the SAME FIFO consumer that just ran the primary, so it routinely arrives while the primary's
+            // llama-server is still handing its VRAM back. Wait and re-decide instead of terminalizing the attempt.
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+                                     new CapacityRequest(runtime.Model.ModelName,
+                                         ModelRole.Chat,
+                                         runtime.Runtime.ContextTokens,
+                                         PublishLaunchAdmission: false,
+                                         runtime.Runtime.KvTypeK),
+                                     new BenchmarkAdmissionContext(work.RunId,
+                                         "judge",
+                                         runtime.RequestedContextTokens,
+                                         runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                         CapacityRejectedMessage),
+                                     admissionRetry,
+                                     logger,
+                                     token)
+                                 .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
             // Truncation is read through the shared predicate, not a local copy: the judging still runs — a truncated
