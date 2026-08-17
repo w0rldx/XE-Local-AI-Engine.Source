@@ -182,7 +182,7 @@ internal static class SandboxJailPathGuard
     ///     canonicalized jail check plus the byte re-check. Throws <see cref="UnauthorizedAccessException" /> when the
     ///     leaf is a symlink or the open otherwise fails.
     /// </summary>
-    internal static SafeFileHandle OpenNoFollow(string sourcePath)
+    private static SafeFileHandle OpenNoFollow(string sourcePath)
     {
         if (!OperatingSystem.IsLinux())
         {

@@ -35,6 +35,11 @@ internal sealed class JailState
 
     public object Sync { get; } = new();
 
+    /// <summary>
+    ///     Liveness flag. The only legitimate writer is <c>SandboxLifecycleRegistry.TerminateState</c>, which pairs the
+    ///     flip with cancelling in-flight executions, tree-killing the process and deleting the jail directory — flipping
+    ///     it anywhere else leaves a live process behind a "dead" state.
+    /// </summary>
     public bool Alive { get; set; } = true;
 
     public ConcurrentDictionary<string, InFlightExecution> InFlight { get; } = new(StringComparer.Ordinal);
