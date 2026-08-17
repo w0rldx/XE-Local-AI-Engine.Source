@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -542,5 +543,6 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     }
 
     // Per-file line counts as `git apply --numstat` reports them. Binary entries and unparsable counts land as zeroes.
+    [StructLayout(LayoutKind.Auto)]
     private readonly record struct LineStat(int Added, int Removed);
 }

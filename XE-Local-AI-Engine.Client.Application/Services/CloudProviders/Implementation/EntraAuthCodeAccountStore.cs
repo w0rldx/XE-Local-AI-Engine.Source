@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -82,7 +79,7 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
         try
         {
             await File.WriteAllBytesAsync(_recordPath, protectedPayload, cancellationToken).ConfigureAwait(false);
-            ApplyPlatformFileSecurity();
+            SecureFilePermissions.Apply(_recordPath);
         }
         finally
         {
@@ -109,38 +106,6 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
     public void Dispose()
     {
         _lock.Dispose();
-    }
-
-    private void ApplyPlatformFileSecurity()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            ApplyWindowsFileSecurity();
-            return;
-        }
-
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_recordPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private void ApplyWindowsFileSecurity()
-    {
-        var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-        var currentIdentity = WindowsIdentity.GetCurrent();
-        if (currentIdentity.User is not null)
-        {
-            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User,
-                FileSystemRights.FullControl,
-                AccessControlType.Allow));
-        }
-
-        var fileInfo = new FileInfo(_recordPath);
-        fileInfo.SetAccessControl(fileSecurity);
     }
 
     private void ClearRecordFileBestEffort()
