@@ -18,7 +18,14 @@ public enum BenchmarkErrorCode
     IneligibleAgent,
     IneligibleModel,
     UnsupportedSnapshot,
-    UnsupportedKvCacheType
+    UnsupportedKvCacheType,
+    RejudgeRequired,
+    JudgeAttemptsActive,
+    JudgeAttemptActive,
+    JudgePolicyAlreadyApplied,
+    JudgePolicyChanged,
+    JudgeDisabled,
+    PrimaryNotSucceeded
 }
 
 public class BenchmarkProjectMutationRequest
@@ -30,8 +37,11 @@ public class BenchmarkProjectMutationRequest
     public bool JudgeEnabled { get; init; }
     public string? JudgeModelName { get; init; }
     public int? JudgeContextTokens { get; init; }
-    public int JudgePromptVersion { get; init; } = 1;
-    public int JudgeOutputSchemaVersion { get; init; } = 1;
+
+    /// <summary>Omitted takes the default rubric.</summary>
+    public BenchmarkRubricDto? Rubric { get; init; }
+
+    public string? ReferenceAnswer { get; init; }
 }
 
 public sealed class UpdateBenchmarkProjectRequest : BenchmarkProjectMutationRequest
@@ -68,10 +78,9 @@ public class BenchmarkProjectSummaryResponse
 public sealed class BenchmarkProjectDetailResponse : BenchmarkProjectSummaryResponse
 {
     public required string CoreTask { get; init; }
-    public string? JudgeModelName { get; init; }
-    public int? JudgeContextTokens { get; init; }
-    public int JudgePromptVersion { get; init; }
-    public int JudgeOutputSchemaVersion { get; init; }
+
+    /// <summary>The judge configuration this project judges under. <c>Enabled: false</c> when judging is off.</summary>
+    public required BenchmarkJudgePolicyResponse Judge { get; init; }
 }
 
 public sealed class ListBenchmarkProjectsResponse
@@ -84,6 +93,12 @@ public sealed class ListBenchmarkRunsRequest
     public Guid ProjectId { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 50;
+
+    /// <summary>Same-model history: only runs whose model content fingerprint equals this.</summary>
+    public string? ModelGroupKey { get; init; }
+
+    /// <summary>False drops runs that carry no quality score at all.</summary>
+    public bool IncludeUnscored { get; init; } = true;
 }
 
 public sealed class StartBenchmarkRunRequest
@@ -114,11 +129,131 @@ public sealed class CancelBenchmarkRunRequest
     public long ExpectedVersion { get; init; }
 }
 
+/// <remarks>
+///     <see cref="Score" /> is nullable on purpose: a CLR-default <c>0</c> is a VALID operator score now, so an omitted
+///     body field must be distinguishable from a deliberate zero and is rejected as a 400.
+/// </remarks>
 public sealed class ScoreBenchmarkRunRequest
 {
     public Guid RunId { get; init; }
-    public int Score { get; init; }
+    public int? Score { get; init; }
     public long ExpectedVersion { get; init; }
+}
+
+public sealed class ClearBenchmarkRunScoreRequest
+{
+    public Guid RunId { get; init; }
+    public long ExpectedVersion { get; init; }
+}
+
+public sealed class RejudgeBenchmarkRunRequest
+{
+    public Guid RunId { get; init; }
+    public long ExpectedVersion { get; init; }
+
+    /// <summary>Judges again even when this run is already judged under the current policy and judge runtime.</summary>
+    public bool Force { get; init; }
+}
+
+public sealed class RejudgeBenchmarkProjectRequest
+{
+    public Guid ProjectId { get; init; }
+    public long ExpectedVersion { get; init; }
+}
+
+public sealed class UpdateBenchmarkJudgePolicyRequest
+{
+    public Guid ProjectId { get; init; }
+
+    /// <summary><see langword="null" /> disables judging; existing revisions and attempts stay as history.</summary>
+    public BenchmarkJudgePolicyDraftDto? Policy { get; init; }
+
+    public long ExpectedVersion { get; init; }
+
+    /// <summary>Required when the policy actually changes on a project that already has runs.</summary>
+    public bool ConfirmRejudge { get; init; }
+}
+
+public sealed class BenchmarkJudgePolicyDraftDto
+{
+    public string ModelName { get; init; } = string.Empty;
+    public int ContextTokens { get; init; }
+
+    /// <summary>Omitted takes the default rubric.</summary>
+    public BenchmarkRubricDto? Rubric { get; init; }
+
+    public string? ReferenceAnswer { get; init; }
+}
+
+public sealed class BenchmarkRubricCriterionDto
+{
+    public string Id { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public int Weight { get; init; }
+}
+
+public sealed class BenchmarkRubricDto
+{
+    public int Version { get; init; } = 1;
+    public IReadOnlyList<BenchmarkRubricCriterionDto> Criteria { get; init; } = [];
+}
+
+/// <summary>The judge configuration a project currently judges under, decrypted from its policy revision.</summary>
+public sealed class BenchmarkJudgePolicyResponse
+{
+    public bool Enabled { get; init; }
+    public Guid? PolicyRevisionId { get; init; }
+    public int? PolicyRevision { get; init; }
+    public string? PolicyHash { get; init; }
+    public string? ModelName { get; init; }
+    public int? RequestedContextTokens { get; init; }
+    public BenchmarkRubricDto? Rubric { get; init; }
+    public string? ReferenceAnswer { get; init; }
+    public int? CohortGeneration { get; init; }
+    public string? ReferenceExecutionKey { get; init; }
+}
+
+/// <summary>The result of a judge change: the updated project plus the runs a judging was queued for.</summary>
+public sealed class BenchmarkJudgeChangeResponse
+{
+    public required BenchmarkProjectDetailResponse Project { get; init; }
+    public IReadOnlyList<Guid> EnqueuedRunIds { get; init; } = [];
+    public int? CohortGeneration { get; init; }
+}
+
+public sealed class BenchmarkRubricPresetsResponse
+{
+    public required BenchmarkRubricDto Default { get; init; }
+    public required BenchmarkRubricDto Programming { get; init; }
+    public required BenchmarkRubricDto Reasoning { get; init; }
+}
+
+/// <summary>One rubric criterion as the judge scored it. Detail responses only.</summary>
+public sealed class BenchmarkJudgeCriterionScoreResponse
+{
+    public required string Id { get; init; }
+    public int Score { get; init; }
+    public required string Rationale { get; init; }
+}
+
+/// <summary>
+///     The run's judge state, derived from its current attempt. <see cref="Summary" /> and <see cref="Criteria" /> are
+///     the decrypted verdict and appear on the detail response only — a list must not decrypt one blob per row.
+/// </summary>
+public sealed class BenchmarkRunJudgeResponse
+{
+    public required string State { get; init; }
+    public int? Score { get; init; }
+    public int? PolicyRevision { get; init; }
+    public int? AttemptSequence { get; init; }
+    public int? CohortGeneration { get; init; }
+    public string? ExecutionKey { get; init; }
+    public bool PolicyCurrent { get; init; }
+    public bool ExecutionCurrent { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string? Summary { get; init; }
+    public IReadOnlyList<BenchmarkJudgeCriterionScoreResponse>? Criteria { get; init; }
 }
 
 public class BenchmarkRunSummaryResponse
@@ -132,7 +267,22 @@ public class BenchmarkRunSummaryResponse
     public long AgentVersion { get; init; }
     public int RequestedContextTokens { get; init; }
     public BenchmarkPrimaryStatus PrimaryStatus { get; init; }
-    public BenchmarkJudgeStatus JudgeStatus { get; init; }
+    public required BenchmarkRunJudgeResponse Judge { get; init; }
+
+    /// <summary>The value this run ranks by: the operator override when set, otherwise the in-cohort judge score.</summary>
+    public int? QualityScore { get; init; }
+
+    /// <summary><c>user</c>, <c>judge</c>, or <c>none</c>.</summary>
+    public required string QualityScoreSource { get; init; }
+
+    /// <summary>Dense rank within the project, descending. Null when the run is not in the ranked cohort.</summary>
+    public int? Rank { get; init; }
+
+    /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
+    public string? RankExclusionReason { get; init; }
+
+    /// <summary>Groups repeated runs of the same model (= the model content fingerprint).</summary>
+    public required string ModelGroupKey { get; init; }
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
     public int? TotalTokens { get; init; }
@@ -163,33 +313,16 @@ public class BenchmarkRunSummaryResponse
     public bool? PrimaryHasAuxAssets { get; set; }
     public string? PrimaryReceiptHash { get; set; }
     public string? PrimaryEnvironmentFactsHash { get; set; }
-    public string? JudgeVariant { get; set; }
-    public string? JudgeKvCacheType { get; set; }
-    public string? JudgeKvCacheTypeSource { get; set; }
-    public string? JudgeKvAutoReason { get; set; }
-    public string? JudgeFlashAttentionMode { get; set; }
-    public string? JudgeIntendedLaunchIdentity { get; set; }
-    public string? JudgeIntendedExecutableSha256 { get; set; }
-    public string? JudgeEffectiveLaunchIdentity { get; set; }
-    public string? JudgeEffectiveBackend { get; set; }
-    public int? JudgePlacementOffloaded { get; set; }
-    public int? JudgePlacementTotal { get; set; }
-    public string? JudgeExecutableSha256 { get; set; }
-    public bool? JudgeHasAuxAssets { get; set; }
-    public string? JudgeReceiptHash { get; set; }
-    public string? JudgeEnvironmentFactsHash { get; set; }
 }
 
 public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 {
     public JsonElement? OutputParts { get; init; }
-    public BenchmarkJudgeResultV1? JudgeResult { get; init; }
+    /// <summary>The rubric verdict of the current attempt (<c>BenchmarkJudgeResultV2</c>), or null.</summary>
+    public JsonElement? JudgeResult { get; init; }
     public string? PrimaryErrorMessage { get; init; }
-    public string? JudgeErrorMessage { get; init; }
     public long? StartedAtUtc { get; init; }
     public long? PrimaryCompletedAtUtc { get; init; }
-    public long? JudgeStartedAtUtc { get; init; }
-    public long? JudgeCompletedAtUtc { get; init; }
 
     /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c> v1), or null when none was recorded.</summary>
     public JsonElement? PrimaryLaunchReceipt { get; init; }
@@ -197,8 +330,15 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>
     public JsonElement? PrimaryEnvironmentFacts { get; init; }
 
-    public JsonElement? JudgeLaunchReceipt { get; init; }
-    public JsonElement? JudgeEnvironmentFacts { get; init; }
+}
+
+public sealed class BenchmarkRankCohortResponse
+{
+    public int? PolicyRevision { get; init; }
+    public string? ExecutionKey { get; init; }
+    public int? CohortGeneration { get; init; }
+    public int RankedCount { get; init; }
+    public int TotalScored { get; init; }
 }
 
 public sealed class ListBenchmarkRunsResponse
@@ -207,6 +347,9 @@ public sealed class ListBenchmarkRunsResponse
     public int Page { get; init; }
     public int PageSize { get; init; }
     public int TotalCount { get; init; }
+
+    /// <summary>What the ranking is computed against, so the UI can say "n of m ranked" honestly.</summary>
+    public required BenchmarkRankCohortResponse RankCohort { get; init; }
 }
 
 public sealed class EligibleBenchmarkAgentsRequest

@@ -13,6 +13,8 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkInstalledModelLeaseProvider, BenchmarkInstalledModelLeaseProvider>();
         builder.Services.AddScoped<IBenchmarkProjectService, BenchmarkProjectService>();
         builder.Services.AddScoped<IBenchmarkFreezeDependencyService, BenchmarkFreezeDependencyService>();
+        builder.Services.AddScoped<IBenchmarkPhaseLaunchResolver, BenchmarkPhaseLaunchResolver>();
+        builder.Services.AddScoped<IBenchmarkJudgeRuntimeResolver, BenchmarkJudgeRuntimeResolver>();
         builder.Services.AddScoped<IBenchmarkRunFreezeService, BenchmarkRunFreezeService>();
         builder.Services.AddScoped<IBenchmarkCatalogService, BenchmarkCatalogService>();
         builder.Services.AddSingleton<IBenchmarkEligibilityPolicy, BenchmarkEligibilityPolicy>();

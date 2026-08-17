@@ -6,8 +6,11 @@ import {
 	applyBenchmarkEvent,
 	type BenchmarkOutputPart,
 	type BenchmarkRunDetail,
+	type BenchmarkRunLiveOverlay,
+	benchmarkLiveOverlayPatch,
 	benchmarkReplayResetSchema,
 	benchmarkRunEventSchema,
+	noBenchmarkRunLiveOverlay,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
 export const benchmarkHubEvents = {
@@ -17,6 +20,8 @@ export const benchmarkHubEvents = {
 
 export interface BenchmarkRunLiveView {
 	parts: BenchmarkOutputPart[];
+	/** Judge-state and metric corrections streamed since the last authoritative read; empty right after one. */
+	overlay: BenchmarkRunLiveOverlay;
 	lastSequence: number;
 	isConnected: boolean;
 	isReconnecting: boolean;
@@ -31,9 +36,13 @@ interface UseBenchmarkRunHubOptions {
  * Reconciles one benchmark run's bounded live SignalR stream with its durable HTTP snapshot. The cursor advances only
  * for contiguous events; duplicates are dropped, gaps/reset messages trigger an authoritative refetch, reconnects
  * subscribe from the last applied sequence, and terminal notifications always fall back to encrypted HTTP output.
+ *
+ * `JudgeState`/`Metrics` events are kept as an OVERLAY rather than written into the query cache: the durable snapshot
+ * stays the authority, so every reconcile drops the overlay instead of having to reconcile it.
  */
 export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions): BenchmarkRunLiveView {
 	const [parts, setParts] = useState<BenchmarkOutputPart[]>(run?.outputParts ?? []);
+	const [overlay, setOverlay] = useState<BenchmarkRunLiveOverlay>(noBenchmarkRunLiveOverlay);
 	const [lastSequence, setLastSequence] = useState(run?.lastStreamSequence ?? 0);
 	const [isConnected, setConnected] = useState(false);
 	const [isReconnecting, setReconnecting] = useState(false);
@@ -48,6 +57,7 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 	useEffect(() => {
 		if (!serverRevision) {
 			setParts([]);
+			setOverlay(noBenchmarkRunLiveOverlay);
 			cursorRef.current = 0;
 			setLastSequence(0);
 			activeRunIdRef.current = undefined;
@@ -63,6 +73,7 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 		}
 		activeRunIdRef.current = current.id;
 		setParts(current?.outputParts ?? []);
+		setOverlay(noBenchmarkRunLiveOverlay);
 		const cursor = current?.lastStreamSequence ?? 0;
 		cursorRef.current = cursor;
 		setLastSequence(cursor);
@@ -89,6 +100,7 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 				const current = await refetchRef.current();
 				if (!disposed && current?.id === runId && (authoritative || current.lastStreamSequence >= cursorRef.current)) {
 					setParts(current.outputParts);
+					setOverlay(noBenchmarkRunLiveOverlay);
 					cursorRef.current = current.lastStreamSequence;
 					setLastSequence(current.lastStreamSequence);
 				}
@@ -116,6 +128,10 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 			cursorRef.current = event.sequence;
 			setLastSequence(event.sequence);
 			setParts((current) => applyBenchmarkEvent(current, event));
+			const patch = benchmarkLiveOverlayPatch(event);
+			if (patch) {
+				setOverlay((current) => ({ ...current, ...patch }));
+			}
 			if (event.kind === "TerminalSnapshotAvailable") {
 				reconcileFromHttp(true).catch(() => undefined);
 			}
@@ -160,5 +176,5 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 		};
 	}, [run?.id]);
 
-	return { parts, lastSequence, isConnected, isReconnecting };
+	return { parts, overlay, lastSequence, isConnected, isReconnecting };
 }

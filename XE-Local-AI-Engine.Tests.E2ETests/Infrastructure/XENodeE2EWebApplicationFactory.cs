@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -411,6 +412,16 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
+
+            // Benchmarks: the only two seams on the benchmark path that require a real llama.cpp install. Everything
+            // else — policy hashing, revisions, attempts, the ranking SQL, the endpoints and the page — stays
+            // production code. See BenchmarkE2ETestDoubles for why a browser host can never execute a run or a judging.
+            services.RemoveAll<IBenchmarkInstalledModelLeaseProvider>();
+            services.AddSingleton<IBenchmarkInstalledModelLeaseProvider, BenchmarkE2ETestDoubles.LeaseProvider>();
+            services.RemoveAll<IBenchmarkJudgeRuntimeResolver>();
+            services.AddSingleton<IBenchmarkJudgeRuntimeResolver, BenchmarkE2ETestDoubles.JudgeRuntimeResolver>();
+            services.RemoveAll<IBenchmarkCatalogService>();
+            services.AddScoped<IBenchmarkCatalogService, BenchmarkE2ETestDoubles.CatalogService>();
 
             services.RemoveAll<IDevelopmentCoderModel>();
             services.AddSingleton<IDevelopmentCoderModel, DevelopmentE2ECoderModel>();

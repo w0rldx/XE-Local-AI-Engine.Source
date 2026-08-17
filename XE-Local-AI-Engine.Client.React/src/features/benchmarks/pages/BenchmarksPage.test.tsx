@@ -35,8 +35,12 @@ function baseRoutes(projects: unknown[]) {
 			createdAtUtc: 1,
 			updatedAtUtc: 2,
 			coreTask: "Summarise the attached text.",
+			judge: { enabled: false },
 		}),
-		jsonRoute("get", `benchmarks/projects/${projectId}/runs`, { items: [] }),
+		jsonRoute("get", `benchmarks/projects/${projectId}/runs`, {
+			items: [],
+			rankCohort: { rankedCount: 0, totalScored: 0 },
+		}),
 	);
 }
 

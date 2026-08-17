@@ -1,5 +1,5 @@
 import { Alert, Group, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
+import { IconInfoCircle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,13 +26,6 @@ function primaryRows(left: BenchmarkRunDetail, right: BenchmarkRunDetail): Bench
 	);
 }
 
-function judgeRows(left: BenchmarkRunDetail, right: BenchmarkRunDetail): BenchmarkEvidenceDiffRow[] {
-	return diffLaunchEvidence(
-		launchEvidenceEntries(left.judgeLaunch, left.judgeLaunchReceipt, left.judgeEnvironmentFacts),
-		launchEvidenceEntries(right.judgeLaunch, right.judgeLaunchReceipt, right.judgeEnvironmentFacts),
-	);
-}
-
 /**
  * Launch evidence of the two selected runs side by side. Differences are reported as facts and never interpreted: the
  * copy says *what* differs, never whether the two runs may be ranked against each other (D12) — that judgement is not
@@ -45,7 +38,6 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 	const left = leftQuery.data;
 	const right = rightQuery.data;
 	const primary = useMemo(() => (left && right ? primaryRows(left, right) : []), [left, right]);
-	const judge = useMemo(() => (left && right ? judgeRows(left, right) : []), [left, right]);
 
 	if (!left || !right) {
 		return null;
@@ -62,7 +54,6 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 	// Driven by the computed rows, not by the hashes: neither hash covers the freeze-side facts (KV source, auto
 	// reason, intended identity), so a hash comparison would stay silent on a difference the table already shows.
 	const primaryDiffers = primary.some((row) => row.differs);
-	const judgeDiffers = judge.some((row) => row.differs);
 
 	return (
 		<Stack gap="sm" data-testid="benchmark-launch-compare">
@@ -88,23 +79,6 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 							leftLabel={leftLabel}
 							rightLabel={rightLabel}
 							data-testid="benchmark-primary-launch-diff"
-						/>
-					</Stack>
-				</Alert>
-			) : null}
-			{judgeDiffers ? (
-				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-judge-launch-differs">
-					<Stack gap="xs">
-						<Text size="sm">
-							{t("pages.benchmarks.launch.judgeDiffers", "Judge launch/environment differs: {{fields}}", {
-								fields: fieldList(judge),
-							})}
-						</Text>
-						<BenchmarkEvidenceDiffTable
-							rows={judge}
-							leftLabel={leftLabel}
-							rightLabel={rightLabel}
-							data-testid="benchmark-judge-launch-diff"
 						/>
 					</Stack>
 				</Alert>

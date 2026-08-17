@@ -1,118 +1,119 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJudgePanel";
-import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkJudgeFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-// The judge lifecycle is independent from the primary run, and the panel is where that independence is made legible:
-// Disabled ("never asked for") and Skipped ("asked for, but the primary did not succeed") must not read the same, a
-// judge failure must be visible without implying the primary failed, and a score only appears once a result exists.
+// The judging is independent from the primary run, and the panel is where that independence is made legible: a judge
+// failure must be visible without implying the primary failed, an unjudged run must not read like a judged one, and a
+// score that can no longer be RANKED (older policy, different judge runtime) must still be shown as the real score it
+// is — flagged, not hidden.
 
-function run(overrides: Partial<BenchmarkRunDetail> = {}): BenchmarkRunDetail {
-	return {
-		id: "run-1",
-		projectId: "project-1",
-		primaryModelName: "model.gguf",
-		primaryModelOrigin: null,
-		modelContentFingerprint: "v1:test",
-		agentName: "agent",
-		agentVersion: 1,
-		requestedContextTokens: 4096,
-		primaryStatus: "Succeeded",
-		judgeStatus: "Disabled",
-		effectiveContextTokens: 4096,
-		durationMs: 1250,
-		totalTokens: 30,
-		tokensPerSecond: 24,
-		userScore: null,
-		lastStreamSequence: 2,
-		primaryLaunch: noBenchmarkLaunchFacts,
-		judgeLaunch: noBenchmarkLaunchFacts,
-		primaryLaunchReceipt: null,
-		judgeLaunchReceipt: null,
-		primaryEnvironmentFacts: null,
-		judgeEnvironmentFacts: null,
-		version: 3,
-		createdAtUtc: 1,
-		updatedAtUtc: 2,
-		outputParts: [],
-		judgeResult: null,
-		primaryErrorMessage: null,
-		judgeErrorMessage: null,
-		startedAtUtc: 1,
-		primaryCompletedAtUtc: 2,
-		judgeStartedAtUtc: null,
-		judgeCompletedAtUtc: null,
-		...overrides,
-	};
+function renderPanel(judge = benchmarkJudgeFixture(), props: Record<string, unknown> = {}) {
+	const onCancel = vi.fn();
+	const onRejudge = vi.fn();
+	const view = renderWithProviders(
+		<BenchmarkJudgePanel judge={judge} canRejudge={true} onCancel={onCancel} onRejudge={onRejudge} {...props} />,
+	);
+	return { ...view, onCancel, onRejudge };
 }
 
 describe("BenchmarkJudgePanel", () => {
 	afterEach(cleanup);
 
-	it("renders the panel with the judge status badge", () => {
-		renderWithProviders(<BenchmarkJudgePanel run={run({ judgeStatus: "Running" })} />);
+	it("renders the panel with the judging's own state badge", () => {
+		renderPanel(benchmarkJudgeFixture({ state: "running" }));
 
 		expect(screen.getByTestId("benchmark-judge-panel")).toBeTruthy();
-		expect(screen.getByText("Running")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-judge-state").textContent).toBe("Judging");
 	});
 
-	it("distinguishes a judge that was never requested from one that was skipped", () => {
-		const disabled = renderWithProviders(<BenchmarkJudgePanel run={run({ judgeStatus: "Disabled" })} />);
-		const disabledText = screen.getByTestId("benchmark-judge-panel").textContent ?? "";
-		expect(disabledText).toMatch(/not requested/i);
-		disabled.unmount();
-
-		renderWithProviders(<BenchmarkJudgePanel run={run({ judgeStatus: "Skipped" })} />);
-
-		const skippedText = screen.getByTestId("benchmark-judge-panel").textContent ?? "";
-		expect(skippedText).toMatch(/requested but skipped/i);
-		expect(skippedText).not.toBe(disabledText);
-	});
-
-	it("shows the judge score and rationale once a result exists", () => {
-		renderWithProviders(
-			<BenchmarkJudgePanel
-				run={run({
-					judgeStatus: "Succeeded",
-					judgeResult: {
-						schemaVersion: 1,
-						score: 4,
-						rationale: "Accurate but terse.",
-						judgeModelContentFingerprint: "v1:judge",
-						promptVersion: 1,
-					},
-				})}
-			/>,
+	it("shows the 0..100 score, the summary and every criterion with its rationale", () => {
+		renderPanel(
+			benchmarkJudgeFixture({
+				state: "succeeded",
+				score: 73,
+				policyRevision: 2,
+				policyCurrent: true,
+				executionCurrent: true,
+				summary: "Accurate but terse.",
+				criteria: [
+					{ id: "accuracy", score: 8, rationale: "Facts check out." },
+					{ id: "clarity", score: 6, rationale: "Dense phrasing." },
+				],
+			}),
 		);
 
-		expect(screen.getByText("Judge score: 4")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-judge-score").textContent).toBe("Judge score: 73 / 100");
 		expect(screen.getByText("Accurate but terse.")).toBeTruthy();
+		expect(screen.getByText("8 / 10")).toBeTruthy();
+		expect(screen.getByText("Facts check out.")).toBeTruthy();
+		expect(screen.getByText("Dense phrasing.")).toBeTruthy();
 	});
 
-	it("shows no score section while there is no judge result", () => {
-		renderWithProviders(<BenchmarkJudgePanel run={run({ judgeStatus: "Pending" })} />);
+	it("shows no score section while nothing has been scored", () => {
+		renderPanel(benchmarkJudgeFixture({ state: "queued" }));
 
-		expect(screen.queryByText(/Judge score:/)).toBeNull();
+		expect(screen.queryByTestId("benchmark-judge-score")).toBeNull();
+	});
+
+	// A score produced under an older policy is still a score; the chip says it cannot be ranked.
+	it("marks an outdated policy revision without hiding its score", () => {
+		renderPanel(benchmarkJudgeFixture({ state: "succeeded", score: 40, policyRevision: 1, policyCurrent: false }));
+
+		expect(screen.getByTestId("benchmark-judge-policy").textContent).toContain("outdated");
+		expect(screen.getByTestId("benchmark-judge-score")).toBeTruthy();
+	});
+
+	it("does not mark a current policy as outdated", () => {
+		renderPanel(
+			benchmarkJudgeFixture({ state: "succeeded", score: 40, policyRevision: 2, policyCurrent: true, executionCurrent: true }),
+		);
+
+		expect(screen.getByTestId("benchmark-judge-policy").textContent).not.toContain("outdated");
+		expect(screen.queryByTestId("benchmark-judge-runtime")).toBeNull();
+	});
+
+	// The two currency flags are separate facts: the policy can be current while the judge runtime has moved.
+	it("flags a judge runtime that differs from the ranked cohort", () => {
+		renderPanel(
+			benchmarkJudgeFixture({ state: "succeeded", score: 55, policyRevision: 2, policyCurrent: true, executionCurrent: false }),
+		);
+
+		expect(screen.getByTestId("benchmark-judge-runtime")).toBeTruthy();
 	});
 
 	// A failed judge must surface its own error without touching the primary result — the two lifecycles are separate.
-	it("surfaces the judge error only when the judge itself failed", () => {
-		const failed = renderWithProviders(
-			<BenchmarkJudgePanel run={run({ judgeStatus: "Failed", judgeErrorMessage: "Judge output was invalid." })} />,
-		);
+	it("surfaces the judge error only when the judging itself failed", () => {
+		const failed = renderPanel(benchmarkJudgeFixture({ state: "failed", errorMessage: "Judge output was invalid." }));
 		expect(screen.getByText("Judge output was invalid.")).toBeTruthy();
 		failed.unmount();
 
-		// The same message on a non-failed judge is not an error to show.
-		renderWithProviders(
-			<BenchmarkJudgePanel run={run({ judgeStatus: "Succeeded", judgeErrorMessage: "Judge output was invalid." })} />,
-		);
+		renderPanel(benchmarkJudgeFixture({ state: "succeeded", score: 10, errorMessage: "Judge output was invalid." }));
 
 		expect(screen.queryByText("Judge output was invalid.")).toBeNull();
+	});
+
+	it("offers cancel while the judging runs and re-judge once it is over", () => {
+		const running = renderPanel(benchmarkJudgeFixture({ state: "running" }));
+		fireEvent.click(screen.getByRole("button", { name: "Cancel judge" }));
+		expect(running.onCancel).toHaveBeenCalledOnce();
+		expect(screen.queryByRole("button", { name: "Re-judge run" })).toBeNull();
+		running.unmount();
+
+		const done = renderPanel(benchmarkJudgeFixture({ state: "succeeded", score: 20 }));
+		fireEvent.click(screen.getByRole("button", { name: "Re-judge run" }));
+
+		expect(done.onRejudge).toHaveBeenCalledOnce();
+	});
+
+	// Only a succeeded primary has stored output to judge, so a re-judge must not be offered otherwise.
+	it("hides re-judge when the run has no output to judge", () => {
+		renderPanel(benchmarkJudgeFixture({ state: "none" }), { canRejudge: false });
+
+		expect(screen.queryByRole("button", { name: "Re-judge run" })).toBeNull();
 	});
 });

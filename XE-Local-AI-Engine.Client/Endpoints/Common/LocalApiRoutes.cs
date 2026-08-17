@@ -251,6 +251,13 @@ public static class LocalApiRoutes
         public const string RunById = "benchmarks/runs/{runId}";
         public const string RunCancel = "benchmarks/runs/{runId}/cancel";
         public const string RunScore = "benchmarks/runs/{runId}/score";
+        public const string RunRejudge = "benchmarks/runs/{runId}/rejudge";
+
+        // The judge policy is its own sub-resource: it is the one part of a FROZEN project an operator may still
+        // change, and doing so re-judges every run, so it never rides along on the project PUT.
+        public const string ProjectJudge = "benchmarks/projects/{projectId}/judge";
+        public const string ProjectRejudge = "benchmarks/projects/{projectId}/rejudge";
+        public const string RubricPresets = "benchmarks/rubric-presets";
         public const string EligibleAgents = "benchmarks/eligible-agents";
         public const string EligibleModels = "benchmarks/eligible-models";
         public const string Hub = "/api/local/v1/benchmarks/hub";

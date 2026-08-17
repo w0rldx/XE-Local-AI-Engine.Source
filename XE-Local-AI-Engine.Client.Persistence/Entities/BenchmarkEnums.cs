@@ -10,11 +10,10 @@ public enum BenchmarkPrimaryStatus
     Cancelled
 }
 
-public enum BenchmarkJudgeStatus
+/// <summary>The lifecycle of one judge attempt. The run-level <see cref="BenchmarkJudgeStatus" /> keeps the states
+///     that describe a run rather than a judging (Disabled/Pending/Skipped).</summary>
+public enum BenchmarkJudgeAttemptStatus
 {
-    Disabled,
-    Pending,
-    Skipped,
     Queued,
     Running,
     Succeeded,

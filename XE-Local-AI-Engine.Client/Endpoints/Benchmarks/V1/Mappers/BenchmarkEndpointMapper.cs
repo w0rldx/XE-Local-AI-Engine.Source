@@ -6,17 +6,19 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 internal static class BenchmarkEndpointMapper
 {
+    // An omitted rubric takes the default; an incomplete judge still fails validation exactly as it did before.
     public static BenchmarkProjectDraft ToDraft(this BenchmarkProjectMutationRequest request, Guid id) =>
         new(id,
             request.Name,
             request.CoreTask,
             request.ContextTokens,
             request.AgentDefinitionId,
-            request.JudgeEnabled,
-            request.JudgeModelName,
-            request.JudgeContextTokens,
-            request.JudgePromptVersion,
-            request.JudgeOutputSchemaVersion);
+            request.JudgeEnabled
+                ? new BenchmarkJudgePolicyDraft(request.JudgeModelName ?? string.Empty,
+                    request.JudgeContextTokens ?? 0,
+                    request.Rubric.ToRubric(),
+                    request.ReferenceAnswer)
+                : null);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -33,7 +35,10 @@ internal static class BenchmarkEndpointMapper
             UpdatedAtUtc = project.UpdatedAtUtc
         };
 
-    public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project, int runCount) =>
+    /// <param name="judge">The decrypted current judge policy, or a disabled marker when the project does not judge.</param>
+    public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project,
+        int runCount,
+        BenchmarkJudgePolicyResponse? judge = null) =>
         new()
         {
             Id = project.Id,
@@ -43,10 +48,10 @@ internal static class BenchmarkEndpointMapper
             ContextTokens = project.ContextTokens,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
-            JudgeModelName = project.JudgeModelName,
-            JudgeContextTokens = project.JudgeContextTokens,
-            JudgePromptVersion = project.JudgePromptVersion,
-            JudgeOutputSchemaVersion = project.JudgeOutputSchemaVersion,
+            Judge = judge ?? new BenchmarkJudgePolicyResponse
+            {
+                Enabled = project.JudgeEnabled
+            },
             RunCount = runCount,
             IsFrozen = project.IsFrozen,
             Version = project.Version,
@@ -67,7 +72,12 @@ internal static class BenchmarkEndpointMapper
             AgentVersion = run.AgentVersion,
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
-            JudgeStatus = run.JudgeStatus,
+            Judge = run.ToJudge(),
+            QualityScore = run.QualityScore,
+            QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
+            Rank = run.Rank,
+            RankExclusionReason = run.Judge?.RankExclusionReason,
+            ModelGroupKey = run.ModelContentFingerprint,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
@@ -82,7 +92,8 @@ internal static class BenchmarkEndpointMapper
         return summary;
     }
 
-    public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run)
+    /// <param name="verdict">The decrypted rubric verdict of the run's current attempt, or null when it has none.</param>
+    public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run, BenchmarkJudgeResultV2? verdict = null)
     {
         var detail = new BenchmarkRunDetailResponse
         {
@@ -95,28 +106,27 @@ internal static class BenchmarkEndpointMapper
             AgentVersion = run.AgentVersion,
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
-            JudgeStatus = run.JudgeStatus,
+            Judge = run.ToJudge(verdict),
+            QualityScore = run.QualityScore,
+            QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
+            Rank = run.Rank,
+            RankExclusionReason = run.Judge?.RankExclusionReason,
+            ModelGroupKey = run.ModelContentFingerprint,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
             TokensPerSecond = run.TokensPerSecond,
             OutputParts = ParseJson(run.OutputPartsJson),
-            JudgeResult = ParseJudgeResult(run.JudgeResultJson),
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             PrimaryErrorMessage = run.PrimaryErrorMessage,
-            JudgeErrorMessage = run.JudgeErrorMessage,
             Version = run.Version,
             CreatedAtUtc = run.CreatedAtUtc,
             StartedAtUtc = run.StartedAtUtc,
             PrimaryCompletedAtUtc = run.PrimaryCompletedAtUtc,
-            JudgeStartedAtUtc = run.JudgeStartedAtUtc,
-            JudgeCompletedAtUtc = run.JudgeCompletedAtUtc,
             UpdatedAtUtc = run.UpdatedAtUtc,
             PrimaryLaunchReceipt = ParseJson(run.PrimaryLaunchEvidence?.ReceiptJson),
-            PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson),
-            JudgeLaunchReceipt = ParseJson(run.JudgeLaunchEvidence?.ReceiptJson),
-            JudgeEnvironmentFacts = ParseJson(run.JudgeLaunchEvidence?.EnvironmentFactsJson)
+            PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson)
         };
         ApplyLaunchEvidence(detail, run);
         return detail;
@@ -148,9 +158,7 @@ internal static class BenchmarkEndpointMapper
     private static void ApplyLaunchEvidence(BenchmarkRunSummaryResponse response, BenchmarkRunRecord run)
     {
         var primaryIntent = run.PrimaryLaunchIntent;
-        var judgeIntent = run.JudgeLaunchIntent;
         var primary = run.PrimaryLaunchEvidence;
-        var judge = run.JudgeLaunchEvidence;
         response.PrimaryVariant = primaryIntent?.Variant;
         response.PrimaryKvCacheType = primaryIntent?.KvCacheType;
         response.PrimaryKvCacheTypeSource = primaryIntent?.KvCacheTypeSource;
@@ -166,22 +174,80 @@ internal static class BenchmarkEndpointMapper
         response.PrimaryHasAuxAssets = primary?.HasAuxAssets;
         response.PrimaryReceiptHash = primary?.ReceiptHash;
         response.PrimaryEnvironmentFactsHash = primary?.EnvironmentFactsHash;
-        response.JudgeVariant = judgeIntent?.Variant;
-        response.JudgeKvCacheType = judgeIntent?.KvCacheType;
-        response.JudgeKvCacheTypeSource = judgeIntent?.KvCacheTypeSource;
-        response.JudgeKvAutoReason = judgeIntent?.KvAutoReason;
-        response.JudgeFlashAttentionMode = judgeIntent?.FlashAttentionMode;
-        response.JudgeIntendedLaunchIdentity = judgeIntent?.IntendedLaunchIdentity;
-        response.JudgeIntendedExecutableSha256 = judgeIntent?.IntendedExecutableSha256;
-        response.JudgeEffectiveLaunchIdentity = judge?.EffectiveLaunchIdentity;
-        response.JudgeEffectiveBackend = judge?.EffectiveBackend;
-        response.JudgePlacementOffloaded = judge?.PlacementOffloaded;
-        response.JudgePlacementTotal = judge?.PlacementTotal;
-        response.JudgeExecutableSha256 = judge?.ExecutableSha256;
-        response.JudgeHasAuxAssets = judge?.HasAuxAssets;
-        response.JudgeReceiptHash = judge?.ReceiptHash;
-        response.JudgeEnvironmentFactsHash = judge?.EnvironmentFactsHash;
     }
+
+    private static BenchmarkRunJudgeResponse ToJudge(this BenchmarkRunRecord run, BenchmarkJudgeResultV2? verdict = null)
+    {
+        var judge = run.Judge;
+        return new BenchmarkRunJudgeResponse
+        {
+            State = judge?.State ?? BenchmarkRunJudgeStates.None,
+            Score = judge?.Score,
+            PolicyRevision = judge?.PolicyRevision,
+            AttemptSequence = judge?.AttemptSequence,
+            CohortGeneration = judge?.CohortGeneration,
+            ExecutionKey = judge?.ExecutionKey,
+            PolicyCurrent = judge?.PolicyCurrent ?? false,
+            ExecutionCurrent = judge?.ExecutionCurrent ?? false,
+            ErrorMessage = judge?.ErrorMessage,
+            Summary = verdict?.Summary,
+            Criteria = verdict?.Criteria.Select(static criterion => new BenchmarkJudgeCriterionScoreResponse
+                              {
+                                  Id = criterion.Id,
+                                  Score = criterion.Score,
+                                  Rationale = criterion.Rationale
+                              })
+                              .ToArray()
+        };
+    }
+
+    public static BenchmarkRubricDto ToDto(this BenchmarkJudgeRubricV1 rubric) =>
+        new()
+        {
+            Version = rubric.Version,
+            Criteria = rubric.Criteria.Select(static criterion => new BenchmarkRubricCriterionDto
+                             {
+                                 Id = criterion.Id,
+                                 Title = criterion.Title,
+                                 Description = criterion.Description,
+                                 Weight = criterion.Weight
+                             })
+                             .ToArray()
+        };
+
+    public static BenchmarkJudgeRubricV1? ToRubric(this BenchmarkRubricDto? dto) =>
+        dto is null
+            ? null
+            : new BenchmarkJudgeRubricV1(dto.Version,
+                dto.Criteria.Select(static criterion => new BenchmarkJudgeRubricCriterionV1(criterion.Id,
+                                criterion.Title,
+                                criterion.Description,
+                                criterion.Weight))
+                            .ToArray());
+
+    /// <summary>
+    ///     The project's judge configuration. <paramref name="policy" /> is the decrypted current revision, or null
+    ///     when judging is off — which is a state, not an absence, so the object is always present.
+    /// </summary>
+    public static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision, BenchmarkJudgePolicyV1? policy) =>
+        revision is null || policy is null
+            ? new BenchmarkJudgePolicyResponse
+            {
+                Enabled = false
+            }
+            : new BenchmarkJudgePolicyResponse
+            {
+                Enabled = true,
+                PolicyRevisionId = revision.Id,
+                PolicyRevision = revision.Revision,
+                PolicyHash = revision.PolicyHash,
+                ModelName = policy.Model.ModelName,
+                RequestedContextTokens = policy.RequestedContextTokens,
+                Rubric = policy.Rubric.ToDto(),
+                ReferenceAnswer = policy.ReferenceAnswer,
+                CohortGeneration = revision.CohortGeneration,
+                ReferenceExecutionKey = revision.ReferenceExecutionKey
+            };
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
     {
@@ -194,9 +260,4 @@ internal static class BenchmarkEndpointMapper
         return document.RootElement.Clone();
     }
 
-    // Reads through the writer's own serializer. Deserializing this blob with default (PascalCase) options bound every
-    // property to its default and returned a zeroed judge result — a null rationale the frontend's schema rejects,
-    // taking the whole run detail down with it.
-    private static BenchmarkJudgeResultV1? ParseJudgeResult(ReadOnlyMemory<byte>? payload) =>
-        BenchmarkExecutionSerialization.DeserializeJudge(payload);
 }

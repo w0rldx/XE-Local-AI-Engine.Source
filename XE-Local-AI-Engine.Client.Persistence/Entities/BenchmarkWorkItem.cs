@@ -5,6 +5,12 @@ internal sealed record class BenchmarkWorkItem
     public long QueueSequence { get; set; }
     public Guid RunId { get; set; }
     public BenchmarkWorkKind Kind { get; set; }
+
+    /// <summary>
+    ///     The judge attempt this item judges. Set exactly when <see cref="Kind" /> is
+    ///     <see cref="BenchmarkWorkKind.Judge" />, and the uniqueness key for judge work — a run has many attempts.
+    /// </summary>
+    public Guid? JudgeAttemptId { get; set; }
     public BenchmarkWorkStatus Status { get; set; }
     public int Attempt { get; set; }
     public long Version { get; set; }

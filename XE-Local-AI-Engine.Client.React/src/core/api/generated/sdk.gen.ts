@@ -86,6 +86,9 @@ import type {
 	CancelTrainingRunData,
 	CancelTrainingRunErrors,
 	CancelTrainingRunResponses,
+	ClearBenchmarkRunScoreData,
+	ClearBenchmarkRunScoreErrors,
+	ClearBenchmarkRunScoreResponses,
 	ClearCloudSettingsData,
 	ClearCloudSettingsErrors,
 	ClearCloudSettingsResponses,
@@ -356,6 +359,9 @@ import type {
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectErrors,
 	GetBenchmarkProjectResponses,
+	GetBenchmarkRubricPresetsData,
+	GetBenchmarkRubricPresetsErrors,
+	GetBenchmarkRubricPresetsResponses,
 	GetBenchmarkRunData,
 	GetBenchmarkRunErrors,
 	GetBenchmarkRunResponses,
@@ -762,6 +768,12 @@ import type {
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionErrors,
 	RejectSuggestedPlaybookActionResponses,
+	RejudgeBenchmarkProjectData,
+	RejudgeBenchmarkProjectErrors,
+	RejudgeBenchmarkProjectResponses,
+	RejudgeBenchmarkRunData,
+	RejudgeBenchmarkRunErrors,
+	RejudgeBenchmarkRunResponses,
 	RemoveCudaBuildData,
 	RemoveCudaBuildErrors,
 	RemoveCudaBuildResponses,
@@ -888,6 +900,9 @@ import type {
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionErrors,
 	UpdateAgentDefinitionResponses,
+	UpdateBenchmarkJudgePolicyData,
+	UpdateBenchmarkJudgePolicyErrors,
+	UpdateBenchmarkJudgePolicyResponses,
 	UpdateBenchmarkProjectData,
 	UpdateBenchmarkProjectErrors,
 	UpdateBenchmarkProjectResponses,
@@ -994,6 +1009,9 @@ import {
 	zCancelTrainingDatasetResponse,
 	zCancelTrainingRunPath,
 	zCancelTrainingRunResponse,
+	zClearBenchmarkRunScoreBody,
+	zClearBenchmarkRunScorePath,
+	zClearBenchmarkRunScoreResponse,
 	zClearCloudSettingsResponse,
 	zCodexLoginResponse,
 	zCodexLogoutResponse,
@@ -1172,6 +1190,7 @@ import {
 	zGetBaseArtifactResponse,
 	zGetBenchmarkProjectPath,
 	zGetBenchmarkProjectResponse,
+	zGetBenchmarkRubricPresetsResponse,
 	zGetBenchmarkRunPath,
 	zGetBenchmarkRunResponse,
 	zGetCloudSettingsResponse,
@@ -1398,6 +1417,12 @@ import {
 	zReindexKnowledgeDocumentResponse,
 	zRejectSuggestedPlaybookActionPath,
 	zRejectSuggestedPlaybookActionResponse,
+	zRejudgeBenchmarkProjectBody,
+	zRejudgeBenchmarkProjectPath,
+	zRejudgeBenchmarkProjectResponse,
+	zRejudgeBenchmarkRunBody,
+	zRejudgeBenchmarkRunPath,
+	zRejudgeBenchmarkRunResponse,
 	zRemoveCudaBuildResponse,
 	zRemoveDevelopmentTemplatePath,
 	zRemoveDevelopmentTemplateResponse,
@@ -1484,6 +1509,9 @@ import {
 	zUpdateAgentDefinitionBody,
 	zUpdateAgentDefinitionPath,
 	zUpdateAgentDefinitionResponse,
+	zUpdateBenchmarkJudgePolicyBody,
+	zUpdateBenchmarkJudgePolicyPath,
+	zUpdateBenchmarkJudgePolicyResponse,
 	zUpdateBenchmarkProjectBody,
 	zUpdateBenchmarkProjectPath,
 	zUpdateBenchmarkProjectResponse,
@@ -7511,6 +7539,80 @@ export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateBenchmarkJudgePolicyData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<UpdateBenchmarkJudgePolicyResponses, UpdateBenchmarkJudgePolicyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateBenchmarkJudgePolicyBody,
+					path: zUpdateBenchmarkJudgePolicyPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateBenchmarkJudgePolicyResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/judge",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = false>(
+	options: Options<RejudgeBenchmarkProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<RejudgeBenchmarkProjectResponses, RejudgeBenchmarkProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRejudgeBenchmarkProjectBody,
+					path: zRejudgeBenchmarkProjectPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRejudgeBenchmarkProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/rejudge",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = false>(
+	options?: Options<GetBenchmarkRubricPresetsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetBenchmarkRubricPresetsResponses, GetBenchmarkRubricPresetsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBenchmarkRubricPresetsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/rubric-presets",
+		...options,
+	});
+
 export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(options: Options<ListBenchmarkRunsData, ThrowOnError>) =>
 	(options.client ?? client).get<ListBenchmarkRunsResponses, ListBenchmarkRunsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -7626,6 +7728,32 @@ export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const clearBenchmarkRunScore = <ThrowOnError extends boolean = false>(
+	options: Options<ClearBenchmarkRunScoreData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<ClearBenchmarkRunScoreResponses, ClearBenchmarkRunScoreErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zClearBenchmarkRunScoreBody,
+					path: zClearBenchmarkRunScorePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zClearBenchmarkRunScoreResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/score",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<ScoreBenchmarkRunData, ThrowOnError>) =>
 	(options.client ?? client).put<ScoreBenchmarkRunResponses, ScoreBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -7643,6 +7771,32 @@ export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(options:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/score",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
+	options: Options<RejudgeBenchmarkRunData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<RejudgeBenchmarkRunResponses, RejudgeBenchmarkRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRejudgeBenchmarkRunBody,
+					path: zRejudgeBenchmarkRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRejudgeBenchmarkRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/rejudge",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

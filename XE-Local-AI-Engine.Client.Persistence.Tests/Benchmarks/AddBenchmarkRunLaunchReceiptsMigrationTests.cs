@@ -12,7 +12,11 @@ public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsTheIntendedAndEffectiveLaunchColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-run-launch-receipts.sqlite").ConfigureAwait(false);
+        // Pinned AT this migration, not at head: the judge half of the block moved to benchmark_judge_attempts when
+        // the 1-5 judge was retired, so head no longer carries it and only this point in the chain can assert it.
+        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-run-launch-receipts.sqlite",
+                                          "20260816174029_AddBenchmarkRunLaunchReceipts")
+                                      .ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
         foreach (var phase in new[]

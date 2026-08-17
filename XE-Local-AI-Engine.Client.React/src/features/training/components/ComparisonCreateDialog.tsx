@@ -117,7 +117,7 @@ export function ComparisonCreateDialog({ opened, onClose }: ComparisonCreateDial
 		);
 	};
 
-	const benchmarkRunOptions = (benchmarkRunsQuery.data ?? []).map((run) => ({ value: run.id, label: run.primaryModelName }));
+	const benchmarkRunOptions = (benchmarkRunsQuery.data?.items ?? []).map((run) => ({ value: run.id, label: run.primaryModelName }));
 
 	return (
 		<DialogShell onClose={close} opened={opened} size="lg" title={t("training.comparisons.create.title", "New comparison")}>

@@ -321,14 +321,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 entry.Entity.Id,
                 "benchmark_output_parts_json",
                 trackedProperties);
-            EncryptOptionalProperty(entry,
-                entry.Property(entity => entity.JudgeResultJson),
-                Guid.Empty,
-                entry.Entity.Id,
-                "benchmark_judge_result_json",
-                trackedProperties);
-            // The launch evidence blocks. A distinct AAD column name per phase so a writer cannot present the
-            // primary's receipt as the judge's (or an environment capture as a receipt).
+            // The primary launch-evidence block. A distinct AAD column name per column so a writer cannot present an
+            // environment capture as a receipt; the judge's own evidence lives on its attempt row.
             EncryptOptionalProperty(entry,
                 entry.Property(entity => entity.PrimaryLaunchReceiptJson),
                 Guid.Empty,
@@ -341,17 +335,45 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 entry.Entity.Id,
                 "benchmark_primary_environment_facts_json",
                 trackedProperties);
-            EncryptOptionalProperty(entry,
-                entry.Property(entity => entity.JudgeLaunchReceiptJson),
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkJudgePolicyRevision>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.PolicyJson),
                 Guid.Empty,
                 entry.Entity.Id,
-                "benchmark_judge_launch_receipt_json",
+                "benchmark_judge_policy_json",
+                trackedProperties);
+        }
+
+        // Every attempt column is optional: an attempt inserted directly as Failed carries no runtime, and an attempt
+        // that never reached readiness carries no receipt. The optional path never dereferences a missing value.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkJudgeAttempt>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.JudgeRuntimeJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_runtime_json",
                 trackedProperties);
             EncryptOptionalProperty(entry,
-                entry.Property(entity => entity.JudgeEnvironmentFactsJson),
+                entry.Property(entity => entity.ResultJson),
                 Guid.Empty,
                 entry.Entity.Id,
-                "benchmark_judge_environment_facts_json",
+                "benchmark_judge_attempt_result_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_attempt_launch_receipt_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.EnvironmentFactsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_judge_attempt_environment_facts_json",
                 trackedProperties);
         }
 
