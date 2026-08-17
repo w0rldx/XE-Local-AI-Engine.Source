@@ -444,7 +444,7 @@ public sealed class NodeChatRegenerationService(
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
         return string.IsNullOrWhiteSpace(retrievalQuery)
             ? null
-            : await turnContextBuilder.BuildKnowledgeContextAsync(retrievalQuery, runCancellationToken).ConfigureAwait(false);
+            : await turnContextBuilder.BuildKnowledgeContextAsync(retrievalQuery, isRegeneratedTurn: true, runCancellationToken).ConfigureAwait(false);
     }
 
     // Drains the run after the SSE consumer is gone. The pump is observed FIRST: on a persistence fault it faults here,
