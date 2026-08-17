@@ -56,14 +56,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
 
-    // Orders ordinary ensures against the rare operator runtime MUTATION (runtime install/remove, source build,
-    // exclusive profiling). Ensures take it SHARED and proceed concurrently; a mutation takes it EXCLUSIVE. What an
-    // exclusive holder relies on is unchanged from the single semaphore this replaces — a mutation waits for every
-    // in-flight ensure DECISION, and no new decision starts while it holds the gate — but an ensure no longer
-    // head-of-line blocks an unrelated role behind its liveness probe (up to ReuseLivenessProbeTimeout, 2 s).
-    // Single-flight per process is NOT this gate's job: _ensureGates already provides it per (model, role).
-    private readonly AsyncSharedExclusiveGate _runtimeMutationGate = new();
-    private readonly Lock _runtimeOperationSync = new();
+    private readonly LlamaServerRuntimeMutationGate _runtimeMutationGate;
     private readonly LlamaServerPortAllocator _ports;
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe;
@@ -112,10 +105,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // runtime device audit; the composition root injects the singleton both sides share.
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private readonly ILlamaServerLoadTelemetry _loadTelemetry;
-    private int _disposed;
-    private int _runtimeOperationCount;
-    private int _runtimeMutationActivityCount;
-    private TaskCompletionSource? _runtimeOperationsDrained;
 
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
@@ -171,20 +160,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
 
+        _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token);
+
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        lock (_runtimeOperationSync)
+        if (!_runtimeMutationGate.TryMarkDisposed())
         {
-            if (_disposed != 0)
-            {
-                return;
-            }
-
-            _disposed = 1;
+            return;
         }
 
         await _shutdownCts.CancelAsync().ConfigureAwait(false);
@@ -197,11 +183,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Expected on shutdown.
         }
 
-        await WaitForRuntimeOperationsDrainedAsync().ConfigureAwait(false);
+        await _runtimeMutationGate.WaitForOperationsDrainedAsync().ConfigureAwait(false);
 
-        // No new operation can enter after _disposed is set, and the separate operation barrier above proves every
-        // admitted operation has finished. Own the runtime gate exclusively through teardown and dispose it in-place.
-        await _runtimeMutationGate.EnterExclusiveAsync(CancellationToken.None).ConfigureAwait(false);
+        // No new operation can enter after the disposed flag is latched, and the separate operation barrier above
+        // proves every admitted operation has finished. Own the runtime gate exclusively through teardown and dispose
+        // it in-place.
+        await _runtimeMutationGate.EnterExclusiveForTeardownAsync().ConfigureAwait(false);
         var inflightSpawns = _inflightSpawns.Values.Select(static inflight => inflight.Task).ToArray();
 
         try
@@ -237,7 +224,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             EnsureDecision decision;
@@ -246,7 +233,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // touches is already safe under concurrency — the reuse probe claim is a CAS, the spawn decision runs under
             // the per-key _ensureGates single-flight, and the process/spawn tables are concurrent — so two ensures for
             // different roles run side by side instead of queueing behind each other's liveness probe.
-            await EnterSharedRuntimeGateAsync(ct).ConfigureAwait(false);
+            await _runtimeMutationGate.EnterSharedAsync(ct).ConfigureAwait(false);
             try
             {
                 // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
@@ -295,159 +282,28 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
     /// <inheritdoc />
-    public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
+    public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
     {
-        BeginRuntimeOperation();
-        var operationTransferred = false;
-        Interlocked.Increment(ref _runtimeMutationActivityCount);
-        try
-        {
-            // EXCLUSIVE: the mutation about to run replaces the runtime binaries under the supervisor, so it must see a
-            // quiet supervisor — every in-flight ensure decision has finished and no new one can start.
-            await EnterExclusiveRuntimeGateAsync(ct).ConfigureAwait(false);
-
-            if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
-            {
-                _runtimeMutationGate.ExitExclusive();
-                return null;
-            }
-
-            var lease = new RuntimeMutationLease(_runtimeMutationGate,
-                () =>
-                {
-                    Interlocked.Decrement(ref _runtimeMutationActivityCount);
-                    EndRuntimeOperation();
-                });
-            operationTransferred = true;
-            return lease;
-        }
-        finally
-        {
-            if (!operationTransferred)
-            {
-                Interlocked.Decrement(ref _runtimeMutationActivityCount);
-                EndRuntimeOperation();
-            }
-        }
-    }
-
-    private void BeginRuntimeOperation()
-    {
-        lock (_runtimeOperationSync)
-        {
-            ObjectDisposedException.ThrowIf(_disposed != 0, this);
-            if (_runtimeOperationCount++ == 0)
-            {
-                _runtimeOperationsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            }
-        }
-    }
-
-    private void EndRuntimeOperation()
-    {
-        TaskCompletionSource? drained = null;
-        lock (_runtimeOperationSync)
-        {
-            _runtimeOperationCount--;
-            if (_runtimeOperationCount == 0)
-            {
-                drained = _runtimeOperationsDrained;
-                _runtimeOperationsDrained = null;
-            }
-        }
-
-        drained?.TrySetResult();
-    }
-
-    private Task WaitForRuntimeOperationsDrainedAsync()
-    {
-        lock (_runtimeOperationSync)
-        {
-            return _runtimeOperationCount == 0 ? Task.CompletedTask : _runtimeOperationsDrained!.Task;
-        }
-    }
-
-    /// <summary>
-    ///     Enters the runtime gate SHARED for an ordinary ensure: concurrent with other ensures, excluded by (and
-    ///     excluding) an operator runtime mutation. Pairs with <see cref="AsyncSharedExclusiveGate.ExitShared" />.
-    /// </summary>
-    private Task EnterSharedRuntimeGateAsync(CancellationToken ct)
-    {
-        return EnterRuntimeGateAsync(shared: true, ct);
-    }
-
-    /// <summary>
-    ///     Enters the runtime gate EXCLUSIVE for an operator runtime mutation or an exclusive profiling spawn: waits
-    ///     for every in-flight ensure decision to finish and holds off every new one. Pairs with
-    ///     <see cref="AsyncSharedExclusiveGate.ExitExclusive" />.
-    /// </summary>
-    private Task EnterExclusiveRuntimeGateAsync(CancellationToken ct)
-    {
-        return EnterRuntimeGateAsync(shared: false, ct);
-    }
-
-    private async Task EnterRuntimeGateAsync(bool shared, CancellationToken ct)
-    {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
-        try
-        {
-            var entering = shared
-                ? _runtimeMutationGate.EnterSharedAsync(linkedCancellation.Token)
-                : _runtimeMutationGate.EnterExclusiveAsync(linkedCancellation.Token);
-            await entering.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new ObjectDisposedException(GetType().FullName);
-        }
-
-        if (Volatile.Read(ref _disposed) == 0)
-        {
-            return;
-        }
-
-        if (shared)
-        {
-            _runtimeMutationGate.ExitShared();
-        }
-        else
-        {
-            _runtimeMutationGate.ExitExclusive();
-        }
-
-        throw new ObjectDisposedException(GetType().FullName);
+        // A live or in-flight process blocks the mutation: swapping the runtime binaries under a loaded model would
+        // pull them out from under it.
+        return _runtimeMutationGate.TryAcquireLeaseAsync(
+            () => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
+            ct);
     }
 
     /// <inheritdoc />
     public bool IsKeepWarmSuppressed()
     {
-        return Volatile.Read(ref _runtimeMutationActivityCount) > 0;
+        return _runtimeMutationGate.IsMutationActive;
     }
 
     internal int CountInflightSpawns() =>
         _inflightSpawns.Count;
-
-    private sealed class RuntimeMutationLease(AsyncSharedExclusiveGate gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
-    {
-        private int _disposed;
-
-        public ValueTask DisposeAsync()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            {
-                gate.ExitExclusive();
-                onDisposed();
-            }
-
-            return ValueTask.CompletedTask;
-        }
-    }
 
     /// <summary>
     ///     The single-flight decision, taken under the per-key gate held only briefly: reuse a now-registered process,
@@ -674,14 +530,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task EvictAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             await EvictCoreAsync(modelName, role).ConfigureAwait(false);
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
@@ -698,14 +554,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task EvictAllRolesAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             await EvictAllRolesCoreAsync(modelName).ConfigureAwait(false);
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
@@ -721,14 +577,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             return await EjectCoreAsync(modelName, role, force, ct).ConfigureAwait(false);
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
@@ -2021,12 +1877,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(launchArgs);
         ArgumentNullException.ThrowIfNull(body);
-        BeginRuntimeOperation();
+        _runtimeMutationGate.BeginOperation();
         try
         {
             // EXCLUSIVE: a profiling spawn must be the only model loading on the box for its measurement to mean
             // anything, so it excludes every ensure for its whole eviction + spawn window.
-            await EnterExclusiveRuntimeGateAsync(ct).ConfigureAwait(false);
+            await _runtimeMutationGate.EnterExclusiveAsync(ct).ConfigureAwait(false);
             var runtimeGateHeld = true;
             try
             {
@@ -2150,7 +2006,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
         finally
         {
-            EndRuntimeOperation();
+            _runtimeMutationGate.EndOperation();
         }
     }
 
