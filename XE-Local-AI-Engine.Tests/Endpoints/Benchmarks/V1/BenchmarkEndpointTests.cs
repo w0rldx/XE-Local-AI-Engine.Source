@@ -489,6 +489,54 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task ScoreRun_ReturnsTheJudgeVerdictTheGetWouldShow()
+    {
+        // A score is an operator override beside the judging, not a replacement for it: dropping the verdict from the
+        // mutation response made the just-scored run render as "not judged" until the next refresh.
+        await using var context = CreateContext();
+        var attemptId = Guid.NewGuid();
+        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            [new BenchmarkJudgeCriterionScoreV2("correctness", 8, "clear and correct")],
+            "solid answer",
+            80,
+            "v1:aggregate"));
+        context.Store.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
+        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
+                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
+        using var client = context.Factory.CreateClient();
+        using var scoreRequest = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
+        {
+            score = 42,
+            expectedVersion = 3
+        });
+        using var scoreResponse = await client.SendAsync(scoreRequest).ConfigureAwait(false);
+        var scored = await scoreResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var clearRequest = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}/score", new
+        {
+            expectedVersion = 3
+        });
+        using var clearResponse = await client.SendAsync(clearRequest).ConfigureAwait(false);
+        var cleared = await clearResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, scoreResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, clearResponse.StatusCode);
+        foreach (var body in new[]
+                 {
+                     scored,
+                     cleared
+                 })
+        {
+            using var document = JsonDocument.Parse(body);
+            var judge = document.RootElement.GetProperty("judge");
+            AssertEx.Equal("solid answer", judge.GetProperty("summary").GetString());
+            AssertEx.Equal(1, judge.GetProperty("criteria").GetArrayLength());
+        }
+    }
+
+    [Test]
     public async Task UpdateJudgePolicy_WithoutConfirmation_ReturnsRejudgeRequired()
     {
         await using var context = CreateContext();

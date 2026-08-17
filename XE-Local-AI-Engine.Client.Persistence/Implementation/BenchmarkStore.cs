@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -12,7 +13,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public async Task<BenchmarkProjectRecord> CreateProjectAsync(BenchmarkProjectInput input, CancellationToken cancellationToken = default)
+    public async Task<BenchmarkProjectRecord> CreateProjectAsync(BenchmarkProjectInput input,
+        BenchmarkJudgePolicyChangeInput? judgePolicy = null,
+        CancellationToken cancellationToken = default)
     {
         ValidateProject(input);
         var now = Now();
@@ -27,8 +30,21 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
+        if (judgePolicy is null)
+        {
+            _dbContext.BenchmarkProjects.Add(entity);
+            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            return ToRecord(entity, frozen: false);
+        }
+
+        // The project and its judge are one creation. Staged saves inside one transaction are what the circular
+        // project↔revision pointers force: project with a null pointer, then the revision, then the pointer.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         _dbContext.BenchmarkProjects.Add(entity);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await ApplyJudgePolicyChangeAsync(entity, judgePolicy, now, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(entity, frozen: false);
     }
 
@@ -55,6 +71,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     public async Task<BenchmarkProjectRecord> UpdateProjectAsync(Guid projectId,
         long expectedVersion,
         BenchmarkProjectInput input,
+        BenchmarkJudgePolicyChangeInput? judgePolicyChange = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProject(input);
@@ -66,12 +83,20 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             throw new BenchmarkConflictException("ProjectFrozen");
         }
 
+        var now = Now();
         project.Name = input.Name.Trim();
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
         project.AgentDefinitionId = input.AgentDefinitionId;
         project.Version++;
-        project.UpdatedAtUtc = Now();
+        project.UpdatedAtUtc = now;
+        if (judgePolicyChange is not null)
+        {
+            // Same transaction as the field edit: an edit that committed without its judge change would leave the
+            // project judging under a policy the operator has just replaced.
+            await ApplyJudgePolicyChangeAsync(project, judgePolicyChange, now, cancellationToken).ConfigureAwait(false);
+        }
+
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(project, frozen: false);
@@ -836,6 +861,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         long expectedProjectVersion,
         ReadOnlyMemory<byte> policyJson,
         string policyHash,
+        BenchmarkJudgeAttemptSeed? cohortAttemptSeed = null,
         CancellationToken cancellationToken = default)
     {
         if (policyJson.IsEmpty)
@@ -861,21 +887,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         var now = Now();
-        var (revision, wasCreated) = await GetOrCreateJudgePolicyRevisionAsync(projectId, policyJson, policyHash, now, cancellationToken).ConfigureAwait(false);
-        if (!wasCreated)
-        {
-            // A revision the project has held before starts a fresh cohort; a brand new one is already at generation 1.
-            revision.ReferenceExecutionKey = null;
-            revision.CohortGeneration = checked(revision.CohortGeneration + 1);
-        }
-
-        project.CurrentJudgePolicyRevisionId = revision.Id;
+        var (revision, wasCreated) = await RepointJudgePolicyAsync(project, policyJson, policyHash, now, cancellationToken).ConfigureAwait(false);
         project.Version++;
         project.UpdatedAtUtc = now;
-        var succeededRunIds = await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken).ConfigureAwait(false);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), wasCreated, succeededRunIds);
+        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), wasCreated, runIds);
     }
 
     public async Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default)
@@ -997,6 +1015,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     public async Task<BenchmarkJudgePolicyActivation> BeginProjectRejudgeAsync(Guid projectId,
         long expectedProjectVersion,
+        BenchmarkJudgeAttemptSeed? cohortAttemptSeed = null,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -1008,17 +1027,25 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             throw new BenchmarkConflictException("JudgeDisabled");
         }
 
-        // The reset and the eligible set are decided together, so "move the cohort to the current runtime" can never
-        // enqueue a partial set that would then rank against a key half of it never ran under.
+        // The seed's runtime was resolved for one revision. If the project has moved on since, rolling back is the
+        // only honest answer: the caller re-resolves and retries rather than judging a cohort under a stale runtime.
+        if (cohortAttemptSeed?.ExpectedJudgePolicyRevisionId is { } expectedRevisionId && expectedRevisionId != revisionId)
+        {
+            throw new BenchmarkJudgePolicyChangedException("The project's judge policy changed. Refresh and retry.");
+        }
+
+        // The reset and the attempts are committed together, so "move the cohort to the current runtime" can never
+        // leave a partial set that would then rank against a key half of it never ran under.
+        var now = Now();
         var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
         revision.ReferenceExecutionKey = null;
         revision.CohortGeneration = checked(revision.CohortGeneration + 1);
         project.Version++;
-        project.UpdatedAtUtc = Now();
-        var succeededRunIds = await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        project.UpdatedAtUtc = now;
+        var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken).ConfigureAwait(false);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), WasCreated: false, succeededRunIds);
+        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), WasCreated: false, runIds);
     }
 
     public async Task<bool> TryPromoteReferenceExecutionKeyAsync(Guid revisionId,
@@ -1464,6 +1491,103 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         string? ReferenceExecutionKey,
         Guid? ProjectCurrentRevisionId);
 
+    /// <summary>
+    ///     Applies a project write's judge half to the tracked project: null policy disables, an unchanged hash is a
+    ///     no-op, anything else get-or-creates the revision, resets its cohort and repoints the project. Returns the
+    ///     revision the project ends up on, or <see langword="null" /> when judging was turned off.
+    /// </summary>
+    private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)?> ApplyJudgePolicyChangeAsync(BenchmarkProject project,
+        BenchmarkJudgePolicyChangeInput change,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        if (change.PolicyJson is not { } policyJson)
+        {
+            project.CurrentJudgePolicyRevisionId = null;
+            return null;
+        }
+
+        if (policyJson.IsEmpty)
+        {
+            throw new BenchmarkValidationException("A judge policy cannot be empty.");
+        }
+
+        EnsurePolicyHash(change.PolicyHash);
+        var current = project.CurrentJudgePolicyRevisionId is { } currentRevisionId
+            ? await RequireJudgePolicyRevisionAsync(currentRevisionId, cancellationToken).ConfigureAwait(false)
+            : null;
+
+        // Same rule as an explicit activation: re-pointing at the policy the project already holds must not reset the
+        // cohort, or saving an unrelated field edit would drop every ranked run out of the ranking.
+        if (current is not null && string.Equals(current.PolicyHash, change.PolicyHash, StringComparison.Ordinal))
+        {
+            return (current, false);
+        }
+
+        return await RepointJudgePolicyAsync(project, policyJson, change.PolicyHash, now, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Get-or-creates the revision for this policy, starts it on a fresh cohort, and points the project at it. The
+    ///     caller owns the transaction and the project version bump.
+    /// </summary>
+    private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)> RepointJudgePolicyAsync(BenchmarkProject project,
+        ReadOnlyMemory<byte> policyJson,
+        string policyHash,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        var (revision, wasCreated) = await GetOrCreateJudgePolicyRevisionAsync(project.Id, policyJson, policyHash, now, cancellationToken).ConfigureAwait(false);
+        if (!wasCreated)
+        {
+            // A revision the project has held before starts a fresh cohort; a brand new one is already at generation 1.
+            revision.ReferenceExecutionKey = null;
+            revision.CohortGeneration = checked(revision.CohortGeneration + 1);
+        }
+
+        project.CurrentJudgePolicyRevisionId = revision.Id;
+        return (revision, wasCreated);
+    }
+
+    /// <summary>
+    ///     The project's eligible runs and — with a seed — one fresh Queued attempt each, inserted inside the caller's
+    ///     transaction. Enqueuing here rather than in a follow-up loop is what makes a cohort reset all-or-nothing: a
+    ///     reset that committed with only some attempts enqueued would rank a cohort against runs never re-judged.
+    ///     No already-applied guard: the caller has just reset the cohort, and every eligible run belongs to it.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> EnqueueCohortAttemptsAsync(Guid projectId,
+        BenchmarkJudgePolicyRevision revision,
+        BenchmarkJudgeAttemptSeed? seed,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        if (seed is null)
+        {
+            return await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Tracked, because each run takes a new attempt pointer and a version bump. The caller has already refused
+        // the call if any attempt of the project is active, so no eligible run can be mid-judging here.
+        var runs = await _dbContext.BenchmarkRuns
+                                   .Where(entity => entity.ProjectId == projectId
+                                                    && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                                                    && entity.OutputPartsJson != null)
+                                   .OrderBy(entity => entity.CreatedAtUtc)
+                                   .ThenBy(entity => entity.Id)
+                                   .ToListAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+        foreach (var run in runs)
+        {
+            _ = await InsertJudgeAttemptAsync(run, revision, seed.RuntimeJson, seed.RuntimeUnresolvedReason, seed.LaunchIntent, now, cancellationToken)
+                    .ConfigureAwait(false);
+            run.Version++;
+            run.UpdatedAtUtc = now;
+        }
+
+        return runs.Select(run => run.Id).ToArray();
+    }
+
     /// <summary>The project's succeeded runs with stored output — exactly the set a re-judge must cover.</summary>
     private async Task<IReadOnlyList<Guid>> SucceededRunIdsAsync(Guid projectId, CancellationToken cancellationToken) =>
         await _dbContext.BenchmarkRuns.AsNoTracking()
@@ -1516,7 +1640,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await _dbContext.BenchmarkJudgeAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
         ?? throw new BenchmarkNotFoundException("Benchmark judge attempt was not found.");
 
-    private static void EnsurePolicyHash(string policyHash)
+    private static void EnsurePolicyHash([NotNull] string? policyHash)
     {
         if (policyHash is not { Length: 64 } || !policyHash.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f')))
         {
