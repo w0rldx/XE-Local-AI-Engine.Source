@@ -465,7 +465,7 @@ public static class NodeMetrics
     ///     process-wide admission gate (0 or 1 — the gate is a serializer) and how many are WAITING behind it.
     ///     The gate singleton supplies the live count callbacks and holds the returned instruments for its lifetime.
     /// </summary>
-    public static (ObservableGauge<long> Active, ObservableGauge<long> Waiting) CreateGpuModelLoadAdmissionGauges(Func<long> observeActive,
+    public static GpuAdmissionGauges CreateGpuModelLoadAdmissionGauges(Func<long> observeActive,
         Func<long> observeWaiting)
     {
         ArgumentNullException.ThrowIfNull(observeActive);
@@ -478,6 +478,12 @@ public static class NodeMetrics
             observeWaiting,
             unit: "loads",
             description: "Number of GPU-backed model loads currently waiting for the admission gate.");
-        return (active, waiting);
+        return new GpuAdmissionGauges(active, waiting);
     }
 }
+
+/// <summary>
+///     The pair of observable gauges registered for the GPU model-load admission gate. The gate singleton holds them for
+///     its lifetime — an unreferenced <see cref="ObservableGauge{T}" /> stops being observed.
+/// </summary>
+public sealed record GpuAdmissionGauges(ObservableGauge<long> Active, ObservableGauge<long> Waiting);
