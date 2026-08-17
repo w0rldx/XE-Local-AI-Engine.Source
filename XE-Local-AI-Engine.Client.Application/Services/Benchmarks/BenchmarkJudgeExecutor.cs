@@ -120,7 +120,11 @@ public sealed class BenchmarkJudgeExecutor(
             }
 
             using var reservation = decision.Reservation;
-            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span, IsTruncated(work.Run.PrimaryStopReason));
+            // Truncation is read through the shared predicate, not a local copy: the judging still runs — a truncated
+            // answer is a real answer that scored badly, not an absent one — but both the payload and the system prompt
+            // say so, and ranking must exclude exactly the runs the judge was told about.
+            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span,
+                BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason));
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
@@ -203,14 +207,6 @@ public sealed class BenchmarkJudgeExecutor(
                 environment).ConfigureAwait(false);
         }
     }
-
-    /// <summary>
-    ///     Whether the primary generation was cut off by its budget. The judging still runs — a truncated answer is a
-    ///     real answer that scored badly, not an absent one — but both the payload and the system prompt say so, so the
-    ///     judge grades what was actually produced.
-    /// </summary>
-    private static bool IsTruncated(string? primaryStopReason) =>
-        string.Equals(primaryStopReason, BenchmarkPrimaryStopReasons.Length, StringComparison.OrdinalIgnoreCase);
 
     private RuntimePackage BuildJudgePackage(BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgePolicyV1 policy,

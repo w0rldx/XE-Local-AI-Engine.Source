@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -269,12 +270,27 @@ internal static class BenchmarkExportCsv
         return builder.ToString();
     }
 
-    /// <summary>Quoted only when it has to be, and an embedded quote is doubled.</summary>
+    /// <summary>
+    ///     A value whose first character makes a spreadsheet read the cell as a formula. Several columns here are
+    ///     operator-supplied (a model name, an HF repo id) or provider-verbatim (<c>stopReason</c>), so a row can carry
+    ///     <c>=HYPERLINK(...)</c> into a workbook that evaluates it.
+    /// </summary>
+    private static readonly SearchValues<char> FormulaLeadCharacters = SearchValues.Create("=+-@\t\r");
+
+    /// <summary>
+    ///     Quoted only when it has to be, an embedded quote is doubled, and a value that would be read as a formula is
+    ///     quoted with a leading apostrophe — the spreadsheet-standard text escape, which every reader strips back off.
+    /// </summary>
     internal static string Field(string? value)
     {
         if (value is null or { Length: 0 })
         {
             return string.Empty;
+        }
+
+        if (FormulaLeadCharacters.Contains(value[0]))
+        {
+            return $"\"'{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
         }
 
         return value.AsSpan().IndexOfAny(",\"\r\n") < 0 ? value : $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";

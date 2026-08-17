@@ -12,7 +12,16 @@ using System.Text.Json.Serialization;
 /// </summary>
 public static class BenchmarkJudgePolicyVersions
 {
-    public const int PromptVersion = 2;
+    /// <summary>
+    ///     3 since the length-neutrality sentence entered <c>BenchmarkJudgePromptV2.SystemPrompt</c>. The prompt TEXT
+    ///     is hashed nowhere, so this integer is the only thing that can separate two judgings across a wording change:
+    ///     without the bump, verdicts taken either side of it share a policy revision and a cohort generation and get
+    ///     dense-ranked against each other after having been asked different questions. A policy still carrying 2 is
+    ///     rejected by <see cref="BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported" />, which is the
+    ///     existing forced-re-judge path.
+    /// </summary>
+    public const int PromptVersion = 3;
+
     public const int OutputSchemaVersion = 2;
     public const int RubricVersion = 1;
 

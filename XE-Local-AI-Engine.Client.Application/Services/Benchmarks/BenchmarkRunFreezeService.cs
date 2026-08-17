@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IBenchmarkRunFreezeService
 {
@@ -52,8 +54,10 @@ public sealed class BenchmarkRunFreezeService(
     IBenchmarkRuntimeSnapshotFactory snapshots,
     IBenchmarkPhaseLaunchResolver launchResolver,
     TimeProvider timeProvider,
+    ILogger<BenchmarkRunFreezeService> logger,
     IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkRunFreezeService
 {
+    private readonly ILogger<BenchmarkRunFreezeService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
     private readonly IAgentDefinitionResolver _agentResolver = agentResolver ?? throw new ArgumentNullException(nameof(agentResolver));
@@ -111,7 +115,7 @@ public sealed class BenchmarkRunFreezeService(
         try
         {
             var trimmedPrimary = primaryModelName.Trim();
-            leases.Add(trimmedPrimary, await _installedModels.AcquireAsync(trimmedPrimary, cancellationToken).ConfigureAwait(false));
+            leases.Add(trimmedPrimary, await AcquireVerifiedAsync(trimmedPrimary, cancellationToken).ConfigureAwait(false));
             var primary = leases[trimmedPrimary].Snapshot;
             BenchmarkModelEligibility.Validate(primary, "primary");
 
@@ -177,35 +181,32 @@ public sealed class BenchmarkRunFreezeService(
             var isGroup = repeatCount > 1 || warmup;
             var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
 
-            // The work queue is FIFO by queue sequence, so inserting in this order is what makes the repeats run
-            // back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
-            // Each insert bumps the project version by exactly one, so the expected version for insert i is
-            // `expectedProjectVersion + i`: the CAS of the FIRST insert is the caller's, and every later one is this
-            // method's own predecessor. A conflict therefore still surfaces on the very first insert, before anything
-            // was created.
-            var runs = new List<BenchmarkRunRecord>(repeatCount + (warmup ? 1 : 0));
-            foreach (var repeatIndex in RepeatIndexes(repeatCount, warmup))
-            {
-                var command = new BenchmarkStartRunCommand(Guid.NewGuid(),
-                    project.Id,
-                    expectedProjectVersion + runs.Count,
-                    serializedSnapshot,
-                    primary.ModelName,
-                    primary.Origin,
-                    primary.ModelContentFingerprint,
-                    eligible.AgentName,
-                    eligible.AgentDefinitionVersion,
-                    project.ContextTokens,
-                    guard,
-                    primaryLaunch.Intent,
-                    repeatGroupId,
-                    isGroup ? repeatIndex : null,
-                    warmup && repeatIndex == 0,
-                    // Copied onto the run, not read from the project at execution: a run replays with the budget it was
-                    // started under, exactly like its context and its output budget.
-                    project.InvocationTimeoutSeconds);
-                runs.Add(await _benchmarkStore.StartRunAsync(command, cancellationToken).ConfigureAwait(false));
-            }
+            // The work queue is FIFO by queue sequence, so building the commands in this order is what makes the
+            // repeats run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is
+            // queued. The whole group goes in through ONE store call: a per-run insert, each chaining its
+            // compare-and-swap on its predecessor, let a concurrent writer land mid-group, so the caller got a
+            // conflict and no ids while the runs already inserted stayed queued and ran anyway.
+            var commands = RepeatIndexes(repeatCount, warmup)
+                           .Select(repeatIndex => new BenchmarkStartRunCommand(Guid.NewGuid(),
+                               project.Id,
+                               expectedProjectVersion,
+                               serializedSnapshot,
+                               primary.ModelName,
+                               primary.Origin,
+                               primary.ModelContentFingerprint,
+                               eligible.AgentName,
+                               eligible.AgentDefinitionVersion,
+                               project.ContextTokens,
+                               guard,
+                               primaryLaunch.Intent,
+                               repeatGroupId,
+                               isGroup ? repeatIndex : null,
+                               warmup && repeatIndex == 0,
+                               // Copied onto the run, not read from the project at execution: a run replays with the
+                               // budget it was started under, exactly like its context and its output budget.
+                               project.InvocationTimeoutSeconds))
+                           .ToArray();
+            var runs = await _benchmarkStore.StartRunsAsync(commands, expectedProjectVersion, cancellationToken).ConfigureAwait(false);
 
             _queueSignal?.Wake();
             return runs;
@@ -216,6 +217,27 @@ public sealed class BenchmarkRunFreezeService(
             {
                 await lease.DisposeAsync().ConfigureAwait(false);
             }
+        }
+    }
+
+    /// <summary>
+    ///     The verifying acquire, with the one failure the freeze path owns mapped to its declared 422. Verification
+    ///     moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry entry now
+    ///     lists happily and fails here — an unmapped <see cref="InstalledGgufSnapshotException" /> is in neither
+    ///     <c>BenchmarkExceptionFilter.IsHandled</c> nor the endpoints' <see cref="KeyNotFoundException" /> clause, so
+    ///     it escaped as a 500 and, in a batch, killed every cell after it instead of rejecting one. The store's own
+    ///     reason is logged, never returned.
+    /// </summary>
+    private async Task<IBenchmarkInstalledModelLease> AcquireVerifiedAsync(string modelName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InstalledGgufSnapshotException exception)
+        {
+            _logger.LogWarning(exception, "Benchmark freeze: installed model {ModelName} could not be verified.", modelName);
+            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.");
         }
     }
 

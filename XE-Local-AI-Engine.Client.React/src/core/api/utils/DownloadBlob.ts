@@ -9,16 +9,19 @@
 /** Triggers a browser download of `blob` under `fileName`. */
 export function saveBlob(blob: Blob, fileName: string): void {
 	const url = URL.createObjectURL(blob);
-	try {
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = fileName;
-		document.body.append(anchor);
-		anchor.click();
-		anchor.remove();
-	} finally {
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = fileName;
+	document.body.append(anchor);
+	anchor.click();
+	anchor.remove();
+	// Revoked on the NEXT tick rather than synchronously after `click()`: the click only QUEUES the download, and
+	// revoking in the same task can pull the object URL out from under a browser that has not taken the bytes yet —
+	// the download then silently does nothing, with no error anywhere. Chrome tolerates the synchronous revoke;
+	// Firefox and Safari are the ones this protects.
+	setTimeout(() => {
 		URL.revokeObjectURL(url);
-	}
+	}, 0);
 }
 
 /**

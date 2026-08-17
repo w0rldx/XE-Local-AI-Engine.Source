@@ -128,60 +128,107 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     public async Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default)
     {
-        ValidateStart(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(command.ProjectId, cancellationToken).ConfigureAwait(false);
-        EnsureVersion(project.Version, command.ExpectedProjectVersion);
-        if (command.FreezeCommitGuard is not null
-            && !await command.FreezeCommitGuard.IsCurrentAsync(cancellationToken).ConfigureAwait(false))
+        ArgumentNullException.ThrowIfNull(command);
+        return (await StartRunsAsync([command], command.ExpectedProjectVersion, cancellationToken).ConfigureAwait(false))[0];
+    }
+
+    public async Task<IReadOnlyList<BenchmarkRunRecord>> StartRunsAsync(IReadOnlyList<BenchmarkStartRunCommand> commands,
+        long expectedProjectVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        if (commands.Count == 0)
         {
-            throw new BenchmarkConflictException("FreezeDependencyChanged");
+            throw new ArgumentException("At least one run must be started.", nameof(commands));
+        }
+
+        var projectId = commands[0].ProjectId;
+        foreach (var command in commands)
+        {
+            ValidateStart(command);
+            if (command.ProjectId != projectId)
+            {
+                throw new ArgumentException("Every run of one insert must belong to the same project.", nameof(commands));
+            }
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+
+        // ONE compare-and-swap for the whole group, and one commit. A per-run CAS chained on its own predecessor let a
+        // concurrent writer land between run i and run i+1: the caller saw a VersionConflict and no ids while the runs
+        // already inserted stayed queued and ran. All-or-nothing is also what lets a batch caller advance its expected
+        // version by the returned count.
+        EnsureVersion(project.Version, expectedProjectVersion);
+
+        // Distinct by reference: a repeat group shares one guard instance, and re-running its dependency read once per
+        // repeat would be N identical round trips.
+        foreach (var guard in commands.Select(static command => command.FreezeCommitGuard).OfType<IBenchmarkFreezeCommitGuard>().Distinct())
+        {
+            if (!await guard.IsCurrentAsync(cancellationToken).ConfigureAwait(false))
+            {
+                throw new BenchmarkConflictException("FreezeDependencyChanged");
+            }
         }
 
         var now = Now();
-        var run = new BenchmarkRun
+        var runs = new List<BenchmarkRun>(commands.Count);
+        foreach (var command in commands)
         {
-            Id = command.RunId == Guid.Empty ? Guid.NewGuid() : command.RunId,
-            ProjectId = command.ProjectId,
-            RuntimeSnapshotJson = command.RuntimeSnapshotJson.ToArray(),
-            PrimaryModelName = command.PrimaryModelName.Trim(),
-            PrimaryModelOrigin = command.PrimaryModelOrigin,
-            ModelContentFingerprint = command.ModelContentFingerprint,
-            AgentName = command.AgentName.Trim(),
-            AgentVersion = command.AgentVersion,
-            RequestedContextTokens = command.RequestedContextTokens,
-            InvocationTimeoutSeconds = command.InvocationTimeoutSeconds,
-            PrimaryStatus = BenchmarkPrimaryStatus.Queued,
-            PrimaryVariant = command.PrimaryLaunchIntent?.Variant,
-            PrimaryKvCacheType = command.PrimaryLaunchIntent?.KvCacheType,
-            PrimaryKvCacheTypeSource = command.PrimaryLaunchIntent?.KvCacheTypeSource,
-            PrimaryKvAutoReason = command.PrimaryLaunchIntent?.KvAutoReason,
-            PrimaryFlashAttentionMode = command.PrimaryLaunchIntent?.FlashAttentionMode,
-            PrimaryIntendedLaunchIdentity = command.PrimaryLaunchIntent?.IntendedLaunchIdentity,
-            PrimaryIntendedExecutableSha256 = command.PrimaryLaunchIntent?.IntendedExecutableSha256,
-            RepeatGroupId = command.RepeatGroupId,
-            RepeatIndex = command.RepeatIndex,
-            IsWarmup = command.IsWarmup,
-            Version = 1,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now
-        };
-        var work = new BenchmarkWorkItem
-        {
-            RunId = run.Id,
-            Kind = BenchmarkWorkKind.Primary,
-            Status = BenchmarkWorkStatus.Queued,
-            Attempt = 1,
-            Version = 1,
-            EnqueuedAtUtc = now
-        };
-        project.Version++;
+            var run = new BenchmarkRun
+            {
+                Id = command.RunId == Guid.Empty ? Guid.NewGuid() : command.RunId,
+                ProjectId = command.ProjectId,
+                RuntimeSnapshotJson = command.RuntimeSnapshotJson.ToArray(),
+                PrimaryModelName = command.PrimaryModelName.Trim(),
+                PrimaryModelOrigin = command.PrimaryModelOrigin,
+                ModelContentFingerprint = command.ModelContentFingerprint,
+                AgentName = command.AgentName.Trim(),
+                AgentVersion = command.AgentVersion,
+                RequestedContextTokens = command.RequestedContextTokens,
+                InvocationTimeoutSeconds = command.InvocationTimeoutSeconds,
+                PrimaryStatus = BenchmarkPrimaryStatus.Queued,
+                PrimaryVariant = command.PrimaryLaunchIntent?.Variant,
+                PrimaryKvCacheType = command.PrimaryLaunchIntent?.KvCacheType,
+                PrimaryKvCacheTypeSource = command.PrimaryLaunchIntent?.KvCacheTypeSource,
+                PrimaryKvAutoReason = command.PrimaryLaunchIntent?.KvAutoReason,
+                PrimaryFlashAttentionMode = command.PrimaryLaunchIntent?.FlashAttentionMode,
+                PrimaryIntendedLaunchIdentity = command.PrimaryLaunchIntent?.IntendedLaunchIdentity,
+                PrimaryIntendedExecutableSha256 = command.PrimaryLaunchIntent?.IntendedExecutableSha256,
+                RepeatGroupId = command.RepeatGroupId,
+                RepeatIndex = command.RepeatIndex,
+                IsWarmup = command.IsWarmup,
+                Version = 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
+            };
+
+            // Added in caller order, and the queue sequence is assigned in insert order, which is what makes a repeat
+            // group run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
+            _dbContext.BenchmarkRuns.Add(run);
+            _dbContext.BenchmarkWorkItems.Add(new BenchmarkWorkItem
+            {
+                RunId = run.Id,
+                Kind = BenchmarkWorkKind.Primary,
+                Status = BenchmarkWorkStatus.Queued,
+                Attempt = 1,
+                Version = 1,
+                EnqueuedAtUtc = now
+            });
+            runs.Add(run);
+        }
+
+        project.Version += commands.Count;
         project.UpdatedAtUtc = now;
-        _dbContext.BenchmarkRuns.Add(run);
-        _dbContext.BenchmarkWorkItems.Add(work);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+        var records = new List<BenchmarkRunRecord>(runs.Count);
+        foreach (var run in runs)
+        {
+            records.Add(await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false));
+        }
+
+        return records;
     }
 
     public async Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
@@ -192,7 +239,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         var views = await LoadJudgeViewsAsync([runId], cancellationToken).ConfigureAwait(false);
-        var (judge, qualityScore, qualityScoreSource) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
+        var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
             entity.UserScore,
             entity.IsWarmup,
             entity.PrimaryStopReason);
@@ -234,7 +281,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // decided by a non-payload member of each block, since both blocks are always written whole.
         // A local, not `default` inline: EF rejects a ReadOnlyMemory<byte> constant in a client projection.
         var noPayload = default(ReadOnlyMemory<byte>);
+        // Newest first, but a repeat group ASCENDING by repeat index inside its millisecond: every run of a group is
+        // inserted by one freeze, so `Now()` is the same value for all of them and the Id tiebreak alone returned a
+        // group in Guid order — the table rendered `#3, #1, warm-up, #4, #2`. The client re-sorts by rank, and a
+        // group's unranked rows (the warm-up above all) tie there too, so this server order is what the reader sees.
+        // The Id tiebreak stays LAST and keeps paging deterministic.
         var items = await runs.OrderByDescending(entity => entity.CreatedAtUtc)
+                              .ThenBy(entity => entity.RepeatIndex)
                               .ThenByDescending(entity => entity.Id)
                               .Skip(skip)
                               .Take(take)
@@ -290,21 +343,26 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                   null,
 
                                   // Inline rather than through ToThroughput: this is a server-side projection, and a
-                                  // helper call would not translate. Absence is decided by all six columns being NULL,
-                                  // the same rule the entity-materializing path uses.
+                                  // helper call would not translate. Absence is decided by all SEVEN columns being
+                                  // NULL, and every one of them is projected — the same rule and the same members the
+                                  // entity-materializing ToThroughput uses. Omitting one here empties that column in
+                                  // the runs table, the CSV export and the repeat statistics, while a single-run read
+                                  // keeps showing it.
                                   entity.TtftMs == null
                                   && entity.PromptTokens == null
                                   && entity.PromptMs == null
                                   && entity.GenerationTokens == null
                                   && entity.GenerationMs == null
                                   && entity.CachedPromptTokens == null
+                                  && entity.SegmentCount == null
                                       ? null
                                       : new BenchmarkRunThroughput(entity.TtftMs,
                                           entity.PromptTokens,
                                           entity.PromptMs,
                                           entity.GenerationTokens,
                                           entity.GenerationMs,
-                                          entity.CachedPromptTokens),
+                                          entity.CachedPromptTokens,
+                                          entity.SegmentCount),
                                   entity.RepeatGroupId,
                                   entity.RepeatIndex,
                                   entity.IsWarmup))
@@ -1321,7 +1379,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
         var views = await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false);
-        var (judge, qualityScore, qualityScoreSource) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+        var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
             run.UserScore,
             run.IsWarmup,
             run.PrimaryStopReason);
@@ -1357,14 +1415,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var totalScored = 0;
         foreach (var run in scored)
         {
-            var (judge, qualityScore, source) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+            var (judge, qualityScore, source, rankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
                 run.UserScore,
                 run.IsWarmup,
                 run.PrimaryStopReason);
 
-            // A warm-up is not counted as scored either: a project's "n of m ranked" must not grow a denominator that
-            // can never be ranked.
-            if (!run.IsWarmup && (run.UserScore is not null || judge.Score is not null))
+            // The denominator counts only runs a score could ever rank: a project's "n of m ranked" must not carry a
+            // gap nothing the operator does can close. `rankable` is the exclusion method's OWN verdict rather than a
+            // second copy of the rule — a warm-up and a truncated run without an operator override are both
+            // permanently unrankable, and re-judging cannot un-truncate one.
+            if (rankable && (run.UserScore is not null || judge.Score is not null))
             {
                 totalScored++;
             }
@@ -1413,31 +1473,28 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///         never inferred from the status.
     ///     </para>
     /// </summary>
-    private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source) ApplyRunExclusions(BenchmarkRunJudgeView judge,
+    /// <param name="Rankable">
+    ///     Whether a score on this run could ever rank it. Returned rather than re-derived by the caller so the
+    ///     ranking's denominator cannot drift from the exclusions themselves.
+    /// </param>
+    private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(
+        BenchmarkRunJudgeView judge,
         int? userScore,
         bool isWarmup,
         string? primaryStopReason)
     {
-        var truncated = !isWarmup && userScore is null && IsTruncated(primaryStopReason);
+        var truncated = !isWarmup && userScore is null && BenchmarkPrimaryStopReasons.IsTruncated(primaryStopReason);
         if (!isWarmup && !truncated)
         {
             var (score, source) = ComputeQuality(userScore, judge);
-            return (judge, score, source);
+            return (judge, score, source, true);
         }
 
         return (judge with
         {
             RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : BenchmarkRunJudgeStates.ReasonTruncated
-        }, null, BenchmarkQualityScoreSources.None);
+        }, null, BenchmarkQualityScoreSources.None, false);
     }
-
-    /// <summary>
-    ///     Whether the primary generation stopped because it ran out of budget. <c>length</c> is the OpenAI-compatible
-    ///     token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the context window full
-    ///     (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
-    /// </summary>
-    private static bool IsTruncated(string? primaryStopReason) =>
-        string.Equals(primaryStopReason, BenchmarkPrimaryStopReasons.Length, StringComparison.OrdinalIgnoreCase);
 
     private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>
         ranking.Runs.TryGetValue(run.Id, out var entry)

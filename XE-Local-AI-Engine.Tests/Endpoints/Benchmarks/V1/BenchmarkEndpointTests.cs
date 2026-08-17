@@ -421,6 +421,31 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task StartRun_WhenTheModelCannotBeVerifiedAtFreeze_IsUnprocessableRatherThanAFailure()
+    {
+        // Verification moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry
+        // entry now lists happily and fails only here. The freeze service maps that store failure to an eligibility
+        // refusal, which is the 422 this route declares; unmapped it escaped as a 500, and inside a batch it killed
+        // every cell after it instead of rejecting one.
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, null, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ =>
+                   throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry."));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.IneligibleModel,
+            "The selected model could not be verified against its installed registry entry.");
+    }
+
+    [Test]
     public async Task GetRun_ExposesTheIntendedAndEffectiveLaunchFieldsAndTheDecodedReceipt()
     {
         await using var context = CreateContext();

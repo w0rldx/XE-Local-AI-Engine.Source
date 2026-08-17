@@ -28,7 +28,32 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Starts ONE run. Shorthand for a single-item <see cref="StartRunsAsync" /> against the command's own
+    ///     <see cref="BenchmarkStartRunCommand.ExpectedProjectVersion" />.
+    /// </summary>
     Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Starts a whole group of runs ATOMICALLY: one transaction, one compare-and-swap against
+    ///     <paramref name="expectedProjectVersion" />, one <c>project.Version += commands.Count</c>, and the runs plus
+    ///     their primary work items inserted in the given order (which is the FIFO order they will execute in).
+    ///     <para>
+    ///         All-or-nothing is the point. Inserting a repeat group one run per transaction, each chaining its CAS on
+    ///         its predecessor, let a concurrent writer land mid-group: the caller got a conflict and no ids while the
+    ///         runs already inserted stayed queued and consumed the exclusive runtime. It also left a batch caller
+    ///         unable to chain — the project version had moved by a number it was never told.
+    ///     </para>
+    ///     <para>
+    ///         Every command must name the same project. A <see cref="BenchmarkStartRunCommand.FreezeCommitGuard" /> is
+    ///         evaluated once per distinct guard instance, inside the same transaction.
+    ///     </para>
+    /// </summary>
+    /// <returns>The created runs, in the order they were given.</returns>
+    Task<IReadOnlyList<BenchmarkRunRecord>> StartRunsAsync(IReadOnlyList<BenchmarkStartRunCommand> commands,
+        long expectedProjectVersion,
+        CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -552,6 +577,20 @@ public static class BenchmarkPrimaryStopReasons
 
     /// <summary>The node cancelled the run at its invocation timeout before the model stopped on its own.</summary>
     public const string Timeout = "timeout";
+
+    /// <summary>
+    ///     Whether the primary generation stopped because it ran out of budget. <see cref="Length" /> is the
+    ///     OpenAI-compatible token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the
+    ///     context window full (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
+    ///     <para>
+    ///         One implementation on purpose. Ranking (<c>BenchmarkStore.ApplyRunExclusions</c>) and judging
+    ///         (<c>BenchmarkJudgeExecutor</c>) live in different assemblies and used to hold byte-identical private
+    ///         copies; a second truncation token added to only one of them would make ranking exclude a run the judge
+    ///         was never told was cut off.
+    ///     </para>
+    /// </summary>
+    public static bool IsTruncated(string? primaryStopReason) =>
+        string.Equals(primaryStopReason, Length, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>
