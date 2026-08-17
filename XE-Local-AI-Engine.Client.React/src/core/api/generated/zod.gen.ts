@@ -4056,6 +4056,12 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResp
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	referenceExecutionKey: z.string().nullish(),
+	promptVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	promptVersionOutdated: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = z.object({

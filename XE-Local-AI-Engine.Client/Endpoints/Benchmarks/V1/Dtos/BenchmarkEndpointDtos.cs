@@ -307,6 +307,16 @@ public sealed class BenchmarkJudgePolicyResponse
     public string? ReferenceAnswer { get; init; }
     public int? CohortGeneration { get; init; }
     public string? ReferenceExecutionKey { get; init; }
+
+    /// <summary>The judge prompt version this revision was stored under.</summary>
+    public int? PromptVersion { get; init; }
+
+    /// <summary>
+    ///     True when <see cref="PromptVersion" /> is not the one this build judges under. The revision still READS —
+    ///     the project opens, the export works, existing scores stay ranked — but no NEW judging will run against it
+    ///     until the operator re-saves the judge, which mints a revision under the current version and re-judges.
+    /// </summary>
+    public bool PromptVersionOutdated { get; init; }
 }
 
 /// <summary>The result of a judge change: the updated project plus the runs a judging was queued for.</summary>

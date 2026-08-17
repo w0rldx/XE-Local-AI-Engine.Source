@@ -274,7 +274,9 @@ internal static class BenchmarkEndpointMapper
                 Rubric = policy.Rubric.ToDto(),
                 ReferenceAnswer = policy.ReferenceAnswer,
                 CohortGeneration = revision.CohortGeneration,
-                ReferenceExecutionKey = revision.ReferenceExecutionKey
+                ReferenceExecutionKey = revision.ReferenceExecutionKey,
+                PromptVersion = policy.PromptVersion,
+                PromptVersionOutdated = policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion
             };
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)

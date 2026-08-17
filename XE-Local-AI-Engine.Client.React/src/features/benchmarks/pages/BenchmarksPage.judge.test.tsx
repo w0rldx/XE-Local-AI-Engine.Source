@@ -154,6 +154,36 @@ describe("BenchmarksPage judge changes", () => {
 		expect(screen.queryByTestId("benchmark-rejudge-confirm-accept")).toBeNull();
 	});
 
+	// A revision stored under an older prompt version still reads — the project must stay open — but the page has to
+	// say so and hand the operator the one control that heals it.
+	it("warns about an outdated judge prompt version and opens the judge editor", async () => {
+		baseRoutes();
+		server.use(
+			jsonRoute("get", `benchmarks/projects/${projectId}`, {
+				...projectDetail,
+				judge: { ...projectDetail.judge, promptVersion: 2, promptVersionOutdated: true },
+			}),
+		);
+
+		renderWithProviders(<BenchmarksPage />);
+
+		const banner = await screen.findByTestId("benchmark-judge-prompt-outdated");
+		expect(banner.textContent).toContain("Judge prompt version outdated");
+
+		fireEvent.click(screen.getByTestId("benchmark-judge-prompt-outdated-edit"));
+
+		expect(await screen.findByRole("button", { name: "Save judge" })).toBeTruthy();
+	});
+
+	it("does not warn when the stored judge prompt version is current", async () => {
+		baseRoutes();
+
+		renderWithProviders(<BenchmarksPage />);
+
+		await screen.findByRole("button", { name: "Edit judge" });
+		expect(screen.queryByTestId("benchmark-judge-prompt-outdated")).toBeNull();
+	});
+
 	it("re-judges the whole project once the operator confirms", async () => {
 		let observedBody: unknown;
 		baseRoutes();

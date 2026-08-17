@@ -178,6 +178,37 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     [Test]
+    public async Task Execute_ForARevisionStoredUnderAnOlderPromptVersion_RefusesAndNamesTheFix()
+    {
+        // Fail CLOSED. Reads are deliberately tolerant so the project stays open and re-savable, but judging under the
+        // current prompt while the revision promises an older one would file the verdict in the same cohort as
+        // verdicts taken under the old wording — exactly what the version exists to prevent.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion - 1);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
+            Substitute.For<IWorkerEventDispatcher>(), runner);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        AssertEx.Equal(BenchmarkJudgeExecutor.OutdatedPolicyVersionMessage, AssertEx.NotNull(failureMessage));
+        AssertEx.Contains(failureMessage!, "Re-save the judge", StringComparison.Ordinal);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+    }
+
+    [Test]
     public async Task Execute_WhenCapacityRejects_FailsOnlyJudgeWithoutDispatcherOrGeneration()
     {
         var installed = Installed();
@@ -386,10 +417,10 @@ public sealed class BenchmarkJudgeExecutorTests
     ///     Wires the reads the executor makes before it spawns: the attempt it was handed and the policy revision that
     ///     attempt was enqueued under. Both carry the payloads the executor deserializes.
     /// </summary>
-    private static void StubJudgeAttempt(IBenchmarkStore store, InstalledModelSnapshot installed, string? kvCacheType = null)
+    private static void StubJudgeAttempt(IBenchmarkStore store, InstalledModelSnapshot installed, string? kvCacheType = null, int? promptVersion = null)
     {
         store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType));
-        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision());
+        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion));
     }
 
     private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed, string? kvCacheType = null) =>
@@ -415,13 +446,13 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, "cpu-variant",
                 LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null));
 
-    private static BenchmarkJudgePolicyRevisionRecord Revision() =>
-        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy()), PolicyHash, null, 1, 1);
+    private static BenchmarkJudgePolicyRevisionRecord Revision(int? promptVersion = null) =>
+        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion)), PolicyHash, null, 1, 1);
 
-    private static BenchmarkJudgePolicyV1 Policy() =>
+    private static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null) =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", V1('c'), [new string('b', 64)]),
             4096,
-            BenchmarkJudgePolicyVersions.PromptVersion,
+            promptVersion ?? BenchmarkJudgePolicyVersions.PromptVersion,
             BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
             new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,

@@ -27704,6 +27704,14 @@
           "referenceExecutionKey": {
             "type": "string",
             "nullable": true
+          },
+          "promptVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "promptVersionOutdated": {
+            "type": "boolean"
           }
         }
       },

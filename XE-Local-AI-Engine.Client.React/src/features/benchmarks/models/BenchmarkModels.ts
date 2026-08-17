@@ -93,6 +93,11 @@ export interface BenchmarkJudgePolicy {
 	referenceAnswer: string | null;
 	cohortGeneration: number | null;
 	referenceExecutionKey: string | null;
+	/**
+	 * True when the stored revision carries a judge prompt version this build no longer judges under. The project
+	 * still reads and existing scores stay ranked; new judgings refuse until the operator re-saves the judge.
+	 */
+	promptVersionOutdated: boolean;
 }
 
 export interface BenchmarkProjectSummary {

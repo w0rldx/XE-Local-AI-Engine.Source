@@ -4078,6 +4078,7 @@
 				"criterionScore": "{{score}} / 10",
 				"outputLength": "· {{tokens}} output tokens",
 				"familyWarning": "Judge model family '{{family}}' matches {{matches}} primary run(s); self-preference bias possible.",
+				"promptVersionOutdated": "Judge prompt version outdated — re-save the judge to upgrade (forces re-judge).",
 				"explanations": {
 					"none": "This run has not been judged under the current judge policy.",
 					"queued": "The judge is waiting in the durable queue.",

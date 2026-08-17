@@ -3429,6 +3429,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyRespon
 	referenceAnswer?: string | null;
 	cohortGeneration?: number | null;
 	referenceExecutionKey?: string | null;
+	promptVersion?: number | null;
+	promptVersionOutdated?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto = {

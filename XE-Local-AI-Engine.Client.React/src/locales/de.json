@@ -4078,6 +4078,7 @@
 				"criterionScore": "{{score}} / 10",
 				"outputLength": "· {{tokens}} Ausgabetoken",
 				"familyWarning": "Die Modellfamilie '{{family}}' der Bewertung entspricht {{matches}} Primärlauf/-läufen; Selbstbevorzugung ist möglich.",
+				"promptVersionOutdated": "Bewerter-Prompt-Version veraltet — Bewerter erneut speichern, um zu aktualisieren (erzwingt Neubewertung).",
 				"explanations": {
 					"none": "Dieser Lauf wurde unter der aktuellen Bewertungsrichtlinie noch nicht bewertet.",
 					"queued": "Die Bewertung wartet in der dauerhaften Warteschlange.",

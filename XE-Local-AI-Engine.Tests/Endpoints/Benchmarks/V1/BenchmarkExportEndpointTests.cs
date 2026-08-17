@@ -205,6 +205,37 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Contains(row, ",\"'@stop\",");
     }
 
+    [Test]
+    public async Task ExportJson_WithAJudgePolicyStoredUnderAnOlderPromptVersion_StillExports()
+    {
+        // Same read path as the project detail (BenchmarkJudgePolicyProjection). A version constant moving must not
+        // take the export down with it — the export is how an operator rescues a project's numbers.
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context, Run());
+        var policy = new BenchmarkJudgePolicyV1(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('a', 64), ["aaa"]),
+            4096,
+            BenchmarkJudgePolicyVersions.PromptVersion - 1,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            BenchmarkJudgeRubricDefaults.Default(),
+            ReferenceAnswer: null);
+        context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 2,
+                   BenchmarkJudgeSerialization.SerializePolicy(policy), new string('h', 64), "cohort-key", 3, 10));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var judge = document.RootElement.GetProperty("project").GetProperty("judge");
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.PromptVersion - 1, judge.GetProperty("promptVersion").GetInt32());
+        AssertEx.True(judge.GetProperty("promptVersionOutdated").GetBoolean());
+    }
+
     private static void ArrangeProject(Context context) =>
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
 
