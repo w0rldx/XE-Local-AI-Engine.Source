@@ -19,7 +19,8 @@ internal static class BenchmarkEndpointMapper
                     request.Rubric.ToRubric(),
                     request.ReferenceAnswer)
                 : null,
-            request.MaxOutputTokens);
+            request.MaxOutputTokens,
+            request.InvocationTimeoutSeconds);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -28,6 +29,7 @@ internal static class BenchmarkEndpointMapper
             Name = project.Name,
             ContextTokens = project.ContextTokens,
             MaxOutputTokens = project.MaxOutputTokens,
+            InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
             RunCount = runCount,
@@ -49,6 +51,7 @@ internal static class BenchmarkEndpointMapper
                        ?? throw new BenchmarkValidationException("The benchmark task is required."),
             ContextTokens = project.ContextTokens,
             MaxOutputTokens = project.MaxOutputTokens,
+            InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
             Judge = judge ?? new BenchmarkJudgePolicyResponse

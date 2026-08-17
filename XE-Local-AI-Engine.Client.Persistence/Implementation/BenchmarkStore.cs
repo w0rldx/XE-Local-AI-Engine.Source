@@ -26,6 +26,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             CoreTaskJson = input.CoreTaskJson.ToArray(),
             ContextTokens = input.ContextTokens,
             MaxOutputTokens = input.MaxOutputTokens,
+            InvocationTimeoutSeconds = input.InvocationTimeoutSeconds,
             AgentDefinitionId = input.AgentDefinitionId,
             Version = 1,
             CreatedAtUtc = now,
@@ -89,6 +90,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
         project.MaxOutputTokens = input.MaxOutputTokens;
+        project.InvocationTimeoutSeconds = input.InvocationTimeoutSeconds;
         project.AgentDefinitionId = input.AgentDefinitionId;
         project.Version++;
         project.UpdatedAtUtc = now;
@@ -148,6 +150,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             AgentName = command.AgentName.Trim(),
             AgentVersion = command.AgentVersion,
             RequestedContextTokens = command.RequestedContextTokens,
+            InvocationTimeoutSeconds = command.InvocationTimeoutSeconds,
             PrimaryStatus = BenchmarkPrimaryStatus.Queued,
             PrimaryVariant = command.PrimaryLaunchIntent?.Variant,
             PrimaryKvCacheType = command.PrimaryLaunchIntent?.KvCacheType,
@@ -189,8 +192,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         var views = await LoadJudgeViewsAsync([runId], cancellationToken).ConfigureAwait(false);
-        var judge = JudgeViewFor(views, runId, entity.UserScore);
-        var (qualityScore, qualityScoreSource) = ComputeQuality(entity.UserScore, judge);
+        var (judge, qualityScore, qualityScoreSource) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
+            entity.UserScore,
+            entity.IsWarmup,
+            entity.PrimaryStopReason);
         return ToRecord(entity) with
         {
             Judge = judge,
@@ -480,23 +485,28 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
-        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage, lastStreamSequence: 0, cancellationToken);
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage,
+            lastStreamSequence: 0, primaryStopReason: null, cancellationToken);
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
         long lastStreamSequence,
+        string? primaryStopReason = null,
         CancellationToken cancellationToken = default) =>
-        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage, lastStreamSequence, cancellationToken);
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage,
+            lastStreamSequence, primaryStopReason, cancellationToken);
 
     public Task<BenchmarkRunRecord> MarkPrimaryCancelledAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default) =>
-        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty, lastStreamSequence: 0, cancellationToken);
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty,
+            lastStreamSequence: 0, primaryStopReason: null, cancellationToken);
 
     public Task<BenchmarkRunRecord> MarkPrimaryCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
         CancellationToken cancellationToken = default) =>
-        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty, lastStreamSequence, cancellationToken);
+        TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Cancelled, BenchmarkWorkStatus.Cancelled, string.Empty,
+            lastStreamSequence, primaryStopReason: null, cancellationToken);
 
     public async Task<BenchmarkRunRecord> MarkJudgeSucceededAsync(BenchmarkJudgeSuccessCommand command, CancellationToken cancellationToken = default)
     {
@@ -1109,6 +1119,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         BenchmarkWorkStatus workStatus,
         string errorMessage,
         long lastStreamSequence,
+        string? primaryStopReason,
         CancellationToken cancellationToken)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -1136,6 +1147,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             : workStatus;
         run.PrimaryStatus = reconciledStatus;
         run.PrimaryErrorMessage = reconciledStatus == BenchmarkPrimaryStatus.Cancelled ? null : Sanitize(errorMessage);
+
+        // Only ever written, never cleared: a caller that cannot explain the failure leaves whatever the run already
+        // knew about how generation stopped.
+        if (primaryStopReason is { Length: > 0 } && reconciledStatus != BenchmarkPrimaryStatus.Cancelled)
+        {
+            run.PrimaryStopReason = primaryStopReason;
+        }
+
         UpdateLastStreamSequence(run, lastStreamSequence);
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
@@ -1302,8 +1321,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
         var views = await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false);
-        var judge = JudgeViewFor(views, run.Id, run.UserScore);
-        var (qualityScore, qualityScoreSource) = ComputeQuality(run.UserScore, judge);
+        var (judge, qualityScore, qualityScoreSource) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+            run.UserScore,
+            run.IsWarmup,
+            run.PrimaryStopReason);
         return ToRecord(run) with
         {
             Judge = judge,
@@ -1336,27 +1357,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var totalScored = 0;
         foreach (var run in scored)
         {
-            // Two unconditional exclusions, outermost first.
-            // A WARM-UP outranks even the operator override: it exists to absorb the first-launch cost the runs after
-            // it should not pay, so ranking it against them would rank the very thing it controls for. It is also not
-            // counted as scored — a project's "n of m ranked" must not grow a denominator that can never be ranked.
-            // TRUNCATION is decided before the judge-derived reasons and AFTER the operator override: a run cut off at
-            // the token budget is a real measurement of an INCOMPLETE answer, so its judge score stays visible but
-            // never ranks — while an operator who scored it anyway still wins. Read off the persisted stop reason,
-            // never inferred from the status.
-            var truncated = !run.IsWarmup && IsTruncated(run.PrimaryStopReason) && run.UserScore is null;
-            var judge = JudgeViewFor(views, run.Id, run.UserScore);
-            if (run.IsWarmup || truncated)
-            {
-                judge = judge with
-                {
-                    RankExclusionReason = run.IsWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : BenchmarkRunJudgeStates.ReasonTruncated
-                };
-            }
+            var (judge, qualityScore, source) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+                run.UserScore,
+                run.IsWarmup,
+                run.PrimaryStopReason);
 
-            var (qualityScore, source) = run.IsWarmup || truncated
-                ? ((int?)null, BenchmarkQualityScoreSources.None)
-                : ComputeQuality(run.UserScore, judge);
+            // A warm-up is not counted as scored either: a project's "n of m ranked" must not grow a denominator that
+            // can never be ranked.
             if (!run.IsWarmup && (run.UserScore is not null || judge.Score is not null))
             {
                 totalScored++;
@@ -1390,6 +1397,38 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 current?.CohortGeneration,
                 runs.Values.Count(static entry => entry.Rank is not null),
                 totalScored));
+    }
+
+    /// <summary>
+    ///     The two RUN-level exclusions — the ones that come from the run itself rather than from its judging — plus the
+    ///     resulting quality score. Every path that hands back a run record routes through here, which is the whole
+    ///     point: when only the ranking applied them, the single-run read and every write-returning path reported the
+    ///     judge-derived <c>no-score</c> on a truncated run whose only problem was truncation.
+    ///     <para>
+    ///         Outermost first. A WARM-UP outranks even the operator override: it exists to absorb the first-launch
+    ///         cost the runs after it should not pay, so ranking it against them would rank the very thing it controls
+    ///         for. TRUNCATION comes next — before every judge-derived reason, after the operator override: a run cut
+    ///         off at the token budget is a real measurement of an INCOMPLETE answer, so its judge score stays visible
+    ///         but never ranks, while an operator who scored it anyway still wins. Read off the persisted stop reason,
+    ///         never inferred from the status.
+    ///     </para>
+    /// </summary>
+    private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source) ApplyRunExclusions(BenchmarkRunJudgeView judge,
+        int? userScore,
+        bool isWarmup,
+        string? primaryStopReason)
+    {
+        var truncated = !isWarmup && userScore is null && IsTruncated(primaryStopReason);
+        if (!isWarmup && !truncated)
+        {
+            var (score, source) = ComputeQuality(userScore, judge);
+            return (judge, score, source);
+        }
+
+        return (judge with
+        {
+            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : BenchmarkRunJudgeStates.ReasonTruncated
+        }, null, BenchmarkQualityScoreSources.None);
     }
 
     /// <summary>
@@ -1850,7 +1889,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens);
+            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds);
 
     // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
@@ -1893,7 +1932,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             Throughput: ToThroughput(entity),
             RepeatGroupId: entity.RepeatGroupId,
             RepeatIndex: entity.RepeatIndex,
-            IsWarmup: entity.IsWarmup);
+            IsWarmup: entity.IsWarmup,
+            InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

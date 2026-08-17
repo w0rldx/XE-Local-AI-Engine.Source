@@ -19,6 +19,13 @@ internal sealed record class BenchmarkRun
     public string AgentName { get; set; } = string.Empty;
     public long AgentVersion { get; set; }
     public int RequestedContextTokens { get; set; }
+
+    /// <summary>
+    ///     The generation timeout frozen onto this run from the project, or <see langword="null" /> for the frozen
+    ///     default. Copied at freeze rather than read from the project at execution so a run replays with the budget it
+    ///     was started under, exactly like <see cref="RequestedContextTokens" />.
+    /// </summary>
+    public int? InvocationTimeoutSeconds { get; set; }
     public BenchmarkPrimaryStatus PrimaryStatus { get; set; }
     public int? EffectiveContextTokens { get; set; }
     public long? DurationMs { get; set; }

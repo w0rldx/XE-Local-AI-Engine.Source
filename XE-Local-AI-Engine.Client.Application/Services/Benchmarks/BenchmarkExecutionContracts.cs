@@ -512,7 +512,8 @@ public sealed record BenchmarkProjectDraft(
     int ContextTokens,
     Guid AgentDefinitionId,
     BenchmarkJudgePolicyDraft? Judge = null,
-    int? MaxOutputTokens = null);
+    int? MaxOutputTokens = null,
+    int? InvocationTimeoutSeconds = null);
 
 public sealed class BenchmarkQueueOptions
 {

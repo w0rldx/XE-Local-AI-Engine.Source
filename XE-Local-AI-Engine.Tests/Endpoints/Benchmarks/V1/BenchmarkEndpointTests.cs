@@ -511,10 +511,11 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
-    public async Task GetProject_ExposesTheOutputBudgetAndTheMutationCarriesItToTheDraft()
+    public async Task GetProject_ExposesTheRunBudgetsAndTheMutationCarriesThemToTheDraft()
     {
         await using var context = CreateContext();
-        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, maxOutputTokens: 2048));
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(Project(isFrozen: false, maxOutputTokens: 2048, invocationTimeoutSeconds: 1800));
         BenchmarkProjectDraft? draft = null;
         context.Projects.CreateAsync(Arg.Do<BenchmarkProjectDraft>(value => draft = value), Arg.Any<CancellationToken>())
                .Returns(Project(isFrozen: false, maxOutputTokens: 1024));
@@ -523,13 +524,16 @@ public sealed class BenchmarkEndpointTests
         using var getRequest = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
         using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
         var getBody = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
-        using var createRequest = Authorized(context.Factory, HttpMethod.Post, Api + "/projects", ProjectMutation(maxOutputTokens: 1024));
+        using var createRequest = Authorized(context.Factory, HttpMethod.Post, Api + "/projects",
+            ProjectMutation(maxOutputTokens: 1024, invocationTimeoutSeconds: 1200));
         using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         using var document = JsonDocument.Parse(getBody);
         AssertEx.Equal<int?>(2048, document.RootElement.GetProperty("maxOutputTokens").GetInt32());
+        AssertEx.Equal<int?>(1800, document.RootElement.GetProperty("invocationTimeoutSeconds").GetInt32());
         AssertEx.Equal<int?>(1024, AssertEx.NotNull(draft).MaxOutputTokens, "The request's budget must reach the service draft.");
+        AssertEx.Equal<int?>(1200, draft!.InvocationTimeoutSeconds, "The request's generation timeout must reach the service draft.");
     }
 
     [Test]
@@ -636,13 +640,14 @@ public sealed class BenchmarkEndpointTests
     private static readonly Guid RunId = Guid.Parse("20000000-0000-0000-0000-000000000002");
     private static readonly Guid AgentId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
-    private static object ProjectMutation(long? expectedVersion = null, int? maxOutputTokens = null) =>
+    private static object ProjectMutation(long? expectedVersion = null, int? maxOutputTokens = null, int? invocationTimeoutSeconds = null) =>
         new
         {
             name = "Project",
             coreTask = "Answer exactly.",
             contextTokens = 4096,
             maxOutputTokens,
+            invocationTimeoutSeconds,
             agentDefinitionId = AgentId,
             judgeEnabled = false,
             judgePromptVersion = 1,
@@ -650,9 +655,9 @@ public sealed class BenchmarkEndpointTests
             expectedVersion
         };
 
-    private static BenchmarkProjectRecord Project(bool isFrozen, int? maxOutputTokens = null) =>
+    private static BenchmarkProjectRecord Project(bool isFrozen, int? maxOutputTokens = null, int? invocationTimeoutSeconds = null) =>
         new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens);
+            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens, invocationTimeoutSeconds);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
         string judgeState = BenchmarkRunJudgeStates.None,

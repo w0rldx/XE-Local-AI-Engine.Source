@@ -3408,6 +3408,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResp
 	coreTask: string;
 	contextTokens?: number;
 	maxOutputTokens?: number | null;
+	invocationTimeoutSeconds?: number | null;
 	agent?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse | null;
 	judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
 };
@@ -3555,6 +3556,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryRes
 	name: string;
 	contextTokens?: number;
 	maxOutputTokens?: number | null;
+	invocationTimeoutSeconds?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
 	runCount?: number;
@@ -3575,6 +3577,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRe
 	coreTask?: string;
 	contextTokens?: number;
 	maxOutputTokens?: number | null;
+	invocationTimeoutSeconds?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
 	judgeModelName?: string | null;

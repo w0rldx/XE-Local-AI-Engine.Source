@@ -3999,7 +3999,9 @@
 				"rejudgeConfirmAll": "Alle {{count}} erfolgreichen Läufe werden mit der aktuellen Richtlinie neu bewertet, und die gewertete Kohorte wechselt auf die aktuelle Bewertungslaufzeit.",
 				"rejudgeConfirmAccept": "Neu bewerten",
 				"maxOutputTokens": "Maximale Ausgabe-Tokens",
-				"maxOutputTokensHint": "Leer lassen = nur durch den Kontext begrenzt. Muss kleiner als der angeforderte Kontext sein."
+				"maxOutputTokensHint": "Leer lassen = nur durch den Kontext begrenzt. Muss kleiner als der angeforderte Kontext sein.",
+				"invocationTimeout": "Zeitlimit der Generierung (s)",
+				"invocationTimeoutHint": "Sekunden; Standard 900. Erhöhen Sie den Wert für lange Reasoning-Läufe — ein von der Uhr abgebrochener Lauf misst die Testumgebung, nicht das Modell."
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4094,7 +4096,8 @@
 				"judgeModel": "Wählen Sie ein Bewertungsmodell.",
 				"judgeContext": "Der Kontext der Bewertung muss positiv sein.",
 				"referenceAnswer": "Die Musterantwort ist zu lang.",
-				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen."
+				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen.",
+				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",

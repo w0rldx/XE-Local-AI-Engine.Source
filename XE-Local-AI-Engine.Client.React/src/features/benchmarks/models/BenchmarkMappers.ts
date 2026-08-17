@@ -47,6 +47,7 @@ export function toBenchmarkProjectSummary(value: ProjectSummaryResponse): Benchm
 		name: value.name,
 		contextTokens: numberValue(value.contextTokens),
 		maxOutputTokens: value.maxOutputTokens ?? null,
+		invocationTimeoutSeconds: value.invocationTimeoutSeconds ?? null,
 		agentDefinitionId: value.agentDefinitionId ?? "",
 		judgeEnabled: value.judgeEnabled === true,
 		runCount: numberValue(value.runCount),

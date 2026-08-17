@@ -129,16 +129,33 @@ public static class BenchmarkFrozenPolicies
     public static BenchmarkSamplingSnapshotV1 DeterministicSampling(int? maxOutputTokens = null) =>
         new(0, null, null, null, maxOutputTokens, null, null, null, null, [], FixedSeedPolicy, "0");
 
+    /// <summary>The generation budget a run gets when its project does not pin one. See <see cref="FrozenTimeouts" />.</summary>
+    public const int DefaultInvocationTimeoutSeconds = 900;
+
+    /// <summary>The bounds an operator-chosen generation budget must sit inside.</summary>
+    public const int MinInvocationTimeoutSeconds = 60;
+
+    public const int MaxInvocationTimeoutSeconds = 7200;
+
     /// <summary>
-    /// The timeout policy every V1 snapshot was executed with, pinned here because the node-level
-    /// <see cref="TimeoutSettings.InvocationTimeoutSeconds"/> default has since moved. A frozen run therefore replays
-    /// identically across app versions instead of silently inheriting whatever the package builder defaults to.
-    /// follow-up: fold timeouts into a versioned snapshot so a future change is visible in the configuration hash.
+    ///     The timeout policy a benchmark generation runs under, pinned here because the node-level
+    ///     <see cref="TimeoutSettings.InvocationTimeoutSeconds" /> default has since moved. A frozen run therefore
+    ///     replays identically across app versions instead of silently inheriting whatever the package builder
+    ///     defaults to. Only the invocation budget is operator-tunable: the tool-call and stream-idle budgets stay
+    ///     pinned because they bound a STALL, not the length of a legitimate answer.
+    ///     <para>
+    ///         <paramref name="invocationTimeoutSeconds" /> is the run's frozen copy of its project's setting. The
+    ///         default moved 300 → 900 deliberately: at 300 a 27B reasoning model was cancelled mid-answer at 307 s
+    ///         before it could finish or hit the context ceiling, so the timeout was measuring the harness rather than
+    ///         the model. A longer budget cannot change what an already-completed run produced — only how many runs get
+    ///         to complete at all.
+    ///     </para>
+    ///     follow-up: fold timeouts into a versioned snapshot so a future change is visible in the configuration hash.
     /// </summary>
-    public static TimeoutSettings FrozenTimeouts() =>
+    public static TimeoutSettings FrozenTimeouts(int? invocationTimeoutSeconds = null) =>
         new()
         {
-            InvocationTimeoutSeconds = 300,
+            InvocationTimeoutSeconds = invocationTimeoutSeconds ?? DefaultInvocationTimeoutSeconds,
             ToolCallTimeoutSeconds = 30,
             StreamIdleTimeoutSeconds = 60
         };

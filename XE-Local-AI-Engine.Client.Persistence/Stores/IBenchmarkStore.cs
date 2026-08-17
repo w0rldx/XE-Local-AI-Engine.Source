@@ -53,10 +53,16 @@ public interface IBenchmarkStore
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default);
 
+    /// <param name="primaryStopReason">
+    ///     Why generation stopped, when the failure itself says so — <c>timeout</c> for a run the node cancelled at its
+    ///     invocation budget. Null leaves the column untouched, so a failure that cannot explain itself records nothing
+    ///     rather than guessing.
+    /// </param>
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
         long lastStreamSequence,
+        string? primaryStopReason = null,
         CancellationToken cancellationToken = default) =>
         MarkPrimaryFailedAsync(runId, expectedRunVersion, errorMessage, cancellationToken);
 
@@ -225,7 +231,8 @@ public sealed record BenchmarkProjectInput(
     ReadOnlyMemory<byte> CoreTaskJson,
     int ContextTokens,
     Guid AgentDefinitionId,
-    int? MaxOutputTokens = null);
+    int? MaxOutputTokens = null,
+    int? InvocationTimeoutSeconds = null);
 
 /// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
@@ -252,7 +259,8 @@ public sealed record BenchmarkStartRunCommand(
     BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
     Guid? RepeatGroupId = null,
     int? RepeatIndex = null,
-    bool IsWarmup = false);
+    bool IsWarmup = false,
+    int? InvocationTimeoutSeconds = null);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
@@ -406,7 +414,8 @@ public sealed record BenchmarkProjectRecord(
     long Version,
     long CreatedAtUtc,
     long UpdatedAtUtc,
-    int? MaxOutputTokens = null);
+    int? MaxOutputTokens = null,
+    int? InvocationTimeoutSeconds = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -446,7 +455,8 @@ public sealed record BenchmarkRunRecord(
     BenchmarkRunThroughput? Throughput = null,
     Guid? RepeatGroupId = null,
     int? RepeatIndex = null,
-    bool IsWarmup = false);
+    bool IsWarmup = false,
+    int? InvocationTimeoutSeconds = null);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
@@ -539,6 +549,9 @@ public static class BenchmarkPrimaryStopReasons
 {
     /// <summary>Generation ran out of budget: <c>n_predict</c> exhausted, or the context window filled.</summary>
     public const string Length = "length";
+
+    /// <summary>The node cancelled the run at its invocation timeout before the model stopped on its own.</summary>
+    public const string Timeout = "timeout";
 }
 
 /// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>

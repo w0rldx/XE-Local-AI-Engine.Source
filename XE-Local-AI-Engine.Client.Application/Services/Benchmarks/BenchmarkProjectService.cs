@@ -251,6 +251,7 @@ public sealed class BenchmarkProjectService(
 
         ValidateContext(draft.ContextTokens, "primary");
         ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
+        ValidateInvocationTimeout(draft.InvocationTimeoutSeconds);
         var definition = await _agentDefinitionStore.GetByIdAsync(draft.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
         {
@@ -263,7 +264,8 @@ public sealed class BenchmarkProjectService(
                 JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
                 draft.ContextTokens,
                 draft.AgentDefinitionId,
-                draft.MaxOutputTokens),
+                draft.MaxOutputTokens,
+                draft.InvocationTimeoutSeconds),
             policy);
     }
 
@@ -329,6 +331,21 @@ public sealed class BenchmarkProjectService(
         if (maxOutputTokens is { } budget && (budget < 1 || budget >= contextTokens))
         {
             throw new BenchmarkValidationException("The output token budget must be between 1 and the requested context, exclusive.");
+        }
+    }
+
+    /// <summary>
+    ///     The generation budget must be a plausible one. The floor keeps a typo from cancelling every run before the
+    ///     model warms; the ceiling keeps a runaway run from occupying the queue for a day.
+    /// </summary>
+    private static void ValidateInvocationTimeout(int? invocationTimeoutSeconds)
+    {
+        if (invocationTimeoutSeconds is { } seconds
+            && (seconds < BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds || seconds > BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds))
+        {
+            throw new BenchmarkValidationException(
+                $"The generation timeout must be between {BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds} and "
+                + $"{BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds} seconds.");
         }
     }
 
