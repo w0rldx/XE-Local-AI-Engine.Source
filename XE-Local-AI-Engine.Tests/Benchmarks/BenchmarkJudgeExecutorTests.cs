@@ -92,6 +92,15 @@ public sealed class BenchmarkJudgeExecutorTests
             AssertEx.Equal(expected: 1, promptPayload.RootElement.GetProperty("rubric").GetProperty("criteria").GetArrayLength());
         }
 
+        // The prompt ASKS for this shape and the parser refuses anything else. Constraining the decode is what makes the
+        // two agree: without it a small judge model answers in prose and every judging fails "invalid result".
+        var responseSchema = package.ResponseJsonSchema ?? throw new AssertionException("Expected the judge package to carry a response schema.");
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            responseSchema.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetInt32());
+        AssertEx.Equal(BenchmarkJudgeOutputSchemaV2.ResponseFormatJson,
+            JsonSerializer.Serialize(responseSchema),
+            "The judge turn must carry the bound-free response-format schema, not the bounded one the prompt documents.");
+
         // The server computes the 0..100 score from the criterion scores; the judge never emits an overall.
         AssertEx.Equal<int?>(50, persisted.Score);
 

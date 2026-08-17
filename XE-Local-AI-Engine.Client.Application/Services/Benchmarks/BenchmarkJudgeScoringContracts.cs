@@ -14,9 +14,12 @@ public sealed record BenchmarkJudgeResultV2(
     string JudgeModelContentFingerprint);
 
 /// <summary>
-/// The JSON schema the judge model is constrained to. Bounds mirror the v1 schema
-/// (<see cref="BenchmarkFrozenPolicies.JudgeOutputSchemaJson"/>) — llama.cpp compiles this into a GBNF grammar, and only
-/// tool schemas have ever tripped over length bounds there.
+/// The judge's output schema in two shapes. <see cref="Json"/> is the documentation copy embedded in the prompt: bounded,
+/// so the model is TOLD the limits <see cref="BenchmarkJudgeResultParser"/> enforces. <see cref="ResponseFormatJson"/> is
+/// the same schema with every <c>minLength</c>/<c>maxLength</c>/<c>minItems</c>/<c>maxItems</c> removed, and is the one
+/// handed to constrained decoding: llama.cpp compiles a response-format schema into a GBNF grammar, and length bounds
+/// break its sampler initialization. Dropping them from the grammar costs nothing — the parser still rejects anything
+/// outside the bounds.
 /// </summary>
 public static class BenchmarkJudgeOutputSchemaV2
 {
@@ -34,6 +37,17 @@ public static class BenchmarkJudgeOutputSchemaV2
         + "\"score\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":10},"
         + "\"rationale\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":2048}}}},"
         + "\"summary\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":4096}}}";
+
+    /// <summary>The bound-free copy of <see cref="Json"/> handed to constrained decoding — see the type summary.</summary>
+    public const string ResponseFormatJson =
+        "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"schemaVersion\",\"criteria\",\"summary\"],\"properties\":{"
+        + "\"schemaVersion\":{\"const\":2},"
+        + "\"criteria\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"required\":[\"id\",\"score\",\"rationale\"],\"properties\":{"
+        + "\"id\":{\"type\":\"string\"},"
+        + "\"score\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":10},"
+        + "\"rationale\":{\"type\":\"string\"}}}},"
+        + "\"summary\":{\"type\":\"string\"}}}";
 }
 
 /// <summary>

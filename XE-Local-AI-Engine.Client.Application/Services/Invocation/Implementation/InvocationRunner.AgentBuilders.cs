@@ -257,7 +257,8 @@ public sealed partial class InvocationRunner
             package.SupportsThinking,
             MapSamplingOptions(package.SamplingOptions),
             MapSkills(package.Skills),
-            effectiveContextTokens);
+            effectiveContextTokens,
+            package.ResponseJsonSchema);
     }
 
     /// <summary>

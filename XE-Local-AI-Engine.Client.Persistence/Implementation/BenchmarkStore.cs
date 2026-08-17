@@ -1436,7 +1436,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return row.Status switch
         {
             BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
-            BenchmarkJudgeAttemptStatus.Failed or BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            BenchmarkJudgeAttemptStatus.Failed => BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeCancelled,
             _ when row.Score is null => BenchmarkRunJudgeStates.ReasonNoScore,
             _ when !policyCurrent => BenchmarkRunJudgeStates.ReasonPolicyOutdated,
             _ when row.AttemptGeneration != row.RevisionGeneration => BenchmarkRunJudgeStates.ReasonGenerationStale,

@@ -175,8 +175,18 @@ describe("toBenchmarkRunSummary", () => {
 			}),
 		);
 
+		const cancelled = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				rankExclusionReason: "judge-cancelled",
+			}),
+		);
+
 		expect(excluded).toMatchObject({ qualityScore: null, qualityScoreSource: "none", rankExclusionReason: "policy-outdated" });
 		expect(unknownReason.rankExclusionReason).toBeNull();
+		expect(cancelled.rankExclusionReason).toBe("judge-cancelled");
 	});
 
 	// Grouping must never collapse two different models into one row because the key was missing.

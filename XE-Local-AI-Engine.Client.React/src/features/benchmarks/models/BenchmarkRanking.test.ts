@@ -91,6 +91,7 @@ describe("rankExclusionAction", () => {
 		["no-score", "score"],
 		["judge-pending", "wait"],
 		["judge-failed", "rejudge"],
+		["judge-cancelled", "rejudge"],
 		["policy-outdated", "rejudge"],
 		["generation-stale", "rejudge"],
 		["execution-key-mismatch", "rejudge"],
