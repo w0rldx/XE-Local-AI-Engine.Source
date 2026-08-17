@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Data.Common;
+using System.Runtime.InteropServices;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
@@ -44,7 +45,7 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         return new AgentFeedbackAggregate(agentDefinitionId, agentName, upCount, downCount, byTool, exemplars);
     }
 
-    private static async Task<(int UpCount, int DownCount)> ReadOverallAsync(DbConnection connection, Guid agentDefinitionId, CancellationToken cancellationToken)
+    private static async Task<VoteCounts> ReadOverallAsync(DbConnection connection, Guid agentDefinitionId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -74,7 +75,7 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
             }
         }
 
-        return (up, down);
+        return new VoteCounts(up, down);
     }
 
     private static async Task<IReadOnlyList<ToolFeedbackCount>> ReadByToolAsync(DbConnection connection, Guid agentDefinitionId, CancellationToken cancellationToken)
@@ -91,21 +92,21 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
                               """;
         AddParameter(command, "$agent_id", agentDefinitionId);
 
-        var byTool = new Dictionary<string, (int Up, int Down)>(StringComparer.Ordinal);
+        var byTool = new Dictionary<string, VoteCounts>(StringComparer.Ordinal);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var toolName = reader.GetString(0);
             var rating = reader.GetString(1);
             var count = reader.GetInt32(2);
-            var (up, down) = byTool.TryGetValue(toolName, out var existing) ? existing : (Up: 0, Down: 0);
+            var (up, down) = byTool.TryGetValue(toolName, out var existing) ? existing : new VoteCounts(UpCount: 0, DownCount: 0);
             byTool[toolName] = string.Equals(rating, RatingDown, StringComparison.Ordinal)
-                ? (up, down + count)
-                : (up + count, down);
+                ? new VoteCounts(up, down + count)
+                : new VoteCounts(up + count, down);
         }
 
         return byTool
-               .Select(static entry => new ToolFeedbackCount(entry.Key, entry.Value.Up, entry.Value.Down))
+               .Select(static entry => new ToolFeedbackCount(entry.Key, entry.Value.UpCount, entry.Value.DownCount))
                .OrderByDescending(static tool => tool.UpCount + tool.DownCount)
                .ThenBy(static tool => tool.ToolName, StringComparer.Ordinal)
                .ToArray();
@@ -161,4 +162,8 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }
+
+    /// <summary>Thumbs-up / thumbs-down tallies for one scope (the whole agent, or a single tool).</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct VoteCounts(int UpCount, int DownCount);
 }
