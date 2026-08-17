@@ -16,7 +16,7 @@ import type { ModelOption } from "@/features/chat/models/ChatModels";
 // stuck, noisy error. A SignalR invalidation on download completion refreshes the installed list, so the moment the
 // model IS installed this flips true and the poll begins on its own.
 //
-// Note: GGUF (llamacpp) selections that ARE installed get polled — CL-4 makes those a 200 carrying maxContextTokens,
+// Note: GGUF (llamacpp) selections that ARE installed get polled — the details endpoint answers those with a 200 carrying maxContextTokens,
 // which the context usage meter needs. Only cloud, unavailable, and not-installed selections are suppressed.
 export function shouldFetchLocalModelDetails(
 	concreteModelName: string,

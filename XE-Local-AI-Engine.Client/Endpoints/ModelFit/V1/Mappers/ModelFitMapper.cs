@@ -188,7 +188,7 @@ internal static class ModelFitMapper
             RepoId = detail.RepoId,
             // Base quants first (smallest-first so the picker leads with the lightest), then the speculative-decoding
             // drafters. A drafter is a fraction of the real weights' size, so a pure size sort put all of them at the
-            // TOP of the ladder — the F-011 defect, where the first three rows of gemma-4-12b were 0.4-0.8 GB drafters.
+            // TOP of the ladder — the defect where the first three rows of gemma-4-12b were 0.4-0.8 GB drafters.
             Files =
             [
                 .. detail.Files

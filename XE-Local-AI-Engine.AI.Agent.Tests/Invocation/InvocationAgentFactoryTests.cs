@@ -259,7 +259,7 @@ public sealed class InvocationAgentFactoryTests
     }
 
     /// <summary>
-    ///     F-014 regression pin. A NATIVE-reasoning model (the OpenAI harmony family, e.g. gpt-oss-20b) reports
+    ///     Regression pin. A NATIVE-reasoning model (the OpenAI harmony family, e.g. gpt-oss-20b) reports
     ///     <c>SupportsThinking=false</c> by design — its template bakes reasoning onto a <c>&lt;|channel|&gt;analysis</c>
     ///     channel with no graded switch — and reasons only because this branch OMITS the think field. Detecting native
     ///     reasoning as a second capability must NOT change that: adding the harmony markers to the GRADED list instead

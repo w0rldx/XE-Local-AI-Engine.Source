@@ -312,7 +312,7 @@ public sealed class TrainingRunExecutor(
             return;
         }
 
-        // The only kind a Slice 3 run can produce. GGUF artifacts arrive with the export step.
+        // The only kind a training run can produce. GGUF artifacts arrive with the export step.
         const TrainingArtifactKind kind = TrainingArtifactKind.HfAdapterDir;
         var staged = _workspace.StagedDirectory(runId);
         var full = Path.GetFullPath(path);

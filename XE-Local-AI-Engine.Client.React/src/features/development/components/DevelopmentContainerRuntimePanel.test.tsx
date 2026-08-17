@@ -145,7 +145,7 @@ describe("DevelopmentContainerRuntimePanel", () => {
 	});
 
 	it("stops claiming container execution is off once the container provider is the one in force", () => {
-		// F-058: this sentence was hard-coded, so with `Development:Sandbox:Provider=docker` live and a container
+		// This sentence was hard-coded, so with `Development:Sandbox:Provider=docker` live and a container
 		// demonstrably running it told the operator the opposite of what the same screen's banner said.
 		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }, vi.fn(), undefined, "docker");
 
