@@ -225,13 +225,17 @@ public static class BenchmarkJudgePromptV2
     /// <summary>
     ///     The instruction every judging gets. The length-neutrality sentence is fixed and unconditional: rewarding a
     ///     longer answer for being longer is an LLM judge's best-documented bias, and telling it not to is the only
-    ///     cheap counter. Stating it unconditionally is safe BECAUSE this text is hashed nowhere — the policy hash
-    ///     covers <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> (an integer), the rubric, the judge model
-    ///     identity, the sampling and the reference answer, and the <c>JudgeExecutionKey</c> covers runtime and hardware
-    ///     identity only. The flip side of that is the consequence to know: changing this text changes what every
-    ///     FUTURE judging is asked without any version moving, so verdicts taken either side of such a change share a
-    ///     cohort key without being strictly comparable. Bump
-    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> for a change that must force a re-judge.
+    ///     cheap counter.
+    ///     <para>
+    ///         THE RULE THIS TEXT LIVES UNDER: it is hashed nowhere. The policy hash covers
+    ///         <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> (an integer), the rubric, the judge model
+    ///         identity, the sampling and the reference answer; the <c>JudgeExecutionKey</c> covers runtime and
+    ///         hardware identity only. So editing a word here changes what every FUTURE judging is asked while every
+    ///         version stays put, and verdicts taken either side of the edit share a policy revision and a cohort
+    ///         generation and get dense-ranked against each other. Any wording change must therefore bump
+    ///         <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> — which is exactly what the length-neutrality
+    ///         sentence did (2 → 3), forcing the existing <c>PromptVersionUnsupported</c> re-judge path.
+    ///     </para>
     /// </summary>
     public const string SystemPrompt =
         "Evaluate only the supplied benchmark task and primary output against the supplied rubric. "

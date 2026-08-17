@@ -179,7 +179,9 @@ public sealed class BenchmarkJudgePolicyContractsTests
         AssertEx.False(canonical.Contains('\n', StringComparison.Ordinal));
         AssertEx.Contains(canonical, "\"referenceAnswer\":null");
         AssertEx.Contains(canonical, "\"requestedContextTokens\":4096");
-        AssertEx.Contains(canonical, "\"promptVersion\":2");
+        // Against the constant, not a literal: the prompt version moves whenever the judge's system prompt is reworded,
+        // and this assertion is about the canonical SHAPE, not about which version is current.
+        AssertEx.Contains(canonical, $"\"promptVersion\":{BenchmarkJudgePolicyVersions.PromptVersion}");
         using var document = JsonDocument.Parse(canonical);
         AssertEx.True(document.RootElement.EnumerateObject().Select(static property => property.Name)
                               .SequenceEqual(["model", "requestedContextTokens", "promptVersion", "outputSchemaVersion", "sampling", "rubric", "referenceAnswer"], StringComparer.Ordinal));

@@ -209,6 +209,13 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         AssertEx.Equal("length", byId[truncated].PrimaryStopReason);
         AssertEx.Equal(BenchmarkPrimaryStatus.Succeeded, byId[truncated].PrimaryStatus, "Truncation flags a run; it never fails it.");
         AssertEx.Equal("stop", byId[complete].PrimaryStopReason);
+
+        // The denominator must drop the truncated run the same way the ranking does. Counting it left the cohort badge
+        // reading "1 of 2 ranked" forever: re-judging cannot un-truncate a run, so nothing the operator does closes
+        // that gap.
+        AssertEx.Equal(expected: 1, AssertEx.NotNull(page.RankCohort).RankedCount);
+        AssertEx.Equal(expected: 1, page.RankCohort!.TotalScored,
+            "A judge-scored but truncated run can never be ranked, so it must not grow \"n of m ranked\".");
     }
 
     [Test]
@@ -228,6 +235,9 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         AssertEx.Equal(BenchmarkQualityScoreSources.User, run.QualityScoreSource);
         AssertEx.Null(run.Judge!.RankExclusionReason);
         AssertEx.Equal("length", run.PrimaryStopReason);
+
+        // The other side of the mirror: a truncated run the operator scored anyway DOES rank, so it must also count.
+        AssertEx.Equal(expected: 1, AssertEx.NotNull(page.RankCohort).TotalScored);
     }
 
     [Test]
