@@ -283,13 +283,20 @@ public static class BenchmarkJudgeSerialization
     public static byte[] SerializePolicy(BenchmarkJudgePolicyV1 policy) =>
         Encoding.UTF8.GetBytes(BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(policy));
 
+    /// <summary>
+    ///     The stored policy, validated STRUCTURALLY only. A version constant moving must never make an
+    ///     already-stored revision unreadable: when the strict validator ran here, bumping
+    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> made `GET benchmarks/projects/{id}` and the
+    ///     project export throw, the whole project header disappeared from the UI, and it took the re-save control
+    ///     that heals the revision with it. Write and execution re-validate with <c>strictVersions: true</c>.
+    /// </summary>
     public static BenchmarkJudgePolicyV1 DeserializePolicy(ReadOnlySpan<byte> payload)
     {
         try
         {
             var policy = JsonSerializer.Deserialize<BenchmarkJudgePolicyV1>(payload, Options)
                          ?? throw new BenchmarkSnapshotException("The stored judge policy is empty.");
-            BenchmarkJudgePolicyValidator.Validate(policy);
+            BenchmarkJudgePolicyValidator.Validate(policy, strictVersions: false);
             return policy;
         }
         catch (JsonException exception)

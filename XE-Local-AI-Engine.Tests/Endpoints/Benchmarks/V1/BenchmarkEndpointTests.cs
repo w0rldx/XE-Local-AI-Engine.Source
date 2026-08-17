@@ -608,6 +608,58 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetProject_WithAJudgePolicyStoredUnderAnOlderPromptVersion_StillReadsAndFlagsIt()
+    {
+        // The read path must tolerate a stored version this build no longer judges under. When it did not, the project
+        // detail 500'd, the whole header disappeared from the UI ("Select a benchmark project"), and the re-save that
+        // heals the revision became unreachable.
+        await using var context = CreateContext();
+        ArrangeOutdatedJudgePolicy(context);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var judge = document.RootElement.GetProperty("judge");
+        AssertEx.True(judge.GetProperty("enabled").GetBoolean(), "An outdated prompt version does not disable the judge.");
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.PromptVersion - 1, judge.GetProperty("promptVersion").GetInt32());
+        AssertEx.True(judge.GetProperty("promptVersionOutdated").GetBoolean(), "The client needs the flag to offer the re-save.");
+    }
+
+    [Test]
+    public async Task GetProject_WithACurrentJudgePolicy_DoesNotFlagThePromptVersion()
+    {
+        await using var context = CreateContext();
+        ArrangeOutdatedJudgePolicy(context, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.False(document.RootElement.GetProperty("judge").GetProperty("promptVersionOutdated").GetBoolean());
+    }
+
+    /// <summary>A project whose CURRENT judge revision was stored under <paramref name="promptVersion" />.</summary>
+    private static void ArrangeOutdatedJudgePolicy(Context context, int? promptVersion = null)
+    {
+        var policy = new BenchmarkJudgePolicyV1(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('a', 64), ["aaa"]),
+            4096,
+            promptVersion ?? BenchmarkJudgePolicyVersions.PromptVersion - 1,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            BenchmarkJudgeRubricDefaults.Default(),
+            ReferenceAnswer: null);
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
+        context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 2,
+                   BenchmarkJudgeSerialization.SerializePolicy(policy), new string('h', 64), "cohort-key", 3, 10));
+    }
+
+    [Test]
     public async Task GetProject_WhenMissing_ReturnsProblemDetailsNotFound()
     {
         await using var context = CreateContext();

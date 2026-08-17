@@ -63,6 +63,7 @@ describe("toBenchmarkProjectDetail", () => {
 			referenceAnswer: null,
 			cohortGeneration: null,
 			referenceExecutionKey: null,
+			promptVersionOutdated: false,
 		});
 	});
 

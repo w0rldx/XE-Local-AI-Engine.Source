@@ -462,6 +462,31 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										)}
 									</Alert>
 								) : null}
+								{detail.judge.enabled && detail.judge.promptVersionOutdated ? (
+									<Alert
+										color="yellow"
+										icon={<IconAlertTriangle size={16} />}
+										data-testid="benchmark-judge-prompt-outdated"
+									>
+										<Group justify="space-between" align="center" wrap="nowrap">
+											<Text size="sm">
+												{t(
+													"pages.benchmarks.judge.promptVersionOutdated",
+													"Judge prompt version outdated — re-save the judge to upgrade (forces re-judge).",
+												)}
+											</Text>
+											<Button
+												variant="default"
+												size="xs"
+												leftSection={<IconSettings size={14} />}
+												onClick={() => setEditorMode("edit")}
+												data-testid="benchmark-judge-prompt-outdated-edit"
+											>
+												{t("pages.benchmarks.project.editJudge", "Edit judge")}
+											</Button>
+										</Group>
+									</Alert>
+								) : null}
 								{judgeFamilyOverlap && familyWarningDismissedFor !== detail.id ? (
 									<Alert
 										color="yellow"

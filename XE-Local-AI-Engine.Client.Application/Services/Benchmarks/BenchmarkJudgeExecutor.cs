@@ -38,6 +38,13 @@ public sealed class BenchmarkJudgeExecutor(
     private const string InvocationFailedMessage = "The benchmark judge invocation failed. See local logs for details.";
 
     /// <summary>
+    ///     Refusal for a revision this build no longer judges under. Names the fix, because the operator's only route
+    ///     out is re-saving the judge — which mints a new revision under the current versions and re-judges.
+    /// </summary>
+    internal const string OutdatedPolicyVersionMessage =
+        "The judge policy was stored under an older judge version. Re-save the judge to upgrade it (this forces a re-judge).";
+
+    /// <summary>
     ///     The judge turn's constrained-decoding schema, parsed once. Cloned out of its document because a
     ///     <see cref="JsonElement" /> does not outlive the <see cref="JsonDocument" /> it was read from.
     /// </summary>
@@ -76,6 +83,16 @@ public sealed class BenchmarkJudgeExecutor(
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
+
+            // Fail closed on a revision this build no longer judges under. READS are deliberately tolerant of an
+            // outdated version so the project stays open and re-savable; EXECUTION is not. Judging under the current
+            // prompt while the revision promises an older one would file the verdict in the same cohort as verdicts
+            // taken under the old wording — exactly what the version exists to prevent.
+            if (!BenchmarkJudgePolicyValidator.VersionsAreCurrent(policy))
+            {
+                throw new BenchmarkExecutionException(OutdatedPolicyVersionMessage);
+            }
+
             var runtime = attempt.JudgeRuntimeJson is { } runtimeJson
                 ? BenchmarkJudgeSerialization.DeserializeRuntime(runtimeJson.Span)
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");

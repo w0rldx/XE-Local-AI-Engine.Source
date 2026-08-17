@@ -85,6 +85,7 @@ function toBenchmarkJudgePolicy(value: JudgePolicyResponse | undefined): Benchma
 		referenceAnswer: value?.referenceAnswer ?? null,
 		cohortGeneration: value?.cohortGeneration ?? null,
 		referenceExecutionKey: value?.referenceExecutionKey ?? null,
+		promptVersionOutdated: value?.promptVersionOutdated === true,
 	};
 }
 
