@@ -51,9 +51,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string ContextBudgetExceededMessage =
         "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
 
-    private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
-
-    private readonly IInvocationAttachmentTracker _attachmentTracker;
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
@@ -64,6 +61,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly ApiToolCallBridge _apiToolCallBridge;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
+    private readonly InvocationLifecycleTracker _lifecycleTracker;
     private readonly LocalRuntimeWarmer _localRuntimeWarmer;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
@@ -83,37 +81,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ToolApprovalCoordinator _toolApprovalCoordinator;
 
     private readonly SpawnOptions _spawnOptions;
-    private readonly Lock _syncRoot = new();
     private readonly AgentToolPipelineOptions _toolPipelineOptions;
-
-    private Guid? _currentInvocationId;
-
-    // Set once (never reset) when shutdown drain begins, guarded by _syncRoot. A local invocation that reaches
-    // admission after this is set is rejected: it registers AFTER the drain snapshot and would otherwise
-    // become an untracked active run the drain never waits for.
-    private bool _draining;
-
-    // The caller/host token the active invocation's source is linked to (see RegisterActiveInvocation), captured so a
-    // cancellation can be attributed to the caller rather than to the invocation watchdog WITHOUT relying on a token
-    // callback: callbacks run in reverse registration order, so anything registered by the streaming agent after the
-    // runner's own registration is released FIRST and can reach the failure mapping before an earlier callback ran.
-    private CancellationToken _hostCancellationToken;
-
-    private CancellationTokenSource? _invocationCancellationTokenSource;
-
-    // The active turn's whole-turn budget, retained so the deadline can be RE-ARMED around a human round-trip
-    // (see SetInvocationDeadline). Written and read only under _syncRoot, alongside the source it arms.
-    private TimeSpan _invocationTimeout;
-
-    // Whether the active turn is currently parked waiting on a human (a tool approval or an ask_user question).
-    // Written and read only under _syncRoot. It exists so the AttachmentChanged handler can re-apply the deadline for a
-    // park it did not itself start — a client re-attaching mid-park must get the full park budget back from that moment.
-    private bool _parkedOnHuman;
-
-    // Why the active invocation was DELIBERATELY cancelled, recorded synchronously under _syncRoot by the requester
-    // itself (Cancel / CancelAll). Unknown means nobody asked: the cancellation then came from the invocation's own
-    // CancelAfter watchdog or from the linked caller token, and both are read off observable state at mapping time.
-    private CancellationOrigin _requestedCancellationOrigin;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
@@ -137,10 +105,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         PendingToolCallRegistry pendingToolCallRegistry,
         ToolApprovalCoordinator toolApprovalCoordinator,
         ApiToolCallBridge apiToolCallBridge,
-        IInvocationAttachmentTracker attachmentTracker,
+        InvocationLifecycleTracker lifecycleTracker,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
+        _lifecycleTracker = lifecycleTracker ?? throw new ArgumentNullException(nameof(lifecycleTracker));
         _toolApprovalCoordinator = toolApprovalCoordinator ?? throw new ArgumentNullException(nameof(toolApprovalCoordinator));
         _apiToolCallBridge = apiToolCallBridge ?? throw new ArgumentNullException(nameof(apiToolCallBridge));
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
@@ -179,14 +148,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         ?? runtimeSettings.GetDefaultModelName();
         _maxResponseSizeBytes = runtimeSettings.GetMaxResponseSizeMb() * 1024 * 1024;
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
-
-        // Subscribe for the process lifetime; both are singletons, so there is no unsubscribe path (mirrors
-        // InvocationResumeRegistry's subscription to the same dispatcher).
-        _attachmentTracker = attachmentTracker ?? throw new ArgumentNullException(nameof(attachmentTracker));
-        _attachmentTracker.AttachmentChanged += OnAttachmentChanged;
     }
 
-    public int ActiveInvocationCount => _activeInvocationCompletions.Count;
+    public int ActiveInvocationCount => _lifecycleTracker.ActiveInvocationCount;
 
     public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -226,14 +190,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // See TurnPolicy's XML doc for the composite budget (which timeout fires when).
         var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge);
 
-        RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, cancellationToken);
-        var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId, !shouldSendHubMessages);
+        _lifecycleTracker.RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, cancellationToken);
+        var activeInvocationCompletion = _lifecycleTracker.RegisterActiveInvocationCompletion(package.InvocationId, !shouldSendHubMessages);
         if (activeInvocationCompletion is null)
         {
             // Shutdown drain has started and this is a local turn admitted after the drain snapshot. Undo the
             // registration above and surface a clean, classified failure instead of running it into a drain that has
             // stopped waiting. A local turn sends no hub messages, so reporting to the dispatcher is the whole surface.
-            ClearActiveInvocation(package.InvocationId);
+            _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
             _logger.LogInformation("Rejecting local invocation {InvocationId}: the node is draining for shutdown.", package.InvocationId);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, NodeDrainingMessage, FailureCategory.Cancelled).ConfigureAwait(false);
             return;
@@ -248,7 +212,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         try
         {
-            var invocationToken = GetInvocationCancellationToken();
+            var invocationToken = _lifecycleTracker.GetInvocationCancellationToken();
             ModelResolution modelResolution;
             using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
             {
@@ -411,21 +375,21 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 generationDurationMs).ConfigureAwait(false);
             invocationOutcome = "completed";
         }
-        catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
+        catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
         {
             invocationOutcome = "cancelled";
-            CancelPendingToolCalls(package.InvocationId);
-            var cancellationOrigin = ResolveCancellationOrigin();
-            var failureCategory = ClassifyCancellation(cancellationOrigin);
+            _lifecycleTracker.CancelPendingToolCalls(package.InvocationId);
+            var cancellationOrigin = _lifecycleTracker.ResolveCancellationOrigin();
+            var failureCategory = InvocationLifecycleTracker.ClassifyCancellation(cancellationOrigin);
             // The breadcrumb: one fixed, path-free sentence per cancellation cause. Every cause used to share the single
             // string "Invocation timed out or was cancelled", so a turn that ended at the node's message-request ceiling,
             // one the operator stopped, and one the detached-run reaper collected were indistinguishable in the persisted
             // failure — which is exactly why a live turn reported "Cancelled" at ~550s could not be attributed to anything.
-            var cancellationMessage = DescribeCancellation(cancellationOrigin, turnPolicy.InvocationTimeout);
+            var cancellationMessage = InvocationLifecycleTracker.DescribeCancellation(cancellationOrigin, turnPolicy.InvocationTimeout);
             // Count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
-            NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory(cancellationOrigin)));
+            NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", InvocationLifecycleTracker.ClassifyCancellationMetricCategory(cancellationOrigin)));
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -469,94 +433,34 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             _apiToolCallBridge.CleanupStaleToolCalls(_maxPendingToolCallAge);
             _apiToolCallBridge.ClearToolResultTimeout(package.InvocationId);
-            ClearActiveInvocation(package.InvocationId);
-            CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
+            _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
+            _lifecycleTracker.CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
             await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
         }
     }
 
-    public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        // Fence local admission and snapshot the active set ATOMICALLY under _syncRoot: a new local turn either
-        // registered its completion before this lock (so it is in the snapshot and awaited) or hits admission after and
-        // is rejected (RegisterActiveInvocationCompletion returns null). No local turn can slip into the gap between the
-        // fence and the snapshot and become an untracked active run.
-        Task[] activeInvocationTasks;
-        lock (_syncRoot)
-        {
-            _draining = true;
-            activeInvocationTasks = _activeInvocationCompletions.Values.Select(static completion => completion.Task).ToArray();
-        }
-
-        if (activeInvocationTasks.Length == 0)
-        {
-            return true;
-        }
-
-        try
-        {
-            await Task.WhenAll(activeInvocationTasks).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
+        return _lifecycleTracker.DrainActiveInvocationsAsync(timeout, cancellationToken);
     }
 
+    /// <inheritdoc />
     public void Cancel(Guid invocationId)
     {
-        CancelCore(invocationId, CancellationOrigin.User);
+        _lifecycleTracker.Cancel(invocationId);
     }
 
+    /// <inheritdoc />
     public void CancelDetached(Guid invocationId)
     {
-        CancelCore(invocationId, CancellationOrigin.DetachedGraceExpired);
+        _lifecycleTracker.CancelDetached(invocationId);
     }
 
-    private void CancelCore(Guid invocationId, CancellationOrigin origin)
-    {
-        CancellationTokenSource? invocationCancellationTokenSource = null;
-
-        lock (_syncRoot)
-        {
-            if (_currentInvocationId == invocationId)
-            {
-                invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                _requestedCancellationOrigin = origin;
-            }
-        }
-
-        invocationCancellationTokenSource?.Cancel();
-        CancelPendingToolCalls(invocationId);
-    }
-
+    /// <inheritdoc />
     public void CancelAll()
     {
-        CancellationTokenSource? invocationCancellationTokenSource;
-
-        lock (_syncRoot)
-        {
-            invocationCancellationTokenSource = _invocationCancellationTokenSource;
-
-            // An external stop of everything in flight (the hub's disconnect request), NOT the invocation watchdog:
-            // record it here so the turn is classified as a shutdown-style cancellation rather than a timeout.
-            if (invocationCancellationTokenSource is not null && _requestedCancellationOrigin == CancellationOrigin.Unknown)
-            {
-                _requestedCancellationOrigin = CancellationOrigin.Shutdown;
-            }
-        }
-
-        invocationCancellationTokenSource?.Cancel();
-
-        foreach (var pendingToolCall in _pendingToolCalls)
-        {
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-            {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
-                removedPendingToolCall.ResultCompletion.TrySetCanceled(CancellationToken.None);
-            }
-        }
+        _lifecycleTracker.CancelAll();
     }
 
     /// <inheritdoc />
@@ -929,12 +833,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // keeps the unchanged approve/deny path.
                     if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))
                     {
-                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, SetInvocationDeadline, invocationToken).ConfigureAwait(false);
+                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken).ConfigureAwait(false);
                         approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
                         continue;
                     }
 
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, SetInvocationDeadline, invocationToken).ConfigureAwait(false);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken).ConfigureAwait(false);
                     approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
                 }
 
@@ -1003,7 +907,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // Name the tool in the approval description so the card matches the single-agent UX (not the opaque id).
                     var pendingApproval = ToApprovalRequest(update);
                     var approvalDescription = $"Tool '{ApprovalToolName(update)}' requires approval before it runs.";
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, SetInvocationDeadline, invocationToken, approvalDescription).ConfigureAwait(false);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription).ConfigureAwait(false);
                     await session.RespondToApprovalAsync(requestId,
                         approved,
                         approved ? "Approved by user." : "Rejected by user.",
@@ -1029,68 +933,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         using var context = InvocationExecutionContext.Create(package, Guid.Empty, epochVersion: 0, ReadOnlyMemory<byte>.Empty);
         await RunAsync(context, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    ///     Re-points the whole-turn watchdog — the <c>CancelAfter</c> armed in <see cref="RegisterActiveInvocation" /> —
-    ///     at a deadline measured from NOW, so a human round-trip is not charged to the model's turn budget.
-    ///     <para>
-    ///         Before parking on a human the deadline is pushed past the longest permitted wait; once the human has
-    ///         answered it is re-armed to a full, fresh <c>InvocationTimeout</c>. This does NOT make any wait unbounded:
-    ///         each wait keeps its own linked <c>CancelAfter(_maxPendingToolCallAge)</c>, which was previously dead code
-    ///         because the shorter invocation deadline always fired first. The net effect is that
-    ///         <c>MaxPendingToolCallAge</c> (operator-configurable, 10 min by default) becomes the real cap on operator
-    ///         thinking time, instead of "whatever the model left over from its InvocationTimeout".
-    ///     </para>
-    ///     <para>
-    ///         The park extension applies only while a client is ATTACHED. A park whose watcher has gone away is
-    ///         waiting for an answer that cannot arrive, so it falls back to a plain <c>InvocationTimeout</c> backstop
-    ///         and <c>DetachedInvocationReaper</c>'s grace normally ends it first. A run that never attached over the
-    ///         hub at all — a scheduled run, a platform-hub run — is NOT detached and keeps today's full park budget.
-    ///     </para>
-    ///     <para>
-    ///         Re-arming under <see cref="_syncRoot" /> is what makes it safe against a concurrent teardown:
-    ///         <see cref="ClearActiveInvocation" /> nulls the field under the same lock BEFORE disposing the source, so a
-    ///         non-null source observed here cannot already be disposed.
-    ///     </para>
-    /// </summary>
-    private void SetInvocationDeadline(bool parkedOnHuman)
-    {
-        lock (_syncRoot)
-        {
-            _parkedOnHuman = parkedOnHuman;
-            ApplyInvocationDeadline();
-        }
-    }
-
-    // Caller must hold _syncRoot.
-    private void ApplyInvocationDeadline()
-    {
-        if (_invocationCancellationTokenSource is not { } invocationCancellationTokenSource)
-        {
-            return;
-        }
-
-        // The parked deadline keeps the model's own budget on top of the human cap purely as a backstop: if the
-        // re-arm on release were ever skipped, the turn still gets its normal InvocationTimeout rather than none.
-        var extendPark = _parkedOnHuman
-                         && _currentInvocationId is { } invocationId
-                         && !_attachmentTracker.IsDetached(invocationId);
-        invocationCancellationTokenSource.CancelAfter(extendPark ? _maxPendingToolCallAge + _invocationTimeout : _invocationTimeout);
-    }
-
-    // A client attaching or detaching mid-park changes which deadline the park is entitled to, and neither park site is
-    // running code at that moment — so the re-arm has to come from here. Without it a reload during an approval park
-    // would inherit whatever budget the detached park left behind.
-    private void OnAttachmentChanged(object? sender, InvocationAttachmentChangedEventArgs args)
-    {
-        lock (_syncRoot)
-        {
-            if (_parkedOnHuman && _currentInvocationId == args.InvocationId)
-            {
-                ApplyInvocationDeadline();
-            }
-        }
     }
 
     // Derives the tool-call id that keys a tool-call card in the UI: the wire CallId when present, otherwise the tool
@@ -1119,35 +961,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // keep the operator console clean. Genuine worker-mode reporting issues surface elsewhere.
             _logger.LogDebug(exception, "Could not report capabilities after invocation {InvocationId} (no active worker hub in desktop mode).", invocationId);
         }
-    }
-
-    // Registers the invocation's active-completion source. Returns null when the node is draining and this is a local
-    // turn — the completion add and the draining check happen under _syncRoot so they are serialized with
-    // the drain snapshot, closing the admission-after-snapshot race. A non-local (remote) turn is not fenced here; the
-    // dispatcher already stops accepting remote assignments at drain.
-    private TaskCompletionSource? RegisterActiveInvocationCompletion(Guid invocationId, bool isLocalLoopback)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        lock (_syncRoot)
-        {
-            if (_draining && isLocalLoopback)
-            {
-                return null;
-            }
-
-            if (!_activeInvocationCompletions.TryAdd(invocationId, completion))
-            {
-                throw new InvalidOperationException($"Invocation {invocationId} is already tracked as active.");
-            }
-        }
-
-        return completion;
-    }
-
-    private void CompleteActiveInvocation(Guid invocationId, TaskCompletionSource completion)
-    {
-        _activeInvocationCompletions.TryRemove(invocationId, out _);
-        completion.TrySetResult();
     }
 
     private async Task TrySendFailureAsync(IHubMessageSender sender,
@@ -1193,210 +1006,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
-    // Attributes the cancellation that ended the turn, from state that is already observable when the failure is
-    // mapped: a deliberate cancel recorded by its own requester, the linked caller token, or — by elimination — the
-    // invocation source's CancelAfter watchdog. Deliberately does NOT consult a flag set from a token callback:
-    // callbacks run in reverse registration order, so a callback the runner registers at invocation registration is
-    // invoked AFTER every later registration (the streaming agent's own), and the released agent can reach this
-    // mapping before it ever ran — which reported a genuine watchdog timeout as a plain cancellation.
-    // Resolved ONCE per cancelled turn so the failure category and the metric category cannot disagree.
-    private CancellationOrigin ResolveCancellationOrigin()
-    {
-        lock (_syncRoot)
-        {
-            if (_requestedCancellationOrigin != CancellationOrigin.Unknown)
-            {
-                return _requestedCancellationOrigin;
-            }
-
-            if (_hostCancellationToken.IsCancellationRequested)
-            {
-                return CancellationOrigin.Shutdown;
-            }
-
-            // Nobody asked and the caller's token is still live, so a cancelled invocation source can only be its own
-            // CancelAfter watchdog. With NOTHING of ours cancelled the OperationCanceledException came from below us —
-            // an HTTP client timeout surfaces as a TaskCanceledException on a token nobody here owns (the same shape
-            // ProviderStreamResilience.IsTransient treats as a provider timeout). Calling that "stopped externally" was
-            // wrong twice over: it blamed a shutdown/disconnect that never happened and hid a real timeout behind the
-            // Cancelled category.
-            return _invocationCancellationTokenSource?.IsCancellationRequested == true
-                ? CancellationOrigin.Watchdog
-                : CancellationOrigin.ProviderTimeout;
-        }
-    }
-
-    private static FailureCategory ClassifyCancellation(CancellationOrigin origin)
-    {
-        return origin is CancellationOrigin.Watchdog or CancellationOrigin.ProviderTimeout
-            ? FailureCategory.Timeout
-            : FailureCategory.Cancelled;
-    }
-
-    /// <summary>
-    ///     The fixed, path-free sentence surfaced (and persisted) for a cancelled turn, naming WHICH bound ended it.
-    ///     <see cref="FailureCategory" /> alone cannot carry this: it collapses the invocation watchdog, the stream-idle
-    ///     watchdog and an HTTP timeout into one <see cref="FailureCategory.Timeout" /> value, and adding a category
-    ///     would drift the generated OpenAPI/zod client — so the message is the breadcrumb channel, exactly as it already
-    ///     is for <c>StreamIdleTimeoutException</c> (whose own message names the stream-idle bound and its seconds).
-    ///     Only the resolved origin and the turn's own configured ceiling are interpolated; nothing here can carry a
-    ///     host, path, or model name.
-    /// </summary>
-    private static string DescribeCancellation(CancellationOrigin origin, TimeSpan invocationTimeout)
-    {
-        return origin switch
-        {
-            CancellationOrigin.User => "Stopped by user.",
-            CancellationOrigin.Watchdog =>
-                $"Timed out: the response exceeded the node maximum message request timeout ({invocationTimeout.TotalSeconds:0}s).",
-            CancellationOrigin.DetachedGraceExpired =>
-                "Stopped: no client was attached to this run and the disconnect grace period expired.",
-            CancellationOrigin.ProviderTimeout =>
-                "Timed out: the model provider stopped responding before the node's own ceiling was reached.",
-            // Shutdown (and the unreachable Unknown): the host token, the caller's token, or a disconnect-driven
-            // CancelAll. The metric collapses all three under "shutdown" too, so the sentence names both plausible
-            // causes rather than asserting a shutdown that may not have happened.
-            _ => "Stopped externally (node shutdown or client disconnect)."
-        };
-    }
-
-    // The cancellation cause for the invocation_cancelled_total metric: an explicit user cancel, the
-    // invocation-level timeout firing ("watchdog"), or an external cancellation — the caller/host token or a
-    // disconnect-driven CancelAll — reported as "shutdown".
-    private static string ClassifyCancellationMetricCategory(CancellationOrigin origin)
-    {
-        return origin switch
-        {
-            CancellationOrigin.User => "user",
-            CancellationOrigin.Watchdog => "watchdog",
-            CancellationOrigin.DetachedGraceExpired => "detached_grace",
-            CancellationOrigin.ProviderTimeout => "provider_timeout",
-            _ => "shutdown"
-        };
-    }
-
-    private void CancelPendingToolCalls(Guid invocationId)
-    {
-        foreach (var pendingToolCall in _pendingToolCalls)
-        {
-            if (pendingToolCall.Value.InvocationId != invocationId)
-            {
-                continue;
-            }
-
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-            {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
-                removedPendingToolCall.ResultCompletion.TrySetCanceled(CancellationToken.None);
-            }
-        }
-    }
-
-    private void RegisterActiveInvocation(Guid invocationId, TimeSpan invocationTimeout, CancellationToken cancellationToken)
-    {
-        CancellationTokenSource? invocationCancellationTokenSource = null;
-
-        try
-        {
-            invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            invocationCancellationTokenSource.CancelAfter(invocationTimeout);
-
-            lock (_syncRoot)
-            {
-                if (_currentInvocationId is not null)
-                {
-                    throw new InvalidOperationException("Worker is busy with another invocation");
-                }
-
-                _currentInvocationId = invocationId;
-                _requestedCancellationOrigin = CancellationOrigin.Unknown;
-                _hostCancellationToken = cancellationToken;
-                _invocationCancellationTokenSource = invocationCancellationTokenSource;
-
-                // Retained so a human round-trip can re-arm this same deadline (see SetInvocationDeadline).
-                _invocationTimeout = invocationTimeout;
-                invocationCancellationTokenSource = null;
-            }
-        }
-        finally
-        {
-            invocationCancellationTokenSource?.Dispose();
-        }
-    }
-
-    private CancellationToken GetInvocationCancellationToken()
-    {
-        lock (_syncRoot)
-        {
-            if (_invocationCancellationTokenSource is null)
-            {
-                throw new InvalidOperationException("No active invocation is registered.");
-            }
-
-            return _invocationCancellationTokenSource.Token;
-        }
-    }
-
-    private bool IsCurrentInvocation(Guid invocationId)
-    {
-        lock (_syncRoot)
-        {
-            return _currentInvocationId == invocationId;
-        }
-    }
-
-    private void ClearActiveInvocation(Guid invocationId)
-    {
-        CancellationTokenSource? invocationCancellationTokenSource;
-
-        lock (_syncRoot)
-        {
-            if (_currentInvocationId != invocationId)
-            {
-                return;
-            }
-
-            invocationCancellationTokenSource = _invocationCancellationTokenSource;
-            _invocationCancellationTokenSource = null;
-            _invocationTimeout = TimeSpan.Zero;
-            _parkedOnHuman = false;
-            _currentInvocationId = null;
-            _requestedCancellationOrigin = CancellationOrigin.Unknown;
-            _hostCancellationToken = CancellationToken.None;
-        }
-
-        invocationCancellationTokenSource?.Dispose();
-    }
 
     // A local tool call seen requested on the stream but not yet resulted: the tool name plus the arguments as they
     // arrived, kept so a repeated call for the same id can be detected and the result can be attributed to its tool.
     // Distinct from PendingToolCall, which tracks a WORKER tool call's approval/result completions.
     private readonly record struct RequestedToolCall(string Name, object? Arguments, string? SerializedArguments);
-
-    /// <summary>
-    ///     What ended a cancelled invocation. <see cref="Unknown" /> is the resting value: no deliberate cancel was
-    ///     requested, so the origin is derived from the caller token and the invocation source in
-    ///     <see cref="ResolveCancellationOrigin" />.
-    /// </summary>
-    private enum CancellationOrigin
-    {
-        Unknown = 0,
-        User = 1,
-        Watchdog = 2,
-        Shutdown = 3,
-
-        /// <summary>
-        ///     The disconnect grace elapsed with no client attached (<c>DetachedInvocationReaper</c>). Classified as a
-        ///     plain cancellation like a user stop — the turn was abandoned, not timed out — but kept distinct so the
-        ///     logs and the cancellation metric can tell an abandoned turn from one the operator stopped.
-        /// </summary>
-        DetachedGraceExpired = 4,
-
-        /// <summary>
-        ///     No token of ours fired: the cancellation came from below the runner, which in practice is the provider's
-        ///     own HTTP timeout (a <see cref="TaskCanceledException" /> on a token this node does not own). Classified
-        ///     as a <see cref="FailureCategory.Timeout" />, not a cancellation — nothing stopped this turn on purpose.
-        /// </summary>
-        ProviderTimeout = 5
-    }
 }
