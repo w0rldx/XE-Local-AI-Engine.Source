@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
@@ -13,7 +14,10 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 /// </summary>
 internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+    };
 
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -39,6 +43,11 @@ internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
         ArgumentNullException.ThrowIfNull(jsonArguments);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (jsonArguments.Length > SpawnSubAgentToolDefinition.MaxJsonArgumentsLength)
+        {
+            return $"spawn_subagent argument payload exceeded the maximum length of {SpawnSubAgentToolDefinition.MaxJsonArgumentsLength} characters.";
+        }
+
         SubAgentSpawnRequest? request;
         try
         {
@@ -54,6 +63,12 @@ internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
             return "spawn_subagent arguments were empty.";
         }
 
+        var validationError = ValidateStringBounds(request);
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
         // Resolve the scoped spawn service from a fresh scope. CapacityService (scoped) depends only on singletons, so a
         // per-call scope is safe; SpawnContext is ambient (AsyncLocal, seeded by the root tool loop), not scope-bound.
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -61,4 +76,31 @@ internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
 
         return await spawnService.SpawnAsync(request, cancellationToken).ConfigureAwait(false);
     }
+
+    private static string? ValidateStringBounds(SubAgentSpawnRequest request)
+    {
+        if (Exceeds(request.SubAgentKey, SpawnSubAgentToolDefinition.BindingMaxLength))
+        {
+            return Exceeded("subAgentKey", SpawnSubAgentToolDefinition.BindingMaxLength);
+        }
+
+        if (Exceeds(request.ModelId, SpawnSubAgentToolDefinition.BindingMaxLength))
+        {
+            return Exceeded("modelId", SpawnSubAgentToolDefinition.BindingMaxLength);
+        }
+
+        if (Exceeds(request.Task, SpawnSubAgentToolDefinition.TaskMaxLength))
+        {
+            return Exceeded("task", SpawnSubAgentToolDefinition.TaskMaxLength);
+        }
+
+        return Exceeds(request.Instructions, SpawnSubAgentToolDefinition.InstructionsMaxLength)
+            ? Exceeded("instructions", SpawnSubAgentToolDefinition.InstructionsMaxLength)
+            : null;
+    }
+
+    private static bool Exceeds(string? value, int maximumLength) => value is { Length: > 0 } && value.Length > maximumLength;
+
+    private static string Exceeded(string argumentName, int maximumLength) =>
+        $"spawn_subagent argument '{argumentName}' exceeded the maximum length of {maximumLength} characters.";
 }

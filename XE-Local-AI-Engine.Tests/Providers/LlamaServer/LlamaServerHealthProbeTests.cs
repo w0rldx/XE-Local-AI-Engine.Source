@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net;
+using System.Text;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -57,6 +58,51 @@ public sealed class LlamaServerHealthProbeTests
         AssertEx.True(ready, "The server became ready within the budget.");
         AssertEx.Equal(expected: 3, handler.Count); // one request per poll, no per-poll retries.
     }
+
+    [Test]
+    public async Task WaitForReadyAndVerifyModelAlias_ExactAliasOnModelsEndpoint_ReturnsTrue()
+    {
+        Uri? requestedUri = null;
+        using var handler = new CountingHandler((request, _) =>
+        {
+            requestedUri = request.RequestUri;
+            return Task.FromResult(Json(HttpStatusCode.OK, """{"data":[{"id":"xe-evaluation-owned"}]}"""));
+        });
+        using var client = new HttpClient(handler, disposeHandler: false);
+        var probe = new LlamaServerHealthProbe(client);
+
+        var ready = await probe.WaitForReadyAndVerifyModelAliasAsync(BaseAddress,
+            "xe-evaluation-owned",
+            TimeSpan.FromSeconds(1),
+            CancellationToken.None);
+
+        AssertEx.True(ready);
+        AssertEx.Equal("http://127.0.0.1:18100/v1/models", requestedUri?.AbsoluteUri);
+        AssertEx.Equal(expected: 1, handler.Count);
+    }
+
+    [Test]
+    public async Task WaitForReadyAndVerifyModelAlias_DifferentProcessOnReleasedPort_FailsClosed()
+    {
+        using var handler = new CountingHandler((_, _) =>
+            Task.FromResult(Json(HttpStatusCode.OK, """{"data":[{"id":"some-other-process"}]}""")));
+        using var client = new HttpClient(handler, disposeHandler: false);
+        var probe = new LlamaServerHealthProbe(client);
+
+        var ready = await probe.WaitForReadyAndVerifyModelAliasAsync(BaseAddress,
+            "xe-evaluation-owned",
+            TimeSpan.FromMilliseconds(20),
+            CancellationToken.None);
+
+        AssertEx.False(ready);
+        AssertEx.Equal(expected: 1, handler.Count);
+    }
+
+    private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
+        new(status)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
 
     private sealed class CountingHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder) : HttpMessageHandler
     {

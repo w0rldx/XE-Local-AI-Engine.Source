@@ -708,6 +708,7 @@ export function isRunActive(status: TrainingRunStatusValue): boolean {
 
 export type TrainingArtifactKindValue = "AdapterGguf" | "MergedGguf" | "HfAdapterDir";
 export type TrainingArtifactSmokeStateValue = "Pending" | "Passed" | "Failed" | "Skipped";
+export type TrainingArtifactQualityOutcomeValue = "Pending" | "Passed" | "Failed" | "Overridden";
 
 export interface TrainingArtifactView {
 	readonly id: string;
@@ -720,7 +721,20 @@ export interface TrainingArtifactView {
 	readonly smokeReason: string | null;
 	/** The registry name once promoted; null while the artifact is still staged and inert. */
 	readonly committedModelName: string | null;
+	readonly qualityComparisonId: string | null;
+	readonly qualityOutcome: TrainingArtifactQualityOutcomeValue;
+	readonly discardedAtUtc: number | null;
+	readonly discardReason: string | null;
+	readonly discardCleanupPending: boolean;
 	readonly version: number;
+}
+
+const artifactQualityOutcomes: readonly TrainingArtifactQualityOutcomeValue[] = ["Passed", "Failed", "Overridden"];
+
+function toArtifactQualityOutcome(value: string | null | undefined): TrainingArtifactQualityOutcomeValue {
+	return artifactQualityOutcomes.includes(value as TrainingArtifactQualityOutcomeValue)
+		? (value as TrainingArtifactQualityOutcomeValue)
+		: "Pending";
 }
 
 export function toTrainingArtifactView(response: TrainingArtifactResponse): TrainingArtifactView {
@@ -734,6 +748,11 @@ export function toTrainingArtifactView(response: TrainingArtifactResponse): Trai
 		smokeState: response.smokeState as TrainingArtifactSmokeStateValue,
 		smokeReason: response.smokeReason ?? null,
 		committedModelName: response.committedModelName ?? null,
+		qualityComparisonId: response.qualityComparisonId ?? null,
+		qualityOutcome: toArtifactQualityOutcome(response.qualityOutcome),
+		discardedAtUtc: response.discardedAtUtc ?? null,
+		discardReason: response.discardReason ?? null,
+		discardCleanupPending: response.discardCleanupPending,
 		version: response.version,
 	};
 }
@@ -743,9 +762,39 @@ export function shortDigest(sha256: string | null): string | null {
 	return sha256 == null || sha256.length < 12 ? sha256 : sha256.slice(0, 12);
 }
 
-/** Only a smoke-passed artifact can be registered, and only one that is not registered yet. */
+/** Promotion remains an explicit action, but only after smoke + quality pass (or an audited override). */
 export function canPromote(artifact: TrainingArtifactView): boolean {
-	return artifact.smokeState === "Passed" && artifact.committedModelName == null;
+	return (
+		artifact.smokeState === "Passed" &&
+		artifact.committedModelName == null &&
+		artifact.discardedAtUtc == null &&
+		(artifact.qualityOutcome === "Passed" || artifact.qualityOutcome === "Overridden")
+	);
+}
+
+export function canValidateArtifact(artifact: TrainingArtifactView): boolean {
+	return artifact.smokeState === "Passed" && artifact.committedModelName == null && artifact.discardedAtUtc == null;
+}
+
+export function canOverrideArtifactQuality(artifact: TrainingArtifactView): boolean {
+	return (
+		artifact.qualityOutcome === "Failed" &&
+		artifact.qualityComparisonId != null &&
+		artifact.committedModelName == null &&
+		artifact.discardedAtUtc == null
+	);
+}
+
+export function canDiscardArtifactQuality(artifact: TrainingArtifactView): boolean {
+	return (
+		artifact.qualityComparisonId != null && artifact.committedModelName == null && artifact.discardedAtUtc == null
+	);
+}
+
+export function canRetryArtifactDiscardCleanup(
+	artifact: TrainingArtifactView,
+): artifact is TrainingArtifactView & { readonly discardReason: string } {
+	return artifact.discardedAtUtc != null && artifact.discardCleanupPending && artifact.discardReason != null;
 }
 
 /** The trainer's own adapter directory is an input to an export, never an export target itself. */

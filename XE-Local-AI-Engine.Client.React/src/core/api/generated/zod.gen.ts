@@ -401,6 +401,11 @@ export const zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactRes
 	smokeState: z.string(),
 	smokeReason: z.string().nullish(),
 	committedModelName: z.string().nullish(),
+	qualityComparisonId: z.guid().nullish(),
+	qualityOutcome: z.string().nullish(),
+	discardedAtUtc: z.int().nullish(),
+	discardReason: z.string().nullish(),
+	discardCleanupPending: z.boolean(),
 	version: z.int(),
 	createdAtUtc: z.int(),
 	updatedAtUtc: z.int(),
@@ -431,6 +436,38 @@ export const zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArti
 	modelName: z.string().min(1),
 });
 
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse = z.object({
+	artifactId: z.guid(),
+	comparisonId: z.guid(),
+	artifactSha256: z.string(),
+	outcome: z.string(),
+	failureCodes: z.array(z.string()),
+	overrideReason: z.string().nullish(),
+	discardedAtUtc: z.int().nullish(),
+	discardReason: z.string().nullish(),
+	discardCleanupPending: z.boolean(),
+	version: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1DecideArtifactQualityRequest = z.object({
+	comparisonId: z.guid().min(1),
+	expectedVersion: z.int().gte(0),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1OverrideArtifactQualityRequest = z.object({
+	expectedVersion: z.int().gte(0),
+	reason: z.string().min(0).max(1024),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1BeginArtifactQualityRevalidationRequest = z.object({
+	expectedVersion: z.int().gte(0),
+});
+
+export const zXeLocalAiEngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest = z.object({
+	expectedVersion: z.int().gte(0),
+	reason: z.string().min(0).max(1024),
+});
+
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationKindTallyResponse = z.object({
 	kind: z.string(),
 	total: z
@@ -449,6 +486,8 @@ export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationRespo
 	comparisonId: z.guid().nullish(),
 	modelName: z.string(),
 	modelContentFingerprint: z.string().nullish(),
+	targetKind: z.string(),
+	sourceArtifactId: z.guid().nullish(),
 	datasetId: z.guid(),
 	datasetContentFingerprint: z.string(),
 	status: z.string(),
@@ -472,12 +511,13 @@ export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationRespo
 	updatedAtUtc: z.int(),
 });
 
-export const zXeLocalAiEngineClientServicesTrainingEvaluationEvaluationTarget = z.enum(["Base", "Tuned"]);
+export const zXeLocalAiEngineClientServicesTrainingEvaluationEvaluationTarget = z.enum(["Undefined", "Base", "Tuned"]);
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1CreateEvaluationRequest = z.object({
-	trainingRunId: z.guid(),
+	trainingRunId: z.guid().min(1),
 	target: zXeLocalAiEngineClientServicesTrainingEvaluationEvaluationTarget,
 	modelName: z.string().nullish(),
+	artifactId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1EvaluationByIdRequest = z.record(z.string(), z.never());
@@ -5248,6 +5288,53 @@ export const zPromoteTrainingArtifactPath = z.object({
  * Success
  */
 export const zPromoteTrainingArtifactResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactResponse;
+
+export const zDecideTrainingArtifactQualityBody = zXeLocalAiEngineClientEndpointsTrainingExportsV1DecideArtifactQualityRequest;
+
+export const zDecideTrainingArtifactQualityPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zDecideTrainingArtifactQualityResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+
+export const zOverrideTrainingArtifactQualityBody =
+	zXeLocalAiEngineClientEndpointsTrainingExportsV1OverrideArtifactQualityRequest;
+
+export const zOverrideTrainingArtifactQualityPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zOverrideTrainingArtifactQualityResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+
+export const zBeginTrainingArtifactQualityRevalidationBody =
+	zXeLocalAiEngineClientEndpointsTrainingExportsV1BeginArtifactQualityRevalidationRequest;
+
+export const zBeginTrainingArtifactQualityRevalidationPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zBeginTrainingArtifactQualityRevalidationResponse =
+	zXeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
+
+export const zDiscardTrainingArtifactQualityBody = zXeLocalAiEngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest;
+
+export const zDiscardTrainingArtifactQualityPath = z.object({
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zDiscardTrainingArtifactQualityResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1ArtifactQualityResponse;
 
 export const zListEvaluationsQuery = z.object({
 	trainingRunId: z.guid().nullish(),

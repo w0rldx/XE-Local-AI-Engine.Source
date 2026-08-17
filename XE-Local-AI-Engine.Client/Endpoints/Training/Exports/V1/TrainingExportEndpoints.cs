@@ -183,7 +183,7 @@ public sealed class RunTrainingArtifactSmokeEndpoint(ITrainingExportService expo
     }
 }
 
-/// <summary>Registers a smoke-passed artifact as a local model, with its training lineage attached.</summary>
+/// <summary>Registers a smoke-passed, quality-approved artifact as a local model, with its training lineage attached.</summary>
 public sealed class PromoteTrainingArtifactEndpoint(IArtifactPromotionService promotion)
     : Endpoint<PromoteTrainingArtifactRequest, PromoteTrainingArtifactResponse>
 {
@@ -212,6 +212,160 @@ public sealed class PromoteTrainingArtifactEndpoint(IArtifactPromotionService pr
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
+        }
+    }
+}
+
+public sealed class DecideTrainingArtifactQualityEndpoint(IArtifactQualityService quality)
+    : Endpoint<DecideArtifactQualityRequest, ArtifactQualityResponse>
+{
+    private readonly IArtifactQualityService _quality = quality ?? throw new ArgumentNullException(nameof(quality));
+
+    public override void Configure()
+    {
+        Put(LocalApiRoutes.Training.ArtifactQuality);
+        Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<ArtifactQualityResponse>(StatusCodes.Status200OK)
+                                      .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
+    }
+
+    public override async Task HandleAsync(DecideArtifactQualityRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var artifact = await _quality.DecideAsync(req.ArtifactId, req.ComparisonId, req.ExpectedVersion.GetValueOrDefault(), ct)
+                                         .ConfigureAwait(false);
+            await Send.OkAsync(ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        }
+        catch (TrainingExportRejectedException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
+        }
+    }
+
+    internal static ArtifactQualityResponse ToQualityResponse(TrainingArtifactRecord artifact)
+    {
+        var decision = ArtifactQualityService.ReadDecision(artifact)
+                       ?? throw new InvalidOperationException("The persisted artifact quality decision could not be read.");
+        return new ArtifactQualityResponse
+        {
+            ArtifactId = artifact.Id,
+            ComparisonId = decision.ComparisonId,
+            ArtifactSha256 = decision.ArtifactSha256,
+            Outcome = decision.Outcome.ToString(),
+            FailureCodes = decision.FailureCodes,
+            OverrideReason = decision.OverrideReason,
+            DiscardedAtUtc = artifact.DiscardedAtUtc,
+            DiscardReason = artifact.DiscardReason,
+            DiscardCleanupPending = artifact.DiscardCleanupPending,
+            Version = artifact.Version
+        };
+    }
+}
+
+public sealed class OverrideTrainingArtifactQualityEndpoint(IArtifactQualityService quality)
+    : Endpoint<OverrideArtifactQualityRequest, ArtifactQualityResponse>
+{
+    private readonly IArtifactQualityService _quality = quality ?? throw new ArgumentNullException(nameof(quality));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Training.ArtifactQualityOverride);
+        Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<ArtifactQualityResponse>(StatusCodes.Status200OK)
+                                      .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
+    }
+
+    public override async Task HandleAsync(OverrideArtifactQualityRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var artifact = await _quality.OverrideAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct)
+                                         .ConfigureAwait(false);
+            await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        }
+        catch (TrainingExportRejectedException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
+        }
+    }
+}
+
+public sealed class BeginTrainingArtifactQualityRevalidationEndpoint(IArtifactQualityService quality)
+    : Endpoint<BeginArtifactQualityRevalidationRequest, ArtifactQualityResponse>
+{
+    private readonly IArtifactQualityService _quality = quality ?? throw new ArgumentNullException(nameof(quality));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Training.ArtifactQualityRevalidation);
+        Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<ArtifactQualityResponse>(StatusCodes.Status200OK)
+                                      .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
+    }
+
+    public override async Task HandleAsync(BeginArtifactQualityRevalidationRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var artifact = await _quality.BeginRevalidationAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), ct)
+                                         .ConfigureAwait(false);
+            await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        }
+        catch (TrainingExportRejectedException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
+        {
+            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
+        }
+    }
+}
+
+public sealed class DiscardTrainingArtifactQualityEndpoint(ITrainingExportService exports)
+    : Endpoint<DiscardArtifactQualityRequest, ArtifactQualityResponse>
+{
+    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Training.ArtifactQualityDiscard);
+        Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<ArtifactQualityResponse>(StatusCodes.Status200OK)
+                                      .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
+    }
+
+    public override async Task HandleAsync(DiscardArtifactQualityRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var artifact = await _exports.DiscardArtifactQualityAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct)
+                                         .ConfigureAwait(false);
+            await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
         {

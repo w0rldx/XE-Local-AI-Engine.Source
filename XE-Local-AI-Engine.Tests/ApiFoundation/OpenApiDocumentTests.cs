@@ -197,8 +197,9 @@ public sealed class OpenApiDocumentTests
         AssertSchemaProperties(schemas, "BenchmarkRunSummaryResponse",
         [
             "id", "projectId", "primaryModelName", "primaryModelOrigin", "modelContentFingerprint", "primaryStatus",
-            "judgeStatus", "lastStreamSequence", "version"
+            "judge", "lastStreamSequence", "version"
         ]);
+        AssertSchemaProperties(schemas, "BenchmarkRunJudgeResponse", ["state"]);
         AssertDeclaredSchemaProperties(schemas, "BenchmarkRunDetailResponse", ["outputParts", "judgeResult"]);
     }
 

@@ -1,10 +1,16 @@
 namespace XE_Local_AI_Engine.Tests.Training.Export;
 
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Training.Comparison;
+using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -18,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ArtifactPromotionServiceTests : IDisposable
 {
     private const string BaseModelName = "base:Q4_K_M";
+    private static readonly string ArtifactSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("gguf")));
     private static readonly Guid ArtifactId = new("00000000-0000-0000-0000-0000000000a1");
     private static readonly Guid RunId = new("00000000-0000-0000-0000-0000000000b1");
 
@@ -89,7 +96,29 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
 
         var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
 
-        AssertEx.Contains(failure.Message, "not linked to an installed model", StringComparison.Ordinal);
+        AssertEx.Contains(failure.Message, "no installed base counterpart", StringComparison.Ordinal);
+        _ = await harness.Importer.DidNotReceiveWithAnyArgs().PrepareAsync(default!, default!, default, default);
+    }
+
+    [Test]
+    [Arguments(null, true, "v1:dataset")]
+    [Arguments("other:Q4_K_M", true, "v1:dataset")]
+    [Arguments(BaseModelName, false, "v1:dataset")]
+    [Arguments(BaseModelName, true, "v1:different")]
+    public async Task Promote_WhenExactInstalledBaseIsAbsent_DoesNotPrepareImport(string? installedName,
+        bool isAvailable,
+        string fingerprint)
+    {
+        var harness = Harness.Create(this,
+            TrainingArtifactKind.MergedGguf,
+            TrainingArtifactSmokeState.Passed,
+            installedModelName: installedName,
+            installedModelAvailable: isAvailable,
+            installedModelFingerprint: fingerprint);
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Contains(failure.Message, "exact installed base counterpart", StringComparison.Ordinal);
         _ = await harness.Importer.DidNotReceiveWithAnyArgs().PrepareAsync(default!, default!, default, default);
     }
 
@@ -103,44 +132,213 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         AssertEx.Contains(failure.Message, "already registered", StringComparison.Ordinal);
     }
 
+    [Test]
+    public async Task Promote_WithoutQualityDecision_DoesNotPrepareAnImport()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed,
+            qualityOutcome: null);
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Contains(failure.Message, "quality decision", StringComparison.Ordinal);
+        _ = await harness.Importer.DidNotReceiveWithAnyArgs().PrepareAsync(default!, default!, default, default);
+    }
+
+    [Test]
+    public async Task Promote_WhileQualityRevalidationIsPending_DoesNotPrepareAnImport()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed,
+            qualityOutcome: ArtifactQualityOutcome.Pending);
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Contains(failure.Message, "quality", StringComparison.OrdinalIgnoreCase);
+        _ = await harness.Importer.DidNotReceiveWithAnyArgs().PrepareAsync(default!, default!, default, default);
+    }
+
+    [Test]
+    public async Task Promote_AcceptsDecisionPersistedByArtifactQualityService()
+    {
+        var harness = Harness.Create(this,
+            TrainingArtifactKind.MergedGguf,
+            TrainingArtifactSmokeState.Passed,
+            qualityOutcome: null);
+
+        var decided = await harness.DecideQualityAsync();
+        var promotedName = await harness.PromoteAsync();
+
+        AssertEx.Equal(ArtifactQualityOutcome.Passed, ArtifactQualityService.ReadDecision(decided)!.Outcome);
+        AssertEx.Equal("tuned:Q4_K_M", promotedName);
+        _ = await harness.Importer.Received(1).CommitAsync(Arg.Any<PreparedGgufImport>(), CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Promote_WhenBytesChangedAfterDecision_DoesNotPrepareAnImport()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        await File.AppendAllTextAsync(harness.StagedPath, "changed");
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Contains(failure.Message, "changed", StringComparison.Ordinal);
+        _ = await harness.Importer.DidNotReceiveWithAnyArgs().PrepareAsync(default!, default!, default, default);
+    }
+
+    [Test]
+    [Arguments("different-digest", 4L)]
+    [Arguments(null, 5L)]
+    public async Task Promote_WhenPreparedIdentityDoesNotMatchDecision_DiscardsWithoutCommit(string? sha256, long sizeBytes)
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        harness.ReturnPreparedIdentity(sha256 ?? ArtifactSha256, sizeBytes);
+
+        var failure = await AssertEx.ThrowsAsync<TrainingExportRejectedException>(() => harness.PromoteAsync());
+
+        AssertEx.Contains(failure.Message, "changed", StringComparison.Ordinal);
+        await harness.Importer.Received(1).DiscardPreparedAsync(Arg.Any<PreparedGgufImport>(), CancellationToken.None);
+        _ = await harness.Importer.DidNotReceiveWithAnyArgs().CommitAsync(default!, default);
+    }
+
+    [Test]
+    public async Task Promote_WhenCommitLeavesFinalArtifacts_RollsBackTheCommitReceipt()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        var receipt = harness.CommitReceipt() with
+        {
+            OwnsFinalGguf = true,
+            OwnsFinalSidecar = false
+        };
+        harness.ThrowPartialCommit(receipt);
+
+        _ = await AssertEx.ThrowsAsync<GgufImportCommitException>(() => harness.PromoteAsync());
+
+        await harness.Importer.Received(1).RollbackCommittedAsync(receipt, CancellationToken.None);
+        await harness.Importer.DidNotReceiveWithAnyArgs().DiscardPreparedAsync(default!, default);
+    }
+
+    [Test]
+    public async Task Promote_WhenPartialCommitRollbackAlsoFails_PreservesBothFailures()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        var receipt = harness.CommitReceipt();
+        harness.ThrowPartialCommit(receipt);
+        _ = harness.Importer.RollbackCommittedAsync(receipt, CancellationToken.None)
+                           .Returns<Task>(_ => throw new IOException("rollback failed"));
+
+        var failure = await AssertEx.ThrowsAsync<AggregateException>(() => harness.PromoteAsync());
+
+        AssertEx.True(failure.InnerExceptions.Any(static exception => exception is GgufImportCommitException));
+        AssertEx.True(failure.InnerExceptions.Any(static exception => exception is IOException));
+    }
+
+    [Test]
+    public async Task Promote_WhenRecordingTheCommitFails_RollsBackTheRegistryEntry()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        _ = harness.Store.SetArtifactCommittedNameAsync(ArtifactId, Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                         .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("recording failed"));
+
+        _ = await AssertEx.ThrowsAsync<TrainingConflictException>(() => harness.PromoteAsync());
+
+        await harness.Importer.Received(1).RollbackCommittedAsync(Arg.Any<GgufImportCommitReceipt>(), CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Promote_WhenRecordingAndRollbackFail_PreservesBothFailuresAndRecoveryReceipt()
+    {
+        var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
+        var receipt = harness.CommitReceipt();
+        harness.ReturnCommitReceipt(receipt);
+        _ = harness.Store.SetArtifactCommittedNameAsync(ArtifactId, Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                         .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("recording failed"));
+        _ = harness.Importer.RollbackCommittedAsync(receipt, CancellationToken.None)
+                            .Returns<Task>(_ => throw new IOException("rollback failed"));
+
+        var failure = await AssertEx.ThrowsAsync<ArtifactPromotionCompensationException>(() => harness.PromoteAsync());
+
+        AssertEx.Equal(receipt, failure.CommitReceipt);
+        AssertEx.True(failure.InnerExceptions.Any(static exception => exception is TrainingConflictException));
+        AssertEx.True(failure.InnerExceptions.Any(static exception => exception is IOException));
+    }
+
     private sealed class Harness
     {
         private ArtifactPromotionService _service = null!;
+        private TrainingArtifactRecord _artifact = null!;
+        private TrainingRunRecord _run = null!;
 
-        private Harness(ITrainingRunStore store, IGgufModelImporter importer)
+        private Harness(ITrainingRunStore store, IGgufModelImporter importer, string stagedPath)
         {
             Store = store;
             Importer = importer;
+            StagedPath = stagedPath;
         }
 
         public ITrainingRunStore Store { get; }
         public IGgufModelImporter Importer { get; }
+        public string StagedPath { get; }
         public GgufImportDestination? Destination { get; private set; }
 
         public static Harness Create(ArtifactPromotionServiceTests owner,
             TrainingArtifactKind kind,
             TrainingArtifactSmokeState smokeState,
             string? linkedModel = BaseModelName,
-            string? committedName = null)
+            string? committedName = null,
+            ArtifactQualityOutcome? qualityOutcome = ArtifactQualityOutcome.Passed,
+            string? installedModelName = BaseModelName,
+            bool installedModelAvailable = true,
+            string installedModelFingerprint = "v1:dataset")
         {
             _ = Directory.CreateDirectory(owner._root);
             var stagedPath = Path.Combine(owner._root, kind == TrainingArtifactKind.AdapterGguf ? "adapter-F16.gguf" : "merged-Q4_K_M.gguf");
             File.WriteAllText(stagedPath, "gguf");
+            var sha256 = ArtifactSha256;
+            var comparisonId = Guid.NewGuid();
+            ReadOnlyMemory<byte>? qualityJson = qualityOutcome is { } outcome
+                ? JsonSerializer.SerializeToUtf8Bytes(new ArtifactQualityDecisionV1
+                {
+                    ArtifactId = ArtifactId,
+                    ArtifactSha256 = sha256,
+                    ComparisonId = comparisonId,
+                    Outcome = outcome
+                }, TrainingJson.Options)
+                : null;
 
             var store = Substitute.For<ITrainingRunStore>();
-            _ = store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>())
-                     .Returns(new TrainingArtifactRecord(ArtifactId, RunId, kind, stagedPath, "abc", SizeBytes: 4, smokeState,
-                         SmokeReason: null, committedName, Version: 2, CreatedAtUtc: 0, UpdatedAtUtc: 0));
-            _ = store.GetAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(linkedModel));
+            var artifact = new TrainingArtifactRecord(ArtifactId, RunId, kind, stagedPath, sha256, SizeBytes: 4, smokeState,
+                SmokeReason: null, committedName, Version: 2, CreatedAtUtc: 0, UpdatedAtUtc: 0, comparisonId, qualityJson);
+            var run = Run(linkedModel);
+            _ = store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(_ => artifact);
+            _ = store.GetAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
             _ = store.SetArtifactCommittedNameAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                     .Returns(callInfo => Task.FromResult(new TrainingArtifactRecord(ArtifactId, RunId, kind, stagedPath, "abc", 4, smokeState,
-                         null, callInfo.ArgAt<string?>(2), 3, 0, 0)));
+                     .Returns(callInfo =>
+                     {
+                         artifact = artifact with { CommittedModelName = callInfo.ArgAt<string?>(2), Version = artifact.Version + 1 };
+                         return artifact;
+                     });
 
             var baseArtifacts = Substitute.For<ITrainingBaseArtifactStore>();
             _ = baseArtifacts.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                              .Returns(new TrainingBaseArtifactRecord(Guid.NewGuid(), "meta/base", "main", TrainingBaseArtifactStatus.Ready,
                                  ReadOnlyMemory<byte>.Empty, TotalBytes: 0, LicenseJson: null, ErrorMessage: null, Version: 1,
                                  CreatedAtUtc: 0, UpdatedAtUtc: 0));
+            var models = Substitute.For<IGgufModelStore>();
+            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<LocalModelDescriptor>>(
+                installedModelName is null
+                    ? []
+                    :
+                    [
+                        new LocalModelDescriptor
+                        {
+                            ModelName = installedModelName,
+                            ProviderName = "llamacpp",
+                            IsAvailable = installedModelAvailable,
+                            SizeBytes = 4,
+                            ModifiedAt = null,
+                            MaxContextTokens = null,
+                            ModelContentFingerprint = installedModelFingerprint
+                        }
+                    ]);
 
             var identity = new ResolvedGgufAcquisitionIdentity("tuned:Q4_K_M",
                 "tuned:q4_k_m",
@@ -155,7 +353,24 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                          .Returns(Reservation(identity));
 
             var importer = Substitute.For<IGgufModelImporter>();
-            var harness = new Harness(store, importer);
+            var harness = new Harness(store, importer, stagedPath)
+            {
+                _artifact = artifact,
+                _run = run
+            };
+            _ = store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(_ => harness._artifact);
+            _ = store.SetArtifactQualityDecisionAsync(ArtifactId, Arg.Any<long>(), Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    harness._artifact = harness._artifact with
+                    {
+                        Version = harness._artifact.Version + 1,
+                        QualityComparisonId = callInfo.ArgAt<Guid>(2),
+                        QualityDecisionJson = callInfo.ArgAt<ReadOnlyMemory<byte>>(3)
+                    };
+                    return harness._artifact;
+                });
             _ = importer.PrepareAsync(Arg.Any<GgufImportSource>(), Arg.Any<GgufImportDestination>(), Arg.Any<IProgress<GgufImportProgress>?>(),
                             Arg.Any<CancellationToken>())
                         .Returns(callInfo =>
@@ -170,7 +385,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                             "member",
                             "v1:content")));
 
-            harness._service = new ArtifactPromotionService(store, baseArtifacts, preflight, importer,
+            harness._service = new ArtifactPromotionService(store, baseArtifacts, models, preflight, importer,
                 NullLogger<ArtifactPromotionService>.Instance);
             return harness;
         }
@@ -178,10 +393,99 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         public Task<string> PromoteAsync() =>
             _service.PromoteAsync(ArtifactId, "tuned");
 
+        public Task<TrainingArtifactRecord> DecideQualityAsync()
+        {
+            var membership = JsonSerializer.SerializeToUtf8Bytes(new TrainingEvaluationMembershipV1
+            {
+                TrainingRunId = RunId,
+                FreezeId = Guid.NewGuid(),
+                DatasetId = _run.DatasetId,
+                DatasetContentFingerprint = _run.DatasetContentFingerprint,
+                HoldoutSampleIds = [Guid.NewGuid()]
+            }, TrainingJson.Options);
+            var baseProvenance = JsonSerializer.SerializeToUtf8Bytes(new TrainingEvaluationExecutionProvenanceV1
+            {
+                Variant = "Cuda",
+                ExecutableVersion = "v1",
+                ExecutableSha256 = new string('c', 64),
+                ManifestSha256 = new string('c', 64),
+                LaunchProjectionIdentity = "projection",
+                ContextTokens = 4096,
+                LaunchPolicyVersion = 1,
+                ModelSha256 = new string('d', 64),
+                ModelSizeBytes = 4
+            }, TrainingJson.Options);
+            var tunedProvenance = JsonSerializer.SerializeToUtf8Bytes(new TrainingEvaluationExecutionProvenanceV1
+            {
+                Variant = "Cuda",
+                ExecutableVersion = "v1",
+                ExecutableSha256 = new string('c', 64),
+                ManifestSha256 = new string('c', 64),
+                LaunchProjectionIdentity = "projection",
+                ContextTokens = 4096,
+                LaunchPolicyVersion = 1,
+                ModelSha256 = ArtifactSha256,
+                ModelSizeBytes = 4
+            }, TrainingJson.Options);
+            var baseEvaluation = Evaluation("base:Q4_K_M", "v1:dataset", membership, baseProvenance,
+                EvaluationModelTargetKind.InstalledModel, sourceArtifactId: null);
+            var tunedEvaluation = Evaluation("tuned.gguf", ArtifactSha256, membership, tunedProvenance,
+                EvaluationModelTargetKind.StagedTrainingArtifact, ArtifactId);
+            var comparison = new TrainingComparisonRecord(Guid.NewGuid(), "quality", baseEvaluation.Id, tunedEvaluation.Id, null, null, RunId,
+                JsonSerializer.SerializeToUtf8Bytes(
+                    ComparisonReportService.ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark: null, tunedBenchmark: null),
+                    TrainingJson.Options), 1, 0, 0);
+            var evaluations = Substitute.For<ITrainingEvaluationStore>();
+            _ = evaluations.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
+            _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
+            _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
+            return new ArtifactQualityService(Store, evaluations, TimeProvider.System)
+                .DecideAsync(ArtifactId, comparison.Id, _artifact.Version);
+        }
+
+        private static TrainingEvaluationRecord Evaluation(string modelName,
+            string fingerprint,
+            ReadOnlyMemory<byte> membership,
+            ReadOnlyMemory<byte> provenance,
+            EvaluationModelTargetKind targetKind,
+            Guid? sourceArtifactId) =>
+            new(Guid.NewGuid(), RunId, Guid.NewGuid(), modelName, fingerprint, Guid.NewGuid(), "v1:dataset", membership,
+                TrainingEvaluationStatus.Succeeded,
+                TrainingEvaluationResults.Write([new TrainingEvaluationResultEntry(Guid.NewGuid(), "tool", true, "deterministic")]),
+                1, 1, 1, null, null, 2, 0, 0, TrainingWorkStatus.Succeeded, targetKind, sourceArtifactId, provenance);
+
+        public void ReturnPreparedIdentity(string sha256, long sizeBytes) =>
+            _ = Importer.PrepareAsync(Arg.Any<GgufImportSource>(), Arg.Any<GgufImportDestination>(), Arg.Any<IProgress<GgufImportProgress>?>(),
+                              Arg.Any<CancellationToken>())
+                        .Returns(callInfo =>
+                        {
+                            Destination = callInfo.Arg<GgufImportDestination>();
+                            return Task.FromResult(Prepared(Destination, sha256, sizeBytes));
+                        });
+
+        public GgufImportCommitReceipt CommitReceipt() =>
+            new(Prepared(Destination ?? new GgufImportDestination("tuned:Q4_K_M", "Q4_K_M", "tuned.gguf", "tuned.json",
+                    LocalModelOrigin.Trained)).RegistryEntry,
+                "/models/tuned.gguf",
+                "/models/tuned.gguf.xe-model.json",
+                "member",
+                "v1:content");
+
+        public void ThrowPartialCommit(GgufImportCommitReceipt receipt) =>
+            _ = Importer.CommitAsync(Arg.Any<PreparedGgufImport>(), CancellationToken.None)
+                        .Returns<Task<GgufImportCommitReceipt>>(_ => throw new GgufImportCommitException(receipt,
+                            "commit failed",
+                            new IOException("provider failure")));
+
+        public void ReturnCommitReceipt(GgufImportCommitReceipt receipt) =>
+            _ = Importer.CommitAsync(Arg.Any<PreparedGgufImport>(), CancellationToken.None).Returns(receipt);
+
         private static PreparedGgufAcquisition Reservation(ResolvedGgufAcquisitionIdentity identity) =>
             new(identity, GgufAcquisitionDisposition.Available, ProviderMapDisposition.Absent, lease: null, activeOperationId: null);
 
-        private static PreparedGgufImport Prepared(GgufImportDestination destination) =>
+        private static PreparedGgufImport Prepared(GgufImportDestination destination,
+            string? sha256 = null,
+            long sizeBytes = 4) =>
             new("op",
                 destination,
                 "/tmp/tuned.gguf.part",
@@ -193,9 +497,9 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                     FileName = "tuned-Q4_K_M-abc.gguf",
                     Quant = destination.CanonicalQuant,
                     LocalPath = "/models/tuned.gguf",
-                    SizeBytes = 4,
-                    Sha256 = "abc",
-                    SourceRevision = "sha256:abc",
+                    SizeBytes = sizeBytes,
+                    Sha256 = sha256 ?? ArtifactSha256,
+                    SourceRevision = $"sha256:{sha256 ?? ArtifactSha256}",
                     DownloadedAtUtc = DateTimeOffset.UnixEpoch,
                     Origin = destination.Origin
                 },

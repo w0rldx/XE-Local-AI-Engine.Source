@@ -32,6 +32,21 @@ internal sealed record class TrainingArtifact
     /// <summary>The registry name this artifact was promoted under. Null while the artifact is still staged.</summary>
     public string? CommittedModelName { get; set; }
 
+    public Guid? QualityComparisonId { get; set; }
+
+    public byte[]? QualityDecisionJson { get; set; }
+
+    /// <summary>
+    ///     When set, the staged bytes were explicitly discarded while this row was retained as the durable quality
+    ///     audit tombstone. The original decision remains encrypted in <see cref="QualityDecisionJson" />.
+    /// </summary>
+    public long? DiscardedAtUtc { get; set; }
+
+    public string? DiscardReason { get; set; }
+
+    /// <summary>True until the service confirms the tombstoned artifact's staged bytes are absent.</summary>
+    public bool DiscardCleanupPending { get; set; }
+
     public long Version { get; set; }
 
     public long CreatedAtUtc { get; set; }

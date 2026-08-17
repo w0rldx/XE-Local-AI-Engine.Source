@@ -14,6 +14,8 @@ internal static class TrainingEvaluationEndpointMapper
             ComparisonId = record.ComparisonId,
             ModelName = record.ModelName,
             ModelContentFingerprint = record.ModelContentFingerprint,
+            TargetKind = record.TargetKind.ToString(),
+            SourceArtifactId = record.SourceArtifactId,
             DatasetId = record.DatasetId,
             DatasetContentFingerprint = record.DatasetContentFingerprint,
             Status = record.Status.ToString(),

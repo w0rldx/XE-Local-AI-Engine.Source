@@ -84,6 +84,12 @@ public sealed class TrainingRunServiceTests : IDisposable
         var run = await service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion, fixture.BaseArtifactId, LicenseConfirmed: true));
         var freeze = ReadFreeze(run);
         var frozenBytesBefore = await File.ReadAllBytesAsync(workspace.FrozenDatasetPath(fixture.DatasetId, freeze.FreezeId));
+        var frozenPlaintext = await workspace.ReadFrozenDatasetAsync(fixture.DatasetId, freeze.FreezeId, CancellationToken.None);
+        var frozenLines = FrozenTrainingCorpus.Read(frozenPlaintext.Span, freeze);
+        AssertEx.Equal(TrainingRunFreezeV1.CurrentSchemaVersion, freeze.SchemaVersion);
+        AssertEx.Equal(expected: 4, frozenLines.Count);
+        AssertEx.True(frozenLines.Select(item => item.Id).ToHashSet().SetEquals(freeze.TrainSampleIds.Concat(freeze.HoldoutSampleIds)),
+            "The immutable corpus must preserve the stable database sample ids used by evaluation membership.");
 
         // Reject a sample: an accepted review bumps the dataset revision and recomputes its content fingerprint.
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
@@ -98,6 +104,24 @@ public sealed class TrainingRunServiceTests : IDisposable
         AssertEx.Equal(fixture.DatasetRevision, reread.DatasetRevision);
         var frozenBytesAfter = await File.ReadAllBytesAsync(workspace.FrozenDatasetPath(fixture.DatasetId, freeze.FreezeId));
         AssertEx.True(frozenBytesBefore.SequenceEqual(frozenBytesAfter), "The frozen copy on disk is immutable once written.");
+    }
+
+    [Test]
+    public void FrozenCorpus_LegacyV1WithoutEmbeddedIds_MapsHoldoutIdsByRecordedSequence()
+    {
+        var holdoutId = Guid.NewGuid();
+        var freeze = new TrainingRunFreezeV1
+        {
+            SchemaVersion = 1,
+            HoldoutSampleIds = [holdoutId],
+            HoldoutSequences = [7]
+        };
+        var legacy = Encoding.UTF8.GetBytes("""{"sequence":7,"kind":"tool-call","label":"Good","reviewState":"Approved","parts":[{"kind":"user","sequence":0,"content":"legacy"}]}""" + "\n");
+
+        var records = FrozenTrainingCorpus.Read(legacy, freeze);
+
+        AssertEx.Equal(holdoutId, records.Single().Id);
+        AssertEx.Equal("legacy", JsonSerializer.Deserialize<TrainingSampleContentV1>(records.Single().ContentJson.Span, TrainingJson.Options)!.Parts.Single().Content!);
     }
 
     [Test]

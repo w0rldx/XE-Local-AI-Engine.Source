@@ -210,6 +210,62 @@ public sealed class TrainingExportServiceTests : IDisposable
         AssertEx.Contains(harness.LogText, "not inside the run's staged directory", StringComparison.Ordinal);
     }
 
+    [Test]
+    public async Task DiscardQuality_AtomicallyTombstonesBeforeRemovingStagedBytes()
+    {
+        using var harness = Harness.Create(this);
+        var artifact = harness.StageArtifact("merged-Q4_K_M.gguf");
+        var discarded = artifact with
+        {
+            Version = artifact.Version + 1,
+            QualityComparisonId = null,
+            QualityDecisionJson = "audit"u8.ToArray(),
+            DiscardedAtUtc = 123,
+            DiscardReason = "failed quality",
+            DiscardCleanupPending = true
+        };
+        var cleaned = discarded with { Version = discarded.Version + 1, DiscardCleanupPending = false };
+        _ = harness.Store.DiscardArtifactQualityAsync(artifact.Id, artifact.Version, "failed quality", Arg.Any<CancellationToken>())
+                   .Returns(discarded);
+        _ = harness.Store.CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version, Arg.Any<CancellationToken>())
+                   .Returns(cleaned);
+
+        var result = await harness.DiscardQualityAsync(artifact.Id, artifact.Version, "failed quality");
+
+        AssertEx.Equal(cleaned.Version, result.Version);
+        AssertEx.False(File.Exists(artifact.Path), "The staged bytes must be removed after the audit tombstone commits.");
+        _ = await harness.Store.Received(1).DiscardArtifactQualityAsync(artifact.Id, artifact.Version, "failed quality",
+            Arg.Any<CancellationToken>());
+        _ = await harness.Store.Received(1).CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version,
+            CancellationToken.None);
+    }
+
+    [Test]
+    public async Task DiscardQuality_RetryOnlyCleansBytesAndDoesNotRewriteAudit()
+    {
+        using var harness = Harness.Create(this);
+        var artifact = harness.StageArtifact("merged-Q4_K_M.gguf") with
+        {
+            Version = 3,
+            QualityDecisionJson = "audit"u8.ToArray(),
+            DiscardedAtUtc = 123,
+            DiscardReason = "original reason",
+            DiscardCleanupPending = true
+        };
+        _ = harness.Store.GetArtifactAsync(artifact.Id, Arg.Any<CancellationToken>()).Returns(artifact);
+        var cleaned = artifact with { Version = 4, DiscardCleanupPending = false };
+        _ = harness.Store.CompleteArtifactDiscardCleanupAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>()).Returns(cleaned);
+
+        var result = await harness.DiscardQualityAsync(artifact.Id, artifact.Version, "different retry reason");
+
+        AssertEx.False(result.DiscardCleanupPending);
+        AssertEx.Equal("original reason", result.DiscardReason!);
+        _ = await harness.Store.DidNotReceive().DiscardArtifactQualityAsync(artifact.Id,
+            artifact.Version,
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
     /// <summary>A re-export replaces the previous unpromoted attempt — and must not leave its bytes behind either.</summary>
     [Test]
     public async Task Export_WhenItReplacesAnUnpromotedAttempt_DeletesThatAttemptsStagedBytes()
@@ -226,6 +282,44 @@ public sealed class TrainingExportServiceTests : IDisposable
         // The staged file name is deterministic, so the sweep targets the path this very export is about to write.
         // Sweeping AFTER the pipeline would delete the export's own output.
         AssertEx.True(File.Exists(stale.Path), "The re-export's own output must survive the stale sweep.");
+    }
+
+    [Test]
+    public async Task Export_AfterDiscard_DoesNotDeleteTheAuditTombstone()
+    {
+        using var harness = Harness.Create(this);
+        var tombstone = harness.StageStaleArtifact("merged-Q4_K_M.gguf") with
+        {
+            DiscardedAtUtc = 123,
+            DiscardReason = "failed quality",
+            DiscardCleanupPending = false
+        };
+        _ = harness.Store.ListArtifactsAsync(harness.RunId, Arg.Any<CancellationToken>())
+                         .Returns<IReadOnlyList<TrainingArtifactRecord>>([
+                             harness.AdapterArtifact(),
+                             tombstone
+                         ]);
+        harness.ScriptMergedPipeline();
+
+        _ = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
+        await harness.DrainAsync();
+
+        await harness.Store.DidNotReceive().DeleteArtifactAsync(tombstone.Id, tombstone.Version, Arg.Any<CancellationToken>());
+        AssertEx.Equal(TrainingArtifactSmokeState.Passed, harness.RecordedSmokeState);
+    }
+
+    [Test]
+    public async Task Export_WhenArtifactCreationFails_ReleasesAdmissionOwnership()
+    {
+        using var harness = Harness.Create(this);
+        _ = harness.Store.CreateArtifactAsync(Arg.Any<TrainingArtifactInput>(), Arg.Any<CancellationToken>())
+                   .Returns<Task<TrainingArtifactRecord>>(_ => throw new IOException("create failed"));
+
+        _ = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
+        await harness.DrainAsync();
+
+        using var acquired = harness.Gate.TryBeginExclusive(GpuWorkKind.Export);
+        AssertEx.NotNull(acquired, "Artifact creation failure must release the export activity admission.");
     }
 
     /// <summary>Wires one export service over scripted collaborators and a temp-directory workspace.</summary>
@@ -373,6 +467,12 @@ public sealed class TrainingExportServiceTests : IDisposable
 
         public Task DeleteArtifactAsync(Guid artifactId, long expectedVersion) =>
             _service.DeleteArtifactAsync(artifactId, expectedVersion);
+
+        public Task<TrainingArtifactRecord> DiscardQualityAsync(Guid artifactId, long expectedVersion, string reason) =>
+            _service.DiscardArtifactQualityAsync(artifactId, expectedVersion, reason);
+
+        public TrainingArtifactRecord AdapterArtifact() =>
+            Artifact(RunId, TrainingArtifactKind.HfAdapterDir, _adapterDirectory, TrainingArtifactSmokeState.Pending);
 
         /// <summary>Writes a staged file and makes the store answer for the artifact row that points at it.</summary>
         public TrainingArtifactRecord StageArtifact(string path, bool absolute = false)

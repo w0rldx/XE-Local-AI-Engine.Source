@@ -277,6 +277,30 @@ public sealed class SupervisorRaceTests
         next!.Dispose();
     }
 
+    [Test]
+    public async Task DisposeAsync_WhenDetachedSpawnIsQueuedButNotStarted_StillRunsCleanup()
+    {
+        var scheduler = new ManualTaskScheduler();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var supervisor = SupervisorFactory.Create(launchAdmissions: registry,
+            detachedSpawnScheduler: scheduler);
+
+        var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(expected: 1, scheduler.PendingCount);
+        AssertEx.Equal(expected: 1, supervisor.CountInflightSpawns());
+
+        var disposal = supervisor.DisposeAsync().AsTask();
+        AssertEx.False(disposal.IsCompleted,
+            "Shutdown must wait for the queued detached spawn to publish its cancellation and release its ticket.");
+
+        scheduler.RunNext();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => ensure);
+        await disposal.WaitAsync(TimeSpan.FromSeconds(3));
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
+        AssertEx.False(registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
         var deadline = DateTime.UtcNow.AddSeconds(3);
@@ -365,4 +389,53 @@ public sealed class SupervisorRaceTests
         AssertEx.Equal(expected: 2, launcher.LaunchCount); // dead process detected → respawned.
         AssertEx.NotNull(afterCrash);
     }
+}
+
+internal sealed class ManualTaskScheduler : TaskScheduler
+{
+    private readonly Queue<Task> _scheduled = new();
+
+    public int PendingCount
+    {
+        get
+        {
+            lock (_scheduled)
+            {
+                return _scheduled.Count;
+            }
+        }
+    }
+
+    public void RunNext()
+    {
+        Task task;
+        lock (_scheduled)
+        {
+            task = _scheduled.Dequeue();
+        }
+
+        if (!TryExecuteTask(task))
+        {
+            throw new InvalidOperationException("The queued detached-spawn task could not be executed.");
+        }
+    }
+
+    protected override IEnumerable<Task> GetScheduledTasks()
+    {
+        lock (_scheduled)
+        {
+            return _scheduled.ToArray();
+        }
+    }
+
+    protected override void QueueTask(Task task)
+    {
+        lock (_scheduled)
+        {
+            _scheduled.Enqueue(task);
+        }
+    }
+
+    protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) =>
+        false;
 }

@@ -8,10 +8,25 @@ using System.ComponentModel.DataAnnotations;
 ///     encrypted synopsis that is sent in their place, so a long chat keeps its gist within the context window without
 ///     the originals ever being deleted.
 /// </summary>
-public sealed class ConversationCompactionOptions
+public sealed class ConversationCompactionOptions : IValidatableObject
 {
     /// <summary>The configuration section these options bind from.</summary>
     public const string SectionName = "Agent:ConversationCompaction";
+
+    /// <summary>Smallest useful synopsis cap.</summary>
+    public const int MinimumSummaryChars = 256;
+
+    /// <summary>
+    ///     Largest supported synopsis cap. The synopsis is deliberately kept compact; increasing the total request budget
+    ///     allows larger source batches, not an unbounded running summary that consumes the next fold request.
+    /// </summary>
+    public const int MaximumSummaryChars = 4_000;
+
+    /// <summary>
+    ///     Smallest supported total request budget. This leaves room for the fixed prompt, the minimum synopsis cap, and
+    ///     source content; <see cref="Validate" /> enforces the exact prompt-dependent requirement for each configuration.
+    /// </summary>
+    public const int MinimumInputCharsPerSummarizationCall = 2_000;
 
     /// <summary>
     ///     How many of the most recent completed messages are always kept verbatim and never folded into the synopsis, so
@@ -22,23 +37,34 @@ public sealed class ConversationCompactionOptions
 
     /// <summary>
     ///     Upper bound on the synopsis length the summarizer is asked to produce (characters). A guard so a runaway model
-    ///     cannot emit a synopsis larger than the span it replaced; the service truncates anything longer.
+    ///     cannot emit a synopsis larger than the span it replaced; the service truncates anything longer. The supported
+    ///     range is 256 through 4,000 characters so the running synopsis cannot consume an unbounded share of each later
+    ///     fold request.
     /// </summary>
-    [Range(256, int.MaxValue)]
+    [Range(MinimumSummaryChars, MaximumSummaryChars)]
     public int MaxSummaryChars { get; set; } = 4000;
 
     /// <summary>
-    ///     Character budget for the fold span sent to the model in a SINGLE summarization call. When the older history is
-    ///     larger than this — the oversized-conversation case compaction most needs to handle — the summarizer folds it in
-    ///     multiple passes (running summary + next batch) so no single provider request exceeds the model's context
-    ///     window. Deliberately conservative so even a 4096-token model has room for the running summary + system prompt +
-    ///     reserved output alongside the batch (≈ <see cref="MaxSummaryChars" /> + this + overhead stays well under 4096
-    ///     tokens at ~4 chars/token).
+    ///     Total character budget for the model-facing messages in a SINGLE summarization call: system prompt plus the
+    ///     serialized JSON containing the running summary and source-message batch. When the older history is larger
+    ///     than this — including one individually oversized message — the summarizer folds it in multiple passes so no
+    ///     provider request exceeds the bound. Deliberately conservative so even a 4096-token model retains room for
+    ///     reserved output and provider framing.
     ///     <para>
     ///         ponytail: fixed char budget, not the model's probed effective window — upgrade to per-model window probing
     ///         if a large-context model should fold in fewer passes.
     ///     </para>
     /// </summary>
-    [Range(512, int.MaxValue)]
+    [Range(MinimumInputCharsPerSummarizationCall, int.MaxValue)]
     public int MaxInputCharsPerSummarizationCall { get; set; } = 6000;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (MaxSummaryChars > 0
+            && MaxInputCharsPerSummarizationCall < ConversationSummarizer.GetMinimumRequestBudget(MaxSummaryChars))
+        {
+            yield return new ValidationResult(
+                "The total request character budget must fit the system prompt, the maximum intermediate summary, and at least one message Rune.");
+        }
+    }
 }

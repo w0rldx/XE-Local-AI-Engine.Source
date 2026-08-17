@@ -16,6 +16,7 @@ import {
 	applyDevelopmentPatch,
 	approveGoldenConversation,
 	archiveNodeChatConversation,
+	beginTrainingArtifactQualityRevalidation,
 	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
@@ -70,6 +71,7 @@ import {
 	createTrainingDefinition,
 	createTrainingRun,
 	createWorkspace,
+	decideTrainingArtifactQuality,
 	deleteAgentDefinition,
 	deleteBaseArtifact,
 	deleteBenchmarkProject,
@@ -99,6 +101,7 @@ import {
 	detectDevelopmentRepositoryProfile,
 	disableAutoConnect,
 	disableScheduledJob,
+	discardTrainingArtifactQuality,
 	disconnectConnection,
 	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
@@ -250,6 +253,7 @@ import {
 	nodeRefresh,
 	nodeSetup,
 	type Options,
+	overrideTrainingArtifactQuality,
 	pinNodeChatConversation,
 	pollNodeBinding,
 	previewDevelopmentPatch,
@@ -343,6 +347,9 @@ import type {
 	ArchiveNodeChatConversationData,
 	ArchiveNodeChatConversationError,
 	ArchiveNodeChatConversationResponse,
+	BeginTrainingArtifactQualityRevalidationData,
+	BeginTrainingArtifactQualityRevalidationError,
+	BeginTrainingArtifactQualityRevalidationResponse,
 	BenchmarkInferenceProfileData,
 	BenchmarkInferenceProfileResponse,
 	BranchNodeChatConversationData,
@@ -472,6 +479,9 @@ import type {
 	CreateWorkspaceData,
 	CreateWorkspaceError,
 	CreateWorkspaceResponse,
+	DecideTrainingArtifactQualityData,
+	DecideTrainingArtifactQualityError,
+	DecideTrainingArtifactQualityResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
 	DeleteBaseArtifactData,
@@ -540,6 +550,9 @@ import type {
 	DisableAutoConnectResponse,
 	DisableScheduledJobData,
 	DisableScheduledJobResponse,
+	DiscardTrainingArtifactQualityData,
+	DiscardTrainingArtifactQualityError,
+	DiscardTrainingArtifactQualityResponse,
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
 	DownloadRecommendedEmbeddingData,
@@ -865,6 +878,9 @@ import type {
 	NodeSetupData,
 	NodeSetupError,
 	NodeSetupResponse,
+	OverrideTrainingArtifactQualityData,
+	OverrideTrainingArtifactQualityError,
+	OverrideTrainingArtifactQualityResponse,
 	PinNodeChatConversationData,
 	PinNodeChatConversationError,
 	PinNodeChatConversationResponse,
@@ -1687,6 +1703,102 @@ export const promoteTrainingArtifactMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await promoteTrainingArtifact({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const decideTrainingArtifactQualityMutation = (
+	options?: Partial<Options<DecideTrainingArtifactQualityData>>,
+): UseMutationOptions<
+	DecideTrainingArtifactQualityResponse,
+	AxiosError<DecideTrainingArtifactQualityError>,
+	Options<DecideTrainingArtifactQualityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DecideTrainingArtifactQualityResponse,
+		AxiosError<DecideTrainingArtifactQualityError>,
+		Options<DecideTrainingArtifactQualityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await decideTrainingArtifactQuality({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const overrideTrainingArtifactQualityMutation = (
+	options?: Partial<Options<OverrideTrainingArtifactQualityData>>,
+): UseMutationOptions<
+	OverrideTrainingArtifactQualityResponse,
+	AxiosError<OverrideTrainingArtifactQualityError>,
+	Options<OverrideTrainingArtifactQualityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		OverrideTrainingArtifactQualityResponse,
+		AxiosError<OverrideTrainingArtifactQualityError>,
+		Options<OverrideTrainingArtifactQualityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await overrideTrainingArtifactQuality({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const beginTrainingArtifactQualityRevalidationMutation = (
+	options?: Partial<Options<BeginTrainingArtifactQualityRevalidationData>>,
+): UseMutationOptions<
+	BeginTrainingArtifactQualityRevalidationResponse,
+	AxiosError<BeginTrainingArtifactQualityRevalidationError>,
+	Options<BeginTrainingArtifactQualityRevalidationData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		BeginTrainingArtifactQualityRevalidationResponse,
+		AxiosError<BeginTrainingArtifactQualityRevalidationError>,
+		Options<BeginTrainingArtifactQualityRevalidationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await beginTrainingArtifactQualityRevalidation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const discardTrainingArtifactQualityMutation = (
+	options?: Partial<Options<DiscardTrainingArtifactQualityData>>,
+): UseMutationOptions<
+	DiscardTrainingArtifactQualityResponse,
+	AxiosError<DiscardTrainingArtifactQualityError>,
+	Options<DiscardTrainingArtifactQualityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DiscardTrainingArtifactQualityResponse,
+		AxiosError<DiscardTrainingArtifactQualityError>,
+		Options<DiscardTrainingArtifactQualityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await discardTrainingArtifactQuality({
 				...options,
 				...fnOptions,
 				throwOnError: true,

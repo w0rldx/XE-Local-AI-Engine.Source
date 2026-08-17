@@ -1311,6 +1311,330 @@
         ]
       }
     },
+    "/api/local/v1/training/artifacts/{artifactId}/quality": {
+      "put": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "decideTrainingArtifactQuality",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DecideArtifactQualityRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1DecideArtifactQualityRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1ArtifactQualityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/quality/override": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "overrideTrainingArtifactQuality",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "OverrideArtifactQualityRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1OverrideArtifactQualityRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1ArtifactQualityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/quality/revalidation": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "beginTrainingArtifactQualityRevalidation",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "BeginArtifactQualityRevalidationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1BeginArtifactQualityRevalidationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1ArtifactQualityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/training/artifacts/{artifactId}/quality/discard": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "discardTrainingArtifactQuality",
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DiscardArtifactQualityRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1ArtifactQualityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/training/evaluations": {
       "post": {
         "tags": [
@@ -16901,6 +17225,7 @@
           "fileName",
           "sizeBytes",
           "smokeState",
+          "discardCleanupPending",
           "version",
           "createdAtUtc",
           "updatedAtUtc"
@@ -16937,6 +17262,26 @@
           "committedModelName": {
             "type": "string",
             "nullable": true
+          },
+          "qualityComparisonId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "qualityOutcome": {
+            "type": "string",
+            "nullable": true
+          },
+          "discardedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "discardReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "discardCleanupPending": {
+            "type": "boolean"
           },
           "version": {
             "type": "integer"
@@ -17008,12 +17353,143 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1ArtifactQualityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactId",
+          "comparisonId",
+          "artifactSha256",
+          "outcome",
+          "failureCodes",
+          "discardCleanupPending",
+          "version"
+        ],
+        "properties": {
+          "artifactId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "comparisonId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "artifactSha256": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "failureCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "overrideReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "discardedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "discardReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "discardCleanupPending": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1DecideArtifactQualityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "comparisonId",
+          "expectedVersion"
+        ],
+        "properties": {
+          "comparisonId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1OverrideArtifactQualityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": false
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1BeginArtifactQualityRevalidationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingExportsV1DiscardArtifactQualityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": false
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1EvaluationResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "id",
           "modelName",
+          "targetKind",
           "datasetId",
           "datasetContentFingerprint",
           "status",
@@ -17045,6 +17521,14 @@
           },
           "modelContentFingerprint": {
             "type": "string",
+            "nullable": true
+          },
+          "targetKind": {
+            "type": "string"
+          },
+          "sourceArtifactId": {
+            "type": "string",
+            "format": "guid",
             "nullable": true
           },
           "datasetId": {
@@ -17126,13 +17610,20 @@
         "properties": {
           "trainingRunId": {
             "type": "string",
-            "format": "guid"
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
           },
           "target": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingEvaluationEvaluationTarget"
           },
           "modelName": {
             "type": "string",
+            "nullable": true
+          },
+          "artifactId": {
+            "type": "string",
+            "format": "guid",
             "nullable": true
           }
         }
@@ -17141,10 +17632,12 @@
         "type": "string",
         "description": "",
         "x-enumNames": [
+          "Undefined",
           "Base",
           "Tuned"
         ],
         "enum": [
+          "Undefined",
           "Base",
           "Tuned"
         ]

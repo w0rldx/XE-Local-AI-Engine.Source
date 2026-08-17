@@ -6,22 +6,24 @@ using Microsoft.Extensions.AI;
 /// <summary>Which side of a comparison an evaluation scores.</summary>
 public enum EvaluationTarget
 {
+    Undefined = 0,
+
     /// <summary>The untuned checkpoint the run started from — <c>TrainingRun.LinkedInstalledModelName</c>.</summary>
-    Base,
+    Base = 1,
 
     /// <summary>What the run produced and promotion committed to the registry.</summary>
-    Tuned
+    Tuned = 2
 }
 
 /// <summary>
 ///     The frozen hold-out membership, persisted (encrypted) in <c>training_evaluation_runs.membership_json</c>. It
-///     carries sample IDS rather than sample content: the samples themselves are already encrypted per dataset, and
-///     copying them here would put a second plaintext-shaped copy of the same rows in a second table.
+///     carries sample ids that select trajectories from the training run's encrypted, immutable corpus. The membership
+///     does not duplicate sample content because the run-owned corpus is the replay source of truth.
 /// </summary>
 /// <remarks>
 ///     Both sides of a comparison take this membership from the SAME training run's freeze, which is the whole reason
-///     their accuracies are comparable. <see cref="DatasetContentFingerprint" /> is what makes a later dataset edit
-///     detectable rather than silent.
+///     their accuracies are comparable. <see cref="DatasetContentFingerprint" /> identifies the dataset version that
+///     produced the corpus; later live-dataset edits do not change or invalidate that frozen replay.
 /// </remarks>
 public sealed record TrainingEvaluationMembershipV1
 {
@@ -37,12 +39,31 @@ public sealed record TrainingEvaluationMembershipV1
 
     public string DatasetContentFingerprint { get; init; } = string.Empty;
 
-    /// <summary>The hold-out sample ids, in the run's own frozen order. Scoring walks them in exactly this order.</summary>
+    /// <summary>The hold-out sample ids, in the run-owned corpus's frozen order. Scoring walks them in exactly this order.</summary>
     public IReadOnlyList<Guid> HoldoutSampleIds { get; init; } = [];
 }
 
-/// <summary>What the operator asked to evaluate. The model name override exists for a model promoted under a custom name.</summary>
-public sealed record CreateEvaluationCommand(Guid TrainingRunId, EvaluationTarget Target, string? ModelNameOverride = null);
+public sealed record TrainingEvaluationExecutionProvenanceV1
+{
+    public int SchemaVersion { get; init; } = 1;
+    public required string Variant { get; init; }
+    public required string ExecutableVersion { get; init; }
+    public required string ExecutableSha256 { get; init; }
+    public required string ManifestSha256 { get; init; }
+    public required string LaunchProjectionIdentity { get; init; }
+    public int ContextTokens { get; init; }
+    public int LaunchPolicyVersion { get; init; }
+    public int LaunchPolicyChatCacheReuse { get; init; }
+    public int LaunchPolicyChatCacheRamMiB { get; init; }
+    public bool LaunchPolicySpeculativeDecoding { get; init; }
+    public required string ModelSha256 { get; init; }
+    public long ModelSizeBytes { get; init; }
+    public string? AdapterSha256 { get; init; }
+    public long? AdapterSizeBytes { get; init; }
+}
+
+/// <summary>What the operator asked to evaluate. The optional model name selects an installed base; tuned evaluation names a staged artifact.</summary>
+public sealed record CreateEvaluationCommand(Guid TrainingRunId, EvaluationTarget Target, string? ModelNameOverride = null, Guid? ArtifactId = null);
 
 /// <summary>What a comparison's create dialog needs to pre-fill itself from one training run.</summary>
 public sealed record ComparisonSuggestion(
