@@ -848,6 +848,31 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenTheConversationIsUnknown_ThrowsTheTypedNotFound()
+    {
+        // The TYPE is the contract: LocalChatHub.TranslateDomainRejections matches on it to forward a legible sentence,
+        // where a bare InvalidOperationException reaches the browser as SignalR's generic "An unexpected error occurred".
+        // Symmetric with the regenerate path (NodeChatRegenerationServiceTests).
+        var conversationId = Guid.NewGuid();
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        var service = CreateAgentHomeService(persistence,
+            Substitute.For<IInvocationRunner>(),
+            new RecordingWorkerEventDispatcher(),
+            Substitute.For<IConversationSandboxStager>());
+
+        var exception = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(async () =>
+        {
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello")).ConfigureAwait(false))
+            {
+                // Nothing is ever yielded: the read fails before the user turn is persisted.
+            }
+        });
+
+        AssertEx.Equal(conversationId, exception.ConversationId);
+        await persistence.DidNotReceive().PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The returned preparation transfers lease ownership to the chat service, whose exceptional disposal this test asserts.")]
     public async Task SendMessageAsync_WhenPreOwnershipBuildFails_ReleasesPreparationExactlyOnce()
@@ -4028,7 +4053,7 @@ public sealed class NodeChatStreamServiceTests
                        return callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>();
                    });
         // The send path reads through GetConversationForTurnAsync. An unstubbed substitute returns null there, and the
-        // service then throws "conversation was not found" before any behaviour under test runs.
+        // service then throws NodeChatConversationNotFoundException before any behaviour under test runs.
         persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
                    .Returns(_ => selectionPersisted
                        ? conversation with
@@ -4106,7 +4131,7 @@ public sealed class NodeChatStreamServiceTests
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>())
                    .Returns(conversation);
         // The send path reads through GetConversationForTurnAsync. An unstubbed substitute returns null there, and the
-        // service then throws "conversation was not found" before any behaviour under test runs.
+        // service then throws NodeChatConversationNotFoundException before any behaviour under test runs.
         persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
                    .Returns(conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>())
