@@ -307,7 +307,7 @@ internal sealed class GgufModelImporter(
         return Task.CompletedTask;
     }
 
-    private static async Task<(string Hash, long Bytes)> CopyAndHashAsync(ValidatedGgufImportSource source,
+    private static async Task<CopiedFile> CopyAndHashAsync(ValidatedGgufImportSource source,
         string destinationPath,
         long expectedBytes,
         IProgress<GgufImportProgress>? progress,
@@ -342,7 +342,7 @@ internal sealed class GgufModelImporter(
 
         source.VerifyStillCurrent();
 
-        return (Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
+        return new CopiedFile(Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
     }
 
     /// <summary>
@@ -457,4 +457,7 @@ internal sealed class GgufModelImporter(
                         .Select(Path.GetFileName)
                         .Any(existing => string.Equals(existing, fileName, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>The SHA-256 (lowercase hex) and byte count of the copy this importer just wrote.</summary>
+    private sealed record CopiedFile(string Hash, long Bytes);
 }

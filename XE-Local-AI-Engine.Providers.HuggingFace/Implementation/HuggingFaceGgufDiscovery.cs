@@ -107,7 +107,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             return new GgufRepoDetail(repoId, IsGated: false, License: null, []);
         }
 
-        var usable = new List<(HfHubClient.HubRepoFile File, string Quant)>();
+        var usable = new List<UsableFile>();
         foreach (var file in detail.Files)
         {
             // Single source of truth for "selectable model file": a real .gguf, not an mmproj projector companion, with
@@ -124,7 +124,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             // for, so its quant is marked (Q8_0 → MTP-Q8_0) — otherwise the repo's quant list carries the label twice,
             // once for a 0.4 GB drafter and once for the 11.8 GB real model, and both map to the same registry key.
             var quant = GgufQuantParser.TryParse(file.FileName)!;
-            usable.Add((file, GgufDraftModel.IsDraftFile(file.FileName) ? GgufDraftModel.MarkQuant(quant) : quant));
+            usable.Add(new UsableFile(file, GgufDraftModel.IsDraftFile(file.FileName) ? GgufDraftModel.MarkQuant(quant) : quant));
         }
 
         usable = GroupShards(usable);
@@ -213,7 +213,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     // input order in the returned array (index i is usable[i]'s header) so the caller can zip them back together.
     private async Task<GgufHeaderMetadata[]> ReadHeadersAsync(string repoId,
         string revision,
-        IReadOnlyList<(HfHubClient.HubRepoFile File, string Quant)> usable,
+        IReadOnlyList<UsableFile> usable,
         CancellationToken ct)
     {
         var results = new GgufHeaderMetadata[usable.Count];
@@ -254,10 +254,10 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     // untouched. Applied once, right after usability filtering, so every consumer of GgufRepoFile
     // (ListRepoFilesAsync, InspectRepoAsync, and — through them — the advisor and the model catalog) sees one
     // candidate per logical model+quant, never a bare, unloadable split fragment.
-    private static List<(HfHubClient.HubRepoFile File, string Quant)> GroupShards(List<(HfHubClient.HubRepoFile File, string Quant)> usable)
+    private static List<UsableFile> GroupShards(List<UsableFile> usable)
     {
-        var plain = new List<(HfHubClient.HubRepoFile File, string Quant)>();
-        var shardGroups = new Dictionary<string, List<(HfHubClient.HubRepoFile File, string Quant, string Part)>>(StringComparer.OrdinalIgnoreCase);
+        var plain = new List<UsableFile>();
+        var shardGroups = new Dictionary<string, List<ShardCandidate>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in usable)
         {
@@ -275,7 +275,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 shardGroups[baseName] = group;
             }
 
-            group.Add((entry.File, entry.Quant, match.Groups["part"].Value));
+            group.Add(new ShardCandidate(entry.File, entry.Quant, match.Groups["part"].Value));
         }
 
         if (shardGroups.Count == 0)
@@ -286,7 +286,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         // Fixed-width (5-digit) zero-padded part numbers sort correctly under ordinal string comparison, so no
         // int.Parse is needed to find the lowest-numbered (first) split.
         var plainQuants = plain.Select(static p => p.Quant).ToHashSet(StringComparer.Ordinal);
-        var result = new List<(HfHubClient.HubRepoFile File, string Quant)>(plain.Count + shardGroups.Count);
+        var result = new List<UsableFile>(plain.Count + shardGroups.Count);
         result.AddRange(plain);
 
         foreach (var group in shardGroups.Values)
@@ -299,7 +299,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             }
 
             var totalSize = group.Sum(static g => g.File.SizeBytes);
-            result.Add((representative.File with
+            result.Add(new UsableFile(representative.File with
             {
                 SizeBytes = totalSize
             }, representative.Quant));
@@ -327,4 +327,10 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     {
         return Path.GetFileName(fileName).Contains("mmproj", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>A selectable repo file paired with the quant token parsed from its name.</summary>
+    private sealed record UsableFile(HfHubClient.HubRepoFile File, string Quant);
+
+    /// <summary>One split of a sharded GGUF: a <see cref="UsableFile" /> plus its zero-padded part number.</summary>
+    private sealed record ShardCandidate(HfHubClient.HubRepoFile File, string Quant, string Part);
 }
