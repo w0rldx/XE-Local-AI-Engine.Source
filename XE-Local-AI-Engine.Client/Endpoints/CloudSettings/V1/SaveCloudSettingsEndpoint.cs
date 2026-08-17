@@ -54,7 +54,7 @@ public sealed class SaveCloudSettingsEndpoint(
         // actually available, so a fresh/renamed secret-less AuthorizationCode connection gets a clean 400 instead
         // of letting CloudCredentialStore.ValidateConfig throw on save (500) — mirrors the secret-header pattern in
         // CloudSettingsPolicy.ValidateHeadersAndSuffixes.
-        if (RequestsAuthorizationCode(req) && string.IsNullOrWhiteSpace(mergedEntraClientSecret))
+        if (CloudSettingsEndpointDtoMapper.RequestsAuthorizationCode(req) && string.IsNullOrWhiteSpace(mergedEntraClientSecret))
         {
             AddError("EntraSignInMethod is 'AuthorizationCode', which requires a client secret (typed on this request or previously stored).");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -65,16 +65,6 @@ public sealed class SaveCloudSettingsEndpoint(
         await _cloudCredentialStore.SaveConfigAsync(config, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
-    }
-
-    // Mirrors CloudSettingsEndpointDtoMapper.ParseAuthMode/ParseEntraSignInMethod's own parsing so this pre-check
-    // agrees with what ToStoredConfig will actually persist.
-    private static bool RequestsAuthorizationCode(SaveCloudSettingsRequest req)
-    {
-        return Enum.TryParse<AzureFoundryAuthMode>(req.AuthMode?.Trim(), ignoreCase: true, out var authMode)
-               && authMode == AzureFoundryAuthMode.EntraId
-               && Enum.TryParse<EntraSignInMethod>(req.EntraSignInMethod?.Trim(), ignoreCase: true, out var signInMethod)
-               && signInMethod == EntraSignInMethod.AuthorizationCode;
     }
 
     private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)

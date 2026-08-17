@@ -62,12 +62,8 @@ public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, IIm
         }
         catch (ImageRuntimeBusyException exception)
         {
-            await Send.ResultAsync(Results.Conflict(new ImageRuntimeBlockedResponse
-            {
-                Reason = "runtime-busy",
-                Message = exception.Message,
-                Activity = _activityGate.GetSnapshot().ToResponse()
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(exception.Message, _activityGate.GetSnapshot()))
+                      .ConfigureAwait(false);
             return;
         }
 

@@ -77,13 +77,6 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint(
         }
     }
 
-    private Task BlockAsync(string reason, string message, ImageRuntimeActivitySnapshot activity)
-    {
-        return Send.ResultAsync(Results.Conflict(new ImageRuntimeBlockedResponse
-        {
-            Reason = reason,
-            Message = message,
-            Activity = activity.ToResponse()
-        }));
-    }
+    private Task BlockAsync(string reason, string message, ImageRuntimeActivitySnapshot activity) =>
+        Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.Blocked(reason, message, activity));
 }
