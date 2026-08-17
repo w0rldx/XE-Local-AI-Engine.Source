@@ -255,6 +255,29 @@ public sealed class SupervisorEvictionTests
         AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "The unleased in-window pooled process yields once its lease releases.");
     }
 
+    [Test]
+    public async Task EnsureRunning_CapFullButOneProcessExited_PrunesExited_AndAdmitsNewModel()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 2, TimeSpan.FromHours(1)),
+            timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
+
+        // model-a's child dies on its own. Both survivors are well inside the TTL, so neither is an idle victim — only
+        // the exited-process prune can reclaim the slot the dead entry still occupies.
+        var deadHandle = launcher.Handles.OrderBy(h => h.ProcessId).First();
+        deadHandle.SimulateExit();
+
+        await supervisor.EnsureRunningAsync("model-c", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, launcher.LaunchCount);
+        AssertEx.True(deadHandle.WasDisposed, "The pruned exited process should have been torn down, not leaked.");
+    }
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
     {
         return new LlamaServerSupervisorOptions
