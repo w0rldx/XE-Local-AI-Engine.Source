@@ -166,12 +166,14 @@ public static class LlamaServerServiceCollectionExtensions
 
         // Path-addressed throwaway spawn for the training export smoke gate. Explicit factory for the same reason the
         // supervisor needs one: it takes the internal launcher/health-probe seams.
-        services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
+        services.TryAddSingleton<TransientLlamaServerLauncher>(static sp =>
             new TransientLlamaServerLauncher(sp.GetRequiredService<ILlamaCppBinaryManager>(),
                 sp.GetRequiredService<IGpuVariantSelector>(),
                 sp.GetRequiredService<ILlamaServerProcessLauncher>(),
                 sp.GetRequiredService<ILlamaServerHealthProbe>(),
                 sp.GetRequiredService<ILogger<TransientLlamaServerLauncher>>()));
+        services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
+            sp.GetRequiredService<TransientLlamaServerLauncher>());
 
         // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
         // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →
@@ -215,6 +217,14 @@ public static class LlamaServerServiceCollectionExtensions
             loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
+        services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>
+            new TransientLlamaServerEvaluationHarness(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+                sp.GetRequiredService<ILlamaCppBinaryManager>(),
+                sp.GetRequiredService<IGpuVariantSelector>(),
+                sp.GetRequiredService<ILlamaServerCapabilityManifestProbe>(),
+                sp.GetRequiredService<ILlamaServerLaunchPolicy>(),
+                sp.GetRequiredService<TransientLlamaServerLauncher>(),
+                sp.GetRequiredService<IGpuModelLoadAdmission>()));
 
         services.TryAddSingleton<ILlamaCppSourceBuildService>(static sp =>
             new LlamaCppSourceBuildService(sp.GetRequiredService<ILlamaCppSourceBuildPrerequisiteProbe>(),

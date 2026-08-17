@@ -46,6 +46,7 @@ internal static class AddNodeTrainingRunExtensions
 
         // The evaluation half rides the same queue and the same cancellation registry; only the executor differs.
         builder.Services.AddScoped<IEvaluationRunService, EvaluationRunService>();
+        builder.Services.AddScoped<ITrainingEvaluationInstalledModelLeaseProvider, TrainingEvaluationInstalledModelLeaseProvider>();
         builder.Services.AddScoped<IEvaluationRunExecutor, EvaluationRunExecutor>();
         builder.Services.AddScoped<IComparisonReportService, ComparisonReportService>();
         // Export/smoke/promotion. The export service is a SINGLETON because it owns background work that outlives the
@@ -54,6 +55,7 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddSingleton<TrainingExportService>();
         builder.Services.AddSingleton<ITrainingExportService>(provider => provider.GetRequiredService<TrainingExportService>());
         builder.Services.AddScoped<IArtifactPromotionService, ArtifactPromotionService>();
+        builder.Services.AddScoped<IArtifactQualityService, ArtifactQualityService>();
 
         builder.Services.AddHostedService<TrainingRunStartupReaper>();
         builder.Services.AddHostedService<TrainingRunQueueHostedService>();

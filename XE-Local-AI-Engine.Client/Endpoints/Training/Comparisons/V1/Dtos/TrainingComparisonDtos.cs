@@ -109,6 +109,6 @@ public sealed class ComparisonSuggestionResponse
     public Guid? BaseEvaluationRunId { get; init; }
     public Guid? TunedEvaluationRunId { get; init; }
 
-    /// <summary>Why one of the two sides cannot be produced yet — a run with no installed base, or nothing promoted.</summary>
+    /// <summary>Why one side cannot be produced yet — for example, no installed base or no completed staged GGUF.</summary>
     public string? UnavailableReason { get; init; }
 }

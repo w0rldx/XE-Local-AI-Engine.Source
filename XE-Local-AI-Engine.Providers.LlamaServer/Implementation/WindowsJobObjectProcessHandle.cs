@@ -42,6 +42,28 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
 
     public bool HasExited => SafeHasExited(_process);
 
+    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        if (SafeHasExited(_process))
+        {
+            return true;
+        }
+
+        try
+        {
+            await _process.WaitForExitAsync(ct).WaitAsync(timeout, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
     public void TreeKill()
     {
         // Closing the kill-on-close job terminates the whole tree. Idempotent: SafeHandle guards double-close.

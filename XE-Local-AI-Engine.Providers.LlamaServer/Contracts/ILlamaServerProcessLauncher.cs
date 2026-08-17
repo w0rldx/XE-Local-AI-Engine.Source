@@ -29,6 +29,12 @@ internal interface ILlamaServerProcessHandle : IDisposable
     bool HasExited { get; }
 
     /// <summary>
+    ///     Waits up to <paramref name="timeout" /> for the contained process to exit. Returns <see langword="false" />
+    ///     only when the bound elapses; caller cancellation is propagated.
+    /// </summary>
+    Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct);
+
+    /// <summary>
     ///     Tree-kills the process and every descendant (Windows: close the Job Object; Linux: <c>kill(-pgid)</c>).
     ///     Idempotent and safe to call after the process has already exited.
     /// </summary>

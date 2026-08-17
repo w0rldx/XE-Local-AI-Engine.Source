@@ -73,6 +73,15 @@ public sealed class TrainingArtifactResponse
     /// <summary>The registry name once promoted; null while the artifact is still staged and inert.</summary>
     public string? CommittedModelName { get; init; }
 
+    public Guid? QualityComparisonId { get; init; }
+
+    public string? QualityOutcome { get; init; }
+
+    public long? DiscardedAtUtc { get; init; }
+
+    public string? DiscardReason { get; init; }
+    public required bool DiscardCleanupPending { get; init; }
+
     public required long Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -111,4 +120,45 @@ public sealed class TrainingArtifactSmokeResponse
 public sealed class PromoteTrainingArtifactResponse
 {
     public required string ModelName { get; init; }
+}
+
+public sealed class DecideArtifactQualityRequest
+{
+    public Guid ArtifactId { get; init; }
+    public Guid ComparisonId { get; init; }
+    public long? ExpectedVersion { get; init; }
+}
+
+public sealed class OverrideArtifactQualityRequest
+{
+    public Guid ArtifactId { get; init; }
+    public long? ExpectedVersion { get; init; }
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class BeginArtifactQualityRevalidationRequest
+{
+    public Guid ArtifactId { get; init; }
+    public long? ExpectedVersion { get; init; }
+}
+
+public sealed class DiscardArtifactQualityRequest
+{
+    public Guid ArtifactId { get; init; }
+    public long? ExpectedVersion { get; init; }
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class ArtifactQualityResponse
+{
+    public required Guid ArtifactId { get; init; }
+    public required Guid ComparisonId { get; init; }
+    public required string ArtifactSha256 { get; init; }
+    public required string Outcome { get; init; }
+    public required IReadOnlyList<string> FailureCodes { get; init; }
+    public string? OverrideReason { get; init; }
+    public long? DiscardedAtUtc { get; init; }
+    public string? DiscardReason { get; init; }
+    public required bool DiscardCleanupPending { get; init; }
+    public required long Version { get; init; }
 }

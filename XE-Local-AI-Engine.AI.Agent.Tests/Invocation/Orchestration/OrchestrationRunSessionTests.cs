@@ -5,6 +5,7 @@
 
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
@@ -12,6 +13,56 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class OrchestrationRunSessionTests
 {
+    [Test]
+    public async Task CompletePendingApprovalAsync_WhenSendFailsOnce_PreservesRequestForRetryAndOnlyRemovesAfterSuccess()
+    {
+        var pending = new ConcurrentDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["approval-1"] = "request"
+        };
+        var attempts = 0;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => OrchestrationRunSession.CompletePendingApprovalAsync(pending,
+            "approval-1",
+            _ => ++attempts == 1 ? ValueTask.FromException(new InvalidOperationException("fail once")) : ValueTask.CompletedTask));
+
+        AssertEx.True(pending.ContainsKey("approval-1"), "A failed send must leave the approval pending so the watchdog stays suspended and the caller can retry.");
+        await OrchestrationRunSession.CompletePendingApprovalAsync(pending, "approval-1", _ => ValueTask.CompletedTask).ConfigureAwait(false);
+        AssertEx.False(pending.ContainsKey("approval-1"), "The request is removed only after the workflow accepts the response.");
+    }
+
+    [Test]
+    public async Task CompletePendingApprovalAsync_WhenWatchRestartsClockDuringGatedFailedSend_ReSuspendsAfterRestoringPendingRequest()
+    {
+        var pending = new ConcurrentDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["approval-1"] = "request"
+        };
+        using var idleClock = new CancellationTokenSource();
+        var sendClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFailure = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var completion = OrchestrationRunSession.CompletePendingApprovalAsync(pending,
+            "approval-1",
+            async _ =>
+            {
+                sendClaimed.SetResult();
+                await releaseFailure.Task.ConfigureAwait(false);
+                throw new InvalidOperationException("send failed");
+            },
+            () => idleClock.CancelAfter(Timeout.InfiniteTimeSpan));
+
+        await sendClaimed.Task.ConfigureAwait(false);
+        idleClock.CancelAfter(TimeSpan.FromMilliseconds(50)); // The watch observes the temporary empty dictionary.
+        releaseFailure.SetResult();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => completion);
+        await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+
+        AssertEx.True(pending.ContainsKey("approval-1"));
+        AssertEx.False(idleClock.IsCancellationRequested,
+            "Restoring a failed approval must re-suspend a clock the watch restarted while the request was claimed.");
+    }
+
     [Test]
     public void ComposeStreamingUpdates_WhenReasoningAndText_EmitsBothReasoningFirst()
     {

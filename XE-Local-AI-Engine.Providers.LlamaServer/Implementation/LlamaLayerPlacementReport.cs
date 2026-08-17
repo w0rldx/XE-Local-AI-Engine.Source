@@ -54,14 +54,23 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
         // know which build produced the reading. Keys snapshots the dictionary, so removing while iterating is safe.
         foreach (var key in _observations.Keys)
         {
-            if (key.Role == role && string.Equals(key.ModelName, modelName, StringComparison.Ordinal))
+            if (key.Role == role && string.Equals(key.ModelName, modelName, StringComparison.OrdinalIgnoreCase))
             {
                 _ = _observations.TryRemove(key, out _);
             }
         }
     }
 
-    private readonly record struct ObservationKey(string ModelName, ModelRole Role, GpuVariant Variant);
+    private readonly record struct ObservationKey(string ModelName, ModelRole Role, GpuVariant Variant)
+    {
+        public bool Equals(ObservationKey other) =>
+            Role == other.Role
+            && Variant == other.Variant
+            && string.Equals(ModelName, other.ModelName, StringComparison.OrdinalIgnoreCase);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), Role, Variant);
+    }
 
     private sealed record Observation(LlamaLayerPlacement Placement, long Sequence);
 }

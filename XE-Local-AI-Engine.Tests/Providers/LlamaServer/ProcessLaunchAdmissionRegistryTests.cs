@@ -99,6 +99,22 @@ public sealed class ProcessLaunchAdmissionRegistryTests
         secondTicket!.Dispose();
     }
 
+    [Test]
+    public void AdmittedModelIdentity_IsCaseInsensitiveAcrossCapacityAndLaunch()
+    {
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var admission = Admission("Model/A");
+        AssertEx.True(registry.TryAcquire(admission, out var consumer));
+
+        AssertEx.True(registry.Snapshot("model/a", ModelRole.Chat).HasRequestedKey);
+        AssertEx.True(registry.TryBeginLaunch("model/a", ModelRole.Chat, out var captured, out var ticket));
+        AssertEx.Equal(admission, captured);
+
+        ticket!.Dispose();
+        consumer!.Dispose();
+        AssertEx.False(registry.Snapshot("MODEL/A", ModelRole.Chat).HasRequestedKey);
+    }
+
     private static ProcessLaunchAdmission Admission(string modelName)
     {
         var allocation = new ProcessContextAllocation(8192,
