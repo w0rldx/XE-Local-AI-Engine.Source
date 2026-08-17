@@ -32,14 +32,18 @@ internal static class OwnedArtifactCleanup
         return failures is null ? null : new AggregateException(failures);
     }
 
-    /// <summary>As <see cref="TryDeleteAll" />, but throws when anything owned survives.</summary>
+    /// <summary>
+    ///     As <see cref="TryDeleteAll" />, but throws when anything owned survives. <paramref name="ownership" /> names
+    ///     the pipeline that owns the artifacts ("import" / "download") and is carried in the message, so the surviving
+    ///     inner exception still identifies which transaction failed to compensate.
+    /// </summary>
     /// <exception cref="IOException">At least one owned artifact could not be removed.</exception>
-    public static void DeleteAll(params OwnedArtifact[] artifacts)
+    public static void DeleteAll(string ownership, params OwnedArtifact[] artifacts)
     {
         var failure = TryDeleteAll(artifacts);
         if (failure is not null)
         {
-            throw new IOException("One or more owned artifacts could not be removed.", failure);
+            throw new IOException($"One or more {ownership}-owned artifacts could not be removed.", failure);
         }
     }
 
