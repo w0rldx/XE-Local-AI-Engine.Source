@@ -98,6 +98,16 @@ public sealed class InvocationState
     public int? ReasoningTokens { get; set; }
 
     /// <summary>
+    ///     Why the model stopped generating, verbatim from <c>ChatFinishReason.Value</c> on the last streamed update
+    ///     that carried one (<c>stop</c>, <c>length</c>, <c>tool_calls</c>, <c>content_filter</c>, or a provider's own
+    ///     token). Null when the provider reported none — every non-OpenAI-shaped path, the orchestration path, and any
+    ///     turn that ended before a terminal update arrived. It describes the GENERATION, not the invocation: a turn
+    ///     that hit the token budget is still <see cref="InvocationStatus.Completed" />, and callers that care about a
+    ///     truncated answer must read THIS rather than the status.
+    /// </summary>
+    public string? FinishReason { get; set; }
+
+    /// <summary>
     ///     Wall-clock generation duration in milliseconds, measured by the invocation runner across the whole turn
     ///     (prompt-eval through final token). Null until the invocation completes and for legacy/platform turns that
     ///     did not report it. Drives the optional tokens-per-second attribution.
@@ -156,6 +166,7 @@ public sealed class InvocationState
             TotalTokens = TotalTokens,
             ReasoningTokens = ReasoningTokens,
             GenerationDurationMs = GenerationDurationMs,
+            FinishReason = FinishReason,
             PendingApproval = PendingApproval,
             PendingQuestion = PendingQuestion,
             LastApprovalResolution = LastApprovalResolution,

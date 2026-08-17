@@ -483,7 +483,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     }
 
     public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
-        long? generationDurationMs = null)
+        long? generationDurationMs = null, string? finishReason = null)
     {
         UpdateInvocation(invocationId,
             state =>
@@ -495,6 +495,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
                 state.TotalTokens = totalTokens;
                 state.ReasoningTokens = reasoningTokens;
                 state.GenerationDurationMs = generationDurationMs;
+                state.FinishReason = finishReason;
                 state.PendingApproval = null;
                 state.PendingQuestion = null;
                 state.PendingToolCalls = [];

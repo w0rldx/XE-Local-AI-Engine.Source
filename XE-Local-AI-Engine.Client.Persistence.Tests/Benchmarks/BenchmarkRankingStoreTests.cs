@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -149,6 +150,52 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Rank_ExcludesATruncatedRunEvenWhenTheJudgeScoredItWell()
+    {
+        await using var context = await CreateDatabaseAsync("rank-truncated.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        // Both judgings are in the live cohort and both scored well. Only the complete one is a comparable measurement.
+        var complete = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a").ConfigureAwait(false);
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var truncated = await JudgedRunAsync(store, refreshed, revision, score: 96, executionKey: "key-a", stopReason: "length").ConfigureAwait(false);
+
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+
+        var byId = page.Items.ToDictionary(static run => run.Id);
+        AssertEx.Equal<int?>(1, byId[complete].Rank);
+        AssertEx.Null(byId[truncated].Rank, "An answer cut off at the token budget must not outrank a complete one.");
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonTruncated, byId[truncated].Judge!.RankExclusionReason,
+            "Truncation is decided before every judge-based reason: the judging itself is perfectly current.");
+        AssertEx.Equal(BenchmarkQualityScoreSources.None, byId[truncated].QualityScoreSource);
+        AssertEx.Null(byId[truncated].QualityScore);
+        AssertEx.Equal<int?>(96, byId[truncated].Judge!.Score, "The score stays visible; it just does not rank.");
+        AssertEx.Equal("length", byId[truncated].PrimaryStopReason);
+        AssertEx.Equal(BenchmarkPrimaryStatus.Succeeded, byId[truncated].PrimaryStatus, "Truncation flags a run; it never fails it.");
+        AssertEx.Equal("stop", byId[complete].PrimaryStopReason);
+    }
+
+    [Test]
+    public async Task Rank_UserScoreStillRanksATruncatedRun()
+    {
+        await using var context = await CreateDatabaseAsync("rank-truncated-override.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+
+        // The operator override wins over truncation exactly as it wins over every judge-based exclusion.
+        var overridden = await ScoredRunAsync(store, project.Id, 55, stopReason: "length").ConfigureAwait(false);
+
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+
+        var run = page.Items.Single(item => item.Id == overridden);
+        AssertEx.Equal<int?>(1, run.Rank);
+        AssertEx.Equal(BenchmarkQualityScoreSources.User, run.QualityScoreSource);
+        AssertEx.Null(run.Judge!.RankExclusionReason);
+        AssertEx.Equal("length", run.PrimaryStopReason);
+    }
+
+    [Test]
     public async Task ListRuns_FiltersByModelGroupAndByScoredWithoutChangingTheRanking()
     {
         await using var context = await CreateDatabaseAsync("rank-filters.sqlite").ConfigureAwait(false);
@@ -187,12 +234,14 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         BenchmarkProjectRecord project,
         BenchmarkJudgePolicyRevisionRecord revision,
         int score,
-        string? executionKey)
+        string? executionKey,
+        string stopReason = "stop")
     {
         var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
         _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
         {
+            PrimaryStopReason = stopReason,
             JudgeAttempt = new BenchmarkJudgeAttemptSeed(revision.Id, new ReadOnlyMemory<byte>(JudgeRuntime))
         }).ConfigureAwait(false);
         var judge = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
@@ -207,11 +256,18 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         return run.Id;
     }
 
-    private static async Task<Guid> ScoredRunAsync(BenchmarkStore store, Guid projectId, int score, string? fingerprint = null)
+    private static async Task<Guid> ScoredRunAsync(BenchmarkStore store,
+        Guid projectId,
+        int score,
+        string? fingerprint = null,
+        string stopReason = "stop")
     {
         var runId = await StartRunAsync(store, projectId, fingerprint).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var succeeded = await store.MarkPrimarySucceededAsync(PrimarySuccess(runId, primary.Run.Version)).ConfigureAwait(false);
+        var succeeded = await store.MarkPrimarySucceededAsync(PrimarySuccess(runId, primary.Run.Version) with
+        {
+            PrimaryStopReason = stopReason
+        }).ConfigureAwait(false);
         _ = await store.SetUserScoreAsync(runId, score, succeeded.Version).ConfigureAwait(false);
         return runId;
     }

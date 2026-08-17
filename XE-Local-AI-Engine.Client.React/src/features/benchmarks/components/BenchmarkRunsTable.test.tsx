@@ -106,6 +106,25 @@ describe("BenchmarkRunsTable", () => {
 		expect(onToggleRun).toHaveBeenCalledExactlyOnceWith("ranked");
 	});
 
+	// A truncated run still reads "Succeeded" — it did succeed. The badge next to that status is the only thing that
+	// stops the reader from taking a cut-off fragment for a finished answer, and the rank chip says what to do.
+	it("badges a truncated run beside its succeeded status and explains why it does not rank", () => {
+		const truncated = benchmarkRunSummaryFixture({
+			id: "truncated",
+			primaryStatus: "Succeeded",
+			primaryStopReason: "length",
+			rank: null,
+			rankExclusionReason: "truncated",
+			judge: benchmarkJudgeFixture({ state: "succeeded", score: 96, policyRevision: 2, policyCurrent: true, executionCurrent: true }),
+		});
+		renderTable([truncated, rankedRun]);
+
+		expect(screen.getByTestId("benchmark-truncated-truncated")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-rank-exclusion-truncated").textContent).toContain("truncated");
+		// The complete run must NOT be badged, or the signal means nothing.
+		expect(screen.queryByTestId("benchmark-truncated-ranked")).toBeNull();
+	});
+
 	// Same-model history: collapsed, one row per model; expanded, the model's older runs appear underneath.
 	it("groups a model's runs and expands them on request", () => {
 		const older = benchmarkRunSummaryFixture({

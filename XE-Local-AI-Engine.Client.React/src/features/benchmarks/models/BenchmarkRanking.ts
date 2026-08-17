@@ -54,8 +54,11 @@ export function groupBenchmarkRunsByModel(runs: readonly BenchmarkRunSummary[]):
 		});
 }
 
-/** What the operator can do about an exclusion. `wait` = the node is already working on it, `none` = nothing to do. */
-export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait";
+/**
+ * What the operator can do about an exclusion. `wait` = the node is already working on it, `rerun` = re-judging cannot
+ * help because the measurement itself is incomplete.
+ */
+export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait" | "rerun";
 
 export function rankExclusionAction(reason: BenchmarkRankExclusionReason): BenchmarkRankExclusionAction {
 	switch (reason) {
@@ -63,6 +66,10 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 			return "score";
 		case "judge-pending":
 			return "wait";
+		// A truncated answer is not a judging problem: re-judging the same fragment produces the same fragment. The run
+		// has to be taken again with more room.
+		case "truncated":
+			return "rerun";
 		default:
 			return "rejudge";
 	}

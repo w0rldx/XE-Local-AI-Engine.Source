@@ -25,6 +25,8 @@ describe("toBenchmarkProjectSummary", () => {
 			id: "",
 			name: "Summarisation",
 			contextTokens: 0,
+			// Null, not 0: an absent budget means context-limited, and 0 is a budget the node refuses.
+			maxOutputTokens: null,
 			agentDefinitionId: "",
 			judgeEnabled: false,
 			runCount: 0,
@@ -37,9 +39,11 @@ describe("toBenchmarkProjectSummary", () => {
 
 	// `=== true` rather than truthiness: an absent flag must read as off, never as "unknown means on".
 	it("carries the flags through when present", () => {
-		const mapped = toBenchmarkProjectSummary(partial({ name: "X", judgeEnabled: true, isFrozen: true, runCount: 4 }));
+		const mapped = toBenchmarkProjectSummary(
+			partial({ name: "X", judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048 }),
+		);
 
-		expect(mapped).toMatchObject({ judgeEnabled: true, isFrozen: true, runCount: 4 });
+		expect(mapped).toMatchObject({ judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048 });
 	});
 });
 
@@ -184,9 +188,22 @@ describe("toBenchmarkRunSummary", () => {
 			}),
 		);
 
+		const truncated = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				rankExclusionReason: "truncated",
+				primaryStopReason: "length",
+			}),
+		);
+
 		expect(excluded).toMatchObject({ qualityScore: null, qualityScoreSource: "none", rankExclusionReason: "policy-outdated" });
 		expect(unknownReason.rankExclusionReason).toBeNull();
 		expect(cancelled.rankExclusionReason).toBe("judge-cancelled");
+		expect(truncated).toMatchObject({ rankExclusionReason: "truncated", primaryStopReason: "length" });
+		// An absent stop reason must stay null: a legacy run was never measured, and "stop" would be a claim.
+		expect(unknownReason.primaryStopReason).toBeNull();
 	});
 
 	// Grouping must never collapse two different models into one row because the key was missing.

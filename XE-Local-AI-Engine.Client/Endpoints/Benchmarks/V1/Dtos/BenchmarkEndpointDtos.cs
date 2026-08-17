@@ -33,6 +33,10 @@ public class BenchmarkProjectMutationRequest
     public string Name { get; init; } = string.Empty;
     public string CoreTask { get; init; } = string.Empty;
     public int ContextTokens { get; init; }
+
+    /// <summary>Per-run output-token budget; omitted leaves generation context-limited. Must be &lt; ContextTokens.</summary>
+    public int? MaxOutputTokens { get; init; }
+
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }
     public string? JudgeModelName { get; init; }
@@ -66,6 +70,10 @@ public class BenchmarkProjectSummaryResponse
     public Guid Id { get; init; }
     public required string Name { get; init; }
     public int ContextTokens { get; init; }
+
+    /// <summary>Per-run output-token budget, or null when generation is context-limited.</summary>
+    public int? MaxOutputTokens { get; init; }
+
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }
     public int RunCount { get; init; }
@@ -280,6 +288,13 @@ public class BenchmarkRunSummaryResponse
 
     /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
     public string? RankExclusionReason { get; init; }
+
+    /// <summary>
+    ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
+    ///     <c>tool_calls</c>, <c>content_filter</c>), or null when none was reported. <c>length</c> means the answer
+    ///     was cut off by the token budget — the run still succeeded, but it does not rank.
+    /// </summary>
+    public string? PrimaryStopReason { get; init; }
 
     /// <summary>Groups repeated runs of the same model (= the model content fingerprint).</summary>
     public required string ModelGroupKey { get; init; }

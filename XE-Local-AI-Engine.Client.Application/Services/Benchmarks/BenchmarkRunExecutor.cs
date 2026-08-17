@@ -152,7 +152,11 @@ public sealed class BenchmarkRunExecutor(
                         effectiveContext,
                         durationMs,
                         terminal.TotalTokens,
-                        tokensPerSecond))
+                        tokensPerSecond,
+                        // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
+                        // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
+                        // if it were a finished one.
+                        terminal.FinishReason))
                 .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
             events.PublishReserved(terminalEvent with

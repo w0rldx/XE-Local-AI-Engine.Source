@@ -152,7 +152,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var judgeRun = await store.StartRunAsync(CreateRun(projectB));
         var judgePrimaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         var primarySucceeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(judgeRun.Id, judgePrimaryClaim.Run.Version,
-            Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null, JudgeSeed(revisionB)));
+            Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null, JudgeAttempt: JudgeSeed(revisionB)));
         var judgeClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judgeClaim.Kind);
         var queuedProject = await store.CreateProjectAsync(CreateProject());
@@ -361,7 +361,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             });
             var primary = AssertEx.NotNull(await store.ClaimNextAsync());
             var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version, output, 1, 4096, 4, 1, 250,
-                JudgeSeed(activation.Revision)));
+                JudgeAttempt: JudgeSeed(activation.Revision)));
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
             attemptId = judgeWork.JudgeAttemptId!.Value;
             _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Version, judge, 5, 61));
@@ -710,7 +710,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             DurationMs: 1,
             TotalTokens: null,
             TokensPerSecond: null,
-            JudgeSeed(revision)));
+            JudgeAttempt: JudgeSeed(revision)));
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judge.Kind);
         AssertEx.True(judge.JudgeAttemptId is not null, "Claimed judge work must name the attempt it judges.");

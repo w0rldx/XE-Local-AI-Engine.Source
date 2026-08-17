@@ -228,6 +228,21 @@ public static class BenchmarkJudgePromptV2
         + "Return exactly one JSON object matching the supplied output schema. Return no markdown and no extra properties.";
 
     /// <summary>
+    ///     The extra instruction a truncated primary output gets. Appended rather than folded into
+    ///     <see cref="SystemPrompt" /> so a judging of a COMPLETE answer stays byte-identical to every judging that
+    ///     came before — neither the prompt text nor the payload is part of the policy hash or the
+    ///     <c>JudgeExecutionKey</c> (both are hardware/identity only), so an unconditional sentence would silently
+    ///     change what past and future judgings were asked without any version moving.
+    /// </summary>
+    public const string TruncatedPrimaryOutputInstruction =
+        " The primary output was cut off by the token budget before the model finished answering. "
+        + "Score it as the incomplete answer it is; do not credit work the model did not produce.";
+
+    /// <summary>The system prompt for one judging: the base instruction, plus the truncation notice when it applies.</summary>
+    public static string SystemPromptFor(bool primaryOutputTruncated) =>
+        primaryOutputTruncated ? SystemPrompt + TruncatedPrimaryOutputInstruction : SystemPrompt;
+
+    /// <summary>
     ///     Embeds the caller's already-shaped pieces verbatim — this builder frames, it never re-serializes.
     ///     <paramref name="primaryOutputPartsJson" /> must be the GRADED projection of the run's transcript
     ///     (<see cref="BenchmarkOutputParts.ForJudge" />): coalesced, with reasoning parts removed, because hidden
@@ -235,11 +250,16 @@ public static class BenchmarkJudgePromptV2
     ///     The payload's property names and order are unchanged by that narrowing, so neither
     ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> nor the output-schema version moves.
     /// </summary>
+    /// <param name="primaryOutputTruncated">
+    ///     Emits <c>primaryOutputTruncated: true</c> after the output parts. Written ONLY when true, so the payload of
+    ///     a complete run stays byte-identical to the one this builder has always produced.
+    /// </param>
     public static string BuildUserPayloadJson(string taskJson,
         string? referenceAnswer,
         BenchmarkJudgeRubricV1 rubric,
         string primaryOutputPartsJson,
-        string outputSchemaJson)
+        string outputSchemaJson,
+        bool primaryOutputTruncated = false)
     {
         ArgumentNullException.ThrowIfNull(rubric);
         var payload = new JsonObject
@@ -253,6 +273,11 @@ public static class BenchmarkJudgePromptV2
 
         payload["rubric"] = JsonSerializer.SerializeToNode(rubric, PayloadOptions);
         payload["primaryOutputParts"] = JsonNode.Parse(primaryOutputPartsJson);
+        if (primaryOutputTruncated)
+        {
+            payload["primaryOutputTruncated"] = JsonValue.Create(value: true);
+        }
+
         payload["outputSchema"] = JsonNode.Parse(outputSchemaJson);
         return payload.ToJsonString(PayloadOptions);
     }

@@ -95,7 +95,12 @@ public interface IWorkerEventDispatcher
     /// </summary>
     Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase);
 
-    Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null);
+    /// <param name="finishReason">
+    ///     Why the model stopped generating (<c>ChatFinishReason.Value</c>), or null when the provider reported none.
+    ///     Recorded on the terminal state as <see cref="Events.InvocationState.FinishReason" />; it never changes the
+    ///     status, so a turn cut off at the token budget still completes.
+    /// </param>
+    Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null, string? finishReason = null);
 
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);
 

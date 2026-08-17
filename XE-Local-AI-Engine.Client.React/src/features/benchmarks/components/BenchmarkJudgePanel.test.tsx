@@ -31,6 +31,21 @@ describe("BenchmarkJudgePanel", () => {
 		expect(screen.getByTestId("benchmark-judge-state").textContent).toBe("Judging");
 	});
 
+	// The live failure: a 96/100 verdict on an answer that stopped mid-sentence. The score is real and stays visible,
+	// but the panel has to say what it graded, or the number reads as a finished answer scoring 96.
+	it("warns that a truncated answer is what the verdict graded, and only then", () => {
+		const verdict = benchmarkJudgeFixture({ state: "succeeded", score: 96, policyRevision: 2, policyCurrent: true });
+
+		renderPanel(verdict, { primaryTruncated: true });
+		const notice = screen.getByTestId("benchmark-judge-truncated-notice").textContent ?? "";
+		expect(notice).toContain("cut off by the token budget");
+		expect(screen.getByTestId("benchmark-judge-score").textContent).toContain("96");
+
+		cleanup();
+		renderPanel(verdict);
+		expect(screen.queryByTestId("benchmark-judge-truncated-notice")).toBeNull();
+	});
+
 	it("shows the 0..100 score, the summary and every criterion with its rationale", () => {
 		renderPanel(
 			benchmarkJudgeFixture({

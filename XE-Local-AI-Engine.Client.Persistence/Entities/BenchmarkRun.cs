@@ -72,6 +72,13 @@ internal sealed record class BenchmarkRun
     public bool? PrimaryLaunchHasAuxAssets { get; set; }
     public string? PrimaryLaunchKvCacheTypeSource { get; set; }
 
+    /// <summary>
+    ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
+    ///     <c>tool_calls</c>, <c>content_filter</c>). Plaintext, not sensitive. Null on runs frozen before this column
+    ///     existed and on any run whose provider reported no finish reason — never inferred from the status.
+    /// </summary>
+    public string? PrimaryStopReason { get; set; }
+
     public string? PrimaryErrorMessage { get; set; }
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }

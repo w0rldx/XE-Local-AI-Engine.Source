@@ -269,6 +269,50 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetRun_ExposesTheStopReasonAndTheTruncatedRankExclusion()
+    {
+        await using var context = CreateContext();
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
+                   output: "[{\"kind\":\"output\",\"content\":\"cut\"}]",
+                   primaryStopReason: "length",
+                   rankExclusionReason: BenchmarkRunJudgeStates.ReasonTruncated));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("length", document.RootElement.GetProperty("primaryStopReason").GetString());
+        AssertEx.Equal("truncated", document.RootElement.GetProperty("rankExclusionReason").GetString());
+        AssertEx.Equal("Succeeded", document.RootElement.GetProperty("primaryStatus").GetString(),
+            "A truncated run is flagged, never failed.");
+    }
+
+    [Test]
+    public async Task GetProject_ExposesTheOutputBudgetAndTheMutationCarriesItToTheDraft()
+    {
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, maxOutputTokens: 2048));
+        BenchmarkProjectDraft? draft = null;
+        context.Projects.CreateAsync(Arg.Do<BenchmarkProjectDraft>(value => draft = value), Arg.Any<CancellationToken>())
+               .Returns(Project(isFrozen: false, maxOutputTokens: 1024));
+        using var client = context.Factory.CreateClient();
+
+        using var getRequest = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        var getBody = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var createRequest = Authorized(context.Factory, HttpMethod.Post, Api + "/projects", ProjectMutation(maxOutputTokens: 1024));
+        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        using var document = JsonDocument.Parse(getBody);
+        AssertEx.Equal<int?>(2048, document.RootElement.GetProperty("maxOutputTokens").GetInt32());
+        AssertEx.Equal<int?>(1024, AssertEx.NotNull(draft).MaxOutputTokens, "The request's budget must reach the service draft.");
+    }
+
+    [Test]
     public async Task CreateProject_WhenAgentIsIneligible_ReturnsUnprocessableEntity()
     {
         await using var context = CreateContext();
@@ -372,12 +416,13 @@ public sealed class BenchmarkEndpointTests
     private static readonly Guid RunId = Guid.Parse("20000000-0000-0000-0000-000000000002");
     private static readonly Guid AgentId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
-    private static object ProjectMutation(long? expectedVersion = null) =>
+    private static object ProjectMutation(long? expectedVersion = null, int? maxOutputTokens = null) =>
         new
         {
             name = "Project",
             coreTask = "Answer exactly.",
             contextTokens = 4096,
+            maxOutputTokens,
             agentDefinitionId = AgentId,
             judgeEnabled = false,
             judgePromptVersion = 1,
@@ -385,16 +430,18 @@ public sealed class BenchmarkEndpointTests
             expectedVersion
         };
 
-    private static BenchmarkProjectRecord Project(bool isFrozen) =>
+    private static BenchmarkProjectRecord Project(bool isFrozen, int? maxOutputTokens = null) =>
         new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20);
+            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
         string judgeState = BenchmarkRunJudgeStates.None,
         string? output = null,
         BenchmarkRunLaunchIntent? intent = null,
         BenchmarkRunLaunchEvidence? evidence = null,
-        Guid? judgeAttemptId = null) =>
+        Guid? judgeAttemptId = null,
+        string? primaryStopReason = null,
+        string? rankExclusionReason = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -420,7 +467,9 @@ public sealed class BenchmarkEndpointTests
             20,
             intent,
             evidence,
-            new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
+            PrimaryStopReason: primaryStopReason,
+            Judge: new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false,
+                ExecutionCurrent: false, rankExclusionReason));
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.

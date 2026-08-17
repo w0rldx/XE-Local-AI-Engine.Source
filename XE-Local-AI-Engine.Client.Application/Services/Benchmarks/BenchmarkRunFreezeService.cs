@@ -123,7 +123,7 @@ public sealed class BenchmarkRunFreezeService(
             var primaryLaunch = await _launchResolver
                                       .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken)
                                       .ConfigureAwait(false);
-            var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling();
+            var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens);
             var snapshot = _snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
                 definition.Id,
                 definition.Version,

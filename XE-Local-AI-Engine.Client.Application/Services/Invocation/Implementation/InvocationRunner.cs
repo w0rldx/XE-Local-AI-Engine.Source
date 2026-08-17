@@ -367,7 +367,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 stream.UsageSnapshot?.OutputTokens,
                 stream.UsageSnapshot?.TotalTokens,
                 stream.UsageSnapshot?.ReasoningTokens,
-                generationDurationMs).ConfigureAwait(false);
+                generationDurationMs,
+                stream.FinishReason).ConfigureAwait(false);
             invocationOutcome = "completed";
         }
         catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
@@ -667,6 +668,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
 
                 var textChunk = update.Text;
+
+                // Last-wins across the whole turn, segments included: an intermediate tool-call segment must not be the
+                // reason the turn is recorded as having stopped.
+                if (update.FinishReason is { } finishReason && !string.IsNullOrEmpty(finishReason.Value))
+                {
+                    stream.FinishReason = finishReason.Value;
+                }
 
                 // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call
                 // lifecycle events, rather than the three separate OfType/Concat/LastOrDefault scans this ran per

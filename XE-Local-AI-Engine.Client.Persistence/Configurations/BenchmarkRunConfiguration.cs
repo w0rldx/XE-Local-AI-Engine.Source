@@ -55,6 +55,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.PrimaryLaunchExecutableSha256).HasColumnName("primary_launch_executable_sha256").HasMaxLength(64);
         builder.Property(entity => entity.PrimaryLaunchHasAuxAssets).HasColumnName("primary_launch_has_aux_assets");
         builder.Property(entity => entity.PrimaryLaunchKvCacheTypeSource).HasColumnName("primary_launch_kv_cache_type_source").HasMaxLength(16);
+        builder.Property(entity => entity.PrimaryStopReason).HasColumnName("primary_stop_reason").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryErrorMessage).HasColumnName("primary_error_message").HasMaxLength(1024);
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");

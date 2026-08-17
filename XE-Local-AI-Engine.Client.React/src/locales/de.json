@@ -3963,7 +3963,9 @@
 				"CancelRequested": "Abbruch angefordert",
 				"Succeeded": "Erfolgreich",
 				"Failed": "Fehlgeschlagen",
-				"Cancelled": "Abgebrochen"
+				"Cancelled": "Abgebrochen",
+				"truncated": "Abgeschnitten",
+				"truncatedHint": "Die Antwort wurde vom Token-Budget abgeschnitten. Sie wird nicht gewertet — führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus."
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -3995,7 +3997,9 @@
 				"rejudgeConfirmTitle": "Projekt neu bewerten?",
 				"rejudgeConfirmPolicy": "Eine Änderung am Judge bewertet dieses Projekt neu. Alle {{count}} erfolgreichen Läufe werden neu bewertet und die Rangliste wird aus der neuen Kohorte aufgebaut.",
 				"rejudgeConfirmAll": "Alle {{count}} erfolgreichen Läufe werden mit der aktuellen Richtlinie neu bewertet, und die gewertete Kohorte wechselt auf die aktuelle Bewertungslaufzeit.",
-				"rejudgeConfirmAccept": "Neu bewerten"
+				"rejudgeConfirmAccept": "Neu bewerten",
+				"maxOutputTokens": "Maximale Ausgabe-Tokens",
+				"maxOutputTokensHint": "Leer lassen = nur durch den Kontext begrenzt. Muss kleiner als der angeforderte Kontext sein."
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4046,7 +4050,8 @@
 					"succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.",
 					"failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.",
 					"cancelled": "Die Bewertung wurde abgebrochen."
-				}
+				},
+				"truncatedPrimary": "Die bewertete Antwort wurde vom Token-Budget abgeschnitten. Die Punktzahl beschreibt daher eine unvollständige Antwort und wird nicht gewertet."
 			},
 			"validation": {
 				"name": "Ein Name ist erforderlich.",
@@ -4055,7 +4060,8 @@
 				"agent": "Wählen Sie einen Agenten.",
 				"judgeModel": "Wählen Sie ein Bewertungsmodell.",
 				"judgeContext": "Der Kontext der Bewertung muss positiv sein.",
-				"referenceAnswer": "Die Musterantwort ist zu lang."
+				"referenceAnswer": "Die Musterantwort ist zu lang.",
+				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
@@ -4141,7 +4147,8 @@
 					"policy-outdated": "Mit einer älteren Bewertungsrichtlinie bewertet.",
 					"generation-stale": "Vor dem Zurücksetzen der aktuellen Kohorte bewertet.",
 					"execution-key-mismatch": "Mit einer anderen Bewertungslaufzeit bewertet als die gewertete Kohorte.",
-					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig."
+					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig.",
+					"truncated": "Die Antwort wurde vom Token-Budget abgeschnitten und ist deshalb nicht mit einer vollständigen vergleichbar."
 				},
 				"exclusionShort": {
 					"no-score": "unbewertet",
@@ -4151,12 +4158,14 @@
 					"policy-outdated": "Richtlinie veraltet",
 					"generation-stale": "veraltete Kohorte",
 					"execution-key-mismatch": "Laufzeit weicht ab",
-					"execution-identity-incomplete": "Identität unvollständig"
+					"execution-identity-incomplete": "Identität unvollständig",
+					"truncated": "abgeschnitten"
 				},
 				"action": {
 					"score": "Vergeben Sie eine Betreiberbewertung.",
 					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
-					"wait": "Warten Sie, bis die Bewertung fertig ist."
+					"wait": "Warten Sie, bis die Bewertung fertig ist.",
+					"rerun": "Führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus."
 				}
 			},
 			"rubric": {

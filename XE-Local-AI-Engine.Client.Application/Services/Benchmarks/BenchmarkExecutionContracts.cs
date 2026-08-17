@@ -494,13 +494,18 @@ public sealed record BenchmarkJudgePolicyDraft(
     BenchmarkJudgeRubricV1? Rubric = null,
     string? ReferenceAnswer = null);
 
+/// <param name="MaxOutputTokens">
+///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
+///     context-limited. Validated as <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
+/// </param>
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
     string CoreTask,
     int ContextTokens,
     Guid AgentDefinitionId,
-    BenchmarkJudgePolicyDraft? Judge = null);
+    BenchmarkJudgePolicyDraft? Judge = null,
+    int? MaxOutputTokens = null);
 
 public sealed class BenchmarkQueueOptions
 {

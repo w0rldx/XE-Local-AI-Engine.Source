@@ -33,6 +33,57 @@ public sealed class BenchmarkJudgeExecutorTests
         "{\"schemaVersion\":2,\"criteria\":[{\"id\":\"correctness\",\"score\":5,\"rationale\":\"excellent\"}],\"summary\":\"good enough\"}";
 
     [Test]
+    public async Task Execute_ForATruncatedPrimary_TellsTheJudgeTheAnswerWasCutOff()
+    {
+        // The judging still runs — a truncated answer is a real answer that deserves a bad score, not an absent one —
+        // but nothing else in the request says the answer stops mid-sentence, and a judge that cannot see that scores
+        // the fragment as if it were the whole thing.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4, primaryStopReason: "length");
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        RuntimePackage? assignedPackage = null;
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+                  .Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 4096,
+                      EffectiveContextTokens = 4096,
+                      ModelId = "judge.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, JudgeReply)));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Equal(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: true), package.ResolvedSystemPrompt);
+        using var promptPayload = JsonDocument.Parse(package.ConversationContext[0].Content);
+        AssertEx.True(promptPayload.RootElement.GetProperty("primaryOutputTruncated").GetBoolean());
+        _ = store.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Execute_SuccessUsesFrozenJudgeContextPersistsStrictResultAndDisposesOwnership()
     {
         var installed = Installed();
@@ -397,7 +448,7 @@ public sealed class BenchmarkJudgeExecutorTests
     private static BenchmarkRunJudgeView JudgeView(string state, string? errorMessage = null) =>
         new(state, AttemptId, null, 1, RevisionId, 1, 1, null, errorMessage, PolicyCurrent: true, ExecutionCurrent: false, null);
 
-    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version) =>
+    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version, string? primaryStopReason = null) =>
         new(Guid.NewGuid(),
             snapshot.ProjectId,
             new byte[]
@@ -432,7 +483,8 @@ public sealed class BenchmarkJudgeExecutorTests
             1,
             null,
             null,
-            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
+            PrimaryStopReason: primaryStopReason,
+            Judge: new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
 
     private static InstalledModelSnapshot Installed()
     {
