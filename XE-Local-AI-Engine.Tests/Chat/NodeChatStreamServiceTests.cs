@@ -3620,7 +3620,7 @@ public sealed class NodeChatStreamServiceTests
         service.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
                {
-                   var models = callInfo.Arg<IEnumerable<(string ModelName, string? Digest)>>();
+                   var models = callInfo.Arg<IEnumerable<ModelIdentity>>();
                    var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
                    foreach (var (modelName, _) in models)
                    {
