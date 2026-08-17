@@ -15,7 +15,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     Owned by <see cref="InvocationRunner" />, which calls it once per turn and (on the orchestration path) once per
 ///     participant model; it holds no per-turn state of its own, so a single instance serves every invocation.
 /// </summary>
-public sealed class LocalRuntimeWarmer(ILocalModelProviderResolver providerResolver,
+public sealed class LocalRuntimeWarmer(
+    ILocalModelProviderResolver providerResolver,
     IActiveCloudChatClientFactory activeCloudFactory,
     ILogger<LocalRuntimeWarmer> logger)
 {

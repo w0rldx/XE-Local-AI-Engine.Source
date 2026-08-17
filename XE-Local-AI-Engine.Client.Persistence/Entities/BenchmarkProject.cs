@@ -16,6 +16,7 @@ internal sealed record class BenchmarkProject
 
     /// <summary>The judge policy revision this project judges under, or <see langword="null" /> when judging is off.</summary>
     public Guid? CurrentJudgePolicyRevisionId { get; set; }
+
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

@@ -46,8 +46,7 @@ internal static class AddNodeDraftingExtensions
         // Scoped, not singleton: eligibility reads the scoped, DbContext-backed IModelClassificationStore. The Ollama
         // API client is resolved OPTIONALLY — the Ollama runtime is capability-gated, and its absence must make Ollama
         // models ineligible rather than break the drafting surface on a llama.cpp-only node.
-        builder.Services.AddScoped<IConfigDraftService>(serviceProvider => new DefaultConfigDraftService(
-            serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
+        builder.Services.AddScoped<IConfigDraftService>(serviceProvider => new DefaultConfigDraftService(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
             serviceProvider.GetRequiredService<IGgufModelStore>(),
             serviceProvider.GetRequiredService<IModelClassificationStore>(),
             serviceProvider.GetRequiredService<DraftAdmissionGate>(),

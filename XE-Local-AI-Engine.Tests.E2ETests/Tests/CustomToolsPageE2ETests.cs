@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
-using System.Text.Json;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-using System.Text.Json;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
@@ -37,12 +36,12 @@ public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
         }
 
         var page = await _store.ListRunsAsync(req.ProjectId,
-                               (req.Page - 1) * req.PageSize,
-                               req.PageSize,
-                               req.ModelGroupKey,
-                               req.IncludeUnscored,
-                               ct)
-                           .ConfigureAwait(false);
+                                   (req.Page - 1) * req.PageSize,
+                                   req.PageSize,
+                                   req.ModelGroupKey,
+                                   req.IncludeUnscored,
+                                   ct)
+                               .ConfigureAwait(false);
         await Send.OkAsync(new ListBenchmarkRunsResponse
                   {
                       Items = page.Items.Select(static run => run.ToSummary()).ToArray(),

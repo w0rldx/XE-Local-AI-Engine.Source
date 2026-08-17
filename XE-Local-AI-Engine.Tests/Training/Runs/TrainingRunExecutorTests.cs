@@ -267,7 +267,10 @@ public sealed class TrainingRunExecutorTests : IDisposable
                          Version = callInfo.ArgAt<long>(1) + 1
                      }));
             _ = store.CompleteRunAsync(runId, Arg.Any<TrainingWorkStatus>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult(run with { Status = TrainingRunStatus.Failed }));
+                     .Returns(Task.FromResult(run with
+                     {
+                         Status = TrainingRunStatus.Failed
+                     }));
             _ = store.CreateArtifactAsync(Arg.Any<TrainingArtifactInput>(), Arg.Any<CancellationToken>())
                      .Returns(callInfo => Task.FromResult(new TrainingArtifactRecord(Guid.NewGuid(),
                          runId,

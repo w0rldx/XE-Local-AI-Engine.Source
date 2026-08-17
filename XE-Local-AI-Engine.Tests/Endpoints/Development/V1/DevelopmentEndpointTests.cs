@@ -124,8 +124,8 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenSelectedFolderIdIsUnknown_ReturnsNotFound(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                                       new SelectedFolderNotFoundException("The selected folder id is not registered."))
-                                   .ConfigureAwait(false);
+                new SelectedFolderNotFoundException("The selected folder id is not registered."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -139,8 +139,8 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenSelectedFolderInputIsRejected_ReturnsBadRequest(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                                       new SelectedFolderValidationException("The selected folder id is not a valid identifier."))
-                                   .ConfigureAwait(false);
+                new SelectedFolderValidationException("The selected folder id is not a valid identifier."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -156,8 +156,8 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenWorkspaceSecurityRejectsTheSuppliedFolder_ReturnsBadRequest(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                                       new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."))
-                                   .ConfigureAwait(false);
+                new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -171,8 +171,8 @@ public sealed class DevelopmentEndpointTests
         // These three carry no folder at all — projectId/taskId/operationId only — so every workspace-security
         // rejection they can produce is the stored workspace state blocking a well-formed request.
         using var response = await SendWithFailingServiceAsync(operation,
-                                       new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."))
-                                   .ConfigureAwait(false);
+                new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -185,8 +185,8 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenPersistedRepositoryStateBlocksIt_ReturnsConflict(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                                       new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."))
-                                   .ConfigureAwait(false);
+                new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -195,8 +195,8 @@ public sealed class DevelopmentEndpointTests
     public async Task CreateProject_WhenSelectedFolderAliasIsAlreadyRegistered_ReturnsConflict()
     {
         using var response = await SendWithFailingServiceAsync("create",
-                                       new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."))
-                                   .ConfigureAwait(false);
+                new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }

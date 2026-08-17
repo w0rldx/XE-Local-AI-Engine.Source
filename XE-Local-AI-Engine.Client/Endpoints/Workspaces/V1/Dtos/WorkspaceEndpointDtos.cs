@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Workspaces.V1;
 
-using XE_Local_AI_Engine.Client.Services.Workspace;
-
 public sealed class CreateWorkspaceRequest
 {
     public string? Alias { get; init; }

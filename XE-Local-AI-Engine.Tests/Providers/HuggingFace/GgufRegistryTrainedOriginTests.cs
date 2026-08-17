@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
@@ -19,7 +20,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Registry_UnknownOrigin_RescanTolerates()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var goodPath = dir.FilePath(BaseFileName);
         var futurePath = dir.FilePath("Future-Model-Q5_K_M.gguf");
         await File.WriteAllTextAsync(goodPath, "fake-gguf");
@@ -48,7 +49,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Registry_TrainedOrigin_LoadsNormally()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var path = dir.FilePath("Tuned-Model-Q4_K_M.gguf");
         await File.WriteAllTextAsync(path, "fake-gguf");
         await File.WriteAllTextAsync(Path.Combine(dir.Path, "index.json"),
@@ -71,7 +72,7 @@ public sealed class GgufRegistryTrainedOriginTests
     {
         // The lineage block is written into the revision only when an entry carries lineage, so every already-installed
         // model keeps the exact revision recorded before adapters existed. A regression here silently skips them all.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var entry = new GgufModelRegistryEntry
         {
             ModelName = BaseModelName,
@@ -101,7 +102,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Store_ResolveAdapterLaunch_PairsTheAdapterWithItsBase()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
         var basePath = dir.FilePath(BaseFileName);
@@ -130,7 +131,7 @@ public sealed class GgufRegistryTrainedOriginTests
     [Test]
     public async Task Store_ResolveAdapterLaunch_WhenBaseIsMissing_FailsWithAClearError()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
         var adapterPath = dir.FilePath("Tuned-Adapter-Q4_K_M.gguf");
@@ -154,7 +155,7 @@ public sealed class GgufRegistryTrainedOriginTests
     private static IGgufModelStore NewStore(GgufModelRegistry registry, HuggingFaceOptions options)
     {
 #pragma warning disable CA2000 // The in-memory fake handler holds no unmanaged resource; the client lives for the test.
-        var http = new HttpClient(new Infra.ScriptedHandler(static (_, _) => new HttpResponseMessage()));
+        var http = new HttpClient(new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage()));
 #pragma warning restore CA2000
         return Infra.Store(Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options),
             Infra.DiscoveryWith(),
@@ -184,7 +185,7 @@ public sealed class GgufRegistryTrainedOriginTests
               "RepoId": "acme/repo",
               "FileName": "{{fileName}}",
               "Quant": "{{quant}}",
-              "LocalPath": {{System.Text.Json.JsonSerializer.Serialize(localPath)}},
+              "LocalPath": {{JsonSerializer.Serialize(localPath)}},
               "SizeBytes": 9,
               "SourceRevision": "abc123",
               "DownloadedAtUtc": "1970-01-01T00:00:00+00:00",

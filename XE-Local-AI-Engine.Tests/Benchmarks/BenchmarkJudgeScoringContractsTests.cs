@@ -278,8 +278,7 @@ public sealed class BenchmarkJudgeScoringContractsTests
         // The live bug this pins: the writer uses JsonSerializerDefaults.Web (camelCase) and a reader that re-derives
         // DEFAULT (PascalCase) options binds every property to its default, so the API answered a zeroed verdict with a
         // null summary — a shape the frontend's schema rejects, taking the whole run detail down with it.
-        var written = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
-            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+        var written = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             [new BenchmarkJudgeCriterionScoreV2("alpha", 8, "solid")],
             "Mostly right.",
             80,
@@ -313,7 +312,8 @@ public sealed class BenchmarkJudgeScoringContractsTests
         BenchmarkJudgeScoreCalculator.Compute(Rubric([.. criteria.Select(static criterion => (criterion.Id, criterion.Weight))]),
             [.. criteria.Select(static criterion => Score(criterion.Id, criterion.Score))]);
 
-    private static BenchmarkJudgeCriterionScoreV2 Score(string id, int score) => new(id, score, "rationale");
+    private static BenchmarkJudgeCriterionScoreV2 Score(string id, int score) =>
+        new(id, score, "rationale");
 
     private static BenchmarkJudgeRubricV1 Rubric(params (string Id, int Weight)[] criteria) =>
         new(BenchmarkJudgePolicyVersions.RubricVersion,

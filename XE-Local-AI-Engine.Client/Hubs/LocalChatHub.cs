@@ -205,8 +205,7 @@ public sealed class LocalChatHub(
     ///         inside a <c>try</c> that has a <c>catch</c>, hence the manual enumeration with the yield outside the try.
     ///     </para>
     /// </summary>
-    private static async IAsyncEnumerable<ChatStreamEvent> TranslateDomainRejections(
-        IAsyncEnumerable<ChatStreamEvent> source,
+    private static async IAsyncEnumerable<ChatStreamEvent> TranslateDomainRejections(IAsyncEnumerable<ChatStreamEvent> source,
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {

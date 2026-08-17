@@ -656,22 +656,22 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
 
         var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
-                                              "Orphaned template job",
-                                              Description: null,
-                                              Enabled: false,
-                                              ScheduleKind.Cron,
-                                              "0 0 * * * ?",
-                                              IntervalSeconds: null,
-                                              RepeatCount: null,
-                                              StartAtUtc: null,
-                                              EndAtUtc: null,
-                                              "UTC",
-                                              SchedulerMisfirePolicy.Smart,
-                                              PreventOverlap: false,
-                                              MaxRuntimeSeconds: null,
-                                              ParameterJson: null,
-                                              ScheduledJobCreator.User))
-                                 .ConfigureAwait(false);
+                                    "Orphaned template job",
+                                    Description: null,
+                                    Enabled: false,
+                                    ScheduleKind.Cron,
+                                    "0 0 * * * ?",
+                                    IntervalSeconds: null,
+                                    RepeatCount: null,
+                                    StartAtUtc: null,
+                                    EndAtUtc: null,
+                                    "UTC",
+                                    SchedulerMisfirePolicy.Smart,
+                                    PreventOverlap: false,
+                                    MaxRuntimeSeconds: null,
+                                    ParameterJson: null,
+                                    ScheduledJobCreator.User))
+                                .ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.SetEnabledAsync(stored.Id, enabled: true))
                       .ConfigureAwait(false);
@@ -879,12 +879,12 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
 
         var derived = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
-                                        displayName: "Derived ceiling"))
+                                       displayName: "Derived ceiling"))
                                    .ConfigureAwait(false);
         var explicitCeiling = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
                                                displayName: "Operator ceiling",
                                                maxRuntimeSeconds: 90))
-                                          .ConfigureAwait(false);
+                                           .ConfigureAwait(false);
 
         var derivedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(derived.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
                                                             .ConfigureAwait(false));
@@ -917,8 +917,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
 
         var legacy = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
-                                       displayName: "Legacy ceiling",
-                                       maxRuntimeSeconds: 600))
+                                      displayName: "Legacy ceiling",
+                                      maxRuntimeSeconds: 600))
                                   .ConfigureAwait(false);
         // The same 600 on ANOTHER template is a plain operator value and must survive untouched.
         var otherTemplate = await service.CreateJobAsync(ValidCronInput(displayName: "Echo ceiling", maxRuntimeSeconds: 600)).ConfigureAwait(false);

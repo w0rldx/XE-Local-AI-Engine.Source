@@ -283,6 +283,7 @@ public class BenchmarkRunSummaryResponse
 
     /// <summary>Groups repeated runs of the same model (= the model content fingerprint).</summary>
     public required string ModelGroupKey { get; init; }
+
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
     public int? TotalTokens { get; init; }
@@ -318,8 +319,10 @@ public class BenchmarkRunSummaryResponse
 public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 {
     public JsonElement? OutputParts { get; init; }
+
     /// <summary>The rubric verdict of the current attempt (<c>BenchmarkJudgeResultV2</c>), or null.</summary>
     public JsonElement? JudgeResult { get; init; }
+
     public string? PrimaryErrorMessage { get; init; }
     public long? StartedAtUtc { get; init; }
     public long? PrimaryCompletedAtUtc { get; init; }
@@ -329,7 +332,6 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 
     /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>
     public JsonElement? PrimaryEnvironmentFacts { get; init; }
-
 }
 
 public sealed class BenchmarkRankCohortResponse

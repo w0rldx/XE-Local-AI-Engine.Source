@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
-using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -333,11 +332,10 @@ public sealed class NodeChatStreamService(
                 return;
             }
 
-            await eventSink.WriteAsync(
-                    ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
-                        invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
+                                   invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                               cancellationToken)
+                           .ConfigureAwait(false);
 
             // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider
             // invocation with a dedicated category, so the client sees an actionable "pull a model" terminal rather
@@ -1028,7 +1026,8 @@ public sealed class NodeChatStreamService(
     private sealed record SandboxStagingOutcome(ConversationSandboxPreparation? Preparation, string? Error);
 
     // The synthetic context messages prepended to one turn, plus the provenance of any inlined knowledge hits.
-    private sealed record ChatTurnContext(ConversationMessageDto? Attachment,
+    private sealed record ChatTurnContext(
+        ConversationMessageDto? Attachment,
         ConversationMessageDto? Image,
         ConversationMessageDto? Knowledge,
         IReadOnlyList<NodeChatMessageSource>? KnowledgeSources);

@@ -83,5 +83,4 @@ public sealed class McpOptionsValidatorTests
         AssertEx.True(result.Failed);
         AssertEx.Equal(expected: 3, result.Failures!.Count());
     }
-
 }

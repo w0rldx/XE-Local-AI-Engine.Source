@@ -45,7 +45,8 @@ public sealed class SelectedFolderResolverTests
         var resolver = CreateResolver();
 
         // Still fully qualified on both platforms, so the '..' segment — not the qualification check — is what rejects it.
-        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
+            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
             "A traversal host path should be rejected.");
 
         AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());

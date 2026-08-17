@@ -71,39 +71,81 @@ public sealed class BenchmarkJudgePolicyContractsTests
     public void Validator_RejectsTitleAndDescriptionOutsideBounds()
     {
         var title = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([Criterion("c0") with { Title = new string('t', 65) }]))));
+            BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([
+                Criterion("c0") with
+                {
+                    Title = new string('t', 65)
+                }
+            ]))));
         var description = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([Criterion("c0") with { Description = "  " }]))));
+            BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([
+                Criterion("c0") with
+                {
+                    Description = "  "
+                }
+            ]))));
         var longDescription = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([Criterion("c0") with { Description = new string('d', 1025) }]))));
+            BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([
+                Criterion("c0") with
+                {
+                    Description = new string('d', 1025)
+                }
+            ]))));
 
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionTitleInvalid, title.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionDescriptionInvalid, description.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionDescriptionInvalid, longDescription.Code);
-        BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([Criterion("c0") with { Title = new string('t', 64), Description = new string('d', 1024) }])));
+        BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([
+            Criterion("c0") with
+            {
+                Title = new string('t', 64),
+                Description = new string('d', 1024)
+            }
+        ])));
     }
 
     [Test]
     public void Validator_RejectsUnsupportedVersionsAndContextAndReferenceAnswer()
     {
         var prompt = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with { PromptVersion = 1 }));
+            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with
+            {
+                PromptVersion = 1
+            }));
         var schema = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with { OutputSchemaVersion = 3 }));
+            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with
+            {
+                OutputSchemaVersion = 3
+            }));
         var rubricVersion = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default() with { Version = 2 })));
+            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default() with
+            {
+                Version = 2
+            })));
         var context = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with { RequestedContextTokens = 0 }));
+            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with
+            {
+                RequestedContextTokens = 0
+            }));
         var reference = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with { ReferenceAnswer = new string('r', 32769) }));
+            BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with
+            {
+                ReferenceAnswer = new string('r', 32769)
+            }));
 
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported, prompt.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.OutputSchemaVersionUnsupported, schema.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.RubricVersionUnsupported, rubricVersion.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.ContextTokensInvalid, context.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.ReferenceAnswerTooLong, reference.Code);
-        BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with { ReferenceAnswer = new string('r', 32768) });
-        BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with { ReferenceAnswer = null });
+        BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with
+        {
+            ReferenceAnswer = new string('r', 32768)
+        });
+        BenchmarkJudgePolicyValidator.Validate(Policy(BenchmarkJudgeRubricDefaults.Default()) with
+        {
+            ReferenceAnswer = null
+        });
     }
 
     [Test]
@@ -111,11 +153,17 @@ public sealed class BenchmarkJudgePolicyContractsTests
     {
         var criteria = BenchmarkJudgeRubricDefaults.Default().Criteria;
         var forward = Policy(BenchmarkJudgeRubricDefaults.Default());
-        var reversed = Policy(BenchmarkJudgeRubricDefaults.Default() with { Criteria = [.. criteria.Reverse()] })
+        var reversed = Policy(BenchmarkJudgeRubricDefaults.Default() with
+            {
+                Criteria = [.. criteria.Reverse()]
+            })
             with
-        {
-            Model = Model() with { MemberHashes = ["bbb", "aaa"] }
-        };
+            {
+                Model = Model() with
+                {
+                    MemberHashes = ["bbb", "aaa"]
+                }
+            };
 
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(forward), BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(reversed));
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(forward), BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(reversed));
@@ -125,8 +173,7 @@ public sealed class BenchmarkJudgePolicyContractsTests
     public void Canonicalizer_EmitsCompactCamelCaseJsonWithExplicitNulls()
     {
         // Space-free texts, so any space left in the output is formatting whitespace rather than rubric wording.
-        var canonical = BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(
-            Policy(Rubric([new BenchmarkJudgeRubricCriterionV1("c0", "Title", "Description", 10)])));
+        var canonical = BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(Policy(Rubric([new BenchmarkJudgeRubricCriterionV1("c0", "Title", "Description", 10)])));
 
         AssertEx.False(canonical.Contains(' ', StringComparison.Ordinal));
         AssertEx.False(canonical.Contains('\n', StringComparison.Ordinal));
@@ -161,7 +208,10 @@ public sealed class BenchmarkJudgePolicyContractsTests
         // Same policy, built the other way round at every level that has one.
         var rebuilt = Policy(Rubric([Criterion("alpha"), Criterion("beta")])) with
         {
-            Model = Model() with { MemberHashes = ["bbb", "aaa"] }
+            Model = Model() with
+            {
+                MemberHashes = ["bbb", "aaa"]
+            }
         };
 
         var canonical = BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(forward);
@@ -185,31 +235,85 @@ public sealed class BenchmarkJudgePolicyContractsTests
 
     private static IEnumerable<BenchmarkJudgePolicyV1> Mutations(BenchmarkJudgePolicyV1 baseline)
     {
-        yield return baseline with { ReferenceAnswer = "reference" };
-        yield return baseline with { RequestedContextTokens = 8192 };
-        yield return baseline with { Model = baseline.Model with { ModelName = "other" } };
-        yield return baseline with { Model = baseline.Model with { ModelContentFingerprint = $"v1:{new string('b', 64)}" } };
-        yield return baseline with { Model = baseline.Model with { MemberHashes = ["aaa"] } };
-        yield return baseline with { Sampling = baseline.Sampling with { Temperature = 0.5f } };
         yield return baseline with
         {
-            Rubric = baseline.Rubric with
+            ReferenceAnswer = "reference"
+        };
+        yield return baseline with
+        {
+            RequestedContextTokens = 8192
+        };
+        yield return baseline with
+        {
+            Model = baseline.Model with
             {
-                Criteria = [.. baseline.Rubric.Criteria.Select(static (criterion, index) => index == 0 ? criterion with { Weight = 41 } : criterion)]
+                ModelName = "other"
+            }
+        };
+        yield return baseline with
+        {
+            Model = baseline.Model with
+            {
+                ModelContentFingerprint = $"v1:{new string('b', 64)}"
+            }
+        };
+        yield return baseline with
+        {
+            Model = baseline.Model with
+            {
+                MemberHashes = ["aaa"]
+            }
+        };
+        yield return baseline with
+        {
+            Sampling = baseline.Sampling with
+            {
+                Temperature = 0.5f
             }
         };
         yield return baseline with
         {
             Rubric = baseline.Rubric with
             {
-                Criteria = [.. baseline.Rubric.Criteria.Select(static (criterion, index) => index == 0 ? criterion with { Description = "changed" } : criterion)]
+                Criteria =
+                [
+                    .. baseline.Rubric.Criteria.Select(static (criterion, index) => index == 0
+                        ? criterion with
+                        {
+                            Weight = 41
+                        }
+                        : criterion)
+                ]
             }
         };
         yield return baseline with
         {
             Rubric = baseline.Rubric with
             {
-                Criteria = [.. baseline.Rubric.Criteria.Select(static (criterion, index) => index == 0 ? criterion with { Title = "changed" } : criterion)]
+                Criteria =
+                [
+                    .. baseline.Rubric.Criteria.Select(static (criterion, index) => index == 0
+                        ? criterion with
+                        {
+                            Description = "changed"
+                        }
+                        : criterion)
+                ]
+            }
+        };
+        yield return baseline with
+        {
+            Rubric = baseline.Rubric with
+            {
+                Criteria =
+                [
+                    .. baseline.Rubric.Criteria.Select(static (criterion, index) => index == 0
+                        ? criterion with
+                        {
+                            Title = "changed"
+                        }
+                        : criterion)
+                ]
             }
         };
     }

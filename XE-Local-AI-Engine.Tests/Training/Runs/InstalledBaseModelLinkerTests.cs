@@ -47,7 +47,10 @@ public sealed class InstalledBaseModelLinkerTests
     public async Task Resolve_NoMatch_IsNull_NeverAGuess()
     {
         var registry = Substitute.For<IGgufModelRegistry>();
-        _ = registry.ListAsync(Arg.Any<CancellationToken>()).Returns(new[] { Entry("other/Model-GGUF:Q4", "other/Model-GGUF") });
+        _ = registry.ListAsync(Arg.Any<CancellationToken>()).Returns(new[]
+        {
+            Entry("other/Model-GGUF:Q4", "other/Model-GGUF")
+        });
         var linker = new InstalledBaseModelLinker(registry);
 
         AssertEx.Null(await linker.ResolveAsync(BaseRepo, explicitModelName: null));

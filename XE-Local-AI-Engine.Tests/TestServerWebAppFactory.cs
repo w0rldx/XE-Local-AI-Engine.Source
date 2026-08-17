@@ -5,8 +5,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -18,7 +18,6 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -119,7 +118,8 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             "true",
             StringComparison.OrdinalIgnoreCase);
 
-    public HttpClient CreateClient() => EnsureApp().GetTestClient();
+    public HttpClient CreateClient() =>
+        EnsureApp().GetTestClient();
 
     public string CreateNodeAccessToken()
     {
@@ -182,7 +182,8 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNonOperatorAccessToken());
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
 
     public async ValueTask DisposeAsync()
     {
@@ -225,7 +226,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 // path would otherwise leave an immortal pool (open connection + prune timer) behind. Clearing all
                 // pools (public API) is safe here: batch runs are single-threaded, and a concurrent host merely
                 // reopens its pooled connection.
-                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                SqliteConnection.ClearAllPools();
 
                 TryDeleteDirectory(_fixtureWebRoot);
                 TryDeleteDirectory(_nodeDataDirectory);

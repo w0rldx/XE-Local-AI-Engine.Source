@@ -48,7 +48,8 @@ internal sealed class JailState
     ///     directory — flipping it anywhere else leaves a live process behind a "dead" state. Callers hold
     ///     <see cref="Sync" />; this method does not take it.
     /// </summary>
-    public void MarkDead() => Alive = false;
+    public void MarkDead() =>
+        Alive = false;
 }
 
 /// <summary>

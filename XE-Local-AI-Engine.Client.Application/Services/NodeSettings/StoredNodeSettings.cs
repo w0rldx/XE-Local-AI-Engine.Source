@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using System.Text.RegularExpressions;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 

@@ -26,8 +26,7 @@ public sealed class EjectImageRuntimeEndpoint(
         var result = await supervisor.EvictAllAsync(ct).ConfigureAwait(false);
         if (!result.Evicted)
         {
-            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(
-                          "Wait for active image jobs, image-runtime startup, or runtime mutation to finish before ejecting image processes.",
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy("Wait for active image jobs, image-runtime startup, or runtime mutation to finish before ejecting image processes.",
                           result.Activity))
                       .ConfigureAwait(false);
             return;

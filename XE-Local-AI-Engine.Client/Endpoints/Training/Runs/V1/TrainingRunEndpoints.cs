@@ -31,13 +31,13 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
         try
         {
             var run = await _runs.CreateAsync(new CreateTrainingRunCommand(req.DatasetId,
-                                      req.ExpectedDatasetVersion,
-                                      req.BaseArtifactId,
-                                      req.LicenseConfirmed,
-                                      req.Options?.ToDomain(),
-                                      req.LinkedModelName),
-                                  ct)
-                              .ConfigureAwait(false);
+                                         req.ExpectedDatasetVersion,
+                                         req.BaseArtifactId,
+                                         req.LicenseConfirmed,
+                                         req.Options?.ToDomain(),
+                                         req.LinkedModelName),
+                                     ct)
+                                 .ConfigureAwait(false);
             await Send.OkAsync(run.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (TrainingRunRejectedException exception)

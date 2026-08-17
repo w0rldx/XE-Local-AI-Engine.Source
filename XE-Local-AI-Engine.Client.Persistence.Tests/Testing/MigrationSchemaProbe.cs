@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -168,7 +169,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         command.Parameters.AddWithValue("$table", tableName);
         command.Parameters.AddWithValue("$column", columnName);
         var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return value is DBNull or null ? null : Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+        return value is DBNull or null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 
     /// <summary>True when <paramref name="indexName" /> exists on the table, has the expected uniqueness, and covers exactly <paramref name="columns" />.</summary>
@@ -181,7 +182,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         listCommand.Parameters.AddWithValue("$table", tableName);
         listCommand.Parameters.AddWithValue("$index", indexName);
         var uniqueFlag = await listCommand.ExecuteScalarAsync().ConfigureAwait(false);
-        if (uniqueFlag is null || Convert.ToInt64(uniqueFlag, System.Globalization.CultureInfo.InvariantCulture) != (unique ? 1 : 0))
+        if (uniqueFlag is null || Convert.ToInt64(uniqueFlag, CultureInfo.InvariantCulture) != (unique ? 1 : 0))
         {
             return false;
         }

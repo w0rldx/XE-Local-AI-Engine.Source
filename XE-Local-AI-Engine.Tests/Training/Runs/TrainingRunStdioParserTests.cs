@@ -22,8 +22,7 @@ public sealed class TrainingRunStdioParserTests
         AssertEx.Equal(TrainingStdioEventKind.Phase, phase.Kind);
         AssertEx.Equal("training", phase.Phase);
 
-        var progress = AssertEx.NotNull(
-            TrainingRunStdioParser.TryParse("""{"event":"progress","step":7,"totalSteps":40,"epoch":0.5,"loss":1.25,"lr":0.0002,"vramBytes":123456789}"""),
+        var progress = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"progress","step":7,"totalSteps":40,"epoch":0.5,"loss":1.25,"lr":0.0002,"vramBytes":123456789}"""),
             "The progress line must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Progress, progress.Kind);
         AssertEx.Equal(expected: 7, progress.Step!.Value);

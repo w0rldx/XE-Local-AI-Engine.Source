@@ -14,8 +14,7 @@ public sealed class StructuredAgentRunnerTests
 {
     private const string SampleJson = """{"userMessage":"hi","assistantText":"there"}""";
 
-    private static readonly JsonElement Schema = JsonDocument.Parse(
-        """{"type":"object","properties":{"userMessage":{"type":"string"}},"required":["userMessage"]}""").RootElement.Clone();
+    private static readonly JsonElement Schema = JsonDocument.Parse("""{"type":"object","properties":{"userMessage":{"type":"string"}},"required":["userMessage"]}""").RootElement.Clone();
 
     [Test]
     public async Task StructuredOutput_ReasoningTeacher_RejectedInConstrainedMode()
@@ -23,8 +22,7 @@ public sealed class StructuredAgentRunnerTests
         using var client = new RecordingChatClient(SampleJson);
         var runner = CreateRunner(supportsThinking: true);
 
-        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(
-            () => runner.RunAsync(client, Request(TeacherOutputMode.Constrained)));
+        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(() => runner.RunAsync(client, Request(TeacherOutputMode.Constrained)));
 
         AssertEx.Contains(exception.Message, "Constrained");
         AssertEx.False(client.WasCalled, "A rejected teacher must never reach the model.");

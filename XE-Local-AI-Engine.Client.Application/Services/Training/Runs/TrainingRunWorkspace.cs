@@ -36,11 +36,9 @@ public sealed class TrainingRunWorkspace
         _protector = new UploadedFileBlobProtector(keyHolder ?? throw new ArgumentNullException(nameof(keyHolder)));
     }
 
-    public string TrainingRoot =>
-        Path.Combine(_dataDirectory.Root, "training");
+    public string TrainingRoot => Path.Combine(_dataDirectory.Root, "training");
 
-    public string RunsRoot =>
-        Path.Combine(TrainingRoot, "runs");
+    public string RunsRoot => Path.Combine(TrainingRoot, "runs");
 
     public string RunRoot(Guid runId) =>
         Path.Combine(RunsRoot, runId.ToString());

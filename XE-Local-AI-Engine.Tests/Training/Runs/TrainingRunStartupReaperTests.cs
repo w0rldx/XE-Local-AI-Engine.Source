@@ -42,32 +42,50 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheProcessGroupDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with { Pgid = 4243 }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+            {
+                Pgid = 4243
+            }),
             "A different process group means the pid was reused by an unrelated session.");
 
     [Test]
     public void Matches_WhenTheStartTimeDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with { StartTicks = 987654322 }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+            {
+                StartTicks = 987654322
+            }),
             "The start time is the pid-reuse guard: a different one is a different process wearing the same pid.");
 
     [Test]
     public void Matches_WhenTheExecutableDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with { ExecutablePath = "/usr/bin/python3" }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+            {
+                ExecutablePath = "/usr/bin/python3"
+            }),
             "A different executable is not this run's trainer, whatever else agrees.");
 
     [Test]
     public void Matches_WhenTheExecutableIsUnreadable_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with { ExecutablePath = null }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+            {
+                ExecutablePath = null
+            }),
             "An unreadable /proc/[pid]/exe cannot confirm identity, so it must not be treated as confirming it.");
 
     [Test]
     public void Matches_WhenTheRunTokenDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with { RunToken = "00000000000000000000000000000000" }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+            {
+                RunToken = "00000000000000000000000000000000"
+            }),
             "The run token is the one field a recycled pid running the same interpreter cannot forge.");
 
     [Test]
     public void Matches_WhenTheRunTokenIsAbsent_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with { RunToken = null }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+            {
+                RunToken = null
+            }),
             "A child whose environment carries no token is not one this host launched.");
 
     [Test]
@@ -131,9 +149,18 @@ public sealed class TrainingRunStartupReaperTests
     {
         var (firstId, secondId, thirdId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var store = StoreWith([
-            new TrainingRunLaunchReceipt(firstId, Serialize(Receipt with { Pid = 1 })),
-            new TrainingRunLaunchReceipt(secondId, Serialize(Receipt with { Pid = 2 })),
-            new TrainingRunLaunchReceipt(thirdId, Serialize(Receipt with { Pid = 3 }))
+            new TrainingRunLaunchReceipt(firstId, Serialize(Receipt with
+            {
+                Pid = 1
+            })),
+            new TrainingRunLaunchReceipt(secondId, Serialize(Receipt with
+            {
+                Pid = 2
+            })),
+            new TrainingRunLaunchReceipt(thirdId, Serialize(Receipt with
+            {
+                Pid = 3
+            }))
         ]);
 
         var inspector = Substitute.For<ITrainingProcessInspector>();
@@ -152,12 +179,30 @@ public sealed class TrainingRunStartupReaperTests
     private static IEnumerable<TrainingProcessFacts?> Mismatches() =>
     [
         null,
-        LiveFacts() with { Pgid = 4243 },
-        LiveFacts() with { StartTicks = 1 },
-        LiveFacts() with { ExecutablePath = "/usr/bin/python3" },
-        LiveFacts() with { ExecutablePath = null },
-        LiveFacts() with { RunToken = "different" },
-        LiveFacts() with { RunToken = null }
+        LiveFacts() with
+        {
+            Pgid = 4243
+        },
+        LiveFacts() with
+        {
+            StartTicks = 1
+        },
+        LiveFacts() with
+        {
+            ExecutablePath = "/usr/bin/python3"
+        },
+        LiveFacts() with
+        {
+            ExecutablePath = null
+        },
+        LiveFacts() with
+        {
+            RunToken = "different"
+        },
+        LiveFacts() with
+        {
+            RunToken = null
+        }
     ];
 
     private static ReadOnlyMemory<byte> Serialize(TrainingLaunchReceiptV1 receipt) =>
@@ -183,8 +228,7 @@ public sealed class TrainingRunStartupReaperTests
         return new TrainingRunStartupReaper(scopeFactory, inspector, workspace, TimeProvider.System, NullLogger<TrainingRunStartupReaper>.Instance);
     }
 
-    private static (TrainingRunStartupReaper Reaper, FakeTrainingProcessInspector Inspector, ITrainingRunStore Store, Guid RunId) Build(
-        TrainingProcessFacts? facts)
+    private static (TrainingRunStartupReaper Reaper, FakeTrainingProcessInspector Inspector, ITrainingRunStore Store, Guid RunId) Build(TrainingProcessFacts? facts)
     {
         var runId = Guid.NewGuid();
         var store = StoreWith([new TrainingRunLaunchReceipt(runId, Serialize(Receipt))]);
@@ -194,6 +238,12 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheRecordedTokenIsEmpty_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt with { RunToken = string.Empty }, LiveFacts() with { RunToken = string.Empty }),
+        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt with
+            {
+                RunToken = string.Empty
+            }, LiveFacts() with
+            {
+                RunToken = string.Empty
+            }),
             "Two empty tokens must not be read as agreement — that would make an unset token a universal match.");
 }

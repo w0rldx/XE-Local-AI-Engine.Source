@@ -268,8 +268,7 @@ public sealed class TrainingExportServiceTests : IDisposable
         public string? RecordedSmokeReason { get; private set; }
         public bool SmokeRan { get; private set; }
 
-        public string LogText =>
-            _logger.AllText;
+        public string LogText => _logger.AllText;
 
         public static Harness Create(TrainingExportServiceTests owner,
             bool quantizerPresent = true,
@@ -399,8 +398,7 @@ public sealed class TrainingExportServiceTests : IDisposable
         {
             var stale = StageArtifact(fileName);
             _ = Store.ListArtifactsAsync(RunId, Arg.Any<CancellationToken>())
-                     .Returns<IReadOnlyList<TrainingArtifactRecord>>(
-                     [
+                     .Returns<IReadOnlyList<TrainingArtifactRecord>>([
                          Artifact(RunId, TrainingArtifactKind.HfAdapterDir, _adapterDirectory, TrainingArtifactSmokeState.Pending),
                          stale
                      ]);
@@ -468,8 +466,7 @@ public sealed class TrainingExportServiceTests : IDisposable
                 WorkErrorMessage: null);
             _ = store.GetAsync(runId, Arg.Any<CancellationToken>()).Returns(run);
             _ = store.ListArtifactsAsync(runId, Arg.Any<CancellationToken>())
-                     .Returns<IReadOnlyList<TrainingArtifactRecord>>(
-                     [
+                     .Returns<IReadOnlyList<TrainingArtifactRecord>>([
                          Artifact(runId, TrainingArtifactKind.HfAdapterDir, adapterDirectory, TrainingArtifactSmokeState.Pending)
                      ]);
             _ = store.CreateArtifactAsync(Arg.Any<TrainingArtifactInput>(), Arg.Any<CancellationToken>())
@@ -494,10 +491,10 @@ public sealed class TrainingExportServiceTests : IDisposable
                      });
             _ = store.GetArtifactAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(callInfo => Task.FromResult<TrainingArtifactRecord?>(Artifact(runId, TrainingArtifactKind.MergedGguf, "staged",
-                         TrainingArtifactSmokeState.Pending) with
-                     {
-                         Id = callInfo.ArgAt<Guid>(0)
-                     }));
+                             TrainingArtifactSmokeState.Pending) with
+                         {
+                             Id = callInfo.ArgAt<Guid>(0)
+                         }));
         }
 
         private static TrainingArtifactRecord Artifact(Guid runId, TrainingArtifactKind kind, string path, TrainingArtifactSmokeState state) =>

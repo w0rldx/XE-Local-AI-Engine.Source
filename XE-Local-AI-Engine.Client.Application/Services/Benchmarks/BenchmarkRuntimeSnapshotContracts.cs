@@ -137,7 +137,6 @@ public static class BenchmarkFrozenPolicies
             ToolCallTimeoutSeconds = 30,
             StreamIdleTimeoutSeconds = 60
         };
-
 }
 
 public sealed record BenchmarkFreezeDependencySetV1(

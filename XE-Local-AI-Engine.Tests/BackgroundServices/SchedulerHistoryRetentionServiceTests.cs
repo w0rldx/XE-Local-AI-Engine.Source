@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using NSubstitute.Core;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
@@ -137,7 +138,7 @@ public sealed class SchedulerHistoryRetentionServiceTests
             _provider.Dispose();
         }
 
-        private int RecordSweep(NSubstitute.Core.CallInfo call)
+        private int RecordSweep(CallInfo call)
         {
             Cutoffs.Enqueue(call.Arg<long>());
             if (_failFirstSweep && Cutoffs.Count == 1)

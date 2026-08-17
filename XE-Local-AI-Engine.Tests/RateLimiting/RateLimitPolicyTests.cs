@@ -27,9 +27,11 @@ public sealed class RateLimitedHostFixture : IAsyncInitializer, IAsyncDisposable
         EnvironmentName = "RateLimitEnforcement"
     };
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
 
-    public ValueTask DisposeAsync() => Factory.DisposeAsync();
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
 }
 
 /// <summary>
@@ -77,7 +79,7 @@ public sealed class RateLimitPolicyTests
             }
 
             var throttled = rejected
-                ?? throw new AssertionException($"No 429 within {attempts} login attempts — the {ProductionAuthPermitLimit}/window auth permit limit is not enforced.");
+                            ?? throw new AssertionException($"No 429 within {attempts} login attempts — the {ProductionAuthPermitLimit}/window auth permit limit is not enforced.");
             AssertEx.True(attempts > ProductionAuthPermitLimit,
                 $"Login attempt {attempts} was rejected inside the {ProductionAuthPermitLimit}/window permit limit.");
 
@@ -128,11 +130,11 @@ public sealed class RateLimitPolicyTests
         // literal at a call site, produces a 500 at request time. Pinning the referenced set to the registered set
         // turns that into a compile-adjacent failure here instead.
         AssertEx.True(referenced.SetEquals(new[]
-        {
-            NodeAuthRateLimits.AuthPolicy,
-            NodeAuthRateLimits.McpPolicy,
-            NodeAuthRateLimits.LocalModelProxyPolicy
-        }), $"Endpoints reference rate-limiting policies [{string.Join(", ", referenced)}], which is not the registered set.");
+            {
+                NodeAuthRateLimits.AuthPolicy,
+                NodeAuthRateLimits.McpPolicy,
+                NodeAuthRateLimits.LocalModelProxyPolicy
+            }), $"Endpoints reference rate-limiting policies [{string.Join(", ", referenced)}], which is not the registered set.");
     }
 
     [Test]

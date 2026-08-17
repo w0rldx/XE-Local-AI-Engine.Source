@@ -34,7 +34,15 @@ public sealed class TrainingEvaluationEndpointTests
 
         foreach (var response in new[]
                  {
-                     list, byId, reports, suggest, createResponse, resumeResponse, cancelResponse, deleteResponse, reportResponse
+                     list,
+                     byId,
+                     reports,
+                     suggest,
+                     createResponse,
+                     resumeResponse,
+                     cancelResponse,
+                     deleteResponse,
+                     reportResponse
                  })
         {
             AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);

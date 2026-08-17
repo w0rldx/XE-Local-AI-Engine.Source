@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
 ///     Fans the worker dispatcher's per-invocation events into ONE turn's stream: invocation-state snapshots go to the

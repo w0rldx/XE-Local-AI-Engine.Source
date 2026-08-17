@@ -5,7 +5,6 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
@@ -117,7 +116,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgePolicyRevisions.SingleAsync(),
-                          "A policy read under another revision id must fail the AEAD tag check.")
+                              "A policy read under another revision id must fail the AEAD tag check.")
                           .ConfigureAwait(false);
     }
 
@@ -139,7 +138,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == SecondAttemptId),
-                          "One attempt's result must not read back as another attempt's.")
+                              "One attempt's result must not read back as another attempt's.")
                           .ConfigureAwait(false);
     }
 
@@ -157,7 +156,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == FirstAttemptId),
-                          "A judge result presented as a launch receipt must fail the AEAD tag check.")
+                              "A judge result presented as a launch receipt must fail the AEAD tag check.")
                           .ConfigureAwait(false);
     }
 

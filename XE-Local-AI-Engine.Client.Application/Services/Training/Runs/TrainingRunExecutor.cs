@@ -227,7 +227,10 @@ public sealed class TrainingRunExecutor(
                 state.ContractVersion = parsed.ContractVersion;
                 break;
             case TrainingStdioEventKind.Phase:
-                state.Progress = state.Progress with { Phase = parsed.Phase ?? string.Empty };
+                state.Progress = state.Progress with
+                {
+                    Phase = parsed.Phase ?? string.Empty
+                };
                 _ = _events.Append(runId, TrainingRunEventKind.Phase, new TrainingRunPayload(Phase: parsed.Phase));
                 break;
             case TrainingStdioEventKind.Progress:
@@ -346,7 +349,10 @@ public sealed class TrainingRunExecutor(
         }
 
         await _store.UpdateProgressAsync(runId,
-                        Serialize(state.Progress with { UpdatedAtUtc = now.ToUnixTimeMilliseconds() }),
+                        Serialize(state.Progress with
+                        {
+                            UpdatedAtUtc = now.ToUnixTimeMilliseconds()
+                        }),
                         CancellationToken.None)
                     .ConfigureAwait(false);
     }

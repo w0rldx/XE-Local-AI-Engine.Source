@@ -97,7 +97,11 @@ public sealed class AnnotatedOptionsBoundsTests
             }
 
             probed++;
-            foreach (var missing in new string?[] { null, string.Empty })
+            foreach (var missing in new string?[]
+                     {
+                         null,
+                         string.Empty
+                     })
             {
                 var instance = Create(optionsType);
                 property.SetValue(instance, missing);

@@ -64,14 +64,14 @@ public sealed class LocalChatHubDomainRejectionTests
         var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
         {
             await foreach (var _ in hub.RegenerateMessage(conversationId,
-                                          Guid.NewGuid(),
-                                          reasoningEffort: null,
-                                          useLocalTools: false,
-                                          useKnowledgeBase: false,
-                                          selectedPath: null,
-                                          samplingOptions: null,
-                                          CancellationToken.None)
-                                      .ConfigureAwait(false))
+                                           Guid.NewGuid(),
+                                           reasoningEffort: null,
+                                           useLocalTools: false,
+                                           useKnowledgeBase: false,
+                                           selectedPath: null,
+                                           samplingOptions: null,
+                                           CancellationToken.None)
+                                       .ConfigureAwait(false))
             {
                 // The guard throws before the first event, so the body never runs.
             }
@@ -151,14 +151,14 @@ public sealed class LocalChatHubDomainRejectionTests
         return await AssertEx.ThrowsAsync<HubException>(async () =>
         {
             await foreach (var _ in hub.RegenerateMessage(Guid.NewGuid(),
-                                          Guid.NewGuid(),
-                                          reasoningEffort: null,
-                                          useLocalTools: false,
-                                          useKnowledgeBase: false,
-                                          selectedPath: null,
-                                          samplingOptions: null,
-                                          CancellationToken.None)
-                                      .ConfigureAwait(false))
+                                           Guid.NewGuid(),
+                                           reasoningEffort: null,
+                                           useLocalTools: false,
+                                           useKnowledgeBase: false,
+                                           selectedPath: null,
+                                           samplingOptions: null,
+                                           CancellationToken.None)
+                                       .ConfigureAwait(false))
             {
                 // The rejection is thrown before the first event, so the body never runs.
             }

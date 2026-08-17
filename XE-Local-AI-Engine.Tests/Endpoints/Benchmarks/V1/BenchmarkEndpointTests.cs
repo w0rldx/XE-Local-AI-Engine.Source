@@ -96,8 +96,7 @@ public sealed class BenchmarkEndpointTests
         // rejected the whole run detail as an unexpected shape. Nothing about the run itself had failed.
         await using var context = CreateContext();
         var attemptId = Guid.NewGuid();
-        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
-            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             [new BenchmarkJudgeCriterionScoreV2("correctness", 8, "clear and correct")],
             "solid answer",
             80,
@@ -495,8 +494,7 @@ public sealed class BenchmarkEndpointTests
         // mutation response made the just-scored run render as "not judged" until the next refresh.
         await using var context = CreateContext();
         var attemptId = Guid.NewGuid();
-        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
-            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             [new BenchmarkJudgeCriterionScoreV2("correctness", 8, "clear and correct")],
             "solid answer",
             80,

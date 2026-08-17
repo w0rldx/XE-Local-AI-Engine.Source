@@ -229,13 +229,13 @@ public sealed class TrainingExportService(
             ? TrainingExportPaths.MergedGgufName(quantization)
             : TrainingExportPaths.AdapterGgufName();
         return new PlanOrRefusal(new ExportPlan(runId,
-            kind,
-            quantization,
-            adapter.Path,
-            BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
-            staged,
-            Path.Combine(staged, fileName),
-            run.LinkedInstalledModelName),
+                kind,
+                quantization,
+                adapter.Path,
+                BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
+                staged,
+                Path.Combine(staged, fileName),
+                run.LinkedInstalledModelName),
             Refusal: null);
     }
 
@@ -539,8 +539,7 @@ public sealed class TrainingExportService(
 
         if (plan.LinkedInstalledModelName is not { Length: > 0 } baseModel)
         {
-            throw new TrainingExportRejectedException(
-                "This run is not linked to an installed model, so its adapter has no base model to be tested against.");
+            throw new TrainingExportRejectedException("This run is not linked to an installed model, so its adapter has no base model to be tested against.");
         }
 
         var models = scope.ServiceProvider.GetRequiredService<IGgufModelStore>();
@@ -565,8 +564,7 @@ public sealed class TrainingExportService(
         var run = await store.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false);
         if (run?.LinkedInstalledModelName is not { Length: > 0 } baseModel)
         {
-            throw new TrainingExportRejectedException(
-                "This run is not linked to an installed model, so its adapter has no base model to be tested against.");
+            throw new TrainingExportRejectedException("This run is not linked to an installed model, so its adapter has no base model to be tested against.");
         }
 
         await using var scope = _scopeFactory.CreateAsyncScope();

@@ -39,12 +39,12 @@ public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
         if (start.Outcome == TrainingExportStartOutcome.Accepted)
         {
             await Send.ResultAsync(TypedResults.Accepted((string?)null,
-                             new TrainingExportAcceptedResponse
-                             {
-                                 RunId = req.RunId,
-                                 Kind = kind.ToString(),
-                                 QuantType = quantization
-                             }))
+                          new TrainingExportAcceptedResponse
+                          {
+                              RunId = req.RunId,
+                              Kind = kind.ToString(),
+                              QuantType = quantization
+                          }))
                       .ConfigureAwait(false);
             return;
         }

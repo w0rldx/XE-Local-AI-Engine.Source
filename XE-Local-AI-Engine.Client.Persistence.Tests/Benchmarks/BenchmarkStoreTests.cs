@@ -99,7 +99,10 @@ public sealed class BenchmarkStoreTests : IDisposable
         var updateStore = new BenchmarkStore(updateContext, TimeProvider.System);
 
         var startTask = RaceAsync(() => startStore.StartRunAsync(CreateRun(project)));
-        var updateTask = RaceAsync(() => updateStore.UpdateProjectAsync(project.Id, project.Version, CreateProject(project.Id) with { Name = "Updated" }));
+        var updateTask = RaceAsync(() => updateStore.UpdateProjectAsync(project.Id, project.Version, CreateProject(project.Id) with
+        {
+            Name = "Updated"
+        }));
         var results = await Task.WhenAll(startTask, updateTask).WaitAsync(TimeSpan.FromSeconds(30));
         var (startWon, startConflict) = results[0];
         var (updateWon, updateConflict) = results[1];

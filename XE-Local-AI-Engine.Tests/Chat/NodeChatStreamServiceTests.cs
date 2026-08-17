@@ -1156,8 +1156,7 @@ public sealed class NodeChatStreamServiceTests
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
                 CreateModelCapabilityResolver(providerResolver: providerResolver,
-                                              gguf: CreateGgufModelCapabilityResolver(
-                                                  new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision))),
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -1518,7 +1517,7 @@ public sealed class NodeChatStreamServiceTests
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
                 CreateModelCapabilityResolver(providerResolver: providerResolver,
-                                              gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false))),
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -1577,7 +1576,7 @@ public sealed class NodeChatStreamServiceTests
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
                 CreateModelCapabilityResolver(providerResolver: providerResolver,
-                                              gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -2134,9 +2133,9 @@ public sealed class NodeChatStreamServiceTests
         // G16: an orchestrator whose orchestration does not compile runs as a lone single agent. That used to be visible
         // only in a server log, so the operator saw an ordinary answer and no hint the team never ran.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
-                               OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
-                                   "only 1 of its agents can call tools, and at least 2 are required"))
-                           .ConfigureAwait(false);
+                OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
+                    "only 1 of its agents can call tools, and at least 2 are required"))
+            .ConfigureAwait(false);
 
         AssertEx.ContainsSingle(events,
             streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded),
@@ -2152,8 +2151,8 @@ public sealed class NodeChatStreamServiceTests
         // A Single-kind agent never asked for orchestration, so it must stay silent even with an orchestration resolver
         // primed to degrade — the chat-turn resolver short-circuits before it is ever consulted.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Single,
-                               OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"))
-                           .ConfigureAwait(false);
+                OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"))
+            .ConfigureAwait(false);
 
         AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded)),
             "a single-agent definition must never raise the orchestration-degraded notice");
@@ -2189,7 +2188,7 @@ public sealed class NodeChatStreamServiceTests
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId))
-                           .ConfigureAwait(false))
+                                                 .ConfigureAwait(false))
         {
             events.Add(streamEvent);
         }
@@ -2262,7 +2261,8 @@ public sealed class NodeChatStreamServiceTests
                                    agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(CreateSampleSpec(), "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(CreateSampleSpec(), "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null,
+                                 AgentDefinitionVersion: 4,
                                  AnyParticipantIsCloud: anyParticipantIsCloud,
                                  FirstCloudParticipantModel: anyParticipantIsCloud ? "azure-specialist-deploy" : null)));
 
@@ -2369,10 +2369,9 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.ContainsSingle(streamed,
             streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming && streamEvent.InvocationTimeoutSeconds == 900);
         // Every other event type keeps a null ceiling — the field is a targeted hint, not a per-frame tax.
-        AssertEx.True(
-            streamed.TrueForAll(streamEvent => streamEvent.InvocationTimeoutSeconds is null
-                                               || streamEvent.Type == ChatStreamEventTypes.AssistantQueued
-                                               || streamEvent.Type == ChatStreamEventTypes.AssistantStreaming),
+        AssertEx.True(streamed.TrueForAll(streamEvent => streamEvent.InvocationTimeoutSeconds is null
+                                                         || streamEvent.Type == ChatStreamEventTypes.AssistantQueued
+                                                         || streamEvent.Type == ChatStreamEventTypes.AssistantStreaming),
             "Expected only the queued/streaming events to carry the invocation timeout.");
     }
 
@@ -3277,8 +3276,7 @@ public sealed class NodeChatStreamServiceTests
 
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
-                                   .ClassifyAsync(
-                                       Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
+                                   .ClassifyAsync(Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
                                        Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is

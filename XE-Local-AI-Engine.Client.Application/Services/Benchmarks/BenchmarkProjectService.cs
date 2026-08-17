@@ -282,8 +282,7 @@ public sealed class BenchmarkProjectService(
         {
             await using var lease = await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
             BenchmarkModelEligibility.ValidateJudge(lease.Snapshot);
-            var policy = new BenchmarkJudgePolicyV1(
-                BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
+            var policy = new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,
                 BenchmarkJudgePolicyVersions.PromptVersion,
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,

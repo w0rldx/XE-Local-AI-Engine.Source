@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 

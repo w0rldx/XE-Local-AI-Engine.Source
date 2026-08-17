@@ -17,8 +17,7 @@ public static class LlamaCppToolBinaries
     public const string QuantizerName = "llama-quantize";
 
     /// <summary>The platform file name of the quantizer.</summary>
-    public static string QuantizerFileName =>
-        OperatingSystem.IsWindows() ? QuantizerName + ".exe" : QuantizerName;
+    public static string QuantizerFileName => OperatingSystem.IsWindows() ? QuantizerName + ".exe" : QuantizerName;
 
     /// <summary>
     ///     Returns the absolute path to the quantizer inside <paramref name="binDirectory" />, or

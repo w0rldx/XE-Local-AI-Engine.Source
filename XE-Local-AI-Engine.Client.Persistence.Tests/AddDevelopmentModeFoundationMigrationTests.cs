@@ -15,7 +15,14 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("development-mode-foundation.sqlite").ConfigureAwait(false);
 
-        foreach (var table in new[] { "development_projects", "development_tasks", "development_attempts", "development_artifacts", "development_events" })
+        foreach (var table in new[]
+                 {
+                     "development_projects",
+                     "development_tasks",
+                     "development_attempts",
+                     "development_artifacts",
+                     "development_events"
+                 })
         {
             AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
         }

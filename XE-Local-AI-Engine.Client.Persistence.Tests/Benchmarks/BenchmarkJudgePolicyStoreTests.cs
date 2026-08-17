@@ -614,13 +614,13 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         var created = await store.CreateProjectAsync(NewProject(), new BenchmarkJudgePolicyChangeInput(PolicyA, HashA)).ConfigureAwait(false);
 
         var renamed = await store.UpdateProjectAsync(created.Id,
-                                    created.Version,
-                                    NewProject(created.Id) with
-                                    {
-                                        Name = "Renamed"
-                                    },
-                                    new BenchmarkJudgePolicyChangeInput(PolicyB, HashB))
-                                .ConfigureAwait(false);
+                                     created.Version,
+                                     NewProject(created.Id) with
+                                     {
+                                         Name = "Renamed"
+                                     },
+                                     new BenchmarkJudgePolicyChangeInput(PolicyB, HashB))
+                                 .ConfigureAwait(false);
 
         AssertEx.Equal("Renamed", renamed.Name);
         AssertEx.Equal(HashB, AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(created.Id).ConfigureAwait(false)).PolicyHash);

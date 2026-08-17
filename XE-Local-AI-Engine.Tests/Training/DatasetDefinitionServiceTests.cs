@@ -22,11 +22,10 @@ public sealed class DatasetDefinitionServiceTests
     {
         var harness = new Harness();
 
-        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(
-            () => harness.Service.CreateAsync(Draft(Body() with
-            {
-                HoldoutFraction = fraction
-            })));
+        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(() => harness.Service.CreateAsync(Draft(Body() with
+        {
+            HoldoutFraction = fraction
+        })));
 
         AssertEx.Contains(exception.Message, "hold-out fraction");
     }
@@ -144,8 +143,7 @@ public sealed class DatasetDefinitionServiceTests
         public IToolApprovalPolicy Policy { get; }
 
         public DatasetDefinitionBodyV1 Saved() =>
-            JsonSerializer.Deserialize<DatasetDefinitionBodyV1>(
-                AssertEx.NotNull(_captured, "The service should have reached the store.").DefinitionJson.Span, TrainingJson.Options)!;
+            JsonSerializer.Deserialize<DatasetDefinitionBodyV1>(AssertEx.NotNull(_captured, "The service should have reached the store.").DefinitionJson.Span, TrainingJson.Options)!;
 
         private static TrainingDefinitionRecord Record(TrainingDefinitionInput input) =>
             new(Guid.NewGuid(), input.Name, input.Kind, input.DefinitionJson, DefinitionVersion: 1, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);

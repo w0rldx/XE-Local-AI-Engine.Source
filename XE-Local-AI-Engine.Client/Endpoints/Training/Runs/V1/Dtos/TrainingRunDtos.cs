@@ -73,8 +73,10 @@ public sealed class TrainingRunResponse
     public required Guid Id { get; init; }
     public required Guid DatasetId { get; init; }
     public required Guid BaseArtifactId { get; init; }
+
     /// <summary>The installed GGUF this run's adapters are served against and comparisons use as the base side; null when none was linkable.</summary>
     public string? LinkedInstalledModelName { get; init; }
+
     public required string Status { get; init; }
     public required int DatasetRevision { get; init; }
     public required string DatasetContentFingerprint { get; init; }

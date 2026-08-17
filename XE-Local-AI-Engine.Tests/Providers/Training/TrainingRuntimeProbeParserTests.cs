@@ -13,8 +13,7 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_SkipsTheUnslothBannerLinesAndReadsTheHandshake()
     {
-        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse(
-            [
+        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse([
                 "🦥 Unsloth: Will patch your computer to enable 2x faster free finetuning.",
                 "🦥 Unsloth Zoo will now patch everything to make training faster!",
                 TrainingRuntimeTestInfrastructure.ValidHandshake
@@ -35,8 +34,7 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_TakesTheLastHandshakeWhenSeveralLinesParse()
     {
-        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse(
-            [
+        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse([
                 """{"contractVersion":1,"ready":false}""",
                 """{"contractVersion":1,"ready":true,"cudaAvailable":true}"""
             ]),
@@ -48,8 +46,7 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_ReadsPerPackageErrorsWhenAnImportFailed()
     {
-        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse(
-            [
+        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse([
                 """{"contractVersion":1,"ready":false,"cudaAvailable":true,"errors":{"unsloth":"RuntimeError: mismatch","numpy":"ImportError: none"}}"""
             ]),
             "A partial report is still a report.");

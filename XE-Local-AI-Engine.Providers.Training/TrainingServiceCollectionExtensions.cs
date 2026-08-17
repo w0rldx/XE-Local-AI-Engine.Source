@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.Training;
 
-using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;

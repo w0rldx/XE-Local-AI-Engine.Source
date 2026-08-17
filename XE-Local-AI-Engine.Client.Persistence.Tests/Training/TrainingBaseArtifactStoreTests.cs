@@ -90,8 +90,7 @@ public sealed class TrainingBaseArtifactStoreTests : IDisposable
 
         var started = await store.StartDownloadAsync(RepoId, Revision);
 
-        _ = await AssertEx.ThrowsAsync<TrainingBaseArtifactConcurrencyException>(
-            () => store.MarkReadyAsync(started.Id, started.Version + 5, [], totalBytes: 0, licenseJson: null));
+        _ = await AssertEx.ThrowsAsync<TrainingBaseArtifactConcurrencyException>(() => store.MarkReadyAsync(started.Id, started.Version + 5, [], totalBytes: 0, licenseJson: null));
     }
 
     [Test]

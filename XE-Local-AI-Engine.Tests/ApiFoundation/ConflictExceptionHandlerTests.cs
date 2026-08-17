@@ -104,7 +104,8 @@ public sealed class ConflictExceptionHandlerTests
         };
     }
 
-    private sealed record ConflictProblemBody(string ConflictType,
+    private sealed record ConflictProblemBody(
+        string ConflictType,
         string Title,
         int Status,
         string Detail,

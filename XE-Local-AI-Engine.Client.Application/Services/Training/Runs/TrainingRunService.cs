@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -229,15 +228,15 @@ public sealed class TrainingRunService(
         // the run — the fingerprint travels with the link.
         var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken).ConfigureAwait(false);
         var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand(command.DatasetId,
-                                     command.ExpectedDatasetVersion,
-                                     command.BaseArtifactId,
-                                     JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
-                                     JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
-                                     JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
-                                     link?.ModelName,
-                                     link?.ContentFingerprint),
-                                 cancellationToken)
-                             .ConfigureAwait(false);
+                                         command.ExpectedDatasetVersion,
+                                         command.BaseArtifactId,
+                                         JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
+                                         JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
+                                         JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
+                                         link?.ModelName,
+                                         link?.ContentFingerprint),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
         _signal.Wake();
         return run;
     }

@@ -24,12 +24,16 @@ public sealed class ComparisonReportServiceTests
         var membership = Membership([SampleId(1), SampleId(2), SampleId(3), SampleId(4)]);
         var baseEvaluation = Evaluation("base-model",
             membership,
-            [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: false), Verdict(3, "no-tool", passed: true),
-                Verdict(4, "no-tool", passed: false)]);
+            [
+                Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: false), Verdict(3, "no-tool", passed: true),
+                Verdict(4, "no-tool", passed: false)
+            ]);
         var tunedEvaluation = Evaluation("tuned-model",
             membership,
-            [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true), Verdict(3, "no-tool", passed: true),
-                Verdict(4, "no-tool", passed: false)]);
+            [
+                Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true), Verdict(3, "no-tool", passed: true),
+                Verdict(4, "no-tool", passed: false)
+            ]);
 
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
         _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
@@ -44,8 +48,8 @@ public sealed class ComparisonReportServiceTests
         AssertEx.Equal(baseEvaluation.Id, report.BaseEvaluationRunId);
         AssertEx.Equal(tunedEvaluation.Id, report.TunedEvaluationRunId);
 
-        var stored = AssertEx.NotNull(JsonSerializer.Deserialize<TrainingComparisonDeltasV1>(
-                AssertEx.NotNull(captured, "The service must hand the store the deltas it computed.").DeltasJson.Span, TrainingJson.Options),
+        var stored = AssertEx.NotNull(
+            JsonSerializer.Deserialize<TrainingComparisonDeltasV1>(AssertEx.NotNull(captured, "The service must hand the store the deltas it computed.").DeltasJson.Span, TrainingJson.Options),
             "The stored deltas must be readable.");
 
         // 2/4 versus 3/4 over the SAME frozen membership — the whole reason the two sides are comparable.
@@ -166,8 +170,7 @@ public sealed class ComparisonReportServiceTests
 
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), benchmarks);
 
-        _ = await AssertEx.ThrowsAsync<EvaluationRejectedException>(
-            () => service.CreateAsync(new CreateComparisonCommand("paired", baseEvaluation.Id, tunedEvaluation.Id, Guid.NewGuid())),
+        _ = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand("paired", baseEvaluation.Id, tunedEvaluation.Id, Guid.NewGuid())),
             "A pairing is validated to exist before it is bound.");
         _ = await evaluations.DidNotReceiveWithAnyArgs().CreateComparisonAsync(default!, default);
     }
@@ -234,8 +237,7 @@ public sealed class ComparisonReportServiceTests
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
 
         var service = new ComparisonReportService(evaluations, Substitute.For<ITrainingRunStore>(), Substitute.For<IBenchmarkStore>());
-        var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(
-            () => service.CreateAsync(new CreateComparisonCommand("mismatched", baseEvaluation.Id, tunedEvaluation.Id)),
+        var rejection = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() => service.CreateAsync(new CreateComparisonCommand("mismatched", baseEvaluation.Id, tunedEvaluation.Id)),
             "Two sides that did not score the same hold-out set must be refused, not silently subtracted.");
         _ = await evaluations.DidNotReceiveWithAnyArgs().CreateComparisonAsync(default!, default);
         return rejection;

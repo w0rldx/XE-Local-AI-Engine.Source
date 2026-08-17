@@ -14,7 +14,13 @@ public sealed class AddKnowledgeBaseTablesMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("knowledge-base-tables.sqlite").ConfigureAwait(false);
 
-        foreach (var table in new[] { "knowledge_documents", "knowledge_document_sections", "knowledge_document_chunks", "knowledge_chunk_vectors" })
+        foreach (var table in new[]
+                 {
+                     "knowledge_documents",
+                     "knowledge_document_sections",
+                     "knowledge_document_chunks",
+                     "knowledge_chunk_vectors"
+                 })
         {
             AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
         }

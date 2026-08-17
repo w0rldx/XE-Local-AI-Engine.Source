@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
@@ -114,7 +114,7 @@ public sealed class ServiceProviderValidationTests
         {
             // The host was never started, so there is nothing to stop.
             await App.DisposeAsync();
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            SqliteConnection.ClearAllPools();
             TryDelete(_webRoot);
             TryDelete(_nodeDataDirectory);
             foreach (var file in Directory.EnumerateFiles(Path.GetDirectoryName(_sqlitePath)!, Path.GetFileName(_sqlitePath) + "*"))

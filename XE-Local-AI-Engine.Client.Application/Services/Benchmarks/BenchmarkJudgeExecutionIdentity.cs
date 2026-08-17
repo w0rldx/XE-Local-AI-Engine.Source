@@ -8,9 +8,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>One GPU as the execution identity records it. Driver version is included when present, never required.</summary>
 public sealed record BenchmarkJudgeExecutionGpuV1(
-    [property: JsonPropertyOrder(0)] string Name,
-    [property: JsonPropertyOrder(1)] long? TotalBytes,
-    [property: JsonPropertyOrder(2)] string? DriverVersion);
+    [property: JsonPropertyOrder(0)]
+    string Name,
+    [property: JsonPropertyOrder(1)]
+    long? TotalBytes,
+    [property: JsonPropertyOrder(2)]
+    string? DriverVersion);
 
 /// <summary>
 ///     A stable, versioned projection of what a judging actually executed on: the effective launch receipt plus the
@@ -32,25 +35,44 @@ public sealed record BenchmarkJudgeExecutionGpuV1(
 ///     </para>
 /// </remarks>
 public sealed record BenchmarkJudgeExecutionIdentityV1(
-    [property: JsonPropertyOrder(0)] int SchemaVersion,
-    [property: JsonPropertyOrder(1)] string ExecutableSha256,
-    [property: JsonPropertyOrder(2)] string ExecutableVersion,
-    [property: JsonPropertyOrder(3)] string Variant,
-    [property: JsonPropertyOrder(4)] string EffectiveBackend,
-    [property: JsonPropertyOrder(5)] string EffectiveLaunchIdentity,
-    [property: JsonPropertyOrder(6)] string RuntimeBundleIdentity,
-    [property: JsonPropertyOrder(7)] string LlamaRuntimeVersion,
-    [property: JsonPropertyOrder(8)] string LlamaRuntimeProvenance,
-    [property: JsonPropertyOrder(9)] string? LlamaRuntimeSourceCommit,
-    [property: JsonPropertyOrder(10)] string OsDescription,
-    [property: JsonPropertyOrder(11)] string Arch,
-    [property: JsonPropertyOrder(12)] string PlacementOutcome,
-    [property: JsonPropertyOrder(13)] int? PlacementOffloaded,
-    [property: JsonPropertyOrder(14)] int? PlacementTotal,
-    [property: JsonPropertyOrder(15)] IReadOnlyList<BenchmarkJudgeExecutionGpuV1> Gpus,
-    [property: JsonPropertyOrder(16)] string? CpuModel,
-    [property: JsonPropertyOrder(17)] int? LogicalCores,
-    [property: JsonPropertyOrder(18)] long? RamBytes)
+    [property: JsonPropertyOrder(0)]
+    int SchemaVersion,
+    [property: JsonPropertyOrder(1)]
+    string ExecutableSha256,
+    [property: JsonPropertyOrder(2)]
+    string ExecutableVersion,
+    [property: JsonPropertyOrder(3)]
+    string Variant,
+    [property: JsonPropertyOrder(4)]
+    string EffectiveBackend,
+    [property: JsonPropertyOrder(5)]
+    string EffectiveLaunchIdentity,
+    [property: JsonPropertyOrder(6)]
+    string RuntimeBundleIdentity,
+    [property: JsonPropertyOrder(7)]
+    string LlamaRuntimeVersion,
+    [property: JsonPropertyOrder(8)]
+    string LlamaRuntimeProvenance,
+    [property: JsonPropertyOrder(9)]
+    string? LlamaRuntimeSourceCommit,
+    [property: JsonPropertyOrder(10)]
+    string OsDescription,
+    [property: JsonPropertyOrder(11)]
+    string Arch,
+    [property: JsonPropertyOrder(12)]
+    string PlacementOutcome,
+    [property: JsonPropertyOrder(13)]
+    int? PlacementOffloaded,
+    [property: JsonPropertyOrder(14)]
+    int? PlacementTotal,
+    [property: JsonPropertyOrder(15)]
+    IReadOnlyList<BenchmarkJudgeExecutionGpuV1> Gpus,
+    [property: JsonPropertyOrder(16)]
+    string? CpuModel,
+    [property: JsonPropertyOrder(17)]
+    int? LogicalCores,
+    [property: JsonPropertyOrder(18)]
+    long? RamBytes)
 {
     public const int CurrentSchemaVersion = 1;
 }

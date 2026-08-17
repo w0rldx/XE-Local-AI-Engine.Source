@@ -899,5 +899,4 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             return value[..lastCharIndex];
         }
     }
-
 }

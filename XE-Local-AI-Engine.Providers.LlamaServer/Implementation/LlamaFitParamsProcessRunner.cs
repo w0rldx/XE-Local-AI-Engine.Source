@@ -188,5 +188,4 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
             ? excerpt
             : string.Concat(excerpt.AsSpan(0, MaxStandardErrorExcerptLength - 1), "…");
     }
-
 }

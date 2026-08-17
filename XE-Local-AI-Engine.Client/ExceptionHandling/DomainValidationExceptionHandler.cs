@@ -35,12 +35,12 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
         ArgumentNullException.ThrowIfNull(exception);
 
         if (exception is not (ScheduledJobValidationException
-                              or CustomToolValidationException
-                              or McpServerValidationException
-                              or SlashCommandValidationException
-                              or PlaybookActionValidationException
-                              or AgentDefinitionValidationException
-                              or AgentSkillValidationException))
+            or CustomToolValidationException
+            or McpServerValidationException
+            or SlashCommandValidationException
+            or PlaybookActionValidationException
+            or AgentDefinitionValidationException
+            or AgentSkillValidationException))
         {
             return false;
         }

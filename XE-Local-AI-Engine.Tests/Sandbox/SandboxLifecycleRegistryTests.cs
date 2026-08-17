@@ -154,7 +154,10 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
             TrustedHostWorkspace = trustedHostWorkspace is null
                 ? null
-                : new SandboxTrustedHostWorkspace { RootPath = trustedHostWorkspace }
+                : new SandboxTrustedHostWorkspace
+                {
+                    RootPath = trustedHostWorkspace
+                }
         };
     }
 

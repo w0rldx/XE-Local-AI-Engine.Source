@@ -1281,8 +1281,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var correlation = new NodeChatMessageCorrelation(conversationId, messageId, Guid.NewGuid());
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, correlation.RequestId, createdAtUtc, "model-x"))
                          .ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, createdAtUtc, content, Model: "model-x"))
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, createdAtUtc, content, Model: "model-x"))
                          .ConfigureAwait(false);
         return messageId;
     }
@@ -1358,8 +1357,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
                              "model-x"))
                          .ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer", Model: "model-x"))
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer",
+                             Model: "model-x"))
                          .ConfigureAwait(false);
 
         var recentUserId = Guid.NewGuid();
@@ -1421,8 +1420,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
                              "model-x"))
                          .ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer", Model: "model-x"))
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer",
+                             Model: "model-x"))
                          .ConfigureAwait(false);
 
         var recentUserId = Guid.NewGuid();
@@ -1503,6 +1502,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.False(context.Any(message => message.Content.Contains("covers everything", StringComparison.Ordinal)),
             "A synopsis reaching the answered user turn must not replace it.");
     }
+
     [Test]
     public async Task RegenerateAsync_ThreadsReasoningEffortIntoRuntimePackage()
     {
@@ -1786,8 +1786,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
-                                   .ClassifyAsync(
-                                       Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
+                                   .ClassifyAsync(Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
                                        Arg.Any<CancellationToken>())
                                    .ConfigureAwait(false);
 

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
-using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;

@@ -27,12 +27,12 @@ public sealed class CreateComparisonEndpoint(IComparisonReportService comparison
         try
         {
             var created = await _comparisons.CreateAsync(new CreateComparisonCommand(req.Name,
-                                                req.BaseEvaluationRunId,
-                                                req.TunedEvaluationRunId,
-                                                req.BaseBenchmarkRunId,
-                                                req.TunedBenchmarkRunId,
-                                                req.TrainingRunId),
-                                            ct)
+                                                    req.BaseEvaluationRunId,
+                                                    req.TunedEvaluationRunId,
+                                                    req.BaseBenchmarkRunId,
+                                                    req.TunedBenchmarkRunId,
+                                                    req.TrainingRunId),
+                                                ct)
                                             .ConfigureAwait(false);
             await Send.OkAsync(created.ToResponse(), ct).ConfigureAwait(false);
         }

@@ -63,5 +63,4 @@ public sealed class AgentToolPipelineOptionsValidatorTests
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxConsecutiveInvalidToolCallsPerTool", StringComparison.Ordinal));
     }
-
 }

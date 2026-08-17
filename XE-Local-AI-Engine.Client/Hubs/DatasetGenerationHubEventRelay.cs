@@ -13,14 +13,13 @@ internal sealed class DatasetGenerationHubEventRelay(
     IHubContext<DatasetGenerationHub> hubContext,
     ILogger<DatasetGenerationHubEventRelay> logger) : BackgroundService
 {
-    private readonly Channel<DatasetGenerationEvent> _channel = Channel.CreateBounded<DatasetGenerationEvent>(
-        new BoundedChannelOptions(DatasetGenerationEventBufferOptions.DefaultMaxEventCount)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            AllowSynchronousContinuations = false,
-            FullMode = BoundedChannelFullMode.Wait
-        });
+    private readonly Channel<DatasetGenerationEvent> _channel = Channel.CreateBounded<DatasetGenerationEvent>(new BoundedChannelOptions(DatasetGenerationEventBufferOptions.DefaultMaxEventCount)
+    {
+        SingleReader = true,
+        SingleWriter = false,
+        AllowSynchronousContinuations = false,
+        FullMode = BoundedChannelFullMode.Wait
+    });
 
     private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly IHubContext<DatasetGenerationHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));

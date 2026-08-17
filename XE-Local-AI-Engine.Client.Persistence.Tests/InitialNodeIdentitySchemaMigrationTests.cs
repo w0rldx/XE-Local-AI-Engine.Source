@@ -15,7 +15,17 @@ public sealed class InitialNodeIdentitySchemaMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.MigrateIdentityAsync("initial-node-identity.sqlite").ConfigureAwait(false);
 
-        foreach (var table in new[] { "AspNetRoles", "AspNetUsers", "AspNetRoleClaims", "AspNetUserClaims", "AspNetUserLogins", "AspNetUserRoles", "AspNetUserTokens", "node_refresh_tokens" })
+        foreach (var table in new[]
+                 {
+                     "AspNetRoles",
+                     "AspNetUsers",
+                     "AspNetRoleClaims",
+                     "AspNetUserClaims",
+                     "AspNetUserLogins",
+                     "AspNetUserRoles",
+                     "AspNetUserTokens",
+                     "node_refresh_tokens"
+                 })
         {
             AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
         }

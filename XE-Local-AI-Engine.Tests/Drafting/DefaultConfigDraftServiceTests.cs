@@ -223,8 +223,7 @@ public sealed class DefaultConfigDraftServiceTests
             }
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(
-                                      Request(new string('b', 101), DraftMode.Improve, existingContent: "current instructions"))
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request(new string('b', 101), DraftMode.Improve, existingContent: "current instructions"))
                                   .ConfigureAwait(false);
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.InvalidRequest, result.Failure);
@@ -395,7 +394,11 @@ public sealed class DefaultConfigDraftServiceTests
         // Invariant 3: nothing sanitizes the ResponseFormat schema on the way to llama-server's grammar compiler
         // (ApplyToolSchemaCompatibility covers options.Tools only), so a maxLength/maxItems on an envelope would reach
         // the grammar compiler unfiltered and fail sampler init.
-        foreach (var envelopeType in new[] { typeof(AgentDraftEnvelope), typeof(SkillDraftEnvelope) })
+        foreach (var envelopeType in new[]
+                 {
+                     typeof(AgentDraftEnvelope),
+                     typeof(SkillDraftEnvelope)
+                 })
         {
             var schema = AIJsonUtilities.CreateJsonSchema(envelopeType).GetRawText();
 
@@ -403,7 +406,13 @@ public sealed class DefaultConfigDraftServiceTests
             AssertEx.Contains(schema, "assumptions", StringComparison.OrdinalIgnoreCase,
                 $"{envelopeType.Name} must derive a property-bearing schema.");
 
-            foreach (var bound in new[] { "maxLength", "minLength", "maxItems", "minItems" })
+            foreach (var bound in new[]
+                     {
+                         "maxLength",
+                         "minLength",
+                         "maxItems",
+                         "minItems"
+                     })
             {
                 AssertEx.False(schema.Contains(bound, StringComparison.OrdinalIgnoreCase),
                     $"{envelopeType.Name} schema must carry no '{bound}' bound: {schema}");
@@ -441,8 +450,7 @@ public sealed class DefaultConfigDraftServiceTests
             Classifications.GetByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                            .Returns(Task.FromResult<ModelClassificationRecord?>(Classification(ModelKind.Chat)));
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(
-                          [
+                          .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
                               new LocalModelDescriptor
                               {
                                   ModelName = LlamaModel,

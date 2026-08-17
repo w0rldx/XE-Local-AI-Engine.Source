@@ -13,14 +13,13 @@ internal sealed class TrainingRunHubEventRelay(
     IHubContext<TrainingRunHub> hubContext,
     ILogger<TrainingRunHubEventRelay> logger) : BackgroundService
 {
-    private readonly Channel<TrainingRunEvent> _channel = Channel.CreateBounded<TrainingRunEvent>(
-        new BoundedChannelOptions(TrainingRunEventBufferOptions.DefaultMaxEventCount)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            AllowSynchronousContinuations = false,
-            FullMode = BoundedChannelFullMode.Wait
-        });
+    private readonly Channel<TrainingRunEvent> _channel = Channel.CreateBounded<TrainingRunEvent>(new BoundedChannelOptions(TrainingRunEventBufferOptions.DefaultMaxEventCount)
+    {
+        SingleReader = true,
+        SingleWriter = false,
+        AllowSynchronousContinuations = false,
+        FullMode = BoundedChannelFullMode.Wait
+    });
 
     private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly IHubContext<TrainingRunHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));

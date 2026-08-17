@@ -83,8 +83,7 @@ public sealed class TrainingRunWorkspaceTests : IDisposable
 
         // The associated data binds the blob to its freeze id, so one run's copy cannot be read as another's even
         // when the bytes are moved into place under the other's name.
-        _ = await AssertEx.ThrowsAsync<CryptographicException>(
-            () => workspace.MaterializeWorkCopyAsync(datasetId, impostorId, Guid.NewGuid(), CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<CryptographicException>(() => workspace.MaterializeWorkCopyAsync(datasetId, impostorId, Guid.NewGuid(), CancellationToken.None));
     }
 
     private TrainingRunWorkspace Create() =>

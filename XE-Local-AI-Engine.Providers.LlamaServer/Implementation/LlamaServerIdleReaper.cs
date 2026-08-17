@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
-using ProcessKey = XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaServerProcessSupervisor.ProcessKey;
-using RunningProcess = XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaServerProcessSupervisor.RunningProcess;
+using ProcessKey = LlamaServerProcessSupervisor.ProcessKey;
+using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;
 
 /// <summary>
 ///     Owns the loaded-model population for <see cref="LlamaServerProcessSupervisor" />: cap admission (with
@@ -39,8 +39,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
 
-    internal LlamaServerIdleReaper(
-        ConcurrentDictionary<ProcessKey, RunningProcess> processes,
+    internal LlamaServerIdleReaper(ConcurrentDictionary<ProcessKey, RunningProcess> processes,
         LlamaServerPortAllocator ports,
         ILlamaLayerPlacementReport layerPlacementReport,
         LlamaServerSupervisorOptions options,

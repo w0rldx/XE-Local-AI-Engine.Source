@@ -96,6 +96,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
             entity.ImportedAtUtc = input.ImportedAtUtc;
             entity.ContentSha256 = input.ContentSha256;
         }
+
         // Same set-if-present rule, and for the same reason: the AI provenance block only travels with a save that came
         // out of the assist dialog, so an ordinary edit omitting it must leave the stored record intact. Not content —
         // it is deliberately absent from configChanged above and never bumps Version.

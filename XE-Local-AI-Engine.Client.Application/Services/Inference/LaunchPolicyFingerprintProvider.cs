@@ -167,15 +167,15 @@ public sealed class LaunchPolicyFingerprintProvider(
         var executableIdentity = includeContentHashes
             ? await _fileHashCache.GetSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false)
             : await RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(binary.ServerExecutablePath,
-                    _fileHashCache,
-                    ct)
-                .ConfigureAwait(false);
+                                                       _fileHashCache,
+                                                       ct)
+                                                   .ConfigureAwait(false);
         var runtimeBundle = await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
-                (path, token) => includeContentHashes
-                    ? _fileHashCache.GetSha256Async(path, token)
-                    : RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
-                ct)
-            .ConfigureAwait(false);
+                                                                     (path, token) => includeContentHashes
+                                                                         ? _fileHashCache.GetSha256Async(path, token)
+                                                                         : RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
+                                                                     ct)
+                                                                 .ConfigureAwait(false);
         var isOperatorOverride = string.Equals(binary.Version, "override", StringComparison.OrdinalIgnoreCase);
         var isManagedSourceBuild = !isOperatorOverride && runtime?.SourceBuildPath is not null;
         var runtimeProvenance = "prebuilt-or-unavailable";

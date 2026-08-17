@@ -116,6 +116,7 @@ internal sealed class LinuxTrainingProcessSpawner(string? cacheRoot = null) : IT
 
         // stdout and stderr close independently; the merged stream is only complete once both have.
         var streamsClosed = 0;
+
         void Complete()
         {
             if (Interlocked.Increment(ref streamsClosed) == 2)

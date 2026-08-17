@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
 using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -113,8 +111,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
         var directory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifactId);
         try
         {
-            var progress = new Progress<PullProgress>(value => download.Progress = new BaseArtifactProgressView(
-                value.CompletedBytes ?? 0,
+            var progress = new Progress<PullProgress>(value => download.Progress = new BaseArtifactProgressView(value.CompletedBytes ?? 0,
                 value.TotalBytes,
                 value.PartIndex ?? 0,
                 value.PartCount ?? manifest.Files.Count));

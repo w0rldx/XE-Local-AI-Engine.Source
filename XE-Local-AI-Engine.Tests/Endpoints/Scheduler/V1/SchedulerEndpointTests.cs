@@ -343,13 +343,13 @@ public sealed class SchedulerEndpointTests
         {
             var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
             var stored = await runStore.AddAsync(new ScheduledJobRunInput(Guid.NewGuid(),
-                                                     "terminal-run-template",
-                                                     QuartzFireInstanceId: null,
-                                                     ScheduledRunTrigger.Manual,
-                                                     ScheduledRunStatus.Succeeded,
-                                                     ScheduledFireTimeUtc: null,
-                                                     ActualFireTimeUtc: null))
-                                        .ConfigureAwait(false);
+                                           "terminal-run-template",
+                                           QuartzFireInstanceId: null,
+                                           ScheduledRunTrigger.Manual,
+                                           ScheduledRunStatus.Succeeded,
+                                           ScheduledFireTimeUtc: null,
+                                           ActualFireTimeUtc: null))
+                                       .ConfigureAwait(false);
             runId = stored.Id;
         }
 
@@ -445,22 +445,22 @@ public sealed class SchedulerEndpointTests
         {
             var store = scope.ServiceProvider.GetRequiredService<IScheduledJobDefinitionStore>();
             var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
-                                                  "Orphaned template job",
-                                                  Description: null,
-                                                  Enabled: false,
-                                                  ScheduleKind.Cron,
-                                                  "0 0 * * * ?",
-                                                  IntervalSeconds: null,
-                                                  RepeatCount: null,
-                                                  StartAtUtc: null,
-                                                  EndAtUtc: null,
-                                                  "UTC",
-                                                  SchedulerMisfirePolicy.Smart,
-                                                  PreventOverlap: false,
-                                                  MaxRuntimeSeconds: null,
-                                                  ParameterJson: null,
-                                                  ScheduledJobCreator.User))
-                                     .ConfigureAwait(false);
+                                        "Orphaned template job",
+                                        Description: null,
+                                        Enabled: false,
+                                        ScheduleKind.Cron,
+                                        "0 0 * * * ?",
+                                        IntervalSeconds: null,
+                                        RepeatCount: null,
+                                        StartAtUtc: null,
+                                        EndAtUtc: null,
+                                        "UTC",
+                                        SchedulerMisfirePolicy.Smart,
+                                        PreventOverlap: false,
+                                        MaxRuntimeSeconds: null,
+                                        ParameterJson: null,
+                                        ScheduledJobCreator.User))
+                                    .ConfigureAwait(false);
             jobId = stored.Id;
         }
 

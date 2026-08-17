@@ -104,9 +104,8 @@ public sealed class BenchmarkJudgeExecutor(
                                              PublishLaunchAdmission: false,
                                              runtime.Runtime.KvTypeK), token)
                                          .ConfigureAwait(false);
-            logger.LogInformation(
-                "Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
-                + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
+            logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
+                                  + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
                 work.RunId,
                 "judge",
                 runtime.Model.ModelName,

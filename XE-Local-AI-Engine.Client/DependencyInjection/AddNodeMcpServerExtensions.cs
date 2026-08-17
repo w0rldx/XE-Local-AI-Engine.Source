@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using System.Reflection;
+using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
@@ -51,7 +52,7 @@ internal static class AddNodeMcpServerExtensions
                    // tools (the ~20 MB-per-test-host leak of docs/agent-knowledge.md §1). With a per-host key the
                    // entry is weakly keyed to THIS host's options and is collected with the host. The copy is
                    // behavior-identical (same converters and type-info resolver as the default).
-                   .WithTools<NodeAgentMcpTools>(new System.Text.Json.JsonSerializerOptions(McpJsonUtilities.DefaultOptions));
+                   .WithTools<NodeAgentMcpTools>(new JsonSerializerOptions(McpJsonUtilities.DefaultOptions));
 
         return builder;
     }

@@ -112,9 +112,9 @@ public sealed class RuntimeEnvironmentFactsProvider(
                 {
                     binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
                     return await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
-                            (path, token) => RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
-                            ct)
-                        .ConfigureAwait(false);
+                                                                    (path, token) => RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
+                                                                    ct)
+                                                                .ConfigureAwait(false);
                 },
                 missing,
                 ct)

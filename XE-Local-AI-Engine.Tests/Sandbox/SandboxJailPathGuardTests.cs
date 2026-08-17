@@ -191,7 +191,10 @@ public sealed class SandboxJailPathGuardTests : IDisposable
         {
             using var handle = File.OpenHandle(target, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
             var offset = RandomAccess.GetLength(handle);
-            var oneByte = new byte[] { 0x41 };
+            var oneByte = new byte[]
+            {
+                0x41
+            };
             while (!stop.IsSet)
             {
                 RandomAccess.Write(handle, oneByte, offset);

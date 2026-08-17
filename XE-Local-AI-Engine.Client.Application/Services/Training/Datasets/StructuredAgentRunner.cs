@@ -90,8 +90,7 @@ public sealed class StructuredAgentRunner(
         {
             // A reasoning model emits its thinking outside the constrained grammar, so constrained decoding cannot hold
             // for the whole completion. ValidateAfter is the supported mode for these teachers (decision #15).
-            throw new TrainingValidationException(
-                $"'{request.ModelName}' is a reasoning model and cannot be used in Constrained mode; use ValidateAfter.");
+            throw new TrainingValidationException($"'{request.ModelName}' is a reasoning model and cannot be used in Constrained mode; use ValidateAfter.");
         }
 
         // No tools are offered to the teacher: it DESCRIBES the call it would make inside the structured record, and the
@@ -131,10 +130,10 @@ public sealed class StructuredAgentRunner(
         try
         {
             var response = await agent.RunAsync(seed, session: null, new ChatClientAgentRunOptions
-                                     {
-                                         ChatOptions = chatOptions
-                                     }, turnCancellation.Token)
-                                     .ConfigureAwait(false);
+                                      {
+                                          ChatOptions = chatOptions
+                                      }, turnCancellation.Token)
+                                      .ConfigureAwait(false);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)
                 ? new StructuredAgentResult(Success: false, string.Empty, "The teacher returned an empty completion.")

@@ -26,5 +26,6 @@ internal static class NodeBindingEndpointHost
         };
     }
 
-    public static INodeBindingService CreateService() => Substitute.For<INodeBindingService>();
+    public static INodeBindingService CreateService() =>
+        Substitute.For<INodeBindingService>();
 }

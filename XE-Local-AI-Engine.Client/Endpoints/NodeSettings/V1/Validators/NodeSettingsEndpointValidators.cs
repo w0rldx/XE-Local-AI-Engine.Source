@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 
 using FastEndpoints;
 using FluentValidation;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>

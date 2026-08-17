@@ -61,5 +61,4 @@ internal sealed class LlamaCommandProcessRunner(ILogger logger) : ILlamaCommandP
             ProcessCaptureRunner.TryKill(process);
         }
     }
-
 }

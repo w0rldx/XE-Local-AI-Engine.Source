@@ -22,9 +22,8 @@ public sealed class ImportKnowledgeRepositoryEndpointTests
     [Test]
     public async Task Import_WhenTheRepositoryIsPastAnImportBound_ReturnsBadRequest()
     {
-        using var response = await ImportWithFailingServiceAsync(
-                                       new KnowledgeRepositoryImportRejectedException("The repository contains more supported files than one import permits."))
-                                   .ConfigureAwait(false);
+        using var response = await ImportWithFailingServiceAsync(new KnowledgeRepositoryImportRejectedException("The repository contains more supported files than one import permits."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -34,9 +33,8 @@ public sealed class ImportKnowledgeRepositoryEndpointTests
     [Test]
     public async Task Import_WhenTheSelectedFolderInputIsRejected_ReturnsBadRequest()
     {
-        using var response = await ImportWithFailingServiceAsync(
-                                       new SelectedFolderValidationException("The selected folder id is not a valid identifier."))
-                                   .ConfigureAwait(false);
+        using var response = await ImportWithFailingServiceAsync(new SelectedFolderValidationException("The selected folder id is not a valid identifier."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -44,9 +42,8 @@ public sealed class ImportKnowledgeRepositoryEndpointTests
     [Test]
     public async Task Import_WhenTheHostCannotReadTheRepository_StaysAServerError()
     {
-        using var response = await ImportWithFailingServiceAsync(
-                                       new KnowledgeRepositoryReadException("The registered repository file index could not be read."))
-                                   .ConfigureAwait(false);
+        using var response = await ImportWithFailingServiceAsync(new KnowledgeRepositoryReadException("The registered repository file index could not be read."))
+            .ConfigureAwait(false);
 
         // 500, not a 400 dressed up with an I/O message. (The message still reaches the body here because the test
         // host runs as a development environment; DefaultExceptionHandler replaces it in production.)
@@ -57,9 +54,8 @@ public sealed class ImportKnowledgeRepositoryEndpointTests
     public async Task Import_WhenAFileResolvesOutsideTheRepositoryRoot_StaysAServerError()
     {
         // A path escape is a security stop, not a request the operator can correct — it must never be echoed as a 400.
-        using var response = await ImportWithFailingServiceAsync(
-                                       new UnauthorizedAccessException("A repository file resolved outside the registered repository root."))
-                                   .ConfigureAwait(false);
+        using var response = await ImportWithFailingServiceAsync(new UnauthorizedAccessException("A repository file resolved outside the registered repository root."))
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }

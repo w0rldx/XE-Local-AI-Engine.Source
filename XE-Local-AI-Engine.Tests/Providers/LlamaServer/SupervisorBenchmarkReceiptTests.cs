@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -172,8 +173,11 @@ public sealed class SupervisorBenchmarkReceiptTests
         var serialized = JsonSerializer.Serialize(recorded);
         foreach (var forbidden in new[]
                  {
-                     "/fake", "llama-server", "model.gguf", "127.0.0.1",
-                     spec!.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                     "/fake",
+                     "llama-server",
+                     "model.gguf",
+                     "127.0.0.1",
+                     spec!.Port.ToString(CultureInfo.InvariantCulture)
                  })
         {
             AssertEx.False(serialized.Contains(forbidden, StringComparison.Ordinal),
@@ -188,12 +192,12 @@ public sealed class SupervisorBenchmarkReceiptTests
         // whole intended-versus-effective comparison is meaningless.
         var resolved = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true);
         var intended = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
-                resolved,
-                plan: null,
-                ModelRole.Chat,
-                LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheReuse,
-                LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheRamMiB)
-            .ComputeIdentity();
+                                                      resolved,
+                                                      plan: null,
+                                                      ModelRole.Chat,
+                                                      LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheReuse,
+                                                      LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheRamMiB)
+                                                  .ComputeIdentity();
 
         var launcher = new FakeProcessLauncher
         {
@@ -219,12 +223,12 @@ public sealed class SupervisorBenchmarkReceiptTests
         // (variant, resolved, plan, role, tuning) would still claim the --metrics this process never received.
         var resolved = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true);
         var intended = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
-                resolved,
-                plan: null,
-                ModelRole.Chat,
-                LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheReuse,
-                LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheRamMiB)
-            .ComputeIdentity();
+                                                      resolved,
+                                                      plan: null,
+                                                      ModelRole.Chat,
+                                                      LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheReuse,
+                                                      LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheRamMiB)
+                                                  .ComputeIdentity();
         var launcher = new FakeProcessLauncher
         {
             StartupLines = [FullOffloadLine]
@@ -389,8 +393,7 @@ public sealed class SupervisorBenchmarkReceiptTests
                             -ctv, --cache-type-v TYPE
                                 allowed values: f32, f16, q8_0, q4_0
                             """;
-        return LlamaServerCapabilityManifest.FromSuccessfulProbe(
-            new LlamaBinary("/fake/bin/llama-server", "b9692", GpuVariant.Cuda, IsPinnedFallback: true),
+        return LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary("/fake/bin/llama-server", "b9692", GpuVariant.Cuda, IsPinnedFallback: true),
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,
             new string('a', 64),
