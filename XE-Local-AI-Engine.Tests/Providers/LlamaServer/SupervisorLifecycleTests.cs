@@ -23,7 +23,7 @@ public sealed class SupervisorLifecycleTests
         };
     }
 
-    // ---- AUD4-01: detached load (caller cancel abandons the wait; the load continues) -----------------------------
+    // ---- detached load (caller cancel abandons the wait; the load continues) -----------------------------
 
     [Test]
     public async Task EnsureRunning_CallerCancelledDuringReadiness_LoadContinuesDetached_SecondEnsureReuses()
@@ -79,7 +79,7 @@ public sealed class SupervisorLifecycleTests
         AssertEx.True(endpoints.All(e => string.Equals(e.BaseAddress.AbsoluteUri, first, StringComparison.Ordinal)));
     }
 
-    // ---- AUD4-09: readiness-timeout is classified and retried at most MaxReadinessTimeoutRetries times ------------
+    // ---- readiness-timeout is classified and retried at most MaxReadinessTimeoutRetries times ------------
 
     [Test]
     public async Task EnsureRunning_ReadinessTimeout_RetriesAtMostConfigured_IndependentOfRestartCap()
@@ -102,7 +102,7 @@ public sealed class SupervisorLifecycleTests
         AssertEx.True(launcher.Handles.All(h => h.WasTreeKilled), "Each timed-out spawn must be torn down.");
     }
 
-    // ---- AUD4-04: operator eject with bounded in-flight lease drain -----------------------------------------------
+    // ---- operator eject with bounded in-flight lease drain -----------------------------------------------
 
     [Test]
     public async Task Eject_IdleProcess_TearsDownImmediately_Ejected()

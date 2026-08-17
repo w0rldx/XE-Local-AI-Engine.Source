@@ -66,8 +66,8 @@ public interface IAgentDefinitionResolver
 ///     <see cref="PlaybookEnabled" /> are true; retrieval/injection stays gated on <see cref="PlaybookEnabled" /> alone,
 ///     so a retrieval-only agent (<see cref="MemoryExtractionEnabled" /> false) still injects existing memory but mines
 ///     no new candidates. It is trailing/non-config-affecting for the same reason as <see cref="PlaybookEnabled" />.
-///     <see cref="Kind" /> is the definition's execution shape, also a trailing/non-config-affecting attribution snapshot
-///     (AUD4-16): the resolver already loaded and decrypted the definition, so exposing its Kind lets the chat-turn
+///     <see cref="Kind" /> is the definition's execution shape, also a trailing/non-config-affecting attribution snapshot:
+///     the resolver already loaded and decrypted the definition, so exposing its Kind lets the chat-turn
 ///     resolver decide whether to compile an orchestration WITHOUT a second uncached store read + AES-GCM decrypt on
 ///     every send (the common non-orchestrator path skips the reload entirely).
 /// </summary>

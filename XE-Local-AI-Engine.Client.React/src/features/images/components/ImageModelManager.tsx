@@ -74,7 +74,7 @@ interface ImageModelManagerProps {
 //
 // The download itself runs on the backend coordinator, which records a terminal phase for every attempt; while any are
 // in flight this component polls their status so a FAILED download surfaces its reason instead of leaving the operator
-// watching an indeterminate bar forever (F-031), and each in-flight row can be cancelled. Those progress rows and the
+// watching an indeterminate bar forever, and each in-flight row can be cancelled. Those progress rows and the
 // per-model error alerts sit ABOVE the tabs, so switching tab mid-download never hides a running transfer.
 export function ImageModelManager({ models, isLoading, onPendingDownloadChange }: ImageModelManagerProps) {
 	const { t } = useTranslation();

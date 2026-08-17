@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     Process-wide serialization gate for GPU-backed model loads (AUD4-06). Every supervisor that spawns a GPU-backed
+///     Process-wide serialization gate for GPU-backed model loads. Every supervisor that spawns a GPU-backed
 ///     runtime process — the llama-server supervisor and the stable-diffusion.cpp image supervisor — acquires this gate
 ///     around the spawn-through-readiness window, so at most ONE GPU load is choosing its placement at a time. Two
 ///     concurrent <c>--fit</c> loads therefore never read the same free-VRAM snapshot and oversubscribe the device

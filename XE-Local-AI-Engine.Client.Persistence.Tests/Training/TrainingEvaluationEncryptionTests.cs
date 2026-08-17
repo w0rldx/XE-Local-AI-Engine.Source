@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Covers both interceptor directions for the three encrypted columns Slice 5 adds. A column registered for
+///     Covers both interceptor directions for the three encrypted evaluation columns. A column registered for
 ///     encryption but not for decryption (or the reverse) round-trips as garbage rather than failing loudly, so each is
 ///     asserted as ciphertext at rest AND as plaintext after a fresh read.
 /// </summary>

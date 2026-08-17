@@ -210,7 +210,7 @@ public sealed class HardwareProfileResponse
 
     public required long FreeDiskBytes { get; init; }
 
-    // AUD4-03 runtime device audit: whether the SELECTED inference runtime actually uses the advertised GPU or has
+    // Runtime device audit: whether the SELECTED inference runtime actually uses the advertised GPU or has
     // silently fallen back to the CPU. The fields above are physical facts (what hardware exists); these are runtime
     // truth (what inference will use). Non-required so a projection without an audit keeps the CPU-safe defaults.
 

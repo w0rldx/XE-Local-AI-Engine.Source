@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 
 /// <summary>
-///     Seam for recording Hugging Face download reliability signals (AUD4-18). The download client lives in the
+///     Seam for recording Hugging Face download reliability signals. The download client lives in the
 ///     Providers.HuggingFace layer, which cannot reference the application layer's <c>NodeMetrics</c> meter directly
 ///     (layering: providers depend only on Abstractions / their own assembly). The host supplies a
 ///     <c>NodeMetrics</c>-backed implementation; tests and headless hosts fall back to

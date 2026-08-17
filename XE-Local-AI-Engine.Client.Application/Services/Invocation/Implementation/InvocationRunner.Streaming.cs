@@ -23,7 +23,7 @@ public sealed partial class InvocationRunner
         // block to stamp the persisted tokens-per-second duration.
         public Stopwatch GenerationStopwatch { get; } = Stopwatch.StartNew();
 
-        // Time-to-first-token (AUD4-19) inputs. HarnessStartedTimestamp provides the production-harness TTFT used by the
+        // Time-to-first-token inputs. HarnessStartedTimestamp provides the production-harness TTFT used by the
         // terminal efficiency record. ModelReadyTimestamp preserves the existing inference-only measure (the local
         // warm phase's completion, or turn start for a runtime with no cold load). ProviderTag is the bounded metric
         // dimension (local | remote). FirstOutputRecorded gates both one-shot values on the first emitted chunk.

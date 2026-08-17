@@ -2033,7 +2033,7 @@ public sealed class NodeChatStreamServiceTests
 
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
-        // AUD4-16: the chat-turn resolver now gates the orchestration reload on the resolved runtime's Kind (it reuses the
+        // The chat-turn resolver now gates the orchestration reload on the resolved runtime's Kind (it reuses the
         // definition the resolver already loaded), so the resolver must surface Kind=Orchestrator for this bound agent.
         var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
         agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -2210,7 +2210,7 @@ public sealed class NodeChatStreamServiceTests
 
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
-        // AUD4-16: the chat-turn resolver gates the orchestration reload on the resolved runtime's Kind, so the resolver
+        // The chat-turn resolver gates the orchestration reload on the resolved runtime's Kind, so the resolver
         // must surface Kind=Orchestrator for this bound agent.
         var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
         agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())

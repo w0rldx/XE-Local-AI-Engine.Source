@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 ///     budgeting policy.
 /// </summary>
 /// <remarks>
-///     AUD4-16: per-message script-category profiles are memoized by message instance in a <see cref="ConditionalWeakTable{TKey,TValue}" />
+///     Per-message script-category profiles are memoized by message instance in a <see cref="ConditionalWeakTable{TKey,TValue}" />
 ///     (no leak — the entry dies with the message). The budgeter re-estimates the same history across the two outer
 ///     growth points and every inner tool-loop round, and the same <see cref="ChatMessage" /> instances flow through all
 ///     of them (the runner appends but never mutates), so the memo turns repeated full-content scans into dictionary

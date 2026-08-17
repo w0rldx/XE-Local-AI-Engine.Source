@@ -46,9 +46,9 @@ public sealed class ChatTurnResolver(
         // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call. The same
         // pass classifies provider LOCALITY (Codex / Azure Foundry = cloud) so the knowledge-tool provider-locality gate
         // reuses this per-turn resolution instead of adding its own hot-path lookup.
-        // AUD4-16: measure per-turn resolution cost so the before/after of the redundant-work removals (single agent-def
+        // measure per-turn resolution cost so the before/after of the redundant-work removals (single agent-def
         // read, cached provider resolution) is observable. Debug-level + timestamp-based, so it costs a long on the hot
-        // path when Debug logging is off. AUD4-23: the same stages are wrapped in coarse spans so the audited silent
+        // path when Debug logging is off. The same stages are wrapped in coarse spans so the audited silent
         // pre-spawn gap (a first send stalled here) shows up in exported traces, and the Debug log now breaks the total
         // down per stage. No high-cardinality attributes: the spans carry no model names, prompts, or ids.
         var resolveStartTimestamp = Stopwatch.GetTimestamp();
@@ -88,7 +88,7 @@ public sealed class ChatTurnResolver(
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
         // keeping the unbound/single-agent path byte-identical. The same retrieval query drives per-participant retrieval.
-        // The already-resolved runtime is threaded in so its Kind gates the reload (AUD4-16).
+        // The already-resolved runtime is threaded in so its Kind gates the reload.
         var orchestrationStart = Stopwatch.GetTimestamp();
         OrchestrationResolution orchestration;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_orchestration"))
@@ -244,7 +244,7 @@ public sealed class ChatTurnResolver(
             return OrchestrationResolution.NotOrchestrated;
         }
 
-        // AUD4-16: the resolver already loaded (and AES-GCM-decrypted) this definition on the line above; reuse its Kind
+        // The resolver already loaded (and AES-GCM-decrypted) this definition on the line above; reuse its Kind
         // instead of a SECOND uncached GetByIdAsync + decrypt. A null resolution (no binding / deleted definition) or a
         // non-orchestrator Kind — the overwhelmingly common path, incl. every mode-off Default Assistant send — means
         // there is no orchestration to compile, so the reload is skipped entirely. Only a bound orchestrator (rare) pays

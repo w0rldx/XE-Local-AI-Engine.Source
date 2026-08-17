@@ -16,7 +16,7 @@ import type { ModelOption } from "@/features/chat/models/ChatModels";
 // stuck, noisy error. A SignalR invalidation on download completion refreshes the installed list, so the moment the
 // model IS installed this flips true and the poll begins on its own.
 //
-// Note: GGUF (llamacpp) selections that ARE installed get polled — CL-4 makes those a 200 carrying maxContextTokens,
+// Note: GGUF (llamacpp) selections that ARE installed get polled — the details endpoint answers those with a 200 carrying maxContextTokens,
 // which the context usage meter needs. Only cloud, unavailable, and not-installed selections are suppressed.
 export function shouldFetchLocalModelDetails(
 	concreteModelName: string,
@@ -41,7 +41,7 @@ export function shouldFetchLocalModelDetails(
 	return concreteModelInstalled;
 }
 
-// Resolves the context-usage meter's capacity from a model's details (AUD4-02/20): prefer the RUNNING process's
+// Resolves the context-usage meter's capacity from a model's details: prefer the RUNNING process's
 // effective window (the launched `-c`, reported once the model is warm) over the model's advertised train ceiling, then
 // undefined (unknown → the meter shows "—"). Kept pure so the preference is unit-testable without rendering the page.
 export function resolveContextCapacityTokens(

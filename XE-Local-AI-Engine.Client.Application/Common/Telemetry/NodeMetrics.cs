@@ -276,7 +276,7 @@ public static class NodeMetrics
             description: "Number of operator eject requests and outcomes (requested | ejected | timed_out_still_busy | forced | not_running).");
 
     /// <summary>
-    ///     Incremented when the runtime device audit (AUD4-03) detects a silent CPU fallback: the host advertises a GPU
+    ///     Incremented when the runtime device audit detects a silent CPU fallback: the host advertises a GPU
     ///     but the SELECTED llama.cpp runtime cannot use it — a CPU variant was chosen on a GPU box, or a GPU variant
     ///     enumerated zero devices (e.g. the shipped Vulkan build under WSL2 with no Vulkan ICD). Fires once per detection
     ///     (the audit is cached per binary), so a non-zero value flags inference silently running on the CPU while the
@@ -307,7 +307,7 @@ public static class NodeMetrics
 
     /// <summary>
     ///     Wall-clock duration (milliseconds) a GPU-backed model load waited to acquire the process-wide GPU-load
-    ///     admission gate (AUD4-06) before its spawn began. Near-zero under no contention; a large value means a load
+    ///     admission gate before its spawn began. Near-zero under no contention; a large value means a load
     ///     queued behind another load's spawn-through-readiness window. Content-free (a duration only).
     /// </summary>
     public static readonly Histogram<double> GpuModelLoadAdmissionWaitMs =
@@ -317,7 +317,7 @@ public static class NodeMetrics
 
     /// <summary>
     ///     Incremented when a GPU-load admission wait exceeded its bounded max-wait and surfaced a typed timeout rather
-    ///     than hanging a chat turn (AUD4-06). A non-zero value flags a wedged load holding the gate past the backstop.
+    ///     than hanging a chat turn. A non-zero value flags a wedged load holding the gate past the backstop.
     ///     Content-free — a count only.
     /// </summary>
     public static readonly Counter<long> GpuModelLoadAdmissionTimeoutTotal =
@@ -327,7 +327,7 @@ public static class NodeMetrics
 
     /// <summary>
     ///     Wall-clock latency (milliseconds) from the start of an invocation turn to the moment the local model load
-    ///     begins — the audited "silent pre-spawn gap" (AUD4-23: a first-ever send stalled ~7.8 s here with no log). Only
+    ///     begins — the audited "silent pre-spawn gap" (a first-ever send stalled ~7.8 s here with no log). Only
     ///     recorded for a local llama.cpp turn (the one that pays a cold load); cloud/Ollama turns never reach the warm
     ///     phase. Tagged by <c>provider</c> (local). Content-free (a duration only).
     /// </summary>
@@ -462,7 +462,7 @@ public static class NodeMetrics
 
     /// <summary>
     ///     Registers the observable gauges that report how many GPU-backed model loads are currently HOLDING the
-    ///     process-wide admission gate (0 or 1 — the gate is a serializer) and how many are WAITING behind it (AUD4-06).
+    ///     process-wide admission gate (0 or 1 — the gate is a serializer) and how many are WAITING behind it.
     ///     The gate singleton supplies the live count callbacks and holds the returned instruments for its lifetime.
     /// </summary>
     public static (ObservableGauge<long> Active, ObservableGauge<long> Waiting) CreateGpuModelLoadAdmissionGauges(Func<long> observeActive,

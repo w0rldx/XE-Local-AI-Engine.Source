@@ -61,7 +61,7 @@ public sealed class ChatInvocationStatePump(
         var lastEmitTimestamp = 0L;
         var emitDebounceInterval = TimeSpan.FromMilliseconds(_options.EmitDebounceMs);
         // The last runtime phase surfaced to the client, so a pre-first-token phase transition is emitted once per
-        // distinct phase (AUD4-20: the "Loading model…" indicator). Coalescing keeps the newest snapshot per burst, so
+        // distinct phase (the "Loading model…" indicator). Coalescing keeps the newest snapshot per burst, so
         // this tracks the CURRENT phase, not every intermediate one — which is exactly what the indicator needs.
         InvocationRuntimePhase? lastEmittedPhase = null;
         // The freshest content-bearing snapshots the cadences deferred. Retained so a graceful end-of-stream that never

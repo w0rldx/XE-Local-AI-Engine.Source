@@ -149,7 +149,7 @@ public sealed class ImageJobCoordinatorTests
     }
 
     /// <summary>
-    ///     F-030: the runtime rounds the requested size up (a requested 100x512 is produced as 128x512). The succeeded
+    ///     The runtime rounds the requested size up (a requested 100x512 is produced as 128x512). The succeeded
     ///     job must record the dimensions the runtime reported producing, not the ones that were requested — otherwise
     ///     the job card describes an image that does not exist.
     /// </summary>

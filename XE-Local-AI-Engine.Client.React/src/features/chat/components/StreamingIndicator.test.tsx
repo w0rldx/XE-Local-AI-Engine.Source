@@ -53,7 +53,7 @@ describe("StreamingIndicator", () => {
 		expect(screen.queryByTestId("chat-stream-error")).toBeNull();
 	});
 
-	// AUD4-20: a local cold load surfaces a distinct "Loading model…" indicator before the first token, so the wait
+	// A local cold load surfaces a distinct "Loading model…" indicator before the first token, so the wait
 	// reads as legitimate progress rather than an apparent hang.
 	it("shows the model-loading indicator during the loading_model phase (before the first token)", () => {
 		renderWithProviders(<StreamingIndicator isActive={true} isQueued={false} hasContent={false} runtimePhase="loading_model" />);
