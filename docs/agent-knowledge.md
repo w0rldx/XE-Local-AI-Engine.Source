@@ -150,6 +150,27 @@ reference-only now; the release mechanism is `release.yml`.
 
 The **architecture tests are a real gate** — but because they are ordinary tests inside `XE-Local-AI-Engine.Tests`, so they run in any full-module run and in the packaging script's backend leg. They are enforced by the test suite, not by a PR check.
 
+### Add a hub, a route family, a React feature or a project — and name it in the wiki, or `python-quality` goes red
+
+`scripts/docs-inventory-check.py` runs in the same CI job as the Python gate above. It re-derives five inventories from
+the code and fails when a member is missing from the `docs/wiki/` page that claims to enumerate it: every `MapHub<>`
+registration under `XE-Local-AI-Engine.Client/` and every nested `public static class` in `LocalApiRoutes.cs` against
+`09-api-and-hubs.md`, every directory under the React client's `src/features/` against `10-react-client.md`, every
+numbered wiki page against a markdown link in `Home.md`, and every project (`.csproj` name) enrolled in `XE-Local-AI-Engine.slnx`
+against `02-project-layout.md`.
+
+The failure it prevents: a wiki page that still *reads* as a complete list while the code has moved on — drift that
+only surfaces when someone trusts the page. It is a mention check, not a structural one, so the fix is almost always
+one line in the wiki, in that page's existing style; do not weaken the check instead. Each inventory must also come
+back non-empty, so a moved directory or a regex that stopped matching fails loudly rather than passing vacuously. Run
+`python3 scripts/docs-inventory-check.py --verbose` locally; exit 2 means a check could not run at all.
+
+Its tests, `scripts/tests/test_docs_inventory_check.py`, are `unittest` and must stay that way. Everything under
+`scripts/tests/` matching `test_*.py` is *also* auto-enrolled by `scripts/run-release-contract-tests.sh`, which
+runs each file as `python3 <file>` and fails the `release-contracts` job unless it prints a non-vacuous
+`Ran N tests` / `OK`. Bare pytest functions there produce no output under `python3` and turn that job red while
+passing perfectly well under `python-quality`.
+
 ### Verify against the whole module, not just the class you touched
 
 A targeted `--treenode-filter "/*/*/<YourClass>/*"` run is great for a fast loop, but it is **not** a merge gate. A DI-wiring regression (an unguarded `INodeSettingsStore.Load()` in a singleton factory) NRE'd every **host-based** test (`WebApplicationFactory` startup) — 14 `NodeSettingsEndpointTests` plus `GetVoiceManifest_*` — and stayed red across *four* merges because every review only ran the narrow classes it changed. Before declaring a backend change merged, run the **whole `XE-Local-AI-Engine.Tests` module** at least once. Nothing else will: there is no CI gate (above), and the packaging script's solution-wide backend leg only runs at release time — by which point a four-merge-old regression is already in the RC. A DI factory that reads a store/config at construction must null-guard it (`Load()?.X`) — a test substitute's `Load()` returns null and takes the whole host down.

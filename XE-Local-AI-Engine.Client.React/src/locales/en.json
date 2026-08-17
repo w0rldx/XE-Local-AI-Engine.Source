@@ -1681,6 +1681,25 @@
 				"cleared": "Token cleared.",
 				"clearError": "Could not clear the token."
 			},
+			"localModelProxyKey": {
+				"title": "Local model proxy",
+				"configured": "Key configured",
+				"none": "No key",
+				"description": "Let an external OpenAI-compatible tool (LiteLLM, Continue, a local agent) use your local model through this node as a plain OpenAI provider — set its base_url to the endpoint below and its API key to the generated key. This serves the raw model only, with no agent tools or memory. Only a one-way hash of the key is stored, so it is shown once when you generate it and cannot be retrieved afterwards. Only clients on this machine can connect.",
+				"endpointLabel": "base_url",
+				"prefixLabel": "Key",
+				"notRetrievable": "Only the first characters are shown. The full key is not stored and cannot be shown again — regenerate if you no longer have it.",
+				"lastUsed": "Last used {{when}}",
+				"neverUsed": "Never used yet — no client has connected with this key.",
+				"revealTitle": "Copy this key now",
+				"revealWarning": "This is the only time this key will be shown. It is not stored and cannot be recovered — if you lose it you must generate a new one and update every client that uses it.",
+				"dismissReveal": "I have copied it",
+				"clientHint": "Point your OpenAI-compatible client at base_url = the endpoint above with api_key = the generated key. It serves only the local model — no agent tools, no memory, no knowledge base.",
+				"regenerate": "Regenerate key",
+				"generate": "Generate key",
+				"revoke": "Revoke key",
+				"regenerateWarning": "Regenerating replaces the key immediately — any client still configured with the old one stops working."
+			},
 			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
 			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			"fields": {

@@ -24,6 +24,9 @@ this whole file as its `validate` job before packaging):
   `pyproject.toml` + `uv.lock` (dev tooling only). Runs the `tools/training/test_*.py` self-checks
   and the `scripts/**` unittest suites under pytest. Not the training runtime: `tools/training/
   pyproject.toml` + `uv.lock` are the shipped runtime manifest (ADR 0005) and stay untouched.
+  - `python3 scripts/docs-inventory-check.py` runs in the same job: it fails when a SignalR hub, a
+    `LocalApiRoutes` route family, a React `features/` directory, a numbered wiki page or a solution
+    project is missing from the `docs/wiki/` page that enumerates it. Run it after adding any of those.
 - **release-contracts** — `scripts/run-release-contract-tests.sh` (auto-enrolled `scripts/tests`,
   `scripts/compliance/tests`, `scripts/performance/tests`), then `scripts/lint-release-scripts.sh
   --no-behavior --bootstrap` (shellcheck, PSScriptAnalyzer, Pester, the `P0_SPIKE` compile gate).
