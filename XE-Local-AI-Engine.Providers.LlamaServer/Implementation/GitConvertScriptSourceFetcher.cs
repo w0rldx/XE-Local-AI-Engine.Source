@@ -25,18 +25,18 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         ArgumentException.ThrowIfNullOrWhiteSpace(commitSha);
 
         var environment = BuildScrubbedGitEnvironment(destinationDirectory);
-        IReadOnlyList<(IReadOnlyList<string> Args, TimeSpan Timeout)> steps =
+        IReadOnlyList<GitStep> steps =
         [
-            (["-C", destinationDirectory, "init", "--quiet"], ShortCommandTimeout),
-            (["-C", destinationDirectory, "remote", "add", "origin", Repository], ShortCommandTimeout),
-            (["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], FetchTimeout),
-            (["-C", destinationDirectory, "checkout", "--detach", commitSha], ShortCommandTimeout)
+            new(["-C", destinationDirectory, "init", "--quiet"], ShortCommandTimeout),
+            new(["-C", destinationDirectory, "remote", "add", "origin", Repository], ShortCommandTimeout),
+            new(["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], FetchTimeout),
+            new(["-C", destinationDirectory, "checkout", "--detach", commitSha], ShortCommandTimeout)
         ];
 
-        foreach (var (args, timeout) in steps)
+        foreach (var step in steps)
         {
-            var (exitCode, _) = await RunAsync(args, environment, destinationDirectory, timeout, ct).ConfigureAwait(false);
-            if (exitCode != 0)
+            var result = await RunAsync(step.Args, environment, destinationDirectory, step.Timeout, ct).ConfigureAwait(false);
+            if (result.ExitCode != 0)
             {
                 throw new LlamaRuntimeException("Fetching the pinned llama.cpp conversion scripts failed.");
             }
@@ -135,4 +135,7 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
             ProcessCaptureRunner.TryKill(process);
         }
     }
+
+    /// <summary>One git invocation of the pinned fetch sequence: its argument vector and the timeout it may take.</summary>
+    private sealed record GitStep(IReadOnlyList<string> Args, TimeSpan Timeout);
 }
