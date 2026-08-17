@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -18,7 +19,8 @@ internal sealed class BenchmarkCatalogService(
     IModelCapabilityResolver modelCapabilities,
     IBenchmarkEligibilityPolicy eligibilityPolicy,
     IGgufModelStore ggufModels,
-    IBenchmarkInstalledModelLeaseProvider installedModels) : IBenchmarkCatalogService
+    IBenchmarkInstalledModelLeaseProvider installedModels,
+    ILogger<BenchmarkCatalogService> logger) : IBenchmarkCatalogService
 {
     private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
     private readonly IAgentDefinitionResolver _agentResolver = agentResolver ?? throw new ArgumentNullException(nameof(agentResolver));
@@ -26,6 +28,7 @@ internal sealed class BenchmarkCatalogService(
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
     private readonly IGgufModelStore _ggufModels = ggufModels ?? throw new ArgumentNullException(nameof(ggufModels));
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
+    private readonly ILogger<BenchmarkCatalogService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<IReadOnlyList<BenchmarkEligibleAgent>> ListEligibleAgentsAsync(string modelName,
         CancellationToken cancellationToken = default)
@@ -104,7 +107,9 @@ internal sealed class BenchmarkCatalogService(
             catch (BenchmarkEligibilityException)
             {
                 // Non-chat or non-llama.cpp entries are not benchmark candidates. A chat model that carries an
-                // optional mmproj projector companion IS a candidate — the benchmark is text-only either way.
+                // optional mmproj projector companion IS a candidate — the benchmark is text-only either way. An
+                // installed model that fails snapshot verification arrives here too (see AcquireEligibleModelAsync)
+                // so a single broken registry entry costs its own row, not the whole catalog.
             }
             catch (BenchmarkNotFoundException)
             {
@@ -128,6 +133,14 @@ internal sealed class BenchmarkCatalogService(
             {
                 Source = exception.Source
             };
+        }
+        catch (InstalledGgufSnapshotException exception)
+        {
+            // One unverifiable installed model must never fail the whole catalog: the list path already isolates a
+            // BenchmarkEligibilityException per entry, and the single-model path turns this into the typed 422 the
+            // endpoint already declares instead of a bare 500. The store's own reason is logged, never returned.
+            _logger.LogWarning(exception, "Benchmark catalog: installed model {ModelName} could not be verified and is excluded.", modelName);
+            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.");
         }
 
         try

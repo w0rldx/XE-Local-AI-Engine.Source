@@ -347,7 +347,9 @@ internal sealed class HfDownloadClient
         await using (var stream = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, useAsync: true))
         {
             var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-            actualSha = Convert.ToHexString(hash);
+            // Lowercase hex is the repo-wide canonical form (GgufMemberFingerprint rejects anything else).
+            // Uppercase here is what left legacy registry entries mismatching their freshly computed digest.
+            actualSha = Convert.ToHexStringLower(hash);
         }
 
         if (!string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase))
