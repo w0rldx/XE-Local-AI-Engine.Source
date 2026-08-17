@@ -27,6 +27,9 @@ public sealed class BenchmarkExportProjectResponse
     public int ContextTokens { get; init; }
     public int? MaxOutputTokens { get; init; }
 
+    /// <summary>The generation budget the runs were given, or null for the node's frozen default.</summary>
+    public int? InvocationTimeoutSeconds { get; init; }
+
     /// <summary>Null on a project with no runs — the frozen agent identity only exists once a run has been frozen.</summary>
     public BenchmarkExportAgentResponse? Agent { get; init; }
 
@@ -105,6 +108,7 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
                           CoreTask = JsonSerializer.Deserialize<string>(project.CoreTaskJson.Span) ?? string.Empty,
                           ContextTokens = project.ContextTokens,
                           MaxOutputTokens = project.MaxOutputTokens,
+                          InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
                           Agent = records.Count == 0
                               ? null
                               : new BenchmarkExportAgentResponse

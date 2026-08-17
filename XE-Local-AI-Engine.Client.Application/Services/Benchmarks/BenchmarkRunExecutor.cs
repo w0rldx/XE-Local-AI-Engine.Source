@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -87,7 +88,7 @@ public sealed class BenchmarkRunExecutor(
             }
 
             using var reservation = decision.Reservation;
-            var package = BuildPrimaryPackage(snapshot);
+            var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);
             var admission = new BenchmarkContextAdmissionPolicy(snapshot.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
@@ -124,7 +125,12 @@ public sealed class BenchmarkRunExecutor(
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
             {
-                throw new BenchmarkExecutionException(InvocationFailedMessage);
+                // A run the node cancelled at its own invocation budget is the one failure that can explain itself, and
+                // "the invocation failed" is exactly the message that made the live 307 s cancellation unattributable.
+                throw new BenchmarkExecutionException(InvocationFailedMessage)
+                {
+                    StopReason = terminal?.FailureCategory == FailureCategory.Timeout ? BenchmarkPrimaryStopReasons.Timeout : null
+                };
             }
 
             var effectiveContext = admission.EffectiveContextTokens
@@ -195,7 +201,8 @@ public sealed class BenchmarkRunExecutor(
             logger.LogError(exception, "Benchmark primary work {RunId} failed.", work.RunId);
             await TerminalizeFailedAsync(work,
                 exception is BenchmarkExecutionException or LlamaRuntimeException ? exception.Message : InvocationFailedMessage,
-                environment).ConfigureAwait(false);
+                environment,
+                (exception as BenchmarkExecutionException)?.StopReason).ConfigureAwait(false);
         }
     }
 
@@ -272,7 +279,7 @@ public sealed class BenchmarkRunExecutor(
         }
     }
 
-    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot)
+    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds)
     {
         var runtime = snapshot.ResolvedRuntime;
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
@@ -292,7 +299,7 @@ public sealed class BenchmarkRunExecutor(
             LocalChatLoopbackDefaults.ClientNodeId,
             runtime.AllowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
+            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(invocationTimeoutSeconds),
             ReasoningEffort: runtime.ReasoningEffort,
             SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
             Skills: runtime.Skills,
@@ -377,7 +384,10 @@ public sealed class BenchmarkRunExecutor(
         events.EvictPlaintext(runId);
     }
 
-    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work, string message, RuntimeEnvironmentFactsV1? environment)
+    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work,
+        string message,
+        RuntimeEnvironmentFactsV1? environment,
+        string? primaryStopReason = null)
     {
         await CheckpointAsync(work, receipt: null, environment).ConfigureAwait(false);
         var runId = work.RunId;
@@ -391,7 +401,8 @@ public sealed class BenchmarkRunExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Failed.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+        var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None)
+                                   .ConfigureAwait(false);
         events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with
@@ -513,4 +524,11 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
     }
 }
 
-internal sealed class BenchmarkExecutionException(string message) : InvalidOperationException(message);
+internal sealed class BenchmarkExecutionException(string message) : InvalidOperationException(message)
+{
+    /// <summary>
+    ///     Why generation stopped, when this failure knows — <c>timeout</c> for a run the node cancelled at its
+    ///     invocation budget. Null for every failure that cannot explain itself, which then records nothing.
+    /// </summary>
+    public string? StopReason { get; init; }
+}

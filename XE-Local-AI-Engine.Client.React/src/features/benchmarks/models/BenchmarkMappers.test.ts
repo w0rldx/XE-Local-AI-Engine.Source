@@ -27,6 +27,7 @@ describe("toBenchmarkProjectSummary", () => {
 			contextTokens: 0,
 			// Null, not 0: an absent budget means context-limited, and 0 is a budget the node refuses.
 			maxOutputTokens: null,
+			invocationTimeoutSeconds: null,
 			agentDefinitionId: "",
 			judgeEnabled: false,
 			runCount: 0,

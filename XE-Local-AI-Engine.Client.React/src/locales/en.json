@@ -3999,7 +3999,9 @@
 				"rejudgeConfirmAll": "All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
 				"rejudgeConfirmAccept": "Re-judge",
 				"maxOutputTokens": "Max output tokens",
-				"maxOutputTokensHint": "Leave empty = context-limited. Must be smaller than the requested context."
+				"maxOutputTokensHint": "Leave empty = context-limited. Must be smaller than the requested context.",
+				"invocationTimeout": "Generation timeout (s)",
+				"invocationTimeoutHint": "Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model."
 			},
 			"run": {
 				"model": "Primary model",
@@ -4094,7 +4096,8 @@
 				"judgeModel": "Select a judge model.",
 				"judgeContext": "Judge context must be positive.",
 				"referenceAnswer": "The reference answer is too long.",
-				"maxOutputTokens": "Max output tokens must be between 1 and the requested context."
+				"maxOutputTokens": "Max output tokens must be between 1 and the requested context.",
+				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds."
 			},
 			"errors": {
 				"projectsLoad": "Could not load benchmark projects.",

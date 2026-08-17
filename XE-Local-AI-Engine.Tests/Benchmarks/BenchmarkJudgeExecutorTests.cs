@@ -164,7 +164,9 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Equal<int?>(50, persisted.Score);
 
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
-        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        // The judge takes the node default and is deliberately NOT project-tunable: it emits one short constrained JSON
+        // object, so a long-reasoning budget would only delay noticing a stuck judge.
+        AssertEx.Equal(expected: 900, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("judge.gguf"),

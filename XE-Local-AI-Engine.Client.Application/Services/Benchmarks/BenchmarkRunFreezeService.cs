@@ -200,7 +200,10 @@ public sealed class BenchmarkRunFreezeService(
                     primaryLaunch.Intent,
                     repeatGroupId,
                     isGroup ? repeatIndex : null,
-                    warmup && repeatIndex == 0);
+                    warmup && repeatIndex == 0,
+                    // Copied onto the run, not read from the project at execution: a run replays with the budget it was
+                    // started under, exactly like its context and its output budget.
+                    project.InvocationTimeoutSeconds);
                 runs.Add(await _benchmarkStore.StartRunAsync(command, cancellationToken).ConfigureAwait(false));
             }
 

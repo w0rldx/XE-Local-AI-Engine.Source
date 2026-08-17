@@ -37,6 +37,9 @@ public class BenchmarkProjectMutationRequest
     /// <summary>Per-run output-token budget; omitted leaves generation context-limited. Must be &lt; ContextTokens.</summary>
     public int? MaxOutputTokens { get; init; }
 
+    /// <summary>Seconds one run's generation may take; omitted takes the node default (900). Range 60..7200.</summary>
+    public int? InvocationTimeoutSeconds { get; init; }
+
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }
     public string? JudgeModelName { get; init; }
@@ -73,6 +76,9 @@ public class BenchmarkProjectSummaryResponse
 
     /// <summary>Per-run output-token budget, or null when generation is context-limited.</summary>
     public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Seconds one run's generation may take, or null for the node default.</summary>
+    public int? InvocationTimeoutSeconds { get; init; }
 
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }

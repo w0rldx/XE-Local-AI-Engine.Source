@@ -27621,6 +27621,11 @@
             "format": "int32",
             "nullable": true
           },
+          "invocationTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "agent": {
             "nullable": true,
             "oneOf": [
@@ -28160,6 +28165,11 @@
             "format": "int32",
             "nullable": true
           },
+          "invocationTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "agentDefinitionId": {
             "type": "string",
             "format": "guid"
@@ -28223,6 +28233,11 @@
             "format": "int32"
           },
           "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "invocationTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
             "nullable": true

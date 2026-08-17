@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -36,6 +37,7 @@ public sealed class BenchmarkRunExecutorTests
                  run.Version,
                  Arg.Do<string>(message => AssertEx.Contains(message, "installed model changed")),
                  Arg.Do<long>(sequence => AssertEx.True(sequence > 0)),
+                 Arg.Any<string?>(),
                  Arg.Any<CancellationToken>())
              .Returns(call => failed = run with
              {
@@ -138,7 +140,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
         AssertEx.Equal("0", package.SamplingOptions!.Seed);
         AssertEx.Equal(8192, package.SamplingOptions.NumCtx);
-        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 900, package.Timeouts.InvocationTimeoutSeconds, "A run with no project budget takes the node default.");
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("model.gguf"),
@@ -268,6 +270,55 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_UsesTheRunsFrozenGenerationTimeoutAndRecordsATimeoutAsItsStopReason()
+    {
+        // Live: a 27B reasoning run was cancelled at 307 s under the old pinned 300 s, before it could finish OR reach
+        // the context ceiling — the clock was measuring the harness. The project now owns the budget, and a run that
+        // still runs out of it says so instead of failing with an unattributable "the invocation failed".
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2, invocationTimeoutSeconds: 1800);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? stopReason = null;
+        store.MarkPrimaryFailedAsync(run.Id,
+                 run.Version,
+                 Arg.Any<string>(),
+                 Arg.Any<long>(),
+                 Arg.Do<string?>(reason => stopReason = reason),
+                 Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        RuntimePackage? assignedPackage = null;
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+                  .Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  var invocationId = call.Arg<InvocationExecutionContext>().Package.InvocationId;
+                  var timedOut = State(invocationId, InvocationStatus.Failed, "half an ans");
+                  timedOut.FailureCategory = FailureCategory.Timeout;
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher, new InvocationStateChangedEventArgs(timedOut));
+                  return Task.CompletedTask;
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1800, AssertEx.NotNull(assignedPackage).Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, assignedPackage!.Timeouts.ToolCallTimeoutSeconds, "Tool-call and stream-idle stay pinned: they bound a STALL.");
+        AssertEx.Equal(expected: 60, assignedPackage.Timeouts.StreamIdleTimeoutSeconds);
+        AssertEx.Equal("timeout", stopReason);
+    }
+
+    [Test]
     public async Task Execute_WhenRunnerCancels_TerminalizesPrimaryAndDisposesOwnedResources()
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
@@ -342,7 +393,7 @@ public sealed class BenchmarkRunExecutorTests
             executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), stopping.Token));
 
         _ = store.DidNotReceive().MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>());
-        _ = store.DidNotReceive().MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+        _ = store.DidNotReceive().MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
         AssertEx.True(assignment.Disposed);
         AssertEx.True(AssertEx.NotNull(capacity.Reservation).Disposed);
         AssertEx.True(lease.Disposed);
@@ -455,7 +506,7 @@ public sealed class BenchmarkRunExecutorTests
         await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
 
         AssertEx.NotNull(succeeded, "A checkpoint that loses a version race must not cost the run its measurement.");
-        _ = store.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default);
+        _ = store.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
     }
 
     [Test]
@@ -465,7 +516,7 @@ public sealed class BenchmarkRunExecutorTests
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -494,7 +545,7 @@ public sealed class BenchmarkRunExecutorTests
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -542,7 +593,7 @@ public sealed class BenchmarkRunExecutorTests
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
         store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -575,7 +626,8 @@ public sealed class BenchmarkRunExecutorTests
         store.MarkPrimaryLaunchReadyAsync(run.Id, 1, 2, Arg.Do<BenchmarkLaunchReceiptCommand>(command => checkpoint = command), Arg.Any<CancellationToken>())
              .Returns(true);
         string? failure = null;
-        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,
@@ -622,12 +674,15 @@ public sealed class BenchmarkRunExecutorTests
             8192,
             LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
-    private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status, long version) =>
+    private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status, long version, int? invocationTimeoutSeconds = null) =>
         new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
             {
                 1
             }, "model.gguf", LocalModelOrigin.Imported, V1('a'), "Agent", 1, 8192,
-            status, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1);
+            status, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1)
+        {
+            InvocationTimeoutSeconds = invocationTimeoutSeconds
+        };
 
     private static BenchmarkRunExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,

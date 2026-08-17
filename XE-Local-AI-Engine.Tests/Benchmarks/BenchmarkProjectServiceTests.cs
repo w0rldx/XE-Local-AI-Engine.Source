@@ -65,6 +65,30 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_GenerationTimeoutMustBePlausible()
+    {
+        var context = new ServiceContext();
+
+        // The floor stops a typo from cancelling every run before the model even warms; the ceiling stops a runaway
+        // run from owning the queue for a day.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId,
+                InvocationTimeoutSeconds: 59)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId,
+                InvocationTimeoutSeconds: 7201)));
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
+            Arg.Any<CancellationToken>());
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId,
+            InvocationTimeoutSeconds: 1800));
+        AssertEx.Equal<int?>(1800, AssertEx.NotNull(context.CreatedInput).InvocationTimeoutSeconds);
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId));
+        AssertEx.Null(AssertEx.NotNull(context.CreatedInput).InvocationTimeoutSeconds, "An omitted timeout takes the node default.");
+    }
+
+    [Test]
     public async Task Create_WithJudge_CarriesAHashedPolicyRevisionIntoTheProjectWriteItself()
     {
         var context = new ServiceContext();

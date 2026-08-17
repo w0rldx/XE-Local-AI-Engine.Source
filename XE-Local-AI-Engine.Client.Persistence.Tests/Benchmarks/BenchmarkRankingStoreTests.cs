@@ -150,6 +150,41 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Truncated_OutranksNoScore_OnEveryPathThatReturnsARun()
+    {
+        // The live bug: on a project WITHOUT a judge the truncated run came back "no-score" — technically true and
+        // completely useless, because scoring it is not what it needs. Only LoadRankingAsync applied the run-level
+        // exclusions, so the single-run read and every write-returning path still reported the judge-derived reason.
+        await using var context = await CreateDatabaseAsync("truncated-beats-no-score.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+        var runId = await StartRunAsync(store, project.Id).ConfigureAwait(false);
+        var claim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+
+        // The write's own return value is the third path, and the one the executor hands straight to the hub.
+        var written = await store.MarkPrimarySucceededAsync(PrimarySuccess(runId, claim.Run.Version) with
+        {
+            PrimaryStopReason = "length"
+        }).ConfigureAwait(false);
+        var read = AssertEx.NotNull(await store.GetRunAsync(runId).ConfigureAwait(false));
+        var listed = (await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false)).Items.Single();
+
+        foreach (var (path, run) in new[]
+                 {
+                     ("MarkPrimarySucceededAsync", written),
+                     ("GetRunAsync", read),
+                     ("ListRunsAsync", listed)
+                 })
+        {
+            AssertEx.Equal(BenchmarkRunJudgeStates.ReasonTruncated, run.Judge!.RankExclusionReason,
+                $"{path} must report truncation, not the judge-derived reason.");
+            AssertEx.Null(run.QualityScore, $"{path} must not give a truncated run a ranking value.");
+            AssertEx.Null(run.Rank, $"{path} must not rank a truncated run.");
+            AssertEx.Equal(BenchmarkQualityScoreSources.None, run.QualityScoreSource, path);
+        }
+    }
+
+    [Test]
     public async Task Rank_ExcludesATruncatedRunEvenWhenTheJudgeScoredItWell()
     {
         await using var context = await CreateDatabaseAsync("rank-truncated.sqlite").ConfigureAwait(false);

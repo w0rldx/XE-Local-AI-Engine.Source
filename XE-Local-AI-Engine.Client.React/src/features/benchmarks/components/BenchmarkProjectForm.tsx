@@ -8,7 +8,11 @@ import type {
 	BenchmarkProjectDraft,
 	BenchmarkRubric,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkRubricIssue, benchmarkRubricLimits } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	benchmarkInvocationTimeoutLimits,
+	benchmarkRubricIssue,
+	benchmarkRubricLimits,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkRubricPresets } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkAgentOption {
@@ -62,6 +66,12 @@ export function BenchmarkProjectForm({
 		maxOutputTokens:
 			values.maxOutputTokens !== null && (values.maxOutputTokens < 1 || values.maxOutputTokens >= values.contextTokens)
 				? t("pages.benchmarks.validation.maxOutputTokens", "Max output tokens must be between 1 and the requested context.")
+				: undefined,
+		invocationTimeoutSeconds:
+			values.invocationTimeoutSeconds !== null &&
+			(values.invocationTimeoutSeconds < benchmarkInvocationTimeoutLimits.min ||
+				values.invocationTimeoutSeconds > benchmarkInvocationTimeoutLimits.max)
+				? t("pages.benchmarks.validation.invocationTimeout", "The generation timeout must be between 60 and 7200 seconds.")
 				: undefined,
 		agentDefinitionId: values.agentDefinitionId ? undefined : t("pages.benchmarks.validation.agent", "Select an agent."),
 		judgeModelName:
@@ -141,6 +151,25 @@ export function BenchmarkProjectForm({
 							// An empty field is "no budget", which must stay null rather than collapse to 0 — 0 would be a
 							// budget the node refuses, and the operator never typed it.
 							maxOutputTokens: value === "" || value === null ? null : Number(value),
+						}))
+					}
+				/>
+				<NumberInput
+					label={t("pages.benchmarks.project.invocationTimeout", "Generation timeout (s)")}
+					description={t(
+						"pages.benchmarks.project.invocationTimeoutHint",
+						"Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model.",
+					)}
+					min={benchmarkInvocationTimeoutLimits.min}
+					max={benchmarkInvocationTimeoutLimits.max}
+					step={60}
+					disabled={frozen}
+					value={values.invocationTimeoutSeconds ?? ""}
+					error={attempted ? errors.invocationTimeoutSeconds : undefined}
+					onChange={(value) =>
+						setValues((current) => ({
+							...current,
+							invocationTimeoutSeconds: value === "" || value === null ? null : Number(value),
 						}))
 					}
 				/>

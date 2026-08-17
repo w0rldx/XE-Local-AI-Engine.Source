@@ -101,6 +101,8 @@ export interface BenchmarkProjectSummary {
 	contextTokens: number;
 	/** Per-run output-token budget (`n_predict`), or null when generation is only limited by the context window. */
 	maxOutputTokens: number | null;
+	/** Seconds one run's generation may take before the node cancels it, or null for the node default (900). */
+	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
 	runCount: number;
@@ -121,6 +123,7 @@ export interface BenchmarkProjectDraft {
 	coreTask: string;
 	contextTokens: number;
 	maxOutputTokens: number | null;
+	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
 	judgeModelName: string | null;
@@ -584,6 +587,9 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
  * so this is the only signal that separates a finished answer from a fragment, and it is what keeps a truncated run out
  * of the ranked cohort.
  */
+/** Mirrors the node's `BenchmarkFrozenPolicies` so the form refuses what the node would reject anyway. */
+export const benchmarkInvocationTimeoutLimits = { min: 60, max: 7200, default: 900 } as const;
+
 export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
 	run.primaryStopReason?.toLowerCase() === "length";
 
