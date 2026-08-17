@@ -33,6 +33,57 @@ public sealed class BenchmarkJudgeExecutorTests
         "{\"schemaVersion\":2,\"criteria\":[{\"id\":\"correctness\",\"score\":5,\"rationale\":\"excellent\"}],\"summary\":\"good enough\"}";
 
     [Test]
+    public async Task Execute_ForATruncatedPrimary_TellsTheJudgeTheAnswerWasCutOff()
+    {
+        // The judging still runs — a truncated answer is a real answer that deserves a bad score, not an absent one —
+        // but nothing else in the request says the answer stops mid-sentence, and a judge that cannot see that scores
+        // the fragment as if it were the whole thing.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4, primaryStopReason: "length");
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        RuntimePackage? assignedPackage = null;
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+                  .Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 4096,
+                      EffectiveContextTokens = 4096,
+                      ModelId = "judge.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, JudgeReply)));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Equal(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: true), package.ResolvedSystemPrompt);
+        using var promptPayload = JsonDocument.Parse(package.ConversationContext[0].Content);
+        AssertEx.True(promptPayload.RootElement.GetProperty("primaryOutputTruncated").GetBoolean());
+        _ = store.Received(1).MarkJudgeSucceededAsync(Arg.Any<BenchmarkJudgeSuccessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Execute_SuccessUsesFrozenJudgeContextPersistsStrictResultAndDisposesOwnership()
     {
         var installed = Installed();
@@ -113,7 +164,9 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Equal<int?>(50, persisted.Score);
 
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
-        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        // The judge takes the node default and is deliberately NOT project-tunable: it emits one short constrained JSON
+        // object, so a long-reasoning budget would only delay noticing a stuck judge.
+        AssertEx.Equal(expected: 900, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         _ = supervisor.Received(1).RunExclusiveBenchmarkAsync(Arg.Is<string>("judge.gguf"),
@@ -122,6 +175,37 @@ public sealed class BenchmarkJudgeExecutorTests
             LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Execute_ForARevisionStoredUnderAnOlderPromptVersion_RefusesAndNamesTheFix()
+    {
+        // Fail CLOSED. Reads are deliberately tolerant so the project stays open and re-savable, but judging under the
+        // current prompt while the revision promises an older one would file the verdict in the same cohort as
+        // verdicts taken under the old wording — exactly what the version exists to prevent.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion - 1);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
+            Substitute.For<IWorkerEventDispatcher>(), runner);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        AssertEx.Equal(BenchmarkJudgeExecutor.OutdatedPolicyVersionMessage, AssertEx.NotNull(failureMessage));
+        AssertEx.Contains(failureMessage!, "Re-save the judge", StringComparison.Ordinal);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
     }
 
     [Test]
@@ -160,6 +244,82 @@ public sealed class BenchmarkJudgeExecutorTests
         _ = dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationAssignedAsync(default!, default);
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
         AssertEx.True(lease.Disposed);
+    }
+
+    [Test]
+    public async Task Execute_WhenCapacityFreesUpDuringTheWait_JudgesInsteadOfFailingTheAttempt()
+    {
+        // The judge is dequeued by the SAME consumer that just ran the primary, so it routinely asks while the
+        // primary's llama-server is still handing back its VRAM. That rejection is transient: re-deciding gets an
+        // Allow, and the attempt must reach generation rather than terminalize and force an operator re-judge.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient,
+            CapacityVerdict.RejectInsufficient,
+            CapacityVerdict.Allow);
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            snapshot,
+            lease,
+            capacity,
+            Substitute.For<IWorkerEventDispatcher>(),
+            runner,
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 5, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        AssertEx.Equal(3, capacity.DecisionCount);
+        await runner.ReceivedWithAnyArgs(1).RunAsync(default!, default);
+        AssertEx.True(capacity.Reservation.Disposed, "the reservation the third decision handed over must still be released.");
+        // Generation itself produced no verdict here, so the attempt still fails — but never for capacity.
+        AssertEx.False((failureMessage ?? string.Empty).Contains("capacity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task Execute_WhenCapacityNeverFrees_FailsAfterTheWaitBudgetAndSaysHowLongItWaited()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient);
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            snapshot,
+            lease,
+            capacity,
+            Substitute.For<IWorkerEventDispatcher>(),
+            runner,
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 3, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        // 3 retries + the first decision, then a terminal failure that tells the operator it was a wait, not a glance.
+        AssertEx.Equal(4, capacity.DecisionCount);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+        AssertEx.Contains(AssertEx.NotNull(failureMessage), "No capacity became free after");
     }
 
     [Test]
@@ -252,6 +412,7 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations,
             new StubEnvironmentFacts(),
+            new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, workVersion, run, AttemptId), CancellationToken.None);
@@ -313,7 +474,8 @@ public sealed class BenchmarkJudgeExecutorTests
         IInvocationRunner runner,
         ILlamaServerProcessSupervisor? supervisor = null,
         IBenchmarkCancellationRegistry? cancellations = null,
-        ILogger<BenchmarkJudgeExecutor>? logger = null) =>
+        ILogger<BenchmarkJudgeExecutor>? logger = null,
+        BenchmarkAdmissionRetry? admissionRetry = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -327,16 +489,19 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations ?? new BenchmarkCancellationRegistry(),
             new StubEnvironmentFacts(),
+            // Default: decide ONCE and never wait, so the tests that assert the rejection path stay instant. Tests
+            // about the wait itself pass their own budget with a zero interval.
+            admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             logger ?? NullLogger<BenchmarkJudgeExecutor>.Instance);
 
     /// <summary>
     ///     Wires the reads the executor makes before it spawns: the attempt it was handed and the policy revision that
     ///     attempt was enqueued under. Both carry the payloads the executor deserializes.
     /// </summary>
-    private static void StubJudgeAttempt(IBenchmarkStore store, InstalledModelSnapshot installed, string? kvCacheType = null)
+    private static void StubJudgeAttempt(IBenchmarkStore store, InstalledModelSnapshot installed, string? kvCacheType = null, int? promptVersion = null)
     {
         store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType));
-        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision());
+        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion));
     }
 
     private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed, string? kvCacheType = null) =>
@@ -362,13 +527,13 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, "cpu-variant",
                 LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null));
 
-    private static BenchmarkJudgePolicyRevisionRecord Revision() =>
-        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy()), PolicyHash, null, 1, 1);
+    private static BenchmarkJudgePolicyRevisionRecord Revision(int? promptVersion = null) =>
+        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion)), PolicyHash, null, 1, 1);
 
-    private static BenchmarkJudgePolicyV1 Policy() =>
+    private static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null) =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", V1('c'), [new string('b', 64)]),
             4096,
-            BenchmarkJudgePolicyVersions.PromptVersion,
+            promptVersion ?? BenchmarkJudgePolicyVersions.PromptVersion,
             BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
             new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
@@ -397,7 +562,7 @@ public sealed class BenchmarkJudgeExecutorTests
     private static BenchmarkRunJudgeView JudgeView(string state, string? errorMessage = null) =>
         new(state, AttemptId, null, 1, RevisionId, 1, 1, null, errorMessage, PolicyCurrent: true, ExecutionCurrent: false, null);
 
-    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version) =>
+    private static BenchmarkRunRecord Run(BenchmarkRuntimeSnapshotV1 snapshot, string judgeState, long version, string? primaryStopReason = null) =>
         new(Guid.NewGuid(),
             snapshot.ProjectId,
             new byte[]
@@ -432,7 +597,8 @@ public sealed class BenchmarkJudgeExecutorTests
             1,
             null,
             null,
-            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
+            PrimaryStopReason: primaryStopReason,
+            Judge: new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: true, ExecutionCurrent: false, null));
 
     private static InstalledModelSnapshot Installed()
     {
@@ -573,21 +739,35 @@ public sealed class BenchmarkJudgeExecutorTests
         }
     }
 
-    private sealed class JudgeCapacityService(CapacityVerdict verdict) : ICapacityService
+    /// <summary>
+    ///     Answers each decision with the next verdict, then repeats the last one forever — so a single verdict is a
+    ///     constant answer and a sequence models capacity that frees up (or never does) while the phase waits.
+    /// </summary>
+    private sealed class JudgeCapacityService(params CapacityVerdict[] verdicts) : ICapacityService
     {
+        private readonly Queue<CapacityVerdict> _verdicts = new(verdicts);
+
         public CapacityRequest? LastRequest { get; private set; }
+        public int DecisionCount { get; private set; }
         public TrackingDisposable Reservation { get; } = new();
 
         public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
-            Task.FromResult(new CapacityDecision(verdict, "capacity", false));
+            Task.FromResult(new CapacityDecision(Next(), "capacity", false));
 
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
         {
             LastRequest = request;
+            var verdict = Next();
             return Task.FromResult(new CapacityDecision(verdict,
                 "capacity",
                 false,
                 verdict == CapacityVerdict.Allow ? Reservation : null));
+        }
+
+        private CapacityVerdict Next()
+        {
+            DecisionCount++;
+            return _verdicts.Count > 1 ? _verdicts.Dequeue() : _verdicts.Peek();
         }
     }
 

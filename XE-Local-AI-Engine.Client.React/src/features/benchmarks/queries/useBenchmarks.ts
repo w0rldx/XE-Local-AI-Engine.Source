@@ -15,11 +15,13 @@ import {
 	rejudgeBenchmarkRun,
 	scoreBenchmarkRun,
 	startBenchmarkRun,
+	startBenchmarkRunBatch,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 } from "@/core/api/generated";
 import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
+	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem as StartBenchmarkRunBatchItem,
 	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
@@ -187,6 +189,10 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	name: draft.name,
 	coreTask: draft.coreTask,
 	contextTokens: draft.contextTokens,
+	// Omitted rather than sent as null when unset: an absent budget means context-limited, which the node validates
+	// against the context window.
+	...(draft.maxOutputTokens === null ? {} : { maxOutputTokens: draft.maxOutputTokens }),
+	...(draft.invocationTimeoutSeconds === null ? {} : { invocationTimeoutSeconds: draft.invocationTimeoutSeconds }),
 	agentDefinitionId: draft.agentDefinitionId,
 	judgeEnabled: draft.judgeEnabled,
 	judgeModelName: draft.judgeModelName,
@@ -308,6 +314,63 @@ export function useStartBenchmarkRun() {
 			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
+	});
+}
+
+/** One matrix cell the node refused, in the same `code` vocabulary a single-run failure uses. */
+export interface BenchmarkBatchRejection {
+	modelName: string;
+	kvCacheType: string | null;
+	code: string;
+	message: string;
+}
+
+/** What a batch launch did: the cells that started, and the ones that did not with the reason. */
+export interface BenchmarkBatchLaunch {
+	startedRunIds: string[];
+	rejected: BenchmarkBatchRejection[];
+}
+
+/**
+ * Launches a whole model × KV-type matrix in one request. Deliberately NOT all-or-nothing — the node reports each cell
+ * separately, so an ineligible model comes back as one rejection in a 200 rather than as a failure of the batch. Only a
+ * stale project version or a vanished project fails the whole call.
+ */
+export function useStartBenchmarkRunBatch() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({
+			projectId,
+			expectedProjectVersion,
+			items,
+			repeatCount,
+			warmup,
+		}: {
+			projectId: string;
+			expectedProjectVersion: number;
+			items: StartBenchmarkRunBatchItem[];
+			repeatCount: number;
+			warmup: boolean;
+		}): Promise<BenchmarkBatchLaunch & { projectId: string }> => {
+			const { data } = await callWithResponseValidation(
+				startBenchmarkRunBatch({
+					path: { projectId },
+					body: { expectedProjectVersion, items, repeatCount, warmup },
+					throwOnError: true,
+				}),
+			);
+			return {
+				projectId,
+				startedRunIds: (data.started ?? []).flatMap((item) => item.runIds ?? []),
+				rejected: (data.rejected ?? []).map((item) => ({
+					modelName: item.modelName,
+					kvCacheType: item.kvCacheType ?? null,
+					code: item.code,
+					message: item.message,
+				})),
+			};
+		},
+		onSuccess: (result) => invalidate(result.projectId, ...result.startedRunIds),
 	});
 }
 

@@ -58,6 +58,62 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         AssertEx.Equal(fixture.Snapshot.ModelContentFingerprint, lease.Snapshot.ModelContentFingerprint);
     }
 
+    /// <summary>
+    ///     A GGUF this node merely FOUND on disk (reinstall, node reset, moved data directory, restored models folder)
+    ///     has no <c>model_provider_map</c> row — only a model acquired through this node gets one. Chat has always
+    ///     routed such a model to llama.cpp; the snapshot must say the same, or every benchmark surface refuses a model
+    ///     the chat surface happily runs. A row naming another provider still wins.
+    /// </summary>
+    [Test]
+    public async Task ReadSnapshot_ReadsAnUnmappedRegistryGgufAsLlamaCppAndKeepsAForeignClaim()
+    {
+        var unmapped = CreateCurrentFixture();
+        var claimed = CreateCurrentFixture();
+        var unmappedCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(),
+            unmapped.Store,
+            new ReadOnlyMapStore(mapping: null));
+        var claimedCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(),
+            claimed.Store,
+            new ReadOnlyMapStore(new ModelProviderMapRecord(claimed.Snapshot.ModelName, "ollama", UpdatedAtUtc: 1, Revision: "map-r1")));
+
+        await using var unmappedLease = await unmappedCoordinator.AcquireReadSnapshotAsync(unmapped.Snapshot.ModelName);
+        await using var claimedLease = await claimedCoordinator.AcquireReadSnapshotAsync(claimed.Snapshot.ModelName);
+
+        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, unmappedLease.Snapshot.ProviderName);
+        AssertEx.Null(unmappedLease.Snapshot.ProviderMappingRevision);
+        AssertEx.Equal("ollama", claimedLease.Snapshot.ProviderName);
+    }
+
+    /// <summary>
+    ///     The catalog read: registry-recorded facts only. <see cref="FakeSnapshotStore.LoadCount" /> staying at zero is
+    ///     the point — verification hashes every member file, which on a real models directory costs minutes per call.
+    /// </summary>
+    [Test]
+    public async Task ReadFacts_ReadsRecordedRegistryFactsWithoutVerifyingContent()
+    {
+        var fingerprint = "v1:" + new string('c', 64);
+        var fixture = CreateCurrentFixture();
+        fixture.Aliases[0] = fixture.Aliases[0] with
+        {
+            RegistryValue = fixture.Aliases[0].RegistryValue with
+            {
+                ModelContentFingerprint = fingerprint
+            }
+        };
+        var coordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(),
+            fixture.Store,
+            new ReadOnlyMapStore(mapping: null));
+
+        var facts = AssertEx.NotNull(await coordinator.ReadFactsAsync(fixture.Snapshot.ModelName));
+
+        AssertEx.Equal(expected: 0, fixture.Store.LoadCount);
+        AssertEx.Equal(fixture.Snapshot.ModelName, facts.ModelName);
+        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, facts.ProviderName);
+        AssertEx.Equal(GgufRole.Chat, facts.Role);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, facts.Origin);
+        AssertEx.Equal(fingerprint, facts.ModelContentFingerprint);
+    }
+
     [Test]
     public async Task StateProbe_DerivesCurrentAndLegacyInstalledOnlyFromVerifiedLeaseFacts()
     {

@@ -43,7 +43,14 @@ public sealed record BenchmarkRunStreamPayload(
     long? DurationMs = null,
     int? TotalTokens = null,
     double? TokensPerSecond = null,
-    long? RunVersion = null);
+    long? RunVersion = null,
+    double? TtftMs = null,
+    int? PromptTokens = null,
+    double? PromptTokensPerSecond = null,
+    int? GenerationTokens = null,
+    double? GenerationTokensPerSecond = null,
+    int? CachedPromptTokens = null,
+    int? SegmentCount = null);
 
 public sealed record BenchmarkRunStreamEvent(
     Guid RunId,
@@ -494,13 +501,19 @@ public sealed record BenchmarkJudgePolicyDraft(
     BenchmarkJudgeRubricV1? Rubric = null,
     string? ReferenceAnswer = null);
 
+/// <param name="MaxOutputTokens">
+///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
+///     context-limited. Validated as <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
+/// </param>
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
     string CoreTask,
     int ContextTokens,
     Guid AgentDefinitionId,
-    BenchmarkJudgePolicyDraft? Judge = null);
+    BenchmarkJudgePolicyDraft? Judge = null,
+    int? MaxOutputTokens = null,
+    int? InvocationTimeoutSeconds = null);
 
 public sealed class BenchmarkQueueOptions
 {

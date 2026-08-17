@@ -194,10 +194,14 @@ public sealed class OpenApiDocumentTests
             "operationId", "operationKind", "modelName", "phase", "completedBytes", "totalBytes", "startedAtUtc",
             "updatedAtUtc", "errorCode", "sanitizedMessage"
         ]);
+        // `judge` is an OBJECT now, not the flat `judgeStatus` string this used to name: judging moved onto attempts,
+        // so a run's judge state is derived rather than stored. The rest are the members later slices added and that
+        // the SPA reads off a summary row — a contract change that dropped one of them would take a column with it.
         AssertSchemaProperties(schemas, "BenchmarkRunSummaryResponse",
         [
             "id", "projectId", "primaryModelName", "primaryModelOrigin", "modelContentFingerprint", "primaryStatus",
-            "judge", "lastStreamSequence", "version"
+            "judge", "modelGroupKey", "primaryStopReason", "ttftMs", "repeatGroupId", "isWarmup", "lastStreamSequence",
+            "version"
         ]);
         AssertSchemaProperties(schemas, "BenchmarkRunJudgeResponse", ["state"]);
         AssertDeclaredSchemaProperties(schemas, "BenchmarkRunDetailResponse", ["outputParts", "judgeResult"]);

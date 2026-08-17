@@ -12,6 +12,18 @@ internal sealed record class BenchmarkProject
     public byte[] CoreTaskJson { get; set; } = [];
 
     public int ContextTokens { get; set; }
+
+    /// <summary>
+    ///     The per-run output-token budget frozen into every run's sampling (<c>n_predict</c>), or
+    ///     <see langword="null" /> to leave generation context-limited. Plaintext, not sensitive.
+    /// </summary>
+    public int? MaxOutputTokens { get; set; }
+
+    /// <summary>
+    ///     How long one run's generation may take before the node cancels it, or <see langword="null" /> for the
+    ///     frozen default (<see cref="Services.Benchmarks.BenchmarkFrozenPolicies" />). Plaintext, not sensitive.
+    /// </summary>
+    public int? InvocationTimeoutSeconds { get; set; }
     public Guid AgentDefinitionId { get; set; }
 
     /// <summary>The judge policy revision this project judges under, or <see langword="null" /> when judging is off.</summary>

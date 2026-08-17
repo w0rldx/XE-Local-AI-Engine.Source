@@ -106,6 +106,25 @@ describe("BenchmarkRunsTable", () => {
 		expect(onToggleRun).toHaveBeenCalledExactlyOnceWith("ranked");
 	});
 
+	// A truncated run still reads "Succeeded" — it did succeed. The badge next to that status is the only thing that
+	// stops the reader from taking a cut-off fragment for a finished answer, and the rank chip says what to do.
+	it("badges a truncated run beside its succeeded status and explains why it does not rank", () => {
+		const truncated = benchmarkRunSummaryFixture({
+			id: "truncated",
+			primaryStatus: "Succeeded",
+			primaryStopReason: "length",
+			rank: null,
+			rankExclusionReason: "truncated",
+			judge: benchmarkJudgeFixture({ state: "succeeded", score: 96, policyRevision: 2, policyCurrent: true, executionCurrent: true }),
+		});
+		renderTable([truncated, rankedRun]);
+
+		expect(screen.getByTestId("benchmark-truncated-truncated")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-rank-exclusion-truncated").textContent).toContain("truncated");
+		// The complete run must NOT be badged, or the signal means nothing.
+		expect(screen.queryByTestId("benchmark-truncated-ranked")).toBeNull();
+	});
+
 	// Same-model history: collapsed, one row per model; expanded, the model's older runs appear underneath.
 	it("groups a model's runs and expands them on request", () => {
 		const older = benchmarkRunSummaryFixture({
@@ -127,6 +146,37 @@ describe("BenchmarkRunsTable", () => {
 		fireEvent.click(screen.getByTestId("benchmark-group-toggle-model-a"));
 
 		expect(screen.getByTestId("benchmark-run-row-older")).toBeTruthy();
+	});
+
+	// The regression this pins: quants of ONE model must fold into ONE group header, not one header per quant. The key
+	// is the server's base-model modelGroupKey, so two rows that differ only in quant share it — and the quant, which
+	// is then the only thing telling the rows apart, has to be visible on each row.
+	it("folds a model's quants into one group and names the quant on each row", () => {
+		const quant = (id: string, modelName: string, rank: number, createdAtUtc: number) =>
+			benchmarkRunSummaryFixture({
+				id,
+				primaryModelName: modelName,
+				modelGroupKey: "unsloth/qwen3.8-27b-gguf",
+				rank,
+				createdAtUtc,
+			});
+		renderTable([
+			quant("q4", "unsloth/Qwen3.8-27B-GGUF:Q4_K_M", 2, 1),
+			quant("q6", "unsloth/Qwen3.8-27B-GGUF:Q6_K", 1, 2),
+		]);
+
+		fireEvent.click(screen.getByTestId("benchmark-group-by-model"));
+
+		// One header, and it is the group's BEST quant — which is what "best quant of this model" now means.
+		expect(screen.getAllByTestId(/^benchmark-group-toggle-/)).toHaveLength(1);
+		expect(screen.getByText("2 runs of this model")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-run-quant-q6").textContent).toBe("Q6_K");
+		// The header shows the base model, not the leader's full tagged name.
+		expect(screen.getByTestId("benchmark-run-row-q6").textContent).toContain("unsloth/Qwen3.8-27B-GGUF");
+
+		fireEvent.click(screen.getByTestId("benchmark-group-toggle-unsloth/qwen3.8-27b-gguf"));
+
+		expect(screen.getByTestId("benchmark-run-quant-q4").textContent).toBe("Q4_K_M");
 	});
 
 	it.each([
@@ -160,6 +210,39 @@ describe("BenchmarkRunsTable", () => {
 		fireEvent.click(await screen.findByRole("menuitem", { name: "Re-judge run" }));
 
 		expect(onRejudgeRun).not.toHaveBeenCalled();
+	});
+
+	// tg leads the cell and pp/TTFT ride under it: a model that decodes fast over a slow prefill is a different machine
+	// from one that does both fast, and the single blended figure this replaced could not tell the two apart.
+	it("shows decode speed with the prompt rate and time to first token under it", () => {
+		renderTable([benchmarkRunSummaryFixture({ id: "measured", tokensPerSecond: 24.31 })]);
+
+		const cell = screen.getByTestId("benchmark-throughput-measured");
+		expect(cell.textContent).toContain("24.3");
+		expect(cell.textContent).toContain("pp 640");
+		expect(cell.textContent).toContain("180 ms");
+	});
+
+	it("shows dashes, not zeros, for a run whose runtime timed nothing", () => {
+		renderTable([
+			benchmarkRunSummaryFixture({
+				id: "untimed",
+				tokensPerSecond: null,
+				throughput: {
+					ttftMs: null,
+					promptTokens: null,
+					promptTokensPerSecond: null,
+					generationTokens: null,
+					generationTokensPerSecond: null,
+					cachedPromptTokens: null,
+					segmentCount: null,
+				},
+			}),
+		]);
+
+		const cell = screen.getByTestId("benchmark-throughput-untimed");
+		expect(cell.textContent).toContain("—");
+		expect(cell.textContent).not.toContain("0.0");
 	});
 
 	it("shows an empty state instead of a bare table head", () => {

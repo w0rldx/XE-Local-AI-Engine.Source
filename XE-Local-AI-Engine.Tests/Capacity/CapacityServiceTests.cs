@@ -363,6 +363,37 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_WhenTheOnlyFittingTierIsBelowTheRequiredContext_RejectsWithoutCommitting()
+    {
+        // The caller NAMED 16384 and will launch at 16384 (a benchmark replays its frozen -c). Admitting the 8192 tier
+        // would under-book the bytes AND pin 8192 into the model's shared allocation for the process lifetime, after
+        // which every later admission naming 16384 fails the required-context check and reports the footprint as
+        // undeterminable until the app restarts.
+        var initial = AdmissionFootprint(20 * Gb, 16384);
+        var downTiered = AdmissionFootprint(6 * Gb, 8192);
+        var harness = new Harness
+        {
+            Profile = GpuProfile(8 * Gb),
+            Footprint = initial
+        };
+        harness.FootprintProvider.TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
+               .Returns(call =>
+               {
+                   call[1] = downTiered;
+                   return true;
+               });
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, RequiredContextTokens: 16384),
+            CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        harness.FootprintProvider.DidNotReceive()
+               .TryCommitAdmissionFootprint(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
+    }
+
+    [Test]
     public async Task Capacity_WhenFootprintUnknown_ReturnsReject()
     {
         var harness = new Harness

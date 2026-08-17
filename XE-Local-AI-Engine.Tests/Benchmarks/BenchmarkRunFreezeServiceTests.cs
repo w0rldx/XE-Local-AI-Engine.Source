@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -37,6 +38,117 @@ public sealed class BenchmarkRunFreezeServiceTests
         AssertEx.NotNull(harness.Command!.FreezeCommitGuard);
         AssertEx.True(harness.LeaseProvider.Leases.All(static lease => lease.Disposed), "All installed-model read leases must be released after commit.");
         _ = harness.Resolver.Received(1).ResolveAsync(harness.AgentId, "a-primary.gguf", "exact task", true, false, false, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Start_WithRepeatsAndAWarmup_EnqueuesOneGroupInQueueOrderAgainstASingleFreeze()
+    {
+        var harness = new FreezeHarness();
+
+        var runs = await harness.StartAsync(repeatCount: 3, warmup: true);
+
+        // ONE freeze, four inserts. Re-freezing per repeat could straddle a runtime swap and give two runs of the same
+        // "group" different snapshots — which is exactly the variable a repeat is supposed to hold still.
+        AssertEx.Equal(1, harness.SnapshotsCreated, "A repeat group must be frozen once and shared.");
+        AssertEx.Equal(4, runs.Count);
+        AssertEx.Equal(4, harness.Commands.Count);
+        var groupId = harness.Commands[0].RepeatGroupId;
+        AssertEx.True(groupId is not null && groupId != Guid.Empty, "A repeat group must carry a real id.");
+        AssertEx.True(harness.Commands.TrueForAll(command => command.RepeatGroupId == groupId), "Every run of a group shares its id.");
+        AssertEx.True(harness.Commands.Select(static command => command.RepeatIndex).SequenceEqual<int?>([0, 1, 2, 3]),
+            "The warm-up is index 0 and the measured repeats are 1..N, in queue order.");
+        AssertEx.True(harness.Commands.Select(static command => command.IsWarmup).SequenceEqual([true, false, false, false]),
+            "Only the index-0 run is a warm-up.");
+
+        // ONE store call and ONE compare-and-swap, the caller's own. Inserting per run against a chained version let a
+        // concurrent writer land mid-group: the caller got a conflict and no ids while the runs already inserted
+        // stayed queued and consumed the exclusive runtime.
+        AssertEx.Equal(1, harness.StoreCalls, "A repeat group must be inserted by a single, atomic store call.");
+        AssertEx.True(harness.ExpectedVersions.SequenceEqual([7L]), "The group presents the caller's expected version, once.");
+    }
+
+    [Test]
+    public async Task Start_ForAPlainSingleRun_LeavesTheRepeatColumnsNull()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync();
+
+        // A group only exists when there is something to group; a single run must look exactly as it always did.
+        AssertEx.Null(AssertEx.NotNull(harness.Command).RepeatGroupId);
+        AssertEx.Null(harness.Command!.RepeatIndex);
+        AssertEx.False(harness.Command.IsWarmup, "A single run is never a warm-up.");
+    }
+
+    [Test]
+    public async Task Start_WithRepeatsButNoWarmup_NumbersTheRepeatsFromOne()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(repeatCount: 2, warmup: false);
+
+        AssertEx.True(harness.Commands.Select(static command => command.RepeatIndex).SequenceEqual<int?>([1, 2]),
+            "Without a warm-up there is no index 0 — the measured repeats still start at 1.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => !command.IsWarmup), "Nothing is a warm-up unless one was asked for.");
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(11)]
+    public async Task Start_WithARepeatCountOutOfRange_IsRejectedBeforeAnythingIsFrozen(int repeatCount)
+    {
+        var harness = new FreezeHarness();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(async () => await harness.StartAsync(repeatCount, warmup: false));
+
+        AssertEx.Equal(0, harness.Commands.Count, "A rejected repeat count must not leave a partial group behind.");
+    }
+
+    [Test]
+    public async Task Start_WhenTheModelCannotBeVerified_IsAnEligibilityRefusalRatherThanAnUnhandledFailure()
+    {
+        // Verification moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry
+        // entry now LISTS happily and only fails here. Unmapped, InstalledGgufSnapshotException is in neither the
+        // endpoint's handled-exception filter nor its KeyNotFoundException clause: it escaped as a 500, and inside a
+        // batch it killed every cell after it instead of rejecting one.
+        var harness = new FreezeHarness(unverifiableModel: true);
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(async () => await harness.StartAsync());
+
+        AssertEx.Contains(exception.Message, "could not be verified");
+        AssertEx.False(exception.Message.Contains("registry value", StringComparison.Ordinal),
+            "The store's own reason is logged, never returned to the caller.");
+        AssertEx.Equal(0, harness.Commands.Count, "Nothing may be enqueued for a model that failed verification.");
+    }
+
+    [Test]
+    public async Task Start_CopiesTheProjectGenerationTimeoutOntoTheRun()
+    {
+        var pinned = new FreezeHarness(invocationTimeoutSeconds: 1800);
+        var defaulted = new FreezeHarness();
+
+        _ = await pinned.StartAsync();
+        _ = await defaulted.StartAsync();
+
+        // Copied onto the run, not read from the project at execution: a run replays with the budget it was started
+        // under, exactly like its context.
+        AssertEx.Equal<int?>(1800, AssertEx.NotNull(pinned.Command).InvocationTimeoutSeconds);
+        AssertEx.Null(AssertEx.NotNull(defaulted.Command).InvocationTimeoutSeconds, "No project setting means the node default.");
+    }
+
+    [Test]
+    public async Task Start_FreezesTheProjectOutputBudgetIntoTheRunSampling()
+    {
+        var budgeted = new FreezeHarness(maxOutputTokens: 2048);
+        var unbudgeted = new FreezeHarness();
+
+        _ = await budgeted.StartAsync();
+        _ = await unbudgeted.StartAsync();
+
+        AssertEx.Equal<int?>(2048, AssertEx.NotNull(budgeted.SnapshotInput).PrimarySampling.MaxOutputTokens,
+            "The budget is frozen per run, so a later project edit cannot change what an existing run replays.");
+        AssertEx.Null(AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling.MaxOutputTokens,
+            "No budget means context-limited, which is the sampling every existing snapshot already hashes.");
     }
 
     [Test]
@@ -249,15 +361,27 @@ public sealed class BenchmarkRunFreezeServiceTests
             bool probeSucceeded = true,
             bool supportsQuantizedKv = true,
             bool optimizedConfigDisabled = false,
-            Func<int, ResolvedLaunchArguments>? profile = null)
+            Func<int, ResolvedLaunchArguments>? profile = null,
+            int? maxOutputTokens = null,
+            int? invocationTimeoutSeconds = null,
+            bool unverifiableModel = false)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
-            _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel);
+            _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds);
             var store = Substitute.For<IBenchmarkStore>();
             store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
-            store.StartRunAsync(Arg.Do<BenchmarkStartRunCommand>(command => Command = command), Arg.Any<CancellationToken>())
-                 .Returns(call => Run(call.Arg<BenchmarkStartRunCommand>()));
+            // ONE store call per freeze, however many repeats: the group is inserted atomically, so a mid-group
+            // conflict can no longer leave orphan runs queued behind an exception the caller reads as "nothing started".
+            store.StartRunsAsync(Arg.Do<IReadOnlyList<BenchmarkStartRunCommand>>(batch =>
+                     {
+                         StoreCalls++;
+                         Command = batch[^1];
+                         Commands.AddRange(batch);
+                     }),
+                     Arg.Do<long>(version => ExpectedVersions.Add(version)),
+                     Arg.Any<CancellationToken>())
+                 .Returns(call => (IReadOnlyList<BenchmarkRunRecord>)[.. call.Arg<IReadOnlyList<BenchmarkStartRunCommand>>().Select(Run)]);
 
             var definitions = Substitute.For<IAgentDefinitionStore>();
             definitions.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns(Definition(AgentId));
@@ -275,12 +399,16 @@ public sealed class BenchmarkRunFreezeServiceTests
                 models[judgeModel] = CreateInstalledModel(judgeModel);
             }
 
-            LeaseProvider = new RecordingLeaseProvider(models);
+            LeaseProvider = new RecordingLeaseProvider(models, unverifiableModel);
             var dependencies = Substitute.For<IBenchmarkFreezeDependencyService>();
             dependencies.CaptureAsync(Arg.Any<Guid>(), Arg.Any<ResolvedAgentRuntime>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                         .Returns(Dependencies("initial"));
             var snapshots = Substitute.For<IBenchmarkRuntimeSnapshotFactory>();
-            snapshots.Create(Arg.Do<BenchmarkRuntimeSnapshotInput>(input => SnapshotInput = input))
+            snapshots.Create(Arg.Do<BenchmarkRuntimeSnapshotInput>(input =>
+                     {
+                         SnapshotInput = input;
+                         SnapshotsCreated++;
+                     }))
                      .Returns(call => CreateRuntimeSnapshot(call.Arg<BenchmarkRuntimeSnapshotInput>()));
             snapshots.Serialize(Arg.Any<BenchmarkRuntimeSnapshotV1>()).Returns([1, 2, 3]);
 
@@ -297,23 +425,43 @@ public sealed class BenchmarkRunFreezeServiceTests
                     Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails),
                     FallbackStore(optimizedConfigDisabled),
                     LaunchPolicy()),
-                TimeProvider.System);
+                TimeProvider.System,
+                NullLogger<BenchmarkRunFreezeService>.Instance);
         }
 
         public Guid AgentId { get; }
         public IAgentDefinitionResolver Resolver { get; }
         public RecordingLeaseProvider LeaseProvider { get; }
         public BenchmarkStartRunCommand? Command { get; private set; }
+
+        /// <summary>Every insert in order — a repeat group is several, and their ORDER is the contract.</summary>
+        public List<BenchmarkStartRunCommand> Commands { get; } = [];
+
+        /// <summary>How many times the store was asked to insert. A repeat group must be exactly one.</summary>
+        public int StoreCalls { get; private set; }
+
+        /// <summary>The expected project version each insert presented — one CAS, the caller's own.</summary>
+        public List<long> ExpectedVersions { get; } = [];
+
+        public int SnapshotsCreated { get; private set; }
         public BenchmarkRuntimeSnapshotInput? SnapshotInput { get; private set; }
 
-        public Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType);
+        public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
+            (await _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType).ConfigureAwait(false))[0];
 
-        private static BenchmarkProjectRecord Project(Guid id, Guid agentId, bool judgeEnabled, string? judgeModel)
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
+            _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType: null, repeatCount, warmup);
+
+        private static BenchmarkProjectRecord Project(Guid id,
+            Guid agentId,
+            bool judgeEnabled,
+            string? judgeModel,
+            int? maxOutputTokens,
+            int? invocationTimeoutSeconds)
         {
             _ = judgeModel;
             return new BenchmarkProjectRecord(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId,
-                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1);
+                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens, invocationTimeoutSeconds);
         }
 
         private static AgentDefinitionRecord Definition(Guid id) =>
@@ -432,7 +580,8 @@ public sealed class BenchmarkRunFreezeServiceTests
                 BenchmarkPrimaryStatus.Queued, null, null, null, null, null, 0, null, null, 1, 1, null, null, 1);
     }
 
-    private sealed class RecordingLeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots) : IBenchmarkInstalledModelLeaseProvider
+    private sealed class RecordingLeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots, bool unverifiable = false)
+        : IBenchmarkInstalledModelLeaseProvider
     {
         public List<string> Acquired { get; } = [];
         public List<RecordingLease> Leases { get; } = [];
@@ -440,6 +589,12 @@ public sealed class BenchmarkRunFreezeServiceTests
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
         {
             Acquired.Add(modelName);
+            if (unverifiable)
+            {
+                throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
+                    "The installed model weight no longer matches its registry value.");
+            }
+
             var lease = new RecordingLease(snapshots[modelName]);
             Leases.Add(lease);
             return Task.FromResult<IBenchmarkInstalledModelLease>(lease);

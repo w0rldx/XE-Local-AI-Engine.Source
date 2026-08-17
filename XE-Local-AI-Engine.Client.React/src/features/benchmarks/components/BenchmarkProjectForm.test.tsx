@@ -42,6 +42,8 @@ function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProject
 		name: "Summarisation",
 		coreTask: "Summarise the attached text.",
 		contextTokens: 4096,
+		maxOutputTokens: null,
+		invocationTimeoutSeconds: null,
 		agentDefinitionId: "agent-1",
 		judgeEnabled: false,
 		judgeModelName: null,
@@ -103,6 +105,29 @@ describe("BenchmarkProjectForm", () => {
 		["a blank core task", { coreTask: "   " }, "Core task is required."],
 		["a non-positive context", { contextTokens: 0 }, "Context must be positive."],
 		["no agent", { agentDefinitionId: "" }, "Select an agent."],
+		// A budget at or above the window can never be honoured; it would silently behave like no budget at all.
+		[
+			"an output budget at the context window",
+			{ maxOutputTokens: 4096 },
+			"Max output tokens must be between 1 and the requested context.",
+		],
+		[
+			"a zero output budget",
+			{ maxOutputTokens: 0 },
+			"Max output tokens must be between 1 and the requested context.",
+		],
+		// The floor stops a typo from cancelling every run before the model warms; the ceiling stops a runaway run
+		// from owning the queue for a day.
+		[
+			"a generation timeout below the floor",
+			{ invocationTimeoutSeconds: 59 },
+			"The generation timeout must be between 60 and 7200 seconds.",
+		],
+		[
+			"a generation timeout above the ceiling",
+			{ invocationTimeoutSeconds: 7201 },
+			"The generation timeout must be between 60 and 7200 seconds.",
+		],
 	])("blocks submit on %s", (_case, overrides, message) => {
 		const { container, onSubmit } = renderForm(draft(overrides as Partial<BenchmarkProjectDraft>));
 
@@ -110,6 +135,30 @@ describe("BenchmarkProjectForm", () => {
 
 		expect(onSubmit).not.toHaveBeenCalled();
 		expect(screen.getByText(message)).toBeTruthy();
+	});
+
+	// An empty field means "context-limited", which is null — never 0, a value the node refuses and the operator
+	// never typed.
+	it("submits a generation timeout inside its bounds, and null when the field is cleared", () => {
+		const pinned = renderForm(draft({ invocationTimeoutSeconds: 1800 }));
+		save(pinned.container);
+		expect(pinned.onSubmit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ invocationTimeoutSeconds: 1800 }));
+
+		cleanup();
+		const defaulted = renderForm(draft({ invocationTimeoutSeconds: null }));
+		save(defaulted.container);
+		expect(defaulted.onSubmit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ invocationTimeoutSeconds: null }));
+	});
+
+	it("submits an output budget that fits, and null when the field is cleared", () => {
+		const budgeted = renderForm(draft({ maxOutputTokens: 2048 }));
+		save(budgeted.container);
+		expect(budgeted.onSubmit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ maxOutputTokens: 2048 }));
+
+		cleanup();
+		const cleared = renderForm(draft({ maxOutputTokens: null }));
+		save(cleared.container);
+		expect(cleared.onSubmit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ maxOutputTokens: null }));
 	});
 
 	// The judge fields are required only while judging is on — an off judge must not block a save.

@@ -1,4 +1,5 @@
 import type { MantineColor } from "@mantine/core";
+import { Tooltip } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
@@ -29,6 +30,29 @@ export function BenchmarkStatusBadge({ status }: { status: BenchmarkPrimaryStatu
 	const { t } = useTranslation();
 	const label = t(`pages.benchmarks.status.${status}`, status);
 	return <StatusBadge color={primaryColors[status]} label={label} inProgress={isPrimaryActive(status)} aria-label={label} />;
+}
+
+/**
+ * Shown next to a Succeeded status, never instead of it: the run really did succeed, and the badge is what stops the
+ * reader from taking a fragment for a finished answer.
+ */
+export function BenchmarkTruncatedBadge({ testId }: { testId?: string }) {
+	const { t } = useTranslation();
+	const label = t("pages.benchmarks.status.truncated", "Truncated");
+	return (
+		<Tooltip
+			label={t(
+				"pages.benchmarks.status.truncatedHint",
+				"The answer was cut off by the token budget. It does not rank — rerun with a larger context or output budget.",
+			)}
+			multiline={true}
+			w={260}
+		>
+			<span>
+				<StatusBadge color="orange" label={label} aria-label={label} data-testid={testId ?? "benchmark-truncated"} />
+			</span>
+		</Tooltip>
+	);
 }
 
 export function BenchmarkJudgeStateBadge({ state }: { state: BenchmarkJudgeState }) {

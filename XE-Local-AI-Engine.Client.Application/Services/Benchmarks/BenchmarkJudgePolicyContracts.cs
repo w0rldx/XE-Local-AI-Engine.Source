@@ -12,7 +12,16 @@ using System.Text.Json.Serialization;
 /// </summary>
 public static class BenchmarkJudgePolicyVersions
 {
-    public const int PromptVersion = 2;
+    /// <summary>
+    ///     3 since the length-neutrality sentence entered <c>BenchmarkJudgePromptV2.SystemPrompt</c>. The prompt TEXT
+    ///     is hashed nowhere, so this integer is the only thing that can separate two judgings across a wording change:
+    ///     without the bump, verdicts taken either side of it share a policy revision and a cohort generation and get
+    ///     dense-ranked against each other after having been asked different questions. A policy still carrying 2 is
+    ///     rejected by <see cref="BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported" />, which is the
+    ///     existing forced-re-judge path.
+    /// </summary>
+    public const int PromptVersion = 3;
+
     public const int OutputSchemaVersion = 2;
     public const int RubricVersion = 1;
 
@@ -159,7 +168,15 @@ public static class BenchmarkJudgePolicyValidator
     private static readonly SearchValues<char> CriterionIdCharacters =
         SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789-_");
 
-    public static void Validate(BenchmarkJudgePolicyV1 policy)
+    /// <param name="strictVersions">
+    ///     <see langword="true" /> on WRITE and immediately before EXECUTION: the policy must carry the versions this
+    ///     build supports. <see langword="false" /> on READ — a version constant moving must never make an
+    ///     already-stored revision unreadable. It did once: bumping <see cref="BenchmarkJudgePolicyVersions.PromptVersion" />
+    ///     made `GET benchmarks/projects/{id}` 500, the whole project header vanished from the UI, and it took the
+    ///     re-save control that heals the revision with it. Everything else checked here is structural and holds for
+    ///     any row this build could have written.
+    /// </param>
+    public static void Validate(BenchmarkJudgePolicyV1 policy, bool strictVersions = true)
     {
         ArgumentNullException.ThrowIfNull(policy);
         if (policy.Model is null
@@ -175,12 +192,12 @@ public static class BenchmarkJudgePolicyValidator
             throw Invalid(BenchmarkJudgePolicyValidationCodes.ContextTokensInvalid, "The judge policy context must be greater than zero.");
         }
 
-        if (policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion)
+        if (strictVersions && policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion)
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported, "The judge policy prompt version is unsupported.");
         }
 
-        if (policy.OutputSchemaVersion != BenchmarkJudgePolicyVersions.OutputSchemaVersion)
+        if (strictVersions && policy.OutputSchemaVersion != BenchmarkJudgePolicyVersions.OutputSchemaVersion)
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.OutputSchemaVersionUnsupported, "The judge policy output schema version is unsupported.");
         }
@@ -195,17 +212,27 @@ public static class BenchmarkJudgePolicyValidator
             throw Invalid(BenchmarkJudgePolicyValidationCodes.ReferenceAnswerTooLong, "The judge policy reference answer is too long.");
         }
 
-        ValidateRubric(policy.Rubric);
+        ValidateRubric(policy.Rubric, strictVersions);
     }
 
-    public static void ValidateRubric(BenchmarkJudgeRubricV1 rubric)
+    /// <summary>Whether every version this policy carries is one this build still writes and executes under.</summary>
+    public static bool VersionsAreCurrent(BenchmarkJudgePolicyV1 policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return policy.PromptVersion == BenchmarkJudgePolicyVersions.PromptVersion
+               && policy.OutputSchemaVersion == BenchmarkJudgePolicyVersions.OutputSchemaVersion
+               && policy.Rubric?.Version == BenchmarkJudgePolicyVersions.RubricVersion;
+    }
+
+    /// <inheritdoc cref="Validate(BenchmarkJudgePolicyV1, bool)" />
+    public static void ValidateRubric(BenchmarkJudgeRubricV1 rubric, bool strictVersions = true)
     {
         if (rubric?.Criteria is null)
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.RubricMissing, "The judge policy rubric is missing.");
         }
 
-        if (rubric.Version != BenchmarkJudgePolicyVersions.RubricVersion)
+        if (strictVersions && rubric.Version != BenchmarkJudgePolicyVersions.RubricVersion)
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.RubricVersionUnsupported, "The judge policy rubric version is unsupported.");
         }

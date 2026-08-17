@@ -28,7 +28,32 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Starts ONE run. Shorthand for a single-item <see cref="StartRunsAsync" /> against the command's own
+    ///     <see cref="BenchmarkStartRunCommand.ExpectedProjectVersion" />.
+    /// </summary>
     Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Starts a whole group of runs ATOMICALLY: one transaction, one compare-and-swap against
+    ///     <paramref name="expectedProjectVersion" />, one <c>project.Version += commands.Count</c>, and the runs plus
+    ///     their primary work items inserted in the given order (which is the FIFO order they will execute in).
+    ///     <para>
+    ///         All-or-nothing is the point. Inserting a repeat group one run per transaction, each chaining its CAS on
+    ///         its predecessor, let a concurrent writer land mid-group: the caller got a conflict and no ids while the
+    ///         runs already inserted stayed queued and consumed the exclusive runtime. It also left a batch caller
+    ///         unable to chain — the project version had moved by a number it was never told.
+    ///     </para>
+    ///     <para>
+    ///         Every command must name the same project. A <see cref="BenchmarkStartRunCommand.FreezeCommitGuard" /> is
+    ///         evaluated once per distinct guard instance, inside the same transaction.
+    ///     </para>
+    /// </summary>
+    /// <returns>The created runs, in the order they were given.</returns>
+    Task<IReadOnlyList<BenchmarkRunRecord>> StartRunsAsync(IReadOnlyList<BenchmarkStartRunCommand> commands,
+        long expectedProjectVersion,
+        CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -36,12 +61,12 @@ public interface IBenchmarkStore
     ///     columns are NOT read: a list of runs must not decrypt every snapshot, output and receipt on the way to
     ///     rendering a table.
     /// </summary>
-    /// <param name="modelGroupKey">Only runs of this model content fingerprint (same-model history), or null for all.</param>
+    /// <param name="modelContentFingerprint">Only runs of this exact model content, or null for all.</param>
     /// <param name="includeUnscored">False drops runs that carry no quality score at all.</param>
     Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
         int skip,
         int take,
-        string? modelGroupKey = null,
+        string? modelContentFingerprint = null,
         bool includeUnscored = true,
         CancellationToken cancellationToken = default);
 
@@ -53,10 +78,16 @@ public interface IBenchmarkStore
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default);
 
+    /// <param name="primaryStopReason">
+    ///     Why generation stopped, when the failure itself says so — <c>timeout</c> for a run the node cancelled at its
+    ///     invocation budget. Null leaves the column untouched, so a failure that cannot explain itself records nothing
+    ///     rather than guessing.
+    /// </param>
     Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId,
         long expectedRunVersion,
         string errorMessage,
         long lastStreamSequence,
+        string? primaryStopReason = null,
         CancellationToken cancellationToken = default) =>
         MarkPrimaryFailedAsync(runId, expectedRunVersion, errorMessage, cancellationToken);
 
@@ -215,12 +246,18 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 }
 
+/// <param name="MaxOutputTokens">
+///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
+///     context-limited. Must be <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
+/// </param>
 public sealed record BenchmarkProjectInput(
     Guid Id,
     string Name,
     ReadOnlyMemory<byte> CoreTaskJson,
     int ContextTokens,
-    Guid AgentDefinitionId);
+    Guid AgentDefinitionId,
+    int? MaxOutputTokens = null,
+    int? InvocationTimeoutSeconds = null);
 
 /// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
@@ -244,7 +281,11 @@ public sealed record BenchmarkStartRunCommand(
     long AgentVersion,
     int RequestedContextTokens,
     IBenchmarkFreezeCommitGuard? FreezeCommitGuard = null,
-    BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null);
+    BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
+    Guid? RepeatGroupId = null,
+    int? RepeatIndex = null,
+    bool IsWarmup = false,
+    int? InvocationTimeoutSeconds = null);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
@@ -256,6 +297,13 @@ public interface IBenchmarkFreezeCommitGuard
     Task<bool> IsCurrentAsync(CancellationToken cancellationToken);
 }
 
+/// <param name="TokensPerSecond">
+///     Decode throughput (tg) when <paramref name="Throughput" /> carries the split, otherwise the blended
+///     <c>TotalTokens / DurationMs</c>. Same column, same name, same meaning for every existing reader.
+/// </param>
+/// <param name="Throughput">
+///     The separated throughput measurement, or <see langword="null" /> when the runtime reported none.
+/// </param>
 public sealed record BenchmarkPrimarySuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
@@ -265,7 +313,42 @@ public sealed record BenchmarkPrimarySuccessCommand(
     long DurationMs,
     int? TotalTokens,
     double? TokensPerSecond,
-    BenchmarkJudgeAttemptSeed? JudgeAttempt = null);
+    string? PrimaryStopReason = null,
+    BenchmarkJudgeAttemptSeed? JudgeAttempt = null,
+    BenchmarkRunThroughput? Throughput = null);
+
+/// <summary>
+///     One run's separated throughput facts: how long the caller waited for the first token, and how the turn's tokens
+///     and milliseconds split between prompt processing (pp) and generation (tg). Persisted as plaintext numerics
+///     alongside the blended figures the columns already carried, never instead of them.
+///     <para>
+///         Display only, by operator decision: no member of this record is a ranking input. <see cref="CachedPromptTokens" />
+///         above zero means <see cref="PromptMs" /> measured a partially cached prefill rather than a cold one — it
+///         counts tokens served from the prompt cache across ALL of the turn's requests.
+///     </para>
+/// </summary>
+/// <param name="SegmentCount">
+///     How many provider requests the turn made, i.e. how many readings the sums are made of. Null on runs recorded
+///     before the column existed; 1 for a plain turn; more once the agent called tools, because each tool round is
+///     another request that re-sends the conversation and prefills again.
+/// </param>
+public sealed record BenchmarkRunThroughput(
+    double? TtftMs = null,
+    int? PromptTokens = null,
+    double? PromptMs = null,
+    int? GenerationTokens = null,
+    double? GenerationMs = null,
+    int? CachedPromptTokens = null,
+    int? SegmentCount = null)
+{
+    /// <summary>Prompt-processing throughput (pp) in tokens per second, or null when either input is absent.</summary>
+    public double? PromptTokensPerSecond =>
+        PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
+
+    /// <summary>Decode throughput (tg) in tokens per second, or null when either input is absent.</summary>
+    public double? GenerationTokensPerSecond =>
+        GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
+}
 
 /// <summary>
 ///     What the run executor resolved for the automatic first judging, carried into the same transaction that commits
@@ -355,7 +438,9 @@ public sealed record BenchmarkProjectRecord(
     bool IsFrozen,
     long Version,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    int? MaxOutputTokens = null,
+    int? InvocationTimeoutSeconds = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -387,10 +472,16 @@ public sealed record BenchmarkRunRecord(
     long UpdatedAtUtc,
     BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
     BenchmarkRunLaunchEvidence? PrimaryLaunchEvidence = null,
+    string? PrimaryStopReason = null,
     BenchmarkRunJudgeView? Judge = null,
     int? QualityScore = null,
     string? QualityScoreSource = null,
-    int? Rank = null);
+    int? Rank = null,
+    BenchmarkRunThroughput? Throughput = null,
+    Guid? RepeatGroupId = null,
+    int? RepeatIndex = null,
+    bool IsWarmup = false,
+    int? InvocationTimeoutSeconds = null);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
@@ -457,7 +548,8 @@ public sealed record BenchmarkLaunchReceiptCommand(
 /// <param name="RankExclusionReason">
 ///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked. One of <c>no-score</c>,
 ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
-///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>.
+///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>, <c>truncated</c>,
+///     <c>warmup</c>.
 /// </param>
 public sealed record BenchmarkRunJudgeView(
     string State,
@@ -472,6 +564,34 @@ public sealed record BenchmarkRunJudgeView(
     bool PolicyCurrent,
     bool ExecutionCurrent,
     string? RankExclusionReason);
+
+/// <summary>
+///     The <see cref="BenchmarkRunRecord.PrimaryStopReason" /> vocabulary. Values are the provider's own
+///     <c>ChatFinishReason</c> tokens, stored verbatim — this class names only the ones the node reasons about, and an
+///     unrecognized token is stored and displayed rather than rejected.
+/// </summary>
+public static class BenchmarkPrimaryStopReasons
+{
+    /// <summary>Generation ran out of budget: <c>n_predict</c> exhausted, or the context window filled.</summary>
+    public const string Length = "length";
+
+    /// <summary>The node cancelled the run at its invocation timeout before the model stopped on its own.</summary>
+    public const string Timeout = "timeout";
+
+    /// <summary>
+    ///     Whether the primary generation stopped because it ran out of budget. <see cref="Length" /> is the
+    ///     OpenAI-compatible token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the
+    ///     context window full (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
+    ///     <para>
+    ///         One implementation on purpose. Ranking (<c>BenchmarkStore.ApplyRunExclusions</c>) and judging
+    ///         (<c>BenchmarkJudgeExecutor</c>) live in different assemblies and used to hold byte-identical private
+    ///         copies; a second truncation token added to only one of them would make ranking exclude a run the judge
+    ///         was never told was cut off.
+    ///     </para>
+    /// </summary>
+    public static bool IsTruncated(string? primaryStopReason) =>
+        string.Equals(primaryStopReason, Length, StringComparison.OrdinalIgnoreCase);
+}
 
 /// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>
 public static class BenchmarkRunJudgeStates
@@ -494,6 +614,20 @@ public static class BenchmarkRunJudgeStates
     public const string ReasonGenerationStale = "generation-stale";
     public const string ReasonExecutionKeyMismatch = "execution-key-mismatch";
     public const string ReasonExecutionIdentityIncomplete = "execution-identity-incomplete";
+
+    /// <summary>
+    ///     The primary generation was cut off by the token budget or the context ceiling (<c>finish_reason=length</c>).
+    ///     The measurement is still a real one — the run stays <c>Succeeded</c> — but an incomplete answer must not be
+    ///     ranked against complete ones, whatever the judge scored it. An operator score still overrides.
+    /// </summary>
+    public const string ReasonTruncated = "truncated";
+
+    /// <summary>
+    ///     A warm-up run. It is a real measurement, kept and shown, but it is exactly the first-launch cost the repeats
+    ///     after it were meant NOT to pay — ranking it against them would rank the thing being controlled for. Unlike
+    ///     every other reason here, an operator score does not override it: a warm-up is not a contender.
+    /// </summary>
+    public const string ReasonWarmup = "warmup";
 }
 
 /// <summary>

@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Represents invocation runner.
@@ -367,7 +368,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 stream.UsageSnapshot?.OutputTokens,
                 stream.UsageSnapshot?.TotalTokens,
                 stream.UsageSnapshot?.ReasoningTokens,
-                generationDurationMs).ConfigureAwait(false);
+                generationDurationMs,
+                stream.FinishReason,
+                stream.ToThroughput()).ConfigureAwait(false);
             invocationOutcome = "completed";
         }
         catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
@@ -667,6 +670,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
 
                 var textChunk = update.Text;
+
+                // Last-wins across the whole turn, segments included: an intermediate tool-call segment must not be the
+                // reason the turn is recorded as having stopped.
+                if (update.FinishReason is { } finishReason && !string.IsNullOrEmpty(finishReason.Value))
+                {
+                    stream.FinishReason = finishReason.Value;
+                }
+
+                // Folded on ARRIVAL, not once per drained stream. A tool-calling turn is several llama-server requests
+                // inside ONE RunStreamingAsync — FunctionInvokingChatClient runs that loop internally, so the outer
+                // do/while below only re-iterates for approval round-trips and never sees them. Keeping the last
+                // reading therefore threw away every request but the final one (measured live: a turn reporting
+                // prompt 283 + cached 2346 + generated 1720 against a usage total of 4349 — two requests, one recorded).
+                // llama-server puts `timings` on the LAST chunk of each request and `timings_per_token` (which would
+                // repeat it on intermediate chunks, double-counting here) is off by default and never set by us.
+                stream.AddSegmentTimings(LlamaServerGenerationTimings.TryRead(update.RawRepresentation));
 
                 // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call
                 // lifecycle events, rather than the three separate OfType/Concat/LastOrDefault scans this ran per

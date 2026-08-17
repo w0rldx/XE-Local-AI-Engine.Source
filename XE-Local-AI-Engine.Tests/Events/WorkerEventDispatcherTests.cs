@@ -457,16 +457,22 @@ public sealed class WorkerEventDispatcherTests
         InvocationState? lastEventState = null;
         dispatcher.InvocationStateChanged += (_, args) => lastEventState = args.State;
 
-        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1, generationDurationMs: 1234);
+        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1,
+            generationDurationMs: 1234, finishReason: "length");
 
         // The getter returns Clone(CurrentInvocation): the duration must survive that copy.
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal(expected: 1234L, current.GenerationDurationMs);
         AssertEx.Equal(expected: 3, current.OutputTokens);
 
+        // Same failure mode, same clone: a benchmark reads the finish reason off the TERMINAL snapshot, so a field the
+        // clone drops travels as null and a truncated run looks complete.
+        AssertEx.Equal("length", current.FinishReason);
+
         // The event payload is also a Clone of the state; the pump consumes this snapshot.
         var eventState = AssertEx.NotNull(lastEventState);
         AssertEx.Equal(expected: 1234L, eventState.GenerationDurationMs);
+        AssertEx.Equal("length", eventState.FinishReason);
     }
 
     [Test]

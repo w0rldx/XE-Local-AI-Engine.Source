@@ -9,6 +9,14 @@ import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 
 interface BenchmarkJudgePanelProps {
 	judge: BenchmarkRunJudge;
+	/** The primary answer was cut off by the token budget, so this verdict graded a fragment. */
+	primaryTruncated?: boolean;
+	/**
+	 * Tokens the graded answer ran to, shown beside the score. Rewarding a longer answer for being longer is an LLM
+	 * judge's best-documented bias, so the length sits next to the number it may have inflated: "88 / 100 · 4200 tokens"
+	 * beside "85 / 100 · 300 tokens" is a comparison the reader can make without opening either transcript.
+	 */
+	outputTokens?: number | null;
 	/** Only a succeeded primary has stored output to judge, so only then can a re-judge be offered. */
 	canRejudge: boolean;
 	isBusy?: boolean;
@@ -24,7 +32,15 @@ const maxCriterionScore = 10;
  * as their own chips rather than folded into the score — a stale score is still a real score, it just cannot be ranked
  * against runs judged under the current policy and judge runtime.
  */
-export function BenchmarkJudgePanel({ judge, canRejudge, isBusy = false, onCancel, onRejudge }: BenchmarkJudgePanelProps) {
+export function BenchmarkJudgePanel({
+	judge,
+	canRejudge,
+	primaryTruncated = false,
+	outputTokens = null,
+	isBusy = false,
+	onCancel,
+	onRejudge,
+}: BenchmarkJudgePanelProps) {
 	const { t } = useTranslation();
 	const active = isJudgeActive(judge.state);
 	const explanation = t(`pages.benchmarks.judge.explanations.${judge.state}`, "");
@@ -75,10 +91,25 @@ export function BenchmarkJudgePanel({ judge, canRejudge, isBusy = false, onCance
 						</Text>
 					)}
 				</Group>
-				{judge.score === null ? null : (
-					<Text fw={700} data-testid="benchmark-judge-score">
-						{t("pages.benchmarks.judge.score", "Judge score: {{score}} / 100", { score: judge.score })}
-					</Text>
+				{primaryTruncated ? (
+				<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-judge-truncated-notice">
+					{t(
+						"pages.benchmarks.judge.truncatedPrimary",
+						"The answer this verdict graded was cut off by the token budget, so the score describes an incomplete answer and does not rank.",
+					)}
+				</Alert>
+			) : null}
+			{judge.score === null ? null : (
+					<Group gap="xs" align="baseline">
+						<Text fw={700} data-testid="benchmark-judge-score">
+							{t("pages.benchmarks.judge.score", "Judge score: {{score}} / 100", { score: judge.score })}
+						</Text>
+						{outputTokens === null ? null : (
+							<Text size="sm" c="dimmed" data-testid="benchmark-judge-output-length">
+								{t("pages.benchmarks.judge.outputLength", "· {{tokens}} output tokens", { tokens: outputTokens })}
+							</Text>
+						)}
+					</Group>
 				)}
 				{judge.summary ? <Text size="sm">{judge.summary}</Text> : null}
 				{judge.criteria.length > 0 ? (

@@ -222,10 +222,41 @@ public static class BenchmarkJudgePromptV2
         WriteIndented = false
     };
 
+    /// <summary>
+    ///     The instruction every judging gets. The length-neutrality sentence is fixed and unconditional: rewarding a
+    ///     longer answer for being longer is an LLM judge's best-documented bias, and telling it not to is the only
+    ///     cheap counter.
+    ///     <para>
+    ///         THE RULE THIS TEXT LIVES UNDER: it is hashed nowhere. The policy hash covers
+    ///         <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> (an integer), the rubric, the judge model
+    ///         identity, the sampling and the reference answer; the <c>JudgeExecutionKey</c> covers runtime and
+    ///         hardware identity only. So editing a word here changes what every FUTURE judging is asked while every
+    ///         version stays put, and verdicts taken either side of the edit share a policy revision and a cohort
+    ///         generation and get dense-ranked against each other. Any wording change must therefore bump
+    ///         <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> — which is exactly what the length-neutrality
+    ///         sentence did (2 → 3), forcing the existing <c>PromptVersionUnsupported</c> re-judge path.
+    ///     </para>
+    /// </summary>
     public const string SystemPrompt =
         "Evaluate only the supplied benchmark task and primary output against the supplied rubric. "
         + "Score every rubric criterion from 0 to 10 and give a short rationale for each score. "
+        + "Do not reward length or verbosity for its own sake; score only against the rubric. "
         + "Return exactly one JSON object matching the supplied output schema. Return no markdown and no extra properties.";
+
+    /// <summary>
+    ///     The extra instruction a truncated primary output gets. Appended rather than folded into
+    ///     <see cref="SystemPrompt" /> so a judging of a COMPLETE answer stays byte-identical to every judging that
+    ///     came before — neither the prompt text nor the payload is part of the policy hash or the
+    ///     <c>JudgeExecutionKey</c> (both are hardware/identity only), so an unconditional sentence would silently
+    ///     change what past and future judgings were asked without any version moving.
+    /// </summary>
+    public const string TruncatedPrimaryOutputInstruction =
+        " The primary output was cut off by the token budget before the model finished answering. "
+        + "Score it as the incomplete answer it is; do not credit work the model did not produce.";
+
+    /// <summary>The system prompt for one judging: the base instruction, plus the truncation notice when it applies.</summary>
+    public static string SystemPromptFor(bool primaryOutputTruncated) =>
+        primaryOutputTruncated ? SystemPrompt + TruncatedPrimaryOutputInstruction : SystemPrompt;
 
     /// <summary>
     ///     Embeds the caller's already-shaped pieces verbatim — this builder frames, it never re-serializes.
@@ -235,11 +266,16 @@ public static class BenchmarkJudgePromptV2
     ///     The payload's property names and order are unchanged by that narrowing, so neither
     ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> nor the output-schema version moves.
     /// </summary>
+    /// <param name="primaryOutputTruncated">
+    ///     Emits <c>primaryOutputTruncated: true</c> after the output parts. Written ONLY when true, so the payload of
+    ///     a complete run stays byte-identical to the one this builder has always produced.
+    /// </param>
     public static string BuildUserPayloadJson(string taskJson,
         string? referenceAnswer,
         BenchmarkJudgeRubricV1 rubric,
         string primaryOutputPartsJson,
-        string outputSchemaJson)
+        string outputSchemaJson,
+        bool primaryOutputTruncated = false)
     {
         ArgumentNullException.ThrowIfNull(rubric);
         var payload = new JsonObject
@@ -253,6 +289,11 @@ public static class BenchmarkJudgePromptV2
 
         payload["rubric"] = JsonSerializer.SerializeToNode(rubric, PayloadOptions);
         payload["primaryOutputParts"] = JsonNode.Parse(primaryOutputPartsJson);
+        if (primaryOutputTruncated)
+        {
+            payload["primaryOutputTruncated"] = JsonValue.Create(value: true);
+        }
+
         payload["outputSchema"] = JsonNode.Parse(outputSchemaJson);
         return payload.ToJsonString(PayloadOptions);
     }

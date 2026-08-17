@@ -57,6 +57,89 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task MarkPrimarySucceeded_RoundTripsTheThroughputSplitAndClearsItOnCancellation()
+    {
+        // Two halves of one invariant. Written: the six columns survive a read back, so the pp/tg split the runtime
+        // measured is what the API later serves. Cleared: a run that cancels mid-flight must not keep a throughput
+        // reading from a generation that never completed — the same reset the blended columns already get.
+        var databasePath = GetDatabasePath("throughput.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        var throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
+            GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 2);
+
+        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88, Throughput: throughput));
+
+        var persisted = AssertEx.NotNull(succeeded.Throughput);
+        AssertEx.Equal<double?>(180.25, persisted.TtftMs);
+        AssertEx.Equal<int?>(123, persisted.PromptTokens);
+        AssertEx.Equal<double?>(456.5, persisted.PromptMs);
+        AssertEx.Equal<int?>(89, persisted.GenerationTokens);
+        AssertEx.Equal<double?>(1011.5, persisted.GenerationMs);
+        AssertEx.Equal<int?>(7, persisted.CachedPromptTokens);
+        AssertEx.Equal<int?>(2, persisted.SegmentCount);
+        AssertEx.Equal<double?>(89 * 1000d / 1011.5, persisted.GenerationTokensPerSecond);
+        AssertEx.Equal<double?>(123 * 1000d / 456.5, persisted.PromptTokensPerSecond);
+
+        // A run that never reported timings carries no split at all, rather than a row of zeros.
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var second = await store.StartRunAsync(CreateRun(project));
+        var secondClaim = AssertEx.NotNull(await store.ClaimNextAsync());
+        var untimed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(second.Id, secondClaim.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        AssertEx.Null(untimed.Throughput, "An unmeasured run must stay unmeasured, never be given an invented split.");
+    }
+
+    [Test]
+    public async Task ListRuns_ProjectsTheThroughputSplitAndTheRepeatGroup()
+    {
+        // The LIST is what the runs table, the CSV export and the client-side repeat statistics all read. Its column
+        // projection deliberately skips the encrypted payloads — but skipping the throughput columns too left every
+        // row's pp/TTFT empty in exactly the three places that display them, while a single-run read showed them fine.
+        var databasePath = GetDatabasePath("list-projection.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var groupId = Guid.NewGuid();
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            RepeatGroupId = groupId,
+            RepeatIndex = 2,
+            IsWarmup = false
+        });
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88,
+            Throughput: new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5, GenerationTokens: 89,
+                GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 3)));
+
+        var listed = (await store.ListRunsAsync(project.Id, skip: 0, take: 10)).Items.Single(item => item.Id == run.Id);
+
+        var throughput = AssertEx.NotNull(listed.Throughput);
+        AssertEx.Equal<double?>(180.25, throughput.TtftMs);
+        AssertEx.Equal<int?>(123, throughput.PromptTokens);
+        AssertEx.Equal<int?>(89, throughput.GenerationTokens);
+        AssertEx.Equal<int?>(7, throughput.CachedPromptTokens);
+
+        // The column the CSV export and the run detail read to explain a summed prompt figure. The projection is
+        // written member by member, so an omitted one empties that column everywhere the LIST feeds while a single-run
+        // read keeps showing it — which is why this assertion belongs on the real-database path and not on an endpoint
+        // test that mocks the store.
+        AssertEx.Equal<int?>(3, throughput.SegmentCount);
+        AssertEx.Equal<Guid?>(groupId, listed.RepeatGroupId);
+        AssertEx.Equal<int?>(2, listed.RepeatIndex);
+        AssertEx.False(listed.IsWarmup);
+    }
+
+    [Test]
     public async Task ClaimNext_ConcurrentConsumers_ClaimsLowestSequenceOnce()
     {
         var databasePath = GetDatabasePath("fifo.sqlite");
@@ -152,7 +235,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var judgeRun = await store.StartRunAsync(CreateRun(projectB));
         var judgePrimaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         var primarySucceeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(judgeRun.Id, judgePrimaryClaim.Run.Version,
-            Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null, JudgeSeed(revisionB)));
+            Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null, JudgeAttempt: JudgeSeed(revisionB)));
         var judgeClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judgeClaim.Kind);
         var queuedProject = await store.CreateProjectAsync(CreateProject());
@@ -361,7 +444,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             });
             var primary = AssertEx.NotNull(await store.ClaimNextAsync());
             var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version, output, 1, 4096, 4, 1, 250,
-                JudgeSeed(activation.Revision)));
+                JudgeAttempt: JudgeSeed(activation.Revision)));
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
             attemptId = judgeWork.JudgeAttemptId!.Value;
             _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Version, judge, 5, 61));
@@ -673,6 +756,94 @@ public sealed class BenchmarkStoreTests : IDisposable
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => new BenchmarkStore(fresh, TimeProvider.System).GetRunAsync(runId));
     }
 
+    [Test]
+    public async Task StartRuns_InsertsTheWholeGroupInQueueOrderAndBumpsTheVersionOnce()
+    {
+        var databasePath = GetDatabasePath("start-runs-group.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var groupId = Guid.NewGuid();
+        var commands = Enumerable.Range(0, 3)
+                                 .Select(index => CreateRun(project) with
+                                 {
+                                     RepeatGroupId = groupId,
+                                     RepeatIndex = index,
+                                     IsWarmup = index == 0
+                                 })
+                                 .ToArray();
+
+        var created = await store.StartRunsAsync(commands, project.Version);
+
+        AssertEx.Equal(expected: 3, created.Count);
+        AssertEx.True(created.Select(static run => run.Id).SequenceEqual(commands.Select(static command => command.RunId)),
+            "The records come back in the order the commands were given.");
+
+        // ONE compare-and-swap for the group, so the version moves by exactly the number of runs created — which is
+        // what lets a batch caller chain the next cell's expected version off the returned count.
+        AssertEx.Equal<long>(project.Version + 3, AssertEx.NotNull(await store.GetProjectAsync(project.Id)).Version);
+
+        // FIFO by queue sequence is what makes a repeat group run back-to-back: warm-up first, then 1..N.
+        var claimOrder = new List<Guid>();
+        for (var index = 0; index < 3; index++)
+        {
+            claimOrder.Add(AssertEx.NotNull(await store.ClaimNextAsync()).RunId);
+        }
+
+        AssertEx.True(claimOrder.SequenceEqual(commands.Select(static command => command.RunId)),
+            "The queue must hand the group back in the order it was inserted.");
+    }
+
+    [Test]
+    public async Task StartRuns_WhenTheProjectVersionMovedUnderTheCaller_CreatesNoRunAtAll()
+    {
+        // The whole point of the atomic insert. Per-run inserts chaining their CAS on a predecessor let a concurrent
+        // writer land mid-group: the caller saw a VersionConflict and got no ids, while the runs already inserted
+        // stayed queued and went on to occupy the exclusive llama-server slot. Re-submitting then produced 7 runs for
+        // a 5-run request.
+        var databasePath = GetDatabasePath("start-runs-conflict.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var commands = Enumerable.Range(0, 5).Select(_ => CreateRun(project)).ToArray();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.StartRunsAsync(commands, project.Version + 1));
+
+        AssertEx.Equal(expected: 0, await store.CountRunsAsync(project.Id), "A refused group must leave nothing queued.");
+        AssertEx.Equal<long>(project.Version, AssertEx.NotNull(await store.GetProjectAsync(project.Id)).Version);
+        AssertEx.Null(await store.ClaimNextAsync(), "A refused group must enqueue no work.");
+    }
+
+    [Test]
+    public async Task StartRuns_WhenTheFreezeDependencyChanged_CreatesNoRunAndAsksTheGuardOnce()
+    {
+        var databasePath = GetDatabasePath("start-runs-guard.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+
+        // One guard instance shared by the group, exactly as the freeze service builds it — re-running its dependency
+        // read once per repeat would be N identical round trips for one answer.
+        var guard = new CountingFreezeCommitGuard();
+        var commands = Enumerable.Range(0, 4)
+                                 .Select(_ => CreateRun(project) with
+                                 {
+                                     FreezeCommitGuard = guard
+                                 })
+                                 .ToArray();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.StartRunsAsync(commands, project.Version));
+
+        AssertEx.Equal(expected: 1, guard.Calls, "A shared guard is evaluated once per group.");
+        AssertEx.Equal(expected: 0, await store.CountRunsAsync(project.Id), "A refused group must leave nothing queued.");
+    }
+
     private NodeChatDbContext CreateContext(string path) =>
         AgentDefinitionTestContextFactory.Create(path, _keyHolder);
 
@@ -710,7 +881,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             DurationMs: 1,
             TotalTokens: null,
             TokensPerSecond: null,
-            JudgeSeed(revision)));
+            JudgeAttempt: JudgeSeed(revision)));
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judge.Kind);
         AssertEx.True(judge.JudgeAttemptId is not null, "Claimed judge work must name the attempt it judges.");
@@ -813,6 +984,17 @@ public sealed class BenchmarkStoreTests : IDisposable
         public Task<bool> IsCurrentAsync(CancellationToken cancellationToken)
         {
             WasCalled = true;
+            return Task.FromResult(false);
+        }
+    }
+
+    private sealed class CountingFreezeCommitGuard : IBenchmarkFreezeCommitGuard
+    {
+        public int Calls { get; private set; }
+
+        public Task<bool> IsCurrentAsync(CancellationToken cancellationToken)
+        {
+            Calls++;
             return Task.FromResult(false);
         }
     }

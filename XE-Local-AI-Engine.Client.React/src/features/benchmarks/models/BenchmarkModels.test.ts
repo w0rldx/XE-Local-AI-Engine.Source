@@ -6,8 +6,11 @@ import { RESPONSE_VALIDATION_PROBLEM_TITLE } from "@/core/api/ResponseValidation
 import {
 	applyBenchmarkEvent,
 	type BenchmarkOutputPart,
+	benchmarkRankExclusionReasons,
 	benchmarkRunEventSchema,
+	isBenchmarkRunTruncated,
 	isUnsupportedKvCacheTypeError,
+	toBenchmarkRankExclusionReason,
 	toChatMessageParts,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
@@ -64,5 +67,23 @@ describe("isUnsupportedKvCacheTypeError", () => {
 		expect(isUnsupportedKvCacheTypeError(new ApiError(409, conflict))).toBe(false);
 		expect(isUnsupportedKvCacheTypeError(new Error("offline"))).toBe(false);
 		expect(isUnsupportedKvCacheTypeError(null)).toBe(false);
+	});
+});
+
+describe("isBenchmarkRunTruncated", () => {
+	// The status alone cannot answer this: a truncated run is Succeeded. Only the stop reason separates a finished
+	// answer from a fragment, and the badge, the judge notice and the rank exclusion all key off this one predicate.
+	it("recognises only the length stop reason, case-insensitively", () => {
+		expect(isBenchmarkRunTruncated({ primaryStopReason: "length" })).toBe(true);
+		expect(isBenchmarkRunTruncated({ primaryStopReason: "Length" })).toBe(true);
+		expect(isBenchmarkRunTruncated({ primaryStopReason: "stop" })).toBe(false);
+		expect(isBenchmarkRunTruncated({ primaryStopReason: "tool_calls" })).toBe(false);
+		// A run frozen before the column existed was never measured; it must not read as truncated OR as complete.
+		expect(isBenchmarkRunTruncated({ primaryStopReason: null })).toBe(false);
+	});
+
+	it("keeps truncated in the exhaustive rank-exclusion vocabulary", () => {
+		expect(benchmarkRankExclusionReasons).toContain("truncated");
+		expect(toBenchmarkRankExclusionReason("truncated")).toBe("truncated");
 	});
 });

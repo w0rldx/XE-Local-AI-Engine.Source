@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -25,6 +26,7 @@ public sealed class BenchmarkRunExecutor(
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
     IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+    BenchmarkAdmissionRetry admissionRetry,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
 {
     private const string FingerprintChangedMessage = "The installed model changed after the benchmark was created.";
@@ -65,29 +67,26 @@ public sealed class BenchmarkRunExecutor(
             // bytes it will really hold rather than the f16 figure it will never reach.
             // No launch admission: this run spawns its own exclusive process from the FROZEN replay arguments, so an
             // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
-            var decision = await capacity.DecideAsync(new CapacityRequest(snapshot.PrimaryModel.ModelName,
-                                             ModelRole.Chat,
-                                             snapshot.PrimaryRuntime.ContextTokens,
-                                             PublishLaunchAdmission: false,
-                                             snapshot.PrimaryRuntime.KvTypeK), token)
-                                         .ConfigureAwait(false);
-            logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
-                                  + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
-                work.RunId,
-                "primary",
-                snapshot.PrimaryModel.ModelName,
-                snapshot.RequestedContextTokens,
-                snapshot.PrimaryRuntime.ContextTokens,
-                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                decision.Verdict,
-                decision.Reason);
-            if (decision.Verdict == CapacityVerdict.RejectInsufficient)
-            {
-                throw new BenchmarkExecutionException(CapacityRejectedMessage);
-            }
+            // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — so the phase waits
+            // and re-decides on a cadence instead of terminalizing the run on the first no.
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+                                     new CapacityRequest(snapshot.PrimaryModel.ModelName,
+                                         ModelRole.Chat,
+                                         snapshot.PrimaryRuntime.ContextTokens,
+                                         PublishLaunchAdmission: false,
+                                         snapshot.PrimaryRuntime.KvTypeK),
+                                     new BenchmarkAdmissionContext(work.RunId,
+                                         "primary",
+                                         snapshot.RequestedContextTokens,
+                                         snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                         CapacityRejectedMessage),
+                                     admissionRetry,
+                                     logger,
+                                     token)
+                                 .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
-            var package = BuildPrimaryPackage(snapshot);
+            var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);
             var admission = new BenchmarkContextAdmissionPolicy(snapshot.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
@@ -124,21 +123,38 @@ public sealed class BenchmarkRunExecutor(
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
             {
-                throw new BenchmarkExecutionException(InvocationFailedMessage);
+                // A run the node cancelled at its own invocation budget is the one failure that can explain itself, and
+                // "the invocation failed" is exactly the message that made the live 307 s cancellation unattributable.
+                throw new BenchmarkExecutionException(InvocationFailedMessage)
+                {
+                    StopReason = terminal?.FailureCategory == FailureCategory.Timeout ? BenchmarkPrimaryStopReasons.Timeout : null
+                };
             }
 
             var effectiveContext = admission.EffectiveContextTokens
                                    ?? throw new BenchmarkExecutionException("The effective model context was unavailable.");
             var durationMs = terminal.GenerationDurationMs ?? 0;
-            double? tokensPerSecond = terminal.TotalTokens is { } total && durationMs > 0
-                ? total * 1000d / durationMs
-                : null;
+            var throughput = ToThroughput(terminal.Throughput);
+
+            // tokens/s now MEANS decode throughput (tg) whenever the runtime timed the prompt and the decode
+            // separately: dividing the turn's total tokens by its wall clock blends prefill into generation, so the same
+            // model measured on a long prompt and a short one produced two incomparable numbers. The blended figure
+            // remains the fallback for a runtime that reports no timings, so the column never goes empty.
+            var tokensPerSecond = throughput?.GenerationTokensPerSecond
+                                  ?? (terminal.TotalTokens is { } total && durationMs > 0 ? total * 1000d / durationMs : null);
             var metricsEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.Metrics,
                 new BenchmarkRunStreamPayload(EffectiveContextTokens: effectiveContext,
                     DurationMs: durationMs,
                     TotalTokens: terminal.TotalTokens,
-                    TokensPerSecond: tokensPerSecond));
+                    TokensPerSecond: tokensPerSecond,
+                    TtftMs: throughput?.TtftMs,
+                    PromptTokens: throughput?.PromptTokens,
+                    PromptTokensPerSecond: throughput?.PromptTokensPerSecond,
+                    GenerationTokens: throughput?.GenerationTokens,
+                    GenerationTokensPerSecond: throughput?.GenerationTokensPerSecond,
+                    CachedPromptTokens: throughput?.CachedPromptTokens,
+                    SegmentCount: throughput?.SegmentCount));
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
@@ -152,7 +168,12 @@ public sealed class BenchmarkRunExecutor(
                         effectiveContext,
                         durationMs,
                         terminal.TotalTokens,
-                        tokensPerSecond))
+                        tokensPerSecond,
+                        // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
+                        // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
+                        // if it were a finished one.
+                        terminal.FinishReason,
+                        Throughput: throughput))
                 .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
             events.PublishReserved(terminalEvent with
@@ -178,9 +199,23 @@ public sealed class BenchmarkRunExecutor(
             logger.LogError(exception, "Benchmark primary work {RunId} failed.", work.RunId);
             await TerminalizeFailedAsync(work,
                 exception is BenchmarkExecutionException or LlamaRuntimeException ? exception.Message : InvocationFailedMessage,
-                environment).ConfigureAwait(false);
+                environment,
+                (exception as BenchmarkExecutionException)?.StopReason).ConfigureAwait(false);
         }
     }
+
+    // Crosses the layer boundary by hand rather than by a shared type: the throughput measurement is produced in the
+    // invocation layer and persisted by the store, and neither may reference the other's contract.
+    private static BenchmarkRunThroughput? ToThroughput(InvocationThroughput? throughput) =>
+        throughput is null
+            ? null
+            : new BenchmarkRunThroughput(throughput.TimeToFirstTokenMs,
+                throughput.PromptTokens,
+                throughput.PromptMs,
+                throughput.GenerationTokens,
+                throughput.GenerationMs,
+                throughput.CachedPromptTokens,
+                throughput.SegmentCount);
 
     /// <summary>
     ///     Commits primary success together with the run's first judging, in the store's single transaction. The judge
@@ -242,7 +277,7 @@ public sealed class BenchmarkRunExecutor(
         }
     }
 
-    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot)
+    private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds)
     {
         var runtime = snapshot.ResolvedRuntime;
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
@@ -262,7 +297,7 @@ public sealed class BenchmarkRunExecutor(
             LocalChatLoopbackDefaults.ClientNodeId,
             runtime.AllowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
+            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(invocationTimeoutSeconds),
             ReasoningEffort: runtime.ReasoningEffort,
             SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
             Skills: runtime.Skills,
@@ -347,7 +382,10 @@ public sealed class BenchmarkRunExecutor(
         events.EvictPlaintext(runId);
     }
 
-    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work, string message, RuntimeEnvironmentFactsV1? environment)
+    private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work,
+        string message,
+        RuntimeEnvironmentFactsV1? environment,
+        string? primaryStopReason = null)
     {
         await CheckpointAsync(work, receipt: null, environment).ConfigureAwait(false);
         var runId = work.RunId;
@@ -361,7 +399,8 @@ public sealed class BenchmarkRunExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Failed.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+        var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None)
+                                   .ConfigureAwait(false);
         events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with
@@ -483,4 +522,11 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
     }
 }
 
-internal sealed class BenchmarkExecutionException(string message) : InvalidOperationException(message);
+internal sealed class BenchmarkExecutionException(string message) : InvalidOperationException(message)
+{
+    /// <summary>
+    ///     Why generation stopped, when this failure knows — <c>timeout</c> for a run the node cancelled at its
+    ///     invocation budget. Null for every failure that cannot explain itself, which then records nothing.
+    /// </summary>
+    public string? StopReason { get; init; }
+}

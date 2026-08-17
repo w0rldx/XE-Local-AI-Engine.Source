@@ -25,6 +25,9 @@ describe("toBenchmarkProjectSummary", () => {
 			id: "",
 			name: "Summarisation",
 			contextTokens: 0,
+			// Null, not 0: an absent budget means context-limited, and 0 is a budget the node refuses.
+			maxOutputTokens: null,
+			invocationTimeoutSeconds: null,
 			agentDefinitionId: "",
 			judgeEnabled: false,
 			runCount: 0,
@@ -37,9 +40,11 @@ describe("toBenchmarkProjectSummary", () => {
 
 	// `=== true` rather than truthiness: an absent flag must read as off, never as "unknown means on".
 	it("carries the flags through when present", () => {
-		const mapped = toBenchmarkProjectSummary(partial({ name: "X", judgeEnabled: true, isFrozen: true, runCount: 4 }));
+		const mapped = toBenchmarkProjectSummary(
+			partial({ name: "X", judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048 }),
+		);
 
-		expect(mapped).toMatchObject({ judgeEnabled: true, isFrozen: true, runCount: 4 });
+		expect(mapped).toMatchObject({ judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048 });
 	});
 });
 
@@ -58,6 +63,7 @@ describe("toBenchmarkProjectDetail", () => {
 			referenceAnswer: null,
 			cohortGeneration: null,
 			referenceExecutionKey: null,
+			promptVersionOutdated: false,
 		});
 	});
 
@@ -184,9 +190,22 @@ describe("toBenchmarkRunSummary", () => {
 			}),
 		);
 
+		const truncated = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				rankExclusionReason: "truncated",
+				primaryStopReason: "length",
+			}),
+		);
+
 		expect(excluded).toMatchObject({ qualityScore: null, qualityScoreSource: "none", rankExclusionReason: "policy-outdated" });
 		expect(unknownReason.rankExclusionReason).toBeNull();
 		expect(cancelled.rankExclusionReason).toBe("judge-cancelled");
+		expect(truncated).toMatchObject({ rankExclusionReason: "truncated", primaryStopReason: "length" });
+		// An absent stop reason must stay null: a legacy run was never measured, and "stop" would be a claim.
+		expect(unknownReason.primaryStopReason).toBeNull();
 	});
 
 	// Grouping must never collapse two different models into one row because the key was missing.
@@ -205,6 +224,45 @@ describe("toBenchmarkRunSummary", () => {
 		expect(mapped.totalTokens).toBeNull();
 		expect(mapped.tokensPerSecond).toBeNull();
 		expect(mapped.userScore).toBeNull();
+		// Same rule for the pp/tg split: a runtime that timed nothing leaves six nulls, not six zeros.
+		expect(mapped.throughput).toEqual({
+			ttftMs: null,
+			promptTokens: null,
+			promptTokensPerSecond: null,
+			generationTokens: null,
+			generationTokensPerSecond: null,
+			cachedPromptTokens: null,
+			segmentCount: null,
+		});
+	});
+
+	// The node derives both rates from the counts and durations it measured, so the mapper carries them through rather
+	// than recomputing — a second computation here could disagree with the one the API served.
+	it("carries the throughput split through verbatim", () => {
+		const mapped = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				ttftMs: 180.25,
+				promptTokens: 123,
+				promptTokensPerSecond: 269.4,
+				generationTokens: 89,
+				generationTokensPerSecond: 88,
+				cachedPromptTokens: 7,
+				segmentCount: 2,
+			}),
+		);
+
+		expect(mapped.throughput).toEqual({
+			ttftMs: 180.25,
+			promptTokens: 123,
+			promptTokensPerSecond: 269.4,
+			generationTokens: 89,
+			generationTokensPerSecond: 88,
+			cachedPromptTokens: 7,
+			segmentCount: 2,
+		});
 	});
 
 	it("preserves a measured zero", () => {

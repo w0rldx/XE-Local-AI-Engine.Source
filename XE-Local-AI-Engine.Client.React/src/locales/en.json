@@ -3963,7 +3963,9 @@
 				"CancelRequested": "Cancellation requested",
 				"Succeeded": "Succeeded",
 				"Failed": "Failed",
-				"Cancelled": "Cancelled"
+				"Cancelled": "Cancelled",
+				"truncated": "Truncated",
+				"truncatedHint": "The answer was cut off by the token budget. It does not rank — rerun with a larger context or output budget."
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -3995,7 +3997,11 @@
 				"rejudgeConfirmTitle": "Re-judge this project?",
 				"rejudgeConfirmPolicy": "Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
 				"rejudgeConfirmAll": "All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
-				"rejudgeConfirmAccept": "Re-judge"
+				"rejudgeConfirmAccept": "Re-judge",
+				"maxOutputTokens": "Max output tokens",
+				"maxOutputTokensHint": "Leave empty = context-limited. Must be smaller than the requested context.",
+				"invocationTimeout": "Generation timeout (s)",
+				"invocationTimeoutHint": "Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model."
 			},
 			"run": {
 				"model": "Primary model",
@@ -4009,10 +4015,36 @@
 				"select": "Show {{model}} in the detail view",
 				"actions": "Run actions"
 			},
+			"matrix": {
+				"open": "Batch runs…",
+				"title": "Batch benchmark runs",
+				"models": "Models",
+				"modelsHelp": "Every selected model runs against every selected KV type.",
+				"repeatCount": "Repeats per combination",
+				"repeatCountHelp": "Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",
+				"warmup": "Warm-up run first",
+				"warmupHelp": "Adds one extra run per combination that is never ranked and never counted in the spread.",
+				"summary": "{{cells}} combinations × {{perCell}} runs = {{total}} runs",
+				"rejected": "{{count}} combinations were not started",
+				"start": "Start {{count}} runs"
+			},
 			"metrics": {
 				"duration": "Duration",
 				"tokens": "Tokens",
-				"speed": "tok/s"
+				"speed": "tok/s",
+				"speedColumn": "tok/s (tg)",
+				"ppAndTtft": "pp {{pp}} · {{ttft}}",
+				"ttft": "Time to first token",
+				"pp": "Prompt processing (pp)",
+				"tg": "Generation (tg)",
+				"tgTooltip": "Decode (tg): {{rate}}{{tokens}}",
+				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
+				"ttftTooltip": "Time to first token: {{value}}",
+				"spreadTooltip": "Across identical launches — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
+				"cachedTooltip": "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.",
+				"cached": "{{tokens}} prompt tokens were reused from the KV cache — the prompt speed is not a cold prefill.",
+				"throughputDiffers": "Throughput differs: {{fields}}",
+				"segments": "Summed over {{count}} model requests — the agent called tools, and every round prefilled again."
 			},
 			"connection": {
 				"live": "Live updates connected",
@@ -4028,6 +4060,11 @@
 				"save": "Save score",
 				"clear": "Clear override"
 			},
+			"export": {
+				"json": "Export JSON",
+				"csv": "Export CSV",
+				"error": "Could not export this benchmark project."
+			},
 			"judge": {
 				"title": "Automated judge",
 				"score": "Judge score: {{score}} / 100",
@@ -4039,6 +4076,9 @@
 				"runtimeDiffersHint": "Re-judge the project to move the cohort.",
 				"attempt": "attempt #{{sequence}}",
 				"criterionScore": "{{score}} / 10",
+				"outputLength": "· {{tokens}} output tokens",
+				"familyWarning": "Judge model family '{{family}}' matches {{matches}} primary run(s); self-preference bias possible.",
+				"promptVersionOutdated": "Judge prompt version outdated — re-save the judge to upgrade (forces re-judge).",
 				"explanations": {
 					"none": "This run has not been judged under the current judge policy.",
 					"queued": "The judge is waiting in the durable queue.",
@@ -4046,7 +4086,8 @@
 					"succeeded": "The judge completed independently of the primary run.",
 					"failed": "The judge failed; the successful primary result remains unchanged.",
 					"cancelled": "The judge was cancelled."
-				}
+				},
+				"truncatedPrimary": "The answer this verdict graded was cut off by the token budget, so the score describes an incomplete answer and does not rank."
 			},
 			"validation": {
 				"name": "Name is required.",
@@ -4055,7 +4096,9 @@
 				"agent": "Select an agent.",
 				"judgeModel": "Select a judge model.",
 				"judgeContext": "Judge context must be positive.",
-				"referenceAnswer": "The reference answer is too long."
+				"referenceAnswer": "The reference answer is too long.",
+				"maxOutputTokens": "Max output tokens must be between 1 and the requested context.",
+				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds."
 			},
 			"errors": {
 				"projectsLoad": "Could not load benchmark projects.",
@@ -4127,6 +4170,8 @@
 				"groupByModel": "Group by model",
 				"groupCount": "{{count}} runs of this model",
 				"expandGroup": "Show this model's other runs",
+				"warmupBadge": "warm-up",
+				"repeatBadge": "#{{index}}",
 				"empty": "No runs yet. Start one to populate the ranking.",
 				"source": {
 					"user": "operator",
@@ -4141,7 +4186,9 @@
 					"policy-outdated": "Judged under an older judge policy.",
 					"generation-stale": "Judged before the current cohort was reset.",
 					"execution-key-mismatch": "Judged under a different judge runtime than the ranked cohort.",
-					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete."
+					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete.",
+					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one.",
+					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch."
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4151,12 +4198,16 @@
 					"policy-outdated": "policy outdated",
 					"generation-stale": "stale cohort",
 					"execution-key-mismatch": "runtime differs",
-					"execution-identity-incomplete": "identity incomplete"
+					"execution-identity-incomplete": "identity incomplete",
+					"truncated": "truncated",
+					"warmup": "warm-up"
 				},
 				"action": {
 					"score": "Set an operator score.",
 					"rejudge": "Re-judge to bring it back into the cohort.",
-					"wait": "Wait for the judging to finish."
+					"wait": "Wait for the judging to finish.",
+					"rerun": "Rerun with a larger context or output budget.",
+					"none": "Nothing to do — a warm-up is meant to sit outside the ranking."
 				}
 			},
 			"rubric": {

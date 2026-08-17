@@ -18,7 +18,9 @@ internal static class BenchmarkEndpointMapper
                     request.JudgeContextTokens ?? 0,
                     request.Rubric.ToRubric(),
                     request.ReferenceAnswer)
-                : null);
+                : null,
+            request.MaxOutputTokens,
+            request.InvocationTimeoutSeconds);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -26,6 +28,8 @@ internal static class BenchmarkEndpointMapper
             Id = project.Id,
             Name = project.Name,
             ContextTokens = project.ContextTokens,
+            MaxOutputTokens = project.MaxOutputTokens,
+            InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
             RunCount = runCount,
@@ -46,6 +50,8 @@ internal static class BenchmarkEndpointMapper
             CoreTask = JsonSerializer.Deserialize<string>(project.CoreTaskJson.Span)
                        ?? throw new BenchmarkValidationException("The benchmark task is required."),
             ContextTokens = project.ContextTokens,
+            MaxOutputTokens = project.MaxOutputTokens,
+            InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
             Judge = judge ?? new BenchmarkJudgePolicyResponse
@@ -77,11 +83,22 @@ internal static class BenchmarkEndpointMapper
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
             RankExclusionReason = run.Judge?.RankExclusionReason,
-            ModelGroupKey = run.ModelContentFingerprint,
+            PrimaryStopReason = run.PrimaryStopReason,
+            ModelGroupKey = BenchmarkModelGroupKey.From(run.PrimaryModelName, run.PrimaryModelOrigin),
+            RepeatGroupId = run.RepeatGroupId,
+            RepeatIndex = run.RepeatIndex,
+            IsWarmup = run.IsWarmup,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
             TokensPerSecond = run.TokensPerSecond,
+            TtftMs = run.Throughput?.TtftMs,
+            PromptTokens = run.Throughput?.PromptTokens,
+            PromptTokensPerSecond = run.Throughput?.PromptTokensPerSecond,
+            GenerationTokens = run.Throughput?.GenerationTokens,
+            GenerationTokensPerSecond = run.Throughput?.GenerationTokensPerSecond,
+            CachedPromptTokens = run.Throughput?.CachedPromptTokens,
+            SegmentCount = run.Throughput?.SegmentCount,
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             Version = run.Version,
@@ -111,11 +128,22 @@ internal static class BenchmarkEndpointMapper
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
             RankExclusionReason = run.Judge?.RankExclusionReason,
-            ModelGroupKey = run.ModelContentFingerprint,
+            PrimaryStopReason = run.PrimaryStopReason,
+            ModelGroupKey = BenchmarkModelGroupKey.From(run.PrimaryModelName, run.PrimaryModelOrigin),
+            RepeatGroupId = run.RepeatGroupId,
+            RepeatIndex = run.RepeatIndex,
+            IsWarmup = run.IsWarmup,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
             TotalTokens = run.TotalTokens,
             TokensPerSecond = run.TokensPerSecond,
+            TtftMs = run.Throughput?.TtftMs,
+            PromptTokens = run.Throughput?.PromptTokens,
+            PromptTokensPerSecond = run.Throughput?.PromptTokensPerSecond,
+            GenerationTokens = run.Throughput?.GenerationTokens,
+            GenerationTokensPerSecond = run.Throughput?.GenerationTokensPerSecond,
+            CachedPromptTokens = run.Throughput?.CachedPromptTokens,
+            SegmentCount = run.Throughput?.SegmentCount,
             OutputParts = ParseJson(run.OutputPartsJson),
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
@@ -246,7 +274,9 @@ internal static class BenchmarkEndpointMapper
                 Rubric = policy.Rubric.ToDto(),
                 ReferenceAnswer = policy.ReferenceAnswer,
                 CohortGeneration = revision.CohortGeneration,
-                ReferenceExecutionKey = revision.ReferenceExecutionKey
+                ReferenceExecutionKey = revision.ReferenceExecutionKey,
+                PromptVersion = policy.PromptVersion,
+                PromptVersionOutdated = policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion
             };
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)

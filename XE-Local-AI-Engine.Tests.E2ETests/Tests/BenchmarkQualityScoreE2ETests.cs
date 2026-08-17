@@ -265,7 +265,7 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
                            DurationMs: 1200,
                            TotalTokens: 128,
                            TokensPerSecond: 32.5,
-                           new BenchmarkJudgeAttemptSeed(revisionId,
+                           JudgeAttempt: new BenchmarkJudgeAttemptSeed(revisionId,
                                BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime),
                                LaunchIntent: resolution.Intent)))
                        .ConfigureAwait(false);

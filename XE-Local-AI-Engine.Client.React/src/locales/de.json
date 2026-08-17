@@ -3963,7 +3963,9 @@
 				"CancelRequested": "Abbruch angefordert",
 				"Succeeded": "Erfolgreich",
 				"Failed": "Fehlgeschlagen",
-				"Cancelled": "Abgebrochen"
+				"Cancelled": "Abgebrochen",
+				"truncated": "Abgeschnitten",
+				"truncatedHint": "Die Antwort wurde vom Token-Budget abgeschnitten. Sie wird nicht gewertet — führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus."
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -3995,7 +3997,11 @@
 				"rejudgeConfirmTitle": "Projekt neu bewerten?",
 				"rejudgeConfirmPolicy": "Eine Änderung am Judge bewertet dieses Projekt neu. Alle {{count}} erfolgreichen Läufe werden neu bewertet und die Rangliste wird aus der neuen Kohorte aufgebaut.",
 				"rejudgeConfirmAll": "Alle {{count}} erfolgreichen Läufe werden mit der aktuellen Richtlinie neu bewertet, und die gewertete Kohorte wechselt auf die aktuelle Bewertungslaufzeit.",
-				"rejudgeConfirmAccept": "Neu bewerten"
+				"rejudgeConfirmAccept": "Neu bewerten",
+				"maxOutputTokens": "Maximale Ausgabe-Tokens",
+				"maxOutputTokensHint": "Leer lassen = nur durch den Kontext begrenzt. Muss kleiner als der angeforderte Kontext sein.",
+				"invocationTimeout": "Zeitlimit der Generierung (s)",
+				"invocationTimeoutHint": "Sekunden; Standard 900. Erhöhen Sie den Wert für lange Reasoning-Läufe — ein von der Uhr abgebrochener Lauf misst die Testumgebung, nicht das Modell."
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4009,10 +4015,36 @@
 				"select": "{{model}} in der Detailansicht anzeigen",
 				"actions": "Laufaktionen"
 			},
+			"matrix": {
+				"open": "Mehrere Läufe…",
+				"title": "Benchmark-Läufe im Stapel",
+				"models": "Modelle",
+				"modelsHelp": "Jedes ausgewählte Modell läuft gegen jeden ausgewählten KV-Typ.",
+				"repeatCount": "Wiederholungen je Kombination",
+				"repeatCountHelp": "Das Sampling ist deterministisch, Wiederholungen ändern die Antwort also nicht — sie messen, wie stark die Geschwindigkeit zwischen Starts schwankt. Jede Wiederholung lädt das Modell erneut.",
+				"warmup": "Zuerst ein Aufwärmlauf",
+				"warmupHelp": "Fügt je Kombination einen zusätzlichen Lauf hinzu, der nie gewertet und nie in die Streuung eingerechnet wird.",
+				"summary": "{{cells}} Kombinationen × {{perCell}} Läufe = {{total}} Läufe",
+				"rejected": "{{count}} Kombinationen wurden nicht gestartet",
+				"start": "{{count}} Läufe starten"
+			},
 			"metrics": {
 				"duration": "Dauer",
 				"tokens": "Tokens",
-				"speed": "Tok/s"
+				"speed": "Tok/s",
+				"speedColumn": "Tok/s (tg)",
+				"ppAndTtft": "pp {{pp}} · {{ttft}}",
+				"ttft": "Zeit bis zum ersten Token",
+				"pp": "Prompt-Verarbeitung (pp)",
+				"tg": "Generierung (tg)",
+				"tgTooltip": "Dekodierung (tg): {{rate}}{{tokens}}",
+				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
+				"ttftTooltip": "Zeit bis zum ersten Token: {{value}}",
+				"spreadTooltip": "Über identische Starts — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
+				"cachedTooltip": "{{tokens}} Prompt-Tokens kamen aus dem KV-Cache, die Prompt-Geschwindigkeit ist daher kein kalter Prefill.",
+				"cached": "{{tokens}} Prompt-Tokens wurden aus dem KV-Cache wiederverwendet — die Prompt-Geschwindigkeit ist kein kalter Prefill.",
+				"throughputDiffers": "Durchsatz unterscheidet sich: {{fields}}",
+				"segments": "Summiert über {{count}} Modellanfragen — der Agent hat Tools aufgerufen, und jede Runde hat erneut vorverarbeitet."
 			},
 			"connection": {
 				"live": "Live-Aktualisierungen verbunden",
@@ -4028,6 +4060,11 @@
 				"save": "Bewertung speichern",
 				"clear": "Vorgabe entfernen"
 			},
+			"export": {
+				"json": "JSON exportieren",
+				"csv": "CSV exportieren",
+				"error": "Dieses Benchmark-Projekt konnte nicht exportiert werden."
+			},
 			"judge": {
 				"title": "Automatische Bewertung",
 				"score": "Bewertung: {{score}} / 100",
@@ -4039,6 +4076,9 @@
 				"runtimeDiffersHint": "Bewerten Sie das Projekt neu, um die Kohorte zu verschieben.",
 				"attempt": "Versuch #{{sequence}}",
 				"criterionScore": "{{score}} / 10",
+				"outputLength": "· {{tokens}} Ausgabetoken",
+				"familyWarning": "Die Modellfamilie '{{family}}' der Bewertung entspricht {{matches}} Primärlauf/-läufen; Selbstbevorzugung ist möglich.",
+				"promptVersionOutdated": "Bewerter-Prompt-Version veraltet — Bewerter erneut speichern, um zu aktualisieren (erzwingt Neubewertung).",
 				"explanations": {
 					"none": "Dieser Lauf wurde unter der aktuellen Bewertungsrichtlinie noch nicht bewertet.",
 					"queued": "Die Bewertung wartet in der dauerhaften Warteschlange.",
@@ -4046,7 +4086,8 @@
 					"succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.",
 					"failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.",
 					"cancelled": "Die Bewertung wurde abgebrochen."
-				}
+				},
+				"truncatedPrimary": "Die bewertete Antwort wurde vom Token-Budget abgeschnitten. Die Punktzahl beschreibt daher eine unvollständige Antwort und wird nicht gewertet."
 			},
 			"validation": {
 				"name": "Ein Name ist erforderlich.",
@@ -4055,7 +4096,9 @@
 				"agent": "Wählen Sie einen Agenten.",
 				"judgeModel": "Wählen Sie ein Bewertungsmodell.",
 				"judgeContext": "Der Kontext der Bewertung muss positiv sein.",
-				"referenceAnswer": "Die Musterantwort ist zu lang."
+				"referenceAnswer": "Die Musterantwort ist zu lang.",
+				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen.",
+				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
@@ -4127,6 +4170,8 @@
 				"groupByModel": "Nach Modell gruppieren",
 				"groupCount": "{{count}} Läufe dieses Modells",
 				"expandGroup": "Weitere Läufe dieses Modells anzeigen",
+				"warmupBadge": "Aufwärmlauf",
+				"repeatBadge": "#{{index}}",
 				"empty": "Noch keine Läufe. Starten Sie einen, um die Rangliste zu füllen.",
 				"source": {
 					"user": "Betreiber",
@@ -4141,7 +4186,9 @@
 					"policy-outdated": "Mit einer älteren Bewertungsrichtlinie bewertet.",
 					"generation-stale": "Vor dem Zurücksetzen der aktuellen Kohorte bewertet.",
 					"execution-key-mismatch": "Mit einer anderen Bewertungslaufzeit bewertet als die gewertete Kohorte.",
-					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig."
+					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig.",
+					"truncated": "Die Antwort wurde vom Token-Budget abgeschnitten und ist deshalb nicht mit einer vollständigen vergleichbar.",
+					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden."
 				},
 				"exclusionShort": {
 					"no-score": "unbewertet",
@@ -4151,12 +4198,16 @@
 					"policy-outdated": "Richtlinie veraltet",
 					"generation-stale": "veraltete Kohorte",
 					"execution-key-mismatch": "Laufzeit weicht ab",
-					"execution-identity-incomplete": "Identität unvollständig"
+					"execution-identity-incomplete": "Identität unvollständig",
+					"truncated": "abgeschnitten",
+					"warmup": "Aufwärmlauf"
 				},
 				"action": {
 					"score": "Vergeben Sie eine Betreiberbewertung.",
 					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
-					"wait": "Warten Sie, bis die Bewertung fertig ist."
+					"wait": "Warten Sie, bis die Bewertung fertig ist.",
+					"rerun": "Führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus.",
+					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen."
 				}
 			},
 			"rubric": {
