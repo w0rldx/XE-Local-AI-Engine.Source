@@ -99,7 +99,7 @@ public sealed class ContextExpansionService : IContextExpansionService
         var rowsByDocument = new Dictionary<Guid, IReadOnlyList<KnowledgeNeighborChunk>>();
         foreach (var group in anchors.GroupBy(static anchor => anchor.DocumentId))
         {
-            var merged = MergeWindows(group.Select(anchor => (Lower: anchor.ChunkIndex - safeWindow, Upper: anchor.ChunkIndex + safeWindow)));
+            var merged = MergeWindows(group.Select(anchor => new TextWindow(anchor.ChunkIndex - safeWindow, anchor.ChunkIndex + safeWindow)));
             rowsByDocument[group.Key] = await ReadDisjointRangesAsync(connection, group.Key, merged, cancellationToken).ConfigureAwait(false);
         }
 
@@ -123,18 +123,18 @@ public sealed class ContextExpansionService : IContextExpansionService
     // Merges overlapping or adjacent (touching, i.e. no unindexed gap) windows into disjoint ascending ranges. A window
     // separated from the previous one by even a single unindexed position starts a new range, so a distant anchor never
     // widens an earlier range across the gap between them.
-    private static List<(int Lower, int Upper)> MergeWindows(IEnumerable<(int Lower, int Upper)> windows)
+    private static List<TextWindow> MergeWindows(IEnumerable<TextWindow> windows)
     {
-        var merged = new List<(int Lower, int Upper)>();
+        var merged = new List<TextWindow>();
         foreach (var (lower, upper) in windows.OrderBy(static window => window.Lower))
         {
             if (merged.Count > 0 && lower <= merged[^1].Upper + 1)
             {
-                merged[^1] = (merged[^1].Lower, Math.Max(merged[^1].Upper, upper));
+                merged[^1] = new TextWindow(merged[^1].Lower, Math.Max(merged[^1].Upper, upper));
             }
             else
             {
-                merged.Add((lower, upper));
+                merged.Add(new TextWindow(lower, upper));
             }
         }
 
@@ -153,7 +153,7 @@ public sealed class ContextExpansionService : IContextExpansionService
             "Only internally-generated $loN/$hiN placeholder names are interpolated; every range bound and the document id are bound parameters, so no user input reaches the command text.")]
     private async Task<IReadOnlyList<KnowledgeNeighborChunk>> ReadDisjointRangesAsync(DbConnection connection,
         Guid documentId,
-        IReadOnlyList<(int Lower, int Upper)> ranges,
+        IReadOnlyList<TextWindow> ranges,
         CancellationToken cancellationToken)
     {
         var rows = new List<KnowledgeNeighborChunk>();
@@ -245,4 +245,7 @@ public sealed class ContextExpansionService : IContextExpansionService
 
         return neighbors;
     }
+
+    // An inclusive chunk-index range. Named rather than System.Range, which indexes a sequence instead of describing one.
+    private readonly record struct TextWindow(int Lower, int Upper);
 }
