@@ -388,9 +388,9 @@ namespace XE_Local_AI_Engine.Client
             {
                 var developmentPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Root}");
                 var capabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Capability}");
-                // Keep the disabled capability opaque before local API security or authentication can challenge the caller.
-                // The endpoint types remain discoverable process-wide because FastEndpoints caches endpoint discovery across
-                // WebApplicationFactory instances; service and hub registration still remain disabled with this feature flag.
+                // Endpoint discovery is per host (the EndpointDiscoveryOptions.Filter in ConfigureServices), so these routes
+                // are genuinely absent on a disabled node. This middleware still answers first — ahead of local API security
+                // and authentication below — so the disabled capability cannot be probed by status code (404 here, never 401).
                 app.Use(async (context, next) =>
                 {
                     if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase)
