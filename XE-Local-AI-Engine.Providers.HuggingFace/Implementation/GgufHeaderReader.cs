@@ -200,20 +200,20 @@ internal sealed class GgufHeaderReader
     ///     ran out of bytes mid-block (caller may re-request a larger range). Tolerant: bad magic / odd value-types yield
     ///     empty-or-partial metadata, never an exception.
     /// </summary>
-    private static (GgufHeaderMetadata Metadata, bool Truncated) TryParse(byte[] bytes)
+    private static ParsedHeader TryParse(byte[] bytes)
     {
         var reader = new SpanReader(bytes);
 
         if (!reader.TryReadUInt32(out var magic) || magic != GgufMagic)
         {
-            return (GgufHeaderMetadata.Empty, false);
+            return new ParsedHeader(GgufHeaderMetadata.Empty, Truncated: false);
         }
 
         if (!reader.TryReadUInt32(out _) || // version
             !reader.TryReadUInt64(out _) || // tensor_count
             !reader.TryReadUInt64(out var kvCount))
         {
-            return (GgufHeaderMetadata.Empty, true);
+            return new ParsedHeader(GgufHeaderMetadata.Empty, Truncated: true);
         }
 
         var values = new Dictionary<string, object>(StringComparer.Ordinal);
@@ -221,17 +221,17 @@ internal sealed class GgufHeaderReader
         {
             if (!reader.TryReadGgufString(out var key))
             {
-                return (Build(values), true);
+                return new ParsedHeader(Build(values), Truncated: true);
             }
 
             if (!reader.TryReadUInt32(out var valueType))
             {
-                return (Build(values), true);
+                return new ParsedHeader(Build(values), Truncated: true);
             }
 
             if (!TryReadValue(ref reader, valueType, out var value, out var ranOut))
             {
-                return (Build(values), ranOut);
+                return new ParsedHeader(Build(values), ranOut);
             }
 
             if (value is not null)
@@ -240,8 +240,11 @@ internal sealed class GgufHeaderReader
             }
         }
 
-        return (Build(values), false);
+        return new ParsedHeader(Build(values), Truncated: false);
     }
+
+    /// <summary>A parsed GGUF header plus whether parsing ran out of bytes mid-block (the caller may re-request more).</summary>
+    private sealed record ParsedHeader(GgufHeaderMetadata Metadata, bool Truncated);
 
     private static GgufHeaderMetadata Build(IReadOnlyDictionary<string, object> values)
     {
