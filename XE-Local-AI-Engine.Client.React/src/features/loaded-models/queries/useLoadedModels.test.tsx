@@ -92,7 +92,7 @@ describe("useLoadedModels", () => {
 	});
 });
 
-describe("resolveLoadedModelsPollIntervalMs (AUD4-20.2 back-off)", () => {
+describe("resolveLoadedModelsPollIntervalMs back-off", () => {
 	const fast = resolveLoadedModelsPollIntervalMs({ isAvailable: true, ollamaConfigured: true, error: null, models: [] });
 
 	it("polls at the fast cadence while the provider is available", () => {
@@ -110,7 +110,7 @@ describe("resolveLoadedModelsPollIntervalMs (AUD4-20.2 back-off)", () => {
 		expect(slow).toBe(30_000);
 	});
 
-	it("STOPS polling entirely once the node reports Ollama is not configured (AUD4-20)", () => {
+	it("STOPS polling entirely once the node reports Ollama is not configured", () => {
 		// A switched-off Ollama runtime will never answer, so the recurring poll is disabled outright rather than backing
 		// off forever against an endpoint that is deliberately absent.
 		const stopped = resolveLoadedModelsPollIntervalMs({ isAvailable: false, ollamaConfigured: false, error: null, models: [] });

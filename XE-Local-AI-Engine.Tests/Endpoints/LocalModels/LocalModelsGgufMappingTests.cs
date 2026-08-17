@@ -210,6 +210,7 @@ public sealed class LocalModelsGgufMappingTests
             [Gguf("repo-a:Q4_K_M")]);
 
         AssertEx.True(response.IsAvailable, "an installed GGUF makes the node-local runtime available even without Ollama");
+        AssertEx.Null(response.Error);
         AssertEx.Equal(expected: 1, response.Items.Count);
         AssertEx.Equal(LocalModelProviders.LlamaCpp, response.Items[0].Provider);
     }
@@ -222,6 +223,7 @@ public sealed class LocalModelsGgufMappingTests
             "Local model provider is unavailable.");
 
         AssertEx.False(response.IsAvailable, "no GGUF and no Ollama → the local runtime is unavailable");
+        AssertEx.Equal("Local model provider is unavailable.", response.Error);
         AssertEx.Equal(expected: 0, response.Items.Count);
     }
 }
