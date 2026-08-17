@@ -440,7 +440,7 @@ export function Chat() {
 	// list option, if known, is available AND whose concrete name is actually installed. Cloud (Codex) ids have no
 	// LOCAL details (the endpoint 404s for them), an unavailable model just retries a guaranteed failure, and a
 	// configured-but-not-installed default (its GGUF never downloaded) 404s forever until the install lands. GGUF
-	// (llamacpp) selections that are installed ARE polled — CL-4 serves their details as a 200 carrying
+	// (llamacpp) selections that are installed ARE polled — the details endpoint answers with a 200 carrying
 	// maxContextTokens, which the context meter needs.
 	const concreteModelInstalled = useMemo(
 		() => selectedConcreteModelName.length > 0 && modelOptions.some((option) => option.value === selectedConcreteModelName),

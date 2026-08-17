@@ -88,7 +88,7 @@ public interface ITrainingRuntimeService
 
     /// <summary>
     ///     Resolves the interpreter of the adopted venv, or <see langword="null" /> when no runtime is installed. This is
-    ///     the seam Slice 3's run executor launches <c>train.py</c> through.
+    ///     the seam the run executor launches <c>train.py</c> through.
     /// </summary>
     string? ResolveInterpreterPath();
 }

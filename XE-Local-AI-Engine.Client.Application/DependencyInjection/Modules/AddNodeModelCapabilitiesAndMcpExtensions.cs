@@ -31,7 +31,7 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // LocalToolOfferProvider takes INodeRuntimeSettings itself and reads the migrated AgentHome:ToolCapableModels
         // allow-list LIVE on each offer (see LocalToolOfferProvider.IsToolCapable). It used to be seeded here once, which
         // meant an operator could add their model in Node Settings, save successfully, and still get no tools until the
-        // node restarted — with no restart hint on that field (F-001/F-025). Do NOT re-introduce the seed: the read goes
+        // node restarted — with no restart hint on that field. Do NOT re-introduce the seed: the read goes
         // through CachedNodeSettingsStore (a memory-cache hit that SaveAsync re-primes), and two other consumers of this
         // same setting already read it live per request.
         builder.Services.AddSingleton<ILocalToolOfferProvider>(sp =>

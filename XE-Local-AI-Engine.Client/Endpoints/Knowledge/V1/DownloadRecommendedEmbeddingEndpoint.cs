@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         to fusion order. The embedder is load-bearing: with no embedding model installed, ingestion of every document
 ///         fails outright and the knowledge base is inert. Before this endpoint existed, the only route out was to know
 ///         to go to Models → Browse Hugging Face and pick a suitable embedding GGUF by hand, which the failure message
-///         did not say (F-020, live eval 2026-07-31).
+///         did not say.
 ///     </para>
 ///     <para>
 ///         The already-installed check is broader than the reranker's on purpose. The reranker asks only "is THE
