@@ -45,7 +45,7 @@ public sealed class ToolApprovalCoordinatorTests
 
         // Grant a session-scoped approval for exactly this skill tool, skill and version, so the memo WOULD answer the
         // second request if it were ever reached.
-        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId), version: 1);
+        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId));
 
         var unattended = SkillPackage(conversationId).AsUnattended().Build();
         var exception = await AssertEx.ThrowsAsync<ApprovalUnavailableException>(() =>
@@ -86,15 +86,15 @@ public sealed class ToolApprovalCoordinatorTests
         // 256 distinct memo keys — same conversation and tool, one per skill VERSION — fill the cap exactly.
         for (var version = 1; version <= 256; version++)
         {
-            await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version), version);
+            await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version));
         }
 
         AssertEx.Equal(expected: 256, sender.SentApprovals.Count);
 
         // The 257th grant is refused by the cap: the operator's approval still applies to THIS call, but nothing is
         // remembered, so the very next request for it must prompt again.
-        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version: 257), version: 257);
-        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version: 257), version: 257);
+        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version: 257));
+        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version: 257));
         AssertEx.Equal(expected: 258, sender.SentApprovals.Count, "an overflowed memo must fail closed and re-prompt");
 
         // An entry that made it in before the cap is still honoured — overflow only ever ADDS prompts.
@@ -166,10 +166,8 @@ public sealed class ToolApprovalCoordinatorTests
     // the sender before the resolve — no polling needed, and 256 iterations stay fast.
     private static async Task GrantSessionApprovalAsync(ToolApprovalCoordinator coordinator,
         MockHubMessageSender sender,
-        RuntimePackageBuilder packageBuilder,
-        int version)
+        RuntimePackageBuilder packageBuilder)
     {
-        _ = version;
         var pending = coordinator.RequestToolApprovalAsync(packageBuilder.Build(), SkillApprovalRequest(), static _ => { }, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count > 0 && !pending.IsCompleted, TimeSpan.FromSeconds(5));
         coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[^1].RequestId, Approved: true), ApprovalScope.Session);
