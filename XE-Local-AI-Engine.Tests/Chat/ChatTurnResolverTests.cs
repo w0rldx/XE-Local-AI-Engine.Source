@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -72,10 +71,7 @@ public sealed class ChatTurnResolverTests
         return new ChatTurnResolver(resolver,
             store,
             orchestrationResolver,
-            Substitute.For<IModelClassificationService>(),
-            Substitute.For<ILocalModelProviderResolver>(),
-            Substitute.For<IGgufModelCapabilityResolver>(),
-            Substitute.For<IActiveCloudChatClientFactory>(),
+            Substitute.For<IModelCapabilityResolver>(),
             NullLogger<ChatTurnResolver>.Instance);
     }
 }

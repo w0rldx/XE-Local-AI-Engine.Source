@@ -19,9 +19,9 @@ internal static class AddNodeChatExtensions
         builder.Services.AddSingleton<INodeChatStreamCancellationRegistry, NodeChatStreamCancellationRegistry>();
         builder.Services.AddSingleton<IInvocationResumeRegistry, InvocationResumeRegistry>();
         builder.Services.AddSingleton<IGgufModelCapabilityResolver, GgufModelCapabilityResolver>();
-        // Provider-routed (thinking/tools) capability resolution used by OrchestrationResolver to resolve each
-        // participant's thinking capability from its own effective model (mirrors ChatTurnResolver's active-model
-        // resolution). Scoped to match IModelClassificationService's lifetime.
+        // The one provider-routed capability resolution: OrchestrationResolver resolves each participant from its own
+        // effective model through it, and ChatTurnResolver resolves the turn's active model through it. Scoped to match
+        // IModelClassificationService's lifetime.
         builder.Services.AddScoped<IModelCapabilityResolver, ModelCapabilityResolver>();
         // Derives the server-secret per-conversation seed that nonces the untrusted-content fence around attachment
         // context (keeps the fence un-forgeable by a client that knows only the public conversation id). Singleton: it
