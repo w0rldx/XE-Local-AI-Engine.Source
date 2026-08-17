@@ -14,10 +14,10 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 // Constructor injection here is only safe because the IDevelopmentEndpoint marker keeps these endpoints out of
-// FastEndpoints registration when Development:Enabled is false (see the Endpoints.Filter in Program): FastEndpoints
-// activates every endpoint once at startup, while AddNodeDevelopment registers their services only when the feature is
-// on. GetDevelopmentCapabilityEndpoint must stay reachable with the feature off and therefore must NOT carry the
-// marker — its dependencies are all registered unconditionally.
+// FastEndpoints discovery when Development:Enabled is false (see the EndpointDiscoveryOptions.Filter in
+// ConfigureServices): FastEndpoints activates every discovered endpoint once at startup, while AddNodeDevelopment
+// registers their services only when the feature is on. GetDevelopmentCapabilityEndpoint must stay reachable with the
+// feature off and therefore must NOT carry the marker — its dependencies are all registered unconditionally.
 
 /// <summary>
 ///     Reports Development Mode's availability, and the state of the runtime it will actually execute on.
