@@ -28,14 +28,27 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.AgentName).HasColumnName("agent_name").HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.AgentVersion).HasColumnName("agent_version");
         builder.Property(entity => entity.RequestedContextTokens).HasColumnName("requested_context_tokens");
+        builder.Property(entity => entity.InvocationTimeoutSeconds).HasColumnName("invocation_timeout_seconds");
         builder.Property(entity => entity.PrimaryStatus).HasColumnName("primary_status").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.EffectiveContextTokens).HasColumnName("effective_context_tokens");
         builder.Property(entity => entity.DurationMs).HasColumnName("duration_ms");
         builder.Property(entity => entity.TotalTokens).HasColumnName("total_tokens");
         builder.Property(entity => entity.TokensPerSecond).HasColumnName("tokens_per_second");
+
+        // Plaintext numerics, same posture as tokens_per_second: no secrets, no content, nothing node-scoped.
+        builder.Property(entity => entity.TtftMs).HasColumnName("ttft_ms");
+        builder.Property(entity => entity.PromptTokens).HasColumnName("prompt_tokens");
+        builder.Property(entity => entity.PromptMs).HasColumnName("prompt_ms");
+        builder.Property(entity => entity.GenerationTokens).HasColumnName("generation_tokens");
+        builder.Property(entity => entity.GenerationMs).HasColumnName("generation_ms");
+        builder.Property(entity => entity.CachedPromptTokens).HasColumnName("cached_prompt_tokens");
+        builder.Property(entity => entity.SegmentCount).HasColumnName("segment_count");
         builder.Property(entity => entity.OutputPartsJson).HasColumnName("output_parts_json");
         builder.Property(entity => entity.LastStreamSequence).HasColumnName("last_stream_sequence");
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");
+        builder.Property(entity => entity.RepeatGroupId).HasColumnName("repeat_group_id");
+        builder.Property(entity => entity.RepeatIndex).HasColumnName("repeat_index");
+        builder.Property(entity => entity.IsWarmup).HasColumnName("is_warmup").HasDefaultValue(false);
         builder.Property(entity => entity.CurrentJudgeAttemptId).HasColumnName("current_judge_attempt_id");
         builder.Property(entity => entity.PrimaryVariant).HasColumnName("primary_variant").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheType).HasColumnName("primary_kv_cache_type").HasMaxLength(32);
@@ -55,6 +68,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.PrimaryLaunchExecutableSha256).HasColumnName("primary_launch_executable_sha256").HasMaxLength(64);
         builder.Property(entity => entity.PrimaryLaunchHasAuxAssets).HasColumnName("primary_launch_has_aux_assets");
         builder.Property(entity => entity.PrimaryLaunchKvCacheTypeSource).HasColumnName("primary_launch_kv_cache_type_source").HasMaxLength(16);
+        builder.Property(entity => entity.PrimaryStopReason).HasColumnName("primary_stop_reason").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryErrorMessage).HasColumnName("primary_error_message").HasMaxLength(1024);
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
@@ -72,6 +86,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             entity.ProjectId,
             entity.PrimaryKvCacheType
         }).HasDatabaseName("ix_benchmark_runs_project_primary_kv_cache_type");
+        builder.HasIndex(entity => entity.RepeatGroupId).HasDatabaseName("ix_benchmark_runs_repeat_group_id");
     }
 
     private static string? ConvertOriginToStore(LocalModelOrigin? value) =>

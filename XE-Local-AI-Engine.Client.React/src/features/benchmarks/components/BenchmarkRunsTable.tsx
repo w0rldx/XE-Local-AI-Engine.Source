@@ -6,10 +6,23 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
-import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
-import { isRunTerminal } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	benchmarkBaseModelLabel,
+	benchmarkQuantTag,
+	isBenchmarkRunTruncated,
+	isRunTerminal,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import { groupBenchmarkRunsByModel, rankExclusionAction, sortBenchmarkRuns } from "@/features/benchmarks/models/BenchmarkRanking";
+import type { BenchmarkRepeatStats } from "@/features/benchmarks/models/BenchmarkThroughput";
+import {
+	benchmarkRepeatCohortKey,
+	benchmarkRepeatStats,
+	formatLatencyMs,
+	formatStatSummary,
+	formatTokensPerSecond,
+} from "@/features/benchmarks/models/BenchmarkThroughput";
 
 interface BenchmarkRunsTableProps {
 	runs: readonly BenchmarkRunSummary[];
@@ -23,6 +36,60 @@ interface BenchmarkRunsTableProps {
 
 const formatDuration = (durationMs: number | null): string => (durationMs === null ? "—" : `${(durationMs / 1000).toFixed(1)}s`);
 const formatTimestamp = (epochMs: number): string => (epochMs > 0 ? new Date(epochMs).toLocaleString() : "—");
+
+// tg (decode) leads because it is the number an operator compares models by; pp and TTFT ride under it because a fast
+// decode over a slow prefill is a different machine from a fast one, and the blended figure this replaced hid that.
+// Exact values live in the tooltip so the column stays narrow without rounding away the measurement.
+function ThroughputCell({ run, stats }: { run: BenchmarkRunSummary; stats?: BenchmarkRepeatStats }) {
+	const { t } = useTranslation();
+	const { ttftMs, promptTokens, promptTokensPerSecond, generationTokens, cachedPromptTokens } = run.throughput;
+	// Only shown from two samples up: the spread is the whole point of repeating, and "± 0 (n=1)" would state a
+	// certainty a single reading does not have.
+	const spread = formatStatSummary(stats?.tokensPerSecond ?? null);
+	const tooltip = [
+		t("pages.benchmarks.metrics.tgTooltip", "Decode (tg): {{rate}}{{tokens}}", {
+			rate: formatTokensPerSecond(run.tokensPerSecond),
+			tokens: generationTokens === null ? "" : ` over ${generationTokens} tokens`,
+		}),
+		t("pages.benchmarks.metrics.ppTooltip", "Prompt (pp): {{rate}}{{tokens}}", {
+			rate: formatTokensPerSecond(promptTokensPerSecond),
+			tokens: promptTokens === null ? "" : ` over ${promptTokens} tokens`,
+		}),
+		t("pages.benchmarks.metrics.ttftTooltip", "Time to first token: {{value}}", { value: formatLatencyMs(ttftMs) }),
+		spread === null
+			? null
+			: t("pages.benchmarks.metrics.spreadTooltip", "Across identical launches — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms", {
+					tg: spread,
+					pp: formatStatSummary(stats?.promptTokensPerSecond ?? null, 0) ?? "—",
+					ttft: formatStatSummary(stats?.ttftMs ?? null, 0) ?? "—",
+				}),
+		cachedPromptTokens !== null && cachedPromptTokens > 0
+			? t("pages.benchmarks.metrics.cachedTooltip", "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.", {
+					tokens: cachedPromptTokens,
+				})
+			: null,
+	]
+		.filter((line): line is string => line !== null)
+		.join("\n");
+	return (
+		<Tooltip label={tooltip} multiline={true} w={300} data-testid={`benchmark-throughput-tooltip-${run.id}`}>
+			<Stack gap={0} data-testid={`benchmark-throughput-${run.id}`}>
+				<Text size="sm">{run.tokensPerSecond?.toFixed(1) ?? "—"}</Text>
+				<Text size="xs" c="dimmed">
+					{t("pages.benchmarks.metrics.ppAndTtft", "pp {{pp}} · {{ttft}}", {
+						pp: promptTokensPerSecond === null ? "—" : promptTokensPerSecond.toFixed(0),
+						ttft: formatLatencyMs(ttftMs),
+					})}
+				</Text>
+				{spread === null ? null : (
+					<Text size="xs" c="dimmed" data-testid={`benchmark-throughput-spread-${run.id}`}>
+						{spread}
+					</Text>
+				)}
+			</Stack>
+		</Tooltip>
+	);
+}
 
 function QualityScoreCell({ run }: { run: BenchmarkRunSummary }) {
 	const { t } = useTranslation();
@@ -81,6 +148,9 @@ interface RunRowProps {
 	nested?: boolean;
 	expander?: React.ReactNode;
 	modelLabel?: React.ReactNode;
+	/** A group leader shows the BASE model; every other row shows the exact model name it ran. */
+	modelName?: string;
+	stats?: BenchmarkRepeatStats;
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
 	onDeleteRun: (run: BenchmarkRunSummary) => void;
@@ -93,11 +163,14 @@ function RunRow({
 	nested = false,
 	expander,
 	modelLabel,
+	modelName,
+	stats,
 	onToggleRun,
 	onRejudgeRun,
 	onDeleteRun,
 }: RunRowProps) {
 	const { t } = useTranslation();
+	const quant = benchmarkQuantTag(run.primaryModelName);
 	return (
 		<Table.Tr data-testid={`benchmark-run-row-${run.id}`}>
 			<Table.Td>
@@ -119,12 +192,30 @@ function RunRow({
 			<Table.Td pl={nested ? "xl" : undefined}>
 				<Stack gap={2} style={{ minWidth: 0 }}>
 					<Text size="sm" fw={500} truncate="end">
-						{run.primaryModelName}
+						{modelName ?? run.primaryModelName}
 					</Text>
-					<Text size="xs" c="dimmed">
-						{modelLabel ??
-							t(`pages.benchmarks.origin.${run.primaryModelOrigin ?? "legacy"}`, run.primaryModelOrigin ?? "Legacy / Unknown")}
-					</Text>
+					<Group gap={4} wrap="nowrap">
+						{/* The quant is what tells a group's rows apart once the header carries the base model — without it a
+						    grouped model's three quants would render as three identical-looking rows. */}
+						{quant ? (
+							<StatusBadge color="gray" label={quant} data-testid={`benchmark-run-quant-${run.id}`} />
+						) : null}
+						{run.repeatIndex === null ? null : (
+							<StatusBadge
+								color={run.isWarmup ? "orange" : "gray"}
+								label={
+									run.isWarmup
+										? t("pages.benchmarks.rank.warmupBadge", "warm-up")
+										: t("pages.benchmarks.rank.repeatBadge", "#{{index}}", { index: run.repeatIndex })
+								}
+								data-testid={`benchmark-run-repeat-${run.id}`}
+							/>
+						)}
+						<Text size="xs" c="dimmed" truncate="end">
+							{modelLabel ??
+								t(`pages.benchmarks.origin.${run.primaryModelOrigin ?? "legacy"}`, run.primaryModelOrigin ?? "Legacy / Unknown")}
+						</Text>
+					</Group>
 				</Stack>
 			</Table.Td>
 			<Table.Td>
@@ -137,7 +228,7 @@ function RunRow({
 				<Text size="sm">{run.userScore ?? "—"}</Text>
 			</Table.Td>
 			<Table.Td>
-				<Text size="sm">{run.tokensPerSecond?.toFixed(1) ?? "—"}</Text>
+				<ThroughputCell run={run} stats={stats} />
 			</Table.Td>
 			<Table.Td>
 				<Text size="sm">{formatDuration(run.durationMs)}</Text>
@@ -158,6 +249,7 @@ function RunRow({
 			<Table.Td>
 				<Group gap={4} wrap="nowrap">
 					<BenchmarkStatusBadge status={run.primaryStatus} />
+					{isBenchmarkRunTruncated(run) ? <BenchmarkTruncatedBadge testId={`benchmark-truncated-${run.id}`} /> : null}
 					<BenchmarkJudgeStateBadge state={run.judge.state} />
 				</Group>
 			</Table.Td>
@@ -214,6 +306,10 @@ export function BenchmarkRunsTable({
 	const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
 	const ordered = useMemo(() => sortBenchmarkRuns(runs), [runs]);
 	const groups = useMemo(() => (grouped ? groupBenchmarkRunsByModel(runs) : []), [grouped, runs]);
+	// Computed over EVERY run of the project, not per group: a cohort is (model, KV, launch identity), which is
+	// narrower than a group and never wider, so scoping it to the rendered group would only recompute the same thing.
+	const stats = useMemo(() => benchmarkRepeatStats(runs), [runs]);
+	const statsFor = (run: BenchmarkRunSummary): BenchmarkRepeatStats | undefined => stats.get(benchmarkRepeatCohortKey(run));
 	const rowProps = { isActionPending, onToggleRun, onRejudgeRun, onDeleteRun };
 
 	if (runs.length === 0) {
@@ -260,7 +356,7 @@ export function BenchmarkRunsTable({
 							<Table.Th>{t("pages.benchmarks.rank.quality", "Quality")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.judgeScore", "Judge")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.userScore", "Operator")}</Table.Th>
-							<Table.Th>{t("pages.benchmarks.metrics.speed", "tok/s")}</Table.Th>
+							<Table.Th>{t("pages.benchmarks.metrics.speedColumn", "tok/s (tg)")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.metrics.duration", "Duration")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.launch", "KV / context")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.created", "Created")}</Table.Th>
@@ -278,6 +374,8 @@ export function BenchmarkRunsTable({
 												{...rowProps}
 												run={group.leader}
 												selected={selectedRunIds.includes(group.leader.id)}
+												stats={statsFor(group.leader)}
+												modelName={benchmarkBaseModelLabel(group.leader.primaryModelName)}
 												modelLabel={t("pages.benchmarks.rank.groupCount", "{{count}} runs of this model", {
 													count: group.runs.length,
 												})}
@@ -309,6 +407,7 @@ export function BenchmarkRunsTable({
 																key={run.id}
 																run={run}
 																selected={selectedRunIds.includes(run.id)}
+																stats={statsFor(run)}
 																nested={true}
 															/>
 														))
@@ -317,7 +416,7 @@ export function BenchmarkRunsTable({
 									);
 								})
 							: ordered.map((run) => (
-									<RunRow {...rowProps} key={run.id} run={run} selected={selectedRunIds.includes(run.id)} />
+									<RunRow {...rowProps} key={run.id} run={run} selected={selectedRunIds.includes(run.id)} stats={statsFor(run)} />
 								))}
 					</Table.Tbody>
 				</Table>

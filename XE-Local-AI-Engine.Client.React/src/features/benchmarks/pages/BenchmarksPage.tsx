@@ -18,6 +18,7 @@ import {
 	IconFlask,
 	IconLock,
 	IconPlus,
+	IconLayoutGrid,
 	IconRefresh,
 	IconRocket,
 	IconScale,
@@ -34,10 +35,14 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
+import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
+import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
+import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
 import type { BenchmarkKvCacheType, BenchmarkProjectDraft, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkErrorCode,
@@ -45,6 +50,7 @@ import {
 	isUnsupportedKvCacheTypeError,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
+import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
@@ -56,6 +62,7 @@ import {
 	useRejudgeBenchmarkProject,
 	useRejudgeBenchmarkRun,
 	useStartBenchmarkRun,
+	useStartBenchmarkRunBatch,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
@@ -64,6 +71,8 @@ const emptyProject: BenchmarkProjectDraft = {
 	name: "",
 	coreTask: "",
 	contextTokens: 4096,
+	maxOutputTokens: null,
+	invocationTimeoutSeconds: null,
 	agentDefinitionId: "",
 	judgeEnabled: false,
 	judgeModelName: null,
@@ -94,6 +103,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
 	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+	const [matrixOpen, setMatrixOpen] = useState(false);
+	const [matrixRejections, setMatrixRejections] = useState<BenchmarkBatchRejection[]>([]);
 	const projectQuery = useBenchmarkProject(selectedProjectId);
 	const runsQuery = useBenchmarkRuns(selectedProjectId);
 	const modelsQuery = useEligibleBenchmarkModels(projectQuery.data?.contextTokens);
@@ -107,6 +118,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const rejudgeRun = useRejudgeBenchmarkRun();
 	const deleteRun = useDeleteBenchmarkRun();
 	const startRun = useStartBenchmarkRun();
+	const startBatch = useStartBenchmarkRunBatch();
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
 
 	useEffect(() => {
@@ -158,6 +170,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						name: detail.name,
 						coreTask: detail.coreTask,
 						contextTokens: detail.contextTokens,
+						maxOutputTokens: detail.maxOutputTokens,
+						invocationTimeoutSeconds: detail.invocationTimeoutSeconds,
 						agentDefinitionId: detail.agentDefinitionId,
 						judgeEnabled: detail.judge.enabled,
 						judgeModelName: detail.judge.modelName,
@@ -171,6 +185,19 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const editorDraft = editorMode === "edit" ? editDraft : emptyProject;
 	const judgeAttemptsActive = hasActiveJudgeAttempt(runs);
 	const affectedRunCount = succeededRunCount(runs);
+	// A judge from the same base family as the models it scores may prefer them. Advisory only, and dismissible per
+	// project rather than by a boolean flag, so switching projects surfaces the next project's overlap again.
+	const [familyWarningDismissedFor, setFamilyWarningDismissedFor] = useState<string | null>(null);
+	const judgeFamilyOverlap = useMemo(
+		() =>
+			detail?.judge.enabled === true
+				? benchmarkJudgeFamilyOverlap(
+						detail.judge.modelName,
+						runs.map((run) => run.primaryModelName),
+					)
+				: null,
+		[detail, runs],
+	);
 
 	// A judge change on a frozen project is refused until the operator confirms the re-judge it implies, and while any
 	// judging of the project is still running. Both come back as ProblemDetails 409s with their own code.
@@ -292,6 +319,28 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			},
 		);
 	};
+	// One request for the whole matrix. The node answers per cell, so a refused combination is reported in the dialog
+	// beside the ones that started rather than failing everything the operator picked.
+	const startMatrix = (selection: BenchmarkMatrixSelection): void => {
+		if (!detail) {
+			return;
+		}
+		startBatch.mutate(
+			{ projectId: detail.id, expectedProjectVersion: detail.version, ...selection },
+			{
+				onSuccess: (result) => {
+					setMatrixRejections(result.rejected);
+					if (result.startedRunIds[0]) {
+						selectRun(result.startedRunIds[0]);
+					}
+					if (result.rejected.length === 0) {
+						setMatrixOpen(false);
+					}
+				},
+				onError: (error) => toast.error(startRunErrorMessage(error)),
+			},
+		);
+	};
 	const removeRun = (run: BenchmarkRunSummary): void => {
 		deleteRun.mutate(run, {
 			onError: (error) =>
@@ -387,6 +436,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										<Text c="dimmed">{detail.coreTask}</Text>
 									</Stack>
 									<Group gap="xs">
+										<BenchmarkExportButtons projectId={detail.id} />
 										{detail.judge.enabled ? (
 											<Button
 												variant="default"
@@ -409,6 +459,47 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t(
 											"pages.benchmarks.project.frozenExplanation",
 											"This project is frozen while runs exist. Delete its terminal runs to edit it again.",
+										)}
+									</Alert>
+								) : null}
+								{detail.judge.enabled && detail.judge.promptVersionOutdated ? (
+									<Alert
+										color="yellow"
+										icon={<IconAlertTriangle size={16} />}
+										data-testid="benchmark-judge-prompt-outdated"
+									>
+										<Group justify="space-between" align="center" wrap="nowrap">
+											<Text size="sm">
+												{t(
+													"pages.benchmarks.judge.promptVersionOutdated",
+													"Judge prompt version outdated — re-save the judge to upgrade (forces re-judge).",
+												)}
+											</Text>
+											<Button
+												variant="default"
+												size="xs"
+												leftSection={<IconSettings size={14} />}
+												onClick={() => setEditorMode("edit")}
+												data-testid="benchmark-judge-prompt-outdated-edit"
+											>
+												{t("pages.benchmarks.project.editJudge", "Edit judge")}
+											</Button>
+										</Group>
+									</Alert>
+								) : null}
+								{judgeFamilyOverlap && familyWarningDismissedFor !== detail.id ? (
+									<Alert
+										color="yellow"
+										icon={<IconAlertTriangle size={16} />}
+										withCloseButton={true}
+										closeButtonLabel={t("common.close", "Close")}
+										onClose={() => setFamilyWarningDismissedFor(detail.id)}
+										data-testid="benchmark-judge-family-warning"
+									>
+										{t(
+											"pages.benchmarks.judge.familyWarning",
+											"Judge model family '{{family}}' matches {{matches}} primary run(s); self-preference bias possible.",
+											{ family: judgeFamilyOverlap.family, matches: judgeFamilyOverlap.matchCount },
 										)}
 									</Alert>
 								) : null}
@@ -461,6 +552,17 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										}
 									>
 										{t("pages.benchmarks.run.start", "Start run")}
+									</Button>
+									<Button
+										variant="default"
+										leftSection={<IconLayoutGrid size={16} />}
+										onClick={() => {
+											setMatrixRejections([]);
+											setMatrixOpen(true);
+										}}
+										data-testid="benchmark-open-matrix"
+									>
+										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
 							</Stack>
@@ -521,6 +623,22 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					isSaving={createProject.isPending || updateProject.isPending || updateJudge.isPending}
 					onSubmit={saveProject}
 					onCancel={() => setEditorMode(null)}
+				/>
+			</DialogShell>
+
+			<DialogShell
+				opened={matrixOpen && detail !== undefined}
+				onClose={() => setMatrixOpen(false)}
+				title={t("pages.benchmarks.matrix.title", "Batch benchmark runs")}
+				size="lg"
+				data-testid="benchmark-matrix-dialog"
+			>
+				<BenchmarkLaunchMatrix
+					models={modelsQuery.data ?? []}
+					rejected={matrixRejections}
+					isSubmitting={startBatch.isPending}
+					onSubmit={startMatrix}
+					onCancel={() => setMatrixOpen(false)}
 				/>
 			</DialogShell>
 

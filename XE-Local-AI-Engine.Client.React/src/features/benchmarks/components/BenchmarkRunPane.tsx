@@ -6,9 +6,10 @@ import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJ
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
-import { BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import { BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
+import { isBenchmarkRunTruncated, isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
+import { formatLatencyMs, formatTokensPerSecond, hasThroughputBreakdown } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 
 interface BenchmarkRunPaneProps {
@@ -25,6 +26,57 @@ interface BenchmarkRunPaneProps {
 	onClearScore: () => void;
 	onRejudge: () => void;
 	onDelete: () => void;
+}
+
+// The split behind the single tok/s figure above. Rendered only when the runtime actually reported it — a cloud run has
+// no prefill/decode timings, and a row of dashes would read as a measurement of zero rather than as no measurement.
+function ThroughputBreakdown({ run }: { run: BenchmarkRunDetail }) {
+	const { t } = useTranslation();
+	const { ttftMs, promptTokens, promptTokensPerSecond, generationTokens, generationTokensPerSecond, cachedPromptTokens, segmentCount } =
+		run.throughput;
+	if (!hasThroughputBreakdown(run.throughput)) {
+		return null;
+	}
+	const rows: { key: string; label: string; value: string }[] = [
+		{ key: "ttft", label: t("pages.benchmarks.metrics.ttft", "Time to first token"), value: formatLatencyMs(ttftMs) },
+		{
+			key: "pp",
+			label: t("pages.benchmarks.metrics.pp", "Prompt processing (pp)"),
+			value: `${formatTokensPerSecond(promptTokensPerSecond)}${promptTokens === null ? "" : ` · ${promptTokens} tok`}`,
+		},
+		{
+			key: "tg",
+			label: t("pages.benchmarks.metrics.tg", "Generation (tg)"),
+			value: `${formatTokensPerSecond(generationTokensPerSecond)}${generationTokens === null ? "" : ` · ${generationTokens} tok`}`,
+		},
+	];
+	return (
+		<Stack gap={2} data-testid="benchmark-throughput-breakdown">
+			<Group gap="lg">
+				{rows.map((row) => (
+					<Text key={row.key} size="sm" data-testid={`benchmark-throughput-${row.key}`}>
+						{row.label}: <b>{row.value}</b>
+					</Text>
+				))}
+			</Group>
+			{segmentCount !== null && segmentCount > 1 ? (
+				<Text size="xs" c="dimmed" data-testid="benchmark-throughput-segments">
+					{t("pages.benchmarks.metrics.segments", "Summed over {{count}} model requests — the agent called tools, and every round prefilled again.", {
+						count: segmentCount,
+					})}
+				</Text>
+			) : null}
+			{cachedPromptTokens !== null && cachedPromptTokens > 0 ? (
+				<Text size="xs" c="dimmed" data-testid="benchmark-throughput-cached">
+					{t(
+						"pages.benchmarks.metrics.cached",
+						"{{tokens}} prompt tokens were reused from the KV cache — the prompt speed is not a cold prefill.",
+						{ tokens: cachedPromptTokens },
+					)}
+				</Text>
+			) : null}
+		</Stack>
+	);
 }
 
 function formatDuration(durationMs: number | null): string {
@@ -48,6 +100,7 @@ export function BenchmarkRunPane({
 }: BenchmarkRunPaneProps) {
 	const { t } = useTranslation();
 	const active = isPrimaryActive(run.primaryStatus);
+	const truncated = isBenchmarkRunTruncated(run);
 	const messageParts = toChatMessageParts(parts);
 	return (
 		<Card withBorder={true} radius="md" padding="lg" data-testid={`benchmark-run-${run.id}`}>
@@ -59,7 +112,10 @@ export function BenchmarkRunPane({
 							{t(`pages.benchmarks.origin.${run.primaryModelOrigin ?? "legacy"}`, run.primaryModelOrigin ?? "Legacy / Unknown")}
 						</Text>
 					</Stack>
-					<BenchmarkStatusBadge status={run.primaryStatus} />
+					<Group gap="xs">
+						<BenchmarkStatusBadge status={run.primaryStatus} />
+						{truncated ? <BenchmarkTruncatedBadge /> : null}
+					</Group>
 				</Group>
 				<BenchmarkLaunchBadges launch={run.primaryLaunch} data-testid="benchmark-run-launch" />
 				<Group gap="lg">
@@ -76,6 +132,7 @@ export function BenchmarkRunPane({
 						{t("pages.benchmarks.rank.quality", "Quality")}: <b>{run.qualityScore ?? "—"}</b>
 					</Text>
 				</Group>
+				<ThroughputBreakdown run={run} />
 				<Group gap="xs" c={isConnected ? "green" : "dimmed"}>
 					{isConnected ? <IconPlugConnected size={16} /> : <IconPlugConnectedX size={16} />}
 					<Text size="xs">
@@ -119,6 +176,11 @@ export function BenchmarkRunPane({
 				/>
 				<BenchmarkJudgePanel
 					judge={run.judge}
+					primaryTruncated={truncated}
+					// The DECODED token count, not run.totalTokens — that one is prompt + output + reasoning, so a long
+					// question would inflate the answer length the judge is counterweighted against. Null on a run whose
+					// runtime reported no timings, which renders nothing rather than an overstated number.
+					outputTokens={run.throughput.generationTokens}
 					canRejudge={run.primaryStatus === "Succeeded"}
 					isBusy={isJudgeBusy}
 					onCancel={() => onCancel("Judge")}

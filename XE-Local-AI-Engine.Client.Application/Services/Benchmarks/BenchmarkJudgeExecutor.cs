@@ -31,11 +31,19 @@ public sealed class BenchmarkJudgeExecutor(
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
+    BenchmarkAdmissionRetry admissionRetry,
     ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
     private const string CapacityRejectedMessage = "The judge could not reserve enough local model capacity.";
     private const string InvocationFailedMessage = "The benchmark judge invocation failed. See local logs for details.";
+
+    /// <summary>
+    ///     Refusal for a revision this build no longer judges under. Names the fix, because the operator's only route
+    ///     out is re-saving the judge — which mints a new revision under the current versions and re-judges.
+    /// </summary>
+    internal const string OutdatedPolicyVersionMessage =
+        "The judge policy was stored under an older judge version. Re-save the judge to upgrade it (this forces a re-judge).";
 
     /// <summary>
     ///     The judge turn's constrained-decoding schema, parsed once. Cloned out of its document because a
@@ -76,6 +84,16 @@ public sealed class BenchmarkJudgeExecutor(
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
+
+            // Fail closed on a revision this build no longer judges under. READS are deliberately tolerant of an
+            // outdated version so the project stays open and re-savable; EXECUTION is not. Judging under the current
+            // prompt while the revision promises an older one would file the verdict in the same cohort as verdicts
+            // taken under the old wording — exactly what the version exists to prevent.
+            if (!BenchmarkJudgePolicyValidator.VersionsAreCurrent(policy))
+            {
+                throw new BenchmarkExecutionException(OutdatedPolicyVersionMessage);
+            }
+
             var runtime = attempt.JudgeRuntimeJson is { } runtimeJson
                 ? BenchmarkJudgeSerialization.DeserializeRuntime(runtimeJson.Span)
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
@@ -98,29 +116,31 @@ public sealed class BenchmarkJudgeExecutor(
             // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒
             // f16), not the project's request.
             // No launch admission — see BenchmarkRunExecutor: the judge spawns its own process from frozen arguments.
-            var decision = await capacity.DecideAsync(new CapacityRequest(runtime.Model.ModelName,
-                                             ModelRole.Chat,
-                                             runtime.Runtime.ContextTokens,
-                                             PublishLaunchAdmission: false,
-                                             runtime.Runtime.KvTypeK), token)
-                                         .ConfigureAwait(false);
-            logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
-                                  + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
-                work.RunId,
-                "judge",
-                runtime.Model.ModelName,
-                runtime.RequestedContextTokens,
-                runtime.Runtime.ContextTokens,
-                runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                decision.Verdict,
-                decision.Reason);
-            if (decision.Verdict == CapacityVerdict.RejectInsufficient)
-            {
-                throw new BenchmarkExecutionException(CapacityRejectedMessage);
-            }
+            // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — and the judge is
+            // dequeued by the SAME FIFO consumer that just ran the primary, so it routinely arrives while the primary's
+            // llama-server is still handing its VRAM back. Wait and re-decide instead of terminalizing the attempt.
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+                                     new CapacityRequest(runtime.Model.ModelName,
+                                         ModelRole.Chat,
+                                         runtime.Runtime.ContextTokens,
+                                         PublishLaunchAdmission: false,
+                                         runtime.Runtime.KvTypeK),
+                                     new BenchmarkAdmissionContext(work.RunId,
+                                         "judge",
+                                         runtime.RequestedContextTokens,
+                                         runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                         CapacityRejectedMessage),
+                                     admissionRetry,
+                                     logger,
+                                     token)
+                                 .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
-            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span);
+            // Truncation is read through the shared predicate, not a local copy: the judging still runs — a truncated
+            // answer is a real answer that scored badly, not an absent one — but both the payload and the system prompt
+            // say so, and ranking must exclude exactly the runs the judge was told about.
+            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span,
+                BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason));
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
@@ -207,7 +227,8 @@ public sealed class BenchmarkJudgeExecutor(
     private RuntimePackage BuildJudgePackage(BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgePolicyV1 policy,
         BenchmarkJudgeRuntimeV1 runtime,
-        ReadOnlySpan<byte> outputParts)
+        ReadOnlySpan<byte> outputParts,
+        bool primaryOutputTruncated)
     {
         // What the judge grades: the stored transcript reduced to its visible answer (see BenchmarkOutputParts.ForJudge)
         // and bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
@@ -217,10 +238,11 @@ public sealed class BenchmarkJudgeExecutor(
             policy.ReferenceAnswer,
             policy.Rubric,
             Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts(graded)),
-            BenchmarkJudgeOutputSchemaV2.Json);
+            BenchmarkJudgeOutputSchemaV2.Json,
+            primaryOutputTruncated);
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
-            BenchmarkJudgePromptV2.SystemPrompt,
+            BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated),
             [
                 new ConversationMessageDto
                 {

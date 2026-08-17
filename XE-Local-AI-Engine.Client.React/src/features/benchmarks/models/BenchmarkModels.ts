@@ -33,6 +33,8 @@ export const benchmarkRankExclusionReasons = [
 	"generation-stale",
 	"execution-key-mismatch",
 	"execution-identity-incomplete",
+	"truncated",
+	"warmup",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
 export const toBenchmarkRankExclusionReason = (value: unknown): BenchmarkRankExclusionReason | null =>
@@ -91,12 +93,21 @@ export interface BenchmarkJudgePolicy {
 	referenceAnswer: string | null;
 	cohortGeneration: number | null;
 	referenceExecutionKey: string | null;
+	/**
+	 * True when the stored revision carries a judge prompt version this build no longer judges under. The project
+	 * still reads and existing scores stay ranked; new judgings refuse until the operator re-saves the judge.
+	 */
+	promptVersionOutdated: boolean;
 }
 
 export interface BenchmarkProjectSummary {
 	id: string;
 	name: string;
 	contextTokens: number;
+	/** Per-run output-token budget (`n_predict`), or null when generation is only limited by the context window. */
+	maxOutputTokens: number | null;
+	/** Seconds one run's generation may take before the node cancels it, or null for the node default (900). */
+	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
 	runCount: number;
@@ -116,6 +127,8 @@ export interface BenchmarkProjectDraft {
 	name: string;
 	coreTask: string;
 	contextTokens: number;
+	maxOutputTokens: number | null;
+	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
 	judgeModelName: string | null;
@@ -265,14 +278,60 @@ export const noBenchmarkLaunchFacts: BenchmarkLaunchFacts = {
  */
 export type BenchmarkEvidenceObject = Readonly<Record<string, unknown>>;
 
+/**
+ * The separated throughput facts of one run. `tg` is DECODE speed and `pp` is PREFILL speed; the node measures and
+ * reports them apart because the single blended figure they replaced conflated the two, making the same model's runs on
+ * a long and a short prompt incomparable. Every member is null for a runtime that reports no per-request timings (every
+ * cloud provider) and for runs measured before the node recorded them. Display only — never a ranking input.
+ */
+export interface BenchmarkRunThroughput {
+	/** Milliseconds the caller waited for the first token, measured client-side (network and adapter overhead included). */
+	ttftMs: number | null;
+	/** Prompt tokens the runtime evaluated, cached ones included. */
+	promptTokens: number | null;
+	/** Prompt-processing throughput (pp). */
+	promptTokensPerSecond: number | null;
+	/** Tokens the runtime decoded. */
+	generationTokens: number | null;
+	/** Decode throughput (tg). Equal to {@link BenchmarkRunSummary.tokensPerSecond} whenever the split exists. */
+	generationTokensPerSecond: number | null;
+	/**
+	 * Prompt tokens served from the prompt cache across ALL of the turn's requests. Above zero means the pp numbers
+	 * describe a partially cached prefill — expected once tools are called, since each round re-sends the conversation.
+	 */
+	cachedPromptTokens: number | null;
+	/** How many provider requests the turn made. Above 1 means the sums span a tool-calling loop. */
+	segmentCount: number | null;
+}
+
+export const noBenchmarkRunThroughput: BenchmarkRunThroughput = {
+	ttftMs: null,
+	promptTokens: null,
+	promptTokensPerSecond: null,
+	generationTokens: null,
+	generationTokensPerSecond: null,
+	cachedPromptTokens: null,
+	segmentCount: null,
+};
+
 export interface BenchmarkRunSummary {
 	id: string;
 	projectId: string;
 	primaryModelName: string;
 	primaryModelOrigin: BenchmarkOrigin;
 	modelContentFingerprint: string;
-	/** Groups the same model's runs together in the "group by model" view. */
+	/**
+	 * The BASE model this run is a build of — the repo id or imported name with the quant tag stripped. Every quant of
+	 * one model shares it, so a group is one model and its rows are that model's quants. Use
+	 * {@link BenchmarkRunSummary.modelContentFingerprint} when you mean the exact build.
+	 */
 	modelGroupKey: string;
+	/** The repeat group this run belongs to, or null for a plain single run. */
+	repeatGroupId: string | null;
+	/** Position in the group: 0 is the warm-up (when one was requested), measured repeats are 1..N. */
+	repeatIndex: number | null;
+	/** A warm-up run: shown, but never ranked and never counted in a group's statistics. */
+	isWarmup: boolean;
 	agentName: string;
 	agentVersion: number;
 	requestedContextTokens: number;
@@ -283,10 +342,18 @@ export interface BenchmarkRunSummary {
 	qualityScoreSource: BenchmarkQualityScoreSource;
 	rank: number | null;
 	rankExclusionReason: BenchmarkRankExclusionReason | null;
+	/**
+	 * Why the model stopped generating, verbatim from the node (`stop`, `length`, `tool_calls`, `content_filter`), or
+	 * null when the provider reported none. Kept as a free string on purpose: an unrecognized token is shown, not
+	 * swallowed. `length` is the one the UI reasons about — see {@link isBenchmarkRunTruncated}.
+	 */
+	primaryStopReason: string | null;
 	effectiveContextTokens: number | null;
 	durationMs: number | null;
 	totalTokens: number | null;
+	/** Decode throughput (tg) when the runtime timed prefill and decode apart, otherwise the blended fallback. */
 	tokensPerSecond: number | null;
+	throughput: BenchmarkRunThroughput;
 	userScore: number | null;
 	lastStreamSequence: number;
 	version: number;
@@ -335,6 +402,13 @@ export const benchmarkRunEventSchema = z.object({
 		totalTokens: z.number().int().nullish(),
 		tokensPerSecond: z.number().nullish(),
 		runVersion: z.number().int().nullish(),
+		ttftMs: z.number().nullish(),
+		promptTokens: z.number().int().nullish(),
+		promptTokensPerSecond: z.number().nullish(),
+		generationTokens: z.number().int().nullish(),
+		generationTokensPerSecond: z.number().nullish(),
+		cachedPromptTokens: z.number().int().nullish(),
+		segmentCount: z.number().int().nullish(),
 	}),
 });
 export type BenchmarkRunEvent = z.infer<typeof benchmarkRunEventSchema>;
@@ -357,6 +431,8 @@ export interface BenchmarkRunLiveOverlay {
 	durationMs: number | null;
 	totalTokens: number | null;
 	tokensPerSecond: number | null;
+	/** Null until a `Metrics` event has arrived; the durable snapshot's own breakdown stays authoritative until then. */
+	throughput: BenchmarkRunThroughput | null;
 }
 
 export const noBenchmarkRunLiveOverlay: BenchmarkRunLiveOverlay = {
@@ -365,6 +441,7 @@ export const noBenchmarkRunLiveOverlay: BenchmarkRunLiveOverlay = {
 	durationMs: null,
 	totalTokens: null,
 	tokensPerSecond: null,
+	throughput: null,
 };
 
 /** Applies the streamed corrections on top of the durable snapshot. Absent members leave the snapshot untouched. */
@@ -376,6 +453,7 @@ export function applyBenchmarkLiveOverlay<T extends BenchmarkRunSummary>(run: T,
 		durationMs: overlay.durationMs ?? run.durationMs,
 		totalTokens: overlay.totalTokens ?? run.totalTokens,
 		tokensPerSecond: overlay.tokensPerSecond ?? run.tokensPerSecond,
+		throughput: overlay.throughput ?? run.throughput,
 	};
 }
 
@@ -390,6 +468,15 @@ export function benchmarkLiveOverlayPatch(event: BenchmarkRunEvent): Partial<Ben
 			durationMs: event.payload.durationMs ?? null,
 			totalTokens: event.payload.totalTokens ?? null,
 			tokensPerSecond: event.payload.tokensPerSecond ?? null,
+			throughput: {
+				ttftMs: event.payload.ttftMs ?? null,
+				promptTokens: event.payload.promptTokens ?? null,
+				promptTokensPerSecond: event.payload.promptTokensPerSecond ?? null,
+				generationTokens: event.payload.generationTokens ?? null,
+				generationTokensPerSecond: event.payload.generationTokensPerSecond ?? null,
+				cachedPromptTokens: event.payload.cachedPromptTokens ?? null,
+				segmentCount: event.payload.segmentCount ?? null,
+			},
 		};
 	}
 	return null;
@@ -498,6 +585,33 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 		}
 	}
 	return rendered.sort((left, right) => left.sequence - right.sequence);
+}
+
+/**
+ * The answer was cut off by the token budget or the context ceiling. The run still SUCCEEDED — the measurement is real —
+ * so this is the only signal that separates a finished answer from a fragment, and it is what keeps a truncated run out
+ * of the ranked cohort.
+ */
+/** Mirrors the node's `BenchmarkFrozenPolicies` so the form refuses what the node would reject anyway. */
+export const benchmarkInvocationTimeoutLimits = { min: 60, max: 7200, default: 900 } as const;
+
+export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
+	run.primaryStopReason?.toLowerCase() === "length";
+
+/**
+ * The base model a row belongs to, for DISPLAY. The server key is lowercased for Hugging Face models so two casings of
+ * one repo cannot split a group; this keeps the operator's own capitalisation for the header by deriving it from the
+ * run's name instead. Grouping still keys off {@link BenchmarkRunSummary.modelGroupKey} — never off this.
+ */
+export function benchmarkBaseModelLabel(modelName: string): string {
+	const separator = modelName.lastIndexOf(":");
+	return separator <= 0 || separator === modelName.length - 1 ? modelName : modelName.slice(0, separator);
+}
+
+/** The quant tag an operator picked, which rides on the model name after the last colon. Empty when it carries none. */
+export function benchmarkQuantTag(modelName: string): string {
+	const separator = modelName.lastIndexOf(":");
+	return separator < 0 || separator === modelName.length - 1 ? "" : modelName.slice(separator + 1);
 }
 
 export const isPrimaryActive = (status: BenchmarkPrimaryStatus): boolean =>

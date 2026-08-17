@@ -75,6 +75,8 @@ const draft: BenchmarkProjectDraft = {
 	name: "Summarisation",
 	coreTask: "Summarise the attached text.",
 	contextTokens: 4096,
+	maxOutputTokens: null,
+	invocationTimeoutSeconds: null,
 	agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
 	judgeEnabled: false,
 	judgeModelName: null,

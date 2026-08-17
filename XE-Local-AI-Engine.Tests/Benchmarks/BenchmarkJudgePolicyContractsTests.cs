@@ -179,7 +179,9 @@ public sealed class BenchmarkJudgePolicyContractsTests
         AssertEx.False(canonical.Contains('\n', StringComparison.Ordinal));
         AssertEx.Contains(canonical, "\"referenceAnswer\":null");
         AssertEx.Contains(canonical, "\"requestedContextTokens\":4096");
-        AssertEx.Contains(canonical, "\"promptVersion\":2");
+        // Against the constant, not a literal: the prompt version moves whenever the judge's system prompt is reworded,
+        // and this assertion is about the canonical SHAPE, not about which version is current.
+        AssertEx.Contains(canonical, $"\"promptVersion\":{BenchmarkJudgePolicyVersions.PromptVersion}");
         using var document = JsonDocument.Parse(canonical);
         AssertEx.True(document.RootElement.EnumerateObject().Select(static property => property.Name)
                               .SequenceEqual(["model", "requestedContextTokens", "promptVersion", "outputSchemaVersion", "sampling", "rubric", "referenceAnswer"], StringComparer.Ordinal));
@@ -320,6 +322,47 @@ public sealed class BenchmarkJudgePolicyContractsTests
 
     internal static BenchmarkJudgePolicyModelV1 Model() =>
         new("judge-model", $"v1:{new string('a', 64)}", ["aaa", "bbb"]);
+
+    [Test]
+    public void Validate_OnRead_AcceptsAnOlderStoredVersionButStillChecksStructure()
+    {
+        // The read path must never be able to reject a row this build could have written. When it could, bumping
+        // PromptVersion made GET benchmarks/projects/{id} throw, the whole project header vanished from the UI, and it
+        // took the re-save control that heals the revision with it.
+        var stored = Policy(BenchmarkJudgeRubricDefaults.Default()) with
+        {
+            PromptVersion = BenchmarkJudgePolicyVersions.PromptVersion - 1
+        };
+
+        BenchmarkJudgePolicyValidator.Validate(stored, strictVersions: false);
+        var written = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(stored));
+        var structural = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+            BenchmarkJudgePolicyValidator.Validate(stored with
+            {
+                RequestedContextTokens = 0
+            }, strictVersions: false));
+
+        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported, written.Code, "Writing one is still refused.");
+        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.ContextTokensInvalid, structural.Code,
+            "Structure is still enforced on read; only the version gate is relaxed.");
+        AssertEx.False(BenchmarkJudgePolicyValidator.VersionsAreCurrent(stored), "An older prompt version is not current.");
+        AssertEx.True(BenchmarkJudgePolicyValidator.VersionsAreCurrent(Policy(BenchmarkJudgeRubricDefaults.Default())));
+    }
+
+    [Test]
+    public void DeserializePolicy_ForAStoredOlderPromptVersion_RoundTripsItVerbatim()
+    {
+        // Read back verbatim, not silently upgraded: the stored bytes must still re-hash to the stored PolicyHash, and
+        // the version is what tells the executor to refuse and the UI to offer the re-save.
+        var stored = Policy(BenchmarkJudgeRubricDefaults.Default()) with
+        {
+            PromptVersion = BenchmarkJudgePolicyVersions.PromptVersion - 1
+        };
+
+        var read = BenchmarkJudgeSerialization.DeserializePolicy(BenchmarkJudgeSerialization.SerializePolicy(stored));
+
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.PromptVersion - 1, read.PromptVersion);
+    }
 
     internal static BenchmarkJudgeRubricCriterionV1 Criterion(string id, int weight = 10) =>
         new(id, $"Title {id}", $"Description {id}. 0 = poor; 5 = partial; 10 = excellent.", weight);

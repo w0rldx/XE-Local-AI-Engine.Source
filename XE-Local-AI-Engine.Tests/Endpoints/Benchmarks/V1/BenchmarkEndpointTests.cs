@@ -26,6 +26,7 @@ public sealed class BenchmarkEndpointTests
     [Arguments("DELETE", "/projects/00000000-0000-0000-0000-000000000001")]
     [Arguments("GET", "/projects/00000000-0000-0000-0000-000000000001/runs")]
     [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/runs")]
+    [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/runs/batch")]
     [Arguments("GET", "/runs/00000000-0000-0000-0000-000000000002")]
     [Arguments("DELETE", "/runs/00000000-0000-0000-0000-000000000002")]
     [Arguments("POST", "/runs/00000000-0000-0000-0000-000000000002/cancel")]
@@ -89,6 +90,58 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetRun_ForAMeasuredRun_ServesTheThroughputSplitWithBothRatesDerived()
+    {
+        // The rates are NOT persisted — they are derived here from the tokens and milliseconds the runtime reported, so
+        // a stored rate can never drift out of step with the counts it was computed from. pp is 123 tokens over
+        // 456.5 ms and tg is 89 over 1011.5 ms; a single blended figure could produce neither.
+        await using var context = CreateContext();
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
+                   throughput: new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
+                       GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 2)));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var run = document.RootElement;
+        AssertEx.Equal(180.25, run.GetProperty("ttftMs").GetDouble());
+        AssertEx.Equal(123, run.GetProperty("promptTokens").GetInt32());
+        AssertEx.Equal(89, run.GetProperty("generationTokens").GetInt32());
+        AssertEx.Equal(7, run.GetProperty("cachedPromptTokens").GetInt32());
+        AssertEx.Equal(2, run.GetProperty("segmentCount").GetInt32());
+        AssertEx.Equal(123 * 1000d / 456.5, run.GetProperty("promptTokensPerSecond").GetDouble());
+        AssertEx.Equal(89 * 1000d / 1011.5, run.GetProperty("generationTokensPerSecond").GetDouble());
+    }
+
+    [Test]
+    public async Task GetRun_ForAnUnmeasuredRun_LeavesEveryThroughputFieldNull()
+    {
+        // A runtime that reports no timings must not be given a zero: the API says "not measured", and the UI shows a
+        // dash rather than a number nobody produced.
+        await using var context = CreateContext();
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(BenchmarkPrimaryStatus.Succeeded));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        foreach (var field in new[]
+                 {
+                     "ttftMs", "promptTokens", "promptTokensPerSecond", "generationTokens", "generationTokensPerSecond", "cachedPromptTokens",
+                     "segmentCount"
+                 })
+        {
+            AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty(field).ValueKind, $"{field} must be null when nothing measured it.");
+        }
+    }
+
+    [Test]
     public async Task GetRun_ForASucceededJudge_ReturnsTheStoredVerdictOfTheAttempt()
     {
         // Round-tripped through the REAL writer: the stored blob is camelCase, and a reader using default options bound
@@ -126,7 +179,7 @@ public sealed class BenchmarkEndpointTests
     public async Task StartRun_ReturnsAcceptedWithSafeRunDetail()
     {
         await using var context = CreateContext();
-        context.RunFreeze.StartAsync(ProjectId, "model", 4, null, Arg.Any<CancellationToken>()).Returns(Run());
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, null, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
             new
@@ -143,10 +196,269 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task StartRun_WithRepeatsAndAWarmup_PassesThemToTheFreezeAndAnswersWithTheFirstRun()
+    {
+        await using var context = CreateContext();
+        var first = Run() with
+        {
+            RepeatGroupId = Guid.Parse("40000000-0000-0000-0000-000000000004"),
+            RepeatIndex = 0,
+            IsWarmup = true
+        };
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, null, 3, true, Arg.Any<CancellationToken>()).Returns(Runs(first, Run(), Run()));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4,
+                repeatCount = 3,
+                warmup = true
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("40000000-0000-0000-0000-000000000004", document.RootElement.GetProperty("repeatGroupId").GetString());
+        AssertEx.Equal(expected: 0, document.RootElement.GetProperty("repeatIndex").GetInt32());
+        AssertEx.True(document.RootElement.GetProperty("isWarmup").GetBoolean(),
+            "The answer is the FIRST run of the group — the one that actually starts.");
+    }
+
+    [Test]
+    public async Task StartRunBatch_EnqueuesEveryCellAndChainsTheProjectVersion()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model-a", 4, null, 2, false, Arg.Any<CancellationToken>()).Returns(Runs(Run(), Run()));
+        context.RunFreeze.StartAsync(ProjectId, "model-b", 6, BenchmarkKvCacheType.Q8_0, 2, false, Arg.Any<CancellationToken>())
+               .Returns(Runs(Run(), Run()));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                repeatCount = 2,
+                warmup = false,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "model-a",
+                        kvCacheType = (string?)null
+                    },
+                    new
+                    {
+                        modelName = "model-b",
+                        kvCacheType = (string?)"  Q8_0  "
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var started = document.RootElement.GetProperty("started");
+        AssertEx.Equal(expected: 2, started.GetArrayLength());
+        AssertEx.Equal(expected: 2, started[0].GetProperty("runIds").GetArrayLength());
+        AssertEx.Equal("q8_0", started[1].GetProperty("kvCacheType").GetString(), "The KV type is canonicalized per cell.");
+        AssertEx.Equal(expected: 0, document.RootElement.GetProperty("rejected").GetArrayLength());
+        AssertEx.Equal(expected: 8L, document.RootElement.GetProperty("projectVersion").GetInt64(),
+            "Four inserts off version 4 — what the NEXT batch has to present.");
+
+        // Each cell's two inserts bump the project version by two, so the SECOND cell must present version 6. Getting
+        // this wrong turns every batch past the first item into a version conflict.
+        _ = context.RunFreeze.Received(1).StartAsync(ProjectId, "model-b", 6, BenchmarkKvCacheType.Q8_0, 2, false, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WithOneIneligibleModel_StartsTheRestAndReportsThatCell()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "bad-model", 4, null, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkEligibilityException("The selected primary model is not eligible."));
+        context.RunFreeze.StartAsync(ProjectId, "good-model", 4, null, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "bad-model"
+                    },
+                    new
+                    {
+                        modelName = "good-model"
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // Per-item, not all-or-nothing: one ineligible model must not cost the operator the rest of the matrix. The
+        // refused cell did NOT consume a project version, so the next one still presents 4.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
+        AssertEx.Equal("good-model", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 1, rejected.GetArrayLength());
+        AssertEx.Equal("bad-model", rejected[0].GetProperty("modelName").GetString());
+        AssertEx.Equal(BenchmarkErrorCode.IneligibleModel.ToString(), rejected[0].GetProperty("code").GetString());
+        AssertEx.Equal("The selected primary model is not eligible.", rejected[0].GetProperty("message").GetString());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WhenTheProjectVersionMoved_FailsTheWholeBatch()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model-a", 4, null, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "model-a"
+                    },
+                    new
+                    {
+                        modelName = "model-b"
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // A stale version is a fact about the batch: every remaining cell would fail identically, so it is one 409
+        // rather than N identical rejections buried in a 200.
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.VersionConflict,
+            "The resource version changed. Refresh and retry.");
+        _ = context.RunFreeze.DidNotReceive().StartAsync(ProjectId, "model-b", Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<int>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WhenTheProjectVersionMovedAfterACellStarted_AnswersPartiallyAndKeepsTheStartedRunIds()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model-a", 4, null, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
+        context.RunFreeze.StartAsync(ProjectId, "model-b", 5, null, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "model-a"
+                    },
+                    new
+                    {
+                        modelName = "model-b"
+                    },
+                    new
+                    {
+                        modelName = "model-c"
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // Runs are already queued: a top-level 409 carries no body, so it would discard their ids — the operator could
+        // not find them and a retry would enqueue duplicates. The started cell survives, the conflicting cell and every
+        // cell after it are reported, and projectVersion is what the resubmission has to present.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
+        AssertEx.Equal("model-a", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
+        AssertEx.Equal(expected: 5L, document.RootElement.GetProperty("projectVersion").GetInt64());
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 2, rejected.GetArrayLength());
+        AssertEx.Equal("model-b", rejected[0].GetProperty("modelName").GetString());
+        AssertEx.Equal(BenchmarkErrorCode.VersionConflict.ToString(), rejected[0].GetProperty("code").GetString());
+        AssertEx.Equal("model-c", rejected[1].GetProperty("modelName").GetString());
+        AssertEx.Equal(BenchmarkErrorCode.NotAttempted.ToString(), rejected[1].GetProperty("code").GetString());
+        AssertEx.Contains(rejected[1].GetProperty("message").GetString() ?? string.Empty, "resubmit the remaining items",
+            StringComparison.Ordinal);
+
+        // The batch stops at the conflict rather than hammering the freeze with cells that would all fail the same way.
+        _ = context.RunFreeze.DidNotReceive().StartAsync(ProjectId, "model-c", Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<int>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WithABlankModelName_RejectsThatCellWithoutTouchingTheFreeze()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model-b", 4, null, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = new[]
+                {
+                    new
+                    {
+                        modelName = "   "
+                    },
+                    new
+                    {
+                        modelName = "model-b"
+                    }
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // A blank name used to reach the freeze and come back as an ArgumentException — a 500 for one operator typo in
+        // one cell. It is the same per-cell verdict an ineligible model gets, and the rest of the matrix still starts.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
+        AssertEx.Equal("model-b", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 1, rejected.GetArrayLength());
+        AssertEx.Equal(BenchmarkErrorCode.InvalidRequest.ToString(), rejected[0].GetProperty("code").GetString());
+        _ = context.RunFreeze.DidNotReceive().StartAsync(ProjectId, "   ", Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<int>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_WithNoItems_IsABadRequest()
+    {
+        await using var context = CreateContext();
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                items = Array.Empty<object>()
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(Guid.Empty, default!, default, default, default, default, default);
+    }
+
+    [Test]
     public async Task StartRun_CanonicalizesTheRequestedKvCacheTypeBeforeFreezing()
     {
         await using var context = CreateContext();
-        context.RunFreeze.StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, Arg.Any<CancellationToken>()).Returns(Run());
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, 1, false, Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
             new
@@ -158,7 +470,7 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        _ = context.RunFreeze.Received(1).StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, Arg.Any<CancellationToken>());
+        _ = context.RunFreeze.Received(1).StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, 1, false, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -177,15 +489,15 @@ public sealed class BenchmarkEndpointTests
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "The requested KV-cache type is not supported.");
-        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(Guid.Empty, default!, default, default, default);
+        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(Guid.Empty, default!, default, default, default, default, default);
     }
 
     [Test]
     public async Task StartRun_UnsupportedKvCacheType_IsUnprocessable()
     {
         await using var context = CreateContext();
-        context.RunFreeze.StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q4_0, Arg.Any<CancellationToken>())
-               .Returns<BenchmarkRunRecord>(_ => throw new BenchmarkUnsupportedKvCacheTypeException("A q4_0 KV cache needs a GPU llama.cpp build."));
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, BenchmarkKvCacheType.Q4_0, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkUnsupportedKvCacheTypeException("A q4_0 KV cache needs a GPU llama.cpp build."));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
             new
@@ -199,6 +511,31 @@ public sealed class BenchmarkEndpointTests
 
         AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
             "A q4_0 KV cache needs a GPU llama.cpp build.");
+    }
+
+    [Test]
+    public async Task StartRun_WhenTheModelCannotBeVerifiedAtFreeze_IsUnprocessableRatherThanAFailure()
+    {
+        // Verification moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry
+        // entry now lists happily and fails only here. The freeze service maps that store failure to an eligibility
+        // refusal, which is the 422 this route declares; unmapped it escaped as a 500, and inside a batch it killed
+        // every cell after it instead of rejecting one.
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(ProjectId, "model", 4, null, 1, false, Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ =>
+                   throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry."));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.IneligibleModel,
+            "The selected model could not be verified against its installed registry entry.");
     }
 
     [Test]
@@ -245,7 +582,8 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal("none", root.GetProperty("judge").GetProperty("state").GetString());
         AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judge").GetProperty("score").ValueKind);
         AssertEx.Equal("none", root.GetProperty("qualityScoreSource").GetString());
-        AssertEx.Equal("v1:aggregate", root.GetProperty("modelGroupKey").GetString());
+        AssertEx.Equal("model", root.GetProperty("modelGroupKey").GetString(),
+            "The group key is the base model, not the content fingerprint — quants of one model must land in one group.");
     }
 
     [Test]
@@ -266,6 +604,54 @@ public sealed class BenchmarkEndpointTests
                                 .GetProperty("responses");
 
         AssertEx.True(responses.TryGetProperty("202", out _), "The start-run operation must document its accepted response.");
+    }
+
+    [Test]
+    public async Task GetRun_ExposesTheStopReasonAndTheTruncatedRankExclusion()
+    {
+        await using var context = CreateContext();
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
+                   output: "[{\"kind\":\"output\",\"content\":\"cut\"}]",
+                   primaryStopReason: "length",
+                   rankExclusionReason: BenchmarkRunJudgeStates.ReasonTruncated));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("length", document.RootElement.GetProperty("primaryStopReason").GetString());
+        AssertEx.Equal("truncated", document.RootElement.GetProperty("rankExclusionReason").GetString());
+        AssertEx.Equal("Succeeded", document.RootElement.GetProperty("primaryStatus").GetString(),
+            "A truncated run is flagged, never failed.");
+    }
+
+    [Test]
+    public async Task GetProject_ExposesTheRunBudgetsAndTheMutationCarriesThemToTheDraft()
+    {
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(Project(isFrozen: false, maxOutputTokens: 2048, invocationTimeoutSeconds: 1800));
+        BenchmarkProjectDraft? draft = null;
+        context.Projects.CreateAsync(Arg.Do<BenchmarkProjectDraft>(value => draft = value), Arg.Any<CancellationToken>())
+               .Returns(Project(isFrozen: false, maxOutputTokens: 1024));
+        using var client = context.Factory.CreateClient();
+
+        using var getRequest = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        var getBody = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var createRequest = Authorized(context.Factory, HttpMethod.Post, Api + "/projects",
+            ProjectMutation(maxOutputTokens: 1024, invocationTimeoutSeconds: 1200));
+        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        using var document = JsonDocument.Parse(getBody);
+        AssertEx.Equal<int?>(2048, document.RootElement.GetProperty("maxOutputTokens").GetInt32());
+        AssertEx.Equal<int?>(1800, document.RootElement.GetProperty("invocationTimeoutSeconds").GetInt32());
+        AssertEx.Equal<int?>(1024, AssertEx.NotNull(draft).MaxOutputTokens, "The request's budget must reach the service draft.");
+        AssertEx.Equal<int?>(1200, draft!.InvocationTimeoutSeconds, "The request's generation timeout must reach the service draft.");
     }
 
     [Test]
@@ -312,6 +698,58 @@ public sealed class BenchmarkEndpointTests
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "Score must be between 1 and 5.");
+    }
+
+    [Test]
+    public async Task GetProject_WithAJudgePolicyStoredUnderAnOlderPromptVersion_StillReadsAndFlagsIt()
+    {
+        // The read path must tolerate a stored version this build no longer judges under. When it did not, the project
+        // detail 500'd, the whole header disappeared from the UI ("Select a benchmark project"), and the re-save that
+        // heals the revision became unreachable.
+        await using var context = CreateContext();
+        ArrangeOutdatedJudgePolicy(context);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var judge = document.RootElement.GetProperty("judge");
+        AssertEx.True(judge.GetProperty("enabled").GetBoolean(), "An outdated prompt version does not disable the judge.");
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.PromptVersion - 1, judge.GetProperty("promptVersion").GetInt32());
+        AssertEx.True(judge.GetProperty("promptVersionOutdated").GetBoolean(), "The client needs the flag to offer the re-save.");
+    }
+
+    [Test]
+    public async Task GetProject_WithACurrentJudgePolicy_DoesNotFlagThePromptVersion()
+    {
+        await using var context = CreateContext();
+        ArrangeOutdatedJudgePolicy(context, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.False(document.RootElement.GetProperty("judge").GetProperty("promptVersionOutdated").GetBoolean());
+    }
+
+    /// <summary>A project whose CURRENT judge revision was stored under <paramref name="promptVersion" />.</summary>
+    private static void ArrangeOutdatedJudgePolicy(Context context, int? promptVersion = null)
+    {
+        var policy = new BenchmarkJudgePolicyV1(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('a', 64), ["aaa"]),
+            4096,
+            promptVersion ?? BenchmarkJudgePolicyVersions.PromptVersion - 1,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            BenchmarkJudgeRubricDefaults.Default(),
+            ReferenceAnswer: null);
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
+        context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 2,
+                   BenchmarkJudgeSerialization.SerializePolicy(policy), new string('h', 64), "cohort-key", 3, 10));
     }
 
     [Test]
@@ -372,12 +810,14 @@ public sealed class BenchmarkEndpointTests
     private static readonly Guid RunId = Guid.Parse("20000000-0000-0000-0000-000000000002");
     private static readonly Guid AgentId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
-    private static object ProjectMutation(long? expectedVersion = null) =>
+    private static object ProjectMutation(long? expectedVersion = null, int? maxOutputTokens = null, int? invocationTimeoutSeconds = null) =>
         new
         {
             name = "Project",
             coreTask = "Answer exactly.",
             contextTokens = 4096,
+            maxOutputTokens,
+            invocationTimeoutSeconds,
             agentDefinitionId = AgentId,
             judgeEnabled = false,
             judgePromptVersion = 1,
@@ -385,16 +825,19 @@ public sealed class BenchmarkEndpointTests
             expectedVersion
         };
 
-    private static BenchmarkProjectRecord Project(bool isFrozen) =>
+    private static BenchmarkProjectRecord Project(bool isFrozen, int? maxOutputTokens = null, int? invocationTimeoutSeconds = null) =>
         new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20);
+            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens, invocationTimeoutSeconds);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
         string judgeState = BenchmarkRunJudgeStates.None,
         string? output = null,
         BenchmarkRunLaunchIntent? intent = null,
         BenchmarkRunLaunchEvidence? evidence = null,
-        Guid? judgeAttemptId = null) =>
+        Guid? judgeAttemptId = null,
+        string? primaryStopReason = null,
+        string? rankExclusionReason = null,
+        BenchmarkRunThroughput? throughput = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -420,7 +863,14 @@ public sealed class BenchmarkEndpointTests
             20,
             intent,
             evidence,
-            new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
+            PrimaryStopReason: primaryStopReason,
+            Judge: new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false,
+                ExecutionCurrent: false, rankExclusionReason),
+            Throughput: throughput);
+
+    /// <summary>What the freeze service returns now: a group of runs, one for a plain single start.</summary>
+    private static IReadOnlyList<BenchmarkRunRecord> Runs(params BenchmarkRunRecord[] runs) =>
+        runs.Length == 0 ? [Run()] : runs;
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.
@@ -689,7 +1139,7 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(expected: 73, run.GetProperty("qualityScore").GetInt32());
         AssertEx.Equal("judge", run.GetProperty("qualityScoreSource").GetString());
         AssertEx.Equal(expected: 1, run.GetProperty("rank").GetInt32());
-        AssertEx.Equal("v1:aggregate", run.GetProperty("modelGroupKey").GetString());
+        AssertEx.Equal("model", run.GetProperty("modelGroupKey").GetString());
         var cohort = document.RootElement.GetProperty("rankCohort");
         AssertEx.Equal(expected: 1, cohort.GetProperty("rankedCount").GetInt32());
         AssertEx.Equal(expected: 2, cohort.GetProperty("totalScored").GetInt32());

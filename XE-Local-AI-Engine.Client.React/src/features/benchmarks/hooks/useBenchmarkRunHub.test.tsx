@@ -154,16 +154,39 @@ describe("useBenchmarkRunHub", () => {
 				runId: "run-1",
 				sequence: 2,
 				kind: "Metrics",
-				payload: { effectiveContextTokens: 4096, durationMs: 1200, totalTokens: 30, tokensPerSecond: 25 },
+				payload: {
+					effectiveContextTokens: 4096,
+					durationMs: 1200,
+					totalTokens: 30,
+					tokensPerSecond: 25,
+					ttftMs: 180.25,
+					promptTokens: 123,
+					promptTokensPerSecond: 269.4,
+					generationTokens: 89,
+					generationTokensPerSecond: 88,
+					cachedPromptTokens: 7,
+					segmentCount: 2,
+				},
 			});
 		});
 
+		// The live Metrics event carries the pp/tg split too, so the pane shows the breakdown while the run is still
+		// streaming rather than only after the durable snapshot is re-read.
 		expect(result.current.overlay).toEqual({
 			judgeState: "running",
 			effectiveContextTokens: 4096,
 			durationMs: 1200,
 			totalTokens: 30,
 			tokensPerSecond: 25,
+			throughput: {
+				ttftMs: 180.25,
+				promptTokens: 123,
+				promptTokensPerSecond: 269.4,
+				generationTokens: 89,
+				generationTokensPerSecond: 88,
+				cachedPromptTokens: 7,
+				segmentCount: 2,
+			},
 		});
 		expect(result.current.parts).toEqual([]);
 		expect(result.current.lastSequence).toBe(2);

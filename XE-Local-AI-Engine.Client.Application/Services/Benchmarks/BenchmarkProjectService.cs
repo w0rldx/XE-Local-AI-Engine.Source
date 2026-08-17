@@ -250,6 +250,8 @@ public sealed class BenchmarkProjectService(
         }
 
         ValidateContext(draft.ContextTokens, "primary");
+        ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
+        ValidateInvocationTimeout(draft.InvocationTimeoutSeconds);
         var definition = await _agentDefinitionStore.GetByIdAsync(draft.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
         {
@@ -261,7 +263,9 @@ public sealed class BenchmarkProjectService(
                 draft.Name.Trim(),
                 JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
                 draft.ContextTokens,
-                draft.AgentDefinitionId),
+                draft.AgentDefinitionId,
+                draft.MaxOutputTokens,
+                draft.InvocationTimeoutSeconds),
             policy);
     }
 
@@ -317,6 +321,33 @@ public sealed class BenchmarkProjectService(
 
     private static string? NormalizeReferenceAnswer(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    ///     The output budget must leave room for the prompt: a budget at or above the context window cannot be honoured
+    ///     and would silently behave like no budget at all. Absent means context-limited, which is the default.
+    /// </summary>
+    private static void ValidateOutputBudget(int? maxOutputTokens, int contextTokens)
+    {
+        if (maxOutputTokens is { } budget && (budget < 1 || budget >= contextTokens))
+        {
+            throw new BenchmarkValidationException("The output token budget must be between 1 and the requested context, exclusive.");
+        }
+    }
+
+    /// <summary>
+    ///     The generation budget must be a plausible one. The floor keeps a typo from cancelling every run before the
+    ///     model warms; the ceiling keeps a runaway run from occupying the queue for a day.
+    /// </summary>
+    private static void ValidateInvocationTimeout(int? invocationTimeoutSeconds)
+    {
+        if (invocationTimeoutSeconds is { } seconds
+            && (seconds < BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds || seconds > BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds))
+        {
+            throw new BenchmarkValidationException(
+                $"The generation timeout must be between {BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds} and "
+                + $"{BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds} seconds.");
+        }
+    }
 
     private static void ValidateContext(int contextTokens, string role)
     {

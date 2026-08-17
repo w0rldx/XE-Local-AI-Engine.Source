@@ -8,7 +8,11 @@ import type {
 	BenchmarkProjectDraft,
 	BenchmarkRubric,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkRubricIssue, benchmarkRubricLimits } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	benchmarkInvocationTimeoutLimits,
+	benchmarkRubricIssue,
+	benchmarkRubricLimits,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkRubricPresets } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkAgentOption {
@@ -59,6 +63,16 @@ export function BenchmarkProjectForm({
 		name: values.name.trim() ? undefined : t("pages.benchmarks.validation.name", "Name is required."),
 		coreTask: values.coreTask.trim() ? undefined : t("pages.benchmarks.validation.task", "Core task is required."),
 		contextTokens: values.contextTokens > 0 ? undefined : t("pages.benchmarks.validation.context", "Context must be positive."),
+		maxOutputTokens:
+			values.maxOutputTokens !== null && (values.maxOutputTokens < 1 || values.maxOutputTokens >= values.contextTokens)
+				? t("pages.benchmarks.validation.maxOutputTokens", "Max output tokens must be between 1 and the requested context.")
+				: undefined,
+		invocationTimeoutSeconds:
+			values.invocationTimeoutSeconds !== null &&
+			(values.invocationTimeoutSeconds < benchmarkInvocationTimeoutLimits.min ||
+				values.invocationTimeoutSeconds > benchmarkInvocationTimeoutLimits.max)
+				? t("pages.benchmarks.validation.invocationTimeout", "The generation timeout must be between 60 and 7200 seconds.")
+				: undefined,
 		agentDefinitionId: values.agentDefinitionId ? undefined : t("pages.benchmarks.validation.agent", "Select an agent."),
 		judgeModelName:
 			values.judgeEnabled && !values.judgeModelName
@@ -119,6 +133,45 @@ export function BenchmarkProjectForm({
 					value={values.contextTokens}
 					error={attempted ? errors.contextTokens : undefined}
 					onChange={(value) => setValues((current) => ({ ...current, contextTokens: Number(value) || 0 }))}
+				/>
+				<NumberInput
+					label={t("pages.benchmarks.project.maxOutputTokens", "Max output tokens")}
+					description={t(
+						"pages.benchmarks.project.maxOutputTokensHint",
+						"Leave empty = context-limited. Must be smaller than the requested context.",
+					)}
+					min={1}
+					step={256}
+					disabled={frozen}
+					value={values.maxOutputTokens ?? ""}
+					error={attempted ? errors.maxOutputTokens : undefined}
+					onChange={(value) =>
+						setValues((current) => ({
+							...current,
+							// An empty field is "no budget", which must stay null rather than collapse to 0 — 0 would be a
+							// budget the node refuses, and the operator never typed it.
+							maxOutputTokens: value === "" || value === null ? null : Number(value),
+						}))
+					}
+				/>
+				<NumberInput
+					label={t("pages.benchmarks.project.invocationTimeout", "Generation timeout (s)")}
+					description={t(
+						"pages.benchmarks.project.invocationTimeoutHint",
+						"Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model.",
+					)}
+					min={benchmarkInvocationTimeoutLimits.min}
+					max={benchmarkInvocationTimeoutLimits.max}
+					step={60}
+					disabled={frozen}
+					value={values.invocationTimeoutSeconds ?? ""}
+					error={attempted ? errors.invocationTimeoutSeconds : undefined}
+					onChange={(value) =>
+						setValues((current) => ({
+							...current,
+							invocationTimeoutSeconds: value === "" || value === null ? null : Number(value),
+						}))
+					}
 				/>
 				<Select
 					label={t("pages.benchmarks.project.agent", "Agent")}

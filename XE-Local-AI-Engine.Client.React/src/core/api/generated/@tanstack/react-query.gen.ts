@@ -119,6 +119,8 @@ import {
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
+	exportBenchmarkProject,
+	exportBenchmarkProjectCsv,
 	exportTrainingDataset,
 	freezeInferenceProfile,
 	generateLocalModelProxyApiKey,
@@ -300,6 +302,7 @@ import {
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	startBenchmarkRun,
+	startBenchmarkRunBatch,
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
@@ -595,6 +598,12 @@ import type {
 	ExecuteUnsavedPreviewWorkflowResponse,
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileResponse,
+	ExportBenchmarkProjectCsvData,
+	ExportBenchmarkProjectCsvError,
+	ExportBenchmarkProjectCsvResponse,
+	ExportBenchmarkProjectData,
+	ExportBenchmarkProjectError,
+	ExportBenchmarkProjectResponse,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetResponse,
 	FreezeInferenceProfileData,
@@ -993,6 +1002,9 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
+	StartBenchmarkRunBatchData,
+	StartBenchmarkRunBatchError,
+	StartBenchmarkRunBatchResponse,
 	StartBenchmarkRunData,
 	StartBenchmarkRunError,
 	StartBenchmarkRunResponse,
@@ -6619,6 +6631,50 @@ export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibl
 		queryKey: listEligibleBenchmarkModelsQueryKey(options),
 	});
 
+export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>
+	createQueryKey("exportBenchmarkProject", options);
+
+export const exportBenchmarkProjectOptions = (options: Options<ExportBenchmarkProjectData>) =>
+	queryOptions<
+		ExportBenchmarkProjectResponse,
+		AxiosError<ExportBenchmarkProjectError>,
+		ExportBenchmarkProjectResponse,
+		ReturnType<typeof exportBenchmarkProjectQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await exportBenchmarkProject({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: exportBenchmarkProjectQueryKey(options),
+	});
+
+export const exportBenchmarkProjectCsvQueryKey = (options: Options<ExportBenchmarkProjectCsvData>) =>
+	createQueryKey("exportBenchmarkProjectCsv", options);
+
+export const exportBenchmarkProjectCsvOptions = (options: Options<ExportBenchmarkProjectCsvData>) =>
+	queryOptions<
+		ExportBenchmarkProjectCsvResponse,
+		AxiosError<ExportBenchmarkProjectCsvError>,
+		ExportBenchmarkProjectCsvResponse,
+		ReturnType<typeof exportBenchmarkProjectCsvQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await exportBenchmarkProjectCsv({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: exportBenchmarkProjectCsvQueryKey(options),
+	});
+
 export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>
 	createQueryKey("listBenchmarkProjects", options);
 
@@ -6874,6 +6930,30 @@ export const startBenchmarkRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startBenchmarkRunBatchMutation = (
+	options?: Partial<Options<StartBenchmarkRunBatchData>>,
+): UseMutationOptions<
+	StartBenchmarkRunBatchResponse,
+	AxiosError<StartBenchmarkRunBatchError>,
+	Options<StartBenchmarkRunBatchData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartBenchmarkRunBatchResponse,
+		AxiosError<StartBenchmarkRunBatchError>,
+		Options<StartBenchmarkRunBatchData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startBenchmarkRunBatch({
 				...options,
 				...fnOptions,
 				throwOnError: true,

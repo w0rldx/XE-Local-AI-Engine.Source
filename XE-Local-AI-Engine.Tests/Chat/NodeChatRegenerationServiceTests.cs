@@ -2660,7 +2660,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
-            long? generationDurationMs = null)
+            long? generationDurationMs = null, string? finishReason = null, InvocationThroughput? throughput = null)
         {
             if (CurrentInvocation is not null)
             {

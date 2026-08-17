@@ -12,6 +12,7 @@ import {
 	launchEvidenceEntries,
 } from "@/features/benchmarks/models/BenchmarkLaunchEvidence";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import { throughputEvidenceEntries } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { useBenchmarkRun } from "@/features/benchmarks/queries/useBenchmarks";
 
 const maxListedFields = 6;
@@ -26,6 +27,13 @@ function primaryRows(left: BenchmarkRunDetail, right: BenchmarkRunDetail): Bench
 	);
 }
 
+// Throughput is compared with the SAME diff machinery as launch evidence rather than a second implementation, and for
+// the same reason: the table reports what differs and never interprets it. Two runs differing in tok/s says nothing
+// about which is the better answer — throughput is display only and ranks nothing.
+function throughputRows(left: BenchmarkRunDetail, right: BenchmarkRunDetail): BenchmarkEvidenceDiffRow[] {
+	return diffLaunchEvidence(throughputEvidenceEntries(left.throughput), throughputEvidenceEntries(right.throughput));
+}
+
 /**
  * Launch evidence of the two selected runs side by side. Differences are reported as facts and never interpreted: the
  * copy says *what* differs, never whether the two runs may be ranked against each other (D12) — that judgement is not
@@ -38,6 +46,7 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 	const left = leftQuery.data;
 	const right = rightQuery.data;
 	const primary = useMemo(() => (left && right ? primaryRows(left, right) : []), [left, right]);
+	const throughput = useMemo(() => (left && right ? throughputRows(left, right) : []), [left, right]);
 
 	if (!left || !right) {
 		return null;
@@ -54,6 +63,7 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 	// Driven by the computed rows, not by the hashes: neither hash covers the freeze-side facts (KV source, auto
 	// reason, intended identity), so a hash comparison would stay silent on a difference the table already shows.
 	const primaryDiffers = primary.some((row) => row.differs);
+	const throughputDiffers = throughput.some((row) => row.differs);
 
 	return (
 		<Stack gap="sm" data-testid="benchmark-launch-compare">
@@ -79,6 +89,21 @@ export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: s
 							leftLabel={leftLabel}
 							rightLabel={rightLabel}
 							data-testid="benchmark-primary-launch-diff"
+						/>
+					</Stack>
+				</Alert>
+			) : null}
+			{throughputDiffers ? (
+				<Alert color="gray" icon={<IconInfoCircle size={16} />} data-testid="benchmark-throughput-differs">
+					<Stack gap="xs">
+						<Text size="sm">
+							{t("pages.benchmarks.metrics.throughputDiffers", "Throughput differs: {{fields}}", { fields: fieldList(throughput) })}
+						</Text>
+						<BenchmarkEvidenceDiffTable
+							rows={throughput}
+							leftLabel={leftLabel}
+							rightLabel={rightLabel}
+							data-testid="benchmark-throughput-diff"
 						/>
 					</Stack>
 				</Alert>

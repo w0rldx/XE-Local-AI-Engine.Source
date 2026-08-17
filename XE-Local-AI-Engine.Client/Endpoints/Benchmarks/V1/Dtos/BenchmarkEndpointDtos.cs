@@ -25,7 +25,10 @@ public enum BenchmarkErrorCode
     JudgePolicyAlreadyApplied,
     JudgePolicyChanged,
     JudgeDisabled,
-    PrimaryNotSucceeded
+    PrimaryNotSucceeded,
+
+    /// <summary>Batch only: the cell never reached the freeze because an earlier cell stopped the batch.</summary>
+    NotAttempted
 }
 
 public class BenchmarkProjectMutationRequest
@@ -33,6 +36,13 @@ public class BenchmarkProjectMutationRequest
     public string Name { get; init; } = string.Empty;
     public string CoreTask { get; init; } = string.Empty;
     public int ContextTokens { get; init; }
+
+    /// <summary>Per-run output-token budget; omitted leaves generation context-limited. Must be &lt; ContextTokens.</summary>
+    public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Seconds one run's generation may take; omitted takes the node default (900). Range 60..7200.</summary>
+    public int? InvocationTimeoutSeconds { get; init; }
+
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }
     public string? JudgeModelName { get; init; }
@@ -66,6 +76,13 @@ public class BenchmarkProjectSummaryResponse
     public Guid Id { get; init; }
     public required string Name { get; init; }
     public int ContextTokens { get; init; }
+
+    /// <summary>Per-run output-token budget, or null when generation is context-limited.</summary>
+    public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Seconds one run's generation may take, or null for the node default.</summary>
+    public int? InvocationTimeoutSeconds { get; init; }
+
     public Guid AgentDefinitionId { get; init; }
     public bool JudgeEnabled { get; init; }
     public int RunCount { get; init; }
@@ -94,13 +111,30 @@ public sealed class ListBenchmarkRunsRequest
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 50;
 
-    /// <summary>Same-model history: only runs whose model content fingerprint equals this.</summary>
-    public string? ModelGroupKey { get; init; }
+    /// <summary>
+    ///     Same-build history: only runs whose model CONTENT fingerprint equals this. Deliberately not the
+    ///     <c>modelGroupKey</c> a run reports — that one is the base model, which spans several fingerprints.
+    /// </summary>
+    public string? ModelContentFingerprint { get; init; }
 
     /// <summary>False drops runs that carry no quality score at all.</summary>
     public bool IncludeUnscored { get; init; } = true;
 }
 
+/// <remarks>
+///     <para>
+///         With <see cref="RepeatCount" /> above 1, or with <see cref="Warmup" />, the node freezes ONCE and enqueues
+///         several runs against that one snapshot, sharing a <c>repeatGroupId</c> and numbered by <c>repeatIndex</c>
+///         (0 = the warm-up when one was asked for, then 1..N). They are enqueued back-to-back in FIFO order.
+///     </para>
+///     <para>
+///         Each run still spawns its own exclusive <c>llama-server</c> — that is the unchanged design of the benchmark
+///         queue, not an oversight — so repeats measure cold-launch-to-cold-launch jitter INCLUDING model load, which
+///         is what an operator on this node actually experiences. And because the frozen sampling is deterministic
+///         (temperature 0, fixed seed), identical launches produce the identical answer: what repeats quantify is
+///         throughput jitter, not answer variance.
+///     </para>
+/// </remarks>
 public sealed class StartBenchmarkRunRequest
 {
     public Guid ProjectId { get; init; }
@@ -109,6 +143,76 @@ public sealed class StartBenchmarkRunRequest
 
     /// <summary><c>f16</c>, <c>q8_0</c>, <c>q4_0</c>, or <see langword="null" /> for Auto (the node picks).</summary>
     public string? KvCacheType { get; init; }
+
+    /// <summary>Measured runs to enqueue, 1..10. The response is the FIRST run of the group — the one that starts.</summary>
+    public int RepeatCount { get; init; } = 1;
+
+    /// <summary>Enqueue one extra run first, flagged as a warm-up: never ranked, never in a group's statistics.</summary>
+    public bool Warmup { get; init; }
+}
+
+/// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type.</summary>
+public sealed class StartBenchmarkRunBatchItem
+{
+    public string ModelName { get; init; } = string.Empty;
+
+    /// <summary><c>f16</c>, <c>q8_0</c>, <c>q4_0</c>, or <see langword="null" /> for Auto.</summary>
+    public string? KvCacheType { get; init; }
+}
+
+/// <summary>
+///     Enqueues a whole model × KV-type matrix in one call. Deliberately NOT all-or-nothing: one ineligible model in a
+///     ten-cell matrix must not cost the operator the other nine. Each cell goes through the same freeze path as the
+///     single-run endpoint and reports its own outcome.
+/// </summary>
+public sealed class StartBenchmarkRunBatchRequest
+{
+    public Guid ProjectId { get; init; }
+
+    /// <summary>The project version the whole batch is planned against; every later cell chains off it.</summary>
+    public long ExpectedProjectVersion { get; init; }
+
+    public IReadOnlyList<StartBenchmarkRunBatchItem> Items { get; init; } = [];
+
+    /// <summary>Measured runs per item, 1..10.</summary>
+    public int RepeatCount { get; init; } = 1;
+
+    /// <summary>Prepend a warm-up run to every item's group.</summary>
+    public bool Warmup { get; init; }
+}
+
+/// <summary>One matrix cell the node accepted, with the runs it enqueued in queue order.</summary>
+public sealed class StartedBenchmarkRunBatchItemResponse
+{
+    public required string ModelName { get; init; }
+    public string? KvCacheType { get; init; }
+
+    /// <summary>Warm-up first when one was requested, then the measured repeats.</summary>
+    public IReadOnlyList<Guid> RunIds { get; init; } = [];
+}
+
+/// <summary>One matrix cell the node refused, carrying the same <c>code</c> the single-run endpoint would have.</summary>
+public sealed class RejectedBenchmarkRunBatchItemResponse
+{
+    public required string ModelName { get; init; }
+    public string? KvCacheType { get; init; }
+
+    /// <summary>A <see cref="BenchmarkErrorCode" /> name — the same vocabulary a single-run failure uses.</summary>
+    public required string Code { get; init; }
+
+    public required string Message { get; init; }
+}
+
+public sealed class StartBenchmarkRunBatchResponse
+{
+    /// <summary>
+    ///     The project version after the last cell that started — the version the NEXT batch has to present. It is the
+    ///     only way a caller can resubmit the cells a partial batch left untried without re-reading the project.
+    /// </summary>
+    public long ProjectVersion { get; init; }
+
+    public IReadOnlyList<StartedBenchmarkRunBatchItemResponse> Started { get; init; } = [];
+    public IReadOnlyList<RejectedBenchmarkRunBatchItemResponse> Rejected { get; init; } = [];
 }
 
 public sealed class BenchmarkRunRouteRequest
@@ -212,6 +316,16 @@ public sealed class BenchmarkJudgePolicyResponse
     public string? ReferenceAnswer { get; init; }
     public int? CohortGeneration { get; init; }
     public string? ReferenceExecutionKey { get; init; }
+
+    /// <summary>The judge prompt version this revision was stored under.</summary>
+    public int? PromptVersion { get; init; }
+
+    /// <summary>
+    ///     True when <see cref="PromptVersion" /> is not the one this build judges under. The revision still READS —
+    ///     the project opens, the export works, existing scores stay ranked — but no NEW judging will run against it
+    ///     until the operator re-saves the judge, which mints a revision under the current version and re-judges.
+    /// </summary>
+    public bool PromptVersionOutdated { get; init; }
 }
 
 /// <summary>The result of a judge change: the updated project plus the runs a judging was queued for.</summary>
@@ -281,13 +395,77 @@ public class BenchmarkRunSummaryResponse
     /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
     public string? RankExclusionReason { get; init; }
 
-    /// <summary>Groups repeated runs of the same model (= the model content fingerprint).</summary>
+    /// <summary>
+    ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
+    ///     <c>tool_calls</c>, <c>content_filter</c>), or null when none was reported. <c>length</c> means the answer
+    ///     was cut off by the token budget — the run still succeeded, but it does not rank.
+    /// </summary>
+    public string? PrimaryStopReason { get; init; }
+
+    /// <summary>
+    ///     The BASE model this run is a build of — the Hugging Face repo id (lowercased) or the imported name, with the
+    ///     quant tag stripped. Every quant of one model shares it, so a group is one model and its rows are its quants.
+    ///     Use <see cref="ModelContentFingerprint" /> when you mean the exact build instead.
+    /// </summary>
     public required string ModelGroupKey { get; init; }
+
+    /// <summary>
+    ///     The repeat group this run belongs to, or null for a plain single run. Runs sharing it were frozen together
+    ///     against one snapshot and enqueued back-to-back.
+    /// </summary>
+    public Guid? RepeatGroupId { get; init; }
+
+    /// <summary>Position in the group: 0 is the warm-up (only when one was requested), measured repeats are 1..N.</summary>
+    public int? RepeatIndex { get; init; }
+
+    /// <summary>A warm-up run: shown, but never ranked and never counted in a group's statistics.</summary>
+    public bool IsWarmup { get; init; }
 
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
     public int? TotalTokens { get; init; }
+
+    /// <summary>
+    ///     Decode throughput (tg) in tokens per second — derived from <see cref="GenerationTokens" /> and the runtime's
+    ///     own decode duration whenever it reported them, so this is generation speed, not the blended
+    ///     prompt-plus-generation figure it used to be. Falls back to <c>totalTokens / durationMs</c> for a runtime that
+    ///     reports no per-request timings. Equal to <see cref="GenerationTokensPerSecond" /> when the split exists.
+    /// </summary>
     public double? TokensPerSecond { get; init; }
+
+    /// <summary>
+    ///     Time to first token in milliseconds, measured client-side from turn start — so it includes network and
+    ///     adapter overhead on top of the runtime's own prefill time, which is what a caller actually waits. Null for a
+    ///     runtime that reported nothing and for runs frozen before the column existed.
+    /// </summary>
+    public double? TtftMs { get; init; }
+
+    /// <summary>Prompt tokens the runtime evaluated, cached ones included. Null when it reported none.</summary>
+    public int? PromptTokens { get; init; }
+
+    /// <summary>Prompt-processing throughput (pp) in tokens per second, derived server-side. Null when unmeasured.</summary>
+    public double? PromptTokensPerSecond { get; init; }
+
+    /// <summary>Tokens the runtime decoded. Null when it reported none.</summary>
+    public int? GenerationTokens { get; init; }
+
+    /// <summary>Decode throughput (tg) in tokens per second, derived server-side. Null when unmeasured.</summary>
+    public double? GenerationTokensPerSecond { get; init; }
+
+    /// <summary>
+    ///     Prompt tokens served from the prompt cache rather than evaluated, across ALL of the turn's requests. Above
+    ///     zero means the pp figures describe a partially cached prefill, not a cold one — expected on a tool-calling
+    ///     turn, where every round re-sends the conversation and the runtime serves the shared prefix from cache.
+    /// </summary>
+    public int? CachedPromptTokens { get; init; }
+
+    /// <summary>
+    ///     How many provider requests the turn made, i.e. how many readings the token and millisecond sums are made of.
+    ///     1 for a plain turn; above 1 means the agent called tools and each round prefilled again. Null when nothing
+    ///     was measured.
+    /// </summary>
+    public int? SegmentCount { get; init; }
+
     public int? UserScore { get; init; }
     public long LastStreamSequence { get; init; }
     public long Version { get; init; }

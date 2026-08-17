@@ -31,6 +31,34 @@ describe("BenchmarkJudgePanel", () => {
 		expect(screen.getByTestId("benchmark-judge-state").textContent).toBe("Judging");
 	});
 
+	// The live failure: a 96/100 verdict on an answer that stopped mid-sentence. The score is real and stays visible,
+	// but the panel has to say what it graded, or the number reads as a finished answer scoring 96.
+	it("warns that a truncated answer is what the verdict graded, and only then", () => {
+		const verdict = benchmarkJudgeFixture({ state: "succeeded", score: 96, policyRevision: 2, policyCurrent: true });
+
+		renderPanel(verdict, { primaryTruncated: true });
+		const notice = screen.getByTestId("benchmark-judge-truncated-notice").textContent ?? "";
+		expect(notice).toContain("cut off by the token budget");
+		expect(screen.getByTestId("benchmark-judge-score").textContent).toContain("96");
+
+		cleanup();
+		renderPanel(verdict);
+		expect(screen.queryByTestId("benchmark-judge-truncated-notice")).toBeNull();
+	});
+
+	// An LLM judge rewards a longer answer for being longer, so the length of what it graded belongs next to the number
+	// it may have inflated. Absent length must render nothing rather than a "0 tokens" that reads like a measurement.
+	it("shows the graded answer's token count beside the score, and only when it is known", () => {
+		const verdict = benchmarkJudgeFixture({ state: "succeeded", score: 88, policyRevision: 2, policyCurrent: true });
+
+		renderPanel(verdict, { outputTokens: 4200 });
+		expect(screen.getByTestId("benchmark-judge-output-length").textContent).toContain("4200");
+
+		cleanup();
+		renderPanel(verdict);
+		expect(screen.queryByTestId("benchmark-judge-output-length")).toBeNull();
+	});
+
 	it("shows the 0..100 score, the summary and every criterion with its rationale", () => {
 		renderPanel(
 			benchmarkJudgeFixture({

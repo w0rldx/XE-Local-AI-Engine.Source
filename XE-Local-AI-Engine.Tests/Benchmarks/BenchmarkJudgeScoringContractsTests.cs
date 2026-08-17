@@ -191,6 +191,43 @@ public sealed class BenchmarkJudgeScoringContractsTests
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "rubric");
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "exactly one JSON object");
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "no markdown");
+
+        // Length neutrality is unconditional: an LLM judge rewarding a longer answer for being longer is the bias this
+        // sentence exists to counter, and it must reach a judging of a COMPLETE answer too, not only a truncated one.
+        AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "Do not reward length or verbosity");
+        AssertEx.Contains(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: false), "Do not reward length or verbosity");
+    }
+
+    // Neither the payload nor the prompt text is hashed into the policy or the JudgeExecutionKey, so an unconditional
+    // sentence would silently change what every judging was asked without any version moving. Both extras are therefore
+    // conditional, and a complete run's request must stay byte-identical to the one this has always produced.
+    [Test]
+    public void Prompt_MarksTheTruncatedPrimaryOutputAndOtherwiseStaysByteIdentical()
+    {
+        var rubric = Rubric(("alpha", 1));
+        const string taskJson = "\"Write a haiku.\"";
+        var outputParts = Encoding.UTF8.GetString(
+            BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "hello")]));
+
+        var complete = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
+        var defaulted = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json,
+            primaryOutputTruncated: false);
+        var truncated = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json,
+            primaryOutputTruncated: true);
+
+        AssertEx.Equal(complete, defaulted, "The default must reproduce the payload the builder produced before the flag existed.");
+        using var completeDocument = JsonDocument.Parse(complete);
+        using var truncatedDocument = JsonDocument.Parse(truncated);
+        AssertEx.False(completeDocument.RootElement.TryGetProperty("primaryOutputTruncated", out _),
+            "A complete run's payload must not carry the flag at all.");
+        AssertEx.True(truncatedDocument.RootElement.GetProperty("primaryOutputTruncated").GetBoolean());
+        AssertEx.True(truncatedDocument.RootElement.EnumerateObject().Select(static property => property.Name)
+                                       .SequenceEqual(["task", "rubric", "primaryOutputParts", "primaryOutputTruncated", "outputSchema"],
+                                           StringComparer.Ordinal));
+
+        AssertEx.Equal(BenchmarkJudgePromptV2.SystemPrompt, BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: false));
+        AssertEx.Contains(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: true), "cut off by the token budget");
+        AssertEx.Contains(BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated: true), "incomplete");
     }
 
     // llama.cpp compiles the response-format schema into a GBNF grammar, and a repetition bound in it breaks the

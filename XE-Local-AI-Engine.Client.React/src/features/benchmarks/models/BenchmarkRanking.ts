@@ -29,8 +29,11 @@ export interface BenchmarkModelGroup {
 }
 
 /**
- * Same-model history: one row per `modelGroupKey`, ordered by its leader. Purely client-side over the loaded page —
- * the node already returns every run of the project, so a second request would only re-fetch what is in hand.
+ * One row per BASE model, ordered by its leader. `modelGroupKey` is the base model now — not the content fingerprint,
+ * which gave every quant its own group and made "which quant of this model is best" unaskable. So a group is one model,
+ * its rows are that model's quants and KV types, and the group's best quant is simply its top-ranked row. Purely
+ * client-side over the loaded page — the node already returns every run of the project, so a second request would only
+ * re-fetch what is in hand.
  */
 export function groupBenchmarkRunsByModel(runs: readonly BenchmarkRunSummary[]): BenchmarkModelGroup[] {
 	const groups = new Map<string, BenchmarkRunSummary[]>();
@@ -54,8 +57,11 @@ export function groupBenchmarkRunsByModel(runs: readonly BenchmarkRunSummary[]):
 		});
 }
 
-/** What the operator can do about an exclusion. `wait` = the node is already working on it, `none` = nothing to do. */
-export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait";
+/**
+ * What the operator can do about an exclusion. `wait` = the node is already working on it, `rerun` = re-judging cannot
+ * help because the measurement itself is incomplete.
+ */
+export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait" | "rerun" | "none";
 
 export function rankExclusionAction(reason: BenchmarkRankExclusionReason): BenchmarkRankExclusionAction {
 	switch (reason) {
@@ -63,6 +69,13 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 			return "score";
 		case "judge-pending":
 			return "wait";
+		// A truncated answer is not a judging problem: re-judging the same fragment produces the same fragment. The run
+		// has to be taken again with more room.
+		case "truncated":
+			return "rerun";
+		// The only reason that is not a problem: a warm-up is excluded because that is what it is for.
+		case "warmup":
+			return "none";
 		default:
 			return "rejudge";
 	}
