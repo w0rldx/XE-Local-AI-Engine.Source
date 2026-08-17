@@ -27,6 +27,10 @@ internal static class AddNodeChatExtensions
         // context (keeps the fence un-forgeable by a client that knows only the public conversation id). Singleton: it
         // holds no per-request state and reads the process-lifetime node key.
         builder.Services.AddSingleton<IUntrustedContentFenceSeedProvider, UntrustedContentFenceSeedProvider>();
+        // Composes the synthetic attachment / image / knowledge context messages both the send and regenerate paths
+        // prepend to a turn. Singleton: it holds no per-request state, and the scoped knowledge search it needs is
+        // resolved from a fresh scope per call.
+        builder.Services.AddSingleton<IChatTurnContextBuilder, ChatTurnContextBuilder>();
         builder.Services.AddScoped<ILocalDefaultChatModelResolver, LocalDefaultChatModelResolver>();
         builder.Services.AddScoped<ChatTurnResolver>();
         builder.Services.AddScoped<ChatInvocationStatePump>();
