@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -75,9 +76,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -238,9 +239,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -398,9 +399,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             // Resolver reports no installed GGUF chat model (null).
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -467,9 +468,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -546,9 +547,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -626,9 +627,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -709,9 +710,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -778,9 +779,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -839,9 +840,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -895,9 +896,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -967,9 +968,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(maxMessageRequestTimeoutSeconds: 900),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1034,9 +1035,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1098,9 +1099,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1153,9 +1154,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1536,9 +1537,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1588,9 +1589,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1632,9 +1633,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1706,9 +1707,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1761,9 +1762,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1950,9 +1951,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
-            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -2003,6 +2004,18 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         return factory;
     }
 
+    // The turn-context builder the regenerate shares with the send path. A regenerate reaches only its knowledge-base
+    // grounding (attachments are a send-only concern), so the attachment collaborators are bare substitutes and the
+    // scope factory is what decides whether grounding finds anything.
+    private static IChatTurnContextBuilder CreateTurnContextBuilder(IServiceScopeFactory? scopeFactory = null)
+    {
+        return new ChatTurnContextBuilder(Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IUntrustedContentFenceSeedProvider>(),
+            scopeFactory ?? CreateScopeFactory(),
+            Options.Create(new LocalChatAgentOptions()),
+            NullLogger<ChatTurnContextBuilder>.Instance);
+    }
+
     // A knowledge search service returning a fixed hit list, wired into a scope factory for the KB grounding tests.
     private static IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
     {
@@ -2041,12 +2054,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(scopeFactory),
             Options.Create(new KnowledgeBaseOptions
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
             Options.Create(new ChatStreamBudgetOptions()),
-            scopeFactory,
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
