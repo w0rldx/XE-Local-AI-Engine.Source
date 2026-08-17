@@ -156,11 +156,6 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     Guid.Empty,
                     benchmarkRun.Id,
                     "benchmark_output_parts_json");
-                benchmarkRun.JudgeResultJson = DecryptIfPresent(benchmarkRun.JudgeResultJson,
-                    context.NodeEncryptionKey.Span,
-                    Guid.Empty,
-                    benchmarkRun.Id,
-                    "benchmark_judge_result_json");
                 benchmarkRun.PrimaryLaunchReceiptJson = DecryptIfPresent(benchmarkRun.PrimaryLaunchReceiptJson,
                     context.NodeEncryptionKey.Span,
                     Guid.Empty,
@@ -171,16 +166,35 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     Guid.Empty,
                     benchmarkRun.Id,
                     "benchmark_primary_environment_facts_json");
-                benchmarkRun.JudgeLaunchReceiptJson = DecryptIfPresent(benchmarkRun.JudgeLaunchReceiptJson,
+                break;
+            case BenchmarkJudgePolicyRevision policyRevision:
+                policyRevision.PolicyJson = NodePayloadProtector.Decrypt(policyRevision.PolicyJson,
                     context.NodeEncryptionKey.Span,
                     Guid.Empty,
-                    benchmarkRun.Id,
-                    "benchmark_judge_launch_receipt_json");
-                benchmarkRun.JudgeEnvironmentFactsJson = DecryptIfPresent(benchmarkRun.JudgeEnvironmentFactsJson,
+                    policyRevision.Id,
+                    "benchmark_judge_policy_json");
+                break;
+            case BenchmarkJudgeAttempt judgeAttempt:
+                judgeAttempt.JudgeRuntimeJson = DecryptIfPresent(judgeAttempt.JudgeRuntimeJson,
                     context.NodeEncryptionKey.Span,
                     Guid.Empty,
-                    benchmarkRun.Id,
-                    "benchmark_judge_environment_facts_json");
+                    judgeAttempt.Id,
+                    "benchmark_judge_runtime_json");
+                judgeAttempt.ResultJson = DecryptIfPresent(judgeAttempt.ResultJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    judgeAttempt.Id,
+                    "benchmark_judge_attempt_result_json");
+                judgeAttempt.LaunchReceiptJson = DecryptIfPresent(judgeAttempt.LaunchReceiptJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    judgeAttempt.Id,
+                    "benchmark_judge_attempt_launch_receipt_json");
+                judgeAttempt.EnvironmentFactsJson = DecryptIfPresent(judgeAttempt.EnvironmentFactsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    judgeAttempt.Id,
+                    "benchmark_judge_attempt_environment_facts_json");
                 break;
             case TrainingDatasetDefinition datasetDefinition:
                 datasetDefinition.DefinitionJson = NodePayloadProtector.Decrypt(datasetDefinition.DefinitionJson,

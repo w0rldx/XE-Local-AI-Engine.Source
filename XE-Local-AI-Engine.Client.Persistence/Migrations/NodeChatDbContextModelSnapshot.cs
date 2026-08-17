@@ -373,6 +373,242 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("agent_skill_resources", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CohortGeneration")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cohort_generation");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<string>("EffectiveBackend")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effective_backend");
+
+                    b.Property<string>("EffectiveLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effective_launch_identity");
+
+                    b.Property<long>("EnqueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("EnvironmentFactsHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("environment_facts_hash");
+
+                    b.Property<byte[]>("EnvironmentFactsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("environment_facts_json");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("FlashAttentionMode")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("flash_attention_mode");
+
+                    b.Property<string>("IntendedExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("intended_executable_sha256");
+
+                    b.Property<string>("IntendedLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("intended_launch_identity");
+
+                    b.Property<string>("JudgeExecutionKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_execution_key");
+
+                    b.Property<byte[]>("JudgeRuntimeJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("judge_runtime_json");
+
+                    b.Property<string>("KvAutoReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kv_auto_reason");
+
+                    b.Property<string>("KvCacheType")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kv_cache_type");
+
+                    b.Property<string>("KvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kv_cache_type_source");
+
+                    b.Property<string>("LaunchExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("launch_executable_sha256");
+
+                    b.Property<bool?>("LaunchHasAuxAssets")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_has_aux_assets");
+
+                    b.Property<string>("LaunchKvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("launch_kv_cache_type_source");
+
+                    b.Property<byte[]>("LaunchReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("launch_receipt_json");
+
+                    b.Property<int?>("PlacementOffloaded")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("placement_offloaded");
+
+                    b.Property<int?>("PlacementTotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("placement_total");
+
+                    b.Property<Guid>("PolicyRevisionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("policy_revision_id");
+
+                    b.Property<string>("ReceiptHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("receipt_hash");
+
+                    b.Property<byte[]>("ResultJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("result_json");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("score");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Variant")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("variant");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyRevisionId");
+
+                    b.HasIndex("RunId", "JudgeExecutionKey")
+                        .HasDatabaseName("ix_benchmark_judge_attempts_run_execution_key");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_judge_attempts_run_sequence");
+
+                    b.HasIndex("RunId", "Status")
+                        .HasDatabaseName("ix_benchmark_judge_attempts_run_status");
+
+                    b.ToTable("benchmark_judge_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_judge_attempts_cohort_generation", "cohort_generation > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_judge_attempts_score", "score IS NULL OR (score >= 0 AND score <= 100)");
+
+                            t.HasCheckConstraint("CK_benchmark_judge_attempts_sequence", "sequence > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_judge_attempts_status", "status IN ('Queued', 'Running', 'Succeeded', 'Failed', 'Cancelled')");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CohortGeneration")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cohort_generation");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("PolicyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("policy_hash");
+
+                    b.Property<byte[]>("PolicyJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("policy_json");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("ReferenceExecutionKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reference_execution_key");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "PolicyHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_judge_policy_revisions_project_policy_hash");
+
+                    b.HasIndex("ProjectId", "Revision")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_judge_policy_revisions_project_revision");
+
+                    b.ToTable("benchmark_judge_policy_revisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_judge_policy_revisions_cohort_generation", "cohort_generation > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_judge_policy_revisions_revision", "revision > 0");
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -397,27 +633,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
-                    b.Property<int?>("JudgeContextTokens")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_context_tokens");
-
-                    b.Property<bool>("JudgeEnabled")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_enabled");
-
-                    b.Property<string>("JudgeModelName")
-                        .HasMaxLength(255)
+                    b.Property<Guid?>("CurrentJudgePolicyRevisionId")
                         .HasColumnType("TEXT")
-                        .HasColumnName("judge_model_name")
-                        .UseCollation("NOCASE");
-
-                    b.Property<int>("JudgeOutputSchemaVersion")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_output_schema_version");
-
-                    b.Property<int>("JudgePromptVersion")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_prompt_version");
+                        .HasColumnName("current_judge_policy_revision_id");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -442,8 +660,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("benchmark_projects", null, t =>
                         {
                             t.HasCheckConstraint("CK_benchmark_projects_context_tokens", "context_tokens > 0");
-
-                            t.HasCheckConstraint("CK_benchmark_projects_judge_context_tokens", "judge_context_tokens IS NULL OR judge_context_tokens > 0");
                         });
                 });
 
@@ -468,6 +684,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<Guid?>("CurrentJudgeAttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("current_judge_attempt_id");
+
                     b.Property<long?>("DurationMs")
                         .HasColumnType("INTEGER")
                         .HasColumnName("duration_ms");
@@ -475,114 +695,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int?>("EffectiveContextTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("effective_context_tokens");
-
-                    b.Property<long?>("JudgeCompletedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_completed_at_utc");
-
-                    b.Property<string>("JudgeEffectiveBackend")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_effective_backend");
-
-                    b.Property<string>("JudgeEffectiveLaunchIdentity")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_effective_launch_identity");
-
-                    b.Property<string>("JudgeEnvironmentFactsHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_environment_facts_hash");
-
-                    b.Property<byte[]>("JudgeEnvironmentFactsJson")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("judge_environment_facts_json");
-
-                    b.Property<string>("JudgeErrorMessage")
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_error_message");
-
-                    b.Property<string>("JudgeFlashAttentionMode")
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_flash_attention_mode");
-
-                    b.Property<string>("JudgeIntendedExecutableSha256")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_intended_executable_sha256");
-
-                    b.Property<string>("JudgeIntendedLaunchIdentity")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_intended_launch_identity");
-
-                    b.Property<string>("JudgeKvAutoReason")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_kv_auto_reason");
-
-                    b.Property<string>("JudgeKvCacheType")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_kv_cache_type");
-
-                    b.Property<string>("JudgeKvCacheTypeSource")
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_kv_cache_type_source");
-
-                    b.Property<string>("JudgeLaunchExecutableSha256")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_launch_executable_sha256");
-
-                    b.Property<bool?>("JudgeLaunchHasAuxAssets")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_launch_has_aux_assets");
-
-                    b.Property<string>("JudgeLaunchKvCacheTypeSource")
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_launch_kv_cache_type_source");
-
-                    b.Property<byte[]>("JudgeLaunchReceiptJson")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("judge_launch_receipt_json");
-
-                    b.Property<int?>("JudgePlacementOffloaded")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_placement_offloaded");
-
-                    b.Property<int?>("JudgePlacementTotal")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_placement_total");
-
-                    b.Property<string>("JudgeReceiptHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_receipt_hash");
-
-                    b.Property<byte[]>("JudgeResultJson")
-                        .HasColumnType("BLOB")
-                        .HasColumnName("judge_result_json");
-
-                    b.Property<long?>("JudgeStartedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("judge_started_at_utc");
-
-                    b.Property<string>("JudgeStatus")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_status");
-
-                    b.Property<string>("JudgeVariant")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("judge_variant");
 
                     b.Property<long>("LastStreamSequence")
                         .HasColumnType("INTEGER")
@@ -761,7 +873,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                             t.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
 
-                            t.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 1 AND user_score <= 5)");
+                            t.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 0 AND user_score <= 100)");
                         });
                 });
 
@@ -788,6 +900,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long?>("FinishedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("finished_at_utc");
+
+                    b.Property<Guid?>("JudgeAttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_attempt_id");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -816,9 +932,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasKey("QueueSequence");
 
-                    b.HasIndex("RunId", "Kind")
+                    b.HasIndex("JudgeAttemptId")
                         .IsUnique()
-                        .HasDatabaseName("ux_benchmark_work_items_run_kind");
+                        .HasDatabaseName("ux_benchmark_work_items_judge_attempt")
+                        .HasFilter("kind = 'Judge'");
+
+                    b.HasIndex("RunId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_work_items_primary_run")
+                        .HasFilter("kind = 'Primary'");
 
                     b.HasIndex("Status", "QueueSequence")
                         .HasDatabaseName("ix_benchmark_work_items_status_sequence");
@@ -826,6 +948,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("benchmark_work_items", null, t =>
                         {
                             t.HasCheckConstraint("CK_benchmark_work_items_attempt", "attempt = 1");
+
+                            t.HasCheckConstraint("CK_benchmark_work_items_judge_attempt", "(kind = 'Primary' AND judge_attempt_id IS NULL) OR (kind = 'Judge' AND judge_attempt_id IS NOT NULL)");
                         });
                 });
 
@@ -4362,6 +4486,30 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .WithMany()
                         .HasForeignKey("SkillId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeAttempt", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

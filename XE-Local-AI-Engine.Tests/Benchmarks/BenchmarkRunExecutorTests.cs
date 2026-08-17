@@ -62,6 +62,7 @@ public sealed class BenchmarkRunExecutorTests
             Buffer(),
             new BenchmarkCancellationRegistry(),
             new RecordingEnvironmentFacts(),
+            Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
             NullLogger<BenchmarkRunExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
@@ -76,10 +77,7 @@ public sealed class BenchmarkRunExecutorTests
     [Test]
     public async Task Execute_SuccessUsesFrozenContextPersistsCanonicalPartsAndDisposesOwnedResources()
     {
-        var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
-        {
-            JudgeStatus = BenchmarkJudgeStatus.Pending
-        };
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
         BenchmarkPrimarySuccessCommand? command = null;
@@ -87,7 +85,6 @@ public sealed class BenchmarkRunExecutorTests
              .Returns(call => run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
-                 JudgeStatus = BenchmarkJudgeStatus.Queued,
                  LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
                  Version = 3
              });
@@ -506,8 +503,7 @@ public sealed class BenchmarkRunExecutorTests
             {
                 1
             }, "model.gguf", LocalModelOrigin.Imported, V1('a'), "Agent", 1, 8192,
-            status, null, null, null, null, null, 0, null, BenchmarkJudgeStatus.Disabled, null, null, null, version,
-            1, 1, null, null, null, 1);
+            status, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1);
 
     private static BenchmarkRunExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,
@@ -532,6 +528,7 @@ public sealed class BenchmarkRunExecutorTests
             Buffer(),
             cancellations,
             environmentFacts ?? new RecordingEnvironmentFacts(),
+            Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
             logger ?? NullLogger<BenchmarkRunExecutor>.Instance);
 
     private static InvocationState State(Guid invocationId,
@@ -615,7 +612,6 @@ public sealed class BenchmarkRunExecutorTests
             Runtime(frozenContextTokens, frozenKvCacheType),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             frozen,
-            new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, null, null, null, null, "hash"),
             new BenchmarkFreezeDependencySetV1("a", "b", "c", "d", "e", null),
             "test",
             1,

@@ -30,6 +30,11 @@ public sealed class BenchmarkEndpointTests
     [Arguments("DELETE", "/runs/00000000-0000-0000-0000-000000000002")]
     [Arguments("POST", "/runs/00000000-0000-0000-0000-000000000002/cancel")]
     [Arguments("PUT", "/runs/00000000-0000-0000-0000-000000000002/score")]
+    [Arguments("DELETE", "/runs/00000000-0000-0000-0000-000000000002/score")]
+    [Arguments("POST", "/runs/00000000-0000-0000-0000-000000000002/rejudge")]
+    [Arguments("PUT", "/projects/00000000-0000-0000-0000-000000000001/judge")]
+    [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/rejudge")]
+    [Arguments("GET", "/rubric-presets")]
     [Arguments("GET", "/eligible-agents?modelName=model")]
     [Arguments("GET", "/eligible-models")]
     public async Task EveryBenchmarkRoute_WithoutOperatorToken_ReturnsUnauthorized(string method, string path)
@@ -84,15 +89,24 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
-    public async Task GetRun_ForASucceededJudge_ReturnsTheStoredScoreAndRationale()
+    public async Task GetRun_ForASucceededJudge_ReturnsTheStoredVerdictOfTheAttempt()
     {
         // Round-tripped through the REAL writer: the stored blob is camelCase, and a reader using default options bound
-        // every property to its default — so the API answered score 0 with a null rationale and the frontend rejected
-        // the whole run detail as an unexpected shape. Nothing about the run itself had failed.
+        // every property to its default — so the API answered a zeroed verdict with a null summary and the frontend
+        // rejected the whole run detail as an unexpected shape. Nothing about the run itself had failed.
         await using var context = CreateContext();
-        var stored = BenchmarkExecutionSerialization.SerializeJudge(new BenchmarkJudgeResultV1(1, 4, "clear and correct", "v1:aggregate", 1));
+        var attemptId = Guid.NewGuid();
+        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            [new BenchmarkJudgeCriterionScoreV2("correctness", 8, "clear and correct")],
+            "solid answer",
+            80,
+            "v1:aggregate"));
         context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
-               .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkJudgeStatus.Succeeded, judgeResult: stored));
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
+        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
+                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -100,11 +114,13 @@ public sealed class BenchmarkEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
-        var judgeResult = document.RootElement.GetProperty("judgeResult");
-        AssertEx.Equal(4, judgeResult.GetProperty("score").GetInt32());
-        AssertEx.Equal("clear and correct", judgeResult.GetProperty("rationale").GetString());
-        AssertEx.Equal(1, judgeResult.GetProperty("schemaVersion").GetInt32());
-        AssertEx.Equal(1, judgeResult.GetProperty("promptVersion").GetInt32());
+        var judge = document.RootElement.GetProperty("judge");
+        AssertEx.Equal("solid answer", judge.GetProperty("summary").GetString());
+        var criteria = judge.GetProperty("criteria");
+        AssertEx.Equal(1, criteria.GetArrayLength());
+        AssertEx.Equal("correctness", criteria[0].GetProperty("id").GetString());
+        AssertEx.Equal(8, criteria[0].GetProperty("score").GetInt32());
+        AssertEx.Equal("clear and correct", criteria[0].GetProperty("rationale").GetString());
     }
 
     [Test]
@@ -225,8 +241,12 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal("environment-hash", root.GetProperty("primaryEnvironmentFactsHash").GetString());
         AssertEx.Equal("exe-sha", root.GetProperty("primaryLaunchReceipt").GetProperty("executableSha256").GetString());
         AssertEx.Equal(expected: 1, root.GetProperty("primaryEnvironmentFacts").GetProperty("schemaVersion").GetInt32());
-        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeKvCacheType").ValueKind);
-        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judgeLaunchReceipt").ValueKind);
+
+        // Primary-only: the judge's own launch evidence belongs to its attempt, and the run projects a derived object.
+        AssertEx.Equal("none", root.GetProperty("judge").GetProperty("state").GetString());
+        AssertEx.Equal(JsonValueKind.Null, root.GetProperty("judge").GetProperty("score").ValueKind);
+        AssertEx.Equal("none", root.GetProperty("qualityScoreSource").GetString());
+        AssertEx.Equal("v1:aggregate", root.GetProperty("modelGroupKey").GetString());
     }
 
     [Test]
@@ -367,15 +387,15 @@ public sealed class BenchmarkEndpointTests
         };
 
     private static BenchmarkProjectRecord Project(bool isFrozen) =>
-        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, false, null, null, 1, 1,
-            isFrozen, 4, 10, 20);
+        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
+            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
-        BenchmarkJudgeStatus judge = BenchmarkJudgeStatus.Disabled,
+        string judgeState = BenchmarkRunJudgeStates.None,
         string? output = null,
         BenchmarkRunLaunchIntent? intent = null,
         BenchmarkRunLaunchEvidence? evidence = null,
-        byte[]? judgeResult = null) =>
+        Guid? judgeAttemptId = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -393,20 +413,15 @@ public sealed class BenchmarkEndpointTests
             output is null ? null : Encoding.UTF8.GetBytes(output),
             0,
             null,
-            judge,
-            judgeResult,
-            null,
             null,
             3,
             10,
             null,
             null,
-            null,
-            null,
             20,
             intent,
-            null,
-            evidence);
+            evidence,
+            new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.
@@ -431,6 +446,256 @@ public sealed class BenchmarkEndpointTests
         }
 
         return request;
+    }
+
+    [Test]
+    public async Task ScoreRun_WithAnOmittedScore_IsRejectedRatherThanScoredZero()
+    {
+        // Zero is a valid operator verdict now, so an absent field must not arrive as one.
+        await using var context = CreateContext();
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
+        {
+            expectedVersion = 3
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        _ = context.Store.DidNotReceive().SetUserScoreAsync(Arg.Any<Guid>(), Arg.Any<int?>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ScoreRun_AcceptsZeroAndClearsWithDelete()
+    {
+        await using var context = CreateContext();
+        context.Store.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>()).Returns(Run());
+        using var client = context.Factory.CreateClient();
+        using var scoreRequest = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
+        {
+            score = 0,
+            expectedVersion = 3
+        });
+        using var scoreResponse = await client.SendAsync(scoreRequest).ConfigureAwait(false);
+        using var clearRequest = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}/score", new
+        {
+            expectedVersion = 3
+        });
+        using var clearResponse = await client.SendAsync(clearRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, scoreResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, clearResponse.StatusCode);
+        _ = context.Store.Received(1).SetUserScoreAsync(RunId, 0, 3, Arg.Any<CancellationToken>());
+        _ = context.Store.Received(1).SetUserScoreAsync(RunId, null, 3, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ScoreRun_ReturnsTheJudgeVerdictTheGetWouldShow()
+    {
+        // A score is an operator override beside the judging, not a replacement for it: dropping the verdict from the
+        // mutation response made the just-scored run render as "not judged" until the next refresh.
+        await using var context = CreateContext();
+        var attemptId = Guid.NewGuid();
+        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            [new BenchmarkJudgeCriterionScoreV2("correctness", 8, "clear and correct")],
+            "solid answer",
+            80,
+            "v1:aggregate"));
+        context.Store.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
+        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
+                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
+        using var client = context.Factory.CreateClient();
+        using var scoreRequest = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
+        {
+            score = 42,
+            expectedVersion = 3
+        });
+        using var scoreResponse = await client.SendAsync(scoreRequest).ConfigureAwait(false);
+        var scored = await scoreResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var clearRequest = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}/score", new
+        {
+            expectedVersion = 3
+        });
+        using var clearResponse = await client.SendAsync(clearRequest).ConfigureAwait(false);
+        var cleared = await clearResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, scoreResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, clearResponse.StatusCode);
+        foreach (var body in new[]
+                 {
+                     scored,
+                     cleared
+                 })
+        {
+            using var document = JsonDocument.Parse(body);
+            var judge = document.RootElement.GetProperty("judge");
+            AssertEx.Equal("solid answer", judge.GetProperty("summary").GetString());
+            AssertEx.Equal(1, judge.GetProperty("criteria").GetArrayLength());
+        }
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WithoutConfirmation_ReturnsRejudgeRequired()
+    {
+        await using var context = CreateContext();
+        context.Projects.UpdateJudgePolicyAsync(ProjectId, 4, Arg.Any<BenchmarkJudgePolicyDraft?>(), false, Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkJudgePolicyChange>>(_ => throw new BenchmarkConflictException("RejudgeRequired"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/projects/{ProjectId}/judge", new
+        {
+            policy = new
+            {
+                modelName = "judge.gguf",
+                contextTokens = 4096
+            },
+            expectedVersion = 4,
+            confirmRejudge = false
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.RejudgeRequired,
+            "Changing the judge re-scores every run of this project. Confirm the re-judge to continue.");
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WhenConfirmed_ReturnsTheProjectAndTheRunsItQueued()
+    {
+        var enqueued = Guid.NewGuid();
+        await using var context = CreateContext();
+        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(2);
+        context.Projects.UpdateJudgePolicyAsync(ProjectId, 4, Arg.Any<BenchmarkJudgePolicyDraft?>(), true, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgePolicyChange(Project(isFrozen: true), [enqueued], 3));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/projects/{ProjectId}/judge", new
+        {
+            policy = new
+            {
+                modelName = "judge.gguf",
+                contextTokens = 4096,
+                rubric = new
+                {
+                    version = 1,
+                    criteria = new[]
+                    {
+                        new
+                        {
+                            id = "correctness",
+                            title = "Correctness",
+                            description = "Is it right?",
+                            weight = 40
+                        }
+                    }
+                }
+            },
+            expectedVersion = 4,
+            confirmRejudge = true
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(enqueued.ToString(), document.RootElement.GetProperty("enqueuedRunIds")[0].GetString());
+        AssertEx.Equal(expected: 3, document.RootElement.GetProperty("cohortGeneration").GetInt32());
+        AssertEx.Equal(ProjectId.ToString(), document.RootElement.GetProperty("project").GetProperty("id").GetString());
+    }
+
+    [Test]
+    public async Task RejudgeProject_WhileAJudgingIsActive_ReturnsConflict()
+    {
+        await using var context = CreateContext();
+        context.Projects.RejudgeProjectAsync(ProjectId, 4, Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkJudgePolicyChange>>(_ => throw new BenchmarkConflictException("JudgeAttemptsActive"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/rejudge", new
+        {
+            expectedVersion = 4
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.JudgeAttemptsActive,
+            "A judging of this project is still running. Wait for it or cancel it first.");
+    }
+
+    [Test]
+    public async Task RejudgeRun_WhenTheProjectHasNoJudge_ReturnsConflict()
+    {
+        await using var context = CreateContext();
+        context.Projects.RejudgeRunAsync(RunId, 3, false, Arg.Any<CancellationToken>())
+               .Returns<Task<BenchmarkJudgeAttemptRecord>>(_ => throw new BenchmarkConflictException("JudgeDisabled"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/runs/{RunId}/rejudge", new
+        {
+            expectedVersion = 3,
+            force = false
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.JudgeDisabled,
+            "This project has no judge policy to judge under.");
+    }
+
+    [Test]
+    public async Task RubricPresets_ReturnsTheThreeRubricsTheFormOffers()
+    {
+        await using var context = CreateContext();
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/rubric-presets");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        foreach (var preset in new[]
+                 {
+                     "default",
+                     "programming",
+                     "reasoning"
+                 })
+        {
+            var criteria = document.RootElement.GetProperty(preset).GetProperty("criteria");
+            AssertEx.Equal(expected: 5, criteria.GetArrayLength(), $"The {preset} preset must offer the full rubric.");
+            AssertEx.Equal("correctness", criteria[0].GetProperty("id").GetString());
+        }
+    }
+
+    [Test]
+    public async Task ListRuns_ProjectsTheRankCohortAndTheRunsQualityScore()
+    {
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
+        context.Store.ListRunsAsync(ProjectId, 0, 50, null, true, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkRunPage([
+                       Run() with
+                       {
+                           QualityScore = 73,
+                           QualityScoreSource = "judge",
+                           Rank = 1
+                       }
+                   ],
+                   TotalCount: 1,
+                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 2)));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/runs?page=1&pageSize=50");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var run = document.RootElement.GetProperty("items")[0];
+        AssertEx.Equal(expected: 73, run.GetProperty("qualityScore").GetInt32());
+        AssertEx.Equal("judge", run.GetProperty("qualityScoreSource").GetString());
+        AssertEx.Equal(expected: 1, run.GetProperty("rank").GetInt32());
+        AssertEx.Equal("v1:aggregate", run.GetProperty("modelGroupKey").GetString());
+        var cohort = document.RootElement.GetProperty("rankCohort");
+        AssertEx.Equal(expected: 1, cohort.GetProperty("rankedCount").GetInt32());
+        AssertEx.Equal(expected: 2, cohort.GetProperty("totalScored").GetInt32());
+        AssertEx.Equal("cohort-key", cohort.GetProperty("executionKey").GetString());
     }
 
     private static Context CreateContext() =>

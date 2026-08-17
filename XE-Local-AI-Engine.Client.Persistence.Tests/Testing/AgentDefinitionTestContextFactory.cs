@@ -31,6 +31,23 @@ internal static class AgentDefinitionTestContextFactory
         return new NodeChatDbContext(options, keyHolder);
     }
 
+    /// <summary>
+    ///     Creates an encrypted context with one extra interceptor wired, for tests that inject a failure into a save
+    ///     and assert the surrounding transaction rolled everything back.
+    /// </summary>
+    public static NodeChatDbContext Create(string databasePath, INodeSqliteKeyHolder keyHolder, IInterceptor extraInterceptor)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+
+        var options = new DbContextOptionsBuilder<NodeChatDbContext>()
+                      .UseSqlite($"Data Source={databasePath}")
+                      .AddInterceptors(SaveChangesInterceptor, MaterializationInterceptor, extraInterceptor)
+                      .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                      .Options;
+
+        return new NodeChatDbContext(options, keyHolder);
+    }
+
     /// <summary>Creates a context without encryption interceptors, for migration schema assertions that read raw columns.</summary>
     public static NodeChatDbContext CreateForMigration(string databasePath, INodeSqliteKeyHolder keyHolder)
     {

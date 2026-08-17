@@ -254,23 +254,12 @@ public sealed class ComparisonReportService(
         };
     }
 
-    private static int? ReadJudgeScore(BenchmarkRunRecord? run)
-    {
-        if (run?.JudgeResultJson is not { } payload || payload.IsEmpty)
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<BenchmarkJudgeResultV1>(payload.Span, TrainingJson.Options)?.Score;
-        }
-        catch (JsonException)
-        {
-            // A judge verdict this node can no longer read leaves the rest of the report intact.
-            return null;
-        }
-    }
+    /// <summary>
+    ///     The run's judge score, read from its current attempt. Plaintext and already 0..100 — the report no longer
+    ///     decrypts and parses a verdict to find a number the store can sort by.
+    /// </summary>
+    private static int? ReadJudgeScore(BenchmarkRunRecord? run) =>
+        run?.Judge?.Score;
 
     private static double Accuracy(int passed, int total) =>
         total == 0 ? 0d : (double)passed / total;

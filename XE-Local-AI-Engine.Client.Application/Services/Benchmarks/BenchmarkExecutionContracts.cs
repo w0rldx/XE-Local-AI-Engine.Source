@@ -251,13 +251,6 @@ public sealed record BenchmarkOutputPart(
     string? Result = null,
     bool? IsError = null);
 
-public sealed record BenchmarkJudgeResultV1(
-    int SchemaVersion,
-    int Score,
-    string Rationale,
-    string JudgeModelContentFingerprint,
-    int PromptVersion);
-
 public sealed class BenchmarkContextAdmissionPolicy(int requiredContextTokens) : IInvocationGenerationAdmissionPolicy
 {
     private readonly int _requiredContextTokens = requiredContextTokens > 0
@@ -339,11 +332,10 @@ internal static class BenchmarkSnapshotModelComparer
 }
 
 /// <summary>
-///     The ONLY serializer for the benchmark run's stored payload blobs. Public because the endpoint mapper reads the
-///     same blobs it writes: <see cref="JsonSerializerDefaults.Web" /> is camelCase, so a reader that deserializes with
-///     default options binds every property to its default and hands the API a zeroed judge result instead of failing.
-///     Route every read of <c>output_parts_json</c>/<c>judge_result_json</c> through here rather than re-deriving the
-///     options at the call site.
+///     The ONLY serializer for the benchmark run's stored <c>output_parts_json</c> blob (the judge's own blobs ride
+///     <c>BenchmarkJudgeSerialization</c>). Public because a reader must never re-derive the options at the call site:
+///     <see cref="JsonSerializerDefaults.Web" /> is camelCase, so deserializing with default options binds every
+///     property to its default and hands the API a zeroed payload instead of failing.
 /// </summary>
 public static class BenchmarkExecutionSerialization
 {
@@ -355,27 +347,6 @@ public static class BenchmarkExecutionSerialization
     public static IReadOnlyList<BenchmarkOutputPart> DeserializeParts(ReadOnlySpan<byte> payload) =>
         JsonSerializer.Deserialize<BenchmarkOutputPart[]>(payload, JsonOptions)
         ?? throw new BenchmarkSnapshotException("Benchmark output parts are invalid.");
-
-    public static byte[] SerializeJudge(BenchmarkJudgeResultV1 result) =>
-        JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
-
-    /// <summary>The stored judge result, or <see langword="null" /> when the payload is absent or unreadable.</summary>
-    public static BenchmarkJudgeResultV1? DeserializeJudge(ReadOnlyMemory<byte>? payload)
-    {
-        if (payload is not { } value || value.IsEmpty)
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<BenchmarkJudgeResultV1>(value.Span, JsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 }
 
 public sealed record BenchmarkEligibleAgent(Guid Id, string Name, int Version);
@@ -388,17 +359,24 @@ public sealed record BenchmarkEligibleModel(
     string ModelContentFingerprint,
     bool SupportsTools);
 
+/// <summary>
+///     The operator-editable judge configuration. Everything here is inside the policy hash, so any change to it is a
+///     new policy revision and — on a project that already has runs — a re-judge.
+/// </summary>
+/// <param name="Rubric">The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</param>
+public sealed record BenchmarkJudgePolicyDraft(
+    string ModelName,
+    int ContextTokens,
+    BenchmarkJudgeRubricV1? Rubric = null,
+    string? ReferenceAnswer = null);
+
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
     string CoreTask,
     int ContextTokens,
     Guid AgentDefinitionId,
-    bool JudgeEnabled,
-    string? JudgeModelName,
-    int? JudgeContextTokens,
-    int JudgePromptVersion = 1,
-    int JudgeOutputSchemaVersion = 1);
+    BenchmarkJudgePolicyDraft? Judge = null);
 
 public sealed class BenchmarkQueueOptions
 {

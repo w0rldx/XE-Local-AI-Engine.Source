@@ -8,7 +8,7 @@ import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/B
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
 import { BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { isJudgeActive, isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
+import { isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 
 interface BenchmarkRunPaneProps {
@@ -18,9 +18,12 @@ interface BenchmarkRunPaneProps {
 	isReconnecting: boolean;
 	isCancelling?: boolean;
 	isScoring?: boolean;
+	isJudgeBusy?: boolean;
 	isDeleting?: boolean;
 	onCancel: (target: "Primary" | "Judge") => void;
 	onScore: (score: number) => void;
+	onClearScore: () => void;
+	onRejudge: () => void;
 	onDelete: () => void;
 }
 
@@ -35,9 +38,12 @@ export function BenchmarkRunPane({
 	isReconnecting,
 	isCancelling,
 	isScoring,
+	isJudgeBusy,
 	isDeleting,
 	onCancel,
 	onScore,
+	onClearScore,
+	onRejudge,
 	onDelete,
 }: BenchmarkRunPaneProps) {
 	const { t } = useTranslation();
@@ -65,6 +71,9 @@ export function BenchmarkRunPane({
 					</Text>
 					<Text size="sm">
 						{t("pages.benchmarks.metrics.speed", "tok/s")}: <b>{run.tokensPerSecond?.toFixed(1) ?? "—"}</b>
+					</Text>
+					<Text size="sm">
+						{t("pages.benchmarks.rank.quality", "Quality")}: <b>{run.qualityScore ?? "—"}</b>
 					</Text>
 				</Group>
 				<Group gap="xs" c={isConnected ? "green" : "dimmed"}>
@@ -101,18 +110,20 @@ export function BenchmarkRunPane({
 						{t("pages.benchmarks.run.cancel", "Cancel run")}
 					</Button>
 				) : null}
-				{isJudgeActive(run.judgeStatus) ? (
-					<Button variant="subtle" color="red" loading={isCancelling} onClick={() => onCancel("Judge")}>
-						{t("pages.benchmarks.judge.cancel", "Cancel judge")}
-					</Button>
-				) : null}
 				<BenchmarkScorePicker
 					value={run.userScore}
 					disabled={run.primaryStatus !== "Succeeded"}
 					isSaving={isScoring}
 					onChange={onScore}
+					onClear={onClearScore}
 				/>
-				<BenchmarkJudgePanel run={run} />
+				<BenchmarkJudgePanel
+					judge={run.judge}
+					canRejudge={run.primaryStatus === "Succeeded"}
+					isBusy={isJudgeBusy}
+					onCancel={() => onCancel("Judge")}
+					onRejudge={onRejudge}
+				/>
 				<BenchmarkLaunchEvidencePanel run={run} />
 				{isRunTerminal(run) ? (
 					<Button variant="subtle" color="red" leftSection={<IconTrash size={14} />} loading={isDeleting} onClick={onDelete}>

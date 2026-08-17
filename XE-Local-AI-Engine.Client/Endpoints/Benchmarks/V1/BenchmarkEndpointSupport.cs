@@ -11,6 +11,24 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 /// </summary>
 internal static class BenchmarkEndpointSupport
 {
+    /// <summary>
+    ///     The run's current judge verdict, decrypted, or null when it has no attempt or no stored result. EVERY
+    ///     endpoint that returns the run detail shape reads it here: a mutation response that skipped it would render
+    ///     as "not judged" for a run whose GET shows a full verdict.
+    /// </summary>
+    public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(IBenchmarkStore store, BenchmarkRunRecord run, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.Judge?.AttemptId is not { } attemptId)
+        {
+            return null;
+        }
+
+        var attempt = await store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
+        return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
+    }
+
     public static IResult Error(Exception exception) =>
         exception switch
         {
@@ -18,6 +36,8 @@ internal static class BenchmarkEndpointSupport
             BenchmarkValidationException => Problem(StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
             BenchmarkEligibilityException => Problem(StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
             BenchmarkUnsupportedKvCacheTypeException => Problem(StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType, exception.Message),
+            BenchmarkJudgePolicyChangedException => Problem(StatusCodes.Status409Conflict, BenchmarkErrorCode.JudgePolicyChanged,
+                "The project's judge policy changed. Refresh and retry."),
             BenchmarkConflictException conflict => Problem(StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code), SafeConflictMessage(conflict.Code)),
             _ => throw exception
         };
@@ -48,6 +68,12 @@ internal static class BenchmarkEndpointSupport
             "ActiveRun" => BenchmarkErrorCode.ActiveRun,
             "FreezeDependencyChanged" => BenchmarkErrorCode.FreezeDependencyChanged,
             "FingerprintChanged" => BenchmarkErrorCode.FingerprintChanged,
+            "RejudgeRequired" => BenchmarkErrorCode.RejudgeRequired,
+            "JudgeAttemptsActive" => BenchmarkErrorCode.JudgeAttemptsActive,
+            "JudgeAttemptActive" => BenchmarkErrorCode.JudgeAttemptActive,
+            "JudgePolicyAlreadyApplied" => BenchmarkErrorCode.JudgePolicyAlreadyApplied,
+            "JudgeDisabled" => BenchmarkErrorCode.JudgeDisabled,
+            "PrimaryNotSucceeded" => BenchmarkErrorCode.PrimaryNotSucceeded,
             _ => BenchmarkErrorCode.InvalidLifecycleTransition
         };
 
@@ -59,6 +85,12 @@ internal static class BenchmarkEndpointSupport
             "ActiveRun" => "The benchmark run is active and cannot be deleted.",
             "FreezeDependencyChanged" => "A benchmark dependency changed while the run was being frozen.",
             "FingerprintChanged" => "The installed model content changed.",
+            "RejudgeRequired" => "Changing the judge re-scores every run of this project. Confirm the re-judge to continue.",
+            "JudgeAttemptsActive" => "A judging of this project is still running. Wait for it or cancel it first.",
+            "JudgeAttemptActive" => "A judging of this run is still running.",
+            "JudgePolicyAlreadyApplied" => "This run is already judged under the current policy and judge runtime.",
+            "JudgeDisabled" => "This project has no judge policy to judge under.",
+            "PrimaryNotSucceeded" => "The benchmark run has no stored output to judge.",
             _ => "The benchmark lifecycle transition is not allowed."
         };
 }

@@ -28,9 +28,10 @@ public sealed class BenchmarkCancellationService(
             throw new BenchmarkConflictException("PrimaryAlreadySucceeded");
         }
 
+        // Only a live attempt is cancellable: a run with no judging, or one already terminal, has nothing to stop.
         if (target == BenchmarkCancellationTarget.Judge
             && (current.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded
-                || current.JudgeStatus is BenchmarkJudgeStatus.Disabled or BenchmarkJudgeStatus.Pending or BenchmarkJudgeStatus.Skipped))
+                || current.Judge?.State is not (BenchmarkRunJudgeStates.Queued or BenchmarkRunJudgeStates.Running)))
         {
             throw new BenchmarkConflictException("JudgeNotCancellable");
         }
@@ -40,7 +41,7 @@ public sealed class BenchmarkCancellationService(
         {
             _ = registry.TryCancel(runId, BenchmarkWorkKind.Primary);
         }
-        else if (target == BenchmarkCancellationTarget.Judge && updated.JudgeStatus == BenchmarkJudgeStatus.Cancelled)
+        else if (target == BenchmarkCancellationTarget.Judge && updated.Judge?.State == BenchmarkRunJudgeStates.Cancelled)
         {
             _ = registry.TryCancel(runId, BenchmarkWorkKind.Judge);
         }

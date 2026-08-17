@@ -17,6 +17,7 @@ vi.mock("@/features/benchmarks/hooks/useBenchmarkRunHub", () => ({ useBenchmarkR
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastErrorMock, success: vi.fn(), info: vi.fn() } }));
 
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
+import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
 import { domainErrorRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -35,7 +36,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
 		agentVersion: 1,
 		requestedContextTokens: 4096,
 		primaryStatus: "Succeeded",
-		judgeStatus: "Skipped",
+		judge: { state: "none", policyCurrent: false, executionCurrent: false },
+		qualityScoreSource: "none",
+		modelGroupKey: "v1:test",
 		effectiveContextTokens: 4096,
 		durationMs: 1250,
 		totalTokens: 30,
@@ -46,14 +49,13 @@ function runRow(overrides: Record<string, unknown> = {}) {
 		createdAtUtc: 1,
 		updatedAtUtc: 2,
 		outputParts: [{ kind: "output", content: "Persisted answer" }],
-		judgeResult: null,
 		...overrides,
 	};
 }
 
 describe("BenchmarkRunLivePane", () => {
 	beforeEach(() => {
-		hubMock.mockReturnValue({ parts: [], isConnected: true, isReconnecting: false });
+		hubMock.mockReturnValue({ parts: [], overlay: noBenchmarkRunLiveOverlay, isConnected: true, isReconnecting: false });
 		toastErrorMock.mockClear();
 	});
 
@@ -62,6 +64,7 @@ describe("BenchmarkRunLivePane", () => {
 	it("renders the run and the parts the hub hands it", async () => {
 		hubMock.mockReturnValue({
 			parts: [{ kind: "output", content: "Persisted answer" }],
+			overlay: noBenchmarkRunLiveOverlay,
 			isConnected: true,
 			isReconnecting: false,
 		});
@@ -90,6 +93,7 @@ describe("BenchmarkRunLivePane", () => {
 	it("renders the hub's live parts, not the persisted snapshot", async () => {
 		hubMock.mockReturnValue({
 			parts: [{ kind: "output", content: "Streaming answer" }],
+			overlay: noBenchmarkRunLiveOverlay,
 			isConnected: true,
 			isReconnecting: false,
 		});
@@ -107,15 +111,15 @@ describe("BenchmarkRunLivePane", () => {
 			http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())),
 			http.put(localApiPath(`benchmarks/runs/${runId}/score`), async ({ request }) => {
 				observedBody = await request.json();
-				return HttpResponse.json(runRow({ userScore: 5, version: 4 }));
+				return HttpResponse.json(runRow({ userScore: 100, version: 4 }));
 			}),
 		);
 
 		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
 
-		fireEvent.click(await screen.findByTestId("benchmark-score-5"));
+		fireEvent.click(await screen.findByTestId("benchmark-score-preset-100"));
 
-		await waitFor(() => expect(observedBody).toEqual({ score: 5, expectedVersion: 3 }));
+		await waitFor(() => expect(observedBody).toEqual({ score: 100, expectedVersion: 3 }));
 		expect(toastErrorMock).not.toHaveBeenCalled();
 	});
 
@@ -132,8 +136,59 @@ describe("BenchmarkRunLivePane", () => {
 
 		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
 
-		fireEvent.click(await screen.findByTestId("benchmark-score-4"));
+		fireEvent.click(await screen.findByTestId("benchmark-score-preset-25"));
 
 		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("The run changed before the score was saved."));
+	});
+	// Clearing the override is its own verb on the wire; posting a 0 would be a different, real score.
+	it("clears the operator override through DELETE, carrying the run version", async () => {
+		let observedBody: unknown;
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow({ userScore: 60 }))),
+			http.delete(localApiPath(`benchmarks/runs/${runId}/score`), async ({ request }) => {
+				observedBody = await request.json();
+				return HttpResponse.json(runRow({ userScore: null, version: 4 }));
+			}),
+		);
+
+		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+		fireEvent.click(await screen.findByTestId("benchmark-score-clear"));
+
+		await waitFor(() => expect(observedBody).toEqual({ expectedVersion: 3 }));
+		expect(toastErrorMock).not.toHaveBeenCalled();
+	});
+
+	// The hub's JudgeState events correct what is RENDERED; the durable snapshot stays the write target.
+	it("renders the hub's judge state over the persisted one", async () => {
+		hubMock.mockReturnValue({
+			parts: [],
+			overlay: { ...noBenchmarkRunLiveOverlay, judgeState: "running" },
+			isConnected: true,
+			isReconnecting: false,
+		});
+		server.use(http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())));
+
+		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+		expect((await screen.findByTestId("benchmark-judge-state")).textContent).toBe("Judging");
+	});
+
+	// An explicit re-judge is forced: the operator asked for a fresh verdict, not for an idempotent no-op.
+	it("forces the re-judge it posts for one run", async () => {
+		let observedBody: unknown;
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => HttpResponse.json(runRow())),
+			http.post(localApiPath(`benchmarks/runs/${runId}/rejudge`), async ({ request }) => {
+				observedBody = await request.json();
+				return HttpResponse.json(runRow({ judge: { state: "queued", policyCurrent: true, executionCurrent: false } }));
+			}),
+		);
+
+		renderWithProviders(<BenchmarkRunLivePane runId={runId} />);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Re-judge run" }));
+
+		await waitFor(() => expect(observedBody).toEqual({ expectedVersion: 3, force: true }));
 	});
 });

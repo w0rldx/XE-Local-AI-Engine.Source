@@ -24,11 +24,16 @@ public sealed class BenchmarkRunExecutor(
     IBenchmarkEventBuffer events,
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
+    IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
 {
     private const string FingerprintChangedMessage = "The installed model changed after the benchmark was created.";
     private const string CapacityRejectedMessage = "The benchmark could not reserve enough local model capacity.";
     private const string InvocationFailedMessage = "The benchmark invocation failed. See local logs for details.";
+    private const string JudgePolicyChangedMessage = "judge policy changed during run";
+
+    /// <summary>How many times a judge-policy change is re-resolved before the first attempt is committed as failed.</summary>
+    private const int JudgePolicyResolutionAttempts = 3;
 
     public async Task ExecuteAsync(BenchmarkClaimedWork work, CancellationToken cancellationToken)
     {
@@ -138,15 +143,16 @@ public sealed class BenchmarkRunExecutor(
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
-            var persisted = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(work.RunId,
+            var persisted = await MarkPrimarySucceededAsync(work,
+                                       new BenchmarkPrimarySuccessCommand(work.RunId,
                                            work.Version,
                                            BenchmarkExecutionSerialization.SerializeParts(capture.Parts),
                                            terminalEvent.Sequence,
                                            effectiveContext,
                                            durationMs,
                                            terminal.TotalTokens,
-                                           tokensPerSecond), CancellationToken.None)
-                                       .ConfigureAwait(false);
+                                           tokensPerSecond))
+                                   .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
             events.PublishReserved(terminalEvent with
             {
@@ -172,6 +178,66 @@ public sealed class BenchmarkRunExecutor(
             await TerminalizeFailedAsync(work,
                 exception is BenchmarkExecutionException or LlamaRuntimeException ? exception.Message : InvocationFailedMessage,
                 environment).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Commits primary success together with the run's first judging, in the store's single transaction. The judge
+    ///     runtime is resolved for one specific policy revision BEFORE the call; if the project moved to another
+    ///     revision in the meantime the store rolls the whole thing back, and this re-resolves against the new one. A
+    ///     bounded number of rounds, then the attempt is committed as failed — the measurement is never lost to a
+    ///     judge-configuration race, and the operator re-judges.
+    /// </summary>
+    private async Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkClaimedWork work, BenchmarkPrimarySuccessCommand command)
+    {
+        for (var round = 1; round <= JudgePolicyResolutionAttempts; round++)
+        {
+            var revision = await store.GetCurrentJudgePolicyRevisionAsync(work.Run.ProjectId, CancellationToken.None).ConfigureAwait(false);
+            if (revision is null)
+            {
+                return await store.MarkPrimarySucceededAsync(command, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            try
+            {
+                return await store.MarkPrimarySucceededAsync(command with
+                {
+                    JudgeAttempt = await ResolveJudgeSeedAsync(revision).ConfigureAwait(false)
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (BenchmarkJudgePolicyChangedException) when (round < JudgePolicyResolutionAttempts)
+            {
+                logger.LogInformation("Benchmark run {RunId}: the judge policy changed while the run was executing; re-resolving.", work.RunId);
+            }
+        }
+
+        // The bounded retry is exhausted. Still atomic: the run keeps its measurement and carries a failed first
+        // attempt the operator can re-judge, rather than losing the measurement to a judge-configuration race.
+        return await store.MarkPrimarySucceededAsync(command with
+        {
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed(ExpectedJudgePolicyRevisionId: null, RuntimeJson: null, JudgePolicyChangedMessage)
+        }, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The judge runtime for <paramref name="revision" />, or a seed that records why it could not be resolved.
+    ///     Never throws toward the primary result: an unusable judge runtime is a failed judging, not a failed run.
+    /// </summary>
+    private async Task<BenchmarkJudgeAttemptSeed> ResolveJudgeSeedAsync(BenchmarkJudgePolicyRevisionRecord revision)
+    {
+        try
+        {
+            var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
+            var resolution = await judgeRuntimeResolver.ResolveAsync(policy, CancellationToken.None).ConfigureAwait(false);
+            return new BenchmarkJudgeAttemptSeed(revision.Id,
+                new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
+                RuntimeUnresolvedReason: null,
+                resolution.Intent);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Benchmark judge runtime could not be resolved for policy revision {RevisionId}.", revision.Id);
+            return new BenchmarkJudgeAttemptSeed(revision.Id, RuntimeJson: null, exception.Message);
         }
     }
 

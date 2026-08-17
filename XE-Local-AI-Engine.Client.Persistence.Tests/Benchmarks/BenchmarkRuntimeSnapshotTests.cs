@@ -48,7 +48,6 @@ public sealed class BenchmarkRuntimeSnapshotTests
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             model,
-            new BenchmarkJudgeSnapshotV1(false, null, 1, 1, null, null, null, null, null, "sha256:" + new string('b', 64)),
             new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null), "test", 123));
 
         var payload = factory.Serialize(snapshot);
@@ -66,11 +65,11 @@ public sealed class BenchmarkRuntimeSnapshotTests
             "exact task",
             4096,
             CreateRuntime([]),
-            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false,
+            // A frozen runtime whose context is smaller than the benchmark requires can never replay the measurement.
+            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 2048, null, null, null, null, null, false,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             model,
-            new BenchmarkJudgeSnapshotV1(false, null, 2, 1, null, null, null, null, null, "hash"),
             new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null),
             "test",
             123)));

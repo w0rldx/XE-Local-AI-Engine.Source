@@ -3963,10 +3963,7 @@
 				"CancelRequested": "Abbruch angefordert",
 				"Succeeded": "Erfolgreich",
 				"Failed": "Fehlgeschlagen",
-				"Cancelled": "Abgebrochen",
-				"Disabled": "Deaktiviert",
-				"Pending": "Ausstehend",
-				"Skipped": "Übersprungen"
+				"Cancelled": "Abgebrochen"
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -3987,7 +3984,18 @@
 				"frozenExplanation": "Dieses Projekt ist eingefroren, solange Läufe existieren. Löschen Sie die abgeschlossenen Läufe, um es wieder zu bearbeiten.",
 				"runCount": "{{count}} Läufe",
 				"empty": "Erstellen Sie ein Projekt, um eine Aufgabe einzufrieren und Modelle zu vergleichen.",
-				"select": "Wählen Sie ein Benchmark-Projekt."
+				"select": "Wählen Sie ein Benchmark-Projekt.",
+				"judgeSection": "Automatische Bewertung",
+				"judgeEditableWhenFrozen": "Der Judge bleibt auch bei eingefrorenen Projekten änderbar. Beim Speichern werden alle erfolgreichen Läufe neu bewertet.",
+				"saveJudge": "Judge speichern",
+				"editJudge": "Judge bearbeiten",
+				"referenceAnswer": "Musterantwort (optional)",
+				"referenceAnswerHelp": "Eine ideale Antwort, mit der der Judge vergleichen darf. Leer lassen, um allein nach dem Raster zu bewerten.",
+				"rejudgeAll": "Alle Läufe neu bewerten",
+				"rejudgeConfirmTitle": "Projekt neu bewerten?",
+				"rejudgeConfirmPolicy": "Eine Änderung am Judge bewertet dieses Projekt neu. Alle {{count}} erfolgreichen Läufe werden neu bewertet und die Rangliste wird aus der neuen Kohorte aufgebaut.",
+				"rejudgeConfirmAll": "Alle {{count}} erfolgreichen Läufe werden mit der aktuellen Richtlinie neu bewertet, und die gewertete Kohorte wechselt auf die aktuelle Bewertungslaufzeit.",
+				"rejudgeConfirmAccept": "Neu bewerten"
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -3995,10 +4003,11 @@
 				"cancel": "Lauf abbrechen",
 				"delete": "Abgeschlossenen Lauf löschen",
 				"waiting": "Warten auf Modellausgabe…",
-				"compareSelection": "Zu vergleichende Läufe",
 				"kvCacheType": "KV-Cache-Typ",
 				"kvCacheTypeAuto": "Automatisch",
-				"kvCacheTypeHelp": "Quantisierte Typen starten mit aktivierter Flash Attention. Automatisch verwendet q8_0 auf der GPU, sofern die gewählte Binärdatei das unterstützt, sonst f16."
+				"kvCacheTypeHelp": "Quantisierte Typen starten mit aktivierter Flash Attention. Automatisch verwendet q8_0 auf der GPU, sofern die gewählte Binärdatei das unterstützt, sonst f16.",
+				"select": "{{model}} in der Detailansicht anzeigen",
+				"actions": "Laufaktionen"
 			},
 			"metrics": {
 				"duration": "Dauer",
@@ -4012,21 +4021,31 @@
 			},
 			"score": {
 				"label": "Betreiberbewertung",
-				"value": "Bewertung {{score}} von 5"
+				"unset": "Keine Vorgabe — es zählt die Bewertung des Judges",
+				"current": "Vorgabe: {{score}} / 100",
+				"input": "Betreiberbewertung, 0 bis 100",
+				"slider": "Schieberegler für die Betreiberbewertung",
+				"save": "Bewertung speichern",
+				"clear": "Vorgabe entfernen"
 			},
 			"judge": {
 				"title": "Automatische Bewertung",
-				"score": "Bewertung: {{score}}",
+				"score": "Bewertung: {{score}} / 100",
 				"cancel": "Bewertung abbrechen",
+				"rejudge": "Lauf neu bewerten",
+				"policyCurrent": "Richtlinie r{{revision}}",
+				"policyOutdated": "Richtlinie r{{revision}} — veraltet",
+				"runtimeDiffers": "abweichende Bewertungslaufzeit",
+				"runtimeDiffersHint": "Bewerten Sie das Projekt neu, um die Kohorte zu verschieben.",
+				"attempt": "Versuch #{{sequence}}",
+				"criterionScore": "{{score}} / 10",
 				"explanations": {
-					"Disabled": "Für dieses Projekt wurde keine automatische Bewertung angefordert.",
-					"Pending": "Die Bewertung wird erst nach einem erfolgreichen Primärlauf eingereiht.",
-					"Skipped": "Die Bewertung war angefordert, wurde aber übersprungen, weil der Primärlauf nicht erfolgreich war.",
-					"Queued": "Die Bewertung wartet in der dauerhaften Warteschlange.",
-					"Running": "Das erfolgreiche Primärergebnis wird bewertet.",
-					"Succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.",
-					"Failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.",
-					"Cancelled": "Die Bewertung wurde abgebrochen."
+					"none": "Dieser Lauf wurde unter der aktuellen Bewertungsrichtlinie noch nicht bewertet.",
+					"queued": "Die Bewertung wartet in der dauerhaften Warteschlange.",
+					"running": "Das erfolgreiche Primärergebnis wird bewertet.",
+					"succeeded": "Die Bewertung wurde unabhängig vom Primärlauf abgeschlossen.",
+					"failed": "Die Bewertung ist fehlgeschlagen; das erfolgreiche Primärergebnis bleibt unverändert.",
+					"cancelled": "Die Bewertung wurde abgebrochen."
 				}
 			},
 			"validation": {
@@ -4034,7 +4053,9 @@
 				"task": "Eine Kernaufgabe ist erforderlich.",
 				"context": "Der Kontext muss positiv sein.",
 				"agent": "Wählen Sie einen Agenten.",
-				"judgeModel": "Wählen Sie ein Bewertungsmodell."
+				"judgeModel": "Wählen Sie ein Bewertungsmodell.",
+				"judgeContext": "Der Kontext der Bewertung muss positiv sein.",
+				"referenceAnswer": "Die Musterantwort ist zu lang."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
@@ -4048,7 +4069,10 @@
 				"fingerprintChanged": "Das installierte Modell wurde nach dem Einfrieren dieses Laufs geändert.",
 				"restartInterrupted": "Diese laufende Phase wurde durch einen Neustart des Knotens unterbrochen.",
 				"judgeFailed": "Die automatische Bewertung ist fehlgeschlagen; das Primärergebnis bleibt verfügbar.",
-				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen."
+				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen.",
+				"rejudgeRun": "Dieser Lauf konnte nicht neu bewertet werden.",
+				"rejudgeProject": "Dieses Projekt konnte nicht neu bewertet werden.",
+				"judgeAttemptsActive": "Eine Bewertung dieses Projekts läuft noch. Warten Sie sie ab oder brechen Sie sie ab."
 			},
 			"loading": {
 				"projects": "Benchmark-Projekte werden geladen…",
@@ -4068,18 +4092,94 @@
 				"field": "Feld",
 				"receipt": "Startprotokoll",
 				"environment": "Umgebung",
-				"judgeReceipt": "Startprotokoll der Bewertung",
-				"judgeEnvironment": "Umgebung der Bewertung",
 				"intended": "Beabsichtigt",
 				"effective": "Tatsächlich",
 				"intendedDiffers": "Der beabsichtigte und der tatsächliche Start unterscheiden sich.",
 				"primaryDiffers": "Start unterscheidet sich: {{fields}}",
-				"judgeDiffers": "Start/Umgebung der Bewertung unterscheidet sich: {{fields}}",
 				"copy": "Kopieren",
 				"copied": "Kopiert",
 				"kvExplicit": "KV {{type}} (ausdrücklich)",
-				"value": "Wert",
-				"judgeIntendedDiffers": "Der beabsichtigte und der tatsächliche Start der Bewertung unterscheiden sich."
+				"value": "Wert"
+			},
+			"judgeState": {
+				"none": "Nicht bewertet",
+				"queued": "Bewertung wartet",
+				"running": "Wird bewertet",
+				"succeeded": "Bewertet",
+				"failed": "Bewertung fehlgeschlagen",
+				"cancelled": "Bewertung abgebrochen"
+			},
+			"rank": {
+				"rank": "Rang",
+				"model": "Modell",
+				"quality": "Qualität",
+				"judgeScore": "Judge",
+				"userScore": "Betreiber",
+				"launch": "KV / Kontext",
+				"created": "Erstellt",
+				"status": "Status",
+				"actions": "Aktionen",
+				"compare": "Vergleich",
+				"context": "Kontext {{tokens}}",
+				"cohort": "{{ranked}} von {{scored}} gewertet",
+				"cohortPolicy": "Bewertungsrichtlinie r{{revision}}",
+				"cohortGeneration": "Gen. {{generation}}",
+				"groupByModel": "Nach Modell gruppieren",
+				"groupCount": "{{count}} Läufe dieses Modells",
+				"expandGroup": "Weitere Läufe dieses Modells anzeigen",
+				"empty": "Noch keine Läufe. Starten Sie einen, um die Rangliste zu füllen.",
+				"source": {
+					"user": "Betreiber",
+					"judge": "Judge",
+					"none": "—"
+				},
+				"exclusion": {
+					"no-score": "Noch keine Bewertung — vergeben Sie eine Betreiberbewertung oder warten Sie auf den Judge.",
+					"judge-pending": "Der Judge ist mit diesem Lauf noch nicht fertig.",
+					"judge-failed": "Der Judge ist bei diesem Lauf fehlgeschlagen.",
+					"judge-cancelled": "Der Judge wurde bei diesem Lauf abgebrochen.",
+					"policy-outdated": "Mit einer älteren Bewertungsrichtlinie bewertet.",
+					"generation-stale": "Vor dem Zurücksetzen der aktuellen Kohorte bewertet.",
+					"execution-key-mismatch": "Mit einer anderen Bewertungslaufzeit bewertet als die gewertete Kohorte.",
+					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig."
+				},
+				"exclusionShort": {
+					"no-score": "unbewertet",
+					"judge-pending": "wird bewertet",
+					"judge-failed": "Judge fehlgeschlagen",
+					"judge-cancelled": "Judge abgebrochen",
+					"policy-outdated": "Richtlinie veraltet",
+					"generation-stale": "veraltete Kohorte",
+					"execution-key-mismatch": "Laufzeit weicht ab",
+					"execution-identity-incomplete": "Identität unvollständig"
+				},
+				"action": {
+					"score": "Vergeben Sie eine Betreiberbewertung.",
+					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
+					"wait": "Warten Sie, bis die Bewertung fertig ist."
+				}
+			},
+			"rubric": {
+				"title": "Bewertungsraster",
+				"presets": "Vorlagen",
+				"presetDefault": "Standard",
+				"presetProgramming": "Programmierung",
+				"presetReasoning": "Schlussfolgern",
+				"criterionTitle": "Titel",
+				"criterionId": "Kennung",
+				"criterionWeight": "Gewicht",
+				"criterionDescription": "Worauf der Judge achten soll",
+				"remove": "Kriterium entfernen",
+				"add": "Kriterium hinzufügen",
+				"count": "{{count}} von {{max}} Kriterien",
+				"issues": {
+					"count": "Ein Raster braucht zwischen 1 und 8 Kriterien.",
+					"id": "Eine Kennung darf nur Kleinbuchstaben, Ziffern, - und _ enthalten (höchstens 32 Zeichen).",
+					"duplicateId": "Diese Kennung wird bereits von einem anderen Kriterium verwendet.",
+					"title": "Ein Titel ist erforderlich (höchstens 64 Zeichen).",
+					"description": "Eine Beschreibung ist erforderlich (höchstens 1024 Zeichen).",
+					"weight": "Das Gewicht muss zwischen 1 und 100 liegen."
+				}
 			}
 		},
 		"customTools": {
