@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -37,6 +38,9 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             WorkspaceRevocationBusyException => NodeConflictProblemType.WorkspaceRevocationBusy,
             PreviewWorkflowCapReachedException => NodeConflictProblemType.PreviewWorkflowCapReached,
             PreviewWorkflowModelCapExceededException => NodeConflictProblemType.PreviewWorkflowModelCapExceeded,
+            InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,
+            InstalledModelProviderConflictException => NodeConflictProblemType.InstalledModelProviderConflict,
+            InstalledModelProviderMapSupersededException => NodeConflictProblemType.InstalledModelProviderMapSuperseded,
             _ => (NodeConflictProblemType?)null
         };
 

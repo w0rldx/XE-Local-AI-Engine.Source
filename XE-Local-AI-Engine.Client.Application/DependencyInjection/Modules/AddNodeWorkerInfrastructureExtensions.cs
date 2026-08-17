@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -25,6 +26,9 @@ internal static class AddNodeWorkerInfrastructureExtensions
         // scoped, DbContext-backed IModelClassificationStore (a singleton could not consume it); the singleton
         // IOllamaModelService is safe to consume from a scoped service.
         builder.Services.AddScoped<IModelClassificationService, ModelClassificationService>();
+        // Model-picker catalog: fans out over Ollama, the installed GGUFs and the two cloud providers, degrading each
+        // source independently. Scoped because it consumes the scoped IModelClassificationService.
+        builder.Services.AddScoped<ILocalModelCatalogService, LocalModelCatalogService>();
 
         return builder;
     }
