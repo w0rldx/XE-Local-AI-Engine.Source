@@ -42,5 +42,23 @@ public enum NodeConflictProblemType
     ///     loaded-process cap allows. The body carries <c>distinctModelCount</c> and <c>maxLoadedProcesses</c> as
     ///     problem-details extensions.
     /// </summary>
-    PreviewWorkflowModelCapExceeded
+    PreviewWorkflowModelCapExceeded,
+
+    /// <summary>
+    ///     An installed base model could not be deleted because installed LoRA adapters launch against it. Retryable
+    ///     once the dependent adapters are removed.
+    /// </summary>
+    InstalledModelHasDependentAdapters,
+
+    /// <summary>
+    ///     An installed model could not be deleted because one of its aliases is mapped to a runtime provider other
+    ///     than the llama.cpp runtime that owns the GGUF deletion path.
+    /// </summary>
+    InstalledModelProviderConflict,
+
+    /// <summary>
+    ///     An installed-model deletion lost a race with a concurrent model mutation that moved the provider map past
+    ///     the revision it read. Retryable after refreshing the model list.
+    /// </summary>
+    InstalledModelProviderMapSuperseded
 }

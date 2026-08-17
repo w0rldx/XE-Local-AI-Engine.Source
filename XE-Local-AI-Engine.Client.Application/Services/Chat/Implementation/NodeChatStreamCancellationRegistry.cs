@@ -16,7 +16,7 @@ public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancella
 
         if (!_activeStreams.TryAdd(correlation, cancel))
         {
-            throw new InvalidOperationException("A node chat stream with the same correlation is already active.");
+            throw new NodeChatStreamAlreadyActiveException();
         }
 
         return new Registration(_activeStreams, correlation);

@@ -98,11 +98,12 @@ public sealed class LocalModelDeletionCoordinatorTests
             BaseModelName = context.ModelName
         }, CancellationToken.None).ConfigureAwait(false);
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                                          context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
-                                      .ConfigureAwait(false);
+        // The TYPE is the contract: ConflictExceptionHandler discriminates on it to answer 409
+        // InstalledModelHasDependentAdapters instead of the 500 a bare InvalidOperationException would produce.
+        _ = await AssertEx.ThrowsAsync<InstalledModelDependentAdaptersException>(() =>
+                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
+                          .ConfigureAwait(false);
 
-        AssertEx.Equal("InstalledModelHasDependentAdapters", exception.Message);
         AssertEx.True(File.Exists(context.WeightPath), "A refused delete must not touch the base weights.");
         AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
         AssertEx.True(context.MapStore.HasMapping(context.ModelName));
