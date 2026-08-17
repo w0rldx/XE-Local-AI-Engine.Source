@@ -3253,7 +3253,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            resolvedActiveCloudFactory,
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, NullLogger<LocalRuntimeWarmer>.Instance),
             Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
             new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),

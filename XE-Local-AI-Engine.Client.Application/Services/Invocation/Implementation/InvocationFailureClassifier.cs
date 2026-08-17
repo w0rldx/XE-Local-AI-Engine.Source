@@ -3,16 +3,63 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Net;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-public sealed partial class InvocationRunner
+/// <summary>
+///     Maps a terminal invocation exception to the pair the client is allowed to see: the <see cref="FailureCategory" />
+///     the UI branches on, and a user-facing message that is either one of this type's fixed, path-free constants or an
+///     already-sanitized exception message. Pure functions over an <see cref="Exception" /> — no invocation state — so the
+///     switch-arm ORDER in <see cref="MapFailure" /> is the whole contract and is pinned by
+///     <c>InvocationRunnerTests</c>.
+/// </summary>
+internal static class InvocationFailureClassifier
 {
-    private static FailureClassification MapFailure(Exception exception)
+    private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
+
+    // A tool call that ran out of time waiting for its RESULT (TurnPolicy.ToolResultTimeout, i.e. the package's
+    // ToolCallTimeoutSeconds or the node-global pending-tool-call age). Split out of AgentToolCallFailureMessage so a
+    // tool-side timeout is attributable rather than reading like an ordinary tool error. Carries no tool name, so it
+    // stays as path-free as the constant it replaces on this arm.
+    private const string ToolCallTimedOutMessage = "A tool call timed out waiting for its result.";
+    private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
+    private const string ProviderUnavailableMessage = "Provider unreachable.";
+
+    // Surfaced when an endpoint's circuit breaker is open (recent consecutive transient failures): a fixed, path-free
+    // message that tells the operator to retry shortly rather than reporting a hard provider outage.
+    private const string ProviderTemporarilyUnavailableMessage = "Provider temporarily unavailable. Please retry shortly.";
+    private const string ModelDoesNotSupportThinkingMessage = "This model does not support reasoning.";
+
+    private const string ModelDoesNotSupportToolsMessage = "This model does not support tool calling.";
+
+    // llama-server failed to COMPILE the constrained-decoding grammar for the offered tool schemas ("Failed to
+    // initialize samplers: failed to parse grammar"). The model is tool-capable — the schema set is what it could not
+    // be prepared for — so this must never claim the model lacks tool calling. Fixed and path-free: the provider body
+    // is never forwarded.
+    private const string ToolCallingPreparationFailedMessage =
+        "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.";
+
+    // A provider HTTP 500 means the model was reached but failed to load OR run (e.g. an Ollama build too old for the
+    // model architecture, or an out-of-memory at load). Phrased to cover both so it never falsely asserts a permanent
+    // model defect, while still being far more actionable than the generic "Provider unreachable.".
+    private const string ModelLoadFailedMessage = "The model could not be loaded or run on the provider.";
+
+    // A "Local runtime default" send found no installed GGUF chat model to route to. Surfaced instead of the generic
+    // "Provider unreachable." so the operator gets an actionable next step (pull a GGUF model) rather than a dead-end.
+    private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
+
+    // A generic (non-inter-chunk) timeout: the invocation-level cancel-after or an HTTP client timeout. Its framework
+    // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
+    private const string TimedOutMessage = "The operation timed out.";
+
+    private static readonly Regex FrameworkExceptionNamePattern =
+        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2));
+
+    internal static FailureClassification MapFailure(Exception exception)
     {
         return exception switch
         {
@@ -203,14 +250,7 @@ public sealed partial class InvocationRunner
         return message.Length > 512 ? message[..512] : message;
     }
 
-    private static bool IsLocalLoopbackInvocation(RuntimePackage package)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-
-        return package.RequestedCapabilities?.Any(static capability => string.Equals(capability, LocalChatLoopbackDefaults.RequestedCapability, StringComparison.Ordinal)) == true;
-    }
-
     // A terminal failure reduced to what the client may see: the category the UI branches on, and the user-facing
     // message — either one of this file's fixed path-free constants or an already-sanitized exception message.
-    private sealed record FailureClassification(FailureCategory Category, string Message);
+    internal sealed record FailureClassification(FailureCategory Category, string Message);
 }

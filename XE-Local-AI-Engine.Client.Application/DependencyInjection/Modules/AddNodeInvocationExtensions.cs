@@ -81,6 +81,7 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<UserQuestionAnswerStash>();
         builder.Services.AddSingleton<IClientLocalToolHandler, AskUserToolHandler>();
         builder.Services.AddSingleton<IInvocationAttachmentTracker, InvocationAttachmentTracker>();
+        builder.Services.AddSingleton<LocalRuntimeWarmer>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddHostedService<DetachedInvocationReaper>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
