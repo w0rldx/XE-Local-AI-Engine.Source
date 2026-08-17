@@ -50,10 +50,13 @@ internal static class BenchmarkModelEligibility
     ///     stays text-only — it never sends image content — so a projector-bearing chat model measures the same as a
     ///     bare one. Genuine vision/projector-only models are excluded by their <see cref="GgufRole" />, not by this.
     /// </summary>
-    public static void Validate(InstalledModelSnapshot snapshot, string role)
+    public static void Validate(InstalledModelSnapshot snapshot, string role) =>
+        Validate(snapshot.ProviderName, snapshot.Role, role);
+
+    /// <inheritdoc cref="Validate(InstalledModelSnapshot, string)" />
+    public static void Validate(string? providerName, GgufRole ggufRole, string role)
     {
-        if (!string.Equals(snapshot.ProviderName, "llamacpp", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Role != GgufRole.Chat)
+        if (!string.Equals(providerName, "llamacpp", StringComparison.OrdinalIgnoreCase) || ggufRole != GgufRole.Chat)
         {
             throw new BenchmarkEligibilityException($"The selected {role} model is not an eligible local text-generation GGUF.");
         }

@@ -151,6 +151,45 @@ public sealed class BenchmarkCatalogServiceTests
         _ = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() => service.ListEligibleAgentsAsync("broken")).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     The listing reads REGISTRY-RECORDED facts and hashes nothing: verifying costs one full re-hash of every
+    ///     member of every installed model per request (measured at 6m34s over a 174 GB models directory, page cache
+    ///     warm). A model whose registry entry predates the recorded aggregate identity is the only one that still pays
+    ///     for verification, and only for itself. <see cref="FactsProvider.Verified" /> is the proof.
+    /// </summary>
+    [Test]
+    public async Task ListModels_ListsFromRecordedFactsAndVerifiesOnlyEntriesWithoutARecordedIdentity()
+    {
+        var recorded = "v1:" + new string('a', 64);
+        var models = Substitute.For<IGgufModelStore>();
+        models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
+            Descriptor("chat", 8192),
+            Descriptor("embedding", 8192),
+            Descriptor("legacy", 8192)
+        ]);
+        var provider = new FactsProvider(new Dictionary<string, InstalledModelFacts>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["chat"] = new("chat", "llamacpp", GgufRole.Chat, LocalModelOrigin.HuggingFace, recorded),
+                ["embedding"] = new("embedding", "llamacpp", GgufRole.Embedding, LocalModelOrigin.HuggingFace, recorded),
+                ["legacy"] = new("legacy", "llamacpp", GgufRole.Chat, null, null)
+            },
+            new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["legacy"] = CreateSnapshot("legacy", LocalModelOrigin.Imported)
+            });
+        var service = CreateService(models, provider);
+
+        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, result.Count);
+        AssertEx.Equal("chat", result[0].ModelName);
+        AssertEx.Equal(recorded, result[0].ModelContentFingerprint);
+        AssertEx.Equal(LocalModelOrigin.HuggingFace, result[0].Origin);
+        AssertEx.Equal("legacy", result[1].ModelName);
+        AssertEx.True(provider.Verified.SequenceEqual(["legacy"], StringComparer.Ordinal),
+            "Only the entry without a recorded aggregate identity may be verified.");
+    }
+
     private static BenchmarkCatalogService CreateService(IGgufModelStore models, IBenchmarkInstalledModelLeaseProvider leases)
     {
         var definitions = Substitute.For<IAgentDefinitionStore>();
@@ -229,6 +268,26 @@ public sealed class BenchmarkCatalogServiceTests
                     "The installed model weight no longer matches its registry value.")
                 : Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(snapshots[modelName]));
         }
+    }
+
+    /// <summary>
+    ///     Serves recorded facts cheaply and fails any verification the caller did not have to do — the model must be in
+    ///     <paramref name="snapshots" /> to be verifiable at all.
+    /// </summary>
+    private sealed class FactsProvider(
+        IReadOnlyDictionary<string, InstalledModelFacts> facts,
+        IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots) : IBenchmarkInstalledModelLeaseProvider
+    {
+        public List<string> Verified { get; } = [];
+
+        public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
+        {
+            Verified.Add(modelName);
+            return Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(snapshots[modelName]));
+        }
+
+        public Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken) =>
+            Task.FromResult<InstalledModelFacts?>(facts.GetValueOrDefault(modelName));
     }
 
     private sealed class Lease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
