@@ -298,6 +298,7 @@ import {
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	startBenchmarkRun,
+	startBenchmarkRunBatch,
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
@@ -985,6 +986,9 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
+	StartBenchmarkRunBatchData,
+	StartBenchmarkRunBatchError,
+	StartBenchmarkRunBatchResponse,
 	StartBenchmarkRunData,
 	StartBenchmarkRunError,
 	StartBenchmarkRunResponse,
@@ -6814,6 +6818,30 @@ export const startBenchmarkRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startBenchmarkRunBatchMutation = (
+	options?: Partial<Options<StartBenchmarkRunBatchData>>,
+): UseMutationOptions<
+	StartBenchmarkRunBatchResponse,
+	AxiosError<StartBenchmarkRunBatchError>,
+	Options<StartBenchmarkRunBatchData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartBenchmarkRunBatchResponse,
+		AxiosError<StartBenchmarkRunBatchError>,
+		Options<StartBenchmarkRunBatchData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startBenchmarkRunBatch({
 				...options,
 				...fnOptions,
 				throwOnError: true,

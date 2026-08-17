@@ -40,6 +40,69 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_WithRepeatsAndAWarmup_EnqueuesOneGroupInQueueOrderAgainstASingleFreeze()
+    {
+        var harness = new FreezeHarness();
+
+        var runs = await harness.StartAsync(repeatCount: 3, warmup: true);
+
+        // ONE freeze, four inserts. Re-freezing per repeat could straddle a runtime swap and give two runs of the same
+        // "group" different snapshots — which is exactly the variable a repeat is supposed to hold still.
+        AssertEx.Equal(1, harness.SnapshotsCreated, "A repeat group must be frozen once and shared.");
+        AssertEx.Equal(4, runs.Count);
+        AssertEx.Equal(4, harness.Commands.Count);
+        var groupId = harness.Commands[0].RepeatGroupId;
+        AssertEx.True(groupId is not null && groupId != Guid.Empty, "A repeat group must carry a real id.");
+        AssertEx.True(harness.Commands.TrueForAll(command => command.RepeatGroupId == groupId), "Every run of a group shares its id.");
+        AssertEx.True(harness.Commands.Select(static command => command.RepeatIndex).SequenceEqual<int?>([0, 1, 2, 3]),
+            "The warm-up is index 0 and the measured repeats are 1..N, in queue order.");
+        AssertEx.True(harness.Commands.Select(static command => command.IsWarmup).SequenceEqual([true, false, false, false]),
+            "Only the index-0 run is a warm-up.");
+
+        // Each insert bumps the project version by exactly one, so insert i must present expectedVersion + i. Getting
+        // this wrong would make every repeat after the first fail its CAS.
+        AssertEx.True(harness.Commands.Select(static command => command.ExpectedProjectVersion).SequenceEqual([7L, 8L, 9L, 10L]),
+            "The version each insert presents chains off its predecessor.");
+    }
+
+    [Test]
+    public async Task Start_ForAPlainSingleRun_LeavesTheRepeatColumnsNull()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync();
+
+        // A group only exists when there is something to group; a single run must look exactly as it always did.
+        AssertEx.Null(AssertEx.NotNull(harness.Command).RepeatGroupId);
+        AssertEx.Null(harness.Command!.RepeatIndex);
+        AssertEx.False(harness.Command.IsWarmup, "A single run is never a warm-up.");
+    }
+
+    [Test]
+    public async Task Start_WithRepeatsButNoWarmup_NumbersTheRepeatsFromOne()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(repeatCount: 2, warmup: false);
+
+        AssertEx.True(harness.Commands.Select(static command => command.RepeatIndex).SequenceEqual<int?>([1, 2]),
+            "Without a warm-up there is no index 0 — the measured repeats still start at 1.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => !command.IsWarmup), "Nothing is a warm-up unless one was asked for.");
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(11)]
+    public async Task Start_WithARepeatCountOutOfRange_IsRejectedBeforeAnythingIsFrozen(int repeatCount)
+    {
+        var harness = new FreezeHarness();
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(async () => await harness.StartAsync(repeatCount, warmup: false));
+
+        AssertEx.Equal(0, harness.Commands.Count, "A rejected repeat count must not leave a partial group behind.");
+    }
+
+    [Test]
     public async Task Start_FreezesTheProjectOutputBudgetIntoTheRunSampling()
     {
         var budgeted = new FreezeHarness(maxOutputTokens: 2048);
@@ -272,7 +335,12 @@ public sealed class BenchmarkRunFreezeServiceTests
             _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens);
             var store = Substitute.For<IBenchmarkStore>();
             store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
-            store.StartRunAsync(Arg.Do<BenchmarkStartRunCommand>(command => Command = command), Arg.Any<CancellationToken>())
+            store.StartRunAsync(Arg.Do<BenchmarkStartRunCommand>(command =>
+                     {
+                         Command = command;
+                         Commands.Add(command);
+                     }),
+                     Arg.Any<CancellationToken>())
                  .Returns(call => Run(call.Arg<BenchmarkStartRunCommand>()));
 
             var definitions = Substitute.For<IAgentDefinitionStore>();
@@ -296,7 +364,11 @@ public sealed class BenchmarkRunFreezeServiceTests
             dependencies.CaptureAsync(Arg.Any<Guid>(), Arg.Any<ResolvedAgentRuntime>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                         .Returns(Dependencies("initial"));
             var snapshots = Substitute.For<IBenchmarkRuntimeSnapshotFactory>();
-            snapshots.Create(Arg.Do<BenchmarkRuntimeSnapshotInput>(input => SnapshotInput = input))
+            snapshots.Create(Arg.Do<BenchmarkRuntimeSnapshotInput>(input =>
+                     {
+                         SnapshotInput = input;
+                         SnapshotsCreated++;
+                     }))
                      .Returns(call => CreateRuntimeSnapshot(call.Arg<BenchmarkRuntimeSnapshotInput>()));
             snapshots.Serialize(Arg.Any<BenchmarkRuntimeSnapshotV1>()).Returns([1, 2, 3]);
 
@@ -320,10 +392,18 @@ public sealed class BenchmarkRunFreezeServiceTests
         public IAgentDefinitionResolver Resolver { get; }
         public RecordingLeaseProvider LeaseProvider { get; }
         public BenchmarkStartRunCommand? Command { get; private set; }
+
+        /// <summary>Every insert in order — a repeat group is several, and their ORDER is the contract.</summary>
+        public List<BenchmarkStartRunCommand> Commands { get; } = [];
+
+        public int SnapshotsCreated { get; private set; }
         public BenchmarkRuntimeSnapshotInput? SnapshotInput { get; private set; }
 
-        public Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType);
+        public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
+            (await _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType).ConfigureAwait(false))[0];
+
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
+            _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType: null, repeatCount, warmup);
 
         private static BenchmarkProjectRecord Project(Guid id, Guid agentId, bool judgeEnabled, string? judgeModel, int? maxOutputTokens)
         {

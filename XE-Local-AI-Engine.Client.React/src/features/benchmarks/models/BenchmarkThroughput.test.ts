@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { noBenchmarkRunThroughput } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	benchmarkRepeatCohortKey,
+	benchmarkRepeatStats,
 	formatLatencyMs,
+	formatStatSummary,
 	formatTokensPerSecond,
 	hasThroughputBreakdown,
 	throughputEvidenceEntries,
 } from "@/features/benchmarks/models/BenchmarkThroughput";
+import { benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 
 describe("BenchmarkThroughput", () => {
 	// An unmeasured number is a dash, never a zero: a run whose runtime reported no timings must not read as a run that
@@ -42,5 +46,67 @@ describe("BenchmarkThroughput", () => {
 			"throughput.segmentCount",
 		]);
 		expect(entries.find((entry) => entry.key === "throughput.promptTokens")?.value).toBe(123);
+	});
+});
+
+// Repeats exist to answer "how much does this number move between launches", which one reading cannot. The spread is
+// computed over the runs already in hand, and WHICH runs count is the whole correctness question.
+describe("benchmarkRepeatStats", () => {
+	const measured = (id: string, tokensPerSecond: number, overrides = {}) =>
+		benchmarkRunSummaryFixture({
+			id,
+			tokensPerSecond,
+			primaryModelName: "owner/Repo:Q4_K_M",
+			primaryLaunch: { ...benchmarkRunSummaryFixture().primaryLaunch, kvCacheType: "q8_0", effectiveLaunchIdentity: "identity-a" },
+			...overrides,
+		});
+
+	it("averages a cohort and reports its sample spread", () => {
+		const stats = benchmarkRepeatStats([measured("a", 80), measured("b", 82), measured("c", 84)]);
+
+		const cohort = stats.get(benchmarkRepeatCohortKey(measured("a", 80)));
+		expect(cohort?.tokensPerSecond?.count).toBe(3);
+		expect(cohort?.tokensPerSecond?.mean).toBe(82);
+		// Sample (n-1) deviation of 80/82/84 is exactly 2.
+		expect(cohort?.tokensPerSecond?.stdDev).toBe(2);
+		expect(formatStatSummary(cohort?.tokensPerSecond ?? null)).toBe("82.0 ± 2.0 (n=3)");
+	});
+
+	// A warm-up is the first-launch cost the repeats after it were meant NOT to pay; averaging it in would report the
+	// spread of the very thing it controls for. A failed run has no measurement to average at all.
+	it("counts only succeeded, non-warm-up runs", () => {
+		const stats = benchmarkRepeatStats([
+			measured("warm", 20, { isWarmup: true, repeatIndex: 0 }),
+			measured("failed", 20, { primaryStatus: "Failed" }),
+			measured("a", 80),
+			measured("b", 82),
+		]);
+
+		expect(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond?.count).toBe(2);
+		expect(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond?.mean).toBe(81);
+	});
+
+	// Two runs of one model on different launch arguments are two experiments; averaging them would report a spread
+	// that is really a configuration difference.
+	it("keeps different KV types and different launch identities in different cohorts", () => {
+		const stats = benchmarkRepeatStats([
+			measured("a", 80),
+			measured("b", 40, {
+				primaryLaunch: { ...benchmarkRunSummaryFixture().primaryLaunch, kvCacheType: "f16", effectiveLaunchIdentity: "identity-a" },
+			}),
+			measured("c", 60, {
+				primaryLaunch: { ...benchmarkRunSummaryFixture().primaryLaunch, kvCacheType: "q8_0", effectiveLaunchIdentity: "identity-b" },
+			}),
+		]);
+
+		expect(stats.size).toBe(3);
+	});
+
+	// "± 0 (n=1)" would state a certainty a single reading does not have, so a lone run renders nothing.
+	it("reports no spread below two samples", () => {
+		const stats = benchmarkRepeatStats([measured("a", 80)]);
+
+		expect(formatStatSummary(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond ?? null)).toBeNull();
+		expect(formatStatSummary(null)).toBeNull();
 	});
 });

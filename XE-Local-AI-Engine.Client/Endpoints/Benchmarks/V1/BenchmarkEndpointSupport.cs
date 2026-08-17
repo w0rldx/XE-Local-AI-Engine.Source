@@ -29,16 +29,30 @@ internal static class BenchmarkEndpointSupport
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 
-    public static IResult Error(Exception exception) =>
+    public static IResult Error(Exception exception)
+    {
+        var (statusCode, code, message) = Classify(exception);
+        return Problem(statusCode, code, message);
+    }
+
+    /// <summary>
+    ///     The same mapping <see cref="Error" /> applies, as data rather than as a response — the batch endpoint reports
+    ///     a refused matrix cell inside a 200 body, and reading the code off a built <see cref="IResult" /> is not a
+    ///     thing you can do. One switch, so a per-item rejection and a single-run failure can never disagree.
+    /// </summary>
+    public static (int StatusCode, BenchmarkErrorCode Code, string Message) Classify(Exception exception) =>
         exception switch
         {
-            BenchmarkNotFoundException or KeyNotFoundException => Problem(StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound, "The requested benchmark resource was not found."),
-            BenchmarkValidationException => Problem(StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
-            BenchmarkEligibilityException => Problem(StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
-            BenchmarkUnsupportedKvCacheTypeException => Problem(StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType, exception.Message),
-            BenchmarkJudgePolicyChangedException => Problem(StatusCodes.Status409Conflict, BenchmarkErrorCode.JudgePolicyChanged,
+            BenchmarkNotFoundException or KeyNotFoundException => (StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound,
+                "The requested benchmark resource was not found."),
+            BenchmarkValidationException => (StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
+            BenchmarkEligibilityException => (StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
+            BenchmarkUnsupportedKvCacheTypeException => (StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
+                exception.Message),
+            BenchmarkJudgePolicyChangedException => (StatusCodes.Status409Conflict, BenchmarkErrorCode.JudgePolicyChanged,
                 "The project's judge policy changed. Refresh and retry."),
-            BenchmarkConflictException conflict => Problem(StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code), SafeConflictMessage(conflict.Code)),
+            BenchmarkConflictException conflict => (StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code),
+                SafeConflictMessage(conflict.Code)),
             _ => throw exception
         };
 

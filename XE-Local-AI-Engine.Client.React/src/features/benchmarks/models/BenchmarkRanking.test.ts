@@ -56,6 +56,21 @@ describe("sortBenchmarkRuns", () => {
 });
 
 describe("groupBenchmarkRunsByModel", () => {
+	// The key comes from the node and is the BASE model now: two quants of one model have different content, so keying
+	// on the content fingerprint gave every quant its own group and made "which quant is best" unaskable.
+	it("folds a model's quants into one group whose best row is its best quant", () => {
+		const groups = groupBenchmarkRunsByModel([
+			run({ id: "q4", modelGroupKey: "owner/repo", primaryModelName: "owner/Repo:Q4_K_M", rank: 2, createdAtUtc: 1 }),
+			run({ id: "q8", modelGroupKey: "owner/repo", primaryModelName: "owner/Repo:Q8_0", rank: 1, createdAtUtc: 2 }),
+			run({ id: "other", modelGroupKey: "owner/other", primaryModelName: "owner/Other:Q4_K_M", rank: 3, createdAtUtc: 3 }),
+		]);
+
+		expect(groups.map((group) => group.key)).toEqual(["owner/repo", "owner/other"]);
+		expect(groups[0]?.runs.map((item) => item.id)).toEqual(["q8", "q4"]);
+		expect(groups[0]?.leader.id).toBe("q8");
+	});
+
+
 	it("collapses a model's runs under its best-ranked one", () => {
 		const groups = groupBenchmarkRunsByModel([
 			run({ id: "a-old", modelGroupKey: "model-a", rank: 3, createdAtUtc: 1 }),
@@ -84,7 +99,7 @@ describe("rankExclusionAction", () => {
 	// Every reason the node can send must map to something the operator can DO; an unmapped reason would render a chip
 	// with no next step.
 	it.each(benchmarkRankExclusionReasons)("maps %s to an action", (reason) => {
-		expect(["score", "rejudge", "wait", "rerun"]).toContain(rankExclusionAction(reason));
+		expect(["score", "rejudge", "wait", "rerun", "none"]).toContain(rankExclusionAction(reason));
 	});
 
 	it.each([
@@ -98,6 +113,8 @@ describe("rankExclusionAction", () => {
 		["execution-identity-incomplete", "rejudge"],
 		// Re-judging the same truncated fragment produces the same fragment, so the only useful action is a rerun.
 		["truncated", "rerun"],
+		// The one exclusion that is not a problem: a warm-up is excluded because that is what it is for.
+		["warmup", "none"],
 	] as const)("maps %s to %s", (reason, action) => {
 		expect(rankExclusionAction(reason)).toBe(action);
 	});

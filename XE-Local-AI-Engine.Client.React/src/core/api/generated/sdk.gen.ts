@@ -858,6 +858,9 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathErrors,
 	SetNodeChatSelectedPathResponses,
+	StartBenchmarkRunBatchData,
+	StartBenchmarkRunBatchErrors,
+	StartBenchmarkRunBatchResponses,
 	StartBenchmarkRunData,
 	StartBenchmarkRunErrors,
 	StartBenchmarkRunResponses,
@@ -1487,6 +1490,9 @@ import {
 	zSetNodeChatSelectedPathBody,
 	zSetNodeChatSelectedPathPath,
 	zSetNodeChatSelectedPathResponse,
+	zStartBenchmarkRunBatchBody,
+	zStartBenchmarkRunBatchPath,
+	zStartBenchmarkRunBatchResponse,
 	zStartBenchmarkRunBody,
 	zStartBenchmarkRunPath,
 	zStartBenchmarkRunResponse,
@@ -7704,6 +7710,32 @@ export const startBenchmarkRun = <ThrowOnError extends boolean = false>(options:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/runs",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startBenchmarkRunBatch = <ThrowOnError extends boolean = false>(
+	options: Options<StartBenchmarkRunBatchData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<StartBenchmarkRunBatchResponses, StartBenchmarkRunBatchErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartBenchmarkRunBatchBody,
+					path: zStartBenchmarkRunBatchPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartBenchmarkRunBatchResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/runs/batch",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

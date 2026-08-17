@@ -38,7 +38,7 @@ public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
         var page = await _store.ListRunsAsync(req.ProjectId,
                                    (req.Page - 1) * req.PageSize,
                                    req.PageSize,
-                                   req.ModelGroupKey,
+                                   req.ModelContentFingerprint,
                                    req.IncludeUnscored,
                                    ct)
                                .ConfigureAwait(false);
@@ -98,8 +98,12 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
 
         try
         {
-            var run = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, kvCacheType, ct).ConfigureAwait(false);
-            await Send.ResultAsync(Results.Accepted(value: run.ToDetail())).ConfigureAwait(false);
+            // The FIRST run of the group is the response: it is the one that starts, so it is the one an operator's
+            // live pane should open on. The rest are reachable through its repeatGroupId.
+            var created = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, kvCacheType, req.RepeatCount,
+                                         req.Warmup, ct)
+                                     .ConfigureAwait(false);
+            await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail())).ConfigureAwait(false);
         }
         catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception) || exception is KeyNotFoundException)
         {
@@ -112,6 +116,114 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
                 exception.Message)).ConfigureAwait(false);
         }
     }
+}
+
+/// <summary>
+///     Enqueues a whole model × KV-type matrix against one project. Per-item outcomes, not all-or-nothing: one
+///     ineligible model must not cost the operator the other nine cells.
+/// </summary>
+public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService runs)
+    : Endpoint<StartBenchmarkRunBatchRequest, StartBenchmarkRunBatchResponse>
+{
+    /// <summary>Matrix ceiling. Ten models × four KV types is already a very long night; beyond that is a mistake.</summary>
+    private const int MaxItems = 50;
+
+    private readonly IBenchmarkRunFreezeService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Benchmarks.ProjectRunsBatch);
+        Policies(NodeAuthorizationPolicies.Operator);
+
+        // 400 can come from BOTH an AddError body and a Results.Problem body here, so it is declared as the permissive
+        // ASP.NET shape, which validates either; 404/409 are Results.Problem bodies from the same helper.
+        Description(builder => builder.Produces<StartBenchmarkRunBatchResponse>(StatusCodes.Status200OK)
+                                      .ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
+    }
+
+    public override async Task HandleAsync(StartBenchmarkRunBatchRequest req, CancellationToken ct)
+    {
+        if (req.Items.Count is 0 or > MaxItems)
+        {
+            AddError($"A batch must carry between 1 and {MaxItems} items.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var started = new List<StartedBenchmarkRunBatchItemResponse>(req.Items.Count);
+        var rejected = new List<RejectedBenchmarkRunBatchItemResponse>();
+
+        // Every insert bumps the project version by exactly one, so the version the NEXT item must present is the
+        // running total of runs created so far. Re-reading the project between items would be the same number with an
+        // extra round trip and a wider race window.
+        var expectedVersion = req.ExpectedProjectVersion;
+        foreach (var item in req.Items)
+        {
+            if (!BenchmarkKvCacheType.TryNormalize(item.KvCacheType, out var kvCacheType))
+            {
+                rejected.Add(Rejection(item, BenchmarkErrorCode.InvalidRequest, "The requested KV-cache type is not supported."));
+                continue;
+            }
+
+            try
+            {
+                var created = await _runs.StartAsync(req.ProjectId, item.ModelName, expectedVersion, kvCacheType, req.RepeatCount,
+                                             req.Warmup, ct)
+                                        .ConfigureAwait(false);
+                expectedVersion += created.Count;
+                started.Add(new StartedBenchmarkRunBatchItemResponse
+                {
+                    ModelName = item.ModelName,
+                    KvCacheType = kvCacheType,
+                    RunIds = [.. created.Select(static run => run.Id)]
+                });
+            }
+            catch (Exception exception) when (IsWholeBatchFailure(exception))
+            {
+                // A stale project version or a vanished project is a fact about the BATCH, not about one cell: every
+                // remaining item would fail the same way, and reporting nine identical rejections would bury it.
+                await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception) || exception is KeyNotFoundException)
+            {
+                var (_, code, message) = BenchmarkEndpointSupport.Classify(exception);
+                rejected.Add(Rejection(item, code, message));
+            }
+            catch (NotSupportedException exception)
+            {
+                rejected.Add(Rejection(item, BenchmarkErrorCode.UnsupportedSnapshot, exception.Message));
+            }
+        }
+
+        await Send.OkAsync(new StartBenchmarkRunBatchResponse
+                  {
+                      Started = started,
+                      Rejected = rejected
+                  }, ct)
+                  .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Facts about the BATCH rather than about one cell: a vanished project, or a project version that moved under
+    ///     the caller. Every remaining item would fail identically, and burying that in N identical rejections would
+    ///     hide the one thing the operator has to fix. A <see cref="KeyNotFoundException" /> is deliberately NOT here —
+    ///     that is the MODEL not being installed, which is exactly a per-cell verdict.
+    /// </summary>
+    private static bool IsWholeBatchFailure(Exception exception) =>
+        exception is BenchmarkNotFoundException
+        || (exception is BenchmarkConflictException conflict && string.Equals(conflict.Code, "VersionConflict", StringComparison.Ordinal));
+
+    private static RejectedBenchmarkRunBatchItemResponse Rejection(StartBenchmarkRunBatchItem item, BenchmarkErrorCode code, string message) =>
+        new()
+        {
+            ModelName = item.ModelName,
+            KvCacheType = item.KvCacheType,
+            Code = code.ToString(),
+            Message = message
+        };
 }
 
 public sealed class GetBenchmarkRunEndpoint(IBenchmarkStore store)

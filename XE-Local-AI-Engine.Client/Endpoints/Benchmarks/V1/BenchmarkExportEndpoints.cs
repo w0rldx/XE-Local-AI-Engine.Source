@@ -181,7 +181,8 @@ internal static class BenchmarkExportProjection
         BenchmarkRankCohort? cohort = null;
         while (true)
         {
-            var page = await store.ListRunsAsync(projectId, runs.Count, PageSize, modelGroupKey: null, includeUnscored: true, ct).ConfigureAwait(false);
+            var page = await store.ListRunsAsync(projectId, runs.Count, PageSize, modelContentFingerprint: null, includeUnscored: true, ct)
+                                  .ConfigureAwait(false);
             cohort ??= page.RankCohort;
             if (page.Items.Count == 0)
             {
@@ -247,9 +248,10 @@ internal static class BenchmarkExportProjection
 internal static class BenchmarkExportCsv
 {
     private const string Header =
-        "rank,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,totalTokens,"
-        + "tokensPerSecond,durationMs,qualityScore,qualityScoreSource,judgeScore,userScore,rankExclusionReason,"
-        + "launchIdentity,receiptHash";
+        "rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
+        + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
+        + "generationTokens,generationTokensPerSecond,cachedPromptTokens,durationMs,qualityScore,qualityScoreSource,"
+        + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash";
 
     public static string Render(IReadOnlyList<BenchmarkRunRecord> runs)
     {
@@ -261,16 +263,6 @@ internal static class BenchmarkExportCsv
         }
 
         return builder.ToString();
-    }
-
-    /// <summary>
-    ///     The quant tag an operator picked, which rides on the model name after the last colon
-    ///     (<c>owner/Repo-GGUF:Q4_K_M</c>). Empty when the name carries none.
-    /// </summary>
-    internal static string Quant(string modelName)
-    {
-        var separator = modelName.LastIndexOf(':');
-        return separator < 0 || separator == modelName.Length - 1 ? string.Empty : modelName[(separator + 1)..];
     }
 
     /// <summary>Quoted only when it has to be, and an embedded quote is doubled.</summary>
@@ -293,9 +285,11 @@ internal static class BenchmarkExportCsv
             : string.Empty;
         builder.Append(Number(run.Rank))
                .Append(',')
+               .Append(Field(BenchmarkModelGroupKey.From(run.PrimaryModelName, run.PrimaryModelOrigin)))
+               .Append(',')
                .Append(Field(run.PrimaryModelName))
                .Append(',')
-               .Append(Field(Quant(run.PrimaryModelName)))
+               .Append(Field(BenchmarkModelGroupKey.QuantTag(run.PrimaryModelName)))
                .Append(',')
                .Append(Field(intent?.KvCacheType))
                .Append(',')
@@ -311,9 +305,27 @@ internal static class BenchmarkExportCsv
                .Append(',')
                .Append(Field(run.PrimaryStopReason))
                .Append(',')
+               .Append(run.RepeatGroupId?.ToString() ?? string.Empty)
+               .Append(',')
+               .Append(Number(run.RepeatIndex))
+               .Append(',')
+               .Append(run.IsWarmup ? "true" : "false")
+               .Append(',')
                .Append(Number(run.TotalTokens))
                .Append(',')
-               .Append(run.TokensPerSecond?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty)
+               .Append(Rate(run.TokensPerSecond))
+               .Append(',')
+               .Append(Rate(run.Throughput?.TtftMs))
+               .Append(',')
+               .Append(Number(run.Throughput?.PromptTokens))
+               .Append(',')
+               .Append(Rate(run.Throughput?.PromptTokensPerSecond))
+               .Append(',')
+               .Append(Number(run.Throughput?.GenerationTokens))
+               .Append(',')
+               .Append(Rate(run.Throughput?.GenerationTokensPerSecond))
+               .Append(',')
+               .Append(Number(run.Throughput?.CachedPromptTokens))
                .Append(',')
                .Append(Number(run.DurationMs))
                .Append(',')
@@ -332,6 +344,9 @@ internal static class BenchmarkExportCsv
                .Append(Field(evidence?.ReceiptHash))
                .Append("\r\n");
     }
+
+    private static string Rate(double? value) =>
+        value?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
 
     private static string Number(int? value) =>
         value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
