@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IBenchmarkRunExecutor
@@ -375,4 +376,31 @@ public static class BenchmarkExecutionSerialization
             return null;
         }
     }
+}
+
+public sealed record BenchmarkEligibleAgent(Guid Id, string Name, int Version);
+
+public sealed record BenchmarkEligibleModel(
+    string ModelName,
+    int? MaxContextTokens,
+    int? EffectiveContextTokens,
+    LocalModelOrigin? Origin,
+    string ModelContentFingerprint,
+    bool SupportsTools);
+
+public sealed record BenchmarkProjectDraft(
+    Guid Id,
+    string Name,
+    string CoreTask,
+    int ContextTokens,
+    Guid AgentDefinitionId,
+    bool JudgeEnabled,
+    string? JudgeModelName,
+    int? JudgeContextTokens,
+    int JudgePromptVersion = 1,
+    int JudgeOutputSchemaVersion = 1);
+
+public sealed class BenchmarkQueueOptions
+{
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
 }
