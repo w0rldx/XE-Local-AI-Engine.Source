@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 public enum InstalledModelMutationKind
 {
@@ -35,10 +36,34 @@ public sealed record InstalledModelSnapshot(
     GgufRole Role,
     string ModelContentFingerprint);
 
+/// <summary>
+///     The registry-RECORDED view of an installed model: what a catalog listing needs to judge a model without
+///     verifying a byte of it. Reading these facts costs one registry read plus one provider-map read, whereas
+///     <see cref="IInstalledModelSnapshotCoordinator.AcquireReadSnapshotAsync" /> re-hashes every member file — minutes
+///     per call on a real models directory.
+/// </summary>
+/// <param name="ModelContentFingerprint">
+///     The aggregate content identity the registry recorded at acquisition, or <see langword="null" /> for a legacy
+///     entry that predates the field. A caller that needs the identity itself must fall back to the verified snapshot
+///     for that one model.
+/// </param>
+public sealed record InstalledModelFacts(
+    string ModelName,
+    string ProviderName,
+    GgufRole Role,
+    LocalModelOrigin? Origin,
+    string? ModelContentFingerprint);
+
 public interface IInstalledModelSnapshotCoordinator
 {
     Task<InstalledModelReadLease> AcquireReadSnapshotAsync(string modelName, CancellationToken cancellationToken = default);
     Task<InstalledModelMutationLease> AcquireMutationAsync(InstalledModelMutationRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Reads the recorded facts for one installed model WITHOUT verifying its content, or <see langword="null" />
+    ///     when the model is not installed.
+    /// </summary>
+    Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken = default);
 }
 
 public sealed class InstalledModelSnapshotCoordinator(
@@ -135,6 +160,34 @@ public sealed class InstalledModelSnapshotCoordinator(
         throw new InvalidOperationException("InstalledModelSnapshotUnstable");
     }
 
+    /// <inheritdoc />
+    public async Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken = default)
+    {
+        // Discovery reads the registry (and its sidecars) only; nothing here opens a weight file, which is the whole
+        // point — a listing must not pay the verification cost that belongs to a run freeze. No re-read/retry loop
+        // either: there is no verification to race, and a listing that observed a model mid-delete is simply stale.
+        var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken).ConfigureAwait(false);
+        if (candidate is null)
+        {
+            return null;
+        }
+
+        var alias = candidate.RegistryAliases.FirstOrDefault(entry =>
+            string.Equals(entry.ModelName, candidate.ModelName, StringComparison.OrdinalIgnoreCase));
+        if (alias is null)
+        {
+            return null;
+        }
+
+        await using var inner = await _lockDomain.AcquireReadAsync(BuildExistingKeys(candidate), cancellationToken).ConfigureAwait(false);
+        var mapping = await ReadMappingAsync(inner, isMutation: false, candidate.ModelName, cancellationToken).ConfigureAwait(false);
+        return new InstalledModelFacts(candidate.ModelName,
+            ResolveProviderName(mapping),
+            alias.RegistryValue.Role,
+            alias.RegistryValue.Origin,
+            alias.RegistryValue.ModelContentFingerprint);
+    }
+
     private static IReadOnlyList<string> BuildAcquisitionKeys(InstalledModelMutationRequest request)
     {
         var keys = new List<string>
@@ -217,7 +270,7 @@ public sealed class InstalledModelSnapshotCoordinator(
             Array.AsReadOnly(members),
             snapshot.PhysicalMemberSetHash,
             snapshot.Origin,
-            mapping?.ProviderName,
+            ResolveProviderName(mapping),
             mapping?.Revision,
             snapshot.RepoId,
             snapshot.SourceRevision,
@@ -225,6 +278,18 @@ public sealed class InstalledModelSnapshotCoordinator(
             snapshot.Role,
             snapshot.ModelContentFingerprint);
     }
+
+    /// <summary>
+    ///     The provider serving an installed GGUF. The <c>model_provider_map</c> is an OVERRIDE map, not a census: only
+    ///     a model acquired THROUGH this node (or an Ollama name repaired by the startup backfill) ever gets a row, so a
+    ///     GGUF this node merely found on disk — after a reinstall, a node reset, a moved data directory or a restored
+    ///     models folder — has none. Chat has always read that as llama.cpp (the resolver's documented
+    ///     "unmapped → default provider = llamacpp" rule); returning null here instead made every such model
+    ///     permanently benchmark-ineligible while it stayed perfectly chattable. A row that names another provider is
+    ///     still returned verbatim, so an Ollama name collision keeps refusing exactly as before.
+    /// </summary>
+    private static string ResolveProviderName(ModelProviderMapRecord? mapping) =>
+        mapping?.ProviderName ?? LlamaServerProviderConstants.ProviderName;
 
     private static bool IsOptimisticConflict(InstalledGgufSnapshotException exception) =>
         exception.Code is "InstalledModelSnapshotUnstable" or "InstalledModelNotFound";
