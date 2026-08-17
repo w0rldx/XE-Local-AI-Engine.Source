@@ -156,6 +156,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             PrimaryFlashAttentionMode = command.PrimaryLaunchIntent?.FlashAttentionMode,
             PrimaryIntendedLaunchIdentity = command.PrimaryLaunchIntent?.IntendedLaunchIdentity,
             PrimaryIntendedExecutableSha256 = command.PrimaryLaunchIntent?.IntendedExecutableSha256,
+            RepeatGroupId = command.RepeatGroupId,
+            RepeatIndex = command.RepeatIndex,
+            IsWarmup = command.IsWarmup,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -199,7 +202,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     public async Task<BenchmarkRunPage> ListRunsAsync(Guid projectId,
         int skip,
         int take,
-        string? modelGroupKey = null,
+        string? modelContentFingerprint = null,
         bool includeUnscored = true,
         CancellationToken cancellationToken = default)
     {
@@ -207,9 +210,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // paging must not renumber it. Filters narrow which rows come back, not what they are ranked against.
         var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
         var runs = _dbContext.BenchmarkRuns.AsNoTracking().Where(entity => entity.ProjectId == projectId);
-        if (modelGroupKey is { Length: > 0 })
+        if (modelContentFingerprint is { Length: > 0 })
         {
-            runs = runs.Where(entity => entity.ModelContentFingerprint == modelGroupKey);
+            runs = runs.Where(entity => entity.ModelContentFingerprint == modelContentFingerprint);
         }
 
         if (!includeUnscored)
@@ -275,7 +278,31 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                           entity.PrimaryLaunchExecutableSha256,
                                           entity.PrimaryLaunchHasAuxAssets,
                                           entity.PrimaryLaunchKvCacheTypeSource),
-                                  entity.PrimaryStopReason))
+                                  entity.PrimaryStopReason,
+                                  null,
+                                  null,
+                                  null,
+                                  null,
+
+                                  // Inline rather than through ToThroughput: this is a server-side projection, and a
+                                  // helper call would not translate. Absence is decided by all six columns being NULL,
+                                  // the same rule the entity-materializing path uses.
+                                  entity.TtftMs == null
+                                  && entity.PromptTokens == null
+                                  && entity.PromptMs == null
+                                  && entity.GenerationTokens == null
+                                  && entity.GenerationMs == null
+                                  && entity.CachedPromptTokens == null
+                                      ? null
+                                      : new BenchmarkRunThroughput(entity.TtftMs,
+                                          entity.PromptTokens,
+                                          entity.PromptMs,
+                                          entity.GenerationTokens,
+                                          entity.GenerationMs,
+                                          entity.CachedPromptTokens),
+                                  entity.RepeatGroupId,
+                                  entity.RepeatIndex,
+                                  entity.IsWarmup))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
 
@@ -1298,7 +1325,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                      {
                                          entity.Id,
                                          entity.UserScore,
-                                         entity.PrimaryStopReason
+                                         entity.PrimaryStopReason,
+                                         entity.IsWarmup
                                      })
                                      .ToArrayAsync(cancellationToken)
                                      .ConfigureAwait(false);
@@ -1308,24 +1336,28 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var totalScored = 0;
         foreach (var run in scored)
         {
-            // Truncation is decided BEFORE the judge-derived reasons and AFTER the operator override: a run whose
-            // answer was cut off at the token budget is a real measurement of an INCOMPLETE answer, so its judge score
-            // stays visible but never ranks — while an operator who scored it anyway still wins, exactly as everywhere
-            // else. Read off the persisted stop reason, never inferred from the status.
-            var truncated = IsTruncated(run.PrimaryStopReason) && run.UserScore is null;
+            // Two unconditional exclusions, outermost first.
+            // A WARM-UP outranks even the operator override: it exists to absorb the first-launch cost the runs after
+            // it should not pay, so ranking it against them would rank the very thing it controls for. It is also not
+            // counted as scored — a project's "n of m ranked" must not grow a denominator that can never be ranked.
+            // TRUNCATION is decided before the judge-derived reasons and AFTER the operator override: a run cut off at
+            // the token budget is a real measurement of an INCOMPLETE answer, so its judge score stays visible but
+            // never ranks — while an operator who scored it anyway still wins. Read off the persisted stop reason,
+            // never inferred from the status.
+            var truncated = !run.IsWarmup && IsTruncated(run.PrimaryStopReason) && run.UserScore is null;
             var judge = JudgeViewFor(views, run.Id, run.UserScore);
-            if (truncated)
+            if (run.IsWarmup || truncated)
             {
                 judge = judge with
                 {
-                    RankExclusionReason = BenchmarkRunJudgeStates.ReasonTruncated
+                    RankExclusionReason = run.IsWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : BenchmarkRunJudgeStates.ReasonTruncated
                 };
             }
 
-            var (qualityScore, source) = truncated
+            var (qualityScore, source) = run.IsWarmup || truncated
                 ? ((int?)null, BenchmarkQualityScoreSources.None)
                 : ComputeQuality(run.UserScore, judge);
-            if (run.UserScore is not null || judge.Score is not null)
+            if (!run.IsWarmup && (run.UserScore is not null || judge.Score is not null))
             {
                 totalScored++;
             }
@@ -1830,6 +1862,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.GenerationTokens = throughput?.GenerationTokens;
         run.GenerationMs = throughput?.GenerationMs;
         run.CachedPromptTokens = throughput?.CachedPromptTokens;
+        run.SegmentCount = throughput?.SegmentCount;
     }
 
     private static BenchmarkRunThroughput? ToThroughput(BenchmarkRun entity) =>
@@ -1839,9 +1872,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         && entity.GenerationTokens is null
         && entity.GenerationMs is null
         && entity.CachedPromptTokens is null
+        && entity.SegmentCount is null
             ? null
             : new BenchmarkRunThroughput(entity.TtftMs, entity.PromptTokens, entity.PromptMs, entity.GenerationTokens,
-                entity.GenerationMs, entity.CachedPromptTokens);
+                entity.GenerationMs, entity.CachedPromptTokens, entity.SegmentCount);
 
     private static BenchmarkRunRecord ToRecord(BenchmarkRun entity) =>
         new(entity.Id, entity.ProjectId, entity.RuntimeSnapshotJson.ToArray(), entity.PrimaryModelName, entity.PrimaryModelOrigin,
@@ -1856,7 +1890,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
                 entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource),
             entity.PrimaryStopReason,
-            Throughput: ToThroughput(entity));
+            Throughput: ToThroughput(entity),
+            RepeatGroupId: entity.RepeatGroupId,
+            RepeatIndex: entity.RepeatIndex,
+            IsWarmup: entity.IsWarmup);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

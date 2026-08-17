@@ -57,11 +57,20 @@ describe("BenchmarkRunPane", () => {
 					generationTokens: 30,
 					generationTokensPerSecond: 24,
 					cachedPromptTokens: 480,
+					segmentCount: 3,
 				},
 			}),
 		);
 
 		expect(screen.getByTestId("benchmark-throughput-cached").textContent).toMatch(/not a cold prefill/i);
+		// A multi-request turn must say so: otherwise a prompt count spanning three prefills reads as one.
+		expect(screen.getByTestId("benchmark-throughput-segments").textContent).toContain("3 model requests");
+	});
+
+	it("says nothing about request count for a plain single-request turn", () => {
+		renderPane(run());
+
+		expect(screen.queryByTestId("benchmark-throughput-segments")).toBeNull();
 	});
 
 	it("hides the breakdown entirely for a runtime that reported no timings", () => {
@@ -74,6 +83,7 @@ describe("BenchmarkRunPane", () => {
 					generationTokens: null,
 					generationTokensPerSecond: null,
 					cachedPromptTokens: null,
+					segmentCount: null,
 				},
 			}),
 		);

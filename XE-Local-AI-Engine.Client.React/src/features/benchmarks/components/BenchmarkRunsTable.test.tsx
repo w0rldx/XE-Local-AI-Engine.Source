@@ -204,6 +204,7 @@ describe("BenchmarkRunsTable", () => {
 					generationTokens: null,
 					generationTokensPerSecond: null,
 					cachedPromptTokens: null,
+					segmentCount: null,
 				},
 			}),
 		]);

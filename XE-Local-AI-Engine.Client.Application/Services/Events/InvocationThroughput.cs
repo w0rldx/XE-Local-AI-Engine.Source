@@ -17,15 +17,20 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 ///     Wall-clock milliseconds from turn start to the first emitted chunk, measured client-side — so it includes
 ///     network, adapter and deserialization overhead on top of the server's own <see cref="PromptMs" />. That is
 ///     deliberate: it is what a caller actually waits. On a multi-segment (tool-calling) turn this is the FIRST
-///     segment's latency, since that is when the caller first saw output.
+///     request's latency, since that is when the caller first saw output.
 /// </param>
-/// <param name="PromptTokens">Prompt tokens evaluated, summed across every segment of the turn.</param>
-/// <param name="PromptMs">Milliseconds spent on prompt processing, summed across every segment.</param>
-/// <param name="GenerationTokens">Tokens decoded, summed across every segment.</param>
-/// <param name="GenerationMs">Milliseconds spent decoding, summed across every segment.</param>
+/// <param name="PromptTokens">Prompt tokens evaluated, summed across every provider request the turn made.</param>
+/// <param name="PromptMs">Milliseconds spent on prompt processing, summed across every request.</param>
+/// <param name="GenerationTokens">Tokens decoded, summed across every request.</param>
+/// <param name="GenerationMs">Milliseconds spent decoding, summed across every request.</param>
 /// <param name="CachedPromptTokens">
-///     Prompt tokens served from the KV cache rather than evaluated, summed across every segment. Non-zero means
-///     <see cref="PromptMs" /> is not a cold-prefill measurement.
+///     Prompt tokens served from the prompt cache rather than evaluated, summed across every request. Non-zero means
+///     <see cref="PromptMs" /> is not a cold-prefill measurement — on a tool-calling turn the later requests re-send
+///     the whole conversation, and the runtime serves the shared prefix from cache.
+/// </param>
+/// <param name="SegmentCount">
+///     How many provider requests the turn made, i.e. how many readings the sums above are made of. Zero when nothing
+///     reported timings, 1 for a plain turn, more once tools are called.
 /// </param>
 public sealed record InvocationThroughput(
     double? TimeToFirstTokenMs = null,
@@ -33,7 +38,8 @@ public sealed record InvocationThroughput(
     double? PromptMs = null,
     int? GenerationTokens = null,
     double? GenerationMs = null,
-    int? CachedPromptTokens = null)
+    int? CachedPromptTokens = null,
+    int SegmentCount = 0)
 {
     /// <summary>True when every member is absent, i.e. there is nothing worth carrying or persisting.</summary>
     public bool IsEmpty =>
@@ -42,7 +48,8 @@ public sealed record InvocationThroughput(
         && PromptMs is null
         && GenerationTokens is null
         && GenerationMs is null
-        && CachedPromptTokens is null;
+        && CachedPromptTokens is null
+        && SegmentCount == 0;
 
     /// <summary>
     ///     Decode throughput in tokens per second — the figure <c>llama-bench</c> calls tg. Null unless the provider

@@ -49,7 +49,8 @@ public sealed record BenchmarkRunStreamPayload(
     double? PromptTokensPerSecond = null,
     int? GenerationTokens = null,
     double? GenerationTokensPerSecond = null,
-    int? CachedPromptTokens = null);
+    int? CachedPromptTokens = null,
+    int? SegmentCount = null);
 
 public sealed record BenchmarkRunStreamEvent(
     Guid RunId,

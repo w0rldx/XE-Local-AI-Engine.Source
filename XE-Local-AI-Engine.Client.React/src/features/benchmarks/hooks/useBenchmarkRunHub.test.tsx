@@ -165,6 +165,7 @@ describe("useBenchmarkRunHub", () => {
 					generationTokens: 89,
 					generationTokensPerSecond: 88,
 					cachedPromptTokens: 7,
+					segmentCount: 2,
 				},
 			});
 		});
@@ -184,6 +185,7 @@ describe("useBenchmarkRunHub", () => {
 				generationTokens: 89,
 				generationTokensPerSecond: 88,
 				cachedPromptTokens: 7,
+				segmentCount: 2,
 			},
 		});
 		expect(result.current.parts).toEqual([]);

@@ -4013,6 +4013,19 @@
 				"select": "Show {{model}} in the detail view",
 				"actions": "Run actions"
 			},
+			"matrix": {
+				"open": "Batch runs…",
+				"title": "Batch benchmark runs",
+				"models": "Models",
+				"modelsHelp": "Every selected model runs against every selected KV type.",
+				"repeatCount": "Repeats per combination",
+				"repeatCountHelp": "Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",
+				"warmup": "Warm-up run first",
+				"warmupHelp": "Adds one extra run per combination that is never ranked and never counted in the spread.",
+				"summary": "{{cells}} combinations × {{perCell}} runs = {{total}} runs",
+				"rejected": "{{count}} combinations were not started",
+				"start": "Start {{count}} runs"
+			},
 			"metrics": {
 				"duration": "Duration",
 				"tokens": "Tokens",
@@ -4025,9 +4038,11 @@
 				"tgTooltip": "Decode (tg): {{rate}}{{tokens}}",
 				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
 				"ttftTooltip": "Time to first token: {{value}}",
+				"spreadTooltip": "Across identical launches — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
 				"cachedTooltip": "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.",
 				"cached": "{{tokens}} prompt tokens were reused from the KV cache — the prompt speed is not a cold prefill.",
-				"throughputDiffers": "Throughput differs: {{fields}}"
+				"throughputDiffers": "Throughput differs: {{fields}}",
+				"segments": "Summed over {{count}} model requests — the agent called tools, and every round prefilled again."
 			},
 			"connection": {
 				"live": "Live updates connected",
@@ -4151,6 +4166,8 @@
 				"groupByModel": "Group by model",
 				"groupCount": "{{count}} runs of this model",
 				"expandGroup": "Show this model's other runs",
+				"warmupBadge": "warm-up",
+				"repeatBadge": "#{{index}}",
 				"empty": "No runs yet. Start one to populate the ranking.",
 				"source": {
 					"user": "operator",
@@ -4166,7 +4183,8 @@
 					"generation-stale": "Judged before the current cohort was reset.",
 					"execution-key-mismatch": "Judged under a different judge runtime than the ranked cohort.",
 					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete.",
-					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one."
+					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one.",
+					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch."
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4177,13 +4195,15 @@
 					"generation-stale": "stale cohort",
 					"execution-key-mismatch": "runtime differs",
 					"execution-identity-incomplete": "identity incomplete",
-					"truncated": "truncated"
+					"truncated": "truncated",
+					"warmup": "warm-up"
 				},
 				"action": {
 					"score": "Set an operator score.",
 					"rejudge": "Re-judge to bring it back into the cohort.",
 					"wait": "Wait for the judging to finish.",
-					"rerun": "Rerun with a larger context or output budget."
+					"rerun": "Rerun with a larger context or output budget.",
+					"none": "Nothing to do — a warm-up is meant to sit outside the ranking."
 				}
 			},
 			"rubric": {

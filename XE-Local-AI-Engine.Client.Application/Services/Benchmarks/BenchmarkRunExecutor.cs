@@ -149,7 +149,8 @@ public sealed class BenchmarkRunExecutor(
                     PromptTokensPerSecond: throughput?.PromptTokensPerSecond,
                     GenerationTokens: throughput?.GenerationTokens,
                     GenerationTokensPerSecond: throughput?.GenerationTokensPerSecond,
-                    CachedPromptTokens: throughput?.CachedPromptTokens));
+                    CachedPromptTokens: throughput?.CachedPromptTokens,
+                    SegmentCount: throughput?.SegmentCount));
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
@@ -208,7 +209,8 @@ public sealed class BenchmarkRunExecutor(
                 throughput.PromptMs,
                 throughput.GenerationTokens,
                 throughput.GenerationMs,
-                throughput.CachedPromptTokens);
+                throughput.CachedPromptTokens,
+                throughput.SegmentCount);
 
     /// <summary>
     ///     Commits primary success together with the run's first judging, in the store's single transaction. The judge

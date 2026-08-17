@@ -41,9 +41,13 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.GenerationTokens).HasColumnName("generation_tokens");
         builder.Property(entity => entity.GenerationMs).HasColumnName("generation_ms");
         builder.Property(entity => entity.CachedPromptTokens).HasColumnName("cached_prompt_tokens");
+        builder.Property(entity => entity.SegmentCount).HasColumnName("segment_count");
         builder.Property(entity => entity.OutputPartsJson).HasColumnName("output_parts_json");
         builder.Property(entity => entity.LastStreamSequence).HasColumnName("last_stream_sequence");
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");
+        builder.Property(entity => entity.RepeatGroupId).HasColumnName("repeat_group_id");
+        builder.Property(entity => entity.RepeatIndex).HasColumnName("repeat_index");
+        builder.Property(entity => entity.IsWarmup).HasColumnName("is_warmup").HasDefaultValue(false);
         builder.Property(entity => entity.CurrentJudgeAttemptId).HasColumnName("current_judge_attempt_id");
         builder.Property(entity => entity.PrimaryVariant).HasColumnName("primary_variant").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheType).HasColumnName("primary_kv_cache_type").HasMaxLength(32);
@@ -81,6 +85,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             entity.ProjectId,
             entity.PrimaryKvCacheType
         }).HasDatabaseName("ix_benchmark_runs_project_primary_kv_cache_type");
+        builder.HasIndex(entity => entity.RepeatGroupId).HasDatabaseName("ix_benchmark_runs_repeat_group_id");
     }
 
     private static string? ConvertOriginToStore(LocalModelOrigin? value) =>

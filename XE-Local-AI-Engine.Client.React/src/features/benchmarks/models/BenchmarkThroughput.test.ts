@@ -39,6 +39,7 @@ describe("BenchmarkThroughput", () => {
 			"throughput.generationTokens",
 			"throughput.generationTokensPerSecond",
 			"throughput.cachedPromptTokens",
+			"throughput.segmentCount",
 		]);
 		expect(entries.find((entry) => entry.key === "throughput.promptTokens")?.value).toBe(123);
 	});

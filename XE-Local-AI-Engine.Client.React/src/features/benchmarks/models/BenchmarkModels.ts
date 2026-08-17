@@ -34,6 +34,7 @@ export const benchmarkRankExclusionReasons = [
 	"execution-key-mismatch",
 	"execution-identity-incomplete",
 	"truncated",
+	"warmup",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
 export const toBenchmarkRankExclusionReason = (value: unknown): BenchmarkRankExclusionReason | null =>
@@ -286,8 +287,13 @@ export interface BenchmarkRunThroughput {
 	generationTokens: number | null;
 	/** Decode throughput (tg). Equal to {@link BenchmarkRunSummary.tokensPerSecond} whenever the split exists. */
 	generationTokensPerSecond: number | null;
-	/** Prompt tokens served from the KV cache. Above zero means the pp numbers describe a partially cached prefill. */
+	/**
+	 * Prompt tokens served from the prompt cache across ALL of the turn's requests. Above zero means the pp numbers
+	 * describe a partially cached prefill — expected once tools are called, since each round re-sends the conversation.
+	 */
 	cachedPromptTokens: number | null;
+	/** How many provider requests the turn made. Above 1 means the sums span a tool-calling loop. */
+	segmentCount: number | null;
 }
 
 export const noBenchmarkRunThroughput: BenchmarkRunThroughput = {
@@ -297,6 +303,7 @@ export const noBenchmarkRunThroughput: BenchmarkRunThroughput = {
 	generationTokens: null,
 	generationTokensPerSecond: null,
 	cachedPromptTokens: null,
+	segmentCount: null,
 };
 
 export interface BenchmarkRunSummary {
@@ -305,8 +312,18 @@ export interface BenchmarkRunSummary {
 	primaryModelName: string;
 	primaryModelOrigin: BenchmarkOrigin;
 	modelContentFingerprint: string;
-	/** Groups the same model's runs together in the "group by model" view. */
+	/**
+	 * The BASE model this run is a build of — the repo id or imported name with the quant tag stripped. Every quant of
+	 * one model shares it, so a group is one model and its rows are that model's quants. Use
+	 * {@link BenchmarkRunSummary.modelContentFingerprint} when you mean the exact build.
+	 */
 	modelGroupKey: string;
+	/** The repeat group this run belongs to, or null for a plain single run. */
+	repeatGroupId: string | null;
+	/** Position in the group: 0 is the warm-up (when one was requested), measured repeats are 1..N. */
+	repeatIndex: number | null;
+	/** A warm-up run: shown, but never ranked and never counted in a group's statistics. */
+	isWarmup: boolean;
 	agentName: string;
 	agentVersion: number;
 	requestedContextTokens: number;
@@ -383,6 +400,7 @@ export const benchmarkRunEventSchema = z.object({
 		generationTokens: z.number().int().nullish(),
 		generationTokensPerSecond: z.number().nullish(),
 		cachedPromptTokens: z.number().int().nullish(),
+		segmentCount: z.number().int().nullish(),
 	}),
 });
 export type BenchmarkRunEvent = z.infer<typeof benchmarkRunEventSchema>;
@@ -449,6 +467,7 @@ export function benchmarkLiveOverlayPatch(event: BenchmarkRunEvent): Partial<Ben
 				generationTokens: event.payload.generationTokens ?? null,
 				generationTokensPerSecond: event.payload.generationTokensPerSecond ?? null,
 				cachedPromptTokens: event.payload.cachedPromptTokens ?? null,
+				segmentCount: event.payload.segmentCount ?? null,
 			},
 		};
 	}
@@ -567,6 +586,22 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
  */
 export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
 	run.primaryStopReason?.toLowerCase() === "length";
+
+/**
+ * The base model a row belongs to, for DISPLAY. The server key is lowercased for Hugging Face models so two casings of
+ * one repo cannot split a group; this keeps the operator's own capitalisation for the header by deriving it from the
+ * run's name instead. Grouping still keys off {@link BenchmarkRunSummary.modelGroupKey} — never off this.
+ */
+export function benchmarkBaseModelLabel(modelName: string): string {
+	const separator = modelName.lastIndexOf(":");
+	return separator <= 0 || separator === modelName.length - 1 ? modelName : modelName.slice(0, separator);
+}
+
+/** The quant tag an operator picked, which rides on the model name after the last colon. Empty when it carries none. */
+export function benchmarkQuantTag(modelName: string): string {
+	const separator = modelName.lastIndexOf(":");
+	return separator < 0 || separator === modelName.length - 1 ? "" : modelName.slice(separator + 1);
+}
 
 export const isPrimaryActive = (status: BenchmarkPrimaryStatus): boolean =>
 	status === "Queued" || status === "Running" || status === "CancelRequested";
