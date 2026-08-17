@@ -8,10 +8,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
 ///     The <c>process</c> sandbox <see cref="ISandboxRuntimeProvider" /> — the <b>process-jail provider</b>: backs
@@ -532,32 +530,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var destination = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, request.DestinationPath);
-
-        // SECURITY (hard reject): a sandboxed command can plant a symlink inside the jail, so the destination's parent
-        // chain — and the leaf if it already exists — must contain no symlink that would redirect the write outside the
-        // jail. The parent dirs are created first so they exist (and are re-checked) before the no-follow create.
-        var parent = Path.GetDirectoryName(destination);
-        if (parent is not null)
-        {
-            // Validate the existing prefix BEFORE Directory.CreateDirectory: that API follows an intermediate
-            // symlink, so creating first could mutate an outside directory before the later rejection. Re-check after
-            // creation to cover every newly materialized component and a concurrent swap.
-            SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, parent, request.DestinationPath);
-            Directory.CreateDirectory(parent);
-            SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, parent, request.DestinationPath);
-        }
-
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, destination, request.DestinationPath);
-
-        // Re-open the host source under the no-follow / byte-cap-on-re-read guard ported from the container provider:
-        // never trust a path string sized by an earlier walk. A swap-to-symlink, over-cap file, or growth-after-sizing
-        // throws so the workspace preparation cannot report a successful snapshot for bytes that were never copied.
-        var content = SandboxJailPathGuard.ReadHostFileUnderGuard(request.SourcePath, _maxCopyFileBytes);
-
-        // No-follow create on Linux: if the leaf was swapped for a symlink between the component check and the write,
-        // O_NOFOLLOW makes the create fail rather than write through the link.
-        await SandboxJailPathGuard.WriteJailFileNoFollowAsync(destination, content, cancellationToken).ConfigureAwait(false);
+        await SandboxFileSurveyOperations.CopyIntoAsync(state.JailRoot, request, _maxCopyFileBytes, cancellationToken).ConfigureAwait(false);
     }
 
     public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -567,24 +540,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var resolved = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, sandboxPath);
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
-
-        if (Directory.Exists(resolved))
-        {
-            StandaloneGitClone.Delete(resolved);
-        }
-        else if (File.Exists(resolved))
-        {
-            throw new UnauthorizedAccessException("The requested sandbox directory is occupied by a file.");
-        }
-
-        Directory.CreateDirectory(resolved);
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
-        if (Directory.EnumerateFileSystemEntries(resolved).Any())
-        {
-            throw new IOException("The sandbox directory could not be proven empty after reset.");
-        }
+        SandboxFileSurveyOperations.ResetDirectory(state.JailRoot, sandboxPath);
 
         return Task.CompletedTask;
     }
@@ -605,44 +561,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var resolved = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, sandboxPath);
-
-        // SECURITY: reject any symlink component (a sandboxed command can plant one), then read through a no-follow
-        // open so a leaf swapped to a symlink after the component check cannot redirect the read outside the jail.
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, sandboxPath);
-        if (!File.Exists(resolved))
-        {
-            throw new FileNotFoundException($"Sandbox path '{sandboxPath}' was not found.", sandboxPath);
-        }
-
-        var bytes = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken).ConfigureAwait(false);
-        return Encoding.UTF8.GetString(bytes);
+        return await SandboxFileSurveyOperations.ReadFileAsync(state.JailRoot, sandboxPath, maxBytes, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    ///     Lists the jail's regular files. Resolves the directory through the SAME two controls a read goes through —
-    ///     <c>ResolveJailPath</c> for the lexical escape and <c>EnsureNoSymlinkComponentsUnderJail</c> for a planted
-    ///     link — and then walks it with <see cref="WorkspaceFileScanner" />, which follows no link it meets on the way
-    ///     down either.
-    ///     <para>
-    ///         This used to be the caller's <c>find</c> shell-out. Doing it here is what makes the operation exist on a
-    ///         host with no findutils, and it also moves the confinement from an argument vector the caller had to get
-    ///         right into the provider that owns the jail.
-    ///     </para>
-    /// </summary>
+    /// <inheritdoc cref="ISandboxRuntimeProvider.ListFilesAsync" />
     public Task<IReadOnlyList<string>> ListFilesAsync(SandboxHandle handle,
         SandboxListFilesRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var root = ResolveSurveyDirectory(handle, request.DirectoryPath, cancellationToken);
+        var state = ResolveSurveyState(handle, request.DirectoryPath, cancellationToken);
 
-        IReadOnlyList<string> entries = WorkspaceFileScanner.ListFiles(root,
-            request.MaxEntries,
-            request.IsPathSuppressed ?? (static _ => false),
-            request.NameGlob,
-            cancellationToken);
-        return Task.FromResult(entries);
+        return Task.FromResult(SandboxFileSurveyOperations.ListFiles(state.JailRoot, request, cancellationToken));
     }
 
     /// <inheritdoc cref="ISandboxRuntimeProvider.SearchTextAsync" />
@@ -651,43 +581,23 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var root = ResolveSurveyDirectory(handle, request.DirectoryPath, cancellationToken);
+        var state = ResolveSurveyState(handle, request.DirectoryPath, cancellationToken);
 
-        IReadOnlyList<string> matches = WorkspaceFileScanner.SearchText(root,
-            request.Pattern,
-            request.IsRegex,
-            request.MaxMatches,
-            request.MaxOutputBytes,
-            request.IsPathSuppressed ?? (static _ => false),
-            cancellationToken);
-        return Task.FromResult(matches);
+        return Task.FromResult(SandboxFileSurveyOperations.SearchText(state.JailRoot, request, cancellationToken));
     }
 
     /// <summary>
-    ///     The survey's own confinement, identical to the read leg's. Kept in one place so the two surveys cannot drift
-    ///     apart from each other or from <c>ReadFileAsync</c>.
-    ///     <para>
-    ///         Suppression of secrets is deliberately NOT applied here: which entries a feature may see is that
-    ///         feature's policy, not the jail's, and the two callers do not agree — Development gates on
-    ///         <c>IsSecret</c> while Coder additionally drops its whole copy-filter set. The provider's job is
-    ///         containment; the caller's is redaction, and it applies it to what comes back.
-    ///     </para>
+    ///     The handle-side half of a survey's entry checks — argument validation and the live-sandbox lookup — kept
+    ///     together so both surveys enter <see cref="SandboxFileSurveyOperations" /> under identical conditions. The
+    ///     jail-side half (path resolution + symlink walk) lives with the survey itself.
     /// </summary>
-    private string ResolveSurveyDirectory(SandboxHandle handle, string directoryPath, CancellationToken cancellationToken)
+    private JailState ResolveSurveyState(SandboxHandle handle, string directoryPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
-        var resolved = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, directoryPath);
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, resolved, directoryPath);
-        if (!Directory.Exists(resolved))
-        {
-            throw new DirectoryNotFoundException($"Sandbox path '{directoryPath}' was not found.");
-        }
-
-        return resolved;
+        return GetAliveState(handle);
     }
 
     public async Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -697,20 +607,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var source = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, request.SourcePath);
-
-        // SECURITY: reject any symlink component on the jail-side source, then read through a no-follow open so an
-        // escaping symlink cannot copy a host file outside the jail out to the caller's destination.
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, source, request.SourcePath);
-        if (!File.Exists(source))
-        {
-            throw new FileNotFoundException($"Sandbox path '{request.SourcePath}' was not found.", request.SourcePath);
-        }
-
-        // Read the raw bytes from inside the jail and write them to the host destination so a binary artifact survives
-        // the round trip unchanged (parity with the container provider's copy-out).
-        var content = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(source, int.MaxValue, cancellationToken).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken).ConfigureAwait(false);
+        await SandboxFileSurveyOperations.CopyOutAsync(state.JailRoot, request, cancellationToken).ConfigureAwait(false);
     }
 
     public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default)
