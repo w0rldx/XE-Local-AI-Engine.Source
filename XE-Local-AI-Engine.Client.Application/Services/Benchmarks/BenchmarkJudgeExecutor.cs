@@ -209,10 +209,14 @@ public sealed class BenchmarkJudgeExecutor(
         BenchmarkJudgeRuntimeV1 runtime,
         ReadOnlySpan<byte> outputParts)
     {
+        // What the judge grades: the stored transcript reduced to its visible answer (see BenchmarkOutputParts.ForJudge)
+        // and bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
+        var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(outputParts),
+            Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
         var promptPayload = BenchmarkJudgePromptV2.BuildUserPayloadJson(JsonSerializer.Serialize(snapshot.CoreTask),
             policy.ReferenceAnswer,
             policy.Rubric,
-            Encoding.UTF8.GetString(outputParts),
+            Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts(graded)),
             BenchmarkJudgeOutputSchemaV2.Json);
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),

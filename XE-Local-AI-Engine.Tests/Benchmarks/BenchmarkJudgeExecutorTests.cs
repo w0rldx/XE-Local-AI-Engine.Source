@@ -91,6 +91,13 @@ public sealed class BenchmarkJudgeExecutorTests
         {
             AssertEx.Equal(BenchmarkJudgeOutputSchemaV2.Json, promptPayload.RootElement.GetProperty("outputSchema").GetRawText());
             AssertEx.Equal(expected: 1, promptPayload.RootElement.GetProperty("rubric").GetProperty("criteria").GetArrayLength());
+
+            // The graded payload is the visible answer only: reasoning is hidden chain-of-thought, not the answer the
+            // rubric scores, and shipping it is what overran the judge window.
+            var gradedParts = promptPayload.RootElement.GetProperty("primaryOutputParts");
+            AssertEx.Equal(expected: 1, gradedParts.GetArrayLength());
+            AssertEx.Equal("output", gradedParts[0].GetProperty("kind").GetString());
+            AssertEx.Equal("answer", gradedParts[0].GetProperty("content").GetString());
         }
 
         // The prompt ASKS for this shape and the parser refuses anything else. Constraining the decode is what makes the
@@ -408,7 +415,13 @@ public sealed class BenchmarkJudgeExecutorTests
             10,
             5,
             500,
-            BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "answer")]),
+            // A thinking model's stored transcript: reasoning parts around the visible answer. The judge must be shown
+            // the answer only.
+            BenchmarkExecutionSerialization.SerializeParts([
+                new BenchmarkOutputPart("reasoning", Content: "hidden chain of thought"),
+                new BenchmarkOutputPart("output", Content: "answer"),
+                new BenchmarkOutputPart("reasoning", Content: "more hidden thought")
+            ]),
             1,
             null,
             null,
