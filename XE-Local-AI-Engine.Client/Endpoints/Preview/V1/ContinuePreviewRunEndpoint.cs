@@ -41,9 +41,7 @@ public sealed class ContinuePreviewRunEndpoint(IPreviewWorkflowExecutionService 
                 return;
 
             case PreviewRunCommandOutcome.WrongState:
-                await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict,
-                              detail: "The run is not paused and cannot be continued."))
-                          .ConfigureAwait(false);
+                await Send.ConflictProblemAsync("The run is not paused and cannot be continued.").ConfigureAwait(false);
                 return;
 
             default:
