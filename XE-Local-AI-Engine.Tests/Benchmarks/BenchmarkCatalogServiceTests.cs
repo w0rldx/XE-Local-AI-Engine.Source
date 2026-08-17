@@ -54,7 +54,7 @@ public sealed class BenchmarkCatalogServiceTests
         resolver.ResolveAsync(missingId, "model", string.Empty, true, false, false, Arg.Any<CancellationToken>())
                 .Returns((ResolvedAgentRuntime?)null);
         var capabilities = Substitute.For<IModelCapabilityResolver>();
-        capabilities.ResolveAsync("model", Arg.Any<CancellationToken>()).Returns((false, true, false));
+        capabilities.ResolveAsync("model", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(false, true, false));
         var models = Substitute.For<IGgufModelStore>();
         var service = new BenchmarkCatalogService(definitions,
             resolver,

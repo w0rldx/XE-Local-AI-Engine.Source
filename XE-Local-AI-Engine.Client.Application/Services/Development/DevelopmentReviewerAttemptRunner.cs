@@ -69,7 +69,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             var task = await _store.GetTaskAsync(snapshot.TaskId, timeout.Token).ConfigureAwait(false);
             var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token).ConfigureAwait(false);
             var evidence = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
-            (DevelopmentArtifactSnapshot validationArtifact, DevelopmentValidationReport validationReport) validation;
+            DevelopmentArtifactWith<DevelopmentValidationReport> validation;
             try
             {
                 validation = await ReadValidationAsync(snapshot.TaskId, evidence, profile.ComputeDigest(), timeout.Token).ConfigureAwait(false);
@@ -183,7 +183,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         }
     }
 
-    private async Task<(DevelopmentArtifactSnapshot Artifact, DevelopmentValidationReport Report)> ReadValidationAsync(Guid taskId,
+    private async Task<DevelopmentArtifactWith<DevelopmentValidationReport>> ReadValidationAsync(Guid taskId,
         DevelopmentEvidenceSet evidence,
         string expectedProfileDigest,
         CancellationToken cancellationToken)
@@ -230,7 +230,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             throw new DevelopmentInvalidTransitionException("The validation report does not authorize the current exact workspace subject.");
         }
 
-        return (validationArtifact, report);
+        return new DevelopmentArtifactWith<DevelopmentValidationReport>(validationArtifact, report);
     }
 
     private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(DevelopmentExecutionSnapshot snapshot,

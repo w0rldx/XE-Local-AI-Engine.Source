@@ -536,11 +536,11 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     /// </summary>
     private static void ValidateMountTargets(SandboxCreateRequest request, ContainerSandboxOptions options, string workspaceRoot)
     {
-        var strict = new List<(string Name, string? Path)>
+        var strict = new List<ContainerMountTarget>
         {
-            (nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
-            (nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
-            (nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
+            new(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
+            new(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
+            new(nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
         };
         var overlays = new List<string>();
 
@@ -567,14 +567,14 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             }
             else
             {
-                strict.Add(("mount " + target, target));
+                strict.Add(new ContainerMountTarget("mount " + target, target));
             }
         }
 
         if (ContainerSandboxOptionsValidator.FindOverlap(strict) is { } collision)
         {
-            throw new SandboxCapabilityNotSupportedException($"The engine-generated sandbox mounts '{collision.First}' ('{collision.FirstPath}') and '{collision.Second}' "
-                                                             + $"('{collision.SecondPath}') overlap. One would shadow the other, and the daemon's read-back would still agree "
+            throw new SandboxCapabilityNotSupportedException($"The engine-generated sandbox mounts '{collision.First.Name}' ('{collision.First.Path}') and '{collision.Second.Name}' "
+                                                             + $"('{collision.Second.Path}') overlap. One would shadow the other, and the daemon's read-back would still agree "
                                                              + "because it applied exactly what it was asked for.");
         }
 

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -251,7 +250,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
 
             // 2. Verify the checked-out commit == the pinned SHA BEFORE any cmake runs. [secHIGH-1]
             SetPhase(CudaBuildPhase.Verifying);
-            var (revExit, revOutput) = await RunCaptureAsync("git",
+            var (revExit, revOutput) = await ProcessCaptureRunner.RunAsync("git",
                 ["-C", cloneDir, "rev-parse", "HEAD"],
                 environment,
                 workDir,
@@ -383,7 +382,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
     {
         try
         {
-            var (exit, output) = await RunCaptureAsync("nvidia-smi",
+            var (exit, output) = await ProcessCaptureRunner.RunAsync("nvidia-smi",
                 ["--query-gpu=compute_cap", "--format=csv,noheader"],
                 environment,
                 workDir,
@@ -423,65 +422,6 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
         CancellationToken ct)
     {
         return StreamingProcessRunner.RunAsync(file, args, environment, workDir, AppendLog, timeout, ct);
-    }
-
-    // Captures (rather than streams) a short command's stdout under the scrubbed env, bounded + tree-killed.
-    private static async Task<(int ExitCode, string Stdout)> RunCaptureAsync(string file,
-        IReadOnlyList<string> args,
-        IReadOnlyDictionary<string, string> environment,
-        string workDir,
-        TimeSpan timeout,
-        CancellationToken ct)
-    {
-        var startInfo = new ProcessStartInfo(file)
-        {
-            WorkingDirectory = workDir,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        startInfo.Environment.Clear();
-        foreach (var entry in environment)
-        {
-            startInfo.Environment[entry.Key] = entry.Value;
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        if (!process.Start())
-        {
-            return (-1, string.Empty);
-        }
-
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(timeout);
-        try
-        {
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            var stdout = await stdoutTask.ConfigureAwait(false);
-            _ = await stderrTask.ConfigureAwait(false);
-            return (process.ExitCode, stdout);
-        }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
-        {
-            TryKill(process);
-            return (-1, string.Empty);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            TryKill(process);
-            throw;
-        }
     }
 
     // Scrubbed, allowlisted build environment: ONLY these keys pass through; everything else (LD_PRELOAD, LD_LIBRARY_PATH,
@@ -618,21 +558,6 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
     private static void SetDirectoryOwnerOnly(string path)
     {
         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best-effort.
-        }
     }
 
     private static void TryDeleteDirectory(string path)

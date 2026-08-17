@@ -80,7 +80,7 @@ public sealed class LocalModelCatalogService(
         {
             var models = (await _modelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false)).ToArray();
             var classifications = await _classificationService
-                                        .ClassifyAsync(models.Select(static model => (ReadModelName(model), (string?)model.Digest)), cancellationToken)
+                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(ReadModelName(model), model.Digest)), cancellationToken)
                                         .ConfigureAwait(false);
 
             return (models, classifications);

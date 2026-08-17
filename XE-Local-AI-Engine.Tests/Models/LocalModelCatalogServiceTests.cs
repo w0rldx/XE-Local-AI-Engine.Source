@@ -127,8 +127,8 @@ public sealed class LocalModelCatalogServiceTests
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<LocalModelDescriptor>());
             CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
             CloudModelResolver.ResolveAzureFoundryConnectionAsync(Arg.Any<CancellationToken>()).Returns((StoredAzureFoundryConnection?)null);
-            ClassificationService.ClassifyAsync(Arg.Any<IEnumerable<(string ModelName, string? Digest)>>(), Arg.Any<CancellationToken>())
-                                 .Returns(call => call.Arg<IEnumerable<(string ModelName, string? Digest)>>()
+            ClassificationService.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
+                                 .Returns(call => call.Arg<IEnumerable<ModelIdentity>>()
                                                       .ToDictionary(entry => entry.ModelName,
                                                           entry => new ModelClassificationResult(entry.ModelName,
                                                               ModelKind.Chat,

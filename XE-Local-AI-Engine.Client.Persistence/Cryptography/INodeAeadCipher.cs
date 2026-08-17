@@ -22,7 +22,7 @@ public interface INodeAeadCipher
     ///     <paramref name="associatedData" />. Returns the ciphertext (same length as the plaintext) and the
     ///     <see cref="TagSize" />-byte authentication tag separately; the caller arranges the on-the-wire layout.
     /// </summary>
-    (byte[] Ciphertext, byte[] Tag) Encrypt(ReadOnlySpan<byte> key,
+    AeadCiphertext Encrypt(ReadOnlySpan<byte> key,
         ReadOnlySpan<byte> nonce,
         ReadOnlySpan<byte> plaintext,
         ReadOnlySpan<byte> associatedData);
