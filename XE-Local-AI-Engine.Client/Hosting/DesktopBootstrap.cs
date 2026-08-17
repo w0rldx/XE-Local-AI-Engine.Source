@@ -406,14 +406,14 @@ internal static class DesktopBootstrap
     ///     first; a legacy plaintext file (or any non-Windows file) fails the unwrap and is returned verbatim as the raw
     ///     secret. The boolean reports whether the bytes were DPAPI-protected, so the caller can migrate legacy files.
     /// </summary>
-    private static (byte[] Secret, bool WasProtected) UnwrapSecretBytes(byte[] fileBytes)
+    private static UnwrappedSecret UnwrapSecretBytes(byte[] fileBytes)
     {
         if (OperatingSystem.IsWindows())
         {
             try
             {
                 var unprotected = ProtectedData.Unprotect(fileBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
-                return (unprotected, true);
+                return new UnwrappedSecret(unprotected, WasProtected: true);
             }
             catch (CryptographicException)
             {
@@ -422,7 +422,7 @@ internal static class DesktopBootstrap
             }
         }
 
-        return (fileBytes, false);
+        return new UnwrappedSecret(fileBytes, WasProtected: false);
     }
 
     /// <summary>
@@ -488,4 +488,10 @@ internal static class DesktopBootstrap
             // Best-effort cleanup of the temp file; the original write failure is already being surfaced.
         }
     }
+
+    /// <summary>
+    ///     The raw operator secret decoded from the key file, and whether the file was DPAPI-protected (a legacy
+    ///     plaintext file reads as not protected and is migrated by the caller).
+    /// </summary>
+    private sealed record UnwrappedSecret(byte[] Secret, bool WasProtected);
 }
