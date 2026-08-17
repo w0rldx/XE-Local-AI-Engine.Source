@@ -81,6 +81,15 @@ describe("BenchmarkRunPane", () => {
 		expect(screen.queryByTestId("benchmark-throughput-breakdown")).toBeNull();
 	});
 
+	// The length-bias counterweight must count the ANSWER, not the question: totalTokens includes the prompt, so a long
+	// task would make every answer look long.
+	it("gives the judge panel the decoded token count, not the turn total", () => {
+		renderPane(run({ totalTokens: 5000, judge: benchmarkJudgeFixture({ state: "succeeded", score: 80 }) }));
+
+		expect(screen.getByTestId("benchmark-judge-panel").textContent).toContain("30 output tokens");
+		expect(screen.getByTestId("benchmark-judge-panel").textContent).not.toContain("5000");
+	});
+
 	it("explains an unjudged run rather than leaving the judge panel blank", () => {
 		renderPane(run());
 

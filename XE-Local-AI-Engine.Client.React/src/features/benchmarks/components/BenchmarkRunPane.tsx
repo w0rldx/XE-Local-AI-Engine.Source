@@ -169,6 +169,10 @@ export function BenchmarkRunPane({
 				<BenchmarkJudgePanel
 					judge={run.judge}
 					primaryTruncated={truncated}
+					// The DECODED token count, not run.totalTokens — that one is prompt + output + reasoning, so a long
+					// question would inflate the answer length the judge is counterweighted against. Null on a run whose
+					// runtime reported no timings, which renders nothing rather than an overstated number.
+					outputTokens={run.throughput.generationTokens}
 					canRejudge={run.primaryStatus === "Succeeded"}
 					isBusy={isJudgeBusy}
 					onCancel={() => onCancel("Judge")}
