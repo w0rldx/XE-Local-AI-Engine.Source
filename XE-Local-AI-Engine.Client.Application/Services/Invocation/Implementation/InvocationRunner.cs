@@ -998,7 +998,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Maps callId → the tool name plus what its Requested event already carried, so FunctionResultContent (which has
         // no Name) can resolve the tool name from the earlier FunctionCallContent with the matching CallId, and so a
         // re-emitted FunctionCallContent can be recognised as a repeat before it pays another serialize + dispatch.
-        var pendingLocalToolCalls = new Dictionary<string, (string Name, object? Arguments, string? SerializedArguments)>(StringComparer.Ordinal);
+        var pendingLocalToolCalls = new Dictionary<string, RequestedToolCall>(StringComparer.Ordinal);
 
         // Tracks which tools this turn has already surfaced a ToolDisabled notice for, so a model that keeps calling a
         // disabled tool (each further call short-circuits to the same "tool_disabled" result — see
@@ -1132,11 +1132,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 // cheaper reference check above.
                                 if (isRepeatedCall && string.Equals(alreadyRequested.SerializedArguments, serializedArguments, StringComparison.Ordinal))
                                 {
-                                    pendingLocalToolCalls[callId] = (alreadyRequested.Name, functionCall.Arguments, alreadyRequested.SerializedArguments);
+                                    pendingLocalToolCalls[callId] = new RequestedToolCall(alreadyRequested.Name, functionCall.Arguments, alreadyRequested.SerializedArguments);
                                     break;
                                 }
 
-                                pendingLocalToolCalls[callId] = (functionCall.Name, functionCall.Arguments, serializedArguments);
+                                pendingLocalToolCalls[callId] = new RequestedToolCall(functionCall.Name, functionCall.Arguments, serializedArguments);
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
@@ -2324,6 +2324,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         invocationCancellationTokenSource?.Dispose();
     }
+
+    // A local tool call seen requested on the stream but not yet resulted: the tool name plus the arguments as they
+    // arrived, kept so a repeated call for the same id can be detected and the result can be attributed to its tool.
+    // Distinct from PendingToolCall, which tracks a WORKER tool call's approval/result completions.
+    private readonly record struct RequestedToolCall(string Name, object? Arguments, string? SerializedArguments);
 
     /// <summary>
     ///     What ended a cancelled invocation. <see cref="Unknown" /> is the resting value: no deliberate cancel was

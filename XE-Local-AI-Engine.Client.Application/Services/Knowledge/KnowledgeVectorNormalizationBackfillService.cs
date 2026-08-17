@@ -146,7 +146,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         return written;
     }
 
-    private static async Task<List<(long RowId, byte[] Embedding)>> ReadBatchAsync(DbConnection connection,
+    private static async Task<List<EmbeddingRow>> ReadBatchAsync(DbConnection connection,
         long cursor,
         int batchSize,
         CancellationToken cancellationToken)
@@ -156,13 +156,13 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         AddParameter(command, "$cursor", cursor);
         AddParameter(command, "$limit", batchSize);
 
-        var rows = new List<(long, byte[])>(batchSize);
+        var rows = new List<EmbeddingRow>(batchSize);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var rowId = reader.GetInt64(0);
             var embedding = await reader.GetFieldValueAsync<byte[]>(ordinal: 1, cancellationToken).ConfigureAwait(false);
-            rows.Add((rowId, embedding));
+            rows.Add(new EmbeddingRow(rowId, embedding));
         }
 
         return rows;
@@ -192,4 +192,8 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         AddParameter(command, "$name", MarkerName);
         _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    // One stored chunk vector read for rescaling: its rowid (also the paging cursor) and the raw float blob, which is
+    // normalized in place before the row is written back.
+    private sealed record EmbeddingRow(long RowId, byte[] Embedding);
 }

@@ -12,4 +12,13 @@ using System.Runtime.InteropServices;
 ///     </para>
 /// </summary>
 [StructLayout(LayoutKind.Auto)]
-public readonly record struct ModelCapabilitySnapshot(bool SupportsThinking, bool SupportsTools, bool IsCloud);
+public readonly record struct ModelCapabilitySnapshot(bool SupportsThinking, bool SupportsTools, bool IsCloud)
+{
+    /// <summary>
+    ///     Whether the model accepts image input. Only a node-local llama.cpp GGUF can advertise it (from the
+    ///     descriptor's projector-gated flag); Codex, Azure Foundry and Ollama-routed models all resolve non-vision.
+    ///     Init-only rather than positional so the three-member deconstruction the capability callers use is the
+    ///     thinking/tools/locality triple, and an unset value is the safe non-vision default.
+    /// </summary>
+    public bool SupportsVision { get; init; }
+}

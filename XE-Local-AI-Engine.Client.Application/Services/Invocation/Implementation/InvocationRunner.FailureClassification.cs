@@ -12,68 +12,68 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 
 public sealed partial class InvocationRunner
 {
-    private static (FailureCategory Category, string Message) MapFailure(Exception exception)
+    private static FailureClassification MapFailure(Exception exception)
     {
         return exception switch
         {
             // Admission policies supply sanitized, user-facing refusal text. Surface it verbatim as an ordinary
             // terminal agent-runtime failure; the policy runs after warm-up but before any generation method is called.
-            InvocationGenerationRejectedException generationRejected => (FailureCategory.AgentRuntime, generationRejected.Message),
+            InvocationGenerationRejectedException generationRejected => new FailureClassification(FailureCategory.AgentRuntime, generationRejected.Message),
             // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
-            NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
+            NoChatModelInstalledException => new FailureClassification(FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
             // An operator force-ejected the model out from under an in-flight turn. Classify as Cancelled (an operator
             // action, not a provider outage) so it is NOT counted as a generic failure and the user sees a truthful
             // "ejected by the operator" message. The exception's message is already user-safe, so it is surfaced verbatim
             // (same treatment as StreamIdleTimeoutException). Reusing Cancelled avoids drifting the generated OpenAPI/zod
             // FailureCategory enum. Matches before the HttpRequestException/agent-runtime arms (its inner is a transport
             // exception, but the OUTER type is matched first).
-            LlamaServerModelEjectedException modelEjected => (FailureCategory.Cancelled, modelEjected.Message),
+            LlamaServerModelEjectedException modelEjected => new FailureClassification(FailureCategory.Cancelled, modelEjected.Message),
             // The budgeter's hard-stop (history still over budget after truncation): a clean, classified pre-inference
             // failure. The exception's own message IS the fixed, path-free constant (ContextBudgetExceededMessage), so
             // it is surfaced verbatim, same treatment as StreamIdleTimeoutException below.
-            ContextBudgetExceededException contextBudgetExceeded => (FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),
+            ContextBudgetExceededException contextBudgetExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),
             // The provider-boundary cumulative-ceiling backstop (a runaway tool/hand-off loop). Reuses the
             // ContextWindowExceeded category (adding a new FailureCategory value would drift the generated OpenAPI/zod
             // client) but carries its own fixed, path-free runaway-loop message. Matches before the generic
             // InvalidOperationException/agent-runtime arms below (it derives from InvalidOperationException).
-            ProviderCallBudgetExceededException providerCallBudgetExceeded => (FailureCategory.ContextWindowExceeded, providerCallBudgetExceeded.Message),
+            ProviderCallBudgetExceededException providerCallBudgetExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, providerCallBudgetExceeded.Message),
             // A single irreducible provider round (its pinned set alone exceeds the context window): the per-round
             // boundary fails it before the provider is called. Reuses ContextWindowExceeded (a new FailureCategory value
             // would drift the generated OpenAPI/zod client) but carries its own fixed, path-free message; the bounded
             // token/window diagnostics it also holds are logged server-side, never surfaced. Matches before the generic
             // InvalidOperationException/agent-runtime arms below (it derives from InvalidOperationException).
-            ProviderContextWindowExceededException providerContextWindowExceeded => (FailureCategory.ContextWindowExceeded, providerContextWindowExceeded.Message),
+            ProviderContextWindowExceededException providerContextWindowExceeded => new FailureClassification(FailureCategory.ContextWindowExceeded, providerContextWindowExceeded.Message),
             // An approval was required in a run that cannot obtain one (unattended). The exception's message is our own
             // fixed-shape reason carrying nothing but a tool name, so it is surfaced verbatim (same treatment as
             // StreamIdleTimeoutException) — that reason IS the value of this failure over the generic approval timeout
             // it replaces. Classified as AgentRuntime rather than a new FailureCategory value, which would drift the
             // generated OpenAPI/zod client. Matches before the generic InvalidOperationException arms below (it derives
             // from InvalidOperationException).
-            ApprovalUnavailableException approvalUnavailable => (FailureCategory.AgentRuntime, approvalUnavailable.Message),
+            ApprovalUnavailableException approvalUnavailable => new FailureClassification(FailureCategory.AgentRuntime, approvalUnavailable.Message),
             // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
             // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
             // arm because it is not a TimeoutException.
-            ProviderCircuitOpenException => (FailureCategory.ProviderUnreachable, ProviderTemporarilyUnavailableMessage),
+            ProviderCircuitOpenException => new FailureClassification(FailureCategory.ProviderUnreachable, ProviderTemporarilyUnavailableMessage),
             // The inter-chunk stall carries the watchdog's own message, which is already a fixed, path-free constant
             // that names which timeout fired — so it is surfaced verbatim. Matches BEFORE the generic TimeoutException
             // arm because it derives from it.
-            StreamIdleTimeoutException streamIdleTimeout => (FailureCategory.Timeout, streamIdleTimeout.Message),
+            StreamIdleTimeoutException streamIdleTimeout => new FailureClassification(FailureCategory.Timeout, streamIdleTimeout.Message),
             // Any other TimeoutException (the invocation-level cancel-after, or an HTTP client timeout surfacing as a
             // bare TimeoutException) carries a framework message that can name hosts/paths/internals and is unbounded, so
             // it is collapsed to a fixed, path-free constant rather than forwarded.
-            TimeoutException => (FailureCategory.Timeout, TimedOutMessage),
+            TimeoutException => new FailureClassification(FailureCategory.Timeout, TimedOutMessage),
             // A tool call the runner itself timed out (ToolResultTimeout / the pending-tool-call cleanup) wraps the
             // timeout as its inner exception. Matched BEFORE the generic tool-call arm so a tool-side timeout is
             // attributable instead of collapsing into the same "Worker tool execution failed." every tool error uses.
             WorkerToolCallException { InnerException: TimeoutException or OperationCanceledException } =>
-                (FailureCategory.AgentToolCall, ToolCallTimedOutMessage),
-            WorkerToolCallException => (FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
-            NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
+                new FailureClassification(FailureCategory.AgentToolCall, ToolCallTimedOutMessage),
+            WorkerToolCallException => new FailureClassification(FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
+            NotSupportedException notSupportedException => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
             InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>
-                (FailureCategory.Unexpected, invalidOperationException.Message),
+                new FailureClassification(FailureCategory.Unexpected, invalidOperationException.Message),
             HttpRequestException httpRequestException when httpRequestException.StatusCode == HttpStatusCode.NotFound =>
-                (FailureCategory.ModelUnavailable, ModelUnavailableMessage),
+                new FailureClassification(FailureCategory.ModelUnavailable, ModelUnavailableMessage),
             // llama-server could not compile the constrained-decoding grammar for the offered tool schemas. It reports
             // this as an HTTP 400, so this arm MUST match before the ReportsModelLoadFailure and generic
             // HttpRequestException arms below, which would otherwise swallow it into ModelLoadFailed/ProviderUnreachable
@@ -82,17 +82,17 @@ public sealed partial class InvocationRunner
             // value would drift the generated OpenAPI/zod client. Still reachable after the node's own tool schemas are
             // shrunk to compile, because MCP servers supply third-party schemas the node does not control.
             _ when ReportsToolGrammarPreparationFailure(exception) =>
-                (FailureCategory.ModelCapabilityUnsupported, ToolCallingPreparationFailedMessage),
+                new FailureClassification(FailureCategory.ModelCapabilityUnsupported, ToolCallingPreparationFailedMessage),
             // Unmask the Ollama capability/load errors that would otherwise collapse to the generic ProviderUnreachable.
             // The capability check matches BEFORE the HTTP-500 load check so a 400 "does not support ..." is always
             // classified as a capability problem (not a load failure), regardless of the carried status code.
             _ when ResolveUnsupportedCapabilityMessage(exception) is { } capabilityMessage =>
-                (FailureCategory.ModelCapabilityUnsupported, capabilityMessage),
+                new FailureClassification(FailureCategory.ModelCapabilityUnsupported, capabilityMessage),
             _ when ReportsModelLoadFailure(exception) =>
-                (FailureCategory.ModelLoadFailed, ModelLoadFailedMessage),
-            HttpRequestException => (FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
-            _ when IsAgentRuntimeException(exception) => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
-            _ => (FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))
+                new FailureClassification(FailureCategory.ModelLoadFailed, ModelLoadFailedMessage),
+            HttpRequestException => new FailureClassification(FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
+            _ when IsAgentRuntimeException(exception) => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
+            _ => new FailureClassification(FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))
         };
     }
 
@@ -209,4 +209,8 @@ public sealed partial class InvocationRunner
 
         return package.RequestedCapabilities?.Any(static capability => string.Equals(capability, LocalChatLoopbackDefaults.RequestedCapability, StringComparison.Ordinal)) == true;
     }
+
+    // A terminal failure reduced to what the client may see: the category the UI branches on, and the user-facing
+    // message — either one of this file's fixed path-free constants or an already-sanitized exception message.
+    private sealed record FailureClassification(FailureCategory Category, string Message);
 }
