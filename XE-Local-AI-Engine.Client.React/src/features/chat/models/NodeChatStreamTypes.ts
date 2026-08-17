@@ -99,6 +99,16 @@ export interface NodeChatStreamEventDto {
 	// the ONE place this wire shape is read.
 	questionRequestId?: string | null;
 	questions?: string | null;
+	// Whether the node can actually REMEMBER an "approve for this session" decision for THIS request. Present on the
+	// `approval-requested` event only, and absent when the backend could not resolve it (the reconnect replay). The
+	// runner answers from the same memo-key resolution that would honour the decision, so it sees the per-call
+	// narrowings the tool catalog cannot — `ToolCallCard` prefers it and falls back to the catalog flag when absent.
+	sessionScopeEligible?: boolean | null;
+	// The effective whole-turn ceiling for THIS turn in seconds — the operator's node "Maximum message request
+	// timeout" as the backend resolved it into the run's TimeoutSettings.InvocationTimeoutSeconds. Present on
+	// `assistant-queued` and `assistant-streaming` only. `NodeChatStreamGuard` is the only reader: it derives its own
+	// watchdog deadlines from it so the browser never pre-empts the node's own ceiling.
+	invocationTimeoutSeconds?: number | null;
 }
 
 export const nodeChatToolStreamEventTypes = {

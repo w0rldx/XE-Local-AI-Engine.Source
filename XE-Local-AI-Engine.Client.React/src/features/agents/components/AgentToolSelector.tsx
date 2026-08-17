@@ -21,7 +21,9 @@ interface AgentToolSelectorProps {
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
 // deselect it; it defaults to requiresApproval=true (the strict default), an unknown source, and the fail-closed
-// "Unknown" risk class (treated as approval-requiring) since its real class is no longer known.
+// "Unknown" risk class (treated as approval-requiring) since its real class is no longer known. sessionScopeEligible
+// is false for the same reason — a vanished tool cannot be shown as one the node will remember a decision for. This
+// selector does not render that flag today; it is set so the synthesized entry stays a complete catalog entry.
 function unknownToolEntry(name: string): ToolCatalogEntry {
 	return {
 		name,
@@ -30,6 +32,7 @@ function unknownToolEntry(name: string): ToolCatalogEntry {
 		source: { kind: "builtin", serverSlug: null },
 		category: "Unknown",
 		effectiveRequiresApproval: true,
+		sessionScopeEligible: false,
 	};
 }
 

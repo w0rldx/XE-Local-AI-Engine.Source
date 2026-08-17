@@ -167,7 +167,8 @@
 		"notices": {
 			"modelSubstituted": "Model substituted",
 			"toolDisabled": "Tool disabled",
-			"historyTruncated": "History truncated"
+			"historyTruncated": "History truncated",
+			"orchestrationDegraded": "Orchestration not used"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
@@ -929,7 +930,9 @@
 			"error": {
 				"title": "Response failed",
 				"modelNotInstalled": "No chat model installed. Pull a GGUF model to start chatting.",
-				"goToModels": "Go to Models"
+				"goToModels": "Go to Models",
+				"clientWatchdogNoFirstChunk": "Connection watchdog: the response never started arriving in this browser.",
+				"clientWatchdogStall": "Connection watchdog: the response stopped arriving in this browser."
 			},
 			"reasoning": {
 				"label": "Reasoning: {{effort}}",
@@ -974,10 +977,11 @@
 				"seed": "Seed",
 				"seedDescription": "Random seed for reproducibility. -1 uses a random seed.",
 				"numCtx": "Context length (num_ctx)",
-				"numCtxDescription": "Size of the context window in tokens used to generate the next token.",
+				"numCtxDescription": "Size of the context window in tokens used to generate the next token. On the local llama.cpp runtime the server window is fixed when the model is loaded, so this only limits how much conversation history is sent.",
 				"stop": "Stop sequences",
 				"stopDescription": "One stop sequence per line. The model halts when it emits any of these strings.",
 				"modelDefault": "Model default",
+				"cloudUnsupported": "Not supported by cloud providers",
 				"reset": "Reset to defaults",
 				"close": "Close",
 				"resetField": "Reset {{field}}"
@@ -1677,11 +1681,32 @@
 				"cleared": "Token cleared.",
 				"clearError": "Could not clear the token."
 			},
+			"localModelProxyKey": {
+				"title": "Local model proxy",
+				"configured": "Key configured",
+				"none": "No key",
+				"description": "Let an external OpenAI-compatible tool (LiteLLM, Continue, a local agent) use your local model through this node as a plain OpenAI provider — set its base_url to the endpoint below and its API key to the generated key. This serves the raw model only, with no agent tools or memory. Only a one-way hash of the key is stored, so it is shown once when you generate it and cannot be retrieved afterwards. Only clients on this machine can connect.",
+				"endpointLabel": "base_url",
+				"prefixLabel": "Key",
+				"notRetrievable": "Only the first characters are shown. The full key is not stored and cannot be shown again — regenerate if you no longer have it.",
+				"lastUsed": "Last used {{when}}",
+				"neverUsed": "Never used yet — no client has connected with this key.",
+				"revealTitle": "Copy this key now",
+				"revealWarning": "This is the only time this key will be shown. It is not stored and cannot be recovered — if you lose it you must generate a new one and update every client that uses it.",
+				"dismissReveal": "I have copied it",
+				"clientHint": "Point your OpenAI-compatible client at base_url = the endpoint above with api_key = the generated key. It serves only the local model — no agent tools, no memory, no knowledge base.",
+				"regenerate": "Regenerate key",
+				"generate": "Generate key",
+				"revoke": "Revoke key",
+				"regenerateWarning": "Regenerating replaces the key immediately — any client still configured with the old one stops working."
+			},
 			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
+			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			"fields": {
 				"save": "Save node settings",
 				"validationError": "Some settings are invalid. Fix the highlighted fields.",
 				"allowedRange": "Allowed range",
+				"restartRequired": "Takes effect after the node restarts.",
 				"seconds": "seconds",
 				"minutes": "minutes",
 				"bytesPositive": "A positive number of bytes. Changes take effect without restarting the node.",
@@ -1704,7 +1729,7 @@
 				},
 				"defaultModelName": {
 					"label": "Default model",
-					"description": "The model used for local chat when none is selected. Leave blank to use the configured default. Applies after the node restarts."
+					"description": "The model used for local chat when none is selected. Leave blank to use the configured default."
 				},
 				"enableTools": {
 					"label": "Enable tools",
@@ -1723,12 +1748,10 @@
 					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max loaded llama-server processes",
-					"description": "Applies after the node restarts."
+					"label": "Max loaded llama-server processes"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Idle process time-to-live",
-					"description": "Applies after the node restarts."
+					"label": "Idle process time-to-live"
 				},
 				"keepModelWarm": {
 					"enabledLabel": "Keep a model warm",
@@ -1743,30 +1766,28 @@
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama endpoint",
-					"description": "The Ollama API base URL. Applies after a restart."
+					"description": "The Ollama API base URL."
 				},
 				"huggingFace": {
 					"title": "Hugging Face"
 				},
 				"huggingFaceDefaultQuant": {
 					"label": "Default quantization",
-					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M). Applies after the node restarts."
+					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M)."
 				},
 				"worker": {
 					"title": "Worker limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Max response size",
-					"description": "Applies after the node restarts."
+					"label": "Max response size"
 				},
 				"advanced": {
 					"title": "Advanced (developer)",
-					"description": "Low-level orchestration and AgentHome limits. The orchestration idle timeout and pending tool-call age apply after a restart; the AgentHome limits apply immediately.",
+					"description": "Low-level orchestration and AgentHome limits.",
 					"samplingNote": "Sampling defaults are configured per message during a chat."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestration idle timeout",
-					"description": "Applies after the node restarts."
+					"label": "Orchestration idle timeout"
 				},
 				"agentHomePrepareTimeoutSeconds": {
 					"label": "AgentHome prepare timeout",
@@ -1783,12 +1804,11 @@
 					"label": "AgentHome max patch size"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max pending tool-call age",
-					"description": "Applies after the node restarts."
+					"label": "Max pending tool-call age"
 				},
 				"speculativeMode": {
 					"label": "Speculative decoding",
-					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. Applies after the node restarts.",
+					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks.",
 					"options": {
 						"off": "Off",
 						"ngram-mod": "n-gram (no draft model)",
@@ -1800,21 +1820,20 @@
 				},
 				"speculativeDraftModel": {
 					"label": "Draft model",
-					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family. Applies after the node restarts.",
+					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
 					"placeholder": "Select a draft model",
 					"empty": "No installed chat models"
 				},
 				"speculativeDraftMaxTokens": {
-					"label": "Draft tokens per step",
-					"description": "Applies after the node restarts."
+					"label": "Draft tokens per step"
 				},
 				"chatCacheReuse": {
 					"label": "Prompt cache reuse",
-					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables. Applies after the node restarts."
+					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables."
 				},
 				"rerankerModel": {
 					"label": "Reranker model",
-					"description": "Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Applies after the node restarts. Uses additional VRAM not counted by capacity checks.",
+					"description": "Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Uses additional VRAM not counted by capacity checks.",
 					"off": "Off",
 					"empty": "No installed models",
 					"downloadRecommended": "Download recommended reranker",
@@ -2838,7 +2857,8 @@
 				},
 				"maxRuntimeSeconds": {
 					"label": "Max runtime (seconds)",
-					"description": "Leave blank for no runtime limit."
+					"description": "Leave blank to use the node default.",
+					"descriptionRunAgent": "Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes). A value of 600 is treated as blank."
 				},
 				"preventOverlap": {
 					"label": "Prevent overlapping runs"
@@ -3919,7 +3939,18 @@
 		},
 		"tools": {
 			"title": "Local tools",
-			"subtitle": "Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers."
+			"subtitle": "Tools installed on this node: built-in in-process tools plus tools from enabled MCP servers. A chat turn is offered a subset of these.",
+			"overview": {
+				"title": "Tools installed on this node",
+				"installedCount": "{{total}} installed",
+				"scopeNotice": "The full node catalog. Which of these a chat turn can actually use is narrower: it depends on the selected model's tool support, the node's tool-capable model list, and the allowed tools of the agent handling the turn.",
+				"loading": "Loading tools…",
+				"error": "Could not load the tool catalog.",
+				"empty": "No tools installed.",
+				"footer": "Built-in tools run in-process on this node. MCP tools run from their registered servers.",
+				"requiresApproval": "requires approval",
+				"autoExecute": "auto-execute"
+			}
 		},
 		"benchmarks": {
 			"title": "Local model benchmarks",

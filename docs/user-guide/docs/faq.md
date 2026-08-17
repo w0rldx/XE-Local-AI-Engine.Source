@@ -238,17 +238,29 @@ Retry it — Hugging Face occasionally rate-limits. Check free disk space; model
 repeatedly, please report it with the model name.
 
 ### Can I use GGUF models I already have?
-**Not in this build — there's no import path.** No import button, no scan-a-folder setting. Dropping
-`.gguf` files into the models directory is *not* reliably picked up, because the model list is driven
-by a manifest rather than by scanning the folder.
+**Yes — one file at a time.** Go to **Models → Installed** and click **Import model**, then enter the
+full path to a `.gguf` file on this computer. The app previews what it found (size, architecture,
+quantization), you confirm the name, and it **copies** the file into its own models folder.
 
-If you have an existing model library this is a real limitation, and **worth telling me about** — it's
-the most likely reason someone with a big collection gives up early.
+Worth knowing before you start:
 
-What *does* work: if you already run **Ollama**, the app can list and use its models. It won't install
-or manage Ollama for you.
+- It **copies** rather than moves, so you need free disk space for a second copy. Your original file
+  stays where it is; you can delete it afterwards if you want the space back. If there isn't enough
+  room, the preview says so instead of failing halfway.
+- **One standalone chat model per import.** Models split across several files
+  (`…-00001-of-00003.gguf`) can't be imported, and neither can embedding models, rerankers, or the
+  vision "projector" files that sit next to some models.
+- An imported model is labelled **Imported** in the model list.
+- The **Import model** button only appears in the packaged desktop app.
 
-→ [Technical detail](for-experienced-users.md#using-ggufs-you-already-have--not-supported)
+There is still **no scan-a-folder setting**, and copying `.gguf` files into the models directory by
+hand is *not* reliably picked up, because the model list is driven by a manifest rather than by
+scanning the folder. Importing is what writes that manifest entry.
+
+Also available: if you already run **Ollama**, the app can list and use its models too. It won't
+install or manage Ollama for you.
+
+→ [Technical detail](for-experienced-users.md#using-ggufs-you-already-have)
 
 ---
 

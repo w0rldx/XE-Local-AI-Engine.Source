@@ -330,7 +330,13 @@ internal static class BenchmarkSnapshotModelComparer
         string.Join('\u001f', path, role, size, sha256, string.Join('\u001e', owners.Order(StringComparer.Ordinal)), required, schema, fingerprint);
 }
 
-internal static class BenchmarkExecutionSerialization
+/// <summary>
+///     The ONLY serializer for the benchmark run's stored <c>output_parts_json</c> blob (the judge's own blobs ride
+///     <c>BenchmarkJudgeSerialization</c>). Public because a reader must never re-derive the options at the call site:
+///     <see cref="JsonSerializerDefaults.Web" /> is camelCase, so deserializing with default options binds every
+///     property to its default and hands the API a zeroed payload instead of failing.
+/// </summary>
+public static class BenchmarkExecutionSerialization
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 

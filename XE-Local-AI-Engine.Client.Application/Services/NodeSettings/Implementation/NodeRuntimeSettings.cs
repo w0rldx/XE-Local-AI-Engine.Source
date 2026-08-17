@@ -169,12 +169,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<int> GetDetachedGraceSecondsAsync(CancellationToken cancellationToken = default) =>
         ResolveDetachedGraceSeconds(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<SamplingOptions?> GetSamplingDefaultsAsync(CancellationToken cancellationToken = default)
-    {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
-        return stored.SamplingDefaults;
-    }
-
     public async Task<int> GetChatCacheReuseAsync(CancellationToken cancellationToken = default) =>
         ResolveChatCacheReuse(await LoadAsync(cancellationToken).ConfigureAwait(false));
 

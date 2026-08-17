@@ -1,6 +1,6 @@
 # Scheduler
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 
@@ -69,9 +69,15 @@ A **template** is a server-defined job type. Each is an `IScheduledJobHandler` e
 
 `RunSavedAgentHandler` (`Handlers/RunSavedAgentHandler.cs`), template id `run-agent`, executes a
 saved agent headlessly with a fixed prompt. It supports Cron, one-shot, simple-interval, and manual
-schedules; defaults to Cron; permits manual triggering and agent-created definitions; and defaults to
-a 600-second runtime limit. Its parameters are `agentDefinitionId`, `prompt`, and an optional
-`reasoningEffort` override.
+schedules; defaults to Cron; and permits manual triggering and agent-created definitions. Its parameters
+are `agentDefinitionId`, `prompt`, and an optional `reasoningEffort` override.
+
+Unlike the model-fit template it carries **no** per-template runtime default — its descriptor sets
+`DefaultMaxRuntimeSeconds: null` — because a fixed value here becomes the form's pre-filled ceiling and would
+silently cap every unattended run below a raised node "Maximum message request timeout". The effective ceiling is
+resolved live instead; see [Cancellation & auto-interrupt](#cancellation--auto-interrupt) below. The run's own turn deadline comes
+from the same node setting: `RunSavedAgentHandler.ExecuteAsync` passes
+`nodeSettings.MaxMessageRequestTimeoutSeconds` into the runtime package it builds.
 
 Security and runtime invariants:
 
@@ -148,7 +154,21 @@ There are **two ways** a run reaches the handler's `CancellationToken`:
 
    (`Services/Scheduler/RunCancellationOutcome.cs`)
 
-2. **Auto-interrupt (timeout)** — opt-in **per job**. `AddNodeScheduler` registers `q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = options.DefaultMaxRuntimeMinutes)` (`NodeSchedulerServiceCollectionExtensions.cs`), but Quartz's auto-interrupt plugin only acts on jobs that **opt in**. A job's effective max-runtime comes from its descriptor / definition (`DefaultMaxRuntimeSeconds`, e.g. 600 for the model-fit template; `MaxRuntimeSeconds` on `ScheduledJobManagementInput`). **Gotcha:** auto-interrupt is *not* applied globally to every job — it is per-job opt-in, so a template/definition that doesn't carry a runtime budget will never be auto-interrupted regardless of the configured default.
+2. **Auto-interrupt (timeout)** — budgeted **per job**. `AddNodeScheduler` registers `q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = options.DefaultMaxRuntimeMinutes)` (`NodeSchedulerServiceCollectionExtensions.cs`), but Quartz's auto-interrupt plugin only acts on jobs that **opt in**: `ScheduledJobManagementService` stamps `JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable` on every job it builds, and the per-job budget as `JobDataMapKeyMaxRunTime` (milliseconds, as a string — `UseProperties=true` persists only strings).
+
+   The budget itself comes from `ScheduledJobManagementService.ResolveMaxRuntimeSecondsAsync`, re-resolved on every schedule/reconcile, in this order:
+
+   | Case | Effective ceiling |
+   |---|---|
+   | Operator set `MaxRuntimeSeconds` (`ScheduledJobManagementInput`) | exactly that value |
+   | `run-agent`, no operator value | **derived from the node setting**: `MaxMessageRequestTimeoutSeconds × 2 + 300 s` |
+   | Any other template, no operator value | none set here — the global `SchedulerOptions.DefaultMaxRuntimeMinutes` applies |
+
+   The `run-agent` derivation exists because that template drives exactly one model invocation whose own deadline *is* the node "Maximum message request timeout"; a lower Quartz ceiling would pre-empt it, so an operator who raised the node timeout would still see the unattended run die at the old bound. The two turn budgets cover one preceding full-length turn this run may queue behind plus its own, and the 300 s slack covers the pre-run resolve/capacity work outside both deadlines (`DerivedMaxRuntimeTurnBudget`, `DerivedMaxRuntimeOverheadSeconds`).
+
+   **Gotcha — a stored `600` on a `run-agent` schedule is treated as unset.** 600 is exactly what the removed template default used to pre-fill into the form, so it is indistinguishable from a deliberate ten-minute cap; the resolver (`LegacyRunAgentTemplateDefaultMaxRuntimeSeconds`) deliberately derives the ceiling instead, which is never lower. The React form says so — the run-agent variant of the max-runtime help text reads "Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes). A value of 600 is treated as blank." (`ScheduledJobForm.tsx`).
+
+   **Gotcha:** a descriptor's `DefaultMaxRuntimeSeconds` (600 for the model-fit template) only **pre-fills the React form** (`ScheduledJobForm.tsx`) — it is surfaced through the template DTO and is never read at fire time. Every job this service builds does opt into the monitor, so a definition that ends up with no explicit or derived budget is still auto-interrupted, at the global `SchedulerOptions.DefaultMaxRuntimeMinutes`.
 
 Either way, the handler must actually *observe* the token. The dispatcher records the terminal state once the handler throws `OperationCanceledException`.
 

@@ -19,4 +19,12 @@ public sealed record InvocationApprovalState(
 
     /// <summary>The tool awaiting approval, when known. Null for a platform-hub approval.</summary>
     public string? ToolName { get; init; }
+
+    /// <summary>
+    ///     Whether the node can REMEMBER an "approve for this session" decision for this exact request, as the runner
+    ///     resolved it. Recorded so a reconnect replay can re-offer — or withhold — the session button on the same
+    ///     terms as the live event. Null when nothing resolved it (a platform-hub approval); the replay treats null as
+    ///     NOT eligible, because offering a durable decision the node will not keep is the failure being fixed.
+    /// </summary>
+    public bool? SessionScopeEligible { get; init; }
 }

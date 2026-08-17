@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
@@ -140,6 +141,13 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         services.AddScoped<IScheduledJobDefinitionStore, ScheduledJobDefinitionStore>();
         services.AddScoped<IScheduledJobRunStore, ScheduledJobRunStore>();
         services.AddSingleton(TimeProvider.System);
+
+        // ScheduledJobManagementService reads the node "Maximum message request timeout" to derive the run-agent
+        // template's implicit Quartz ceiling; AddNodeScheduler does not own that store, so the test supplies it.
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        nodeSettingsStore.Load(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        services.AddSingleton(nodeSettingsStore);
 
         var config = BuildConfig($"Data Source={dbPath}");
         services.AddSingleton<IConfiguration>(config);

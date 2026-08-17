@@ -13,20 +13,25 @@ interface ChatSamplingOptionsDialogProps {
 	onClose: () => void;
 	// The active model's maximum context length, used to cap MaxOutputTokens and NumCtx inputs.
 	maxContextTokens?: number;
+	// True when the selected model is a cloud (Codex/Azure) one. Those requests never reach the local chat clients, so
+	// the knobs marked localRuntimeOnly have no wire field there and are disabled rather than silently ignored.
+	cloudModelSelected?: boolean;
 }
 
 interface SamplingFieldRowProps {
 	meta: SamplingFieldMeta;
 	numValue: number | undefined;
 	cappedMax: number;
+	unsupported: boolean;
 	onCommit: (val: number | string) => void;
 	onReset: () => void;
 }
 
-function SamplingFieldRow({ meta, numValue, cappedMax, onCommit, onReset }: SamplingFieldRowProps) {
+function SamplingFieldRow({ meta, numValue, cappedMax, unsupported, onCommit, onReset }: SamplingFieldRowProps) {
 	const { t } = useTranslation();
 
 	const resetLabel = t("pages.chat.samplingOptions.resetField", { field: t(meta.labelKey) });
+	const unsupportedHint = t("pages.chat.samplingOptions.cloudUnsupported", "Not supported by cloud providers");
 
 	const numberInput = (
 		<NumberInput
@@ -34,6 +39,7 @@ function SamplingFieldRow({ meta, numValue, cappedMax, onCommit, onReset }: Samp
 			hideControls={meta.slider}
 			label={meta.slider ? undefined : t(meta.labelKey)}
 			description={meta.slider ? undefined : t(meta.descriptionKey)}
+			disabled={unsupported}
 			min={meta.min}
 			max={cappedMax}
 			step={meta.step}
@@ -46,6 +52,8 @@ function SamplingFieldRow({ meta, numValue, cappedMax, onCommit, onReset }: Samp
 		/>
 	);
 
+	// Stays enabled even when the field is unsupported: a value stored while a local model was selected must remain
+	// clearable without switching models first.
 	const resetButton = (
 		<Tooltip label={resetLabel} withArrow={true}>
 			<ActionIcon
@@ -74,9 +82,15 @@ function SamplingFieldRow({ meta, numValue, cappedMax, onCommit, onReset }: Samp
 				<Text size="xs" c="dimmed">
 					{t(meta.descriptionKey)}
 				</Text>
+				{unsupported ? (
+					<Text size="xs" c="dimmed" fs="italic" data-testid={`chat-sampling-unsupported-${meta.key}`}>
+						{unsupportedHint}
+					</Text>
+				) : null}
 				<Group wrap="nowrap" align="center" gap="sm">
 					<Slider
 						style={{ flex: 1 }}
+						disabled={unsupported}
 						min={meta.min}
 						max={cappedMax}
 						step={meta.step}
@@ -104,7 +118,7 @@ function SamplingFieldRow({ meta, numValue, cappedMax, onCommit, onReset }: Samp
 	);
 }
 
-export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens }: ChatSamplingOptionsDialogProps) {
+export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens, cloudModelSelected = false }: ChatSamplingOptionsDialogProps) {
 	const { t } = useTranslation();
 	const options = useChatSamplingPreferencesStore((state) => state.options);
 	const { setField, reset } = useChatSamplingPreferencesStore((state) => state.actions);
@@ -182,6 +196,7 @@ export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens }:
 									meta={meta}
 									numValue={numValue}
 									cappedMax={cappedMax}
+									unsupported={cloudModelSelected && meta.localRuntimeOnly === true}
 									onCommit={(val) => commitField(meta.key, val)}
 									onReset={() => setField(meta.key, undefined as never)}
 								/>

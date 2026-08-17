@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { guardNodeChatStream, StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
+import { clientWatchdogFailureCategory, guardNodeChatStream, StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 function event(sequence: number, content: string): NodeChatStreamEventDto {
@@ -27,6 +27,22 @@ function phaseEvent(sequence: number, runtimePhase: string): NodeChatStreamEvent
 		sequence,
 		occurredAtUtc: 1_700_000_000_000 + sequence,
 		runtimePhase,
+	};
+}
+
+// The server stamps the turn's effective whole-turn ceiling on `assistant-queued` (and `assistant-streaming`); the
+// guard reads it off the wire to derive its own deadlines. `invocationTimeoutSeconds: undefined` models a server that
+// never sends one (a resume re-attach, or a pre-field node).
+function queuedEvent(sequence: number, invocationTimeoutSeconds?: number): NodeChatStreamEventDto {
+	return {
+		type: "assistant-queued",
+		conversationId: "conversation-1",
+		messageId: "assistant-1",
+		requestId: "request-1",
+		status: "queued",
+		sequence,
+		occurredAtUtc: 1_700_000_000_000 + sequence,
+		invocationTimeoutSeconds,
 	};
 }
 
@@ -190,5 +206,87 @@ describe("guardNodeChatStream", () => {
 		const caught = await stalled;
 		expect(caught).toBeInstanceOf(StreamWatchdogError);
 		expect(caught).toMatchObject({ category: "inter-chunk-stall" });
+	});
+
+	it("keeps the default deadlines when no event carries the node timeout", async () => {
+		vi.useFakeTimers();
+		async function* silentAfterQueued(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield queuedEvent(0);
+			await new Promise<void>(() => {
+				// never resolves
+			});
+		}
+
+		const iterator = guardNodeChatStream(silentAfterQueued())[Symbol.asyncIterator]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		// The unchanged 180 s inter-chunk constant still owns the deadline.
+		await vi.advanceTimersByTimeAsync(179_999);
+		await expect(Promise.race([stalled, Promise.resolve("pending")])).resolves.toBe("pending");
+		await vi.advanceTimersByTimeAsync(1);
+		expect(await stalled).toBeInstanceOf(StreamWatchdogError);
+	});
+
+	it("widens the deadline when the node timeout is raised above the default", async () => {
+		vi.useFakeTimers();
+		async function* silentAfterQueued(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield queuedEvent(0, 900);
+			await new Promise<void>(() => {
+				// never resolves — a turn the node is still willing to wait 900 s for
+			});
+		}
+
+		const iterator = guardNodeChatStream(silentAfterQueued())[Symbol.asyncIterator]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		// Far past the 180 s constant: the client must NOT pre-empt the node's own 900 s ceiling.
+		await vi.advanceTimersByTimeAsync(880_000);
+		await expect(Promise.race([stalled, Promise.resolve("pending")])).resolves.toBe("pending");
+		// 900 s + the 30 s grace for the node's terminal event to reach us.
+		await vi.advanceTimersByTimeAsync(50_000);
+		expect(await stalled).toBeInstanceOf(StreamWatchdogError);
+	});
+
+	it("never drops below the dead-transport constants when the node timeout is lowered", async () => {
+		vi.useFakeTimers();
+		async function* silentAfterQueued(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield queuedEvent(0, 5);
+			await new Promise<void>(() => {
+				// never resolves
+			});
+		}
+
+		const iterator = guardNodeChatStream(silentAfterQueued())[Symbol.asyncIterator]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		// A 5 s node ceiling would derive a 35 s floor; the 180 s constant is the floor the guard keeps.
+		await vi.advanceTimersByTimeAsync(179_999);
+		await expect(Promise.race([stalled, Promise.resolve("pending")])).resolves.toBe("pending");
+		await vi.advanceTimersByTimeAsync(1);
+		expect(await stalled).toBeInstanceOf(StreamWatchdogError);
+	});
+});
+
+describe("streamWatchdogNotice", () => {
+	it("maps each watchdog category to its own translatable sentence", () => {
+		expect(streamWatchdogNotice("no-first-chunk").key).toBe("pages.chat.error.clientWatchdogNoFirstChunk");
+		expect(streamWatchdogNotice("inter-chunk-stall").key).toBe("pages.chat.error.clientWatchdogStall");
+		expect(streamWatchdogNotice("no-first-chunk").key).not.toBe(streamWatchdogNotice("inter-chunk-stall").key);
+	});
+
+	it("reports a client-side give-up under its own reason code, never a node failure category", () => {
+		expect(clientWatchdogFailureCategory).toBe("ClientWatchdog");
 	});
 });

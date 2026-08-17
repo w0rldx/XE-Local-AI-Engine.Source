@@ -1467,37 +1467,6 @@ export const zXeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zXeLocalAiEngineClientModelsSamplingOptions = z.object({
-	temperature: z.number().nullish(),
-	topP: z.number().nullish(),
-	topK: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	minP: z.number().nullish(),
-	maxOutputTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	repeatPenalty: z.number().nullish(),
-	repeatLastN: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	presencePenalty: z.number().nullish(),
-	frequencyPenalty: z.number().nullish(),
-	seed: z.string().nullish(),
-	stop: z.array(z.string()).nullish(),
-	numCtx: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-});
-
 export const zXeLocalAiEngineClientServicesNodeSettingsModelRate = z.object({
 	inputPer1M: z.number().optional(),
 	outputPer1M: z.number().optional(),
@@ -1704,9 +1673,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	samplingDefaults: zXeLocalAiEngineClientModelsSamplingOptions.nullish(),
 	voiceFeatureEnabled: z.boolean().nullish(),
-	allowedVoiceModels: z.array(z.string()).nullish(),
 	defaultVoiceProfile: z.string().nullish(),
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
 });
@@ -1792,9 +1759,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	samplingDefaults: zXeLocalAiEngineClientModelsSamplingOptions.nullish(),
 	voiceFeatureEnabled: z.boolean().nullish(),
-	allowedVoiceModels: z.array(z.string()).nullish(),
 	defaultVoiceProfile: z.string().nullish(),
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
 });
@@ -2499,6 +2464,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = z.ob
 	source: z.string(),
 	category: z.string(),
 	effectiveRequiresApproval: z.boolean(),
+	sessionScopeEligible: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object({

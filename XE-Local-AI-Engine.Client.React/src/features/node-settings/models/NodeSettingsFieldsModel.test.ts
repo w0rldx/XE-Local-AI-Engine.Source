@@ -5,8 +5,10 @@ import {
 	buildNodeSettingsRequest,
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
+	restartGatedNodeSettingsFields,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
+	touchesRestartGatedField,
 	toUsageRateRows,
 	type UsageRateRow,
 	validateLlamaCppTag,
@@ -502,5 +504,53 @@ describe("detachedGraceSeconds", () => {
 	it("is developer-gated like its MaxPendingToolCallAge sibling", () => {
 		const form = { ...baseline, detachedGraceSeconds: 120 };
 		expect(buildNodeSettingsRequest(form, baseline, bounds, false).body.detachedGraceSeconds).toBeUndefined();
+	});
+});
+
+describe("restart-gated fields", () => {
+	const baseline = { ...nodeSettingsFieldDefaults };
+	const bounds = toNodeSettingsFieldBounds(undefined);
+
+	it("flags a body that changed a seeded-once field", () => {
+		// chatCacheReuse is read once into LlamaServerSupervisorOptions at composition.
+		const { body } = buildNodeSettingsRequest({ ...baseline, chatCacheReuse: 512 }, baseline, bounds, false);
+		expect(touchesRestartGatedField(body)).toBe(true);
+	});
+
+	it("does not flag a body that only changed live fields", () => {
+		// enableTools + the AgentHome caps are re-read per call, so a save is effective immediately.
+		const { body } = buildNodeSettingsRequest(
+			{ ...baseline, enableTools: false, agentHomeMaxPatchBytes: 1024 },
+			baseline,
+			bounds,
+			true,
+		);
+		expect(Object.keys(body).length).toBeGreaterThan(0);
+		expect(touchesRestartGatedField(body)).toBe(false);
+	});
+
+	it("does not flag an empty (nothing changed) body", () => {
+		expect(touchesRestartGatedField({})).toBe(false);
+	});
+
+	it("never lists a field that is read live on the backend", () => {
+		// Regression guard for the labelling rule: mislabelling a live field would tell operators to restart for nothing.
+		for (const live of [
+			"enableTools",
+			"customToolsEnabled",
+			"toolCapableModels",
+			"keepModelWarmEnabled",
+			"keepModelWarmModelName",
+			"keepModelWarmIntervalSeconds",
+			"agentHomePrepareTimeoutSeconds",
+			"agentHomeCommandTimeoutSeconds",
+			"agentHomeMaxSelectedFolderBytes",
+			"agentHomeMaxPatchBytes",
+			"detachedGraceSeconds",
+			"usageRates",
+			"recommendedLlamaCppTag",
+		] as const) {
+			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
+		}
 	});
 });

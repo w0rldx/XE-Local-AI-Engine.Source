@@ -283,6 +283,127 @@ public sealed class LlamaServerLaunchProjectionTests
     }
 
     [Test]
+    public void TryFromArguments_ForAnEmittedVector_RoundTripsToTheProjectionItWasRenderedFrom()
+    {
+        // The whole point of reading the argv back: for a vector nothing perturbed, the effective projection must be
+        // identical to the intended one — otherwise every receipt would report a spurious difference.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: true,
+            "q8_0",
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+        var intended = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            plan,
+            ModelRole.Chat,
+            chatCacheReuse: 256,
+            chatCacheRamMiB: 512);
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(spec.Arguments));
+
+        AssertEx.Equal(intended, effective);
+        AssertEx.Equal(intended.ComputeIdentity(), effective.ComputeIdentity());
+    }
+
+    [Test]
+    [Arguments(GpuVariant.Cuda)]
+    [Arguments(GpuVariant.Cpu)]
+    public void TryFromArguments_ForAPooledReplayVector_MatchesTheIntendedProjection(GpuVariant variant)
+    {
+        var resolved = ResolvedLaunchArguments.Replay(ctxSize: 3072, nGpuLayers: 24);
+        var plan = variant == GpuVariant.Cpu
+            ? NewPolicy(cpuThreads: 6, cpuThreadsBatch: 8).ResolveCpuReplayPlan(resolved)
+            : (LlamaServerLaunchPlan?)null;
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            variant,
+            resolved,
+            chatCacheReuse: 0,
+            plan: plan);
+
+        AssertEx.Equal(LlamaServerLaunchProjection.From(variant, resolved, plan, ModelRole.Embedding),
+            AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)));
+    }
+
+    [Test]
+    public void TryFromArguments_WhenAFlagTheProjectionClaimsWasDropped_ReportsTheVectorNotTheIntent()
+    {
+        // The capability gate removes optional options a runtime does not advertise, AFTER the projection that rendered
+        // them. Re-reading the argv is what stops a receipt from claiming a flag the process never received.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: false,
+            "q8_0",
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+        var intended = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            plan,
+            ModelRole.Chat,
+            chatCacheReuse: 256,
+            chatCacheRamMiB: 512);
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+        var gated = spec.Arguments
+                        .Where(static argument => !string.Equals(argument, "--metrics", StringComparison.Ordinal))
+                        .ToArray();
+
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(gated));
+
+        AssertEx.True(intended.Metrics);
+        AssertEx.False(effective.Metrics, "A dropped --metrics must read as absent, not as the intent that rendered it.");
+        AssertEx.NotEqual(intended.ComputeIdentity(), effective.ComputeIdentity());
+    }
+
+    [Test]
+    public void TryFromArguments_IsTolerantOfUnknownArgumentsAndLastWinsForARepeatedFlag()
+    {
+        // Operator extra arguments are appended after everything else and llama.cpp is last-wins for a scalar flag, so
+        // the honest reading of the vector is the last value — and an argument this projection does not model is skipped.
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "-c", "8192", "--jinja", "--cache-ram", "0", "-lv", "4", "-c", "4096"
+        ]));
+
+        AssertEx.Equal<int?>(expected: 4096, effective.ContextTokens);
+        AssertEx.True(effective.Metrics);
+        AssertEx.True(effective.Jinja);
+        AssertEx.Equal(expected: 1, effective.Parallel);
+        AssertEx.Null(effective.Pooling);
+    }
+
+    [Test]
+    [Arguments("-c")]
+    [Arguments("--cache-ram")]
+    public void TryFromArguments_ForAnUnreadableVector_IsNullRatherThanAWrongFact(string flag)
+    {
+        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["--metrics", flag, "not-a-number"]),
+            "A value that cannot be read must degrade to no projection, never to a fabricated one.");
+        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["--metrics", flag]),
+            "A trailing flag with no value must degrade to no projection.");
+        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["-fa", "--jinja"]),
+            "A value flag followed by another flag must not swallow the flag as its value.");
+    }
+
+    [Test]
     public void ResolveCpuReplayPlan_ForExploreArguments_RequestsNoContext()
     {
         // Explore pins no context of its own, so there is nothing for a policy-free CPU spawn to carry over — and a

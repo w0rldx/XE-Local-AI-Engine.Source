@@ -61,13 +61,27 @@ public sealed class BenchmarkRunExecutor(
 
             // Admission sizes against the context the FROZEN runtime will actually launch with, not the context the
             // project requested: a profile replay can pin a larger window, and reserving the smaller one under-books.
+            // It also sizes the KV term against the FROZEN KV-cache type (null ⇒ f16), so a q8_0/q4_0 run books the
+            // bytes it will really hold rather than the f16 figure it will never reach.
             // No launch admission: this run spawns its own exclusive process from the FROZEN replay arguments, so an
             // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
             var decision = await capacity.DecideAsync(new CapacityRequest(snapshot.PrimaryModel.ModelName,
                                              ModelRole.Chat,
                                              snapshot.PrimaryRuntime.ContextTokens,
-                                             PublishLaunchAdmission: false), token)
+                                             PublishLaunchAdmission: false,
+                                             snapshot.PrimaryRuntime.KvTypeK), token)
                                          .ConfigureAwait(false);
+            logger.LogInformation(
+                "Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
+                + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
+                work.RunId,
+                "primary",
+                snapshot.PrimaryModel.ModelName,
+                snapshot.RequestedContextTokens,
+                snapshot.PrimaryRuntime.ContextTokens,
+                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                decision.Verdict,
+                decision.Reason);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 throw new BenchmarkExecutionException(CapacityRejectedMessage);

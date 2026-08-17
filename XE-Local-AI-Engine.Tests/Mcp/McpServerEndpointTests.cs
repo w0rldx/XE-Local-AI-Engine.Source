@@ -192,6 +192,51 @@ public sealed class McpServerEndpointTests
         AssertEx.ContainsSingle(body.Tools,
             tool => tool.Name == "mcp__filesystem__read_file" && tool.Source == "mcp:filesystem" && tool.RequiresApproval
                     && tool.Category == "Network" && tool.EffectiveRequiresApproval);
+        // Neither a built-in nor an MCP tool can carry a session-scoped approval, so the catalog says so and the chat
+        // card withholds its "Approve for this session" button rather than promising a decision the node downgrades.
+        AssertEx.True(body.Tools.All(tool => !tool.SessionScopeEligible),
+            "Only the skill tools and Fixed custom tools are session-scope eligible.");
+    }
+
+    [Test]
+    public async Task GetToolCatalog_MarksAFixedCustomToolSessionScopeEligible_AndAParameterizedOneNot()
+    {
+        // The one boolean the chat approval card keys off. It is computed through the SAME predicate the invocation
+        // runner's session memo uses (SessionApprovalEligibility), so the card cannot offer a durable decision the node
+        // would silently treat as one-shot. Fixed = a verbatim, operator-authored invocation; Parameterized = the model
+        // chooses the arguments, so every argument set must re-prompt.
+        var service = Substitute.For<IMcpServerService>();
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetKnownToolsAsync(Arg.Any<CancellationToken>()).Returns([
+            new LocalToolCatalogEntry
+            {
+                Name = "custom__nightly_backup",
+                Description = "Runs the nightly backup.",
+                RequiresApproval = true,
+                Source = "custom",
+                Category = ToolCategory.WriteExecute,
+                IsFixedCustomTool = true
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = "custom__fetch_url",
+                Description = "Fetches a URL the model picks.",
+                RequiresApproval = true,
+                Source = "custom",
+                Category = ToolCategory.Network,
+                IsFixedCustomTool = false
+            }
+        ]);
+        await using var factory = CreateFactory(service, offerProvider);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ToolCatalogRoute);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await ReadJsonAsync<ToolCatalogResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.ContainsSingle(body.Tools, tool => tool.Name == "custom__nightly_backup" && tool.SessionScopeEligible);
+        AssertEx.ContainsSingle(body.Tools, tool => tool.Name == "custom__fetch_url" && !tool.SessionScopeEligible);
     }
 
     [Test]

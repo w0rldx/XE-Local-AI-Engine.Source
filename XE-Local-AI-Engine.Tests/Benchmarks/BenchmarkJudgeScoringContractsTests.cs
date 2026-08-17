@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -269,6 +270,43 @@ public sealed class BenchmarkJudgeScoringContractsTests
             default:
                 return JsonNode.Parse(element.GetRawText());
         }
+    }
+
+    [Test]
+    public void Serialization_RoundTripsTheVerdictThroughTheWritersOwnOptions_AndDefaultOptionsWouldZeroIt()
+    {
+        // The live bug this pins: the writer uses JsonSerializerDefaults.Web (camelCase) and a reader that re-derives
+        // DEFAULT (PascalCase) options binds every property to its default, so the API answered a zeroed verdict with a
+        // null summary — a shape the frontend's schema rejects, taking the whole run detail down with it.
+        var written = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            [new BenchmarkJudgeCriterionScoreV2("alpha", 8, "solid")],
+            "Mostly right.",
+            80,
+            $"v1:{new string('b', 64)}"));
+
+        AssertEx.Contains(Encoding.UTF8.GetString(written), "\"schemaVersion\":2");
+
+        var roundTripped = AssertEx.NotNull(BenchmarkJudgeSerialization.DeserializeResult(written));
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.OutputSchemaVersion, roundTripped.SchemaVersion);
+        AssertEx.Equal("Mostly right.", roundTripped.Summary);
+        AssertEx.Equal(80, roundTripped.Score);
+        AssertEx.Equal(1, roundTripped.Criteria.Count);
+        AssertEx.Equal("alpha", roundTripped.Criteria[0].Id);
+        AssertEx.Equal(8, roundTripped.Criteria[0].Score);
+
+        var withDefaultOptions = AssertEx.NotNull(JsonSerializer.Deserialize<BenchmarkJudgeResultV2>(written));
+        AssertEx.Equal(0, withDefaultOptions.Score,
+            "If this ever binds, camelCase stopped being the stored shape — revisit the pin rather than deleting it.");
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("not json")]
+    public void Serialization_ForAnAbsentOrUnreadableVerdict_IsNullRatherThanAThrow(string payload)
+    {
+        AssertEx.Null(BenchmarkJudgeSerialization.DeserializeResult(Encoding.UTF8.GetBytes(payload)));
+        AssertEx.Null(BenchmarkJudgeSerialization.DeserializeResult(null));
     }
 
     private static int Compute((string Id, int Weight, int Score)[] criteria) =>

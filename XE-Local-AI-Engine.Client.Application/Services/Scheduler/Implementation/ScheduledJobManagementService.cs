@@ -5,6 +5,8 @@ using Quartz;
 using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
 ///     Default <see cref="IScheduledJobManagementService" />. Validates the requested schedule, persists the definition
@@ -18,9 +20,32 @@ public sealed class ScheduledJobManagementService(
     IScheduledJobTemplateRegistry templateRegistry,
     ISchedulerFactory schedulerFactory,
     ISchedulerEventPublisher eventPublisher,
+    INodeSettingsStore nodeSettingsStore,
     ILogger<ScheduledJobManagementService> logger,
     TimeProvider timeProvider) : IScheduledJobManagementService
 {
+    /// <summary>
+    ///     How many whole-turn budgets the derived run-agent ceiling covers. Quartz counts max-runtime from the job's
+    ///     START, but the run's own invocation deadline only starts once it holds the shared invocation slot — and the
+    ///     turn it queues behind may itself run for a full node "Maximum message request timeout". Two budgets cover
+    ///     one preceding full-length turn plus this run's own.
+    /// </summary>
+    private const int DerivedMaxRuntimeTurnBudget = 2;
+
+    /// <summary>
+    ///     Slack added on top of the turn budgets when the run-agent template's ceiling is derived rather than
+    ///     operator-set, covering the pre-run resolve/capacity work outside both deadlines. Five minutes matches
+    ///     <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>, the coarse slack unit this subsystem already uses.
+    /// </summary>
+    private const int DerivedMaxRuntimeOverheadSeconds = 300;
+
+    /// <summary>
+    ///     The max-runtime the run-agent template used to pre-fill into every new schedule's form before the default
+    ///     was removed. A stored value equal to it is indistinguishable from an operator who typed 600, so
+    ///     <see cref="ResolveMaxRuntimeSecondsAsync" /> treats it as unset — see the rationale there.
+    /// </summary>
+    private const int LegacyRunAgentTemplateDefaultMaxRuntimeSeconds = 600;
+
     private readonly IScheduledJobDefinitionStore _definitionStore =
         definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
 
@@ -29,6 +54,9 @@ public sealed class ScheduledJobManagementService(
 
     private readonly ILogger<ScheduledJobManagementService> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
+
+    private readonly INodeSettingsStore _nodeSettingsStore =
+        nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
 
     private readonly IScheduledJobRunStore _runStore =
         runStore ?? throw new ArgumentNullException(nameof(runStore));
@@ -243,7 +271,7 @@ public sealed class ScheduledJobManagementService(
         // surfaces the real, actionable error.
         try
         {
-            await scheduler.AddJob(BuildJobDetail(definition), replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken).ConfigureAwait(false), replace: true, cancellationToken).ConfigureAwait(false);
         }
         catch (SchedulerException ex)
         {
@@ -312,7 +340,7 @@ public sealed class ScheduledJobManagementService(
                 continue;
             }
 
-            await scheduler.AddJob(BuildJobDetail(definition), replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken).ConfigureAwait(false), replace: true, cancellationToken).ConfigureAwait(false);
             healedCount++;
         }
 
@@ -529,7 +557,7 @@ public sealed class ScheduledJobManagementService(
         // Ensure no stale job/trigger remains before (re)scheduling.
         _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken).ConfigureAwait(false);
 
-        var jobDetail = BuildJobDetail(record);
+        var jobDetail = await BuildJobDetailAsync(record, cancellationToken).ConfigureAwait(false);
 
         if (record.ScheduleKind == ScheduleKind.Manual)
         {
@@ -555,7 +583,7 @@ public sealed class ScheduledJobManagementService(
         return new TriggerKey(definitionId.ToString("N"), SchedulerJobKeys.Group);
     }
 
-    private static IJobDetail BuildJobDetail(ScheduledJobDefinitionRecord record)
+    private async Task<IJobDetail> BuildJobDetailAsync(ScheduledJobDefinitionRecord record, CancellationToken cancellationToken)
     {
         var jobType = record.PreventOverlap
             ? typeof(NonOverlappingSchedulerDispatchJob)
@@ -570,15 +598,51 @@ public sealed class ScheduledJobManagementService(
                                 .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable, "true")
                                 .StoreDurably();
 
-        // Per-job max-runtime override: the plugin parses MaxRunTime as a millisecond long from its string form
-        // (TryGetLongValueFromString → TimeSpan.FromMilliseconds). Falls back to the global default when unset.
-        if (record.MaxRuntimeSeconds is > 0)
+        // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling.
+        // The plugin parses MaxRunTime as a millisecond long from its string form (TryGetLongValueFromString →
+        // TimeSpan.FromMilliseconds); with neither, the global default applies.
+        var maxRuntimeSeconds = await ResolveMaxRuntimeSecondsAsync(record, cancellationToken).ConfigureAwait(false);
+
+        if (maxRuntimeSeconds is > 0)
         {
             builder = builder.UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime,
-                (record.MaxRuntimeSeconds.Value * 1000L).ToString(CultureInfo.InvariantCulture));
+                (maxRuntimeSeconds.Value * 1000L).ToString(CultureInfo.InvariantCulture));
         }
 
         return builder.Build();
+    }
+
+    /// <summary>
+    ///     The effective Quartz ceiling for a schedule: the operator's own value when it is set, otherwise the
+    ///     template's derived ceiling. Only the run-agent template derives one — it drives exactly one model
+    ///     invocation, whose own deadline is the node "Maximum message request timeout", so a Quartz interrupt below
+    ///     that setting always pre-empts the run's own ceiling (the operator raises the node timeout and the unattended
+    ///     run still dies at the older, lower bound). Every other template keeps the global
+    ///     <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c> fallback (null here). Re-resolved on every
+    ///     schedule/reconcile, so a raised node setting reaches existing schedules at the next startup reconciliation.
+    /// </summary>
+    private async Task<int?> ResolveMaxRuntimeSecondsAsync(ScheduledJobDefinitionRecord record, CancellationToken cancellationToken)
+    {
+        var isRunAgent = string.Equals(record.TemplateId, RunSavedAgentHandler.TemplateIdValue, StringComparison.Ordinal);
+
+        // A stored 600 on a run-agent schedule is ambiguous: it is what the removed template default pre-filled into
+        // the form, so it is far more likely to be that stale default than a deliberate ten-minute cap — and honoring
+        // it would leave exactly the schedules this fix exists for still capped below the node timeout. Operator
+        // decision: treat it as unset and derive the ceiling. An operator who really wanted 600 s gets the derived
+        // ceiling instead, which is never lower, so the only cost is a stuck run being collected later.
+        var isLegacyTemplateDefault = isRunAgent && record.MaxRuntimeSeconds == LegacyRunAgentTemplateDefaultMaxRuntimeSeconds;
+        if (record.MaxRuntimeSeconds is > 0 && !isLegacyTemplateDefault)
+        {
+            return record.MaxRuntimeSeconds;
+        }
+
+        if (!isRunAgent)
+        {
+            return null;
+        }
+
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        return (nodeSettings.MaxMessageRequestTimeoutSeconds * DerivedMaxRuntimeTurnBudget) + DerivedMaxRuntimeOverheadSeconds;
     }
 
     private static ITrigger BuildTrigger(ScheduledJobDefinitionRecord record, TimeProvider timeProvider)

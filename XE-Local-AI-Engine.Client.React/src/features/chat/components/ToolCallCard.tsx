@@ -82,6 +82,13 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	const catalogEntry = catalogQuery.data?.find((tool) => tool.name === part.name);
 	const toolCategory = catalogEntry?.category ?? "Unknown";
 	const toolEffectiveApproval = catalogEntry?.effectiveRequiresApproval ?? true;
+	// Whether the node can actually REMEMBER a session-scoped approval. The backend's PER-REQUEST answer wins: the
+	// runner resolves it from the same memo key that would honour the decision, so it also covers the tools the node
+	// catalog does not carry at all (the MAF skill tools — which is how run_skill_script and imported skills kept
+	// offering a session scope that silently degraded to "Once"). The catalog's tool-identity flag is the fallback for
+	// a request the backend did not resolve (a reconnect replay), and offering the button remains the last resort — the
+	// node stays the authority either way.
+	const sessionScopeEligible = part.pendingApprovalSessionScopeEligible ?? catalogEntry?.sessionScopeEligible ?? true;
 
 	const handleToggle = (open: boolean) => {
 		expandedByToolId.set(part.id, open);
@@ -211,20 +218,24 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 						>
 							{t("chat.toolCall.approve", "Approve")}
 						</Button>
-						{/* Session scope is a REQUEST, not a guarantee: the node withholds it for imported skills and an
-						    operator policy can disable it outright, in which case the same tool prompts again. That is
-						    expected, not a failure — the controls re-arm on the new request id. */}
-						<Button
-							size="compact-xs"
-							color="teal"
-							variant="subtle"
-							leftSection={<IconCheck size={12} />}
-							loading={resolveApproval.isPending}
-							onClick={() => handleApprovalDecision(true, "Session")}
-							data-testid={`chat-tool-call-approve-session-${part.name}`}
-						>
-							{t("chat.toolCall.approveSession", "Approve for this session")}
-						</Button>
+						{/* The button appears only where the node will actually remember the decision. The per-request
+						    flag knows the narrowings the catalog cannot see (an imported skill, run_skill_script, a
+						    resource-less read_skill_resource); the catalog flag covers the tool-identity cases (an MCP
+						    tool, run_in_agent_home, a Parameterized custom tool, or anything at all while the operator's
+						    always-prompt switch is on). Either way the click never silently degrades to a plain "Once". */}
+						{sessionScopeEligible ? (
+							<Button
+								size="compact-xs"
+								color="teal"
+								variant="subtle"
+								leftSection={<IconCheck size={12} />}
+								loading={resolveApproval.isPending}
+								onClick={() => handleApprovalDecision(true, "Session")}
+								data-testid={`chat-tool-call-approve-session-${part.name}`}
+							>
+								{t("chat.toolCall.approveSession", "Approve for this session")}
+							</Button>
+						) : null}
 						<Button
 							size="compact-xs"
 							color="red"

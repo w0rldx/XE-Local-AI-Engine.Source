@@ -62,9 +62,7 @@ internal static class NodeSettingsEndpointDtoMapper
             DetachedGraceSeconds = settings.DetachedGraceSeconds,
             MinDetachedGraceSeconds = StoredNodeSettings.MinDetachedGraceSeconds,
             MaxAllowedDetachedGraceSeconds = StoredNodeSettings.MaxDetachedGraceSeconds,
-            SamplingDefaults = settings.SamplingDefaults,
             VoiceFeatureEnabled = settings.VoiceFeatureEnabled,
-            AllowedVoiceModels = settings.AllowedVoiceModels,
             DefaultVoiceProfile = settings.DefaultVoiceProfile,
             // Flatten the stored wrapper to the map the React rate editor renders (null wrapper → null map).
             UsageRates = settings.UsageRates?.Models
@@ -131,13 +129,11 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
             MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
             DetachedGraceSeconds = request.DetachedGraceSeconds ?? currentSettings.DetachedGraceSeconds,
-            SamplingDefaults = request.SamplingDefaults ?? currentSettings.SamplingDefaults,
             // The node-default tool-approval policy has no editable field on this request yet (the operator
             // surface is planned but not yet built); preserve the currently stored value so an unrelated node-settings
             // save never wipes it.
             ToolApprovalPolicy = currentSettings.ToolApprovalPolicy,
             VoiceFeatureEnabled = request.VoiceFeatureEnabled ?? currentSettings.VoiceFeatureEnabled,
-            AllowedVoiceModels = request.AllowedVoiceModels ?? currentSettings.AllowedVoiceModels,
             DefaultVoiceProfile = request.DefaultVoiceProfile is null
                 ? currentSettings.DefaultVoiceProfile
                 : request.DefaultVoiceProfile.Trim(),

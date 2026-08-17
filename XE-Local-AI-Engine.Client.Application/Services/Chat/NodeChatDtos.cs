@@ -106,9 +106,10 @@ public sealed record NodeChatConversationDto(
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
     Guid? AgentDefinitionId = null,
     bool MemoryExcluded = false,
-    // Non-destructive compaction synopsis (decrypted) plus the highest message sequence it folds in. Null until the
-    // conversation has been compacted. The send path replaces messages at/below CompactionSummaryCoversToSequence with
-    // CompactionSummary; the originals stay in Messages.
+    // Non-destructive compaction synopsis (decrypted) plus the highest message ANCHOR sequence it folds in — a variant
+    // group's earliest member sequence, not the chosen sibling's own (SelectedPathResolver.CreateAnchorResolver). Null
+    // until the conversation has been compacted. The send path replaces messages anchored at/below
+    // CompactionSummaryCoversToSequence with CompactionSummary; the originals stay in Messages.
     string? CompactionSummary = null,
     int? CompactionSummaryCoversToSequence = null,
     long? CompactionSummaryUpdatedAtUtc = null);

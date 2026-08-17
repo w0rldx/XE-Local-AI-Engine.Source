@@ -484,6 +484,54 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(within(listbox).getByRole("option", { name: "MODEL-A (not installed)", hidden: true })).toBeTruthy();
 	});
 
+	// Restart-gated knobs (seeded once at DI composition) must say so on save; live knobs must not.
+	it("tells the operator a restart is needed when a restart-gated field changed", async () => {
+		// Wait on a value only the RESPONSE can produce: the form renders seed defaults before the query resolves, and the
+		// load-sync effect would otherwise land after the edit below and wipe it.
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, huggingFaceDefaultQuant: "Q4_K_M" }),
+		});
+		renderPage();
+		await screen.findByDisplayValue("Q4_K_M");
+
+		// huggingFaceDefaultQuant is seeded once into the HF options at composition.
+		fireEvent.change(screen.getByTestId("node-settings-hf-default-quant"), { target: { value: "Q5_K_M" } });
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+
+		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalled());
+		await waitFor(() =>
+			expect(toastMock.success).toHaveBeenCalledWith(
+				"Node settings saved. Some of the changed settings only take effect after the node restarts.",
+			),
+		);
+	});
+
+	it("keeps the plain saved notice when only live fields changed", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, defaultModelName: "loaded-model" }),
+		});
+		renderPage();
+		await screen.findByDisplayValue("loaded-model");
+
+		// enableTools is re-read per send/regenerate — no restart involved.
+		const toggle = screen.getByTestId("node-settings-enable-tools");
+		fireEvent.click(toggle.querySelector("input[type='checkbox']") ?? toggle);
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		await waitFor(() =>
+			expect(toastMock.success).toHaveBeenCalledWith(
+				"Node settings saved. Capability reporting was requested for the worker connection.",
+			),
+		);
+	});
+
 	// One-click recommended-reranker download: response-state handling.
 	it("downloads the recommended reranker on a fresh start — shows progress and duplicate-guards the button", async () => {
 		renderPage();

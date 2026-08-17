@@ -3,7 +3,6 @@ import {
 	zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse,
 	zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest,
 	zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse,
-	zXeLocalAiEngineClientModelsSamplingOptions,
 } from "@/core/api/generated/zod.gen";
 
 // Runtime contract: the backend serializes C# `long` (int64) fields as plain JSON numbers, and
@@ -67,14 +66,6 @@ describe("generated int64 number contract", () => {
 describe("generated seed string contract", () => {
 	// 9007199254740993 = 2^53 + 1: the first integer a JSON number cannot represent.
 	const largeSeed = "9007199254740993";
-
-	it("keeps SamplingOptions.seed a string and preserves a value above 2^53", () => {
-		const parsed = zXeLocalAiEngineClientModelsSamplingOptions.parse({ seed: largeSeed });
-		expect(typeof parsed.seed).toBe("string");
-		expect(parsed.seed).toBe(largeSeed);
-		// A JSON number is rejected — the wire contract is a string, never a lossy int64 number.
-		expect(zXeLocalAiEngineClientModelsSamplingOptions.safeParse({ seed: 1234 }).success).toBe(false);
-	});
 
 	it("keeps the image request/response seed a string and preserves a value above 2^53", () => {
 		const request = zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest.parse({

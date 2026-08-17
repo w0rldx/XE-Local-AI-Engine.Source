@@ -10,6 +10,21 @@ public interface IProcessContextAllocationResolver
         CancellationToken ct);
 
     /// <summary>
+    ///     Resolves the allocation with its KV-cache term sized for <paramref name="kvCacheType" /> — a llama.cpp cache
+    ///     element type such as <c>q8_0</c>. <see langword="null" />, <c>f16</c> and anything unrecognized keep the
+    ///     conservative fp16 sizing, which is why the default below is the whole contract for an implementation with no
+    ///     KV-aware estimate. The context window is never chosen against the quantized estimate — only the resolved
+    ///     allocation's bytes are — so a quantized type can only ever reserve LESS than fp16.
+    /// </summary>
+    Task<ProcessContextAllocation?> ResolveAsync(string modelName,
+        ModelRole role,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        string? kvCacheType,
+        CancellationToken ct) =>
+        ResolveAsync(modelName, role, variant, resolved, ct);
+
+    /// <summary>
     /// Returns the next smaller hardware-tier allocation candidate for live admission sizing. Frozen and deterministic
     /// allocations are immutable. Candidate generation is pure and independent of classified-startup-OOM retry accounting.
     /// </summary>

@@ -89,6 +89,41 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetRun_ForASucceededJudge_ReturnsTheStoredVerdictOfTheAttempt()
+    {
+        // Round-tripped through the REAL writer: the stored blob is camelCase, and a reader using default options bound
+        // every property to its default — so the API answered a zeroed verdict with a null summary and the frontend
+        // rejected the whole run detail as an unexpected shape. Nothing about the run itself had failed.
+        await using var context = CreateContext();
+        var attemptId = Guid.NewGuid();
+        var stored = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            [new BenchmarkJudgeCriterionScoreV2("correctness", 8, "clear and correct")],
+            "solid answer",
+            80,
+            "v1:aggregate"));
+        context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
+               .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
+        context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
+                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var judge = document.RootElement.GetProperty("judge");
+        AssertEx.Equal("solid answer", judge.GetProperty("summary").GetString());
+        var criteria = judge.GetProperty("criteria");
+        AssertEx.Equal(1, criteria.GetArrayLength());
+        AssertEx.Equal("correctness", criteria[0].GetProperty("id").GetString());
+        AssertEx.Equal(8, criteria[0].GetProperty("score").GetInt32());
+        AssertEx.Equal("clear and correct", criteria[0].GetProperty("rationale").GetString());
+    }
+
+    [Test]
     public async Task StartRun_ReturnsAcceptedWithSafeRunDetail()
     {
         await using var context = CreateContext();
@@ -359,7 +394,8 @@ public sealed class BenchmarkEndpointTests
         string judgeState = BenchmarkRunJudgeStates.None,
         string? output = null,
         BenchmarkRunLaunchIntent? intent = null,
-        BenchmarkRunLaunchEvidence? evidence = null) =>
+        BenchmarkRunLaunchEvidence? evidence = null,
+        Guid? judgeAttemptId = null) =>
         new(RunId,
             ProjectId,
             Encoding.UTF8.GetBytes("secret-runtime"),
@@ -385,7 +421,7 @@ public sealed class BenchmarkEndpointTests
             20,
             intent,
             evidence,
-            new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
+            new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
 
     // Benchmark errors are RFC 7807 problem+json: the operator-safe message is `detail` and the machine-readable
     // BenchmarkErrorCode name rides along as the `code` extension member.

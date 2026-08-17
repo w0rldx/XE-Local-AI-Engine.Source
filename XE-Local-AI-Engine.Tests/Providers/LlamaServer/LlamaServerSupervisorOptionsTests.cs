@@ -92,6 +92,47 @@ public sealed class LlamaServerSupervisorOptionsTests
     }
 
     [Test]
+    public void HttpNetworkTimeoutDefault_IsNotShorterThanTheNodeMessageTimeoutCeiling()
+    {
+        // G9: this is the OUTERMOST floor against a wedged socket, not the per-turn bound. When it was 600s an operator
+        // who raised the node "Maximum message request timeout" above 600s got a socket abort from the inner HTTP
+        // timeout first, so the setting silently had no effect for local models. It must never be shorter than the node
+        // setting's own ceiling (StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds = 3600; that constant lives in
+        // Client.Application, which this provider project cannot reference — see the comment on the default).
+        AssertEx.True(new LlamaServerSupervisorOptions().HttpNetworkTimeout >= TimeSpan.FromSeconds(3600),
+            "the llama-server HTTP network timeout must not pre-empt the operator's maximum message request timeout.");
+    }
+
+    [Test]
+    public void EmbeddingHttpNetworkTimeoutDefault_StaysAtThePreviousSixHundredSecondFloor()
+    {
+        // The embedding split: raising HttpNetworkTimeout to 3600s was safe ONLY for chat, which also carries the
+        // invocation deadline's token. An embedding call (knowledge ingestion, memory extraction) has no such
+        // per-request bound, so this value is its only one and must stay at the pre-split 600s — a wedged embedding
+        // request has to fail in minutes, not an hour.
+        var options = new LlamaServerSupervisorOptions();
+
+        AssertEx.Equal(TimeSpan.FromSeconds(600), options.EmbeddingHttpNetworkTimeout);
+        AssertEx.True(options.EmbeddingHttpNetworkTimeout < options.HttpNetworkTimeout,
+            "the embedding timeout must stay strictly shorter than the chat one; a single shared value is the bug this split fixed.");
+    }
+
+    [Test]
+    public async Task Validate_NonPositiveEmbeddingHttpNetworkTimeout_Throws()
+    {
+        var options = new LlamaServerSupervisorOptions
+        {
+            EmbeddingHttpNetworkTimeout = TimeSpan.Zero
+        };
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        {
+            options.Validate();
+            return Task.CompletedTask;
+        });
+    }
+
+    [Test]
     public async Task Validate_NonPositiveEjectDrainTimeout_Throws()
     {
         var options = new LlamaServerSupervisorOptions

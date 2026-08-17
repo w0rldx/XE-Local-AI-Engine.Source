@@ -1,6 +1,6 @@
 # Model-fit / Model Advisor
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 Model-fit is the node's **box-aware GGUF recommendation advisor**: given the operator's use-case, it profiles the local hardware (RAM / VRAM / GPU vendor), discovers candidate GGUF repos on Hugging Face, estimates each model's memory footprint with a pure I/O-free formula, ranks the ones that fit, and caches the ranked snapshot. The React page is **cache-first** — it reads the last cached snapshot and never runs the advisor inline; the only way to (re)run the advisor is to fire the seeded Quartz `model-recommendation-check` job. This page covers the hardware profiler, the memory-fit estimator, the refresh service, the cache-read query service, the GGUF download coordinator, the Quartz wiring, the local endpoints, and the React feature.
 
@@ -155,7 +155,7 @@ Default seeded parameters: `{"operation":"Recommend","useCase":"coding","limit":
 
 ## Endpoints
 
-Routes under `model-fit/*` (`LocalApiRoutes.ModelFit`, mapped in `Endpoints/ModelFit/V1/`). The advisor-proper routes are the first three; the rest are thin transport over the llama.cpp binary/supervisor and HF GGUF seams (their UI now lives in sibling features).
+Routes under `model-fit/*` (`LocalApiRoutes.ModelFit`, mapped in `Endpoints/ModelFit/V1/`). The advisor-proper routes are the first three; the rest are thin transport over the llama.cpp binary/supervisor and HF GGUF seams (their UI now lives in sibling features). `LocalApiRoutes.ModelFit` is the authority for the complete constant list — the table below names every family it currently holds, and [API & hubs](09-api-and-hubs.md) carries the same inventory alongside the other route families.
 
 | Route constant | Path | Endpoint | Notes |
 |---|---|---|---|
@@ -164,8 +164,14 @@ Routes under `model-fit/*` (`LocalApiRoutes.ModelFit`, mapped in `Endpoints/Mode
 | `HardwareProfile` | `model-fit/hardware-profile` | `GetHardwareProfileEndpoint` | Sanitized aggregates; `?refresh=true` re-probes. |
 | `GgufBrowse` / `GgufInspect` | `model-fit/gguf/browse` · `…/inspect` | `BrowseGgufRepositoriesEndpoint` · `InspectGgufRepositoryEndpoint` | HF GGUF discovery + per-repo quant/size inspection. **Inspect** annotates each file with quality tier + fit verdict + the ★ recommended variant (`IGgufVariantRecommender`). |
 | `Download` / `DownloadCancel` | `model-fit/download` · `…/cancel` | `StartGgufDownloadEndpoint` · `CancelGgufDownloadEndpoint` | Background, cancellable, keyed by model name. |
+| `Downloads` / `DownloadStatus` / `DownloadOperationStatus` | `model-fit/gguf/downloads` · `…/{modelName}` · `…/operations/{operationId}` | `GetGgufDownloadsEndpoint` · `GetGgufDownloadStatusEndpoint` · `GetGgufDownloadOperationStatusEndpoint` | One-shot hydrate for the download list/one download/one operation. The per-second poll is gone — progress arrives over `GgufDownloadHub` ([API & hubs](09-api-and-hubs.md)). |
+| `ImportCapability` / `ImportPreview` / `Import` / `Imports` / `ImportStatus` / `ImportCancel` | `model-fit/gguf/import/capability` · `…/import/preview` · `…/import` · `…/imports` · `…/imports/{operationId}` · `…/imports/{operationId}/cancel` | `GetGgufImportCapabilityEndpoint` · `PreviewGgufImportEndpoint` · `StartGgufImportEndpoint` · `GetGgufImportsEndpoint` · `GetGgufImportStatusEndpoint` · `CancelGgufImportEndpoint` | **Import an already-downloaded local GGUF** into the registry: capability probe, dry-run preview of what would be imported, then a background, cancellable operation tracked by id. Shares the acquisition preflight + importer that promotes a [trained artifact](18-training.md). |
+| `CatalogInfo` / `CatalogRefresh` | `model-fit/catalog` · `…/catalog/refresh` | `GetModelCatalogInfoEndpoint` · `RefreshModelCatalogEndpoint` | Local model-catalog snapshot and an operator-initiated refresh. |
 | `Running` / `RunningEject` | `model-fit/running` · `…/eject` | `ListRunningModelsEndpoint` · `EjectRunningModelEndpoint` | Running llama-server processes; eject tree-kills one. |
 | `LlamaCppVersion` / `LlamaCppRuntime` / `LlamaCppUpdate` | `model-fit/llamacpp/version` · `…/runtime` · `…/update` | `EnsureLlamaCppBinaryEndpoint` (a **POST** on `…/version`) · `GetLlamaCppRuntimeEndpoint` · `UpdateLlamaCppRuntimeEndpoint` | Pinned/resolved binary version, dynamic-runtime status, operator-initiated install/update. There is no `GetLlamaCppVersionEndpoint`: resolving the version can install the binary, so the route is a POST. |
+| `CudaBuild*` (5 constants + `CudaBuildHub`) | `model-fit/llamacpp/cuda-build(/prerequisites\|status\|cancel\|remove)` | `Start`/`Cancel`/`Remove CudaBuildEndpoint` · `GetCudaBuildPrerequisitesEndpoint` · `GetCudaBuildStatusEndpoint` | Linux in-app CUDA build lifecycle. A blocked start answers a **typed 409 domain object**, not ProblemDetails — see [API & hubs](09-api-and-hubs.md). Progress rides `CudaBuildHub`. |
+| `SourceBuild*` (5 constants + `SourceBuildHub`) | `model-fit/llamacpp/source-build(/prerequisites\|status\|cancel\|remove)` | `Start`/`Cancel`/`Remove LlamaCppSourceBuildEndpoint` · `GetLlamaCppSourceBuildPrerequisitesEndpoint` · `GetLlamaCppSourceBuildStatusEndpoint` | The generalized source-build family (official pin, custom repo, or explicit 40-hex commit). Same typed-409 shape; a source build is also the only runtime that ships `llama-quantize`, which merged [training](18-training.md) exports need. |
+| `LlamaCppAcquisition` (+ hub) | `model-fit/llamacpp/acquisition` | `GetRuntimeAcquisitionStatusEndpoint` | Latest snapshot of the host's automatic first-run llama.cpp acquisition; `RuntimeAcquisitionHub` pushes the same sequence-numbered status. |
 | `HfToken` | `model-fit/hf-token` | `GetHfTokenStatusEndpoint` · `SetHfTokenEndpoint` | **GET reports presence only** — the token is never returned (security gate). |
 | `Profiles` + `ProfilesExplore` / `ProfilesBenchmark` / `ProfilesFreeze` / `ProfilesInvalidate` | `model-fit/profiles` · `…/profiles/{explore,benchmark,freeze,invalidate}` | `ListInferenceProfilesEndpoint` · `Explore`/`Benchmark`/`Freeze`/`InvalidateInferenceProfileEndpoint` | Inference Optimizer (`IInferenceProfileService`). Collection GET lists every persisted node-local profile (**machine key omitted**). The four actions are **body-carrying POSTs** (target in the body, never a route param) so the POST always has a body — sidesteps the FastEndpoints 415-on-bodyless-POST issue. |
 
@@ -191,6 +197,7 @@ All endpoints are loopback/local-only, authenticated, and secret-redacted — se
 ## Related pages
 
 - [Local runtime & providers](03-local-runtime-and-providers.md) — host llama.cpp supervisor, binary manager, HF GGUF discovery/store the advisor depends on.
+- [Training](18-training.md) — QLoRA fine-tuning; a promoted artifact enters the registry through the same acquisition preflight and importer as a GGUF import.
 - [Scheduler](06-scheduler.md) — Quartz dispatcher, run history, and the SignalR hub the refresh path rides.
 - [Data & persistence](08-data-and-persistence.md) — snapshot/recommendation tables in the node SQLite database and the exact selected-field encryption boundary.
 - [API & hubs](09-api-and-hubs.md) — `/api/local/v1` mapping and OpenAPI → hey-api.
