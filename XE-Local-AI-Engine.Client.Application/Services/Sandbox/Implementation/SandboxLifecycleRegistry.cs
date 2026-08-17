@@ -328,7 +328,7 @@ internal sealed class SandboxLifecycleRegistry
                 return;
             }
 
-            state.Alive = false;
+            state.MarkDead();
         }
 
         foreach (var inFlight in state.InFlight.Values)
