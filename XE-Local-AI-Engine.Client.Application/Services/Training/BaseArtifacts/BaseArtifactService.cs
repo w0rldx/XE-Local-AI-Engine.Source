@@ -97,7 +97,7 @@ internal sealed class BaseArtifactService(
         }
 
         // Refuse while the transfer is live: deleting the directory under the writer would leave half-written shards
-        // that the next attempt would happily resume from. Run references arrive with the run module in Slice 3.
+        // that the next attempt would happily resume from. Run references arrive with the run module.
         if (record.Status == TrainingBaseArtifactStatus.Downloading || _coordinator.IsDownloading(artifactId))
         {
             return BaseArtifactDeleteOutcome.Downloading;

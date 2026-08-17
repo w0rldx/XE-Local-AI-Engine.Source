@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
-///     F-011's second instance, locally: the registry gated only on "does the file name parse to a quant", so a
+///     The draft-model misclassification, second instance: the registry gated only on "does the file name parse to a quant", so a
 ///     downloaded speculative-decoding drafter was registered as an ordinary model and listed beside the real weights
 ///     it drafts for — a 0.4 GB "Q8_0 gemma-4" next to the 7.8 GB one. A rescan must give the drafter the marked quant
 ///     identity and the <see cref="GgufRole.Draft" /> role, without disturbing any base quant.

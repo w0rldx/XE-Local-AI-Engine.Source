@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     Default <see cref="IGpuModelLoadAdmission" /> (AUD4-06): a single process-wide <see cref="SemaphoreSlim" />(1,1)
+///     Default <see cref="IGpuModelLoadAdmission" />: a single process-wide <see cref="SemaphoreSlim" />(1,1)
 ///     that serializes the spawn-through-readiness window of every GPU-backed model load — llama-server AND
 ///     stable-diffusion.cpp — so two <c>--fit</c> loads never read the same free-VRAM snapshot concurrently and
 ///     oversubscribe the device. Serialization is the whole mechanism: when the current holder's load becomes resident

@@ -195,7 +195,7 @@ public sealed class GgufVariantRecommenderTests
     [Test]
     public async Task Annotate_NeverRecommendsASpeculativeDecodingDrafter()
     {
-        // The live gemma-4-12b shape (F-011): the MTP drafter is BOTH the smallest file and NearLossless-looking, so
+        // The live gemma-4-12b shape: the MTP drafter is BOTH the smallest file and NearLossless-looking, so
         // under a plain fit-first / quality-first walk it wins outright — the ★ row would be a 0.4 GB non-chat model.
         var recommender = Build(freeVramBytes: 24 * Gib);
         var files = new[]

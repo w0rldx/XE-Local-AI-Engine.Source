@@ -82,7 +82,7 @@ public sealed class DetachedInvocationReaperTests
     [Test]
     public async Task Reap_WhenTheOperatorEditsTheGraceMidRun_TakesEffectOnTheNextTick()
     {
-        // The direct F-001/F-025 regression test. Capturing a stored node setting in a singleton field is what silently
+        // The direct regression test. Capturing a stored node setting in a singleton field is what silently
         // required a node restart before an operator edit applied; the reaper must re-read the grace on EVERY tick.
         var invocationId = Guid.NewGuid();
         var time = new FakeClock(Start);

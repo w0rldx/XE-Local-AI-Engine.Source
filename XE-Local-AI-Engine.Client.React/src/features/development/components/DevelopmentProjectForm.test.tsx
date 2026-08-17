@@ -516,7 +516,7 @@ describe("DevelopmentProjectForm", () => {
 	});
 
 	it("describes the isolation posture of the provider actually in force, on the control being consented to", () => {
-		// F-058. Both strings were hard-coded to the process posture. Under the container provider the notice on the
+		// Both strings were hard-coded to the process posture. Under the container provider the notice on the
 		// trust checkbox was false in the UNSAFE direction — it claimed weaker isolation than was in force, on the
 		// exact control the operator ticks to proceed. Asserting both directions is the point: a fix that simply
 		// reworded the sentence would still be wrong for one of the two providers.

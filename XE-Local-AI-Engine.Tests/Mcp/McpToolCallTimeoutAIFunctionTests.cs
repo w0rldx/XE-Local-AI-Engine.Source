@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-18: a model-invoked MCP tool call must be bounded by a per-call timeout. On expiry the wrapper returns a
+///     A model-invoked MCP tool call must be bounded by a per-call timeout. On expiry the wrapper returns a
 ///     typed tool-failure RESULT (so the function-invocation loop surfaces a clean error and the run continues), never
 ///     throws-as-cancel and never retries, and increments <c>mcp_tool_timeout_total</c>. A caller cancellation still
 ///     propagates so a genuine run-cancel is not masked as a tool error.

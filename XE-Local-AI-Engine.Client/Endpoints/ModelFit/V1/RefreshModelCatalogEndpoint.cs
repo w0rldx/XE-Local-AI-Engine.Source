@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 ///     ships that section — this returned the unchanged bundled snapshot and the UI showed a green "catalog refreshed"
 ///     toast for an action that could not possibly have done anything. The response now carries
 ///     <see cref="ModelCatalogInfoResponse.RefreshSourceConfigured" /> so the caller can tell "refreshed" from
-///     "there is nothing to refresh from". Same silent-success class as the image-model download (F-031).
+///     "there is nothing to refresh from". Same silent-success class as the image-model download.
 /// </remarks>
 public sealed class RefreshModelCatalogEndpoint(
     IModelCatalogProvider catalogProvider,

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     AUD4-16: the chat-turn resolver must not read + decrypt the bound agent definition twice per send. The definition
+///     The chat-turn resolver must not read + decrypt the bound agent definition twice per send. The definition
 ///     resolver already loads it once; the orchestration branch reuses that resolution's <c>Kind</c> and only reloads for
 ///     a bound orchestrator (rare), so the common non-orchestrator path issues a single store read.
 /// </summary>

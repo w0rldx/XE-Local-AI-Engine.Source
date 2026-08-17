@@ -165,7 +165,7 @@ describe("DevelopmentLivePanel validation evidence", () => {
 	});
 
 	it("reads the newest report whether or not it is still valid", () => {
-		// This asserted the opposite until F-056: selecting on `isValid` dropped every FAILED report, because a failed
+		// This asserted the opposite until the fix: selecting on `isValid` dropped every FAILED report, because a failed
 		// gate invalidates the task's approval evidence. Validity is a presentation decision made from the report's
 		// own verdict; it is not a reason to refuse to read the newest report.
 		contentQuery(JSON.stringify(report()));
@@ -180,7 +180,7 @@ describe("DevelopmentLivePanel validation evidence", () => {
 	});
 
 	it("renders a failed validation as failed, with its reason, rather than as nothing having run", () => {
-		// F-056, verbatim: the container gate failed, the timeline read `ValidationFinalized — Failed`, and the
+		// The live failure, verbatim: the container gate failed, the timeline read `ValidationFinalized — Failed`, and the
 		// Validation tab said "No deterministic validation has run for this task yet." A failed gate invalidates the
 		// approval evidence, so `isValid` is false on the very report that carries the answer.
 		contentQuery(

@@ -254,7 +254,7 @@ public sealed class TrainingRunStoreTests : IDisposable
             Encoding.UTF8.GetBytes("""{"schemaVersion":1,"epochs":3}"""),
             Encoding.UTF8.GetBytes("""{"license":"apache-2.0","confirmedAtUtc":1}"""));
 
-    /// <summary>Drives the shipped Slice 1–2 stores to produce the Ready dataset and Ready checkpoint a run needs.</summary>
+    /// <summary>Drives the shipped dataset and base-artifact stores to produce the Ready dataset and Ready checkpoint a run needs.</summary>
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasetStore = new TrainingDatasetStore(context, TimeProvider.System);

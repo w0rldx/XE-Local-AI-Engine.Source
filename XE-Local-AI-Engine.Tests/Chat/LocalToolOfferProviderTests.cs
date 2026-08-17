@@ -62,7 +62,7 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_WhenAllowlistChangesAfterConstruction_TakesEffectWithoutARestart()
     {
-        // THE regression test for F-001/F-025. The allow-list used to be captured into a HashSet at DI composition, so
+        // THE regression test. The allow-list used to be captured into a HashSet at DI composition, so
         // an operator could add their model in Node Settings, save successfully, and still be offered no tools until the
         // node restarted — with no restart hint on that field. The provider now reads INodeRuntimeSettings live on every
         // offer, so a change between two calls on the SAME instance must be observed.

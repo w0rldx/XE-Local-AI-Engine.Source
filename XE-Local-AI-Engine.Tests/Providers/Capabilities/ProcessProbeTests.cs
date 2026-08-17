@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ProcessProbe" /> tests exercising the REAL process-spawn seam (AUD4-07): a normal exit returns its code
+///     <see cref="ProcessProbe" /> tests exercising the REAL process-spawn seam: a normal exit returns its code
 ///     + stdout; a probe that overruns its wall-clock deadline is killed (process tree — a descendant never survives to
 ///     complete its work) and returns a typed <c>TimedOut</c> result instead of hanging; caller cancellation tree-kills
 ///     and surfaces cancellation; a missing tool degrades to <see langword="null" />. The POSIX-shell cases are gated to

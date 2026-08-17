@@ -43,7 +43,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly TimeProvider _timeProvider;
 
-    // AUD4-06: the process-wide GPU-load admission gate (shared with the llama-server supervisor). A GPU-backed image
+    // The process-wide GPU-load admission gate (shared with the llama-server supervisor). A GPU-backed image
     // load serializes its spawn-through-readiness window through it so it never races an LLM load's free-VRAM read.
     private readonly IGpuModelLoadAdmission _loadAdmission;
     private int _disposed;
@@ -349,7 +349,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         using var spawnCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
         var spawnCt = spawnCts.Token;
 
-        // AUD4-06: serialize the spawn-through-readiness window of a GPU-backed image load through the SAME process-wide
+        // Serialize the spawn-through-readiness window of a GPU-backed image load through the SAME process-wide
         // gate the llama-server supervisor uses, so an image load and an LLM load never race two --fit / free-VRAM reads.
         // The binary's OWN backend decides (a bring-your-own override may serve a different backend than the host probe
         // selected); a CPU backend bypasses. The ticket releases on ready OR any failure via the using scope. sd-server

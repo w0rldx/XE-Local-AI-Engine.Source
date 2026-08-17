@@ -188,7 +188,7 @@ public sealed class LocalModelDetailsResponse
 
     /// <summary>
     ///     The effective context window (in tokens) the RUNNING llama.cpp process for this model actually loaded — the
-    ///     launched <c>-c</c> as the server reports it via <c>/props</c> (AUD4-02). Null when no chat process is running
+    ///     launched <c>-c</c> as the server reports it via <c>/props</c>. Null when no chat process is running
     ///     for the model or the runtime does not expose it. Distinct from <see cref="MaxContextTokens" /> (the model's
     ///     advertised train ceiling): the chat context-usage meter should size against this real window when present.
     /// </summary>

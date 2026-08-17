@@ -74,7 +74,7 @@ public static class Extensions
                    .WithTracing(tracing =>
                    {
                        tracing.AddSource(builder.Environment.ApplicationName)
-                              // Exports the coarse pre-spawn turn/readiness spans (AUD4-23), mirroring the identically
+                              // Exports the coarse pre-spawn turn/readiness spans, mirroring the identically
                               // named meters above.
                               .AddSource(TelemetrySourceNames.Node)
                               .AddSource(TelemetrySourceNames.Agent)

@@ -70,7 +70,7 @@ public sealed class DetachedInvocationReaper : BackgroundService
 
     /// <summary>
     ///     Reads the grace EVERY tick and never caches it in a field. Capturing a stored node setting in a singleton is
-    ///     precisely what silently required a node restart before an operator edit took effect (F-001/F-025); the read
+    ///     precisely what silently required a node restart before an operator edit took effect; the read
     ///     is an <c>IMemoryCache</c> hit through <c>CachedNodeSettingsStore</c>, so per-tick costs nothing.
     ///     <para>
     ///         One tick's work, <c>internal</c> so tests can drive it directly: the repo's fake clocks override only
