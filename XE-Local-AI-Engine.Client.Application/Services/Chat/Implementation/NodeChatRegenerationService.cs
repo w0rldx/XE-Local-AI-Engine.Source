@@ -95,14 +95,14 @@ public sealed class NodeChatRegenerationService(
             : null;
 
         var conversation = await persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
-                           ?? throw new InvalidOperationException("The node chat conversation was not found.");
+                           ?? throw new NodeChatConversationNotFoundException(conversationId);
 
         // Same precedence as the send path: a request-supplied selection is persisted and used; otherwise the
         // already-persisted conversation selection drives the pre-cutoff context.
         var selectedPath = persistedSelectedPath ?? conversation.SelectedPath;
 
         var original = conversation.Messages.FirstOrDefault(message => message.MessageId == originalMessageId)
-                       ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
+                       ?? throw new NodeChatMessageNotFoundException(originalMessageId);
 
         var newMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -133,7 +133,7 @@ public sealed class NodeChatRegenerationService(
                               // package built below). Survives reload off the metadata blob.
                               ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? reasoningEffort),
                           cancellationToken).ConfigureAwait(false)
-                      ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
+                      ?? throw new NodeChatMessageNotFoundException(originalMessageId);
 
         var placeholder = variant.Variant;
         var correlation = new NodeChatMessageCorrelation(conversationId, placeholder.MessageId, requestId);
