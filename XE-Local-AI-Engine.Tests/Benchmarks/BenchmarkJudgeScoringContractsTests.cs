@@ -150,12 +150,20 @@ public sealed class BenchmarkJudgeScoringContractsTests
         AssertEx.Equal(4096, properties.GetProperty("summary").GetProperty("maxLength").GetInt32());
     }
 
+    // The builder frames, it never re-serializes: it embeds the GRADED parts JSON (coalesced, reasoning-free — see
+    // BenchmarkOutputParts.ForJudge) exactly as the caller hands it over, under the pinned property order.
     [Test]
     public void Prompt_OmitsReferenceAnswerWhenNullAndEmbedsRawJson()
     {
         var rubric = Rubric(("alpha", 1));
         const string taskJson = "\"Write a haiku.\"";
-        const string outputParts = """[{"kind":"text","text":"hello"}]""";
+        var outputParts = Encoding.UTF8.GetString(
+            BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge(
+                [
+                    new BenchmarkOutputPart("reasoning", Content: "hidden"),
+                    new BenchmarkOutputPart("output", Content: "hello")
+                ],
+                judgeContextTokens: 4096)));
 
         var withoutReference = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
         var withReference = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, "the reference", rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
@@ -168,7 +176,9 @@ public sealed class BenchmarkJudgeScoringContractsTests
                                 .SequenceEqual(["task", "referenceAnswer", "rubric", "primaryOutputParts", "outputSchema"], StringComparer.Ordinal));
         AssertEx.Equal("Write a haiku.", bare.RootElement.GetProperty("task").GetString());
         AssertEx.Equal(JsonValueKind.Array, bare.RootElement.GetProperty("primaryOutputParts").ValueKind);
-        AssertEx.Equal("hello", bare.RootElement.GetProperty("primaryOutputParts")[0].GetProperty("text").GetString());
+        AssertEx.Equal(expected: 1, bare.RootElement.GetProperty("primaryOutputParts").GetArrayLength());
+        AssertEx.Equal("output", bare.RootElement.GetProperty("primaryOutputParts")[0].GetProperty("kind").GetString());
+        AssertEx.Equal("hello", bare.RootElement.GetProperty("primaryOutputParts")[0].GetProperty("content").GetString());
         AssertEx.Equal(JsonValueKind.Object, bare.RootElement.GetProperty("outputSchema").ValueKind);
         AssertEx.Equal("object", bare.RootElement.GetProperty("outputSchema").GetProperty("type").GetString());
         AssertEx.Equal(JsonValueKind.Array, bare.RootElement.GetProperty("rubric").GetProperty("criteria").ValueKind);
