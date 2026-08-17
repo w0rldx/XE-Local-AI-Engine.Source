@@ -26,6 +26,7 @@ public sealed class BenchmarkRunExecutor(
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
     IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+    BenchmarkAdmissionRetry admissionRetry,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
 {
     private const string FingerprintChangedMessage = "The installed model changed after the benchmark was created.";
@@ -66,26 +67,23 @@ public sealed class BenchmarkRunExecutor(
             // bytes it will really hold rather than the f16 figure it will never reach.
             // No launch admission: this run spawns its own exclusive process from the FROZEN replay arguments, so an
             // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
-            var decision = await capacity.DecideAsync(new CapacityRequest(snapshot.PrimaryModel.ModelName,
-                                             ModelRole.Chat,
-                                             snapshot.PrimaryRuntime.ContextTokens,
-                                             PublishLaunchAdmission: false,
-                                             snapshot.PrimaryRuntime.KvTypeK), token)
-                                         .ConfigureAwait(false);
-            logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
-                                  + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
-                work.RunId,
-                "primary",
-                snapshot.PrimaryModel.ModelName,
-                snapshot.RequestedContextTokens,
-                snapshot.PrimaryRuntime.ContextTokens,
-                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                decision.Verdict,
-                decision.Reason);
-            if (decision.Verdict == CapacityVerdict.RejectInsufficient)
-            {
-                throw new BenchmarkExecutionException(CapacityRejectedMessage);
-            }
+            // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — so the phase waits
+            // and re-decides on a cadence instead of terminalizing the run on the first no.
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+                                     new CapacityRequest(snapshot.PrimaryModel.ModelName,
+                                         ModelRole.Chat,
+                                         snapshot.PrimaryRuntime.ContextTokens,
+                                         PublishLaunchAdmission: false,
+                                         snapshot.PrimaryRuntime.KvTypeK),
+                                     new BenchmarkAdmissionContext(work.RunId,
+                                         "primary",
+                                         snapshot.RequestedContextTokens,
+                                         snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                         CapacityRejectedMessage),
+                                     admissionRetry,
+                                     logger,
+                                     token)
+                                 .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
             var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);

@@ -28,6 +28,7 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddSingleton<IBenchmarkCancellationRegistry, BenchmarkCancellationRegistry>();
         builder.Services.AddScoped<IBenchmarkCancellationService, BenchmarkCancellationService>();
         builder.Services.AddSingleton<IBenchmarkQueueSignal, BenchmarkQueueSignal>();
+        builder.Services.AddSingleton(BenchmarkAdmissionRetry.Default);
         builder.Services.AddScoped<IBenchmarkRunExecutor, BenchmarkRunExecutor>();
         builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
         builder.Services.AddHostedService<BenchmarkQueueHostedService>();

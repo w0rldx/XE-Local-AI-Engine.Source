@@ -65,6 +65,7 @@ public sealed class BenchmarkRunExecutorTests
             new BenchmarkCancellationRegistry(),
             new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
+            new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             NullLogger<BenchmarkRunExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
@@ -316,6 +317,48 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal(expected: 30, assignedPackage!.Timeouts.ToolCallTimeoutSeconds, "Tool-call and stream-idle stay pinned: they bound a STALL.");
         AssertEx.Equal(expected: 60, assignedPackage.Timeouts.StreamIdleTimeoutSeconds);
         AssertEx.Equal("timeout", stopReason);
+    }
+
+    [Test]
+    public async Task Execute_WhenCapacityFreesUpDuringTheWait_RunsInsteadOfFailingTheRun()
+    {
+        // A capacity rejection means something holds the bytes RIGHT NOW — a preceding run's llama-server still
+        // releasing its VRAM, typically. The run must wait for that instead of terminalizing on the first no.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkPrimaryFailedAsync(run.Id,
+                 run.Version,
+                 Arg.Any<string>(),
+                 Arg.Any<long>(),
+                 Arg.Any<string?>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var capacity = new SequencedCapacityService(CapacityVerdict.RejectInsufficient,
+            CapacityVerdict.RejectInsufficient,
+            CapacityVerdict.Allow);
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            Snapshot(installed),
+            lease,
+            capacity,
+            Substitute.For<IWorkerEventDispatcher>(),
+            runner,
+            new BenchmarkCancellationRegistry(),
+            PassthroughSupervisor(),
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 5, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal(3, capacity.DecisionCount);
+        await runner.ReceivedWithAnyArgs(1).RunAsync(default!, default);
+        AssertEx.True(capacity.Reservation.Disposed, "the reservation the third decision handed over must still be released.");
     }
 
     [Test]
@@ -693,7 +736,8 @@ public sealed class BenchmarkRunExecutorTests
         IBenchmarkCancellationRegistry cancellations,
         ILlamaServerProcessSupervisor? supervisor = null,
         IRuntimeEnvironmentFactsProvider? environmentFacts = null,
-        ILogger<BenchmarkRunExecutor>? logger = null) =>
+        ILogger<BenchmarkRunExecutor>? logger = null,
+        BenchmarkAdmissionRetry? admissionRetry = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -708,6 +752,8 @@ public sealed class BenchmarkRunExecutorTests
             cancellations,
             environmentFacts ?? new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
+            // Default: decide ONCE and never wait, so every test but the wait tests stays instant.
+            admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             logger ?? NullLogger<BenchmarkRunExecutor>.Instance);
 
     private static InvocationState State(Guid invocationId,
@@ -874,6 +920,28 @@ public sealed class BenchmarkRunExecutorTests
         {
             Disposed = true;
             return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>Answers each decision with the next verdict, then repeats the last one — capacity that frees up, or not.</summary>
+    private sealed class SequencedCapacityService(params CapacityVerdict[] verdicts) : ICapacityService
+    {
+        private readonly Queue<CapacityVerdict> _verdicts = new(verdicts);
+
+        public int DecisionCount { get; private set; }
+        public TrackingDisposable Reservation { get; } = new();
+
+        public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            DecideAsync(new CapacityRequest(modelName, role), ct);
+
+        public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
+        {
+            DecisionCount++;
+            var verdict = _verdicts.Count > 1 ? _verdicts.Dequeue() : _verdicts.Peek();
+            return Task.FromResult(new CapacityDecision(verdict,
+                "capacity",
+                false,
+                verdict == CapacityVerdict.Allow ? Reservation : null));
         }
     }
 
