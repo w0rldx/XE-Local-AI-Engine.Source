@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
@@ -108,6 +109,54 @@ public sealed class ToolApprovalCoordinatorTests
     }
 
     [Test]
+    public async Task RequestToolApprovalAsync_OnALoopbackTurn_DispatchesLocallyWithoutTheHub()
+    {
+        // The ordinary desktop case: an unpaired standalone node whose hub sender throws on every send. The approval
+        // must still reach the local chat stream and park the turn — sending to the hub first failed the whole turn
+        // before the card was ever rendered.
+        var sender = new MockHubMessageSender();
+        sender.ThrowOnNextSend(new InvalidOperationException("Worker hub connection is not active. Cannot send 'ApprovalRequested'."));
+
+        ApprovalRequestPayload? dispatchedApproval = null;
+        ApprovalLifecyclePayload? dispatchedLifecycle = null;
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportApprovalRequestedAsync(Arg.Do<ApprovalRequestPayload>(payload => dispatchedApproval = payload)).Returns(Task.CompletedTask);
+        dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(payload => dispatchedLifecycle = payload)).Returns(Task.CompletedTask);
+
+        var coordinator = CreateCoordinator(sender, dispatcher: dispatcher);
+        var loopback = RuntimePackageBuilder.Valid()
+                                            .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
+                                            .Build();
+
+        var pending = coordinator.RequestToolApprovalAsync(loopback, ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatchedLifecycle is not null, TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(expected: 0, sender.SentApprovals.Count, "a loopback turn must not touch the worker hub");
+        AssertEx.False(pending.IsCompleted, "the turn parks on the approval card");
+
+        // The loopback resolve endpoint answers the card the local dispatch rendered, and the turn continues.
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(AssertEx.NotNull(dispatchedApproval).RequestId, Approved: true));
+        AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Test]
+    public async Task RequestToolApprovalAsync_OnAHubBoundTurn_StillSendsToTheHub()
+    {
+        // The paired case is unchanged: a package without the loopback capability still raises the card on the hub.
+        var sender = new MockHubMessageSender();
+        var coordinator = CreateCoordinator(sender);
+
+        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(),
+            ToolApprovalRequest(),
+            static _ => { },
+            CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Test]
     public async Task ResolveApprovalResult_ReleasesACallTheApiBridgeRegistered()
     {
         // The two collaborators must share ONE pending-call dictionary: the bridge parks the call, the coordinator's
@@ -174,6 +223,13 @@ public sealed class ToolApprovalCoordinatorTests
         AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    // A plain, memo-INELIGIBLE approval request (not a skill tool), so the session memo never short-circuits the
+    // request under test.
+    private static ToolApprovalRequestContent ToolApprovalRequest()
+    {
+        return new ToolApprovalRequestContent($"approval-{Guid.NewGuid():N}", new FunctionCallContent($"call-{Guid.NewGuid():N}", "GetCurrentTime"));
+    }
+
     private static ToolApprovalRequestContent SkillApprovalRequest()
     {
         var arguments = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -195,10 +251,11 @@ public sealed class ToolApprovalCoordinatorTests
 
     private static ToolApprovalCoordinator CreateCoordinator(MockHubMessageSender sender,
         PendingToolCallRegistry? registry = null,
-        IToolApprovalAuditRecorder? auditRecorder = null)
+        IToolApprovalAuditRecorder? auditRecorder = null,
+        IWorkerEventDispatcher? dispatcher = null)
     {
         return new ToolApprovalCoordinator(new Lazy<IHubMessageSender>(() => sender),
-            new Lazy<IWorkerEventDispatcher>(() => Substitute.For<IWorkerEventDispatcher>()),
+            new Lazy<IWorkerEventDispatcher>(() => dispatcher ?? Substitute.For<IWorkerEventDispatcher>()),
             registry ?? new PendingToolCallRegistry(),
             auditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
             NodeToolApprovalPolicy.FromSettings(settings: null),
