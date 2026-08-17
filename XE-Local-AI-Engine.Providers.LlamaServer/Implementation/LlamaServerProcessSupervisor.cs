@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -66,7 +64,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     // Single-flight per process is NOT this gate's job: _ensureGates already provides it per (model, role).
     private readonly AsyncSharedExclusiveGate _runtimeMutationGate = new();
     private readonly Lock _runtimeOperationSync = new();
-    private readonly HashSet<int> _allocatedPorts = [];
+    private readonly LlamaServerPortAllocator _ports;
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe;
 
@@ -152,6 +150,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _capabilityManifestProbe = capabilityManifestProbe ?? throw new ArgumentNullException(nameof(capabilityManifestProbe));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
+        _ports = new LlamaServerPortAllocator(_options);
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _extraArgumentsResolver = extraArgumentsResolver ?? new EmptyLlamaServerExtraLaunchArgumentsResolver();
         _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
@@ -2176,12 +2175,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses(detached);
 
-            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
+            if (_ports.ReservedCount >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
             {
                 throw CapReached();
             }
 
-            return AllocatePort();
+            return _ports.Allocate();
         }
         finally
         {
@@ -2390,8 +2389,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     <para>
     ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
     ///         (which is what bounds the loaded-model CAP) never counts a process that is on its way out. That does not
-    ///         hand the next spawn a port the dying child still holds: <see cref="AllocatePort" /> bind-probes every
-    ///         candidate (<see cref="IsPortFree" />) and skips one that is still bound. The bind probe was always the
+    ///         hand the next spawn a port the dying child still holds: <see cref="LlamaServerPortAllocator.Allocate" />
+    ///         bind-probes every candidate and skips one that is still bound. The bind probe was always the
     ///         real guard — <c>TreeKill</c> (<c>kill(-pgid)</c> / closing the Windows job) returns before the OS
     ///         reclaims the socket, so releasing the port after the kill never proved availability either.
     ///     </para>
@@ -2404,7 +2403,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         _layerPlacementReport.Remove(key.Role, key.ModelName);
-        ReleasePort(running.Port);
+        _ports.Release(running.Port);
         return running;
     }
 
@@ -2442,28 +2441,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    /// <summary>Allocates a free port from the configured range (caller holds the admission gate).</summary>
-    private int AllocatePort()
-    {
-        for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
-        {
-            if (_allocatedPorts.Contains(port) || !IsPortFree(port))
-            {
-                continue;
-            }
-
-            _allocatedPorts.Add(port);
-            return port;
-        }
-
-        throw NonRetryable("No free local port is available for the model runtime.");
-    }
-
-    private void ReleasePort(int port)
-    {
-        _allocatedPorts.Remove(port);
-    }
-
     /// <summary>
     ///     Releases a reserved port for a spawn that never registered (launch/readiness failure), taking the admission
     ///     gate so the reserved-port set (which backs the cap count) is mutated under the same lock as allocation.
@@ -2473,26 +2450,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
-            ReleasePort(port);
+            _ports.Release(port);
         }
         finally
         {
             _admissionGate.Release();
-        }
-    }
-
-    private static bool IsPortFree(int port)
-    {
-        // Probe by binding loopback; collision (another process owns it) means skip-and-retry.
-        try
-        {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
         }
     }
 
