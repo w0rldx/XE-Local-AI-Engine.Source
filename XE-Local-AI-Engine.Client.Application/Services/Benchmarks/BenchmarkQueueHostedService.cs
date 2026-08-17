@@ -5,42 +5,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training;
 
-public interface IBenchmarkQueueSignal
-{
-    void Wake();
-    Task WaitAsync(TimeSpan pollInterval, CancellationToken cancellationToken);
-}
-
-public sealed class BenchmarkQueueSignal : IBenchmarkQueueSignal, IDisposable
-{
-    private readonly SemaphoreSlim _signal = new(0, 1);
-
-    public void Wake()
-    {
-        try
-        {
-            _signal.Release();
-        }
-        catch (SemaphoreFullException)
-        {
-            // A pending wake is sufficient; coalescing avoids unbounded producer pressure.
-        }
-    }
-
-    public async Task WaitAsync(TimeSpan pollInterval, CancellationToken cancellationToken)
-    {
-        _ = await _signal.WaitAsync(pollInterval, cancellationToken).ConfigureAwait(false);
-    }
-
-    public void Dispose() =>
-        _signal.Dispose();
-}
-
-public sealed class BenchmarkQueueOptions
-{
-    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
-}
-
 /// <summary>
 ///     Single-consumer durable FIFO for benchmark runs. A shared <see cref="IGpuWorkGate" /> hold is taken BEFORE the
 ///     claim and released only when the work is done, so an exclusive holder (a training run, an evaluation, an export)

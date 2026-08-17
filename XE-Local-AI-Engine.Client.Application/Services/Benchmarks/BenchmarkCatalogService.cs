@@ -7,16 +7,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-public sealed record BenchmarkEligibleAgent(Guid Id, string Name, int Version);
-
-public sealed record BenchmarkEligibleModel(
-    string ModelName,
-    int? MaxContextTokens,
-    int? EffectiveContextTokens,
-    LocalModelOrigin? Origin,
-    string ModelContentFingerprint,
-    bool SupportsTools);
-
 public interface IBenchmarkCatalogService
 {
     Task<IReadOnlyList<BenchmarkEligibleAgent>> ListEligibleAgentsAsync(string modelName, CancellationToken cancellationToken = default);

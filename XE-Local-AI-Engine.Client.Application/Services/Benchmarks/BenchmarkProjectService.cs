@@ -5,18 +5,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
-public sealed record BenchmarkProjectDraft(
-    Guid Id,
-    string Name,
-    string CoreTask,
-    int ContextTokens,
-    Guid AgentDefinitionId,
-    bool JudgeEnabled,
-    string? JudgeModelName,
-    int? JudgeContextTokens,
-    int JudgePromptVersion = 1,
-    int JudgeOutputSchemaVersion = 1);
-
 public interface IBenchmarkProjectService
 {
     Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default);
