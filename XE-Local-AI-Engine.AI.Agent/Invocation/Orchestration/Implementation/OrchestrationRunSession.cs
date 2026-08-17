@@ -250,28 +250,32 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         return "unknown";
     }
 
-    private (string? Key, string? Name) ResolveParticipant(string executorId)
+    private ParticipantRef ResolveParticipant(string executorId)
     {
         if (string.IsNullOrEmpty(executorId))
         {
-            return (null, null);
+            return new ParticipantRef(null, null);
         }
 
         // MAF names the agent executor "{AgentName}_{AgentId}", so an exact agent-id match fails. Match on the
         // "_{agentId}" suffix (the id is the stable part; the name prefix can vary). Exact match is tried first.
         if (_participantsByAgentId.TryGetValue(executorId, out var exact))
         {
-            return (exact.Key, exact.Name);
+            return new ParticipantRef(exact.Key, exact.Name);
         }
 
         foreach (var (agentId, participant) in _participantsByAgentId)
         {
             if (executorId.EndsWith(agentId, StringComparison.Ordinal))
             {
-                return (participant.Key, participant.Name);
+                return new ParticipantRef(participant.Key, participant.Name);
             }
         }
 
-        return (null, null);
+        return new ParticipantRef(null, null);
     }
+
+    // The participant an executor id maps to. Both members are null when the executor is not a known agent (for
+    // example a workflow-internal executor), which the update mapping renders as an unattributed update.
+    private readonly record struct ParticipantRef(string? Key, string? Name);
 }

@@ -78,18 +78,22 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
         return string.Create(CultureInfo.InvariantCulture, $"{expression} = {result:0.############}");
     }
 
-    private static (TimeZoneInfo Zone, bool Resolved) ResolveTimeZone(string? timezone)
+    private static TimeZoneResolution ResolveTimeZone(string? timezone)
     {
         if (string.IsNullOrWhiteSpace(timezone))
         {
-            return (TimeZoneInfo.Local, true);
+            return new TimeZoneResolution(TimeZoneInfo.Local, true);
         }
 
         if (TimeZoneInfo.TryFindSystemTimeZoneById(timezone.Trim(), out var zone))
         {
-            return (zone, true);
+            return new TimeZoneResolution(zone, true);
         }
 
-        return (TimeZoneInfo.Local, false);
+        return new TimeZoneResolution(TimeZoneInfo.Local, false);
     }
+
+    // The zone a time request resolved to. Resolved is false when the caller named a zone the host does not know and
+    // the local zone was substituted, so the answer can say so.
+    private readonly record struct TimeZoneResolution(TimeZoneInfo Zone, bool Resolved);
 }
