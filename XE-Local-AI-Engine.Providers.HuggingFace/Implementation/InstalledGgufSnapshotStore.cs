@@ -310,6 +310,15 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
             });
     }
 
+    /// <summary>
+    ///     Compares the recorded registry digests against the freshly computed ones. The comparison is
+    ///     case-INSENSITIVE on purpose: registry entries written before the sidecar era persisted
+    ///     <c>Convert.ToHexString</c> (UPPERCASE) hex, while every current write path and
+    ///     <see cref="GgufAcquisitionSidecar.ComputeSha256Async" /> produce lowercase. An ordinal compare therefore
+    ///     failed every legacy entry with <c>InstalledModelMemberFingerprintMismatch</c>, which took down whole
+    ///     catalog endpoints that verify each installed model. Only the comparison is relaxed — the persisted
+    ///     fingerprint/revision inputs are untouched, so no identity changes.
+    /// </summary>
     private static void VerifyRegistryFingerprints(IReadOnlyList<InstalledModelRegistryAliasSnapshot> aliases,
         IReadOnlyList<InstalledModelPhysicalMember> members)
     {
@@ -317,7 +326,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         {
             var weight = members.Single(member => string.Equals(member.RelativePath, alias.WeightRelativePath, StringComparison.OrdinalIgnoreCase));
             if (alias.RegistryValue.SizeBytes != weight.SizeBytes
-                || alias.RegistryValue.Sha256 is not null && !string.Equals(alias.RegistryValue.Sha256, weight.Sha256, StringComparison.Ordinal))
+                || alias.RegistryValue.Sha256 is not null && !string.Equals(alias.RegistryValue.Sha256, weight.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
                     "The installed model weight no longer matches its registry value.");
@@ -333,7 +342,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
             if (acquired && (alias.RegistryValue.ProjectorSizeBytes is null || alias.RegistryValue.ProjectorSha256 is null)
                 || alias.RegistryValue.ProjectorSizeBytes is { } projectorSize && projectorSize != projector.SizeBytes
                 || alias.RegistryValue.ProjectorSha256 is { } projectorHash
-                && !string.Equals(projectorHash, projector.Sha256, StringComparison.Ordinal))
+                && !string.Equals(projectorHash, projector.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
                     "The installed model projector no longer matches its registry value.");

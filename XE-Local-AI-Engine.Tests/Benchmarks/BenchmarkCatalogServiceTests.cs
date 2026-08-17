@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -64,7 +65,8 @@ public sealed class BenchmarkCatalogServiceTests
             new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>
             {
                 ["model"] = CreateSnapshot("model", null)
-            }));
+            }),
+            NullLogger<BenchmarkCatalogService>.Instance);
 
         var result = await service.ListEligibleAgentsAsync("model").ConfigureAwait(false);
 
@@ -101,12 +103,66 @@ public sealed class BenchmarkCatalogServiceTests
         AssertEx.Equal("chat-with-projector", result[0].ModelName);
     }
 
+    /// <summary>
+    ///     One installed model whose snapshot fails verification (a legacy registry entry, a member changed on disk)
+    ///     costs its own catalog row only. Before this, the unhandled <see cref="InstalledGgufSnapshotException" />
+    ///     escaped the loop and turned the whole eligible-models endpoint into a 500.
+    /// </summary>
+    [Test]
+    public async Task ListModels_ExcludesOnlyTheModelWhoseSnapshotFailsVerification()
+    {
+        var models = Substitute.For<IGgufModelStore>();
+        models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
+            Descriptor("broken", 8192),
+            Descriptor("healthy", 8192)
+        ]);
+        var leases = new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["healthy"] = CreateSnapshot("healthy", LocalModelOrigin.Imported)
+        })
+        {
+            Unverifiable =
+            {
+                "broken"
+            }
+        };
+        var service = CreateService(models, leases);
+
+        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, result.Count);
+        AssertEx.Equal("healthy", result[0].ModelName);
+    }
+
+    /// <summary>The requested model being unverifiable stays a typed eligibility refusal, not an unhandled fault.</summary>
+    [Test]
+    public async Task ListAgents_WhenRequestedModelFailsVerification_ThrowsEligibility()
+    {
+        var models = Substitute.For<IGgufModelStore>();
+        var leases = new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase))
+        {
+            Unverifiable =
+            {
+                "broken"
+            }
+        };
+        var service = CreateService(models, leases);
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() => service.ListEligibleAgentsAsync("broken")).ConfigureAwait(false);
+    }
+
     private static BenchmarkCatalogService CreateService(IGgufModelStore models, IBenchmarkInstalledModelLeaseProvider leases)
     {
         var definitions = Substitute.For<IAgentDefinitionStore>();
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         var capabilities = Substitute.For<IModelCapabilityResolver>();
-        return new BenchmarkCatalogService(definitions, resolver, capabilities, new BenchmarkEligibilityPolicy(), models, leases);
+        return new BenchmarkCatalogService(definitions,
+            resolver,
+            capabilities,
+            new BenchmarkEligibilityPolicy(),
+            models,
+            leases,
+            NullLogger<BenchmarkCatalogService>.Instance);
     }
 
     private static LocalModelDescriptor Descriptor(string name, int context) =>
@@ -162,10 +218,16 @@ public sealed class BenchmarkCatalogServiceTests
     {
         public List<string> Acquired { get; } = [];
 
+        /// <summary>Model names whose snapshot acquisition fails verification, as a legacy registry entry does.</summary>
+        public HashSet<string> Unverifiable { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
         {
             Acquired.Add(modelName);
-            return Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(snapshots[modelName]));
+            return Unverifiable.Contains(modelName)
+                ? throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
+                    "The installed model weight no longer matches its registry value.")
+                : Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(snapshots[modelName]));
         }
     }
 
