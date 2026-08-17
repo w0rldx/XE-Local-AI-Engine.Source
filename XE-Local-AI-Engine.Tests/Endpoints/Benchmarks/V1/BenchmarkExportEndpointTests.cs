@@ -149,7 +149,7 @@ public sealed class BenchmarkExportEndpointTests
                 QualityScore = 73,
                 QualityScoreSource = BenchmarkQualityScoreSources.Judge,
                 Throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 500,
-                    GenerationTokens: 89, GenerationMs: 2000, CachedPromptTokens: 7),
+                    GenerationTokens: 89, GenerationMs: 2000, CachedPromptTokens: 7, SegmentCount: 2),
                 RepeatGroupId = Guid.Parse("50000000-0000-0000-0000-000000000005"),
                 RepeatIndex = 2,
                 IsWarmup = false
@@ -166,14 +166,14 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(expected: 2, lines.Length, "One header row and one run row.");
         AssertEx.Equal("rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
                        + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
-                       + "generationTokens,generationTokensPerSecond,cachedPromptTokens,durationMs,qualityScore,qualityScoreSource,"
+                       + "generationTokens,generationTokensPerSecond,cachedPromptTokens,segmentCount,durationMs,qualityScore,qualityScoreSource,"
                        + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
         // quant is dropped from it and kept in its own column.
         AssertEx.Equal("1,\"owner/My,Model-GGUF\",\"owner/My,Model-GGUF:Q4_K_M\",Q4_K_M,,,,,4096,succeeded,,"
-                       + "50000000-0000-0000-0000-000000000005,2,false,512,41.5,180.25,123,246,89,44.5,7,12340,73,judge,,,,,",
+                       + "50000000-0000-0000-0000-000000000005,2,false,512,41.5,180.25,123,246,89,44.5,7,2,12340,73,judge,,,,,",
             lines[1]);
     }
 
