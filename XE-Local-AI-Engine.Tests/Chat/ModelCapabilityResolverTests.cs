@@ -69,6 +69,29 @@ public sealed class ModelCapabilityResolverTests
         AssertEx.True(supportsTools);
     }
 
+    [Test]
+    public async Task ResolveAsync_CarriesVisionFromTheGgufDescriptorAndNeverFromACloudRoute()
+    {
+        // Vision rides the GGUF descriptor's projector-gated flag; it is the ONLY path that may advertise it. The chat
+        // turn gates image attachments on this bit, so a cloud-routed model must resolve non-vision.
+        const string visionModel = "smolvlm.gguf";
+        var factory = Substitute.For<IActiveCloudChatClientFactory>();
+        factory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
+        var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
+        providerResolver.ResolveProviderNameForModelAsync(visionModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
+        ggufResolver.TryResolveAsync(visionModel, Arg.Any<CancellationToken>())
+                    .Returns(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: true));
+
+        var local = await resolver.ResolveAsync(visionModel, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(local.SupportsVision, "a projector-carrying GGUF must advertise vision");
+
+        factory.IsCloudProviderSelected(AzureDeployment).Returns(true);
+        var cloud = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(cloud.SupportsVision, "a cloud-routed deployment must stay non-vision");
+    }
+
     private static ModelCapabilityResolver CreateResolver(IActiveCloudChatClientFactory factory, out ILocalModelProviderResolver providerResolver)
     {
         return CreateResolver(factory, out providerResolver, out _);
