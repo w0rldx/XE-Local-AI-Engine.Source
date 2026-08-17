@@ -13,7 +13,7 @@ describe("toRunningModel", () => {
 	});
 });
 
-describe("toEjectRunningModelResult (AUD4-20 eject outcomes)", () => {
+describe("toEjectRunningModelResult eject outcomes", () => {
 	it("maps each backend outcome to the domain union", () => {
 		expect(toEjectRunningModelResult({ modelName: "m", role: "chat", outcome: "ejected" }).outcome).toBe("ejected");
 		expect(toEjectRunningModelResult({ modelName: "m", role: "chat", outcome: "timed_out_still_busy" }).outcome).toBe(

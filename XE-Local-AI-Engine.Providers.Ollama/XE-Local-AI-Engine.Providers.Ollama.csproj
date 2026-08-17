@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The two model-list surfaces that must read an Ollama model's name identically (OllamaModelName): the catalog
+         service builds the classification keys and the endpoint mapper looks them up. Internal rather than public so
+         the shared reader stays a node-internal detail. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Client" />
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Client.Application" />
     <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
   </ItemGroup>
 

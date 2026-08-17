@@ -93,7 +93,7 @@ public sealed partial class InvocationRunner
     ///         <item>
     ///             <description>
     ///                 A participant on the SAME model as the turn reuses the turn's already-read-back effective window
-    ///                 (<see cref="ResolveEffectiveContextTokensAsync" /> ran once in <see cref="PrepareLocalRuntimeAsync" />)
+    ///                 (<see cref="LocalRuntimeWarmer.ResolveEffectiveContextTokensAsync" /> ran once in <see cref="LocalRuntimeWarmer.PrepareLocalRuntimeAsync" />)
     ///                 — no extra probe.
     ///             </description>
     ///         </item>
@@ -120,13 +120,13 @@ public sealed partial class InvocationRunner
             return turnEffectiveContextTokens;
         }
 
-        var provider = await ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        var provider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken).ConfigureAwait(false);
         if (provider is null)
         {
             return null;
         }
 
-        return await ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        return await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken).ConfigureAwait(false);
     }
 
     private IReadOnlyList<AITool> BuildParticipantTools(RuntimePackage package, IReadOnlyList<AllowedToolDto> tools)
@@ -138,7 +138,7 @@ public sealed partial class InvocationRunner
                 ToolLocation.ApiSide => InvocationToolBridge.Create(tool.Name,
                     tool.Description,
                     tool.ParameterSchema,
-                    (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
+                    (arguments, cancellationToken) => _apiToolCallBridge.ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
                 ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval),
                 _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
             })
@@ -268,7 +268,7 @@ public sealed partial class InvocationRunner
     ///     emits a single sanitized <see cref="TurnNoticeKind.HistoryTruncated" /> chat notice carrying counts only —
     ///     never content. When the budgeter still reports <c>ExceedsBudget</c> after its two-pass truncation, this is a
     ///     HARD STOP: it throws <see cref="ContextBudgetExceededException" /> (a classified, pre-inference failure —
-    ///     see <see cref="MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
+    ///     see <see cref="InvocationFailureClassifier.MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
     ///     (reference-equal) when nothing was trimmed.
     ///     <para>
     ///         <paramref name="toolBudgetDefinitions" /> is built ONCE per turn by the caller rather than here: the
@@ -489,7 +489,7 @@ public sealed partial class InvocationRunner
                 ToolLocation.ApiSide => InvocationToolBridge.Create(tool.Name,
                     tool.Description,
                     tool.ParameterSchema,
-                    (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
+                    (arguments, cancellationToken) => _apiToolCallBridge.ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
                 ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval),
                 _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
             })

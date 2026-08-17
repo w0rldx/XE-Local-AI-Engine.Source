@@ -2440,7 +2440,7 @@ public sealed class InvocationRunnerTests
         // requiresApproval: false guarantees the Requested lifecycle fires before the result-wait timeout, so the
         // timeout path must emit a matching Completed (IsError=true) to clear the UI card.
         await AssertEx.ThrowsAsync<WorkerToolCallException>(() =>
-            runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
+            Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
 
         await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
             payload.InvocationId == invocationId
@@ -2462,7 +2462,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
+        var task = Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
         await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(expected: 0, sender.SentApprovals.Count);
@@ -2494,7 +2494,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender);
         var invocationId = Guid.NewGuid();
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: true);
+        var task = Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: true);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(expected: 0, sender.SentToolCalls.Count);
@@ -2638,7 +2638,7 @@ public sealed class InvocationRunnerTests
 
         // If the result wait honoured the 5-minute node age instead of the 1s package timeout, this would not fault
         // within 15s and the WaitAsync would surface a TimeoutException (failing the expected WorkerToolCallException).
-        var toolCall = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
+        var toolCall = Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
         var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => toolCall.WaitAsync(TimeSpan.FromSeconds(15)));
         AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
 
@@ -3245,6 +3245,10 @@ public sealed class InvocationRunnerTests
                                                      .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
                                                      .Build();
 
+        // One registry instance shared by the runner and all three collaborators, exactly as the DI graph wires it: a
+        // second copy would let a call be registered in one dictionary and resolved against another.
+        var pendingToolCallRegistry = new PendingToolCallRegistry();
+
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
             new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
@@ -3253,7 +3257,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            resolvedActiveCloudFactory,
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, NullLogger<LocalRuntimeWarmer>.Instance),
             Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
             new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
@@ -3264,10 +3268,20 @@ public sealed class InvocationRunnerTests
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
-            approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
-            approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),
-            userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
-            attachmentTracker ?? CreateAttachmentTracker(),
+            pendingToolCallRegistry,
+            new ToolApprovalCoordinator(new Lazy<IHubMessageSender>(() => sender),
+                new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
+                pendingToolCallRegistry,
+                approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
+                approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),
+                userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
+                runtimeSettings,
+                NullLogger<ToolApprovalCoordinator>.Instance),
+            new ApiToolCallBridge(new Lazy<IHubMessageSender>(() => sender),
+                new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
+                pendingToolCallRegistry,
+                runtimeSettings),
+            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), pendingToolCallRegistry, runtimeSettings),
             NullLogger<InvocationRunner>.Instance);
     }
 
@@ -3298,16 +3312,44 @@ public sealed class InvocationRunnerTests
         return new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => dispatcher), TimeProvider.System);
     }
 
+    // The active turn's linked source now lives on InvocationLifecycleTracker; reach it through the runner's own
+    // tracker instance so these tests still observe the source the turn under test armed.
     private static CancellationTokenSource? GetActiveInvocationCancellationTokenSource(InvocationRunner runner)
     {
-        var field = AssertEx.NotNull(typeof(InvocationRunner).GetField("_invocationCancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic));
-        return (CancellationTokenSource?)field.GetValue(runner);
+        var tracker = GetPrivateField(runner, "_lifecycleTracker");
+        var field = AssertEx.NotNull(tracker.GetType().GetField("_invocationCancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic));
+        return (CancellationTokenSource?)field.GetValue(tracker);
     }
 
+    // The pending-call wait budget is read once at construction by four singletons — the runner, ToolApprovalCoordinator,
+    // ApiToolCallBridge and InvocationLifecycleTracker (whose park deadline adds it on top of the turn budget) — so
+    // shortening only one of them would silently miss the path under test.
     private static void SetMaxPendingToolCallAge(InvocationRunner runner, TimeSpan maxPendingToolCallAge)
     {
-        var field = AssertEx.NotNull(typeof(InvocationRunner).GetField("_maxPendingToolCallAge", BindingFlags.Instance | BindingFlags.NonPublic));
-        field.SetValue(runner, maxPendingToolCallAge);
+        SetPrivateField(runner, "_maxPendingToolCallAge", maxPendingToolCallAge);
+        SetPrivateField(GetPrivateField(runner, "_toolApprovalCoordinator"), "_maxPendingToolCallAge", maxPendingToolCallAge);
+        SetPrivateField(GetPrivateField(runner, "_apiToolCallBridge"), "_maxPendingToolCallAge", maxPendingToolCallAge);
+        SetPrivateField(GetPrivateField(runner, "_lifecycleTracker"), "_maxPendingToolCallAge", maxPendingToolCallAge);
+    }
+
+    // The per-tool RequiresApproval overload now lives on ApiToolCallBridge; the runner only implements the
+    // approval-gated IInvocationRunner signature. Reach the collaborator the runner was built with so these tests keep
+    // exercising the SAME instance (and therefore the same shared pending-call registry) the turn would use.
+    private static ApiToolCallBridge Bridge(InvocationRunner runner)
+    {
+        return (ApiToolCallBridge)GetPrivateField(runner, "_apiToolCallBridge");
+    }
+
+    private static object GetPrivateField(object target, string name)
+    {
+        var field = AssertEx.NotNull(target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic));
+        return AssertEx.NotNull(field.GetValue(target));
+    }
+
+    private static void SetPrivateField(object target, string name, object? value)
+    {
+        var field = AssertEx.NotNull(target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic));
+        field.SetValue(target, value);
     }
 
     private static void AgePendingToolCalls(InvocationRunner runner, TimeSpan age)

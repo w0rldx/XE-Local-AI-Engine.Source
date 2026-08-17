@@ -6,7 +6,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -15,8 +14,10 @@ public sealed partial class InvocationRunner
     // The mutable streaming accumulator shared by the single-agent and orchestration paths: the response/reasoning
     // builders, the byte totals (against _maxResponseSizeBytes), the monotonic sequence counters the transport sends,
     // and the terminal usage snapshot. Carried by reference into the branch methods so the post-stream completion
-    // block in RunAsync reads the final state.
-    private sealed class StreamState
+    // block in RunAsync reads the final state. Internal rather than private only so LocalRuntimeWarmer can record the
+    // readiness telemetry (provider tag, ready timestamp, readiness duration) into the SAME accumulator the completion
+    // block reads — including on the cancelled path, where the value must land before the cancellation propagates.
+    internal sealed class StreamState
     {
         // Wall-clock generation timer for the whole turn (prompt-eval through final token), started at state
         // construction so it covers both the single-agent and orchestration branches. Read once in the completion
@@ -205,7 +206,7 @@ public sealed partial class InvocationRunner
         }
     }
 
-    private sealed record UsageSnapshot(int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? TotalTokens)
+    internal sealed record UsageSnapshot(int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? TotalTokens)
     {
         public static UsageSnapshot From(UsageDetails usage)
         {
@@ -255,10 +256,4 @@ public sealed partial class InvocationRunner
             return value.Value > int.MaxValue ? int.MaxValue : (int)value.Value;
         }
     }
-
-    private sealed record PendingToolCall(
-        Guid InvocationId,
-        DateTimeOffset CreatedAt,
-        TaskCompletionSource<bool> ApprovalCompletion,
-        TaskCompletionSource<ToolCallResultEvent> ResultCompletion);
 }

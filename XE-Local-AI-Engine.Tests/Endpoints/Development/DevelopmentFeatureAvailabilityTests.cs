@@ -72,6 +72,40 @@ public sealed class DevelopmentFeatureAvailabilityTests
         AssertEx.True(json.Contains(expected, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     Development Mode's endpoints are kept out of FastEndpoints DISCOVERY when the feature is off (the
+    ///     <c>EndpointDiscoveryOptions.Filter</c> in <c>ConfigureServices</c>), which is what lets them inject their
+    ///     services through a constructor. This pins that the exclusion is per host: a node that booted with the
+    ///     feature off must not leave a process-wide discovery cache behind that strips the routes from the next host.
+    /// </summary>
+    [Test]
+    public async Task ListProjects_AfterAHostWithDevelopmentModeDisabled_IsStillRoutedByAnEnabledHost()
+    {
+        await using (var disabledFactory = new TestServerWebAppFactory
+                     {
+                         EnableDevelopmentMode = false
+                     })
+        {
+            using var disabledClient = disabledFactory.CreateClient();
+            using var disabledRequest = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
+            disabledFactory.AddNodeBearerToken(disabledRequest);
+            using var disabledResponse = await disabledClient.SendAsync(disabledRequest).ConfigureAwait(false);
+            AssertEx.Equal(HttpStatusCode.NotFound, disabledResponse.StatusCode);
+        }
+
+        await using var factory = new TestServerWebAppFactory
+        {
+            EnableDevelopmentMode = true
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     [Test]
     public async Task ListProjects_WhenExplicitlyDisabled_ReturnsNotFound()
     {

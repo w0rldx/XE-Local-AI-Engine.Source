@@ -298,7 +298,8 @@ public sealed class LocalModelEndpointTests
     public async Task DeleteLocalModel_WhenModelAlreadyGone_ReturnsOkIdempotently()
     {
         // Regression: CommitDeleteAsync throws KeyNotFoundException when the mutation lease has no snapshot (the model
-        // was already deleted/never existed). Delete must stay idempotent (200, Deleted=true) rather than 500ing.
+        // was already deleted/never existed). Delete must stay idempotent (200) rather than 500ing, and report
+        // Deleted=false so the caller can tell the no-op apart from a real removal.
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = Substitute.For<ILocalModelDeletionCoordinator>();
@@ -317,7 +318,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("ghost:model", deleted.ModelName);
-        AssertEx.True(deleted.Deleted);
+        AssertEx.False(deleted.Deleted, "a model that was never installed reports no deletion");
         await deletionCoordinator.DidNotReceiveWithAnyArgs()
                                  .PurgeAfterSuccessAsync(Arg.Any<CommittedModelDeletion>(), Arg.Any<CancellationToken>());
     }

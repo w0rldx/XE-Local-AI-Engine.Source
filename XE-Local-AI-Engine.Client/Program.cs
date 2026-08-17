@@ -388,9 +388,9 @@ namespace XE_Local_AI_Engine.Client
             {
                 var developmentPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Root}");
                 var capabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Capability}");
-                // Keep the disabled capability opaque before local API security or authentication can challenge the caller.
-                // The endpoint types remain discoverable process-wide because FastEndpoints caches endpoint discovery across
-                // WebApplicationFactory instances; service and hub registration still remain disabled with this feature flag.
+                // Endpoint discovery is per host (the EndpointDiscoveryOptions.Filter in ConfigureServices), so these routes
+                // are genuinely absent on a disabled node. This middleware still answers first — ahead of local API security
+                // and authentication below — so the disabled capability cannot be probed by status code (404 here, never 401).
                 app.Use(async (context, next) =>
                 {
                     if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase)
@@ -428,6 +428,10 @@ namespace XE_Local_AI_Engine.Client
                 // registration entirely, so the routes are absent (a request 404s) rather than throwing a 500 for a missing
                 // service. Mirrors the invariant that the updater is desktop-mode only. On the desktop flag the filter is a
                 // no-op (returns true for every endpoint).
+                // Note this filter cannot gate an endpoint whose SERVICES are conditionally registered: FastEndpoints
+                // instantiates every discovered endpoint before evaluating it (which is why the AppUpdate services are
+                // registered in every mode). Development Mode's endpoints are excluded at DISCOVERY instead — see the
+                // EndpointDiscoveryOptions.Filter in ConfigureServices.
                 config.Endpoints.Filter = ep => isDesktop || !typeof(IDesktopOnlyEndpoint).IsAssignableFrom(ep.EndpointType);
 
                 // Single source of truth for OpenAPI operationIds (consumed by the generated hey-api React SDK):

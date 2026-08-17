@@ -159,7 +159,7 @@ function renderChat(): void {
 	);
 }
 
-describe("Chat selected-conversation load failure (AUD4-13)", () => {
+describe("Chat selected-conversation load failure", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
