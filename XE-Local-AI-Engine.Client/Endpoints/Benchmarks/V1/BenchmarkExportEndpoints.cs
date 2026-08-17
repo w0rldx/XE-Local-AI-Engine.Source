@@ -250,7 +250,7 @@ internal static class BenchmarkExportCsv
     private const string Header =
         "rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
         + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
-        + "generationTokens,generationTokensPerSecond,cachedPromptTokens,durationMs,qualityScore,qualityScoreSource,"
+        + "generationTokens,generationTokensPerSecond,cachedPromptTokens,segmentCount,durationMs,qualityScore,qualityScoreSource,"
         + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash";
 
     public static string Render(IReadOnlyList<BenchmarkRunRecord> runs)
@@ -326,6 +326,11 @@ internal static class BenchmarkExportCsv
                .Append(Rate(run.Throughput?.GenerationTokensPerSecond))
                .Append(',')
                .Append(Number(run.Throughput?.CachedPromptTokens))
+               .Append(',')
+
+               // Above 1 the token counts span several llama-server requests of one tool-calling turn, which is a
+               // different fact from the same counts over a single prefill — and nothing else in the row says so.
+               .Append(Number(run.Throughput?.SegmentCount))
                .Append(',')
                .Append(Number(run.DurationMs))
                .Append(',')
