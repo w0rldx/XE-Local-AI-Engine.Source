@@ -108,7 +108,7 @@ internal sealed class MemoryExtractionService(
             var behavior = behaviorScan.RedactedContent ?? proposal.Behavior;
             var triggerCondition = proposal.TriggerCondition is null ? null : (triggerScan.RedactedContent ?? proposal.TriggerCondition);
 
-            if (!dedupKeys.Add(DedupKey(behavior, proposal.Scope)))
+            if (!dedupKeys.Add(ToDedupKey(behavior, proposal.Scope)))
             {
                 // Matches an existing Suggested/Enabled memory (or an earlier candidate in this same run) — skip it.
                 duplicates++;
@@ -180,22 +180,26 @@ internal sealed class MemoryExtractionService(
     // One lexically-surviving candidate carried between PASS 1 (lexical) and PASS 2 (semantic) before persistence.
     private sealed record AcceptedCandidate(string Behavior, string? TriggerCondition, MemoryScope Scope, double? Confidence);
 
-    private static HashSet<(MemoryScope Scope, string Behavior)> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
+    private static HashSet<DedupKey> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
     {
         // Only live actions matter for dedup: a rejected (Archived) or disabled action should not block re-proposing.
         // A legacy untyped action (null MemoryScope) keys under Procedural so a manually-authored equivalent still
         // dedupes a procedural candidate.
         return existing
                .Where(static action => action.State is PlaybookActionState.Suggested or PlaybookActionState.Enabled)
-               .Select(static action => DedupKey(action.Behavior, action.MemoryScope ?? MemoryScope.Procedural))
+               .Select(static action => ToDedupKey(action.Behavior, action.MemoryScope ?? MemoryScope.Procedural))
                .ToHashSet();
     }
 
-    private static (MemoryScope Scope, string Behavior) DedupKey(string behavior, MemoryScope scope)
+    private static DedupKey ToDedupKey(string behavior, MemoryScope scope)
     {
-        // A (scope, behavior) tuple keys the dedup set, so there is no separator char to collide with content.
-        return (scope, NormalizeText(behavior));
+        // A (scope, behavior) pair keys the dedup set, so there is no separator char to collide with content.
+        return new DedupKey(scope, NormalizeText(behavior));
     }
+
+    // The normalized identity a candidate dedupes on. Deliberately not shared with PlaybookAnalysisService's
+    // same-named key, which scopes by an untyped string rather than the MemoryScope enum.
+    private readonly record struct DedupKey(MemoryScope Scope, string Behavior);
 
     private static string NormalizeText(string? value)
     {

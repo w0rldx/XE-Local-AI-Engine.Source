@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
@@ -11,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,
-///     Windows user-only <see cref="FileSecurity" />, *nix <c>0600</c>. Uses a dedicated protector purpose and a
+///     user-only file permissions via <see cref="SecureFilePermissions" />. Uses a dedicated protector purpose and a
 ///     separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
 ///     Never logs token values.
 /// </summary>
@@ -91,7 +88,7 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
         try
         {
             await File.WriteAllBytesAsync(_tokensPath, protectedPayload, cancellationToken).ConfigureAwait(false);
-            ApplyPlatformFileSecurity();
+            SecureFilePermissions.Apply(_tokensPath);
         }
         finally
         {
@@ -142,39 +139,6 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
         {
             throw new ArgumentException("Stored Codex tokens are missing an account id.", nameof(tokens));
         }
-    }
-
-    private void ApplyPlatformFileSecurity()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            ApplyWindowsFileSecurity();
-            return;
-        }
-
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_tokensPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private void ApplyWindowsFileSecurity()
-    {
-        var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-        var currentIdentity = WindowsIdentity.GetCurrent();
-        if (currentIdentity.User is not null)
-        {
-            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User,
-                FileSystemRights.FullControl,
-                AccessControlType.Allow));
-        }
-
-        var fileInfo = new FileInfo(_tokensPath);
-        fileInfo.SetAccessControl(fileSecurity);
     }
 
     private void ClearTokensFileBestEffort()

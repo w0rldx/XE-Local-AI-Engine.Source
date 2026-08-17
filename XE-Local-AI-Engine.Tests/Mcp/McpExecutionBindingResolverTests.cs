@@ -345,7 +345,7 @@ public sealed class McpExecutionBindingResolverTests
             _models.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
             IAgentInstructionProvider instructions = new FakeAgentInstructionProvider();
             var capabilities = Substitute.For<IModelCapabilityResolver>();
-            capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((SupportsThinking: true, SupportsTools: true, IsCloud: false));
+            capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
             var nodeKey = Substitute.For<INodeSqliteKeyHolder>();
             nodeKey.Key.Returns(new ReadOnlyMemory<byte>(Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray()));
             Resolver = new McpExecutionBindingResolver(_definitions, _agentResolver, _models, instructions, capabilities, nodeKey);

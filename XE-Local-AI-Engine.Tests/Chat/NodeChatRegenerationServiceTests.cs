@@ -1779,7 +1779,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
                                    .ClassifyAsync(
-                                       Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
+                                       Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
                                        Arg.Any<CancellationToken>())
                                    .ConfigureAwait(false);
 
@@ -2071,10 +2071,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static IModelClassificationService CreateModelClassificationService()
     {
         var service = Substitute.For<IModelClassificationService>();
-        service.ClassifyAsync(Arg.Any<IEnumerable<(string ModelName, string? Digest)>>(), Arg.Any<CancellationToken>())
+        service.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
                {
-                   var models = callInfo.Arg<IEnumerable<(string ModelName, string? Digest)>>();
+                   var models = callInfo.Arg<IEnumerable<ModelIdentity>>();
                    var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
                    foreach (var (modelName, _) in models)
                    {
