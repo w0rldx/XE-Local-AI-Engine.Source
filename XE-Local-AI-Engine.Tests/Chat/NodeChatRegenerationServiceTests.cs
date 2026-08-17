@@ -1652,6 +1652,70 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenTheConversationIsUnknown_ThrowsTheTypedNotFound()
+    {
+        // The type is the contract: LocalChatHub matches on it to forward a legible sentence, where a bare
+        // InvalidOperationException reaches the browser as SignalR's generic "An unexpected error occurred".
+        await using var provider = await BuildProviderAsync("regeneration-missing-conversation.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var service = CreateMinimalRegenerationService(persistence);
+
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(Guid.NewGuid(), Guid.NewGuid()).ConfigureAwait(false))
+            {
+                // Nothing is ever yielded.
+            }
+        }).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheOriginalMessageIsUnknown_ThrowsTheTypedNotFound()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-missing-message.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var service = CreateMinimalRegenerationService(persistence);
+
+        _ = await AssertEx.ThrowsAsync<NodeChatMessageNotFoundException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, Guid.NewGuid()).ConfigureAwait(false))
+            {
+                // Nothing is ever yielded.
+            }
+        }).ConfigureAwait(false);
+    }
+
+    // The regenerate rejects before any runner/dispatcher work, so the collaborators past persistence never run.
+    private static NodeChatRegenerationService CreateMinimalRegenerationService(NodeChatPersistenceService persistence)
+    {
+        var dispatcher = new RegenRecordingDispatcher();
+        return new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            new RegenCompletingRunner(dispatcher),
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+    }
+
+
+    [Test]
     public async Task RegenerateAsync_WhenOriginalModelIsCodexCloudModel_OffersToolsAndSkipsOllamaClassification()
     {
         // Parity with NodeChatStreamServiceTests.SendMessageAsync_WhenActiveModelIsCodexCloudModel_*: regenerating a
