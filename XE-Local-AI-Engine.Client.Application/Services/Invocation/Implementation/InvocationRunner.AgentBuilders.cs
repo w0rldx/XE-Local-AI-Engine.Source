@@ -93,7 +93,7 @@ public sealed partial class InvocationRunner
     ///         <item>
     ///             <description>
     ///                 A participant on the SAME model as the turn reuses the turn's already-read-back effective window
-    ///                 (<see cref="ResolveEffectiveContextTokensAsync" /> ran once in <see cref="PrepareLocalRuntimeAsync" />)
+    ///                 (<see cref="LocalRuntimeWarmer.ResolveEffectiveContextTokensAsync" /> ran once in <see cref="LocalRuntimeWarmer.PrepareLocalRuntimeAsync" />)
     ///                 — no extra probe.
     ///             </description>
     ///         </item>
@@ -120,13 +120,13 @@ public sealed partial class InvocationRunner
             return turnEffectiveContextTokens;
         }
 
-        var provider = await ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        var provider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken).ConfigureAwait(false);
         if (provider is null)
         {
             return null;
         }
 
-        return await ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        return await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken).ConfigureAwait(false);
     }
 
     private IReadOnlyList<AITool> BuildParticipantTools(RuntimePackage package, IReadOnlyList<AllowedToolDto> tools)

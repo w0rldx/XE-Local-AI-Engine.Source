@@ -102,6 +102,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
+    private readonly LocalRuntimeWarmer _localRuntimeWarmer;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
@@ -130,7 +131,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
-    private readonly IActiveCloudChatClientFactory _activeCloudFactory;
     private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
 
@@ -189,7 +189,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
         ILocalModelProviderResolver providerResolver,
-        IActiveCloudChatClientFactory activeCloudFactory,
+        LocalRuntimeWarmer localRuntimeWarmer,
         IDeadLetterStore deadLetterStore,
         IProviderStreamResilience providerStreamResilience,
         IConversationContextBudgeter contextBudgeter,
@@ -216,7 +216,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-        _activeCloudFactory = activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
+        _localRuntimeWarmer = localRuntimeWarmer ?? throw new ArgumentNullException(nameof(localRuntimeWarmer));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
         _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
@@ -369,7 +369,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
             // the supervisor, so a user who cancels merely abandons the wait while the load continues in the background.
             var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
-            var localRuntime = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+            var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
             var effectiveContextTokens = localRuntime.EffectiveContextTokens;
 
             // Fold the launched effective context window into the turn policy so the OUTER conversation
@@ -398,7 +398,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                ?? throw new InvalidOperationException("The invocation generation admission policy returned no decision.");
                 if (!decision.IsAllowed)
                 {
-                    throw new InvocationGenerationRejectedException(BuildGenerationAdmissionRejectionMessage(decision.RejectionReasonCode,
+                    throw new InvocationGenerationRejectedException(LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(decision.RejectionReasonCode,
                         admissionContext));
                 }
             }
@@ -704,173 +704,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     }
 
     /// <summary>
-    ///     Model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog
-    ///     is armed, so a cold big-model load runs in its own size-aware window (owned by the supervisor) instead of
-    ///     being killed by the shorter no-first-chunk watchdog. Cloud (Codex/Azure) and Ollama models route elsewhere or
-    ///     warm cheaply on first send, so they are a no-op here. Surfaces the phase into the invocation state (so the UI
-    ///     can render "loading model…") and records readiness timing/outcome on <see cref="NodeMetrics" />.
-    ///     <para>
-    ///         INVARIANT: the warm await is decoupled from the model load's lifetime in the supervisor — a caller
-    ///         cancellation abandons THIS wait (rethrown so the turn terminates as cancelled) while the load continues in
-    ///         the background and the model becomes warm for the next send. A warm FAILURE is swallowed here so the
-    ///         streaming send surfaces the real, classified error through its normal path rather than a duplicate here.
-    ///         Admission-gated callers receive that captured failure before policy evaluation, because otherwise an
-    ///         unknown-context rejection would mask the authoritative provider failure.
-    ///     </para>
-    /// </summary>
-    private async Task<LocalRuntimePreparationResult> PrepareLocalRuntimeAsync(string resolvedModel,
-        IWorkerEventDispatcher dispatcher,
-        Guid invocationId,
-        StreamState stream,
-        long turnStartedTimestamp,
-        CancellationToken cancellationToken)
-    {
-        var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
-        if (provider is null)
-        {
-            // No local cold-load for this turn (cloud, Ollama, or an unresolved provider): the TTFT baseline is turn
-            // start and the provider dimension is "remote" — the first-token latency is the provider's own, not a
-            // measurable local warm. The send-to-load-start histogram is deliberately local-only, so it is not recorded.
-            stream.ProviderTag = "remote";
-            stream.ModelReadyTimestamp = turnStartedTimestamp;
-            return new LocalRuntimePreparationResult(EffectiveContextTokens: null, ProviderName: null, WarmFailure: null);
-        }
-
-        // This turn pays a real local cold-load. Record how long the turn waited before the load even began
-        // (the audited silent pre-spawn gap), tag the provider dimension "local", and measure TTFT from readiness.
-        stream.ProviderTag = "local";
-        NodeMetrics.TurnToModelLoadStartMs.Record(Stopwatch.GetElapsedTime(turnStartedTimestamp).TotalMilliseconds,
-            new KeyValuePair<string, object?>("provider", "local"));
-
-        // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime).ConfigureAwait(false);
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel).ConfigureAwait(false);
-        _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
-
-        using var readinessActivity = NodeActivitySource.Source.StartActivity("chat.invocation.model_readiness");
-        var startedUtc = DateTimeOffset.UtcNow;
-        try
-        {
-            await provider.WarmModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
-            // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
-            stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "cancelled");
-            readinessActivity?.SetTag("outcome", "cancelled");
-            throw;
-        }
-        catch (Exception exception)
-        {
-            // Readiness failed (e.g. model incompatible / OOM). Record and capture it. The normal path still lets the
-            // streaming send surface the real classified failure through its provider boundary; an admission-gated path
-            // rethrows this captured failure before policy evaluation so a null-context refusal cannot mask it.
-            stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "failed");
-            readinessActivity?.SetTag("outcome", "failed");
-            _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
-            return new LocalRuntimePreparationResult(EffectiveContextTokens: null,
-                provider.ProviderName,
-                ExceptionDispatchInfo.Capture(exception));
-        }
-
-        var durationMs = RecordReadiness(startedUtc, "ready");
-        stream.ModelReadinessDurationMs = durationMs;
-        readinessActivity?.SetTag("outcome", "ready");
-
-        // The model is ready: measure TTFT from HERE (the first emitted chunk records against this baseline).
-        stream.ModelReadyTimestamp = Stopwatch.GetTimestamp();
-        _logger.LogInformation("Local model ready for invocation {InvocationId} after {ElapsedMs:F0} ms; arming the stream-idle watchdog for generation.", invocationId, durationMs);
-
-        // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating).ConfigureAwait(false);
-
-        // With the model now ready, read the effective per-slot context window it actually loaded so the turn's
-        // budgeters + the num_ctx side channel size against the REAL window (llama.cpp's -c) rather than the app default.
-        // Best-effort — a null here just keeps the configured default. A cancellation propagates (the turn is terminating).
-        var effectiveContextTokens = await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
-        return new LocalRuntimePreparationResult(effectiveContextTokens, provider.ProviderName, WarmFailure: null);
-    }
-
-    private static string BuildGenerationAdmissionRejectionMessage(string? reasonCode,
-        InvocationGenerationAdmissionContext context)
-    {
-        return reasonCode switch
-        {
-            InvocationGenerationAdmissionReasonCodes.EffectiveContextUnavailable => "Effective context unavailable.",
-            InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient when context.EffectiveContextTokens is { } effectiveContext =>
-                $"Requested context {context.RequestedContextTokens} tokens exceeds effective context {effectiveContext} tokens.",
-            _ => "Invocation generation was rejected by policy."
-        };
-    }
-
-    private readonly record struct LocalRuntimePreparationResult(
-        int? EffectiveContextTokens,
-        string? ProviderName,
-        ExceptionDispatchInfo? WarmFailure);
-
-    /// <summary>
-    ///     Reads the launched effective context window for <paramref name="resolvedModel" /> from the warm local provider
-    ///     (llama.cpp). Returns <see langword="null" /> when unknown (the runtime does not report one, or the read failed)
-    ///     so the caller keeps the configured default. A cancellation propagates.
-    /// </summary>
-    private async Task<int?> ResolveEffectiveContextTokensAsync(ILocalModelProvider provider,
-        string resolvedModel,
-        Guid invocationId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var runtimeInfo = await provider.GetRuntimeInfoAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
-            return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            _logger.LogDebug(exception, "Reading the effective context window for invocation {InvocationId} failed; the configured default window is used.", invocationId);
-            return null;
-        }
-    }
-
-    /// <summary>
-    ///     Resolves the local provider that serves <paramref name="resolvedModel" />, returning it only when it is the
-    ///     llama.cpp runtime (the one that pays a real cold-load before a watched stream). Any other provider (Ollama /
-    ///     cloud) or a resolution failure returns <see langword="null" /> so the warm phase is skipped; a genuine
-    ///     cancellation propagates.
-    /// </summary>
-    private async Task<ILocalModelProvider?> ResolveWarmableProviderAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
-    {
-        // A cloud-routed model (Codex/Azure) must never trigger a local warm. The provider resolver maps any UNMAPPED
-        // model name to the default local provider (llamacpp), so a cloud model id like "gpt-5.6-terra" would otherwise
-        // resolve to llama-server and fail its cold-load with "model not installed". This is the SAME per-request routing
-        // decision RuntimeChatClient makes for the send, so warm and send stay consistent (see IsCloudProviderSelected).
-        if (_activeCloudFactory.IsCloudProviderSelected(resolvedModel))
-        {
-            return null;
-        }
-
-        try
-        {
-            var provider = await _providerResolver.ResolveProviderForModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
-            return provider is not null && string.Equals(provider.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
-                ? provider
-                : null;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            _logger.LogDebug(exception, "Skipping runtime warm for invocation {InvocationId}: could not resolve a local provider for the model.", invocationId);
-            return null;
-        }
-    }
-
-    /// <summary>
     ///     Emits the terminal token-usage counter for a completed turn (BE-01). Called once from the shared completion
     ///     block — never the per-tool-loop usage-arrival site — so a multi-round tool run counts its final usage exactly
     ///     once. No-op when the model reported no usage. Content-free: only the coarse provider dimension
@@ -924,15 +757,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(package);
 
         return package.RequestedCapabilities?.Any(static capability => string.Equals(capability, LocalChatLoopbackDefaults.RequestedCapability, StringComparison.Ordinal)) == true;
-    }
-
-    /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
-    private static double RecordReadiness(DateTimeOffset startedUtc, string outcome)
-    {
-        var durationMs = (DateTimeOffset.UtcNow - startedUtc).TotalMilliseconds;
-        NodeMetrics.ModelReadinessDurationMs.Record(durationMs, new KeyValuePair<string, object?>("outcome", outcome));
-        NodeMetrics.ModelReadinessTotal.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
-        return durationMs;
     }
 
     // The single-agent path. Drives one ChatClientAgent over an approval-gated do/while loop, accumulating into
