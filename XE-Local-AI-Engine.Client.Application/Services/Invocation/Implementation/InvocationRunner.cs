@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -24,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
@@ -43,23 +43,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 public sealed partial class InvocationRunner : IInvocationRunner
 {
-    private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
-
-    // A tool call that ran out of time waiting for its RESULT (TurnPolicy.ToolResultTimeout, i.e. the package's
-    // ToolCallTimeoutSeconds or the node-global pending-tool-call age). Split out of AgentToolCallFailureMessage so a
-    // tool-side timeout is attributable rather than reading like an ordinary tool error. Carries no tool name, so it
-    // stays as path-free as the constant it replaces on this arm.
-    private const string ToolCallTimedOutMessage = "A tool call timed out waiting for its result.";
-    private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
-    private const string ProviderUnavailableMessage = "Provider unreachable.";
-
-    // Surfaced when an endpoint's circuit breaker is open (recent consecutive transient failures): a fixed, path-free
-    // message that tells the operator to retry shortly rather than reporting a hard provider outage.
-    private const string ProviderTemporarilyUnavailableMessage = "Provider temporarily unavailable. Please retry shortly.";
     private const string OrchestrationFailureMessage = "Orchestration run failed.";
-    private const string ModelDoesNotSupportThinkingMessage = "This model does not support reasoning.";
-
-    private const string ModelDoesNotSupportToolsMessage = "This model does not support tool calling.";
 
     // Approval-decision audit labels for the two outcomes the runner reaches WITHOUT an operator round-trip. They
     // extend the ApprovalDecisions vocabulary (approve/deny/timeout) and read the same way in the audit trail; a
@@ -96,26 +80,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 #pragma warning restore MAAI001
     };
 
-    // llama-server failed to COMPILE the constrained-decoding grammar for the offered tool schemas ("Failed to
-    // initialize samplers: failed to parse grammar"). The model is tool-capable — the schema set is what it could not
-    // be prepared for — so this must never claim the model lacks tool calling. Fixed and path-free: the provider body
-    // is never forwarded.
-    private const string ToolCallingPreparationFailedMessage =
-        "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.";
-
-    // A provider HTTP 500 means the model was reached but failed to load OR run (e.g. an Ollama build too old for the
-    // model architecture, or an out-of-memory at load). Phrased to cover both so it never falsely asserts a permanent
-    // model defect, while still being far more actionable than the generic "Provider unreachable.".
-    private const string ModelLoadFailedMessage = "The model could not be loaded or run on the provider.";
-
-    // A "Local runtime default" send found no installed GGUF chat model to route to. Surfaced instead of the generic
-    // "Provider unreachable." so the operator gets an actionable next step (pull a GGUF model) rather than a dead-end.
-    private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
-
-    // A generic (non-inter-chunk) timeout: the invocation-level cancel-after or an HTTP client timeout. Its framework
-    // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
-    private const string TimedOutMessage = "The operation timed out.";
-
     // A new local turn admitted after shutdown drain has begun. Surfaced as a clean Cancelled-category
     // failure — the node is going away — rather than being run into a drain that has already stopped waiting for it.
     private const string NodeDrainingMessage = "The node is shutting down and is not accepting new requests.";
@@ -124,10 +88,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // the two-pass truncation. A fixed, path-free constant carrying no token counts, model names, or content.
     private const string ContextBudgetExceededMessage =
         "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
-
-    private static readonly Regex FrameworkExceptionNamePattern =
-        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
-            TimeSpan.FromSeconds(2));
 
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
@@ -547,7 +507,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             invocationOutcome = exception is LlamaServerModelEjectedException ? "cancelled" : "failed";
             _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
-            var (failureCategory, message) = MapFailure(exception);
+            var (failureCategory, message) = InvocationFailureClassifier.MapFailure(exception);
             // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
             // path). Count it as a cancellation cause rather than a failure, mirroring the OCE branch above.
             if (exception is LlamaServerModelEjectedException)
@@ -954,6 +914,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Keep the fallback content-free: no record values or user/model/tool data are echoed here.
             _logger.LogTrace(exception, "Agent harness efficiency telemetry could not be emitted.");
         }
+    }
+
+    // True for a turn the node dispatched to ITSELF (local chat, scheduler, benchmarks): it carries the loopback
+    // requested-capability marker, has no hub connection behind it, and therefore sends no hub messages and audits its
+    // approval decisions as locally sourced.
+    private static bool IsLocalLoopbackInvocation(RuntimePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        return package.RequestedCapabilities?.Any(static capability => string.Equals(capability, LocalChatLoopbackDefaults.RequestedCapability, StringComparison.Ordinal)) == true;
     }
 
     /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
