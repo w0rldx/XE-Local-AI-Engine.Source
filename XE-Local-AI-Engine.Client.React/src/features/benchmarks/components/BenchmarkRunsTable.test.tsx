@@ -181,6 +181,38 @@ describe("BenchmarkRunsTable", () => {
 		expect(onRejudgeRun).not.toHaveBeenCalled();
 	});
 
+	// tg leads the cell and pp/TTFT ride under it: a model that decodes fast over a slow prefill is a different machine
+	// from one that does both fast, and the single blended figure this replaced could not tell the two apart.
+	it("shows decode speed with the prompt rate and time to first token under it", () => {
+		renderTable([benchmarkRunSummaryFixture({ id: "measured", tokensPerSecond: 24.31 })]);
+
+		const cell = screen.getByTestId("benchmark-throughput-measured");
+		expect(cell.textContent).toContain("24.3");
+		expect(cell.textContent).toContain("pp 640");
+		expect(cell.textContent).toContain("180 ms");
+	});
+
+	it("shows dashes, not zeros, for a run whose runtime timed nothing", () => {
+		renderTable([
+			benchmarkRunSummaryFixture({
+				id: "untimed",
+				tokensPerSecond: null,
+				throughput: {
+					ttftMs: null,
+					promptTokens: null,
+					promptTokensPerSecond: null,
+					generationTokens: null,
+					generationTokensPerSecond: null,
+					cachedPromptTokens: null,
+				},
+			}),
+		]);
+
+		const cell = screen.getByTestId("benchmark-throughput-untimed");
+		expect(cell.textContent).toContain("—");
+		expect(cell.textContent).not.toContain("0.0");
+	});
+
 	it("shows an empty state instead of a bare table head", () => {
 		renderTable([]);
 

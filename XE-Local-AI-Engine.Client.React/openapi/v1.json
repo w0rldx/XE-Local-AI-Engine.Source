@@ -28031,6 +28031,36 @@
             "format": "double",
             "nullable": true
           },
+          "ttftMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "promptTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "promptTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "generationTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "generationTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cachedPromptTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "userScore": {
             "type": "integer",
             "format": "int32",

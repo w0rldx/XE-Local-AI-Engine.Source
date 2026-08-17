@@ -302,7 +302,40 @@ public class BenchmarkRunSummaryResponse
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
     public int? TotalTokens { get; init; }
+
+    /// <summary>
+    ///     Decode throughput (tg) in tokens per second — derived from <see cref="GenerationTokens" /> and the runtime's
+    ///     own decode duration whenever it reported them, so this is generation speed, not the blended
+    ///     prompt-plus-generation figure it used to be. Falls back to <c>totalTokens / durationMs</c> for a runtime that
+    ///     reports no per-request timings. Equal to <see cref="GenerationTokensPerSecond" /> when the split exists.
+    /// </summary>
     public double? TokensPerSecond { get; init; }
+
+    /// <summary>
+    ///     Time to first token in milliseconds, measured client-side from turn start — so it includes network and
+    ///     adapter overhead on top of the runtime's own prefill time, which is what a caller actually waits. Null for a
+    ///     runtime that reported nothing and for runs frozen before the column existed.
+    /// </summary>
+    public double? TtftMs { get; init; }
+
+    /// <summary>Prompt tokens the runtime evaluated, cached ones included. Null when it reported none.</summary>
+    public int? PromptTokens { get; init; }
+
+    /// <summary>Prompt-processing throughput (pp) in tokens per second, derived server-side. Null when unmeasured.</summary>
+    public double? PromptTokensPerSecond { get; init; }
+
+    /// <summary>Tokens the runtime decoded. Null when it reported none.</summary>
+    public int? GenerationTokens { get; init; }
+
+    /// <summary>Decode throughput (tg) in tokens per second, derived server-side. Null when unmeasured.</summary>
+    public double? GenerationTokensPerSecond { get; init; }
+
+    /// <summary>
+    ///     Prompt tokens served from the KV cache rather than evaluated. Above zero means the pp figures describe a
+    ///     partially cached prefill, not a cold one.
+    /// </summary>
+    public int? CachedPromptTokens { get; init; }
+
     public int? UserScore { get; init; }
     public long LastStreamSequence { get; init; }
     public long Version { get; init; }

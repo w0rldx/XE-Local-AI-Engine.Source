@@ -33,6 +33,14 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.DurationMs).HasColumnName("duration_ms");
         builder.Property(entity => entity.TotalTokens).HasColumnName("total_tokens");
         builder.Property(entity => entity.TokensPerSecond).HasColumnName("tokens_per_second");
+
+        // Plaintext numerics, same posture as tokens_per_second: no secrets, no content, nothing node-scoped.
+        builder.Property(entity => entity.TtftMs).HasColumnName("ttft_ms");
+        builder.Property(entity => entity.PromptTokens).HasColumnName("prompt_tokens");
+        builder.Property(entity => entity.PromptMs).HasColumnName("prompt_ms");
+        builder.Property(entity => entity.GenerationTokens).HasColumnName("generation_tokens");
+        builder.Property(entity => entity.GenerationMs).HasColumnName("generation_ms");
+        builder.Property(entity => entity.CachedPromptTokens).HasColumnName("cached_prompt_tokens");
         builder.Property(entity => entity.OutputPartsJson).HasColumnName("output_parts_json");
         builder.Property(entity => entity.LastStreamSequence).HasColumnName("last_stream_sequence");
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");

@@ -130,15 +130,26 @@ public sealed class BenchmarkRunExecutor(
             var effectiveContext = admission.EffectiveContextTokens
                                    ?? throw new BenchmarkExecutionException("The effective model context was unavailable.");
             var durationMs = terminal.GenerationDurationMs ?? 0;
-            double? tokensPerSecond = terminal.TotalTokens is { } total && durationMs > 0
-                ? total * 1000d / durationMs
-                : null;
+            var throughput = ToThroughput(terminal.Throughput);
+
+            // tokens/s now MEANS decode throughput (tg) whenever the runtime timed the prompt and the decode
+            // separately: dividing the turn's total tokens by its wall clock blends prefill into generation, so the same
+            // model measured on a long prompt and a short one produced two incomparable numbers. The blended figure
+            // remains the fallback for a runtime that reports no timings, so the column never goes empty.
+            var tokensPerSecond = throughput?.GenerationTokensPerSecond
+                                  ?? (terminal.TotalTokens is { } total && durationMs > 0 ? total * 1000d / durationMs : null);
             var metricsEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.Metrics,
                 new BenchmarkRunStreamPayload(EffectiveContextTokens: effectiveContext,
                     DurationMs: durationMs,
                     TotalTokens: terminal.TotalTokens,
-                    TokensPerSecond: tokensPerSecond));
+                    TokensPerSecond: tokensPerSecond,
+                    TtftMs: throughput?.TtftMs,
+                    PromptTokens: throughput?.PromptTokens,
+                    PromptTokensPerSecond: throughput?.PromptTokensPerSecond,
+                    GenerationTokens: throughput?.GenerationTokens,
+                    GenerationTokensPerSecond: throughput?.GenerationTokensPerSecond,
+                    CachedPromptTokens: throughput?.CachedPromptTokens));
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
@@ -156,7 +167,8 @@ public sealed class BenchmarkRunExecutor(
                         // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
                         // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
                         // if it were a finished one.
-                        terminal.FinishReason))
+                        terminal.FinishReason,
+                        Throughput: throughput))
                 .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
             events.PublishReserved(terminalEvent with
@@ -185,6 +197,18 @@ public sealed class BenchmarkRunExecutor(
                 environment).ConfigureAwait(false);
         }
     }
+
+    // Crosses the layer boundary by hand rather than by a shared type: the throughput measurement is produced in the
+    // invocation layer and persisted by the store, and neither may reference the other's contract.
+    private static BenchmarkRunThroughput? ToThroughput(InvocationThroughput? throughput) =>
+        throughput is null
+            ? null
+            : new BenchmarkRunThroughput(throughput.TimeToFirstTokenMs,
+                throughput.PromptTokens,
+                throughput.PromptMs,
+                throughput.GenerationTokens,
+                throughput.GenerationMs,
+                throughput.CachedPromptTokens);
 
     /// <summary>
     ///     Commits primary success together with the run's first judging, in the store's single transaction. The judge

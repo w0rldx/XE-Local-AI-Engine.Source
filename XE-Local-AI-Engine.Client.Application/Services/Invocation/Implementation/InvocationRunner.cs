@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Represents invocation runner.
@@ -368,7 +369,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 stream.UsageSnapshot?.TotalTokens,
                 stream.UsageSnapshot?.ReasoningTokens,
                 generationDurationMs,
-                stream.FinishReason).ConfigureAwait(false);
+                stream.FinishReason,
+                stream.ToThroughput()).ConfigureAwait(false);
             invocationOutcome = "completed";
         }
         catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
@@ -644,6 +646,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             pendingApprovalKeys.Clear();
             var segmentUpdates = new List<AgentResponseUpdate>();
 
+            // llama-server puts its `timings` object on the LAST chunk of each request, so one segment yields at most
+            // one reading; last-wins covers the case where `timings_per_token` is on and intermediate chunks carry it
+            // too. Folded into the turn totals once the segment drains, so a tool-calling turn sums every round.
+            LlamaServerGenerationTimings? segmentTimings = null;
+
             // Each provider send is guarded by the inter-chunk idle watchdog (the watchdog owns the token the provider
             // call binds cancellation to, so an idle expiry actually cancels the send). The first segment additionally
             // runs through the pre-first-token retry + circuit breaker; the retry re-invokes this whole factory, so a
@@ -675,6 +682,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 {
                     stream.FinishReason = finishReason.Value;
                 }
+
+                segmentTimings = LlamaServerGenerationTimings.TryRead(update.RawRepresentation) ?? segmentTimings;
 
                 // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call
                 // lifecycle events, rather than the three separate OfType/Concat/LastOrDefault scans this ran per
@@ -812,6 +821,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 await transport.EmitTextAsync(stream, textChunk, invocationToken).ConfigureAwait(false);
             }
+
+            stream.AddSegmentTimings(segmentTimings);
 
             // The first segment has drained; any resume segment past this point follows earlier output and must not be
             // retried (a retry there would replay already-streamed chunks).

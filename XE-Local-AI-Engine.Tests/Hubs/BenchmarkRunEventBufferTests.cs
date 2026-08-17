@@ -91,7 +91,16 @@ public sealed class BenchmarkRunEventBufferTests
             nameof(BenchmarkRunStreamPayload.DurationMs),
             nameof(BenchmarkRunStreamPayload.TotalTokens),
             nameof(BenchmarkRunStreamPayload.TokensPerSecond),
-            nameof(BenchmarkRunStreamPayload.RunVersion)
+            nameof(BenchmarkRunStreamPayload.RunVersion),
+            // Reviewed: the throughput split is six timing scalars the runtime measured about ITS OWN work — token
+            // counts, milliseconds and derived rates. None of them is derived from the prompt, the output text, the
+            // runtime snapshot or an error message, so none can carry content or an unredacted failure onto the hub.
+            nameof(BenchmarkRunStreamPayload.TtftMs),
+            nameof(BenchmarkRunStreamPayload.PromptTokens),
+            nameof(BenchmarkRunStreamPayload.PromptTokensPerSecond),
+            nameof(BenchmarkRunStreamPayload.GenerationTokens),
+            nameof(BenchmarkRunStreamPayload.GenerationTokensPerSecond),
+            nameof(BenchmarkRunStreamPayload.CachedPromptTokens)
         };
 
         AssertEx.True(actual.SetEquals(expected),

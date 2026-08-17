@@ -152,6 +152,70 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_WhenTheRuntimeReportedTimings_PersistsTheSplitAndDerivesTokensPerSecondFromDecode()
+    {
+        // The blended figure this replaces divided the turn's TOTAL tokens by its wall clock, so a long prompt dragged
+        // the reported speed down and the same model looked slower purely for having been asked a longer question.
+        // tokens/second must now mean decode speed (tg): 89 tokens over 1011.5 ms, NOT 20 tokens over 100 ms.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkPrimarySuccessCommand? command = null;
+        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var throughput = new InvocationThroughput(TimeToFirstTokenMs: 180.25,
+            PromptTokens: 123,
+            PromptMs: 456.5,
+            GenerationTokens: 89,
+            GenerationMs: 1011.5,
+            CachedPromptTokens: 7);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 8192,
+                      EffectiveContextTokens = 8192,
+                      ModelId = "model.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100, "stop", throughput)));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        var persisted = AssertEx.NotNull(command);
+        var measured = AssertEx.NotNull(persisted.Throughput);
+        AssertEx.Equal<double?>(180.25, measured.TtftMs);
+        AssertEx.Equal<int?>(123, measured.PromptTokens);
+        AssertEx.Equal<double?>(456.5, measured.PromptMs);
+        AssertEx.Equal<int?>(89, measured.GenerationTokens);
+        AssertEx.Equal<double?>(1011.5, measured.GenerationMs);
+        AssertEx.Equal<int?>(7, measured.CachedPromptTokens);
+        AssertEx.Equal<double?>(89 * 1000d / 1011.5, persisted.TokensPerSecond,
+            "tokens/second is decode throughput now, not the turn's total tokens over its wall clock.");
+        // The blended numbers stay exactly as they were, so nothing downstream that already read them changes meaning.
+        AssertEx.Equal<int?>(20, persisted.TotalTokens);
+        AssertEx.Equal<long>(100, persisted.DurationMs);
+    }
+
+    [Test]
     public async Task Execute_WhenGenerationHitsTheTokenBudget_SucceedsButPersistsTheLengthStopReason()
     {
         // The live failure this exists for: a 16k-token answer cut mid-sentence was persisted Succeeded and judged
@@ -594,7 +658,8 @@ public sealed class BenchmarkRunExecutorTests
         string content,
         int? totalTokens = null,
         long? durationMs = null,
-        string? finishReason = null) =>
+        string? finishReason = null,
+        InvocationThroughput? throughput = null) =>
         new()
         {
             InvocationId = invocationId,
@@ -605,7 +670,8 @@ public sealed class BenchmarkRunExecutorTests
             LastUpdatedAt = DateTimeOffset.UnixEpoch,
             TotalTokens = totalTokens,
             GenerationDurationMs = durationMs,
-            FinishReason = finishReason
+            FinishReason = finishReason,
+            Throughput = throughput
         };
 
     private static InstalledModelSnapshot Installed(string name, char fingerprintCharacter)

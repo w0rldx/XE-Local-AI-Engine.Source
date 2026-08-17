@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.ClientModel.Primitives;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -111,7 +112,8 @@ public sealed class InvocationRunnerTests
         // non-deterministic elapsed value does not fail the call assertion (the rest of the args stay null-checked).
         await dispatcher.Received(1)
                         .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
-                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>(),
+                            Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -133,7 +135,8 @@ public sealed class InvocationRunnerTests
         // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
         await dispatcher.Received(1)
                         .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
-                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>(),
+                            Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -179,7 +182,8 @@ public sealed class InvocationRunnerTests
         // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
         await dispatcher.Received(1)
                         .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
-                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>(),
+                            Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -252,7 +256,8 @@ public sealed class InvocationRunnerTests
         // The authoritative token counts are asserted exactly; the new wall-clock duration arg is matched with Arg.Any
         // because the elapsed value is non-deterministic.
         await dispatcher.Received(1)
-                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(10), Arg.Is<int?>(2), Arg.Is<int?>(12), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(10), Arg.Is<int?>(2), Arg.Is<int?>(12), Arg.Is<int?>(static value => value == null),
+                            Arg.Any<long?>(), Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -2777,7 +2782,9 @@ public sealed class InvocationRunnerTests
             Arg.Any<int?>(),
             Arg.Any<int?>(),
             Arg.Any<int?>(),
-            Arg.Any<long?>());
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -2840,7 +2847,9 @@ public sealed class InvocationRunnerTests
             Arg.Any<int?>(),
             Arg.Any<int?>(),
             Arg.Any<int?>(),
-            Arg.Any<long?>());
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -3066,7 +3075,8 @@ public sealed class InvocationRunnerTests
             Arg.Any<int?>(),
             Arg.Any<int?>(),
             Arg.Any<long?>(),
-            "length");
+            "length",
+            Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -3087,7 +3097,89 @@ public sealed class InvocationRunnerTests
             Arg.Any<int?>(),
             Arg.Any<int?>(),
             Arg.Any<long?>(),
-            null);
+            null,
+            Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheRuntimeStreamsTimings_ReportsTheSeparatedThroughput()
+    {
+        // The benchmark reads this off the terminal snapshot. Before it existed, one blended tokens/second conflated
+        // prefill with decode, so the same model measured on a long prompt and a short one produced two numbers that
+        // could not be compared. pp and tg must arrive apart, with TTFT alongside them.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: TimingsUpdates());
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Is<InvocationThroughput?>(throughput => throughput != null
+                                                       && throughput.PromptTokens == 123
+                                                       && IsClose(throughput.PromptMs, 456.5)
+                                                       && throughput.GenerationTokens == 89
+                                                       && IsClose(throughput.GenerationMs, 1011.5)
+                                                       && throughput.CachedPromptTokens == 7
+                                                       && throughput.TimeToFirstTokenMs > 0));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheRuntimeStreamsNoTimings_ReportsOnlyTheClientMeasuredTtft()
+    {
+        // Fail open: a provider that times nothing leaves the pp/tg split absent rather than having a zero-valued
+        // measurement invented for it. Time to first token still arrives — it is measured by our own stopwatch, not by
+        // the runtime — so the caller-visible latency is reported for every provider, cloud ones included.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(ChatFinishReason.Stop, ChatFinishReason.Stop));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Is<InvocationThroughput?>(throughput => throughput != null
+                                                       && throughput.PromptTokens == null
+                                                       && throughput.GenerationTokens == null));
+    }
+
+    private static bool IsClose(double? actual, double expected) => actual is { } value && Math.Abs(value - expected) < 0.0001;
+
+    /// <summary>
+    ///     A two-chunk stream shaped like a real llama-server one: the timings ride the FINAL chunk only, on the OpenAI
+    ///     SDK object reachable through the agent update's raw representation. Deliberately the real types rather than a
+    ///     stub, because the double hop (agent update -> chat update -> OpenAI chunk) is exactly what a package bump can
+    ///     break without any compile error.
+    /// </summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> TimingsUpdates()
+    {
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "part one");
+
+        const string finalChunk = """
+                                  {"id":"chunk","object":"chat.completion.chunk","created":1,"model":"m",
+                                   "choices":[{"index":0,"finish_reason":"stop","delta":{}}],
+                                   "timings":{"cache_n":7,"prompt_n":123,"prompt_ms":456.5,"predicted_n":89,"predicted_ms":1011.5}}
+                                  """;
+        var chunk = ModelReaderWriter.Read<OpenAI.Chat.StreamingChatCompletionUpdate>(BinaryData.FromString(finalChunk))
+                    ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
+        yield return new AgentResponseUpdate(new ChatResponseUpdate(ChatRole.Assistant, " part two")
+        {
+            RawRepresentation = chunk,
+            FinishReason = ChatFinishReason.Stop
+        });
     }
 
     /// <summary>
