@@ -3048,6 +3048,66 @@ public sealed class InvocationRunnerTests
             && payload.ToolCallId == "call-1"));
     }
 
+    [Test]
+    public async Task RunAsync_ReportsTheLastFinishReasonTheProviderStreamed()
+    {
+        // The benchmark ranking reads this off the terminal snapshot to tell a truncated answer from a complete one, so
+        // an intermediate tool-call segment must not be what the turn is recorded as having stopped for: last wins.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(ChatFinishReason.ToolCalls, ChatFinishReason.Length));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            "length");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheProviderReportsNoFinishReason_ReportsNull()
+    {
+        // Fail open, never infer: a provider that reports nothing leaves the field null rather than being labelled
+        // "stop", which would make an unmeasured turn indistinguishable from a measured complete one.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(first: null, last: null));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            null);
+    }
+
+    /// <summary>
+    ///     Two streamed updates carrying <paramref name="first" /> then <paramref name="last" />. Real streams carry a
+    ///     finish reason only on the terminal update of each segment, so the accumulator keeps the last NON-NULL one:
+    ///     a trailing null must not erase the reason an earlier segment reported.
+    /// </summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> FinishReasonUpdates(ChatFinishReason? first, ChatFinishReason? last)
+    {
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "part one")
+        {
+            FinishReason = first
+        };
+        yield return new AgentResponseUpdate(ChatRole.Assistant, " part two")
+        {
+            FinishReason = last
+        };
+    }
+
     private static async IAsyncEnumerable<AgentResponseUpdate> RepeatedToolCallUpdates()
     {
         var repeated = new FunctionCallContent("call-1",

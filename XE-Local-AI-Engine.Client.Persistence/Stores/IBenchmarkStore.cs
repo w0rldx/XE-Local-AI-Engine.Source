@@ -215,12 +215,17 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 }
 
+/// <param name="MaxOutputTokens">
+///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
+///     context-limited. Must be <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
+/// </param>
 public sealed record BenchmarkProjectInput(
     Guid Id,
     string Name,
     ReadOnlyMemory<byte> CoreTaskJson,
     int ContextTokens,
-    Guid AgentDefinitionId);
+    Guid AgentDefinitionId,
+    int? MaxOutputTokens = null);
 
 /// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
@@ -265,6 +270,7 @@ public sealed record BenchmarkPrimarySuccessCommand(
     long DurationMs,
     int? TotalTokens,
     double? TokensPerSecond,
+    string? PrimaryStopReason = null,
     BenchmarkJudgeAttemptSeed? JudgeAttempt = null);
 
 /// <summary>
@@ -355,7 +361,8 @@ public sealed record BenchmarkProjectRecord(
     bool IsFrozen,
     long Version,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    int? MaxOutputTokens = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -387,6 +394,7 @@ public sealed record BenchmarkRunRecord(
     long UpdatedAtUtc,
     BenchmarkRunLaunchIntent? PrimaryLaunchIntent = null,
     BenchmarkRunLaunchEvidence? PrimaryLaunchEvidence = null,
+    string? PrimaryStopReason = null,
     BenchmarkRunJudgeView? Judge = null,
     int? QualityScore = null,
     string? QualityScoreSource = null,
@@ -457,7 +465,7 @@ public sealed record BenchmarkLaunchReceiptCommand(
 /// <param name="RankExclusionReason">
 ///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked. One of <c>no-score</c>,
 ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
-///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>.
+///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>, <c>truncated</c>.
 /// </param>
 public sealed record BenchmarkRunJudgeView(
     string State,
@@ -472,6 +480,17 @@ public sealed record BenchmarkRunJudgeView(
     bool PolicyCurrent,
     bool ExecutionCurrent,
     string? RankExclusionReason);
+
+/// <summary>
+///     The <see cref="BenchmarkRunRecord.PrimaryStopReason" /> vocabulary. Values are the provider's own
+///     <c>ChatFinishReason</c> tokens, stored verbatim — this class names only the ones the node reasons about, and an
+///     unrecognized token is stored and displayed rather than rejected.
+/// </summary>
+public static class BenchmarkPrimaryStopReasons
+{
+    /// <summary>Generation ran out of budget: <c>n_predict</c> exhausted, or the context window filled.</summary>
+    public const string Length = "length";
+}
 
 /// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>
 public static class BenchmarkRunJudgeStates
@@ -494,6 +513,13 @@ public static class BenchmarkRunJudgeStates
     public const string ReasonGenerationStale = "generation-stale";
     public const string ReasonExecutionKeyMismatch = "execution-key-mismatch";
     public const string ReasonExecutionIdentityIncomplete = "execution-identity-incomplete";
+
+    /// <summary>
+    ///     The primary generation was cut off by the token budget or the context ceiling (<c>finish_reason=length</c>).
+    ///     The measurement is still a real one — the run stays <c>Succeeded</c> — but an incomplete answer must not be
+    ///     ranked against complete ones, whatever the judge scored it. An operator score still overrides.
+    /// </summary>
+    public const string ReasonTruncated = "truncated";
 }
 
 /// <summary>

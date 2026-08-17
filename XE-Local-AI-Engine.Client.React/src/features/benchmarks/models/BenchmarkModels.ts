@@ -33,6 +33,7 @@ export const benchmarkRankExclusionReasons = [
 	"generation-stale",
 	"execution-key-mismatch",
 	"execution-identity-incomplete",
+	"truncated",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
 export const toBenchmarkRankExclusionReason = (value: unknown): BenchmarkRankExclusionReason | null =>
@@ -97,6 +98,8 @@ export interface BenchmarkProjectSummary {
 	id: string;
 	name: string;
 	contextTokens: number;
+	/** Per-run output-token budget (`n_predict`), or null when generation is only limited by the context window. */
+	maxOutputTokens: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
 	runCount: number;
@@ -116,6 +119,7 @@ export interface BenchmarkProjectDraft {
 	name: string;
 	coreTask: string;
 	contextTokens: number;
+	maxOutputTokens: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
 	judgeModelName: string | null;
@@ -283,6 +287,12 @@ export interface BenchmarkRunSummary {
 	qualityScoreSource: BenchmarkQualityScoreSource;
 	rank: number | null;
 	rankExclusionReason: BenchmarkRankExclusionReason | null;
+	/**
+	 * Why the model stopped generating, verbatim from the node (`stop`, `length`, `tool_calls`, `content_filter`), or
+	 * null when the provider reported none. Kept as a free string on purpose: an unrecognized token is shown, not
+	 * swallowed. `length` is the one the UI reasons about — see {@link isBenchmarkRunTruncated}.
+	 */
+	primaryStopReason: string | null;
 	effectiveContextTokens: number | null;
 	durationMs: number | null;
 	totalTokens: number | null;
@@ -499,6 +509,14 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 	}
 	return rendered.sort((left, right) => left.sequence - right.sequence);
 }
+
+/**
+ * The answer was cut off by the token budget or the context ceiling. The run still SUCCEEDED — the measurement is real —
+ * so this is the only signal that separates a finished answer from a fragment, and it is what keeps a truncated run out
+ * of the ranked cohort.
+ */
+export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
+	run.primaryStopReason?.toLowerCase() === "length";
 
 export const isPrimaryActive = (status: BenchmarkPrimaryStatus): boolean =>
 	status === "Queued" || status === "Running" || status === "CancelRequested";

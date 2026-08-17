@@ -112,7 +112,7 @@ public sealed class BenchmarkRunExecutorTests
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Running, "ans")));
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
-                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100)));
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100, "stop")));
               });
         await using var lease = new FakeLease(installed);
         var cancellationRegistry = new BenchmarkCancellationRegistry();
@@ -128,6 +128,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal(expected: 1, persistedParts.Count, "Adjacent same-kind deltas are coalesced into one stored part.");
         AssertEx.Equal<int?>(20, persisted.TotalTokens);
         AssertEx.Equal<double?>(200d, persisted.TokensPerSecond);
+        AssertEx.Equal("stop", persisted.PrimaryStopReason, "The run must persist why generation stopped, verbatim.");
         AssertEx.True(persisted.LastStreamSequence > 0);
         AssertEx.True(assignment.Disposed);
         AssertEx.True(AssertEx.NotNull(capacity.Reservation).Disposed);
@@ -147,6 +148,56 @@ public sealed class BenchmarkRunExecutorTests
             Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
             Arg.Any<CancellationToken>());
         AssertEx.False(cancellationRegistry.TryCancel(run.Id, BenchmarkWorkKind.Primary));
+        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Execute_WhenGenerationHitsTheTokenBudget_SucceedsButPersistsTheLengthStopReason()
+    {
+        // The live failure this exists for: a 16k-token answer cut mid-sentence was persisted Succeeded and judged
+        // 96/100, indistinguishable from a complete one. The status is deliberately unchanged — the measurement IS
+        // real — so the stop reason is the only thing that can carry the truth downstream.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkPrimarySuccessCommand? command = null;
+        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 8192,
+                      EffectiveContextTokens = 8192,
+                      ModelId = "model.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "cut off mid-", 16384, 100, "length")));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        var persisted = AssertEx.NotNull(command);
+        AssertEx.Equal("length", persisted.PrimaryStopReason);
+        // Reaching MarkPrimarySucceededAsync at all is the assertion: the failure path terminalizes through
+        // MarkPrimaryFailedAsync instead and never gets here.
         _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
     }
 
@@ -542,7 +593,8 @@ public sealed class BenchmarkRunExecutorTests
         InvocationStatus status,
         string content,
         int? totalTokens = null,
-        long? durationMs = null) =>
+        long? durationMs = null,
+        string? finishReason = null) =>
         new()
         {
             InvocationId = invocationId,
@@ -552,7 +604,8 @@ public sealed class BenchmarkRunExecutorTests
             StartedAt = DateTimeOffset.UnixEpoch,
             LastUpdatedAt = DateTimeOffset.UnixEpoch,
             TotalTokens = totalTokens,
-            GenerationDurationMs = durationMs
+            GenerationDurationMs = durationMs,
+            FinishReason = finishReason
         };
 
     private static InstalledModelSnapshot Installed(string name, char fingerprintCharacter)

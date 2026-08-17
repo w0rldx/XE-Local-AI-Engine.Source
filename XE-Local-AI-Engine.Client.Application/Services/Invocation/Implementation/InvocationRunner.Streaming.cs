@@ -46,6 +46,13 @@ public sealed partial class InvocationRunner
 
         public UsageSnapshot? UsageSnapshot { get; set; }
 
+        // Why generation stopped, taken from the LAST streamed update that carried a finish reason: a tool-calling turn
+        // ends its first segment with "tool_calls" and its final one with "stop", so last-wins is the turn's answer.
+        // Verbatim ChatFinishReason.Value — the OpenAI-compatible llama-server emits "length" both when n_predict is
+        // exhausted and when the context window fills (stopped_limit), which is exactly the truncation the benchmark
+        // ranking must see. Null when no provider reported one.
+        public string? FinishReason { get; set; }
+
         public long Sequence { get; set; }
 
         public long ReasoningSequence { get; set; }

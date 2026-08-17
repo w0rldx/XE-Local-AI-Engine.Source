@@ -6,9 +6,9 @@ import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJ
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
-import { BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import { BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
+import { isBenchmarkRunTruncated, isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 
 interface BenchmarkRunPaneProps {
@@ -48,6 +48,7 @@ export function BenchmarkRunPane({
 }: BenchmarkRunPaneProps) {
 	const { t } = useTranslation();
 	const active = isPrimaryActive(run.primaryStatus);
+	const truncated = isBenchmarkRunTruncated(run);
 	const messageParts = toChatMessageParts(parts);
 	return (
 		<Card withBorder={true} radius="md" padding="lg" data-testid={`benchmark-run-${run.id}`}>
@@ -59,7 +60,10 @@ export function BenchmarkRunPane({
 							{t(`pages.benchmarks.origin.${run.primaryModelOrigin ?? "legacy"}`, run.primaryModelOrigin ?? "Legacy / Unknown")}
 						</Text>
 					</Stack>
-					<BenchmarkStatusBadge status={run.primaryStatus} />
+					<Group gap="xs">
+						<BenchmarkStatusBadge status={run.primaryStatus} />
+						{truncated ? <BenchmarkTruncatedBadge /> : null}
+					</Group>
 				</Group>
 				<BenchmarkLaunchBadges launch={run.primaryLaunch} data-testid="benchmark-run-launch" />
 				<Group gap="lg">
@@ -119,6 +123,7 @@ export function BenchmarkRunPane({
 				/>
 				<BenchmarkJudgePanel
 					judge={run.judge}
+					primaryTruncated={truncated}
 					canRejudge={run.primaryStatus === "Succeeded"}
 					isBusy={isJudgeBusy}
 					onCancel={() => onCancel("Judge")}

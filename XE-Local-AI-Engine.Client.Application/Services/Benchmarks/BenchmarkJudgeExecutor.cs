@@ -120,7 +120,7 @@ public sealed class BenchmarkJudgeExecutor(
             }
 
             using var reservation = decision.Reservation;
-            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span);
+            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span, IsTruncated(work.Run.PrimaryStopReason));
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
@@ -204,10 +204,19 @@ public sealed class BenchmarkJudgeExecutor(
         }
     }
 
+    /// <summary>
+    ///     Whether the primary generation was cut off by its budget. The judging still runs — a truncated answer is a
+    ///     real answer that scored badly, not an absent one — but both the payload and the system prompt say so, so the
+    ///     judge grades what was actually produced.
+    /// </summary>
+    private static bool IsTruncated(string? primaryStopReason) =>
+        string.Equals(primaryStopReason, BenchmarkPrimaryStopReasons.Length, StringComparison.OrdinalIgnoreCase);
+
     private RuntimePackage BuildJudgePackage(BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgePolicyV1 policy,
         BenchmarkJudgeRuntimeV1 runtime,
-        ReadOnlySpan<byte> outputParts)
+        ReadOnlySpan<byte> outputParts,
+        bool primaryOutputTruncated)
     {
         // What the judge grades: the stored transcript reduced to its visible answer (see BenchmarkOutputParts.ForJudge)
         // and bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
@@ -217,10 +226,11 @@ public sealed class BenchmarkJudgeExecutor(
             policy.ReferenceAnswer,
             policy.Rubric,
             Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts(graded)),
-            BenchmarkJudgeOutputSchemaV2.Json);
+            BenchmarkJudgeOutputSchemaV2.Json,
+            primaryOutputTruncated);
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
-            BenchmarkJudgePromptV2.SystemPrompt,
+            BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated),
             [
                 new ConversationMessageDto
                 {

@@ -6,9 +6,9 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
-import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
-import { isRunTerminal } from "@/features/benchmarks/models/BenchmarkModels";
+import { isBenchmarkRunTruncated, isRunTerminal } from "@/features/benchmarks/models/BenchmarkModels";
 import { groupBenchmarkRunsByModel, rankExclusionAction, sortBenchmarkRuns } from "@/features/benchmarks/models/BenchmarkRanking";
 
 interface BenchmarkRunsTableProps {
@@ -158,6 +158,7 @@ function RunRow({
 			<Table.Td>
 				<Group gap={4} wrap="nowrap">
 					<BenchmarkStatusBadge status={run.primaryStatus} />
+					{isBenchmarkRunTruncated(run) ? <BenchmarkTruncatedBadge testId={`benchmark-truncated-${run.id}`} /> : null}
 					<BenchmarkJudgeStateBadge state={run.judge.state} />
 				</Group>
 			</Table.Td>

@@ -27396,6 +27396,11 @@
             "type": "integer",
             "format": "int32"
           },
+          "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "agentDefinitionId": {
             "type": "string",
             "format": "guid"
@@ -27545,6 +27550,11 @@
           "contextTokens": {
             "type": "integer",
             "format": "int32"
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           },
           "agentDefinitionId": {
             "type": "string",
@@ -27797,6 +27807,10 @@
             "nullable": true
           },
           "rankExclusionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryStopReason": {
             "type": "string",
             "nullable": true
           },

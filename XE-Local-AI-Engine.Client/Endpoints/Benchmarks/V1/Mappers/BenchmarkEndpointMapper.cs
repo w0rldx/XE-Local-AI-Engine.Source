@@ -18,7 +18,8 @@ internal static class BenchmarkEndpointMapper
                     request.JudgeContextTokens ?? 0,
                     request.Rubric.ToRubric(),
                     request.ReferenceAnswer)
-                : null);
+                : null,
+            request.MaxOutputTokens);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -26,6 +27,7 @@ internal static class BenchmarkEndpointMapper
             Id = project.Id,
             Name = project.Name,
             ContextTokens = project.ContextTokens,
+            MaxOutputTokens = project.MaxOutputTokens,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
             RunCount = runCount,
@@ -46,6 +48,7 @@ internal static class BenchmarkEndpointMapper
             CoreTask = JsonSerializer.Deserialize<string>(project.CoreTaskJson.Span)
                        ?? throw new BenchmarkValidationException("The benchmark task is required."),
             ContextTokens = project.ContextTokens,
+            MaxOutputTokens = project.MaxOutputTokens,
             AgentDefinitionId = project.AgentDefinitionId,
             JudgeEnabled = project.JudgeEnabled,
             Judge = judge ?? new BenchmarkJudgePolicyResponse
@@ -77,6 +80,7 @@ internal static class BenchmarkEndpointMapper
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
             RankExclusionReason = run.Judge?.RankExclusionReason,
+            PrimaryStopReason = run.PrimaryStopReason,
             ModelGroupKey = run.ModelContentFingerprint,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,
@@ -111,6 +115,7 @@ internal static class BenchmarkEndpointMapper
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
             RankExclusionReason = run.Judge?.RankExclusionReason,
+            PrimaryStopReason = run.PrimaryStopReason,
             ModelGroupKey = run.ModelContentFingerprint,
             EffectiveContextTokens = run.EffectiveContextTokens,
             DurationMs = run.DurationMs,

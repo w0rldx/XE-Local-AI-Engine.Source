@@ -3402,6 +3402,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryRes
 	id?: string;
 	name: string;
 	contextTokens?: number;
+	maxOutputTokens?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
 	runCount?: number;
@@ -3446,6 +3447,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRe
 	name?: string;
 	coreTask?: string;
 	contextTokens?: number;
+	maxOutputTokens?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
 	judgeModelName?: string | null;
@@ -3519,6 +3521,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	qualityScoreSource: string;
 	rank?: number | null;
 	rankExclusionReason?: string | null;
+	primaryStopReason?: string | null;
 	modelGroupKey: string;
 	effectiveContextTokens?: number | null;
 	durationMs?: number | null;

@@ -121,8 +121,13 @@ public static class BenchmarkFrozenPolicies
 {
     public const string FixedSeedPolicy = "fixed";
 
-    public static BenchmarkSamplingSnapshotV1 DeterministicSampling() =>
-        new(0, null, null, null, null, null, null, null, null, [], FixedSeedPolicy, "0");
+    /// <summary>
+    ///     The frozen sampling every benchmark generation replays. <paramref name="maxOutputTokens" /> is the project's
+    ///     optional output budget (<c>n_predict</c>); the default keeps generation context-limited and keeps the
+    ///     judge-policy sampling — which never takes a budget — byte-identical to what it has always hashed.
+    /// </summary>
+    public static BenchmarkSamplingSnapshotV1 DeterministicSampling(int? maxOutputTokens = null) =>
+        new(0, null, null, null, maxOutputTokens, null, null, null, null, [], FixedSeedPolicy, "0");
 
     /// <summary>
     /// The timeout policy every V1 snapshot was executed with, pinned here because the node-level

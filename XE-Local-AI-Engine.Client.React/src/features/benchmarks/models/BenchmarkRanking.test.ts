@@ -84,7 +84,7 @@ describe("rankExclusionAction", () => {
 	// Every reason the node can send must map to something the operator can DO; an unmapped reason would render a chip
 	// with no next step.
 	it.each(benchmarkRankExclusionReasons)("maps %s to an action", (reason) => {
-		expect(["score", "rejudge", "wait"]).toContain(rankExclusionAction(reason));
+		expect(["score", "rejudge", "wait", "rerun"]).toContain(rankExclusionAction(reason));
 	});
 
 	it.each([
@@ -96,6 +96,8 @@ describe("rankExclusionAction", () => {
 		["generation-stale", "rejudge"],
 		["execution-key-mismatch", "rejudge"],
 		["execution-identity-incomplete", "rejudge"],
+		// Re-judging the same truncated fragment produces the same fragment, so the only useful action is a rerun.
+		["truncated", "rerun"],
 	] as const)("maps %s to %s", (reason, action) => {
 		expect(rankExclusionAction(reason)).toBe(action);
 	});

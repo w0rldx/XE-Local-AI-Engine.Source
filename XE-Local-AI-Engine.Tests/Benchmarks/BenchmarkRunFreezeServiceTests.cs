@@ -40,6 +40,21 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_FreezesTheProjectOutputBudgetIntoTheRunSampling()
+    {
+        var budgeted = new FreezeHarness(maxOutputTokens: 2048);
+        var unbudgeted = new FreezeHarness();
+
+        _ = await budgeted.StartAsync();
+        _ = await unbudgeted.StartAsync();
+
+        AssertEx.Equal<int?>(2048, AssertEx.NotNull(budgeted.SnapshotInput).PrimarySampling.MaxOutputTokens,
+            "The budget is frozen per run, so a later project edit cannot change what an existing run replays.");
+        AssertEx.Null(AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling.MaxOutputTokens,
+            "No budget means context-limited, which is the sampling every existing snapshot already hashes.");
+    }
+
+    [Test]
     public async Task Start_AutoOnAGpuBinaryThatAcceptsTheOptimizedVector_FreezesQuantizedKv()
     {
         var harness = new FreezeHarness(variant: GpuVariant.Cuda);
@@ -249,11 +264,12 @@ public sealed class BenchmarkRunFreezeServiceTests
             bool probeSucceeded = true,
             bool supportsQuantizedKv = true,
             bool optimizedConfigDisabled = false,
-            Func<int, ResolvedLaunchArguments>? profile = null)
+            Func<int, ResolvedLaunchArguments>? profile = null,
+            int? maxOutputTokens = null)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
-            _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel);
+            _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens);
             var store = Substitute.For<IBenchmarkStore>();
             store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
             store.StartRunAsync(Arg.Do<BenchmarkStartRunCommand>(command => Command = command), Arg.Any<CancellationToken>())
@@ -309,11 +325,11 @@ public sealed class BenchmarkRunFreezeServiceTests
         public Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
             _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType);
 
-        private static BenchmarkProjectRecord Project(Guid id, Guid agentId, bool judgeEnabled, string? judgeModel)
+        private static BenchmarkProjectRecord Project(Guid id, Guid agentId, bool judgeEnabled, string? judgeModel, int? maxOutputTokens)
         {
             _ = judgeModel;
             return new BenchmarkProjectRecord(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId,
-                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1);
+                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens);
         }
 
         private static AgentDefinitionRecord Definition(Guid id) =>

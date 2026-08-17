@@ -25,6 +25,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             Name = input.Name.Trim(),
             CoreTaskJson = input.CoreTaskJson.ToArray(),
             ContextTokens = input.ContextTokens,
+            MaxOutputTokens = input.MaxOutputTokens,
             AgentDefinitionId = input.AgentDefinitionId,
             Version = 1,
             CreatedAtUtc = now,
@@ -87,6 +88,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.Name = input.Name.Trim();
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
+        project.MaxOutputTokens = input.MaxOutputTokens;
         project.AgentDefinitionId = input.AgentDefinitionId;
         project.Version++;
         project.UpdatedAtUtc = now;
@@ -272,7 +274,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                           entity.PrimaryPlacementTotal,
                                           entity.PrimaryLaunchExecutableSha256,
                                           entity.PrimaryLaunchHasAuxAssets,
-                                          entity.PrimaryLaunchKvCacheTypeSource)))
+                                          entity.PrimaryLaunchKvCacheTypeSource),
+                                  entity.PrimaryStopReason))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
 
@@ -389,6 +392,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             run.DurationMs = null;
             run.TotalTokens = null;
             run.TokensPerSecond = null;
+            run.PrimaryStopReason = null;
             run.PrimaryCompletedAtUtc = cancelledAt;
             run.Version++;
             run.UpdatedAtUtc = cancelledAt;
@@ -407,6 +411,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.DurationMs = command.DurationMs;
         run.TotalTokens = command.TotalTokens;
         run.TokensPerSecond = command.TokensPerSecond;
+        run.PrimaryStopReason = command.PrimaryStopReason;
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;
@@ -1285,23 +1290,39 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// </summary>
     private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var userScores = await _dbContext.BenchmarkRuns.AsNoTracking()
-                                         .Where(entity => entity.ProjectId == projectId)
-                                         .Select(entity => new
-                                         {
-                                             entity.Id,
-                                             entity.UserScore
-                                         })
-                                         .ToArrayAsync(cancellationToken)
-                                         .ConfigureAwait(false);
-        var views = await LoadJudgeViewsAsync([.. userScores.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
+        var scored = await _dbContext.BenchmarkRuns.AsNoTracking()
+                                     .Where(entity => entity.ProjectId == projectId)
+                                     .Select(entity => new
+                                     {
+                                         entity.Id,
+                                         entity.UserScore,
+                                         entity.PrimaryStopReason
+                                     })
+                                     .ToArrayAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
 
-        var runs = new Dictionary<Guid, BenchmarkRunRanking>(userScores.Length);
+        var runs = new Dictionary<Guid, BenchmarkRunRanking>(scored.Length);
         var totalScored = 0;
-        foreach (var run in userScores)
+        foreach (var run in scored)
         {
+            // Truncation is decided BEFORE the judge-derived reasons and AFTER the operator override: a run whose
+            // answer was cut off at the token budget is a real measurement of an INCOMPLETE answer, so its judge score
+            // stays visible but never ranks — while an operator who scored it anyway still wins, exactly as everywhere
+            // else. Read off the persisted stop reason, never inferred from the status.
+            var truncated = IsTruncated(run.PrimaryStopReason) && run.UserScore is null;
             var judge = JudgeViewFor(views, run.Id, run.UserScore);
-            var (qualityScore, source) = ComputeQuality(run.UserScore, judge);
+            if (truncated)
+            {
+                judge = judge with
+                {
+                    RankExclusionReason = BenchmarkRunJudgeStates.ReasonTruncated
+                };
+            }
+
+            var (qualityScore, source) = truncated
+                ? ((int?)null, BenchmarkQualityScoreSources.None)
+                : ComputeQuality(run.UserScore, judge);
             if (run.UserScore is not null || judge.Score is not null)
             {
                 totalScored++;
@@ -1336,6 +1357,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 runs.Values.Count(static entry => entry.Rank is not null),
                 totalScored));
     }
+
+    /// <summary>
+    ///     Whether the primary generation stopped because it ran out of budget. <c>length</c> is the OpenAI-compatible
+    ///     token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the context window full
+    ///     (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
+    /// </summary>
+    private static bool IsTruncated(string? primaryStopReason) =>
+        string.Equals(primaryStopReason, BenchmarkPrimaryStopReasons.Length, StringComparison.OrdinalIgnoreCase);
 
     private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>
         ranking.Runs.TryGetValue(run.Id, out var entry)
@@ -1787,7 +1816,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens);
 
     private static BenchmarkRunRecord ToRecord(BenchmarkRun entity) =>
         new(entity.Id, entity.ProjectId, entity.RuntimeSnapshotJson.ToArray(), entity.PrimaryModelName, entity.PrimaryModelOrigin,
@@ -1800,7 +1829,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
                 entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
                 entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
-                entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource));
+                entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource),
+            entity.PrimaryStopReason);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

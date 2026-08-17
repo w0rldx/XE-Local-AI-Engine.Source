@@ -30,6 +30,7 @@ export function benchmarkRunSummaryFixture(overrides: Partial<BenchmarkRunSummar
 		qualityScoreSource: "none",
 		rank: null,
 		rankExclusionReason: null,
+		primaryStopReason: "stop",
 		effectiveContextTokens: 4096,
 		durationMs: 1250,
 		totalTokens: 30,
