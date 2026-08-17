@@ -1,6 +1,6 @@
 # Testing & Validation
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-15 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". For *how to write a new test* — which project it belongs in, the fixture patterns, the parallelism keys, the per-kind recipes — see [Writing Tests](17-writing-tests.md). It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), validation commands and standalone runners, the tracked GitHub Actions gate design, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 
@@ -18,7 +18,7 @@ Test stack at a glance: **TUnit 1.65.0** on **Microsoft.Testing.Platform (MTP)**
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `TestServerWebAppFactory`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, and development mode | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, `PreviewWorkflows/`, plus project smoke tests | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, migration tests — **59 migration implementations, every one named by a test; 56 have their own `*MigrationTests.cs`, the other 3 are asserted inside a neighbouring migration's test (as of 2026-08-15)** — and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | SQLite stores with selected encrypted fields, AEAD cipher, migration tests — **every migration implementation is named by a test; all but three have their own `*MigrationTests.cs`, and those three are asserted inside a neighbouring migration's test** (`ls Client.Persistence/Migrations/*.cs` minus `.Designer.cs`/`*ModelSnapshot.cs` is the current count) — and the `NegativeFence/` compile-fence | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (21 `*E2ETests.cs`: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, smoke, viewport, …) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -53,9 +53,10 @@ This is the heaviest suite and the heart of validation. `TestServerWebAppFactory
 ### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
 
 EF migrations have dedicated `*MigrationTests.cs` files that apply the migration to a fresh SQLite DB and
-assert the resulting shape. As of 2026-08-15 all 59 migration implementations are named by a test: 56 have a
-dedicated file, and 3 (`AddNodeMessageLifecycleColumns`, `AddAgentDefinitionBaseScaffoldOptOut`,
-`AddDevelopmentCommandProfile`) are asserted substantively inside a neighbouring migration's test —
+assert the resulting shape. Every migration implementation in `Client.Persistence/Migrations/` is named by a test.
+All but three have a dedicated file; those three (`AddNodeMessageLifecycleColumns`,
+`AddAgentDefinitionBaseScaffoldOptOut`, `AddDevelopmentCommandProfile`) are asserted substantively inside a
+neighbouring migration's test —
 `NodeMessageLifecycleMigrationTests.cs`, `AddAgentDefinitionsMigrationTests.cs` and
 `Development/DevelopmentMigrationTests.cs` respectively — so a separate file would only restate them.
 The file follows the migration
@@ -106,6 +107,12 @@ pnpm install --frozen-lockfile
 pnpm run lint     # tsc --noEmit + CheckEventCurrentTargetInUpdaters.mjs + biome lint + stylelint
 pnpm test         # vitest run
 pnpm run build    # lint chain + vite build
+```
+
+```bash
+# Python (tools/training + scripts/**) — the same gate CI's python-quality job runs
+scripts/python-validation.sh --scope full      # deps, then style/types/tests/security in parallel
+scripts/python-validation.sh --scope changed   # auto-detect scope from the diff against develop
 ```
 
 Notable React scripts (from `package.json`): `test:coverage` / `test:coverage:check` (the latter sets `VITEST_COVERAGE_CHECK=true` to enforce thresholds), `openapi:check` (regenerate the hey-api client from the committed spec and fail on drift — see below), `validate` (lint + knip + depcruise), `knip`, `depcruise`, `spellCheck`. The lint chain is strict: type-check, a custom `currentTarget`-in-updaters guard, Biome, and Stylelint all run before the build.
@@ -167,8 +174,9 @@ more than a local Release build.
 
 ### What `build-and-test.yml` and `e2e.yml` describe
 
-**`build-and-test.yml`** — runs on `pull_request`/`push` to `develop` plus `workflow_dispatch`, and is `workflow_call`-reusable (`release.yml` calls it as its `validate` job so the exact tagged commit re-runs these gates before packaging). **Three jobs**, and every job carries an explicit `timeout-minutes` so a hung step cannot burn the runner budget — note that the reusable-workflow *call* in `release.yml` cannot carry one, which is a GitHub limitation, not an oversight:
+**`build-and-test.yml`** — runs on `pull_request`/`push` to `develop` plus `workflow_dispatch`, and is `workflow_call`-reusable (`release.yml` calls it as its `validate` job so the exact tagged commit re-runs these gates before packaging). **Four jobs**, and every job carries an explicit `timeout-minutes` so a hung step cannot burn the runner budget — note that the reusable-workflow *call* in `release.yml` cannot carry one, which is a GitHub limitation, not an oversight:
 
+- **`python-quality` (ubuntu-latest)** — sets up `uv` with a pinned version and Python 3.13, then runs [`scripts/python-validation.sh`](../../scripts/python-validation.sh) `--scope full --serial`: `uv sync --locked --all-groups` followed by ruff (`format --check` + `check`), pyrefly, pytest with coverage, and bandit over `tools/training` and `scripts/**`. The tooling config is the **root** `pyproject.toml` + its own small `uv.lock` — deliberately *not* `tools/training/pyproject.toml`, which with its lockfile is the shipped training-runtime manifest (see [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md) and [Training](18-training.md)). Locally: `scripts/python-validation.sh --scope full`, or `--scope changed` to auto-detect from the diff. The same job then runs [`scripts/docs-inventory-check.py`](../../scripts/docs-inventory-check.py), which re-derives five inventories from the code — SignalR hubs, `LocalApiRoutes` route families, React `features/` directories, numbered wiki pages, solution projects — and fails when one of them is missing from the wiki page that claims to enumerate it.
 - **`release-contracts` (ubuntu-latest)** — runs [`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) plus `scripts/lint-release-scripts.sh --no-behavior --bootstrap`. Contract discovery is **auto-enrolling** across `scripts/tests`, `scripts/compliance/tests`, and `scripts/performance/tests`, matching `*.test.sh`, `*.test.py`, and `test_*.py` — a new script test needs no workflow edit. The Pester leg of `lint-release-scripts.sh` covers `publish/tests` and `scripts/performance/tests`; **zero discovered Pester tests is a failure, not a pass**.
 - **`build-and-test` (ubuntu-latest)** — SDK from `global.json`, restore + `build -c Release --no-restore`, a live OpenAPI comparison ([`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh)), then **one `dotnet test` per project** (rather than one solution-wide run) each emitting **Cobertura** coverage. [`scripts/merge-cobertura.py`](../../scripts/merge-cobertura.py) merges the reports without double-counting shared source lines and enforces the floor in [`scripts/backend-coverage-baseline.txt`](../../scripts/backend-coverage-baseline.txt) — currently **90.50**. The `--max-parallel-test-modules 2` flag is gone with the solution-wide run; the explicit `--maximum-parallel-tests` cap remains, because TUnit's default is `ProcessorCount * 4` **per module**, which is what made concurrent modules time out on shared runners. Output is piped through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary, failing if none is found (catching a silent green where zero suites enrolled). The merged coverage XML and the TRX files upload as the **`backend-test-results`** artifact.
 - **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run validate`** (`lint` → `knip` → `signalr:check` → `depcruise` — not bare `lint`), `test:coverage:check`, `test:tooling`, `build`, and `pnpm audit --prod --audit-level=high` in order. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
@@ -194,8 +202,11 @@ Two gates ride the packaging path rather than any test suite:
   reviewed decision, not a way to make a red build green. The merged XML and the TRX files are retained as the
   `backend-test-results` artifact, so a failure can be inspected rather than re-run blind.
 - **Frontend**: Vitest v8 coverage. Thresholds are enforced only by the `test:coverage:check` script, which sets
-  `VITEST_COVERAGE_CHECK=true`. The current `vite.config.ts` thresholds are branches 35, functions 34, lines 39,
-  statements 38; generated, locale, test, and route-tree files are excluded by the `coverage.exclude` configuration.
+  `VITEST_COVERAGE_CHECK=true`. The thresholds live in the `coverageThresholds` constant in
+  [`XE-Local-AI-Engine.Client.React/vite.config.ts`](../../XE-Local-AI-Engine.Client.React/vite.config.ts) — read them
+  there rather than here: the comment beside them marks it a **ratchet**, raised as coverage grows and never lowered to
+  make a red run green, so any number quoted in this page goes stale on the next raise. Generated, locale, test, and
+  route-tree files are excluded by the `coverage.exclude` configuration.
 
 ## RC evidence requirements
 
@@ -227,7 +238,7 @@ retained transcript their operating status is unknown. See [Hosting & Deployment
 ## Maintainer checklist
 
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
-- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`, built on the shared `Testing/MigrationSchemaProbe.cs`. Every migration must be named by a test; prefer a dedicated file (56 of 59 have one as of 2026-08-15) so a schema regression fails in a file named after its migration.
+- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`, built on the shared `Testing/MigrationSchemaProbe.cs`. Every migration must be named by a test; prefer a dedicated file (all but three have one) so a schema regression fails in a file named after its migration.
 - New or changed tool schema → run the schema/compiler unit tests and the live `run-tool-grammar-smoke-local.sh`; the negative control is required evidence, not optional diagnostics.
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).

@@ -45,6 +45,10 @@ export interface ChatToolPart {
 	// Approve/Deny controls post to the loopback resolve endpoint. Transient, live-only: cleared once the tool
 	// completes (approved) or is rejected, and never present on a reloaded/persisted turn.
 	pendingApprovalRequestId?: string;
+	// The backend's per-request answer to whether an "approve for this session" decision can be remembered for this
+	// exact call. Preferred over the tool catalog's tool-identity flag; undefined when the backend did not resolve it
+	// (a reconnect replay), in which case the card falls back to the catalog.
+	pendingApprovalSessionScopeEligible?: boolean;
 	// When set, this is an `ask_user` call parked on the operator's answer: the question payload the inline answer
 	// card renders. Transient and live-only on exactly the same terms as `pendingApprovalRequestId` — cleared when
 	// the tool call completes/fails or the turn terminalizes, and never present on a reloaded/persisted turn.

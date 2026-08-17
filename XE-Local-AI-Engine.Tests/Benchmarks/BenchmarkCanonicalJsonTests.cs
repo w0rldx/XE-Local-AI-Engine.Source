@@ -61,9 +61,14 @@ public sealed class BenchmarkCanonicalJsonTests
             new LlamaServerLaunchAuxAssets(false, false, false),
             new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.None, 0, 33),
             4096,
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1));
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1)
+        {
+            OmittedOptions = ["--metrics"]
+        });
 
         AssertEx.Contains(json, "\"variant\":\"cuda\"");
+        // The frontend walks the decoded receipt generically, so a new member only reaches the UI if it is serialized.
+        AssertEx.Contains(json, "\"omittedOptions\":[\"--metrics\"]");
         AssertEx.Contains(json, "\"outcome\":\"none\"");
         AssertEx.False(json.Contains("\"variant\":1", StringComparison.Ordinal),
             "An enum written as its ordinal re-labels every stored receipt the day a member is inserted.");

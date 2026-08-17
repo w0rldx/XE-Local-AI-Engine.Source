@@ -374,7 +374,8 @@ public sealed class InvocationResumeRegistryTests
         parked.PendingApproval = new InvocationApprovalState("approval-1", "Run a command", DateTimeOffset.UtcNow)
         {
             CallId = "call-7",
-            ToolName = "run_command"
+            ToolName = "run_command",
+            SessionScopeEligible = true
         };
         RaiseState(dispatcher, parked);
 
@@ -395,6 +396,8 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Equal("approval-1", replayed.ApprovalRequestId);
         AssertEx.Equal("call-7", replayed.ToolCallId);
         AssertEx.Equal("run_command", replayed.ToolName);
+        // The runner's session-scope answer survives the reload, so the re-rendered card offers the same controls.
+        AssertEx.Equal(expected: true, replayed.SessionScopeEligible);
     }
 
     [Test]
@@ -428,6 +431,9 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Equal("approval-2", replayed.ApprovalRequestId);
         AssertEx.Null(replayed.ToolCallId);
         AssertEx.Null(replayed.ToolName);
+        // Nothing recorded the runner's answer, so the replay fails CLOSED rather than letting the client fall back to
+        // the tool catalog and offer a session scope the node may never honor.
+        AssertEx.Equal(expected: false, replayed.SessionScopeEligible);
     }
 
     [Test]

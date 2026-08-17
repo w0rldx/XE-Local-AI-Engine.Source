@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal static class McpServerMapper
@@ -77,7 +78,8 @@ internal static class McpServerMapper
             RequiresApproval = entry.RequiresApproval,
             Source = entry.Source,
             Category = entry.Category.ToString(),
-            EffectiveRequiresApproval = approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval)
+            EffectiveRequiresApproval = approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval),
+            SessionScopeEligible = SessionApprovalEligibility.IsToolEligible(approvalPolicy, entry.Name, entry.IsFixedCustomTool)
         };
     }
 }

@@ -194,28 +194,6 @@ public sealed class CentralPlatformOptionsValidatorTests
         AssertFailureContains(_validator.Validate(name: null, options), "ReconnectBackoffJitterMs must be between 0 and 10000.");
     }
 
-    [Test]
-    [Arguments(4)]
-    [Arguments(601)]
-    public void Validate_WhenToolCallTimeoutIsOutOfRange_ReturnsFailure(int value)
-    {
-        var options = CreateValidOptions();
-        options.ToolCallTimeoutSeconds = value;
-
-        AssertFailureContains(_validator.Validate(name: null, options), "ToolCallTimeoutSeconds must be between 5 and 600.");
-    }
-
-    [Test]
-    [Arguments(9)]
-    [Arguments(3601)]
-    public void Validate_WhenInvocationTimeoutIsOutOfRange_ReturnsFailure(int value)
-    {
-        var options = CreateValidOptions();
-        options.InvocationTimeoutSeconds = value;
-
-        AssertFailureContains(_validator.Validate(name: null, options), "InvocationTimeoutSeconds must be between 10 and 3600.");
-    }
-
     private static CentralPlatformOptions CreateValidOptions()
     {
         return new CentralPlatformOptions

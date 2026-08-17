@@ -1,6 +1,6 @@
 # Agent Mode & the AI Agent Runtime
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
 `XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`
@@ -159,6 +159,34 @@ The factory returns an **`IOrchestrationRunSession`** (`Invocation/Orchestration
   for minutes) and reset after each productive event;
 - `RespondToApprovalAsync` — resolves a pending `ToolApprovalRequestContent`, sends the
   `ExternalResponse`, and restarts the idle clock.
+
+#### When orchestration does not compile — the degrade notice
+
+A `Kind=Orchestrator` definition does not always produce a mesh. `IOrchestrationResolver` /
+`OrchestrationResolver` (`Client.Application/Services/Agents/`) compiles the definition plus its
+`OrchestrationTopologyJson` into the spec carried on the runtime package, and returns an
+`OrchestrationResolution` whose `Orchestration` is `null` when it cannot. Four of those outcomes carry a typed
+`OrchestrationDegradationReason`:
+
+| Reason | Meaning |
+|---|---|
+| `TopologyInvalid` | `OrchestrationTopologyJson` is missing, empty, or does not parse |
+| `ModelNotToolCapable` | the orchestrator's effective model does not advertise (or is not allow-listed for) tool calling |
+| `TriageMissing` | the topology's triage participant is missing, deleted, or was dropped as not tool-capable |
+| `TooFewCapableParticipants` | fewer than the two capable participants handoff routing needs survived resolution |
+
+In every one of those cases **the turn still runs** — the orchestrator executes as a lone agent on its own prompt
+and tools — and the operator is told rather than left to read a server log: `OrchestrationResolution.DegradationNotice`
+composes the one sanitized sentence ("Orchestration was not used for this turn: … The agent ran as a single agent
+instead.") that **both** the send and the regenerate path emit as a `TurnNoticePayload` with
+`TurnNoticeKind.OrchestrationDegraded` and the reason name in `Detail`
+(`NodeChatStreamService`, `NodeChatRegenerationService`; rendered by `ChatNoticeRow.tsx`). Composing the sentence on
+the resolution — not at each call site — is what keeps the two paths from drifting.
+
+The fifth outcome, `OrchestrationResolution.NotOrchestrated`, is deliberately **silent**: a `Single`-kind agent, an
+unbound conversation, or a deleted definition never asked for orchestration, so `ChatTurnResolver.ResolveOrchestrationAsync`
+returns it without resolving and no notice is raised. That keeps the overwhelmingly common single-agent path
+byte-identical.
 
 ### 1.6 Other AI.Agent runners
 
@@ -572,6 +600,15 @@ resolved in `InvocationRunner.RequestToolApprovalAsync`:
   - A memo-suppressed approval **still writes its audit row** (`SessionScopeApprovalDecision`) — a
     approval that leaves no trace would thin the record of what an agent was allowed to do.
   - Denials are **never** remembered, under any scope.
+  - The chat card only OFFERS session scope where the node can honor it. `SessionApprovalEligibility`
+    is the one predicate `TryResolveSessionApprovalKey` and the node tool-catalog response
+    (`ToolCatalogEntryResponse.SessionScopeEligible`) both read, so `ToolCallCard` hides its "Approve
+    for this session" button for every tool that can never carry a memo — an MCP tool,
+    `run_in_agent_home`, a `Parameterized` custom tool, or anything at all while
+    `SkillSessionScopeDisabled` is on. The catalog answer is a tool-identity UPPER BOUND: the runner
+    still applies the per-call narrowings above (imported skill, skill not in the package, unnamed
+    resource), which only ever remove eligibility. The MAF skill tools are per-agent and therefore
+    absent from the node catalog, so an entry the card cannot find keeps offering the button.
 
 **Unattended runs fail fast, and the check runs before the memo, not after.** A scheduled `run-agent`
 job carries `RuntimePackage.IsUnattended` (excluded from the config hash, same posture as

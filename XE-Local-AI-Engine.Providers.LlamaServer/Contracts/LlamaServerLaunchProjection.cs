@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -156,6 +157,195 @@ public sealed record LlamaServerLaunchProjection(
     }
 
     /// <summary>
+    ///     The EFFECTIVE launch shape, read back out of the argument vector the process was actually started with.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <see cref="From" /> describes what a spawn INTENDED before the capability gate ran. The gate can drop
+    ///         optional flags a runtime does not advertise (<c>--cache-reuse</c>, <c>--metrics</c>, <c>-lv</c>), and an
+    ///         operator's per-model extra arguments are appended after it — so the intended shape can name a flag the
+    ///         process never received, or miss one it did. Re-reading the final argv is the only description that is a
+    ///         fact rather than a derivation. Last-wins for a repeated scalar flag, matching llama.cpp itself.
+    ///     </para>
+    ///     <para>
+    ///         Tolerant and pure: an unknown argument is ignored, and a malformed value for an allow-listed numeric flag
+    ///         returns <see langword="null" /> so the caller can fall back rather than record a wrong fact. Only the
+    ///         allow-listed flags below are read; nothing addressable (<c>-m</c>, <c>--host</c>, <c>--port</c>) is.
+    ///     </para>
+    /// </remarks>
+    /// <param name="arguments">The final argument vector handed to the process.</param>
+    /// <returns>The effective projection, or <see langword="null" /> when the vector could not be parsed.</returns>
+    public static LlamaServerLaunchProjection? TryFromArguments(IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        var autoFit = false;
+        var metrics = false;
+        var jinja = false;
+        int? contextTokens = null;
+        int? gpuLayers = null;
+        string? tensorSplit = null;
+        string? overrideTensor = null;
+        string? kvCacheTypeK = null;
+        string? kvCacheTypeV = null;
+        string? flashAttention = null;
+        int? threads = null;
+        int? threadsBatch = null;
+        int? batchSize = null;
+        int? ubatchSize = null;
+        var parallel = 1;
+        int? cacheReuse = null;
+        var cacheRamMiB = 0;
+        string? pooling = null;
+
+        var index = 0;
+        while (index < arguments.Count)
+        {
+            var argument = arguments[index];
+            index++;
+            switch (argument)
+            {
+                case "--jinja":
+                    jinja = true;
+                    continue;
+                case "--metrics":
+                    metrics = true;
+                    continue;
+            }
+
+            // Everything below is a value flag. A trailing flag with no value is a vector this method cannot describe.
+            if (!IsAllowListedValueOption(argument))
+            {
+                continue;
+            }
+
+            if (index >= arguments.Count)
+            {
+                return null;
+            }
+
+            var value = arguments[index];
+            index++;
+            if (value.StartsWith('-') && !TryParseInt(value, out _))
+            {
+                // A value flag followed by another flag is a vector this method cannot describe truthfully.
+                return null;
+            }
+
+            switch (argument)
+            {
+                case "--fit":
+                    autoFit = string.Equals(value, "on", StringComparison.Ordinal);
+                    break;
+                case "-c" or "--ctx-size":
+                    if (!TryParseInt(value, out contextTokens))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "-ngl" or "--n-gpu-layers":
+                    if (!TryParseInt(value, out gpuLayers))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "-ts" or "--tensor-split":
+                    tensorSplit = NullIfBlank(value);
+                    break;
+                case "-ot" or "--override-tensor":
+                    overrideTensor = NullIfBlank(value);
+                    break;
+                case "-ctk" or "--cache-type-k":
+                    kvCacheTypeK = NullIfBlank(value);
+                    break;
+                case "-ctv" or "--cache-type-v":
+                    kvCacheTypeV = NullIfBlank(value);
+                    break;
+                case "-fa" or "--flash-attn":
+                    flashAttention = NullIfBlank(value);
+                    break;
+                case "-t" or "--threads":
+                    if (!TryParseInt(value, out threads))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "-tb" or "--threads-batch":
+                    if (!TryParseInt(value, out threadsBatch))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "-b" or "--batch-size":
+                    if (!TryParseInt(value, out batchSize))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "-ub" or "--ubatch-size":
+                    if (!TryParseInt(value, out ubatchSize))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "--parallel" or "-np":
+                    if (!TryParseInt(value, out var parsedParallel) || parsedParallel is null)
+                    {
+                        return null;
+                    }
+
+                    parallel = parsedParallel.Value;
+                    break;
+                case "--cache-reuse":
+                    if (!TryParseInt(value, out cacheReuse))
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "--cache-ram":
+                    if (!TryParseInt(value, out var parsedCacheRam) || parsedCacheRam is null)
+                    {
+                        return null;
+                    }
+
+                    cacheRamMiB = parsedCacheRam.Value;
+                    break;
+                case "--pooling":
+                    pooling = NullIfBlank(value);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return new LlamaServerLaunchProjection(autoFit,
+            metrics,
+            contextTokens,
+            gpuLayers,
+            tensorSplit,
+            overrideTensor,
+            kvCacheTypeK,
+            kvCacheTypeV,
+            flashAttention ?? FlashAttentionAuto,
+            threads,
+            threadsBatch,
+            batchSize,
+            ubatchSize,
+            parallel,
+            cacheReuse is > 0 ? cacheReuse : null,
+            cacheRamMiB,
+            jinja,
+            pooling);
+    }
+
+    /// <summary>
     ///     The deterministic identity of this launch shape: lowercase SHA-256 hex over the canonical JSON above. Two
     ///     projections with equal values always hash equally; any differing field produces a different hash.
     /// </summary>
@@ -168,5 +358,29 @@ public sealed record LlamaServerLaunchProjection(
     private static string? NullIfBlank(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    /// <summary>The value-taking flags <see cref="TryFromArguments" /> reads; every other argument is ignored.</summary>
+    private static bool IsAllowListedValueOption(string argument) =>
+        argument switch
+        {
+            "--fit" or "-c" or "--ctx-size" or "-ngl" or "--n-gpu-layers" or "-ts" or "--tensor-split"
+                or "-ot" or "--override-tensor" or "-ctk" or "--cache-type-k" or "-ctv" or "--cache-type-v"
+                or "-fa" or "--flash-attn" or "-t" or "--threads" or "-tb" or "--threads-batch"
+                or "-b" or "--batch-size" or "-ub" or "--ubatch-size" or "--parallel" or "-np"
+                or "--cache-reuse" or "--cache-ram" or "--pooling" => true,
+            _ => false
+        };
+
+    private static bool TryParseInt(string value, out int? parsed)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
+        {
+            parsed = result;
+            return true;
+        }
+
+        parsed = null;
+        return false;
     }
 }

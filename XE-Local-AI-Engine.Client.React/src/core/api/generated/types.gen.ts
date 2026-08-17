@@ -1331,28 +1331,11 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	detachedGraceSeconds?: number | null;
 	minDetachedGraceSeconds?: number;
 	maxAllowedDetachedGraceSeconds?: number;
-	samplingDefaults?: XeLocalAiEngineClientModelsSamplingOptions | null;
 	voiceFeatureEnabled?: boolean | null;
-	allowedVoiceModels?: Array<string> | null;
 	defaultVoiceProfile?: string | null;
 	usageRates?: {
 		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
 	} | null;
-};
-
-export type XeLocalAiEngineClientModelsSamplingOptions = {
-	temperature?: number | null;
-	topP?: number | null;
-	topK?: number | null;
-	minP?: number | null;
-	maxOutputTokens?: number | null;
-	repeatPenalty?: number | null;
-	repeatLastN?: number | null;
-	presencePenalty?: number | null;
-	frequencyPenalty?: number | null;
-	seed?: string | null;
-	stop?: Array<string> | null;
-	numCtx?: number | null;
 };
 
 export type XeLocalAiEngineClientServicesNodeSettingsModelRate = {
@@ -1389,9 +1372,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	agentHomeMaxPatchBytes?: number | null;
 	maxPendingToolCallAgeMinutes?: number | null;
 	detachedGraceSeconds?: number | null;
-	samplingDefaults?: XeLocalAiEngineClientModelsSamplingOptions | null;
 	voiceFeatureEnabled?: boolean | null;
-	allowedVoiceModels?: Array<string> | null;
 	defaultVoiceProfile?: string | null;
 	usageRates?: {
 		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
@@ -2033,6 +2014,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
 	source: string;
 	category: string;
 	effectiveRequiresApproval: boolean;
+	sessionScopeEligible: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = {

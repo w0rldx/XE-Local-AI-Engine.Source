@@ -1,6 +1,6 @@
 # Solution & Project Layout
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page is the inventory and dependency map of the .NET side of XE Local AI Engine. It lists every `.csproj` registered in `XE-Local-AI-Engine.slnx`, explains each project's role, draws the project reference graph (who references whom), and states the layering rule that keeps the runtime, applications, and providers decoupled. The React client (`XE-Local-AI-Engine.Client.React`) is a separate Vite/pnpm tree wired in by Aspire and is documented on [10-react-client.md](10-react-client.md).
 
@@ -30,8 +30,8 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 | Project | SDK / kind | Role |
 |---|---|---|
 | `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, owns the single platform WorkerHub connection, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
-| `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
-| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, 53 migration implementations (51 timestamped + 2 untimestamped), and 2 model snapshots. References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
+| `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, benchmarking, training, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
+| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, every migration under `Client.Persistence/Migrations/` (that folder is the inventory — count it there; all but `InitialNodeChatSchema` and `AddNodeMessageLifecycleColumns` are timestamped), and the 2 model snapshots (`NodeIdentityDbContextModelSnapshot`, `NodeChatDbContextModelSnapshot`). References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
 | `XE-Local-AI-Engine.AI.Agent` | `Microsoft.NET.Sdk`, `net10.0` | Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI (MEAI) wiring: agents, tools, playbooks, the AgentHome write-back loop. See [04-agent-mode.md](04-agent-mode.md). |
 | `XE-Local-AI-Engine.AI.Contracts` | `Microsoft.NET.Sdk` | Shared, dependency-free contract types — `Enums/` and `Events/` only (verified). Referenced by both `Client` and `Client.Application` so transport DTOs/events are defined once. Note: despite the name this is an in-tree project, **not** a git submodule (no `.gitmodules` entry matches). |
 | `XE-Local-AI-Engine.WindowsLauncher` | `Microsoft.NET.Sdk`, `Exe` | Packaged Windows entry point. Runs `VelopackApp.Build().Run()` before application code, then launches the published `Client` host in desktop mode through `WindowsLauncherApplication`. It has no project references; the boundary is a child-process handoff rather than an assembly dependency. See [Hosting & Deployment](11-hosting-and-deployment.md). |
@@ -56,12 +56,13 @@ All provider projects reference **only** `Providers.Abstractions`. SDK-specific 
 | `XE-Local-AI-Engine.Providers.CodexOAuth` | ChatGPT/Codex OAuth cloud chat provider. | — |
 | `XE-Local-AI-Engine.Providers.Capabilities` | Sanitized hardware profiling (CPU/RAM/GPU/VRAM/disk) behind `IHardwareProfiler`, consumed by model-fit and runtime auditing. | `HardwareProfiler`, `CapabilitiesServiceCollectionExtensions` |
 | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | Local image-generation provider and supervised `sd-server` runtime. | — |
+| `XE-Local-AI-Engine.Providers.Training` | Local fine-tuning runtime (Linux only): provisions a uv-managed Python environment and spawns/supervises the training process behind `ITrainingRuntimeService` / `ITrainingProcessSpawner`, with its own libc tree-kill process-group handle. Implements neither `ILocalModelProvider` nor `IChatClient`. See [18-training.md](18-training.md). | `TrainingRuntimeService.cs`, `UvBinaryAcquirer.cs`, `LinuxTrainingProcessSpawner.cs` |
 
 ### Tests & support
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Client.Application`, `ServiceDefaults`, all six concrete provider projects, and `Testing.FakeOllama`. |
+| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Client.Application`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, `Training`), and `Testing.FakeOllama`. |
 | `XE-Local-AI-Engine.Tests.E2ETests` | `Exe`, MTP | End-to-end suite. References `Client`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, plus `Testing.FakeOllama` and `Client.Testing` fixtures. See [13-testing-and-validation.md](13-testing-and-validation.md). |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | `Exe`, MTP | Unit suite scoped to `AI.Agent`. |
 | `XE-Local-AI-Engine.Client.Persistence.Tests` | `Exe`, MTP | Persistence/migration suite. References `Client.Application`, `Client.Persistence`, `Client`. |
@@ -85,11 +86,11 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
             │  │  └────► AI.Agent ◄─────────┘  │  │  │  │
             │  └───────► Client.Persistence ◄──┘  │  │  │
             │                                      │  │  │
-            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama}
+            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Training}
                                   ▼                │  │  │
                        Providers.Abstractions ◄────┴──┴──┘
                                   ▲
-            Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / StableDiffusionCpp
+       Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / StableDiffusionCpp / Training
                        (each references ONLY Abstractions)
 
 AppHost ──► Client            (orchestrates; not referenced back)
@@ -103,9 +104,9 @@ orchestration dependencies; provider implementations converge on `Providers.Abst
 
 Notable edges:
 
-- **`Client.Application` is the hub of the product graph** — it references all seven provider projects, `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
+- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, `Training`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
 - **`Client` (Web) references a narrower set** — `AI.Agent`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, `ServiceDefaults`, `AI.Contracts`. It reaches the other providers transitively through `Client.Application`; only `Ollama` is referenced directly at the web layer (legacy direct dependency).
-- **Every provider references only `Providers.Abstractions`** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, and `StableDiffusionCpp`). `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
+- **Every provider references only `Providers.Abstractions`** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, and `Training`). `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
 - **`Client.Persistence` and `Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering.
 - **`AppHost` references `Client`** for dev orchestration but nothing references `AppHost`.
 - **`WindowsLauncher` is an assembly leaf.** It references no product project; the packaged launcher starts the published `Client` executable as a child process after Velopack lifecycle handling.
@@ -123,7 +124,8 @@ Notable edges:
         └──► Provider seams       Providers.Abstractions
                                        ▲
                               concrete providers (LlamaServer, HuggingFace,
-                              Ollama, CodexOAuth, Capabilities, StableDiffusionCpp)
+                              Ollama, CodexOAuth, Capabilities,
+                              StableDiffusionCpp, Training)
    Shared, depended-on by all:  AI.Contracts (DTOs/enums/events),
                                 ServiceDefaults (telemetry/resilience)
 ```
@@ -146,7 +148,7 @@ Repo-wide MSBuild config lives at the solution root:
 
 - **`eng/ReleaseVersion.props`** is the single release-identity source (`VersionPrefix` + optional `VersionSuffix`), imported by `Directory.Build.props`. `Directory.Build.props` sets `net10.0`, `Nullable`/`ImplicitUsings` enabled, `LangVersion latest`, and a **strict analyzer wall**: `TreatWarningsAsErrors=true`, `AnalysisMode=All`, plus `SonarAnalyzer.CSharp` everywhere. Production projects additionally get `Meziantou.Analyzer` + `Microsoft.CodeAnalysis.BannedApiAnalyzers` (with `BannedSymbols.txt`); test/tooling projects (`*.Tests`, `*.Testing*`, `*.AppHost`) are exempted via the `IsTestOrToolingProject` flag. A literal `TODO`/`FIXME` in a comment fails the build (Sonar S1135 = error) — phrase deferred work as "... follow-up:".
 - **`Directory.Build.targets`** gates that whole analyzer wall to **Release and CI**. Since 2026-07-31 it sets `RunAnalyzers=false` when `Configuration == Debug` and neither `CI` nor `XE_FULL_ANALYSIS` is set (84 s → 10 s on the Tests module), which maps to csc `-skipanalyzers`. **A green local Debug build proves nothing about Sonar, Meziantou, BannedApiAnalyzers or the `IDExxxx` style rules — including the bare-`TODO` rule above.** Iterate in Debug, then finish with `dotnet build XE-Local-AI-Engine.slnx --configuration Release`, or the packaging script will reject what compiled fine for you. `XE_FULL_ANALYSIS=1` forces the full pass in Debug. `TreatWarningsAsErrors` is unaffected, so genuine compiler warnings still fail a Debug build, and source generators still run (so TUnit discovery is intact).
-- **`Directory.Packages.props`** enables **Central Package Management** (`ManagePackageVersionsCentrally=true` in `Directory.Build.props`); ~83 `PackageVersion` entries pin every dependency. Add new dependencies as a `<PackageVersion>` there, then a versionless `<PackageReference>` in the consuming `.csproj`.
+- **`Directory.Packages.props`** enables **Central Package Management** (`ManagePackageVersionsCentrally=true` in `Directory.Build.props`); every dependency is pinned by a `<PackageVersion>` entry there — that file is the inventory. Add new dependencies as a `<PackageVersion>` there, then a versionless `<PackageReference>` in the consuming `.csproj`.
 - **`global.json`** sets a `10.0.100` feature-band **baseline** with `rollForward: latestFeature` (no prerelease) — it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version — and sets the test runner to **Microsoft.Testing.Platform (MTP)** — test projects are `OutputType=Exe` and run via MTP, not VSTest.
 - **`cliff.toml` + `CHANGELOG.md`** (repo root) drive git-cliff changelog automation: conventional-commit history → `CHANGELOG.md` / release notes, consumed by the Velopack release flow. See [11-hosting-and-deployment.md](11-hosting-and-deployment.md).
 
@@ -161,4 +163,5 @@ Repo-wide MSBuild config lives at the solution root:
 - [11-hosting-and-deployment.md](11-hosting-and-deployment.md) — AppHost orchestration and packaging.
 - [12-security-and-privacy.md](12-security-and-privacy.md) — the security invariants that ride on this layering.
 - [13-testing-and-validation.md](13-testing-and-validation.md) — the test/fixture projects and MTP.
+- [18-training.md](18-training.md) — what `Providers.Training` and the training service areas do.
 - [Home.md](Home.md)

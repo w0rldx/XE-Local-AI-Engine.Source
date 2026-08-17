@@ -1,5 +1,5 @@
 import { Group, Text, ThemeIcon } from "@mantine/core";
-import { IconArrowsExchange, IconHistory, IconInfoCircle, IconToolsOff } from "@tabler/icons-react";
+import { IconArrowsExchange, IconHistory, IconInfoCircle, IconToolsOff, IconUsersGroup } from "@tabler/icons-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -18,6 +18,8 @@ function noticeIcon(noticeKind: string) {
 			return IconToolsOff;
 		case "HistoryTruncated":
 			return IconHistory;
+		case "OrchestrationDegraded":
+			return IconUsersGroup;
 		default:
 			return IconInfoCircle;
 	}
@@ -32,6 +34,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.toolDisabled";
 		case "HistoryTruncated":
 			return "chat.notices.historyTruncated";
+		case "OrchestrationDegraded":
+			return "chat.notices.orchestrationDegraded";
 		default:
 			return undefined;
 	}
@@ -39,7 +43,7 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 
 /**
  * A small muted system-style row for a non-fatal "turn notice" (model substitution, tool disabled, history
- * truncated) — rendered inline in the ordered parts interleave, visually distinct from both the plain answer
+ * truncated, orchestration degraded to a single agent) — rendered inline in the ordered parts interleave, visually distinct from both the plain answer
  * (`ChatMarkdown`) and an error state: neutral/dimmed color, no red, no collapse/expand. `part.text` is the
  * backend-sanitized, user-facing sentence and is displayed verbatim (not translated).
  */

@@ -148,9 +148,7 @@ public sealed class GetBenchmarkRunEndpoint(IBenchmarkStore store)
         }
 
         var attempt = await _store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
-        return attempt?.ResultJson is { } payload && !payload.IsEmpty
-            ? JsonSerializer.Deserialize<BenchmarkJudgeResultV2>(payload.Span, JsonSerializerOptions.Web)
-            : null;
+        return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 }
 

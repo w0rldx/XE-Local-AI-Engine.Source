@@ -181,6 +181,9 @@ click the item.
 | **Create a local HTTP or command tool** | **Automation → Custom tools** | Advanced and high-risk — approval-wrapped; parameterized tools ask every call |
 | **Connect external tools** | **Automation → MCP** | Advanced — see the [Glossary](glossary.md#mcp) |
 | **Try the visual workflow builder** | **Preview → Open Canvas** | Experimental |
+| **Bring in a `.gguf` you already have** | **Models → Installed** → *Import model* | One file at a time; it's [copied, not moved](faq.md#can-i-use-gguf-models-i-already-have) |
+| **Find out which model is actually better** | **Benchmarks** | Running your own task against several models and scoring the results |
+| **Fine-tune a model on your own data** | **Training** | Advanced — [**Linux with an NVIDIA card only**](features.md#fine-tuning-training) |
 | **See what's using memory** | **Models → Loaded** | Freeing up VRAM |
 | **Change settings** | **Settings → Node Settings** | Voice, and everything else |
 | **Export a bug report** | **Settings → Diagnostics** | [Reporting problems](feedback.md) |

@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 internal static class AddNodeDraftingExtensions
@@ -31,9 +32,11 @@ internal static class AddNodeDraftingExtensions
                        draftingOptions.MaxOutputTokens = 8192;
                    }
 
+                   // A non-positive explicit override would mean "unbounded"; drop it back to null so the generation
+                   // follows the node's live "Maximum message request timeout" instead of a second hardcoded ceiling.
                    if (draftingOptions.GenerationTimeout <= TimeSpan.Zero)
                    {
-                       draftingOptions.GenerationTimeout = TimeSpan.FromSeconds(300);
+                       draftingOptions.GenerationTimeout = null;
                    }
                });
 
@@ -49,6 +52,7 @@ internal static class AddNodeDraftingExtensions
             serviceProvider.GetRequiredService<IModelClassificationStore>(),
             serviceProvider.GetRequiredService<DraftAdmissionGate>(),
             serviceProvider.GetRequiredService<IOptions<DraftingOptions>>(),
+            serviceProvider.GetRequiredService<INodeSettingsStore>(),
             serviceProvider.GetRequiredService<TimeProvider>(),
             serviceProvider.GetRequiredService<ILogger<DefaultConfigDraftService>>(),
             serviceProvider.GetService<IOllamaApiClient>()));

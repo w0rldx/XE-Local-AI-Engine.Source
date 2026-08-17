@@ -46,23 +46,18 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
         // to its newest member. The branch-point turn always contributes exactly the cutoff message, overriding any
         // caller entry for its group. Without this collapse the copied siblings would render as duplicate stacked
         // assistant turns (variant_group_id is dropped on copy below). (RC fix + late-sibling anchoring.)
-        var anchorByGroup = source.Messages.Where(message => message.VariantGroupId is not null)
-                                  .GroupBy(message => message.VariantGroupId!.Value)
-                                  .ToDictionary(group => group.Key, group => group.Min(member => member.Sequence));
-
-        int AnchorSequence(NodeChatPersistedMessageDto message) =>
-            message.VariantGroupId is { } groupId ? anchorByGroup[groupId] : message.Sequence;
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(source.Messages);
 
         // The cutoff's anchored position defines how far the branch reaches: a group participates iff its own anchor is
         // at/upstream of it. When the cutoff is itself a late-created sibling of an early turn, this resolves to the
         // early position it renders at, not its late raw sequence.
-        var cutoffAnchor = AnchorSequence(cutoff);
-        var eligible = source.Messages.Where(message => AnchorSequence(message) <= cutoffAnchor).ToArray();
-        var selection = BuildValidatedSelection(request.SelectedRevisions, source.Messages, cutoff, anchorByGroup, cutoffAnchor);
+        var cutoffAnchor = anchorSequence(cutoff);
+        var eligible = source.Messages.Where(message => anchorSequence(message) <= cutoffAnchor).ToArray();
+        var selection = BuildValidatedSelection(request.SelectedRevisions, source.Messages, cutoff, anchorSequence, cutoffAnchor);
         // The resolver orders by each chosen sibling's own sequence; re-order by anchor so a late-created sibling lands
         // at its group's position instead of the tail. Each copy is also stamped with the anchor sequence below.
         IReadOnlyList<NodeChatPersistedMessageDto> copies =
-            SelectedPathResolver.Resolve(eligible, selection).OrderBy(AnchorSequence).ToArray();
+            SelectedPathResolver.Resolve(eligible, selection).OrderBy(anchorSequence).ToArray();
         var branchedConversationId = Guid.NewGuid();
 
         return await _writer.ExecuteConversationExclusiveAsync(branchedConversationId,
@@ -109,7 +104,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     // Stamp the copy at its group's anchored position (not the chosen sibling's own sequence) so a
                     // late-created sibling of an early turn lands where the turn renders, keeping the new linear thread
                     // ordered exactly as the operator saw it. Anchor sequences are unique (each is a distinct source row).
-                    AddParameter(messageCommand, "$sequence", AnchorSequence(message));
+                    AddParameter(messageCommand, "$sequence", anchorSequence(message));
                     AddParameter(messageCommand, "$role", message.Role);
                     AddParameter(messageCommand, "$content", dbContext.EncryptMessageContent(message.Content, branchedConversationId, copyMessageId));
                     AddParameter(messageCommand, "$metadata_json",
@@ -149,7 +144,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
     private static IReadOnlyDictionary<Guid, Guid>? BuildValidatedSelection(IReadOnlyDictionary<Guid, Guid>? requested,
         IReadOnlyList<NodeChatPersistedMessageDto> allMessages,
         NodeChatPersistedMessageDto cutoff,
-        IReadOnlyDictionary<Guid, int> anchorByGroup,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence,
         int cutoffAnchor)
     {
         var selection = new Dictionary<Guid, Guid>();
@@ -164,7 +159,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     throw new NodeChatInvalidBranchSelectionException(cutoff.ConversationId, groupId, messageId);
                 }
 
-                if (anchorByGroup.GetValueOrDefault(groupId, message.Sequence) > cutoffAnchor)
+                if (anchorSequence(message) > cutoffAnchor)
                 {
                     // The group is anchored downstream of the branch point — not part of this branch. Drop it.
                     continue;

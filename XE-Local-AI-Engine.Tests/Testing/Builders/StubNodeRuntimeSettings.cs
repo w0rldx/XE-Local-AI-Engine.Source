@@ -212,7 +212,6 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeMaxPatchBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxPatchBytes);
         settings.GetMaxPendingToolCallAgeMinutesAsync(Arg.Any<CancellationToken>()).Returns(_maxPendingToolCallAgeMinutes);
         settings.GetDetachedGraceSecondsAsync(Arg.Any<CancellationToken>()).Returns(_detachedGraceSeconds);
-        settings.GetSamplingDefaultsAsync(Arg.Any<CancellationToken>()).Returns((SamplingOptions?)null);
         settings.GetChatCacheReuseAsync(Arg.Any<CancellationToken>()).Returns(_chatCacheReuse);
         settings.GetSpeculativeModeAsync(Arg.Any<CancellationToken>()).Returns(_speculativeMode);
         settings.GetSpeculativeDraftModelNameAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftModelName);

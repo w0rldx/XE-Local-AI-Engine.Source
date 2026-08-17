@@ -24,12 +24,12 @@ public sealed class McpAgentRunExecutorTests
                      observedContext = SpawnContext.Current;
                      return Task.FromResult(SpawnOutcome.Success("complete"));
                  });
-        var executor = new McpAgentRunExecutor(execution,
-            Options.Create(new SpawnOptions
+        var executor = CreateExecutor(execution,
+            new SpawnOptions
             {
                 MaxConcurrentSpawns = 2,
                 MaxCloudSpawns = 1
-            }));
+            });
 
         _ = await executor.ExecuteAsync(CreateRun(), CancellationToken.None).ConfigureAwait(false);
 
@@ -47,7 +47,7 @@ public sealed class McpAgentRunExecutorTests
                      Arg.Any<string?>(),
                      Arg.Any<CancellationToken>())
                  .Returns(expected);
-        var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
+        var executor = CreateExecutor(execution);
 
         var outcome = await executor.ExecuteAsync(CreateRun(), CancellationToken.None).ConfigureAwait(false);
 
@@ -72,7 +72,7 @@ public sealed class McpAgentRunExecutorTests
                      fingerprint = callInfo.ArgAt<string?>(2);
                      return Task.FromResult(SpawnOutcome.Success("complete"));
                  });
-        var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
+        var executor = CreateExecutor(execution);
         var run = CreateRun() with
         {
             AgentDefinitionId = Guid.Parse("8fd3bb15-eafb-4e34-bb88-11b9fa6deae3"),
@@ -92,7 +92,7 @@ public sealed class McpAgentRunExecutorTests
     public async Task ExecuteAsync_WhenClaimPayloadIsMissing_FailsClosedWithoutInvokingAgent()
     {
         var execution = Substitute.For<IMcpAgentExecutionService>();
-        var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
+        var executor = CreateExecutor(execution);
 
         var outcome = await executor.ExecuteAsync(CreateRun() with
         {
@@ -123,7 +123,7 @@ public sealed class McpAgentRunExecutorTests
                      capturedWorkspaceId = callInfo.ArgAt<Guid?>(4);
                      return released.Task;
                  });
-        var executor = new McpAgentRunExecutor(execution, Options.Create(new SpawnOptions()));
+        var executor = CreateExecutor(execution);
         var workspaceId = Guid.NewGuid();
 
         var pending = executor.ExecuteAsync(CreateRun() with
@@ -136,6 +136,13 @@ public sealed class McpAgentRunExecutorTests
         var outcome = await pending.ConfigureAwait(false);
         AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
         AssertEx.Equal(workspaceId, capturedWorkspaceId!.Value);
+    }
+
+    private static McpAgentRunExecutor CreateExecutor(IMcpAgentExecutionService execution, SpawnOptions? spawnOptions = null)
+    {
+        // No node-settings store here on purpose: the whole-turn deadline lives inside SpawnForMcpAsync so both inbound
+        // MCP front doors are bounded once (SubAgentSpawnServiceTests covers it).
+        return new McpAgentRunExecutor(execution, Options.Create(spawnOptions ?? new SpawnOptions()));
     }
 
     private static McpAgentRunRecord CreateRun() =>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -130,6 +131,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.True(AssertEx.NotNull(capacity.Reservation).Disposed);
         AssertEx.True(lease.Disposed);
         var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Null(package.ResponseJsonSchema, "Only the judge is decode-constrained; the primary measurement is not.");
         AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
         AssertEx.Equal("0", package.SamplingOptions!.Seed);
         AssertEx.Equal(8192, package.SamplingOptions.NumCtx);
@@ -365,6 +367,80 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_AdmissionSizesAgainstTheFrozenKvCacheTypeAndLogsWhatItDecidedOn()
+    {
+        // The ledger books the KV term the run will really hold, and the decision is legible afterwards: the requested
+        // and frozen contexts differ here on purpose, so a line that logged the wrong one is distinguishable.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var capacity = new RecordingCapacityService();
+        var logger = new RecordingLogger<BenchmarkRunExecutor>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            Snapshot(installed, frozenContextTokens: 12288, frozenKvCacheType: "q4_0"),
+            lease,
+            capacity,
+            dispatcher,
+            Substitute.For<IInvocationRunner>(),
+            new BenchmarkCancellationRegistry(),
+            logger: logger);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal("q4_0", AssertEx.NotNull(capacity.LastRequest).KvCacheType);
+        var admission = AssertEx.NotNull(logger.Entries.FirstOrDefault(entry =>
+            entry.Level == LogLevel.Information && entry.Message.Contains("capacity admission", StringComparison.Ordinal)));
+        foreach (var expected in new[]
+                 {
+                     run.Id.ToString(), "phase primary", "model.gguf", "requested context 8192",
+                     "frozen runtime context 12288", "KV cache q4_0", "Allow"
+                 })
+        {
+            AssertEx.Contains(admission.Message, expected);
+        }
+    }
+
+    [Test]
+    public async Task Execute_WithNoFrozenKvCacheType_AdmitsWithTheFp16DefaultAndLogsIt()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var capacity = new RecordingCapacityService();
+        var logger = new RecordingLogger<BenchmarkRunExecutor>();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, Substitute.For<IInvocationRunner>(),
+            new BenchmarkCancellationRegistry(), logger: logger);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Null(AssertEx.NotNull(capacity.LastRequest).KvCacheType, "Auto/f16 must reach capacity as the unchanged default.");
+        AssertEx.True(logger.HasEntry(LogLevel.Information, "KV cache f16"),
+            "The log names the effective type, so an f16 run is not an empty field.");
+    }
+
+    [Test]
     public async Task Execute_WhenTheSpawnFailsBeforeReadiness_RecordsEnvironmentFactsWithNoReceiptAndKeepsTheSanitizedReason()
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
@@ -437,7 +513,8 @@ public sealed class BenchmarkRunExecutorTests
         IInvocationRunner runner,
         IBenchmarkCancellationRegistry cancellations,
         ILlamaServerProcessSupervisor? supervisor = null,
-        IRuntimeEnvironmentFactsProvider? environmentFacts = null) =>
+        IRuntimeEnvironmentFactsProvider? environmentFacts = null,
+        ILogger<BenchmarkRunExecutor>? logger = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -452,7 +529,7 @@ public sealed class BenchmarkRunExecutorTests
             cancellations,
             environmentFacts ?? new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
-            NullLogger<BenchmarkRunExecutor>.Instance);
+            logger ?? NullLogger<BenchmarkRunExecutor>.Instance);
 
     private static InvocationState State(Guid invocationId,
         InvocationStatus status,
@@ -500,7 +577,7 @@ public sealed class BenchmarkRunExecutorTests
             fingerprint);
     }
 
-    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot model, int frozenContextTokens = 8192)
+    private static BenchmarkRuntimeSnapshotV1 Snapshot(InstalledModelSnapshot model, int frozenContextTokens = 8192, string? frozenKvCacheType = null)
     {
         var frozen = new BenchmarkInstalledModelSnapshotV1(model.ModelName,
             model.RegistryRevision,
@@ -532,7 +609,7 @@ public sealed class BenchmarkRunExecutorTests
             "task",
             8192,
             new ResolvedAgentRuntime("prompt", [], null, null, 1, AgentName: "Agent"),
-            Runtime(frozenContextTokens),
+            Runtime(frozenContextTokens, frozenKvCacheType),
             BenchmarkFrozenPolicies.DeterministicSampling(),
             frozen,
             new BenchmarkFreezeDependencySetV1("a", "b", "c", "d", "e", null),
@@ -544,8 +621,9 @@ public sealed class BenchmarkRunExecutorTests
     private static string V1(char value) =>
         $"v1:{new string(value, 64)}";
 
-    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens) =>
-        new(GpuVariant.Cpu, contextTokens, null, null, null, null, null, false, LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+    private static BenchmarkLlamaRuntimeSnapshotV1 Runtime(int contextTokens, string? kvCacheType = null) =>
+        new(GpuVariant.Cpu, contextTokens, null, null, null, kvCacheType, kvCacheType, kvCacheType is not null,
+            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
     private static IGpuVariantSelector FixedVariantSelector()
     {

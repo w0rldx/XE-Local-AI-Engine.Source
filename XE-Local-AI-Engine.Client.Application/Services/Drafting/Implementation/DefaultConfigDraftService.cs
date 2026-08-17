@@ -9,6 +9,7 @@ using OllamaSharp;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -53,6 +54,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     private readonly IGgufModelStore _ggufModelStore;
     private readonly ILogger<DefaultConfigDraftService> _logger;
     private readonly IModelClassificationStore _modelClassificationStore;
+    private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly IOllamaApiClient? _ollamaApiClient;
     private readonly DraftingOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
@@ -63,6 +65,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         IModelClassificationStore modelClassificationStore,
         DraftAdmissionGate admissionGate,
         IOptions<DraftingOptions> options,
+        INodeSettingsStore nodeSettingsStore,
         TimeProvider timeProvider,
         ILogger<DefaultConfigDraftService> logger,
         IOllamaApiClient? ollamaApiClient)
@@ -72,6 +75,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         _modelClassificationStore = modelClassificationStore ?? throw new ArgumentNullException(nameof(modelClassificationStore));
         _admissionGate = admissionGate ?? throw new ArgumentNullException(nameof(admissionGate));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -145,8 +149,15 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         string eligibleProviderName,
         CancellationToken cancellationToken)
     {
+        // Drafting is a model request, so its budget is the operator's node-level "Maximum message request timeout" —
+        // the same knob that bounds a chat send/regenerate — read LIVE here so a Save applies without a node restart.
+        // An explicit Drafting:GenerationTimeout still wins as a drafting-specific ceiling.
+        var generationTimeout = _options.GenerationTimeout
+                                ?? TimeSpan.FromSeconds((await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false))
+                                    .MaxMessageRequestTimeoutSeconds);
+
         using var generationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        generationCancellation.CancelAfter(_options.GenerationTimeout);
+        generationCancellation.CancelAfter(generationTimeout);
 
         ChatResponse<TEnvelope> response;
         try
@@ -191,7 +202,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         {
             _logger.LogWarning("Draft generation for model {ModelName} exceeded the {TimeoutSeconds}s budget.",
                 request.ModelName,
-                _options.GenerationTimeout.TotalSeconds);
+                generationTimeout.TotalSeconds);
             return DraftResult.Failed(DraftFailureKind.Unparseable, "The model did not finish within the generation budget.");
         }
 

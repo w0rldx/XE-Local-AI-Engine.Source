@@ -1,6 +1,6 @@
 # Data Model & Persistence
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration timeline.
 
@@ -90,7 +90,7 @@ Encrypted columns are mapped as `BLOB` in the entity configurations and model sn
 
 ## Entity inventory
 
-Entities live in `Entities/` with mapping in the matching `Configurations/*Configuration.cs`. `NodeChatDbContext` exposes 44 internal `DbSet`s; `NodeIdentityDbContext` exposes refresh tokens in addition to the Identity sets:
+Entities live in `Entities/` with mapping in the matching `Configurations/*Configuration.cs`. Every set on `NodeChatDbContext` is `internal` — `grep 'DbSet<' NodeChatDbContext.cs` is the current inventory, and the table below names them by area rather than counting them. `NodeIdentityDbContext` exposes refresh tokens in addition to the Identity sets:
 
 | Entity | Table | Area | Notes |
 |---|---|---|---|
@@ -123,6 +123,13 @@ Entities live in `Entities/` with mapping in the matching `Configurations/*Confi
 | `DevelopmentProject` / `DevelopmentTask` / `DevelopmentAttempt` / `DevelopmentArtifact` / `DevelopmentEvent` | development tables | Development Mode | encrypted objective/task/artifact/event payloads plus command-profile/evidence/recovery state |
 | `DevelopmentTemplate` / `DevelopmentTemplateMaterialization` | development-template tables | Development Mode | reusable template definitions and selected-folder materialization provenance; host/template paths encrypted |
 | `ChatMaintenanceState` | `chat_maintenance_state` | Persistence | **not encrypted**; PK `name`, opaque `value`. Durable key/value flags for one-shot DB maintenance. Currently holds the content-encryption backfill's `content_encryption_reclaim_pending` marker: set before the legacy rows are re-encrypted and cleared only after the post-backfill `checkpoint → VACUUM → checkpoint` residue-reclamation succeeds, so a failed/interrupted cleanup is retried on the next startup (`NodeChatContentEncryptionBackfillService`). A plain table (not `PRAGMA user_version`) so `VACUUM` preserves it. |
+| `BenchmarkProject` / `BenchmarkRun` / `BenchmarkWorkItem` | `benchmark_projects` / `benchmark_runs` / `benchmark_work_items` | Benchmarks | project + run definitions with encrypted configuration/result payloads, and a durable single-consumer work queue whose `attempt = 1` CHECK constraint makes a claim un-retryable; `AddBenchmarkRunLaunchReceipts` adds the launch/environment evidence columns |
+| `TrainingDatasetDefinition` / `TrainingDataset` / `TrainingDatasetSample` / `ToolMockDefinition` | `training_dataset_definitions` / `training_datasets` / `training_dataset_samples` / `tool_mock_definitions` | Training ([18](18-training.md)) | encrypted definition bodies, dataset payloads, per-sample trajectories and mock configuration. `training_datasets.definition_json` is the **pinned copy** of the definition body a generation/evaluation reads instead of the live row; it is nullable on purpose (an empty-blob `NOT NULL` default would not be decryptable) and a null pin is refused, never defaulted |
+| `DatasetGenerationWorkItem` / `TrainingWorkItem` | `dataset_generation_work_items` / `training_work_items` | Training | the two single-consumer durable queues; both pin `attempt = 1` with a CHECK constraint. `TrainingWorkItem` carries a `TrainingWorkKind` discriminator (`TrainingRun` / `EvaluationRun`) so one queue serves both |
+| `TrainingBaseArtifact` / `TrainingRun` / `TrainingArtifact` | `training_base_artifacts` / `training_runs` / `training_artifacts` | Training | downloaded HF base checkpoints (+ license gate document), run configuration/progress, and staged export artifacts. A run's `launch_receipt_json` is the only thing that can identify an orphaned Python trainer after a host crash — only the startup reaper clears one |
+| `TrainingEvaluationRun` / `TrainingComparisonReport` | `training_evaluation_runs` / `training_comparison_reports` | Training | encrypted hold-out membership + per-sample results, and the two-sided comparison report; a comparison is refused unless both sides' membership agrees on dataset, content fingerprint and hold-out id set |
+| `LocalModelProxyApiKey` | `local_model_proxy_api_keys` | Inbound model proxy | singleton bearer-credential row for the OpenAI-compatible passthrough — prefix plus a one-way SHA-256 key hash (encrypted through the interceptor); the plaintext is shown once at generation and is not recoverable |
+| `ModelLaunchArguments` | `model_launch_arguments` | Models | per-model custom llama.cpp launch arguments |
 | `NodeUser` *(NodeIdentity ctx)* | Identity tables | Auth | `setup_completed`, `created_at_utc`, `tutorial_state` (onboarding-tour state JSON) |
 | `NodeRefreshToken` *(NodeIdentity ctx)* | `node_refresh_tokens` | Auth | hashed token, one-live-per-user filtered unique index |
 
@@ -193,11 +200,23 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260806201500_AddSelectedFolderRevocation` | Adds selected-folder revocation and makes alias uniqueness apply only to live registrations |
 | `20260807130219_AddSlashCommands` | Adds operator-authored slash commands with encrypted description/configuration |
 | `20260807193324_AddCustomTools` | Adds the Custom Tools library with encrypted description/configuration and case-insensitive unique names |
+| `20260811160811_AddLocalModelProxyApiKey` | Adds the singleton inbound model-proxy bearer credential (`local_model_proxy_api_keys`) |
+| `20260811161453_AddModelLaunchArguments` | Adds per-model custom llama.cpp launch arguments |
 | `20260813121930_AddKnowledgeCollectionsAndProvenance` | Adds knowledge collection namespaces plus source/page/offset/content-kind/language/symbol provenance; rebuilds `chunk_fts` with weighted source-path, heading, symbol, and content fields |
+| `20260814090000_AddModelProviderMapRevision` | Adds `model_provider_map.revision`, the token the installed-model deletion compare-and-swap reads |
+| `20260814091525_AddBenchmarks` | Adds benchmark projects, runs and the single-consumer benchmark work queue |
+| `20260815002954_AddGenerationMetadata` | Adds `generation_metadata_json` to `agent_definitions` and `agent_skills` (AI-assisted drafting provenance) |
+| `20260815005024_AddTraining` | Adds training dataset definitions, datasets, samples, tool mocks and the dataset-generation work queue |
+| `20260815031430_AddTrainingRuns` | Adds base artifacts, training runs, training artifacts and the training work queue |
+| `20260815034444_AddTrainedModelOrigin` | Widens the `benchmark_runs` model-origin CHECK constraint to admit a trained model |
+| `20260815052532_AddTrainingEvaluation` | Adds evaluation runs and comparison reports |
+| `20260815171537_AddTrainingDatasetDefinitionSnapshot` | Adds `training_datasets.definition_json`, the pinned copy of the definition body a dataset was generated from |
+| `20260816174029_AddBenchmarkRunLaunchReceipts` | Adds the benchmark run's launch/environment receipt columns |
 
-(Counted on disk: **54 migration implementation files** — 52 timestamped plus 2
-untimestamped chat-schema migrations — and **2 model snapshots**. Per-migration `.Designer.cs` files
-are not included in that implementation count.)
+The table above is a timeline, not an inventory — `ls Migrations/*.cs` (excluding `.Designer.cs` and
+`*ModelSnapshot.cs`) is the count that is true today, and the two contexts share the folder while
+keeping **2 model snapshots**. All but two files are timestamped; `InitialNodeChatSchema` and
+`AddNodeMessageLifecycleColumns` are the untimestamped originals noted above.
 
 ### Notable migration mechanics
 
@@ -232,6 +251,7 @@ Tests use `NullNodeSqliteKeyHolder` (a fixed zero key) plus a non-encrypting mig
 - [Agent Mode](04-agent-mode.md) — agent definitions, playbook, golden conversations, and adaptive-memory state/logging
 - [Scheduler](06-scheduler.md) — scheduler tables
 - [Model Fit](07-model-fit.md) — model-fit snapshot/recommendation/benchmark tables
+- [Training](18-training.md) — the training/dataset/evaluation tables and their encryption
 - [API & Hubs](09-api-and-hubs.md) — auth/identity consumers
 - [Security & Privacy](12-security-and-privacy.md) — key derivation, AAD binding, cloud-credential storage
 - [Testing & Validation](13-testing-and-validation.md)

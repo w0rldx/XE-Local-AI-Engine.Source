@@ -1,6 +1,6 @@
 # XE Local AI Engine — Developer Wiki
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform. A single
 **Node Web Server process** (`XE-Local-AI-Engine.Client`) serves the React management UI, owns the one
@@ -70,6 +70,17 @@ or host-program definitions. Their CRUD surface, generated React client, secret 
 execution trust boundary are documented in [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md), and
 [Security & Privacy](12-security-and-privacy.md).
 
+**Local fine-tuning and model benchmarking.** Two feature areas landed after the previous review and are
+visible across the whole stack. **Training** runs supervised fine-tuning on-node through a dedicated
+`XE-Local-AI-Engine.Providers.Training` project (a uv-provisioned Python runtime spawned as a supervised host
+child process, `TrainingRuntimeService`/`LinuxTrainingProcessSpawner`), with dataset generation, run execution,
+export and evaluation services under `Client.Application/Services/Training/` and three hubs
+(`DatasetGenerationHub`, `TrainingRuntimeHub`, `TrainingRunHub`); see [Training](18-training.md) and
+[ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md). **Benchmarks** run frozen,
+receipt-carrying model comparisons (`Client.Application/Services/Benchmarks/`, `BenchmarkRunHub`,
+`LocalApiRoutes.Benchmarks`, the `AddBenchmarks`/`AddBenchmarkRunLaunchReceipts` migrations); it has **no
+dedicated wiki page yet**, so that code is the source of truth until one exists.
+
 **In-app llama.cpp source builds.** Upstream ships no prebuilt Linux CUDA `llama-server`, so the node can
 compile one itself and adopt it as a managed runtime — an explicit, Operator-gated, prerequisite-checked
 action, never implicit. Prebuilt download stays the default. If you read anywhere that this engine has
@@ -82,14 +93,14 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | --- | --- | --- |
 | 01 | [Architecture Overview](01-architecture-overview.md) | System boundary, layering, dataflow, Development Mode source/worktree flow, the architecture invariants |
 | 02 | [Project Layout](02-project-layout.md) | Every `.csproj`, dependency graph, central package mgmt, analyzer wall |
-| 03 | [Local Runtime & Providers](03-local-runtime-and-providers.md) | llama.cpp supervisor, GPU variant select, binary acquisition (prebuilt / BYO override / in-app source build), provider seams across all seven `Providers.*` projects (Abstractions, LlamaServer, HuggingFace, Ollama, CodexOAuth, Capabilities, StableDiffusionCpp) |
+| 03 | [Local Runtime & Providers](03-local-runtime-and-providers.md) | llama.cpp supervisor, GPU variant select, binary acquisition (prebuilt / BYO override / in-app source build), provider seams across every `Providers.*` project registered in `XE-Local-AI-Engine.slnx` (Abstractions, LlamaServer, HuggingFace, Ollama, CodexOAuth, Capabilities, StableDiffusionCpp, Training) |
 | 04 | [Agent Mode](04-agent-mode.md) | MAF wiring, tool registries, AgentHome, Playbook P1–P5, Memory, Capacity, Coder, sub-agent spawn |
 | 05 | [Chat](05-chat.md) | `RuntimeChatClient` per-send routing, ordered parts, sampling, attribution, at-rest encryption |
 | 06 | [Scheduler](06-scheduler.md) | Quartz.NET jobs, run history, cancellation, live hub, encoded gotchas |
 | 07 | [Model-fit / Advisor](07-model-fit.md) | Cache-read vs scheduler refresh, `MemoryFitEstimator`, hardware profiler, sanitization |
 | 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, migration timeline |
-| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (24 route families), 11 possible local SignalR hubs (10 unconditional plus conditional Development), WorkerHub, OpenAPI→hey-api |
-| 10 | [React Client](10-react-client.md) | 27 features, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
+| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`), WorkerHub, OpenAPI→hey-api |
+| 10 | [React Client](10-react-client.md) | The feature directories under `Client.React/src/features/`, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
 | 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, legacy/manual cleanup |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, loopback/Host-Origin, redaction, node-local AI ops, Development Mode execution boundary |
 | 13 | [Testing & Validation](13-testing-and-validation.md) | Test topology, validation commands, E2E, RC evidence |
@@ -97,6 +108,7 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 15 | [Knowledge Base / RAG](15-knowledge-base.md) | Offline document KB: ingestion pipeline, hybrid FTS+vector search, reranker, agent tools |
 | 16 | [Code Organization Conventions](16-code-conventions.md) | Where a type/file goes: `*ServiceModels.cs`, DTO aggregation, mapper colocation, feature-folder rules, load-bearing suppressions, reconciliation with the generic `.opencode` standards |
 | 17 | [Writing Tests](17-writing-tests.md) | Contributor authoring guide: which project a test belongs in, the `TestServerWebAppFactory` patterns, parallelism keys, migration/hub/hosted-service/React/E2E recipes, how to run a scoped subset |
+| 18 | [Training](18-training.md) | Local fine-tuning: the `Providers.Training` uv/Python runtime, dataset generation, training runs, export/promote/eval |
 
 ## Conventions in this wiki
 

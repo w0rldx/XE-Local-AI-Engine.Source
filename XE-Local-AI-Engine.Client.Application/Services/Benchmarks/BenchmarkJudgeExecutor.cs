@@ -95,13 +95,26 @@ public sealed class BenchmarkJudgeExecutor(
             // The host facts this judging ran on, captured before anything is reserved or spawned. Non-throwing.
             environment = await environmentFacts.CaptureAsync(runtime.Runtime.Variant, token).ConfigureAwait(false);
 
-            // Admission sizes against the frozen judge runtime's own context, not the project's request.
+            // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒
+            // f16), not the project's request.
             // No launch admission — see BenchmarkRunExecutor: the judge spawns its own process from frozen arguments.
             var decision = await capacity.DecideAsync(new CapacityRequest(runtime.Model.ModelName,
                                              ModelRole.Chat,
                                              runtime.Runtime.ContextTokens,
-                                             PublishLaunchAdmission: false), token)
+                                             PublishLaunchAdmission: false,
+                                             runtime.Runtime.KvTypeK), token)
                                          .ConfigureAwait(false);
+            logger.LogInformation(
+                "Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
+                + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType} -> {Verdict} ({Reason}).",
+                work.RunId,
+                "judge",
+                runtime.Model.ModelName,
+                runtime.RequestedContextTokens,
+                runtime.Runtime.ContextTokens,
+                runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                decision.Verdict,
+                decision.Reason);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 throw new BenchmarkExecutionException(CapacityRejectedMessage);

@@ -44,6 +44,9 @@ jobs:
       - name: Python quality gate
         run: scripts/python-validation.sh --scope full --serial
 
+      - name: Docs inventory guard
+        run: python3 scripts/docs-inventory-check.py
+
   release-contracts:
     runs-on: ubuntu-latest
     # Two dotnet builds of the AI.Agent.Tests project (the P0_SPIKE gate) dominate this job.

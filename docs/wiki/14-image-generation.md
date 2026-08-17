@@ -1,6 +1,6 @@
 # Image Generation (stable-diffusion.cpp)
 
-> Last reviewed: 2026-07-25 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 The node generates images **locally** with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). It mirrors the llama.cpp text runtime: the app resolves either a pinned prebuilt or a managed source-built `sd-server`, supervises **one resident daemon per model** on a private loopback port range, and drives generation through a coordinator that serializes work to one job at a time and persists every produced image **encrypted-at-rest**. Nothing about a prompt, an image, or the daemon's HTTP shape ever leaves the node. The feature **ships enabled by default** — there is no off switch in `StableDiffusionRuntimeOptions`; the runtime is always wired.
 
@@ -96,25 +96,30 @@ stable-diffusion.cpp/
 
 ## Endpoints
 
-Routes under `images/*`, one endpoint class per file in `Endpoints/Images/V1/`:
+Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file in `Endpoints/Images/V1/` — `ls` that folder for the current set:
 
-| Endpoint | Role |
-|---|---|
-| `CreateImageJobEndpoint` | Enqueue a new generation job (prompt, negative prompt, width/height/steps/sampler). Returns the job id. |
-| `GetImageJobEndpoint` | One job's current status view. |
-| `ListImageJobsEndpoint` | All persisted jobs, newest first. |
-| `CancelImageJobEndpoint` | Request cancellation of a tracked job. |
-| `RetrieveImageEndpoint` | Fetch the produced image bytes for a succeeded job (decrypted on read). |
-| `ListImageModelsEndpoint` | Installed image models available to the runtime. |
-| `StartImageModelDownloadEndpoint` | Begin downloading an image model. |
-| `GetImageRuntimeStatusEndpoint` | Inspect managed-runtime validity and the process-wide activity gate. |
-| `GetStableDiffusionCppSourceBuildPrerequisitesEndpoint` | Probe Linux build prerequisites for the selected backend. |
-| `Start/Cancel/RemoveStableDiffusionCppSourceBuildEndpoint` | Manage the source-build lifecycle and installed runtime. |
-| `EjectImageRuntimeEndpoint` | Evict resident `sd-server` processes before a build/remove mutation. |
+| Endpoint | Route | Role |
+|---|---|---|
+| `CreateImageJobEndpoint` | `POST images/jobs` | Enqueue a new generation job (prompt, negative prompt, width/height/steps/sampler). Returns the job id. |
+| `ListImageJobsEndpoint` | `GET images/jobs` | All persisted jobs, newest first. |
+| `GetImageJobEndpoint` | `GET images/jobs/{jobId}` | One job's current status view. |
+| `CancelImageJobEndpoint` | `POST images/jobs/{jobId}/cancel` | Request cancellation of a tracked job. |
+| `RetrieveImageEndpoint` | `GET images/{imageId}` | Fetch the produced image bytes for a succeeded job (decrypted on read). |
+| `ListImageModelsEndpoint` | `GET images/models` | Installed image models available to the runtime. |
+| `DeleteImageModelEndpoint` | `DELETE images/models/{modelName}` | Remove an installed image model. |
+| `StartImageModelDownloadEndpoint` | `POST images/models/downloads` | Begin downloading an image model. |
+| `ListImageModelDownloadsEndpoint` | `GET images/models/downloads` | Every tracked download — in flight and recently finished — with phase, completed/total bytes, part index/count and a sanitized failure reason. This is how a failed weight download becomes visible instead of a model that never appears. Mirrors `GET model-fit/gguf/downloads`; no path, URL or token is returned. |
+| `CancelImageModelDownloadEndpoint` | `POST images/models/downloads/cancel` | Cancel a tracked download. |
+| `GetImageModelCatalogEndpoint` | `GET images/models/catalog` | The curated image-model catalog. |
+| `BrowseImageRepositoriesEndpoint` / `InspectImageRepositoryEndpoint` | `GET images/models/browse` · `…/inspect` | Hugging Face image-repository discovery and per-repo file inspection. |
+| `GetImageRuntimeStatusEndpoint` | `GET images/runtime` | Inspect managed-runtime validity and the process-wide activity gate. |
+| `EjectImageRuntimeEndpoint` | `POST images/runtime/eject` | Evict resident `sd-server` processes before a build/remove mutation. |
+| `GetStableDiffusionCppSourceBuildPrerequisitesEndpoint` / `GetStableDiffusionCppSourceBuildStatusEndpoint` | `GET images/runtime/source-build/prerequisites` · `…/status` | Probe Linux build prerequisites for the selected backend, and hydrate build status (the hub pushes the rest). |
+| `Start`/`Cancel`/`RemoveStableDiffusionCppSourceBuildEndpoint` | `POST images/runtime/source-build(/cancel\|remove)` | Manage the source-build lifecycle and installed runtime. |
 
 All endpoints are loopback/local-only, operator-authenticated, and secret-redacted — see [Security & Privacy](12-security-and-privacy.md). They are surfaced to React via OpenAPI → hey-api; see [API & Hubs](09-api-and-hubs.md).
 
-> **Known RC limitation.** Image-model download has **no progress or cancel** yet (`StartImageModelDownloadEndpoint`); a large model download runs to completion silently. Tracked as audit finding P2-2.
+> **Download progress is polled, not pushed.** Unlike generation jobs, image-model downloads have no hub: `GET images/models/downloads` is the progress surface, and the React model manager polls it while a download is pending. Byte counts plus part index/count are reported, so a multi-part weight download is legible; cancellation goes through `POST images/models/downloads/cancel`.
 
 ## React feature
 

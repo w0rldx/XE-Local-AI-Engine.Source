@@ -205,7 +205,48 @@ public sealed class SupervisorBenchmarkReceiptTests
         LlamaServerLaunchReceipt? receipt = null;
         await RunBenchmarkAsync(supervisor, resolved, context => receipt = context.LaunchReceipt);
 
-        AssertEx.Equal(intended, AssertEx.NotNull(receipt).LaunchProjection.ComputeIdentity());
+        var recorded = AssertEx.NotNull(receipt);
+        AssertEx.Equal(intended, recorded.LaunchProjection.ComputeIdentity());
+        AssertEx.Empty(recorded.OmittedOptions, "Nothing was omitted, so there is nothing to explain a difference with.");
+    }
+
+    [Test]
+    public async Task Benchmark_Spawn_WhenTheGateOmitsAnOption_RecordsTheEmittedShapeAndNamesTheOmission()
+    {
+        // The gate drops optional options the selected runtime does not advertise. On the benchmark path those are
+        // --metrics (a benchmark spawns with ensureMetrics false, so nothing protects it) and -lv; an unsupported
+        // KV-cache/flash-attention option refuses the launch instead. A receipt that recomputed its projection from
+        // (variant, resolved, plan, role, tuning) would still claim the --metrics this process never received.
+        var resolved = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true);
+        var intended = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
+                resolved,
+                plan: null,
+                ModelRole.Chat,
+                LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheReuse,
+                LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheRamMiB)
+            .ComputeIdentity();
+        var launcher = new FakeProcessLauncher
+        {
+            StartupLines = [FullOffloadLine]
+        };
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            capabilityManifestProbe: new FakeLlamaServerCapabilityManifestProbe(ManifestWithoutMetricsOrVerbosity()));
+
+        LlamaServerLaunchReceipt? receipt = null;
+        await RunBenchmarkAsync(supervisor, resolved, context => receipt = context.LaunchReceipt);
+
+        var recorded = AssertEx.NotNull(receipt);
+        AssertEx.True(launcher.Launches.TryPeek(out var spec));
+        AssertEx.False(spec!.Arguments.Contains("--metrics"), "The gate must have removed the unsupported option.");
+        AssertEx.False(recorded.LaunchProjection.Metrics, "The receipt must describe the argv, not the intent.");
+        AssertEx.Contains(recorded.OmittedOptions, "--metrics");
+        AssertEx.Contains(recorded.OmittedOptions, "-lv");
+        AssertEx.NotEqual(intended, recorded.LaunchProjection.ComputeIdentity());
+
+        // Everything the gate did not touch is still recorded exactly as launched.
+        AssertEx.Equal("q8_0", recorded.LaunchProjection.KvCacheTypeK);
+        AssertEx.Equal<int?>(expected: 8192, recorded.LaunchProjection.ContextTokens);
     }
 
     [Test]
@@ -323,6 +364,38 @@ public sealed class SupervisorBenchmarkReceiptTests
         AssertEx.Null(receipt.ManifestSha256);
         AssertEx.Equal(LlamaServerLaunchReceipt.CurrentVersion, receipt.ReceiptVersion);
         AssertEx.NotNullOrEmpty(receipt.Os);
+    }
+
+    /// <summary>
+    ///     A manifest for a runtime that advertises everything a benchmark spawn needs EXCEPT the two options the gate
+    ///     is allowed to drop on this path. Everything the gate treats as mandatory stays listed, so the launch is
+    ///     admitted rather than refused.
+    /// </summary>
+    private static LlamaServerCapabilityManifest ManifestWithoutMetricsOrVerbosity()
+    {
+        const string Help = """
+                            -m, --model FNAME
+                            --host HOST
+                            --port PORT
+                            -c, --ctx-size N
+                            -ngl, --n-gpu-layers N
+                            --parallel N
+                            --no-warmup
+                            --jinja
+                            --cache-ram N
+                            -fa, --flash-attn [on|off|auto]
+                            -ctk, --cache-type-k TYPE
+                                allowed values: f32, f16, q8_0, q4_0
+                            -ctv, --cache-type-v TYPE
+                                allowed values: f32, f16, q8_0, q4_0
+                            """;
+        return LlamaServerCapabilityManifest.FromSuccessfulProbe(
+            new LlamaBinary("/fake/bin/llama-server", "b9692", GpuVariant.Cuda, IsPinnedFallback: true),
+            executableLengthBytes: 1,
+            DateTimeOffset.UnixEpoch,
+            new string('a', 64),
+            "version: 9692 (b9692)",
+            Help);
     }
 
     private static Task RunBenchmarkAsync(LlamaServerProcessSupervisor supervisor,

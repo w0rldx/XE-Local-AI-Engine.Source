@@ -302,6 +302,28 @@ public static class BenchmarkJudgeSerialization
     public static byte[] SerializeResult(BenchmarkJudgeResultV2 result) =>
         JsonSerializer.SerializeToUtf8Bytes(result, Options);
 
+    /// <summary>
+    ///     The stored verdict, or <see langword="null" /> when the payload is absent or unreadable. Reads through the
+    ///     WRITER's own options: these are camelCase, so a reader that re-derives default options binds every property
+    ///     to its default and hands the API a zeroed verdict instead of failing.
+    /// </summary>
+    public static BenchmarkJudgeResultV2? DeserializeResult(ReadOnlyMemory<byte>? payload)
+    {
+        if (payload is not { } value || value.IsEmpty)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<BenchmarkJudgeResultV2>(value.Span, Options);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public static byte[] SerializeRuntime(BenchmarkJudgeRuntimeV1 runtime) =>
         JsonSerializer.SerializeToUtf8Bytes(runtime, Options);
 

@@ -39,8 +39,16 @@ public interface ICapacityService
 ///     the admission it never consumes is exactly what the supervisor refuses to launch against. The ledger
 ///     reservation is unaffected either way, so the bytes are still booked.
 /// </param>
+/// <param name="KvCacheType">
+///     The llama.cpp KV-cache element type (<c>q8_0</c>/<c>q4_0</c>) the caller will ACTUALLY launch with, so the ledger
+///     reservation sizes its KV term against that instead of the conservative fp16 default. <see langword="null" /> —
+///     every caller but a benchmark run — keeps the fp16 sizing, and so does an f16 or unrecognized value. It can only
+///     ever reserve LESS: the context window is still chosen against the fp16 estimate, and only the returned
+///     allocation's bytes are re-sized.
+/// </param>
 public sealed record CapacityRequest(
     string ModelName,
     ModelRole Role,
     int? RequiredContextTokens = null,
-    bool PublishLaunchAdmission = true);
+    bool PublishLaunchAdmission = true,
+    string? KvCacheType = null);

@@ -45,6 +45,10 @@ public sealed class NodeChatRegenerationService(
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
     private const int AgentDefinitionVersion = 1;
+
+    // Mirrors the send path (NodeChatStreamService.PreRunCancelledMessage): a cancel that lands while the turn is still
+    // waiting for the shared collision-queue lease, before the invocation — and therefore its own timeout — ever starts.
+    private const string PreRunCancelledMessage = "Stopped before the response started (cancelled while queued).";
     private const string AssistantRole = "assistant";
     private const string UserRole = "user";
 
@@ -54,9 +58,18 @@ public sealed class NodeChatRegenerationService(
         bool useLocalTools = false,
         bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
+        SamplingOptions? samplingOptions = null,
         CancellationToken cancellationToken = default)
     {
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken);
+        // Same up-front rejection the send path applies (NodeChatStreamService.SendMessageAsync): the sampling seed
+        // rides the wire as a string, so a malformed value is caught here rather than silently dropped deeper in the
+        // invocation mapping. A null sampling block always parses, keeping the no-override path unchanged.
+        if (!SeedValue.TryParse(samplingOptions?.Seed, out _, out var seedError))
+        {
+            throw new ArgumentException(seedError, nameof(samplingOptions));
+        }
+
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
@@ -65,6 +78,7 @@ public sealed class NodeChatRegenerationService(
         bool useLocalTools,
         bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
+        SamplingOptions? samplingOptions,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
@@ -72,14 +86,20 @@ public sealed class NodeChatRegenerationService(
         // guard; throwing here propagates to the hub caller, same as the send path.
         await mutationGuard.EnsureMutableAsync(conversationId, cancellationToken).ConfigureAwait(false);
 
+        // Persist a request-supplied selection BEFORE reading the conversation. The write also CLEARS the stored
+        // compaction synopsis (a synopsis built on the previous path can misrepresent the newly selected branch), so a
+        // DTO read first would still carry a synopsis the database no longer has — and BuildRegenerationContext would
+        // splice that stale summary in AND drop the verbatim messages it claims to cover.
+        var persistedSelectedPath = requestedSelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : null;
+
         var conversation = await persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
 
         // Same precedence as the send path: a request-supplied selection is persisted and used; otherwise the
         // already-persisted conversation selection drives the pre-cutoff context.
-        var selectedPath = requestedSelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
-            : conversation.SelectedPath;
+        var selectedPath = persistedSelectedPath ?? conversation.SelectedPath;
 
         var original = conversation.Messages.FirstOrDefault(message => message.MessageId == originalMessageId)
                        ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
@@ -129,6 +149,18 @@ public sealed class NodeChatRegenerationService(
 
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, placeholder, sequence.Next());
 
+        // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local
+        // chat turn — regenerate is a turn too, so it honors the same setting as the send path. Without this the
+        // package fell back to TimeoutSettings' own default and a raised setting was silently ignored. Only the
+        // invocation timeout is operator-controlled; the tool-call and stream-idle timeouts keep their defaults.
+        // When the setting equals the TimeoutSettings default the package — and therefore its config hash — is
+        // byte-identical to a package built without an explicit Timeouts.
+        //
+        // Loaded HERE rather than next to the package build below because the same ceiling is stamped on the queued and
+        // streaming events: the browser's stream watchdog must know it before the collision-queue wait, which is the
+        // first stretch of the turn where nothing at all arrives on the wire.
+        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
         // Queued until the collision-queue lease is acquired in RunInvocationAsync; transitions to Streaming only
         // when the invocation actually starts, so a turn waiting behind another invocation reads "queued".
         var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
@@ -140,7 +172,8 @@ public sealed class NodeChatRegenerationService(
             yield break;
         }
 
-        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
+        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next(),
+            invocationTimeoutSeconds: runtimeNodeSettings.MaxMessageRequestTimeoutSeconds);
 
         // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection (mirrors the send
         // path, NodeChatStreamService): when the client cancellationToken fires on disconnect we must only stop
@@ -291,6 +324,21 @@ public sealed class NodeChatRegenerationService(
                 ];
             }
 
+            // G16 parity with the send path: an Orchestrator whose orchestration did not compile reruns as a lone single
+            // agent, which used to be visible only in a server log. Emit ONE notice naming the typed reason; a Single-kind
+            // agent (NotOrchestrated) has no notice, so the common path stays silent.
+            if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
+            {
+                await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                                     {
+                                         InvocationId = requestId,
+                                         Kind = TurnNoticeKind.OrchestrationDegraded,
+                                         Message = orchestrationDegradedMessage,
+                                         Detail = resolution.OrchestrationOutcome.Reason.ToString()
+                                     })
+                                     .ConfigureAwait(false);
+            }
+
             // Knowledge-base grounding parity with the send path: a regenerated plain-chat turn honors
             // the same opt-in knowledge grounding + cloud-egress gate the send path applies, so a rerun does not silently
             // lose grounding + its sources strip. Agent mode reaches the KB through the gated search_knowledge_base tool
@@ -329,14 +377,6 @@ public sealed class NodeChatRegenerationService(
                 }
             }
 
-            // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local
-            // chat turn — regenerate is a turn too, so it honors the same setting as the send path. Without this the
-            // package fell back to TimeoutSettings' own default and a raised setting was silently ignored. Only the
-            // invocation timeout is operator-controlled; the tool-call and stream-idle timeouts keep their defaults.
-            // When the setting equals the TimeoutSettings default the package — and therefore its config hash — is
-            // byte-identical to a package built without an explicit Timeouts.
-            var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,
                 resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
@@ -353,6 +393,9 @@ public sealed class NodeChatRegenerationService(
                 ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
                 OrchestrationSpec: orchestration?.Spec,
                 SupportsThinking: resolution.SupportsThinking,
+                // Per-turn sampling overrides, carried exactly as the send path carries them so a regenerated turn
+                // reruns under the same knobs the original send used. Null keeps the package byte-identical to today.
+                SamplingOptions: samplingOptions,
                 Skills: resolved?.Skills,
                 CustomTools: resolved?.CustomTools));
 
@@ -489,7 +532,11 @@ public sealed class NodeChatRegenerationService(
                 return;
             }
 
-            await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
+            await eventSink.WriteAsync(
+                    ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
+                        invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
             // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.
@@ -504,7 +551,7 @@ public sealed class NodeChatRegenerationService(
         catch (OperationCanceledException)
         {
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
-                "Invocation timed out or was cancelled",
+                PreRunCancelledMessage,
                 FailureCategory.Cancelled).ConfigureAwait(false);
         }
         catch (NoChatModelInstalledException exception)
@@ -542,12 +589,25 @@ public sealed class NodeChatRegenerationService(
     ///     original answer and all sibling variants) sorts at or after that user turn and is therefore excluded.
     ///     When no preceding user turn exists, falls back to everything strictly before the earliest group member.
     /// </summary>
+    /// <param name="applyCompaction">
+    ///     False only for the memory-extraction turn collection, which mines REAL user turns: it must keep the turns a
+    ///     synopsis covers and must never mine the synthetic synopsis message itself (the send path's own
+    ///     <c>CollectUserTurns</c> is likewise compaction-free).
+    /// </param>
     private static IReadOnlyList<ConversationMessageDto> BuildRegenerationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
-        ConversationMessageDto? knowledgeContext = null)
+        ConversationMessageDto? knowledgeContext = null,
+        bool applyCompaction = true)
     {
-        var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original);
+        // Everything here — the cutoff, the compaction splice and the final ordering — runs in ANCHOR space (each
+        // group's earliest member sequence), never on a chosen sibling's own sequence. A sibling minted by
+        // regenerating an EARLY turn after later turns exist carries a raw sequence PAST them, so a raw
+        // `Sequence <= cutoff` filter would drop that turn from context entirely. See
+        // SelectedPathResolver.CreateAnchorResolver. With no variants anchor == raw sequence, so a persisted
+        // CompactionSummaryCoversToSequence written before this change stays valid.
+        var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
+        var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original, anchorSequence);
 
         // A prior turn before the cutoff may itself have variants; collapse those to the selected path so the
         // regenerate sees the same chosen branch the send path would. The group being regenerated already sorts
@@ -555,16 +615,34 @@ public sealed class NodeChatRegenerationService(
         // regardless of which member the resolver would otherwise pick.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
-        // The synthetic knowledge-base grounding message (plain-chat only) is prepended so the model reads its content
-        // before the conversation history — mirroring the send path (NodeChatStreamService.BuildConversationContext). It
-        // takes the first slot and the history shifts down by one; null on every non-grounded rerun.
-        var leadingOffset = knowledgeContext is not null ? 1 : 0;
+        // The synthetic context messages (knowledge-base grounding, then the compaction synopsis) are prepended so the
+        // model reads them before the conversation history — same order and rationale as the send path
+        // (NodeChatStreamService.BuildConversationContext). They take the first slots and the history shifts down by
+        // their count; empty on a plain, uncompacted rerun.
+        var leadingContext = new List<ConversationMessageDto>(capacity: 2);
+        if (knowledgeContext is not null)
+        {
+            leadingContext.Add(knowledgeContext with
+            {
+                SortOrder = 0
+            });
+        }
+
+        // Non-destructive compaction, spliced through the same resolver the send path uses: the synopsis replaces the
+        // messages it covers instead of re-sending them verbatim. Only when the covered sequence sits BELOW the cutoff —
+        // a synopsis that already covers the user turn being answered would leave the rerun with no question at all, so
+        // that (compact-then-regenerate-an-older-turn) case keeps the verbatim pre-cutoff history.
+        if (applyCompaction && CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction && compaction.CoveredSequence < cutoffSequence)
+        {
+            leadingContext.Add(compaction.Summary);
+            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];
+        }
 
         var messages = selected
-                       .Where(message => message.Sequence <= cutoffSequence
+                       .Where(message => anchorSequence(message) <= cutoffSequence
                                          && !string.IsNullOrWhiteSpace(message.Content)
                                          && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                       .OrderBy(static message => message.Sequence)
+                       .OrderBy(anchorSequence)
                        .Select((message, index) => new ConversationMessageDto
                        {
                            Id = message.MessageId,
@@ -572,20 +650,11 @@ public sealed class NodeChatRegenerationService(
                            Content = message.Content,
                            Thinking = message.Reasoning,
                            ModelUsed = message.Model,
-                           SortOrder = index + leadingOffset
+                           SortOrder = index + leadingContext.Count
                        })
                        .ToList();
 
-        return knowledgeContext is null
-            ? messages
-            :
-            [
-                knowledgeContext with
-                {
-                    SortOrder = 0
-                },
-                .. messages
-            ];
+        return leadingContext.Count == 0 ? messages : [.. leadingContext, .. messages];
     }
 
     /// <summary>
@@ -596,22 +665,30 @@ public sealed class NodeChatRegenerationService(
     ///     context is everything that came before — never the answer being replaced.
     /// </summary>
     private static int ResolvePrecedingUserTurnCutoff(NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto original)
+        NodeChatPersistedMessageDto original,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence)
     {
-        var earliestGroupSequence = original.VariantGroupId is { } groupId
-            ? conversation.Messages.Where(message => message.VariantGroupId == groupId)
-                          .Select(message => message.Sequence)
-                          .DefaultIfEmpty(original.Sequence)
-                          .Min()
-            : original.Sequence;
+        var precedingUserTurn = ResolvePrecedingUserTurn(conversation, original, anchorSequence);
+        return precedingUserTurn is not null ? anchorSequence(precedingUserTurn) : anchorSequence(original) - 1;
+    }
 
-        var precedingUserTurn = conversation.Messages
-                                            .Where(message => message.Sequence < earliestGroupSequence
-                                                              && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
-                                            .OrderByDescending(message => message.Sequence)
-                                            .FirstOrDefault();
+    /// <summary>
+    ///     The latest USER turn anchored strictly before the original's variant group. The group's anchor IS the
+    ///     earliest member's sequence (<see cref="SelectedPathResolver.CreateAnchorResolver{TMessage}" />), so every
+    ///     member — the original answer and each sibling variant — anchors at or after it and is excluded whichever
+    ///     member is being regenerated.
+    /// </summary>
+    private static NodeChatPersistedMessageDto? ResolvePrecedingUserTurn(NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto original,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence)
+    {
+        var groupAnchor = anchorSequence(original);
 
-        return precedingUserTurn?.Sequence ?? earliestGroupSequence - 1;
+        return conversation.Messages
+                           .Where(message => anchorSequence(message) < groupAnchor
+                                             && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
+                           .OrderByDescending(anchorSequence)
+                           .FirstOrDefault();
     }
 
     /// <summary>
@@ -624,7 +701,7 @@ public sealed class NodeChatRegenerationService(
         NodeChatPersistedMessageDto original,
         IReadOnlyDictionary<Guid, Guid>? selectedPath)
     {
-        return BuildRegenerationContext(conversation, original, selectedPath)
+        return BuildRegenerationContext(conversation, original, selectedPath, knowledgeContext: null, applyCompaction: false)
                .Where(static message => message.Role == MessageRole.User && !string.IsNullOrWhiteSpace(message.Content))
                .Select(static message => new MemoryExtractionTurn(message.Content))
                .ToArray();
@@ -715,22 +792,8 @@ public sealed class NodeChatRegenerationService(
     ///     resolver falls back to the full static prepend.
     /// </summary>
     private static string? ResolvePrecedingUserTurnContent(NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto original)
-    {
-        var earliestGroupSequence = original.VariantGroupId is { } groupId
-            ? conversation.Messages.Where(message => message.VariantGroupId == groupId)
-                          .Select(message => message.Sequence)
-                          .DefaultIfEmpty(original.Sequence)
-                          .Min()
-            : original.Sequence;
-
-        return conversation.Messages
-                           .Where(message => message.Sequence < earliestGroupSequence
-                                             && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
-                           .OrderByDescending(message => message.Sequence)
-                           .Select(message => message.Content)
-                           .FirstOrDefault();
-    }
+        NodeChatPersistedMessageDto original) =>
+        ResolvePrecedingUserTurn(conversation, original, SelectedPathResolver.CreateAnchorResolver(conversation.Messages))?.Content;
 
     // Emits the KnowledgeWithheld notice when the user opted into knowledge grounding for a regenerated plain-chat turn
     // but a cloud effective model would have received it without the operator's data-access opt-in. Mirrors the send
@@ -812,9 +875,11 @@ public sealed class NodeChatRegenerationService(
         int? inputTokens = null,
         int? outputTokens = null,
         int? totalTokens = null,
-        int? reasoningTokens = null)
+        int? reasoningTokens = null,
+        int? invocationTimeoutSeconds = null)
     {
-        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, inputTokens, outputTokens, totalTokens, reasoningTokens,
+            invocationTimeoutSeconds);
     }
 
     private long NowUnixMilliseconds()

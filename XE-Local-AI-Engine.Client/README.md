@@ -28,7 +28,8 @@
 
 ## Validation
 
-See the root [AGENTS.md](../AGENTS.md#validation) for the full validation command set. In short:
+The root [AGENTS.md](../AGENTS.md#validation) is authoritative for the validation command set — including why CI's
+per-project test loop differs from the local command. In short:
 
 ```bash
 dotnet restore XE-Local-AI-Engine.slnx
