@@ -73,8 +73,7 @@ public sealed class LocalModelCatalogService(
     ///     at Warning. Classification is lazy and cached by content digest, so a cache hit issues no <c>/api/show</c>
     ///     call and repeated catalog reads are cheap.
     /// </summary>
-    private async Task<(IReadOnlyList<Model>? Models, IReadOnlyDictionary<string, ModelClassificationResult> Classifications)>
-        ResolveOllamaModelsAsync(CancellationToken cancellationToken)
+    private async Task<OllamaModelListing> ResolveOllamaModelsAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -83,7 +82,7 @@ public sealed class LocalModelCatalogService(
                                         .ClassifyAsync(models.Select(static model => new ModelIdentity(ReadModelName(model), model.Digest)), cancellationToken)
                                         .ConfigureAwait(false);
 
-            return (models, classifications);
+            return new OllamaModelListing(models, classifications);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -100,7 +99,7 @@ public sealed class LocalModelCatalogService(
                 _logger.LogWarning(exception, "Local model list could not be loaded.");
             }
 
-            return (null, NoClassifications);
+            return new OllamaModelListing(Models: null, NoClassifications);
         }
     }
 
@@ -153,4 +152,8 @@ public sealed class LocalModelCatalogService(
         !string.IsNullOrWhiteSpace(model.ModelName)
             ? model.ModelName
             : model.Name ?? string.Empty;
+
+    // The Ollama runtime's models and their effective kinds. Models is null — not empty — when the runtime could not
+    // be reached, which the catalog renders differently from "reachable, but nothing installed".
+    private sealed record OllamaModelListing(IReadOnlyList<Model>? Models, IReadOnlyDictionary<string, ModelClassificationResult> Classifications);
 }

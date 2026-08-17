@@ -579,7 +579,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             return null;
         }
 
-        var (file, estimate) = selected.Value;
+        var (file, estimate) = selected;
         var modelName = GgufModelName.Format(repoId, file.Quant);
         return new AdvisorRecommendation(repoId,
             modelName,

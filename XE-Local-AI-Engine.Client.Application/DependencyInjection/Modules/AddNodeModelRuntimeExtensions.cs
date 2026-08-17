@@ -320,14 +320,14 @@ internal static class AddNodeModelRuntimeExtensions
 
         _ = dispatchTask.ContinueWith(static (task, state) =>
             {
-                var (continuationLogger, dispatchOperationName) = ((ILogger Logger, string OperationName))(state ?? throw new ArgumentNullException(nameof(state)));
+                var (continuationLogger, dispatchOperationName) = (DispatchContinuationState)(state ?? throw new ArgumentNullException(nameof(state)));
 
                 if (task.IsFaulted)
                 {
                     continuationLogger.LogError(task.Exception, "Unhandled worker hub event dispatch failure during {OperationName}.", dispatchOperationName);
                 }
             },
-            (Logger: logger, OperationName: operationName),
+            new DispatchContinuationState(logger, operationName),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted,
             TaskScheduler.Default);
@@ -430,4 +430,8 @@ internal static class AddNodeModelRuntimeExtensions
     }
 
     private sealed record ChatConnectionSettings(Uri Endpoint, string Model);
+
+    // The boxed state the fault continuation is handed. A named type instead of a cast to an anonymous tuple shape:
+    // the continuation runs on a plain object?, and the cast has to match the boxed type exactly.
+    private sealed record DispatchContinuationState(ILogger Logger, string OperationName);
 }

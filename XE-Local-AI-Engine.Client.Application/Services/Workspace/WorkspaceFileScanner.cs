@@ -245,7 +245,7 @@ internal static class WorkspaceFileScanner
 
         Array.Sort(entries, static (left, right) => string.CompareOrdinal(left.Name, right.Name));
 
-        var directories = new List<(DirectoryInfo Directory, string Relative)>();
+        var directories = new List<ScannedDirectory>();
         foreach (var entry in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -267,7 +267,7 @@ internal static class WorkspaceFileScanner
             {
                 if (depth < MaxDepth)
                 {
-                    directories.Add((child, relative));
+                    directories.Add(new ScannedDirectory(child, relative));
                 }
 
                 continue;
@@ -445,4 +445,8 @@ internal static class WorkspaceFileScanner
 
         return sniff[..read].Contains((byte)0);
     }
+
+    // A subdirectory deferred to the second pass: the directory itself and its path relative to the workspace root,
+    // so files are emitted in this level's sorted order before the walk descends.
+    private sealed record ScannedDirectory(DirectoryInfo Directory, string Relative);
 }
