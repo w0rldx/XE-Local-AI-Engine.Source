@@ -8,7 +8,7 @@ using OllamaSharp.Models;
 ///     catalog builds its classification dictionary with this key and the picker looks the entry up with it, and a
 ///     drift between the two would silently miss every lookup rather than fail.
 /// </summary>
-public static class OllamaModelName
+internal static class OllamaModelName
 {
     /// <summary>Returns the model's reported name, or an empty string when the daemon reported neither field.</summary>
     public static string ReadModelName(this Model model) =>
