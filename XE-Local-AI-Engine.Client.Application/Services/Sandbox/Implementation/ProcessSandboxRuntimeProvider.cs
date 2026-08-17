@@ -1,10 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
-using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -24,8 +22,10 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///         gets the container provider, while AgentHome (4 injection sites) and Coder (3 sites) stay here.
 ///         All soft-guard logic (working-dir jail, path canonicalization, no-follow open, byte budgets, timeout,
 ///         tree-kill) is owned by this provider — the path/symlink/no-follow half factored out into
-///         <see cref="SandboxJailPathGuard" /> so the guard pair is one audit target; a future hardware-isolated (MXC)
-///         provider replaces the whole provider, not the contract.
+///         <see cref="SandboxJailPathGuard" /> so the guard pair is one audit target, and the question of which jails
+///         exist (create/attach/evict/terminate) into <see cref="SandboxLifecycleRegistry" />, which owns the live
+///         sandbox set this class executes commands inside; a future hardware-isolated (MXC) provider replaces the
+///         whole provider, not the contract.
 ///     </para>
 ///     <para>
 ///         Security posture (v1): this is supervised execution, NOT an OS isolation boundary. That has not changed,
@@ -140,8 +140,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     private readonly long _maxCopyFileBytes;
     private readonly long _maxJailDiskBytes;
-    private readonly ConcurrentDictionary<string, JailState> _sandboxes = new(StringComparer.Ordinal);
-    private readonly Lock _sync = new();
+    private readonly SandboxLifecycleRegistry _registry;
     private readonly TimeProvider _timeProvider;
     private int _disposed;
 
@@ -174,6 +173,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // node-scoped sandbox is a subdirectory under it, named deterministically from the attach key.
         _jailRoot = Path.Combine(SandboxPaths.ContainerRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_jailRoot);
+
+        // The registry owns the live sandbox set rooted at that container directory; this provider reaches every jail
+        // through it rather than keeping a second dictionary.
+        _registry = new SandboxLifecycleRegistry(_jailRoot, _launcher, _timeProvider);
     }
 
     public void Dispose()
@@ -185,12 +188,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         // Dispose = ensure tree-kill of any live process the provider still supervises. Best-effort: a sandbox can
         // already be torn down.
-        foreach (var state in _sandboxes.Values)
-        {
-            TerminateState(state);
-        }
-
-        _sandboxes.Clear();
+        _registry.TerminateAll();
 
         // Remove this instance's container root (all node-scoped jails already deleted by TerminateState).
         try
@@ -248,58 +246,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        // Fail-closed capability contract, resolved against what this HOST can actually do. Anything the provider
-        // cannot deliver here is refused up front rather than silently downgraded; anything it can is captured in the
-        // launch policy and applied to every command this sandbox runs.
-        var launchPolicy = BuildLaunchPolicy(request);
-
-        lock (_sync)
-        {
-            var attached = FindAliveByKey(request.AttachKey);
-            if (attached is not null)
-            {
-                EnsureCompatibleWorkspaceBinding(attached, request.TrustedHostWorkspace);
-                return Task.FromResult(attached.Handle);
-            }
-
-            // Owner change on the same node forbids reuse: kill and remove any sandbox keyed to the same node under a
-            // different owner before creating the new one (parity with FakeSandboxRuntimeProvider.EvictOwnerConflicts).
-            EvictOwnerConflicts(request.AttachKey);
-
-            var sandboxId = BuildSandboxId(request.AttachKey);
-            var jailDirectory = request.TrustedHostWorkspace is null
-                ? Path.Combine(_jailRoot, sandboxId)
-                : ResolveTrustedHostWorkspace(request.TrustedHostWorkspace.RootPath);
-            Directory.CreateDirectory(jailDirectory);
-
-            var handle = new SandboxHandle
-            {
-                ProviderName = Name,
-                SandboxId = sandboxId,
-                AttachKey = request.AttachKey,
-                CreatedAt = _timeProvider.GetUtcNow(),
-                ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = ResolveIdentityMounts(request, jailDirectory)
-            };
-            _sandboxes[sandboxId] = new JailState(handle, jailDirectory, launchPolicy, request.TrustedHostWorkspace is not null);
-            return Task.FromResult(handle);
-        }
+        return _registry.CreateOrAttachAsync(request, cancellationToken);
     }
 
     public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(attachKey);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_sync)
-        {
-            var match = FindAliveByKey(attachKey)
-                        ?? throw new SandboxHandleInvalidException("No live sandbox matches the supplied attach key.");
-            return Task.FromResult(match.Handle);
-        }
+        return _registry.ConnectAsync(attachKey, cancellationToken);
     }
 
     public async Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default)
@@ -308,7 +260,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
+        var state = _registry.GetAliveState(handle);
         var startedAt = _timeProvider.GetUtcNow();
 
         var startInfo = new ProcessStartInfo
@@ -404,7 +356,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
         {
             // Another command is already in flight under this execution id; kill the just-started one and reject.
-            TreeKill(process);
+            SandboxProcessTree.TreeKill(process);
             await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
             if (markerId is not null)
             {
@@ -458,7 +410,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // The child wrote past the jail disk ceiling: tree-kill and return the same non-throwing incomplete shape as
             // a timeout, with an explanatory StandardError so the AgentHome run flow can tell the user WHY it stopped.
-            TreeKill(process);
+            SandboxProcessTree.TreeKill(process);
             await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
             return new SandboxCommandResult
             {
@@ -474,7 +426,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // A best-effort CancelCommandAsync (or a sandbox kill) fired: tree-kill and return a non-throwing
             // Completed=false result so AgentHome treats it like the fake's cancelled command, not a caller cancel.
-            TreeKill(process);
+            SandboxProcessTree.TreeKill(process);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -488,7 +440,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // Per-command timeout fired while the caller token stayed un-cancelled: kill the tree and return a
             // non-throwing timed-out result (Completed=false / ExitCode=-1), matching the container/fake timeout shape.
-            TreeKill(process);
+            SandboxProcessTree.TreeKill(process);
             await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
             return new SandboxCommandResult
             {
@@ -503,7 +455,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // A caller cancel tree-kills and propagates OperationCanceledException so AgentHomeService can disambiguate
             // caller-cancel from timeout.
-            TreeKill(process);
+            SandboxProcessTree.TreeKill(process);
             await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
             throw;
         }
@@ -529,7 +481,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
+        var state = _registry.GetAliveState(handle);
         await SandboxFileSurveyOperations.CopyIntoAsync(state.JailRoot, request, _maxCopyFileBytes, cancellationToken).ConfigureAwait(false);
     }
 
@@ -539,7 +491,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
+        var state = _registry.GetAliveState(handle);
         SandboxFileSurveyOperations.ResetDirectory(state.JailRoot, sandboxPath);
 
         return Task.CompletedTask;
@@ -560,7 +512,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
+        var state = _registry.GetAliveState(handle);
         return await SandboxFileSurveyOperations.ReadFileAsync(state.JailRoot, sandboxPath, maxBytes, cancellationToken).ConfigureAwait(false);
     }
 
@@ -597,7 +549,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return GetAliveState(handle);
+        return _registry.GetAliveState(handle);
     }
 
     public async Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -606,7 +558,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = GetAliveState(handle);
+        var state = _registry.GetAliveState(handle);
         await SandboxFileSurveyOperations.CopyOutAsync(state.JailRoot, request, cancellationToken).ConfigureAwait(false);
     }
 
@@ -619,7 +571,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // Best-effort: cancel + tree-kill the in-flight command by execution id. Firing the command-cancel source makes
         // the in-flight ExecuteAsync return a non-throwing Completed=false result. A missing id or already-gone sandbox
         // is a no-op (parity with the container/fake providers).
-        if (_sandboxes.TryGetValue(handle.SandboxId, out var state)
+        if (_registry.FindState(handle.SandboxId) is { } state
             && state.InFlight.TryGetValue(executionId, out var inFlight))
         {
             inFlight.RequestCancel();
@@ -633,13 +585,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentNullException.ThrowIfNull(handle);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_sync)
-        {
-            if (_sandboxes.TryRemove(handle.SandboxId, out var state))
-            {
-                TerminateState(state);
-            }
-        }
+        _registry.RemoveAndTerminate(handle.SandboxId);
 
         return Task.CompletedTask;
     }
@@ -694,10 +640,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <summary>
-    ///     Signals the child's whole process group after a tree-kill, as defense in depth. <see cref="TreeKill" />
-    ///     remains the primary mechanism and is unchanged; this catches a descendant that detached from the process tree
-    ///     the runtime walks but is still in the group the child leads. A no-op unless the child really is a group
-    ///     leader.
+    ///     Signals the child's whole process group after a tree-kill, as defense in depth.
+    ///     <see cref="SandboxProcessTree.TreeKill" /> remains the primary mechanism and is unchanged; this catches a
+    ///     descendant that detached from the process tree the runtime walks but is still in the group the child leads.
+    ///     A no-op unless the child really is a group leader.
     /// </summary>
     private async Task KillProcessGroupIfLeaderAsync(SandboxLaunchDescriptor launch, Process process)
     {
@@ -836,196 +782,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
     }
 
-    // ---- jail / state helpers ----
-
-    /// <summary>
-    ///     The enforcement half of the capability-honesty invariant: a guarantee this host cannot deliver is refused up
-    ///     front, so a caller can never believe it received isolation the provider did not apply. It reads the same
-    ///     containment probe as <see cref="Capabilities" />, so what is rejected here is exactly what is not advertised
-    ///     there.
-    /// </summary>
-    private SandboxLaunchPolicy BuildLaunchPolicy(SandboxCreateRequest request)
-    {
-        var containment = _launcher.Containment;
-
-        // Restricted means an egress allow-list, which needs a veth pair plus a per-namespace ruleset. That is
-        // explicitly out of scope (default-deny only), so it is never honored regardless of host capability.
-        if (request.NetworkPolicy == SandboxNetworkPolicy.Restricted)
-        {
-            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{Name}' sandbox provider has no network allow-list mechanism and cannot honor NetworkPolicy.Restricted. Use NetworkPolicy.None for default-deny egress, or an OS-isolated provider for an allow-list."));
-        }
-
-        // None means no egress. Honored when the host can create an empty network namespace; rejected fail-closed when
-        // it cannot, rather than handing back a sandbox that silently shares the host network.
-        var denyEgress = request.NetworkPolicy == SandboxNetworkPolicy.None;
-        if (denyEgress && !containment.SupportsNetworkIsolation)
-        {
-            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{Name}' sandbox provider cannot deny network egress on this host ({containment.NetworkIsolationUnavailableReason ?? "no mechanism is available"}), so NetworkPolicy.None cannot be honored. Use NetworkPolicy.Unrestricted to accept a shared host network, or an OS-isolated provider."));
-        }
-
-        // Resource limits are honored when a transient systemd user scope can impose them, and rejected fail-closed
-        // when it cannot — running without the ceiling the caller asked for is exactly the silent downgrade this
-        // contract exists to prevent.
-        var limits = request.ResourceLimits;
-        var wantsLimits = limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue);
-        if (wantsLimits && !containment.SupportsResourceLimits)
-        {
-            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{Name}' sandbox provider cannot enforce resource limits (CPU/memory/PID) on this host ({containment.ResourceLimitsUnavailableReason ?? "no mechanism is available"}). Remove SandboxResourceLimits or use a provider that advertises SupportsResourceLimits."));
-        }
-
-        // A read-only mount needs a mount layer, and this provider has none — the child runs on the host filesystem
-        // with ordinary permissions. Rejected rather than served writable: a caller that asked for read-only and got
-        // read-write would believe a file was protected that anything in the sandbox can overwrite, which is the same
-        // silent downgrade the network and resource-limit branches above exist to prevent. Callers that want this
-        // where it exists must gate the request on SupportsReadOnlyMounts, exactly as AgentHome gates its egress
-        // request on SupportsNetworkPolicy.
-        if (request.Mounts?.Any(static mount => mount.ReadOnly) == true)
-        {
-            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{Name}' sandbox provider has no mount layer and cannot make a mount read-only. Remove the read-only mount, or use a provider that advertises SupportsReadOnlyMounts."));
-        }
-
-        return new SandboxLaunchPolicy
-        {
-            ResourceLimits = wantsLimits ? limits : null,
-            DenyNetworkEgress = denyEgress
-        };
-    }
-
-    /// <summary>
-    ///     Resolves the engine's requested mounts as an IDENTITY map: a host child already sees the host filesystem, so
-    ///     every requested host path is reachable under its own name and nothing is mounted anywhere.
-    ///     <para>
-    ///         The requested <see cref="SandboxMount.SandboxPath" /> is therefore <em>discarded</em>, not honoured, and
-    ///         the handle reports the host path instead. That is the honest answer rather than a shortcut: a caller that
-    ///         put the requested path into a child's environment would name a directory this provider never created.
-    ///     </para>
-    ///     <para>
-    ///         This deliberately does NOT start confining anything. The mount list is a description of what the sandbox
-    ///         can reach, and under this provider that set was already the whole host filesystem; narrowing it here
-    ///         would change the preserved-workspace contract under callers that never asked for it.
-    ///     </para>
-    /// </summary>
-    private static IReadOnlyList<SandboxMountBinding> ResolveIdentityMounts(SandboxCreateRequest request, string jailDirectory)
-    {
-        var bindings = new List<SandboxMountBinding>();
-        if (request.TrustedHostWorkspace is not null)
-        {
-            bindings.Add(new SandboxMountBinding(jailDirectory, jailDirectory, ReadOnly: false));
-        }
-
-        foreach (var mount in request.Mounts ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(mount.HostPath))
-            {
-                throw new ArgumentException("An engine-generated sandbox mount must name a host path.", nameof(request));
-            }
-
-            var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
-            if (!Directory.Exists(canonical) && !File.Exists(canonical))
-            {
-                throw new DirectoryNotFoundException($"The engine-generated sandbox mount source '{mount.HostPath}' does not exist.");
-            }
-
-            bindings.Add(new SandboxMountBinding(canonical, canonical, mount.ReadOnly));
-        }
-
-        return bindings;
-    }
-
-    private JailState? FindAliveByKey(SandboxAttachKey attachKey)
-    {
-        return _sandboxes.Values.FirstOrDefault(state => state.Alive && state.Handle.AttachKey == attachKey);
-    }
-
-    private static void EnsureCompatibleWorkspaceBinding(JailState state, SandboxTrustedHostWorkspace? requested)
-    {
-        if (requested is null)
-        {
-            if (state.PreserveJailRoot)
-            {
-                throw new SandboxHandleInvalidException("The existing sandbox is bound to a trusted host workspace, but the attach request is not.");
-            }
-
-            return;
-        }
-
-        var requestedRoot = ResolveTrustedHostWorkspace(requested.RootPath);
-        if (!state.PreserveJailRoot || !string.Equals(requestedRoot, state.JailRoot, StringComparison.Ordinal))
-        {
-            throw new SandboxHandleInvalidException("The existing sandbox is bound to a different trusted host workspace.");
-        }
-    }
-
-    private static string ResolveTrustedHostWorkspace(string rootPath)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
-        var canonical = Path.GetFullPath(rootPath);
-        if (!Directory.Exists(canonical))
-        {
-            throw new DirectoryNotFoundException("The trusted host workspace must be an existing canonical directory.");
-        }
-
-        SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(canonical);
-
-        return canonical;
-    }
-
-    private void EvictOwnerConflicts(SandboxAttachKey attachKey)
-    {
-        var conflicts = _sandboxes
-                        .Where(entry => string.Equals(entry.Value.Handle.AttachKey.NodeId, attachKey.NodeId, StringComparison.Ordinal)
-                                        && !string.Equals(entry.Value.Handle.AttachKey.OwnerUserId, attachKey.OwnerUserId, StringComparison.Ordinal))
-                        .Select(entry => entry.Key)
-                        .ToList();
-
-        foreach (var sandboxId in conflicts)
-        {
-            if (_sandboxes.TryRemove(sandboxId, out var state))
-            {
-                TerminateState(state);
-            }
-        }
-    }
-
-    private static string BuildSandboxId(SandboxAttachKey attachKey)
-    {
-        // Hash the complete attach scope. Owner/node alone is insufficient because AgentHome and Development may use
-        // different runtime profiles or manifest versions for the same logical node and must coexist without one
-        // dictionary entry overwriting the other.
-        var scope = string.Concat(attachKey.OwnerUserId, "\0",
-            attachKey.NodeId, "\0",
-            attachKey.ProviderName, "\0",
-            attachKey.RuntimeProfile, "\0",
-            attachKey.ManifestVersion.ToString(CultureInfo.InvariantCulture));
-        var scopeHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(scope)))[..16];
-        var nodeSegment = SanitizeSegment(attachKey.NodeId);
-        return string.Create(CultureInfo.InvariantCulture, $"process-{nodeSegment}-{scopeHash}");
-    }
-
-    private static string SanitizeSegment(string value)
-    {
-        var builder = new StringBuilder(value.Length);
-        foreach (var character in value)
-        {
-            builder.Append(char.IsAsciiLetterOrDigit(character) ? character : '_');
-        }
-
-        return builder.Length == 0 ? "node" : builder.ToString();
-    }
-
-    private JailState GetAliveState(SandboxHandle handle)
-    {
-        if (_sandboxes.TryGetValue(handle.SandboxId, out var state) && state.Alive)
-        {
-            return state;
-        }
-
-        throw new SandboxHandleInvalidException($"Sandbox '{handle.SandboxId}' is no longer available.");
-    }
+    // ---- jail working-directory helper ----
 
     private static string ResolveWorkingDirectory(JailState state, string? requestedWorkingDirectory)
     {
@@ -1037,77 +794,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         var canonicalPath = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, requestedWorkingDirectory);
         SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, canonicalPath, requestedWorkingDirectory);
         return canonicalPath;
-    }
-
-    private static void TerminateState(JailState state)
-    {
-        lock (state.Sync)
-        {
-            if (!state.Alive)
-            {
-                return;
-            }
-
-            state.Alive = false;
-        }
-
-        foreach (var inFlight in state.InFlight.Values)
-        {
-            // Signal the in-flight ExecuteAsync that its command was cancelled (Completed=false) AND tree-kill the
-            // process so a sandbox kill terminates every running command immediately.
-            inFlight.RequestCancel();
-            TreeKill(inFlight.Process);
-        }
-
-        state.InFlight.Clear();
-
-        try
-        {
-            if (!state.PreserveJailRoot && Directory.Exists(state.JailRoot))
-            {
-                Directory.Delete(state.JailRoot, recursive: true);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort jail teardown; a locked file does not fail the kill.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort jail teardown.
-        }
-    }
-
-    private static void TreeKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                // entireProcessTree:true kills descendants too. On Linux the runtime kills the process group; on
-                // Windows it walks the tree via the OS APIs. (A dedicated Windows Job Object with
-                // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE would be strictly stronger for orphan reaping, but Process.Kill
-                // with entireProcessTree is sufficient and OS-correct here; the Job Object polish is deferred and is
-                // not load-bearing for the Linux-primary runtime.)
-                process.Kill(true);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // The process already exited between the check and the kill — nothing to do.
-        }
-        catch (NotSupportedException)
-        {
-            // Tree-kill unsupported on this platform; fall back to a single-process kill.
-            try
-            {
-                process.Kill();
-            }
-            catch (InvalidOperationException)
-            {
-                // Already exited.
-            }
-        }
     }
 
     /// <summary>
@@ -1214,58 +900,4 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
     }
 
-    /// <summary>
-    ///     A single in-flight command: the spawned process plus the per-command cancel source that best-effort cancel
-    ///     and sandbox kill fire to make <see cref="ExecuteAsync" /> return a non-throwing Completed=false result.
-    /// </summary>
-    private sealed class InFlightExecution
-    {
-        private readonly CancellationTokenSource _cancelSource;
-
-        public InFlightExecution(Process process, CancellationTokenSource cancelSource)
-        {
-            Process = process;
-            _cancelSource = cancelSource;
-        }
-
-        public Process Process { get; }
-
-        public void RequestCancel()
-        {
-            try
-            {
-                _cancelSource.Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-                // The command already completed and disposed its source; nothing to cancel.
-            }
-        }
-    }
-
-    private sealed class JailState
-    {
-        public JailState(SandboxHandle handle, string jailRoot, SandboxLaunchPolicy launchPolicy, bool preserveJailRoot = false)
-        {
-            Handle = handle;
-            JailRoot = jailRoot;
-            LaunchPolicy = launchPolicy;
-            PreserveJailRoot = preserveJailRoot;
-        }
-
-        public SandboxHandle Handle { get; }
-
-        public string JailRoot { get; }
-
-        /// <summary>The containment resolved at create time and applied to every command this sandbox runs.</summary>
-        public SandboxLaunchPolicy LaunchPolicy { get; }
-
-        public bool PreserveJailRoot { get; }
-
-        public object Sync { get; } = new();
-
-        public bool Alive { get; set; } = true;
-
-        public ConcurrentDictionary<string, InFlightExecution> InFlight { get; } = new(StringComparer.Ordinal);
-    }
 }
