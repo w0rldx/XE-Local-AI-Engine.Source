@@ -160,10 +160,23 @@ public sealed class CapacityService : ICapacityService
 
         while (!FitsResourceBudget(profile, footprint.Resources))
         {
-            if (!_footprintProvider.TryDownTierForAdmission(footprint, out footprint))
+            if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
                 return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
             }
+
+            // A caller that NAMED a required window launches AT that window (a benchmark replays its frozen -c), so a
+            // tier below it must never be admitted: the reservation would under-book the bytes the process really takes,
+            // and committing it pins the model's shared allocation under the required window for the whole process
+            // lifetime — every later admission naming that window then fails the required-context check and surfaces as
+            // "the model's memory footprint could not be determined" until the app restarts.
+            if (request.RequiredContextTokens is { } required
+                && downTiered.Admission?.Allocation.ProcessContextTokens < required)
+            {
+                return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+            }
+
+            footprint = downTiered;
         }
 
         if (!_footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint)
