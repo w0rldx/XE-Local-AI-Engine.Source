@@ -428,6 +428,10 @@ namespace XE_Local_AI_Engine.Client
                 // registration entirely, so the routes are absent (a request 404s) rather than throwing a 500 for a missing
                 // service. Mirrors the invariant that the updater is desktop-mode only. On the desktop flag the filter is a
                 // no-op (returns true for every endpoint).
+                // Note this filter cannot gate an endpoint whose SERVICES are conditionally registered: FastEndpoints
+                // instantiates every discovered endpoint before evaluating it (which is why the AppUpdate services are
+                // registered in every mode). Development Mode's endpoints are excluded at DISCOVERY instead — see the
+                // EndpointDiscoveryOptions.Filter in ConfigureServices.
                 config.Endpoints.Filter = ep => isDesktop || !typeof(IDesktopOnlyEndpoint).IsAssignableFrom(ep.EndpointType);
 
                 // Single source of truth for OpenAPI operationIds (consumed by the generated hey-api React SDK):
