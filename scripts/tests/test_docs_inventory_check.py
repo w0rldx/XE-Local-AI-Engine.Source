@@ -209,6 +209,15 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
         self.assertEqual(["09-api-and-hubs.md"], [item.name for item in result.missing])
 
+    def test_react_features_skip_hidden_tooling_directories(self) -> None:
+        root = self.make_repo()
+        (root / "XE-Local-AI-Engine.Client.React" / "src" / "features" / ".omc").mkdir()
+
+        result = MODULE.check_react_features(root)
+
+        self.assertNotIn(".omc", result.inventory)
+        self.assertEqual((), result.missing)
+
     def test_solution_projects_use_the_project_file_stem_as_identity(self) -> None:
         result = MODULE.check_solution_projects(self.make_repo())
 
