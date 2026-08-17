@@ -873,7 +873,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
         finally
         {
-            TryKill(process);
+            ProcessCaptureRunner.TryKill(process);
         }
     }
 
@@ -1241,21 +1241,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private static void SetDirectoryOwnerOnly(string path)
     {
         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best-effort.
-        }
     }
 
     private static void TryDeleteDirectory(string path)
