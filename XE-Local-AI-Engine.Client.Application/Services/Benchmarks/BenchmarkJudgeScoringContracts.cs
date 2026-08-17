@@ -227,6 +227,14 @@ public static class BenchmarkJudgePromptV2
         + "Score every rubric criterion from 0 to 10 and give a short rationale for each score. "
         + "Return exactly one JSON object matching the supplied output schema. Return no markdown and no extra properties.";
 
+    /// <summary>
+    ///     Embeds the caller's already-shaped pieces verbatim — this builder frames, it never re-serializes.
+    ///     <paramref name="primaryOutputPartsJson" /> must be the GRADED projection of the run's transcript
+    ///     (<see cref="BenchmarkOutputParts.ForJudge" />): coalesced, with reasoning parts removed, because hidden
+    ///     chain-of-thought is not the graded answer and a thinking model's raw transcript does not fit the judge window.
+    ///     The payload's property names and order are unchanged by that narrowing, so neither
+    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> nor the output-schema version moves.
+    /// </summary>
     public static string BuildUserPayloadJson(string taskJson,
         string? referenceAnswer,
         BenchmarkJudgeRubricV1 rubric,

@@ -108,8 +108,9 @@ public sealed class BenchmarkRunExecutorTests
                       ModelId = "model.gguf",
                       ProviderName = "llamacpp"
                   });
+                  // Two growth points, i.e. two streamed deltas: the terminal write must persist them as ONE part.
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
-                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Running, "answer")));
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Running, "ans")));
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
                       new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100)));
               });
@@ -122,8 +123,9 @@ public sealed class BenchmarkRunExecutorTests
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal<int?>(8192, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
-        AssertEx.Contains(BenchmarkExecutionSerialization.DeserializeParts(persisted.OutputPartsJson.Span),
-            static part => part.Kind == "output" && part.Content == "answer");
+        var persistedParts = BenchmarkExecutionSerialization.DeserializeParts(persisted.OutputPartsJson.Span);
+        AssertEx.ContainsSingle(persistedParts, static part => part.Kind == "output" && part.Content == "answer");
+        AssertEx.Equal(expected: 1, persistedParts.Count, "Adjacent same-kind deltas are coalesced into one stored part.");
         AssertEx.Equal<int?>(20, persisted.TotalTokens);
         AssertEx.Equal<double?>(200d, persisted.TokensPerSecond);
         AssertEx.True(persisted.LastStreamSequence > 0);
