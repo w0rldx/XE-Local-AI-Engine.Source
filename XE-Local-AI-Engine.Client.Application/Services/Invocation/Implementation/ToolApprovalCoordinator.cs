@@ -225,7 +225,15 @@ public sealed class ToolApprovalCoordinator
                               ?? $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs."
             };
 
-            await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
+            // The hub send exists for the PAIRED case only, and is skipped for a loopback turn exactly as every other
+            // hub send on the invocation path is (InvocationRunner.RunAsync's shouldSendHubMessages). A standalone node
+            // has no worker hub, so sending unconditionally threw before the local dispatch below could run — failing
+            // the whole turn instead of rendering the approval card the operator answers.
+            if (!InvocationRunner.IsLocalLoopbackInvocation(package))
+            {
+                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
+            }
+
             await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
 
             // Surface the pending approval on the LOCAL chat stream. The CallId is derived through the SAME
