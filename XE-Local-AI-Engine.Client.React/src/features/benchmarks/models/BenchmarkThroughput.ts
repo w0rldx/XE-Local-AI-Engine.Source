@@ -62,15 +62,22 @@ export interface BenchmarkRepeatStats {
 /**
  * What makes two runs comparable measurements of the same thing: the same model BUILD, the same KV-cache type, and the
  * same effective launch identity. Two runs of one model on different launch arguments are two different experiments,
- * and averaging them would report a spread that is really a configuration difference. Falls back to the INTENDED
- * identity while a run has not launched yet, and to the empty string when neither is recorded (legacy rows), which
- * groups legacy rows of one model+KV together rather than scattering them.
+ * and averaging them would report a spread that is really a configuration difference. The NAME is not the build — a
+ * model deleted and reinstalled, or a repo tag repointed at new weights, keeps its name and changes its content
+ * fingerprint — so the fingerprint is what keeps two builds out of one mean. Falls back to the INTENDED identity while
+ * a run has not launched yet, and to the empty string when neither is recorded (legacy rows), which groups legacy rows
+ * of one model+KV together rather than scattering them.
  */
 export function benchmarkRepeatCohortKey(
-	run: Pick<BenchmarkRunSummary, "primaryModelName" | "primaryLaunch">,
+	run: Pick<BenchmarkRunSummary, "primaryModelName" | "modelContentFingerprint" | "primaryLaunch">,
 ): string {
 	const { kvCacheType, effectiveLaunchIdentity, intendedLaunchIdentity } = run.primaryLaunch;
-	return [run.primaryModelName, kvCacheType ?? "", effectiveLaunchIdentity ?? intendedLaunchIdentity ?? ""].join("|");
+	return [
+		run.primaryModelName,
+		run.modelContentFingerprint,
+		kvCacheType ?? "",
+		effectiveLaunchIdentity ?? intendedLaunchIdentity ?? "",
+	].join("|");
 }
 
 function summarize(values: readonly number[]): BenchmarkStatSummary | null {

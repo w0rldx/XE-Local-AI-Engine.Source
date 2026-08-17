@@ -3647,6 +3647,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest =
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchResponse = {
+	projectVersion?: number;
 	started?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchItemResponse>;
 	rejected?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatchItemResponse>;
 };

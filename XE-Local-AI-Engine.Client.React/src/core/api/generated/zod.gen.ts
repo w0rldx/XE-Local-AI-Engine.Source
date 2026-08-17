@@ -4461,6 +4461,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatc
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchResponse = z.object({
+	projectVersion: z.int().optional(),
 	started: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchItemResponse).optional(),
 	rejected: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatchItemResponse).optional(),
 });
