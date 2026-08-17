@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
@@ -85,7 +85,7 @@ See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Pri
 
 ### Background (hosted) services
 
-Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServices.cs`. These are the always-on workers inside the node process:
+Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServices.cs`. These are the always-on workers inside the node process. Feature modules register more of their own — `grep -r AddHostedService` across `Client.Application/DependencyInjection/Modules/` and the provider projects is the complete inventory; the module-owned queue workers are called out under the table:
 
 | Service | Role |
 |---------|------|
@@ -101,6 +101,21 @@ Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServi
 | `NodeChatTitleEncryptionBackfillService`, `OllamaProviderMapBackfillService` | one-shot data backfills |
 | `FirstRunModelProvisioningService` | desktop first-run GGUF starter-model download |
 | `LlamaCppUpdateCheckService` | periodic llama.cpp runtime update check (see [Local Runtime & Providers](03-local-runtime-and-providers.md)) |
+| `BenchmarkRunHubEventRelay`, `DatasetGenerationHubEventRelay`, `TrainingRunHubEventRelay` | drain each feature's in-process event buffer onto its SignalR hub, keeping `Client.Application` free of a SignalR dependency (see [API & Hubs](09-api-and-hubs.md)) |
+
+Module-owned workers worth knowing about, registered alongside their feature rather than here:
+
+| Service | Registered in | Role |
+|---------|---------------|------|
+| `BenchmarkQueueHostedService` | `AddNodeBenchmarksExtensions` | single-consumer durable benchmark run queue |
+| `DatasetGenerationHostedService` | `AddNodeTrainingDatasetExtensions` | single-consumer durable dataset-generation queue (see [Training](18-training.md)) |
+| `TrainingRunQueueHostedService`, `TrainingRunStartupReaper` | `AddNodeTrainingRunExtensions` | the single-consumer training/evaluation run queue, and the startup reaper that kills Python trainers orphaned by a host crash using their persisted launch receipts |
+| `KnowledgeIngestionWorker`, `KnowledgeScheduledModelReindexWorker` | `AddNodeKnowledgeBaseExtensions` | KB ingestion queue and scheduled reindex (see [Knowledge Base](15-knowledge-base.md)) |
+| `McpAgentRunDispatcher`, `McpAgentRunRecoveryService`, `McpAgentRunCompactionService` | `AddNodeMcpAgentRunsExtensions` | inbound-MCP agent run dispatch, restart recovery, compaction |
+| `ImageJobStartupReconciler`, `DevelopmentStartupReconciler`, `LocalModelDeletionStartupReconciler`, `SandboxOrphanReaper`, `DetachedInvocationReaper` | their feature modules | restart reconciliation and orphan reaping |
+| `StaleLlamaServerReaper`, `CudaBuildStartupService`, `LlamaServerRuntimeOverrideStartupNotice` | `Providers.LlamaServer` | see [Local Runtime & Providers](03-local-runtime-and-providers.md) |
+| `StaleImageServerReaper`, `StableDiffusionCppSourceBuildLifecycle` | `Providers.StableDiffusionCpp` | see [Image Generation](14-image-generation.md) |
+| `GgufAcquisitionArtifactStartupReaper` | `Providers.HuggingFace` | sweeps partial GGUF acquisition artifacts left by a previous run |
 
 ---
 
@@ -166,7 +181,7 @@ not a retained smoke-test transcript.
 - **Linux `SIGHUP`** (terminal close) → a `PosixSignalRegistration` with `context.Cancel = true` → `StopApplication()`.
 - **Windows `CTRL_CLOSE_EVENT` / logoff / shutdown** → a `SetConsoleCtrlHandler` callback (kept rooted so the GC can't reclaim the native delegate) that calls `StopApplication()` then **blocks up to ~4s** (`ConsoleCloseDrainBudget`, safely under Windows' ~5s force-kill window) for the drain.
 
-The **Windows Job Object is the source-defined hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.LlamaServer/WindowsJobObjectProcessHandle.cs`) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) is designed to terminate the whole process tree. This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it must be verified on real Windows 11; the WSL build cannot exercise it, and this baseline review does not include an operating transcript. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
+The **Windows Job Object is the source-defined hard-kill safety net** regardless of whether the drain completes. `WindowsJobObjectProcessHandle` (`Providers.LlamaServer/Implementation/WindowsJobObjectProcessHandle.cs`) wraps the child in a job created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: closing the job handle (on `TreeKill`/`Dispose`) is designed to terminate the whole process tree. This Win32 path is `[SupportedOSPlatform("windows")]` and the source notes it must be verified on real Windows 11; the WSL build cannot exercise it, and this baseline review does not include an operating transcript. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the supervisor side.
 
 ---
 

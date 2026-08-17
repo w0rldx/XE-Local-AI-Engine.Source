@@ -14,8 +14,19 @@ All paths below are relative to `XE-Local-AI-Engine.Client.React/`.
 
 - **`src/locales/en.json`** — the **source of truth**. It is statically bundled and is the
   `fallbackLng`, so any key missing from another locale renders the English text instead of
-  breaking. ~3110 leaf strings across 13 top-level sections (`common`, `chat`, `pages`,
-  `components`, `voice`, …).
+  breaking. It is a deep object of a few thousand leaf strings across a handful of top-level
+  sections (`common`, `chat`, `pages`, `components`, `voice`, `training`, …). Both numbers move
+  with every feature, so count them rather than trusting a figure here — from
+  `XE-Local-AI-Engine.Client.React/`:
+
+  ```bash
+  # top-level sections
+  python3 -c "import json;print(len(json.load(open('src/locales/en.json'))))"
+  # leaf strings
+  python3 -c "import json;d=json.load(open('src/locales/en.json'))
+  f=lambda o: sum(map(f,o.values())) if isinstance(o,dict) else 1
+  print(f(d))"
+  ```
 - **`src/locales/<code>.json`** — every other locale. These are **lazy-loaded**: each is code-split
   into its own chunk and fetched on demand the first time that language is selected, so users
   never download a language they won't render. This is why non-English locales must be

@@ -104,6 +104,22 @@ That closes the gap properly, and is good practice regardless.
 > *same-machine, same-account rollback only*. If you need conversations you can carry elsewhere, copy
 > the text out instead.
 
+> ### On Linux, `node.key` is protected differently — and more weakly
+>
+> There is no DPAPI equivalent, so on Linux `node.key` is written as **plain key bytes**, with file
+> permissions restricted to your user only (`0600`). The app does not yet use a system keyring.
+>
+> Both directions of that trade-off are real:
+>
+> - **A data-folder copy does move.** Unlike Windows, the same folder will open on another Linux
+>   machine or under another account, because the key travels with it.
+> - **Anything that can read the file can read your data.** That includes another process running as
+>   your user, a backup tool, or anyone who takes the disk. On Windows the DPAPI wrap makes the stolen
+>   disk useless; on Linux it doesn't.
+>
+> **Full-disk encryption is doing more work on Linux than it is on Windows.** If the data matters,
+> turn it on.
+
 ---
 
 ## What connects to the internet
@@ -136,6 +152,11 @@ platform implementation, not this repository.
   tool asks again for every model-selected argument set. An API caller can request enablement for an
   acknowledged definition, and approval is not containment. Only enable definitions whose complete
   behavior and destination you trust.
+- **The local model proxy** — this one goes the *other* way: it lets another program on **this machine**
+  use your local models over an OpenAI-compatible API. Nothing leaves the computer — the proxy is
+  loopback-only, like the rest of the app, and it additionally requires a bearer key you generate
+  yourself in **Settings → Node Settings**. It is unusable until you generate that key, and revoking it
+  closes the surface again.
 - **OpenTelemetry export** — only if you deliberately configure an endpoint.
 - **A dormant connection to an older platform this project grew from** — disabled on a fresh install
   and only active if explicitly enabled.

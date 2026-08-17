@@ -36,10 +36,10 @@ The corollary that matters for review: a pull request that adds a training conce
 
 A run acquires two things for its whole duration:
 
-- a process-wide `ITrainingActivity` marker (implemented as the shared `IGpuWorkGate`, whose exclusive/shared admission makes this marker and every other queue's converse check one atomic decision under one lock), and
+- a process-wide training-activity hold — referred to below as the `ITrainingActivity` marker, which is a conceptual name in this ADR and not a C# type: the mechanism is `IGpuWorkGate.TryBeginExclusive(GpuWorkKind.TrainingRun)`, whose exclusive/shared admission makes this marker and every other queue's converse check one atomic decision under one lock — and
 - the existing supervisor runtime-mutation lease (`TryAcquireRuntimeMutationLeaseAsync`), which already refuses while any model is loaded.
 
-That second acquisition gives training the same eject-first user experience the llama.cpp source build already has: a run cannot start while a model is resident, and the refusal surfaces as the established `runtime-busy` outcome rather than as a new failure vocabulary. Dataset generation, benchmark runs and image jobs check `ITrainingActivity` before starting, and conversely a run start refuses while any of them is active.
+That second acquisition gives training the same eject-first user experience the llama.cpp source build already has: a run cannot start while a model is resident, and the refusal surfaces as the established `runtime-busy` outcome rather than as a new failure vocabulary. Dataset generation, benchmark runs and image jobs take a shared admission on the same gate before starting (`IGpuWorkGate.TryBeginShared` with `GpuWorkKind.DatasetGeneration`, `GpuWorkKind.Benchmark`, `GpuWorkKind.ImageJob`), which is refused while an exclusive holder owns the node, and conversely a run start refuses while any of them is active.
 
 **`IGpuModelLoadAdmission` is held only for brief load windows** — the staged-artifact smoke gate, and nothing else. It is never held across a run. This is the sharpest edge in the decision and it is deliberate: that semaphore serializes every model load node-wide, so holding it for hours would not merely queue other work, it would convert every waiting chat and image load into a `GpuModelLoadAdmissionTimeoutException`. Exclusivity is expressed by the training marker plus the mutation lease; the load-admission semaphore keeps meaning what it already means.
 

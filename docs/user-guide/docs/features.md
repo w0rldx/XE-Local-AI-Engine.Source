@@ -9,7 +9,8 @@ Everything here runs **on your own computer** unless you deliberately connect an
 **Jump to:** [Chat](#chat) · [Finding & choosing models](#finding-and-choosing-models) ·
 [Managing models](#managing-models) · [Your documents](#your-own-documents) ·
 [Agents](#agents) · [Custom tools](#custom-tools) · [Automation](#automation) · [Voice](#voice) · [Images](#image-generation) ·
-[Development Mode](#development-mode) · [Advanced](#advanced)
+[Development Mode](#development-mode) · [Benchmarks](#benchmarks) · [Fine-tuning](#fine-tuning-training) ·
+[Advanced](#advanced)
 
 ---
 
@@ -29,6 +30,16 @@ Also available: file attachments, per-message model selection, adjustable reason
 that support step-by-step thinking, and advanced sampling controls if you want to experiment.
 
 > **New to this?** [Context, tokens and reasoning explained](glossary.md#context-context-window)
+
+### Show it a picture
+
+Some local models can look at images as well as read text. When the model you've selected can, an
+**Attach image** button appears in the composer alongside the file attachment button; when it can't,
+the button isn't there — so you never send an image to a model that would silently ignore it.
+
+This needs a small companion file (a "vision projector") that ships alongside some models. The app
+downloads it automatically when you download a model from Hugging Face that has one. A model you
+[imported yourself](#import-a-gguf-you-already-have) doesn't get one, so imported models are text-only.
 
 ---
 
@@ -83,6 +94,18 @@ fits your machine** — plus a recommended pick.
 
 Installed models with their detected capabilities — whether each supports tools, thinking, and so on.
 
+### Import a GGUF you already have
+
+If you already have model files on disk, **Import model** on this page takes the full path to one
+`.gguf` file, shows you what it found — size, architecture, quantization — and then **copies** it into
+the app's own models folder so it appears alongside everything else, labelled **Imported**.
+
+It copies rather than moves, so you keep your original and need room for a second copy; the preview
+warns you if there isn't enough. One standalone chat model per import — models split across several
+files, embedding models and rerankers are refused rather than half-imported.
+
+> [The full rules, and why there's no scan-a-folder option](faq.md#can-i-use-gguf-models-i-already-have)
+
 ### See what's using memory, and free it
 
 ![Loaded models with eject](../media/screenshots/loaded-models@2x.png)
@@ -108,6 +131,12 @@ actual documents rather than from memory.
 ![Documents in a knowledge base](../media/screenshots/knowledge-documents@2x.png)
 
 Documents are processed and indexed locally. Nothing is uploaded anywhere.
+
+### Or point it at a code repository
+
+Instead of uploading files one by one, you can index a whole **Git repository** you've already
+registered with the app — it pulls in the tracked, unignored text and code files from it into the
+active collection. Handy for asking questions about a codebase rather than a pile of documents.
 
 ### Search that combines two approaches
 
@@ -238,6 +267,57 @@ your file and network access. The protections are application-level.
 
 ---
 
+## Benchmarks
+
+"Which of these models is actually better *for what I do*?" is hard to answer from a spec sheet.
+**Benchmarks** answers it by measurement.
+
+You create a **project**: one task, written by you, and one agent to carry it out. Then you run that
+same frozen task against as many models as you like. Because the task never changes between runs, the
+results are comparable — and a project locks itself once it has runs, so it can't drift underneath you.
+
+Each run records how long it took, how many tokens it produced and the resulting speed, plus the exact
+settings the model was launched with. You give each result a score out of 5, and you can optionally
+switch on an **automated judge**: a second model that reads the output and returns its own score out of
+5 with a written rationale. The judge runs separately, only after a successful run, and if the judge
+fails your original result is untouched.
+
+For the technically minded: the **KV-cache type** is chosen per run, so you can measure what that
+setting actually costs you rather than guessing. → [Details](for-experienced-users.md#benchmarks)
+
+---
+
+## Fine-tuning (Training)
+
+> ### ⚠️ Advanced, and demanding. **Linux with an NVIDIA graphics card only.**
+
+Everything else in the app *uses* models. **Training** makes one: you can fine-tune a model on your own
+data, entirely on your own machine. *(No screenshots yet — this section is newer than the rest of the
+tour.)*
+
+The route from nothing to a tuned model:
+
+1. **Datasets** — describe the kind of examples you want, pick a local model to generate them
+   ("the teacher"), and let it produce a training set. You review every sample and approve or reject
+   it. An optional second model can score them for you first.
+2. **Training** — pick a dataset and a base model, and start a run. The app estimates whether the run
+   fits in your VRAM and refuses it if it doesn't. Loss and step progress stream live while it works.
+3. **Export** — turn the finished result into a normal model file, at a quantization you choose, and
+   the app smoke-tests it before you keep it. One click registers it as an installed model like any
+   other.
+4. **Comparisons** — score the original model and your tuned model on the *same* held-back examples
+   and read the difference, per category. Optionally pair it with two benchmark runs to see the speed
+   cost too.
+
+A training run **takes the whole graphics card** while it runs, so chat, image generation and
+benchmarks all wait. Before your first run you install a self-contained Python environment from the
+Training page — expect a multi-gigabyte download, and the app checks free disk, memory and your NVIDIA
+driver before it starts.
+
+→ [The full pipeline, with the actual limits](for-experienced-users.md#fine-tuning-training)
+
+---
+
 ## Advanced
 
 ### Usage accounting
@@ -256,6 +336,16 @@ an exact upstream version, refusing to proceed if the source doesn't match, with
 live into the interface.
 
 This needs testing across distributions and drivers. → [Installing on Linux](install-linux.md)
+
+### Use your local models from other tools
+
+**Settings → Node Settings → Local model proxy** exposes this node's local models over an
+**OpenAI-compatible API**, so another program on the same machine — an editor plugin, a script, another
+app — can point its `base_url` at it and use your models as if they were a cloud provider.
+
+It is **off until you generate a key**. The key is shown once, can be revoked or regenerated at any
+time, and the proxy is only reachable from this machine. What comes back is the plain model — no
+agent persona, tools, memory or knowledge-base grounding.
 
 ### Canvas
 
