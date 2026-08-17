@@ -145,7 +145,9 @@ public sealed class BenchmarkRunExecutor(
             var persisted = await MarkPrimarySucceededAsync(work,
                     new BenchmarkPrimarySuccessCommand(work.RunId,
                         work.Version,
-                        BenchmarkExecutionSerialization.SerializeParts(capture.Parts),
+                        // Coalesced HERE, at the terminal write, not in the capture: the live stream needs one
+                        // event per delta, storage needs one part per contiguous run (see BenchmarkOutputParts).
+                        BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.Coalesce(capture.Parts)),
                         terminalEvent.Sequence,
                         effectiveContext,
                         durationMs,
@@ -424,8 +426,11 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
 
         lock (_gate)
         {
-            AppendTextDelta(state.StreamedContent, ref _contentLength, "output", BenchmarkRunStreamEventKind.OutputDelta);
-            AppendTextDelta(state.StreamedThinkingContent, ref _reasoningLength, "reasoning", BenchmarkRunStreamEventKind.ReasoningDelta);
+            AppendTextDelta(state.StreamedContent, ref _contentLength, BenchmarkOutputParts.OutputKind, BenchmarkRunStreamEventKind.OutputDelta);
+            AppendTextDelta(state.StreamedThinkingContent,
+                ref _reasoningLength,
+                BenchmarkOutputParts.ReasoningKind,
+                BenchmarkRunStreamEventKind.ReasoningDelta);
             if (state.Status is InvocationStatus.Completed or InvocationStatus.Failed or InvocationStatus.Cancelled)
             {
                 TerminalState = state;

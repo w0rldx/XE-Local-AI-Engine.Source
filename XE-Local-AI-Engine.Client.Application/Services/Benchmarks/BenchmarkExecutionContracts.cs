@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -250,6 +251,129 @@ public sealed record BenchmarkOutputPart(
     string? Arguments = null,
     string? Result = null,
     bool? IsError = null);
+
+/// <summary>
+///     Shaping for a run's output parts. The live capture appends ONE part per stream delta, so a thinking model's turn
+///     arrives as thousands of <c>{"kind":"reasoning","content":" 5"}</c> parts (measured: 476 KB of JSON for a 4.3k-token
+///     answer). Nothing downstream wants that granularity: the terminal write stores the COALESCED form, and the judge
+///     grades a further-reduced projection of it. The part schema is unchanged either way — same kinds, same property
+///     names — so every existing reader (the endpoint DTO, the live pane, the transcript viewer) is unaffected.
+/// </summary>
+public static class BenchmarkOutputParts
+{
+    public const string OutputKind = "output";
+    public const string ReasoningKind = "reasoning";
+
+    /// <summary>Appended to the last text part the judge is shown when the answer had to be cut to fit its context.</summary>
+    public const string TruncationMarker = "\n\n[truncated: the primary output exceeded the judge context budget]";
+
+    // ponytail: a coarse character allowance rather than a second context budgeter. Four characters per token mirrors
+    // HeuristicTokenEstimator's divisor, and half the window is left for the system prompt, task, rubric, output schema
+    // and the judge's own verdict. Ceiling: tool arguments and results are not counted, so a tool-heavy transcript can
+    // still overrun. Upgrade path is to budget the BUILT payload with ITokenEstimator if that ever bites.
+    private const int EstimatedCharsPerToken = 4;
+    private const int MinimumJudgeTextChars = 2048;
+
+    /// <summary>
+    ///     Merges adjacent text parts of the same kind (output with output, reasoning with reasoning) into one part.
+    ///     Tool-call and tool-result parts pass through untouched and act as boundaries, so the transcript order is
+    ///     preserved exactly — text before a tool call never merges with text after it.
+    /// </summary>
+    public static IReadOnlyList<BenchmarkOutputPart> Coalesce(IEnumerable<BenchmarkOutputPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        List<BenchmarkOutputPart> merged = [];
+        var text = new StringBuilder();
+        string? pendingKind = null;
+        foreach (var part in parts)
+        {
+            var isText = part.Kind is OutputKind or ReasoningKind;
+            if (isText && string.Equals(pendingKind, part.Kind, StringComparison.Ordinal))
+            {
+                _ = text.Append(part.Content);
+                continue;
+            }
+
+            if (pendingKind is not null)
+            {
+                merged.Add(new BenchmarkOutputPart(pendingKind, Content: text.ToString()));
+                _ = text.Clear();
+                pendingKind = null;
+            }
+
+            if (isText)
+            {
+                pendingKind = part.Kind;
+                _ = text.Append(part.Content);
+            }
+            else
+            {
+                merged.Add(part);
+            }
+        }
+
+        if (pendingKind is not null)
+        {
+            merged.Add(new BenchmarkOutputPart(pendingKind, Content: text.ToString()));
+        }
+
+        return merged;
+    }
+
+    /// <summary>
+    ///     The parts the judge is shown: <see cref="Coalesce" />d, with every <c>reasoning</c> part DROPPED. Hidden
+    ///     chain-of-thought is not the graded answer — the rubric evaluates the visible output — and on a thinking model
+    ///     the reasoning alone blew the judge context (measured: 107,192 estimated tokens against a 16,384 window, so
+    ///     every judging failed before inference). Text and tool parts are kept, in order.
+    ///     <para>
+    ///         Defensively bounded: if the reasoning-free text still cannot plausibly fit
+    ///         <paramref name="judgeContextTokens" />, the tail is cut and the cut is marked with
+    ///         <see cref="TruncationMarker" /> so the judge grades a visibly partial answer instead of the judging
+    ///         failing outright. Truncation applies to the judge's copy only; the stored transcript keeps every part.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlyList<BenchmarkOutputPart> ForJudge(IEnumerable<BenchmarkOutputPart> parts, int judgeContextTokens)
+    {
+        var graded = Coalesce(parts)
+                     .Where(static part => !string.Equals(part.Kind, ReasoningKind, StringComparison.Ordinal))
+                     .ToArray();
+        var allowance = Math.Max(MinimumJudgeTextChars, judgeContextTokens / 2 * EstimatedCharsPerToken);
+        if (graded.Sum(static part => part.Content?.Length ?? 0) <= allowance)
+        {
+            return graded;
+        }
+
+        List<BenchmarkOutputPart> bounded = [];
+        var remaining = allowance;
+        foreach (var part in graded)
+        {
+            if (part.Content is not { } content)
+            {
+                bounded.Add(part);
+                continue;
+            }
+
+            if (content.Length <= remaining)
+            {
+                bounded.Add(part);
+                remaining -= content.Length;
+                continue;
+            }
+
+            if (remaining > 0)
+            {
+                bounded.Add(part with
+                {
+                    Content = string.Concat(content.AsSpan(0, remaining), TruncationMarker)
+                });
+            }
+
+            remaining = 0;
+        }
+
+        return bounded;
+    }
+}
 
 public sealed class BenchmarkContextAdmissionPolicy(int requiredContextTokens) : IInvocationGenerationAdmissionPolicy
 {
