@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -95,25 +96,25 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         return true;
     }
 
-    internal static (VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason) ClassifyFailure(Exception exception)
+    internal static ClassifiedFailure ClassifyFailure(Exception exception)
     {
         return exception switch
         {
-            OperationCanceledException or TimeoutException => (VelopackCheckOutcome.Offline, AppUpdateFailureReason.Timeout),
-            ChecksumFailedException => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Integrity),
-            AuthenticationException => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Tls),
+            OperationCanceledException or TimeoutException => new ClassifiedFailure(VelopackCheckOutcome.Offline, AppUpdateFailureReason.Timeout),
+            ChecksumFailedException => new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.Integrity),
+            AuthenticationException => new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.Tls),
             JsonException or FormatException or InvalidDataException =>
-                (VelopackCheckOutcome.Failed, AppUpdateFailureReason.MalformedFeed),
+                new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.MalformedFeed),
             HttpRequestException httpException => ClassifyHttpFailure(httpException),
-            _ => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Unexpected)
+            _ => new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.Unexpected)
         };
     }
 
-    private static (VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason) ClassifyHttpFailure(HttpRequestException exception)
+    private static ClassifiedFailure ClassifyHttpFailure(HttpRequestException exception)
     {
         if (exception.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.GatewayTimeout)
         {
-            return (VelopackCheckOutcome.Offline, AppUpdateFailureReason.Timeout);
+            return new ClassifiedFailure(VelopackCheckOutcome.Offline, AppUpdateFailureReason.Timeout);
         }
 
         return exception.HttpRequestError switch
@@ -121,12 +122,16 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             HttpRequestError.NameResolutionError or
                 HttpRequestError.ConnectionError or
                 HttpRequestError.ProxyTunnelError or
-                HttpRequestError.ResponseEnded => (VelopackCheckOutcome.Offline, AppUpdateFailureReason.Transport),
-            HttpRequestError.SecureConnectionError => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Tls),
-            HttpRequestError.InvalidResponse => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.MalformedFeed),
-            _ => (VelopackCheckOutcome.Failed, AppUpdateFailureReason.Http)
+                HttpRequestError.ResponseEnded => new ClassifiedFailure(VelopackCheckOutcome.Offline, AppUpdateFailureReason.Transport),
+            HttpRequestError.SecureConnectionError => new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.Tls),
+            HttpRequestError.InvalidResponse => new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.MalformedFeed),
+            _ => new ClassifiedFailure(VelopackCheckOutcome.Failed, AppUpdateFailureReason.Http)
         };
     }
+
+    /// <summary>An update-check failure mapped to the reported outcome and the stable failure reason.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    internal readonly record struct ClassifiedFailure(VelopackCheckOutcome Outcome, AppUpdateFailureReason Reason);
 }
 
 /// <summary>

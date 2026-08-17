@@ -28,7 +28,7 @@ internal static class BrowserLauncher
     /// <param name="url">The loopback URL to open.</param>
     /// <param name="isWindows"><c>true</c> on Windows; otherwise the Linux command is used.</param>
     /// <returns>The file name (<c>explorer</c> / <c>xdg-open</c>) and the URL argument.</returns>
-    internal static (string FileName, string Arguments) BuildOpenCommand(string url, bool isWindows)
+    internal static OpenCommand BuildOpenCommand(string url, bool isWindows)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
 
@@ -36,8 +36,8 @@ internal static class BrowserLauncher
         // so callers must never treat a non-zero exit as failure.
         // Linux: "xdg-open <url>" defers to the desktop's default browser.
         return isWindows
-            ? ("explorer", url)
-            : ("xdg-open", url);
+            ? new OpenCommand("explorer", url)
+            : new OpenCommand("xdg-open", url);
     }
 
     /// <summary>
@@ -69,4 +69,7 @@ internal static class BrowserLauncher
                 "Could not open the default browser automatically. Open {DesktopUrl} manually to use the app.", url);
         }
     }
+
+    /// <summary>The program to launch and its single URL argument; never passed through a shell.</summary>
+    internal sealed record OpenCommand(string FileName, string Arguments);
 }
