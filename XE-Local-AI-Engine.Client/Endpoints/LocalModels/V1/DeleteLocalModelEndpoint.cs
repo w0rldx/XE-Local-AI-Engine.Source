@@ -17,20 +17,16 @@ public sealed class DeleteLocalModelEndpoint(
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
 
-    /// <summary>
-    ///     The deletion coordinator's refusal code for a base model that installed LoRA adapters launch against. It
-    ///     reaches this endpoint as a plain <see cref="InvalidOperationException" />, which the global handler would
-    ///     otherwise turn into a 500 for what is a perfectly ordinary conflict.
-    /// </summary>
-    private const string DependentAdaptersCode = "InstalledModelHasDependentAdapters";
-
     public override void Configure()
     {
         Delete(LocalApiRoutes.LocalModels.ModelByName);
         Policies(NodeAuthorizationPolicies.Operator);
+
+        // The coordinator's three refusals (dependent adapters, provider conflict, superseded provider map) are typed
+        // conflict exceptions the global ConflictExceptionHandler turns into this envelope — never caught here.
         Description(builder => builder
                                .Produces<DeleteLocalModelResponse>(StatusCodes.Status200OK)
-                               .Produces<DeleteLocalModelBlockedResponse>(StatusCodes.Status409Conflict));
+                               .ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(DeleteLocalModelRequest req, CancellationToken ct)
@@ -56,16 +52,6 @@ public sealed class DeleteLocalModelEndpoint(
             catch (KeyNotFoundException)
             {
                 // Delete is idempotent: an already-ejected/uninstalled model still reports success rather than 500ing.
-            }
-            catch (InvalidOperationException exception) when (string.Equals(exception.Message, DependentAdaptersCode, StringComparison.Ordinal))
-            {
-                await Send.ResultAsync(TypedResults.Conflict(new DeleteLocalModelBlockedResponse
-                          {
-                              Reason = DependentAdaptersCode,
-                              Message = "Installed LoRA adapters apply to this model. Remove them before deleting it."
-                          }))
-                          .ConfigureAwait(false);
-                return;
             }
         }
         else
