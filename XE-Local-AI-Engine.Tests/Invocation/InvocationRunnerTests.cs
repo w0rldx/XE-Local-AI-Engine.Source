@@ -3245,8 +3245,8 @@ public sealed class InvocationRunnerTests
                                                      .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
                                                      .Build();
 
-        // One registry instance shared by the runner and both collaborators, exactly as the DI graph wires it: a second
-        // copy would let a call be registered in one dictionary and resolved against another.
+        // One registry instance shared by the runner and all three collaborators, exactly as the DI graph wires it: a
+        // second copy would let a call be registered in one dictionary and resolved against another.
         var pendingToolCallRegistry = new PendingToolCallRegistry();
 
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
@@ -3281,7 +3281,7 @@ public sealed class InvocationRunnerTests
                 new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
                 pendingToolCallRegistry,
                 runtimeSettings),
-            attachmentTracker ?? CreateAttachmentTracker(),
+            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), pendingToolCallRegistry, runtimeSettings),
             NullLogger<InvocationRunner>.Instance);
     }
 
@@ -3312,19 +3312,24 @@ public sealed class InvocationRunnerTests
         return new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => dispatcher), TimeProvider.System);
     }
 
+    // The active turn's linked source now lives on InvocationLifecycleTracker; reach it through the runner's own
+    // tracker instance so these tests still observe the source the turn under test armed.
     private static CancellationTokenSource? GetActiveInvocationCancellationTokenSource(InvocationRunner runner)
     {
-        var field = AssertEx.NotNull(typeof(InvocationRunner).GetField("_invocationCancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic));
-        return (CancellationTokenSource?)field.GetValue(runner);
+        var tracker = GetPrivateField(runner, "_lifecycleTracker");
+        var field = AssertEx.NotNull(tracker.GetType().GetField("_invocationCancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic));
+        return (CancellationTokenSource?)field.GetValue(tracker);
     }
 
-    // The pending-call wait budget is read once at construction by three singletons — the runner, ToolApprovalCoordinator
-    // and ApiToolCallBridge — so shortening only one of them would silently miss the path under test.
+    // The pending-call wait budget is read once at construction by four singletons — the runner, ToolApprovalCoordinator,
+    // ApiToolCallBridge and InvocationLifecycleTracker (whose park deadline adds it on top of the turn budget) — so
+    // shortening only one of them would silently miss the path under test.
     private static void SetMaxPendingToolCallAge(InvocationRunner runner, TimeSpan maxPendingToolCallAge)
     {
         SetPrivateField(runner, "_maxPendingToolCallAge", maxPendingToolCallAge);
         SetPrivateField(GetPrivateField(runner, "_toolApprovalCoordinator"), "_maxPendingToolCallAge", maxPendingToolCallAge);
         SetPrivateField(GetPrivateField(runner, "_apiToolCallBridge"), "_maxPendingToolCallAge", maxPendingToolCallAge);
+        SetPrivateField(GetPrivateField(runner, "_lifecycleTracker"), "_maxPendingToolCallAge", maxPendingToolCallAge);
     }
 
     // The per-tool RequiresApproval overload now lives on ApiToolCallBridge; the runner only implements the

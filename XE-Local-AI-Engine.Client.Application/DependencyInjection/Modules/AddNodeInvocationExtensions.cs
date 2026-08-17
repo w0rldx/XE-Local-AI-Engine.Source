@@ -84,11 +84,13 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<LocalRuntimeWarmer>();
 
         // Singletons for the same reason the runner is: they own state that outlives the turn that created it — the
-        // session-approval memo spans a conversation, and a parked tool call is released by a post that arrives on a
-        // different call stack. All three share ONE PendingToolCallRegistry instance.
+        // session-approval memo spans a conversation, a parked tool call is released by a post that arrives on a
+        // different call stack, and the lifecycle tracker holds the live turn a cancel arriving on another stack must
+        // find. All four share ONE PendingToolCallRegistry instance.
         builder.Services.AddSingleton<PendingToolCallRegistry>();
         builder.Services.AddSingleton<ToolApprovalCoordinator>();
         builder.Services.AddSingleton<ApiToolCallBridge>();
+        builder.Services.AddSingleton<InvocationLifecycleTracker>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddHostedService<DetachedInvocationReaper>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
