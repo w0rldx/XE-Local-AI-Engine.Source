@@ -74,6 +74,18 @@ describe("BenchmarkRunsTable", () => {
 		expect(screen.queryByTestId("benchmark-rank-exclusion-ranked")).toBeNull();
 	});
 
+	// A cancelled judging is not a failed one — the operator only has to re-judge it, and the chip must say so rather
+	// than accusing the judge of failing.
+	it("distinguishes a cancelled judging from a failed one", () => {
+		renderTable([
+			benchmarkRunSummaryFixture({ id: "cancelled", rank: null, rankExclusionReason: "judge-cancelled" }),
+			benchmarkRunSummaryFixture({ id: "broken", rank: null, rankExclusionReason: "judge-failed" }),
+		]);
+
+		expect(screen.getByTestId("benchmark-rank-exclusion-cancelled").textContent).toBe("judge cancelled");
+		expect(screen.getByTestId("benchmark-rank-exclusion-broken").textContent).toBe("judge failed");
+	});
+
 	// The quality score without its source is ambiguous: an operator override and a judge verdict rank identically but
 	// mean different things.
 	it("labels where each quality score came from", () => {

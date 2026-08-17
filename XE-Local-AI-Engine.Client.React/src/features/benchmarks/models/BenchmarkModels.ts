@@ -28,6 +28,7 @@ export const benchmarkRankExclusionReasons = [
 	"no-score",
 	"judge-pending",
 	"judge-failed",
+	"judge-cancelled",
 	"policy-outdated",
 	"generation-stale",
 	"execution-key-mismatch",

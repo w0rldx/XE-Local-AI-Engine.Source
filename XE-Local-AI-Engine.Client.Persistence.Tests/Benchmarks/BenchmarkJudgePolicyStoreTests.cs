@@ -449,6 +449,34 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonNoScore, none.RankExclusionReason);
     }
 
+    // An operator who cancels a judging did not watch it fail. Folding the two into `judge-failed` told the operator to
+    // go looking for a broken judge when all the run needs is a re-judge.
+    [Test]
+    public async Task RunJudgeView_ReportsACancelledJudgingSeparatelyFromAFailedOne()
+    {
+        await using var context = await CreateDatabaseAsync("judge-view-cancelled.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        var cancelledRun = await SucceedRunAsync(store, project, revision).ConfigureAwait(false);
+        var cancelledWork = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkJudgeCancelledAsync(cancelledRun.Id, cancelledWork.Version).ConfigureAwait(false);
+
+        // Starting a run bumps the project's version, and StartRunAsync is version-checked against it.
+        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var failedRun = await SucceedRunAsync(store, current, revision).ConfigureAwait(false);
+        var failedWork = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkJudgeFailedAsync(failedRun.Id, failedWork.Version, "judge blew up").ConfigureAwait(false);
+
+        var cancelled = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(cancelledRun.Id).ConfigureAwait(false)).Judge);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Cancelled, cancelled.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonJudgeCancelled, cancelled.RankExclusionReason);
+
+        var failed = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(failedRun.Id).ConfigureAwait(false)).Judge);
+        AssertEx.Equal(BenchmarkRunJudgeStates.Failed, failed.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonJudgeFailed, failed.RankExclusionReason);
+    }
+
     private static BenchmarkLaunchReceiptCommand Receipt() =>
         new("{}", "{}", new string('e', count: 64), new string('r', count: 64), "identity", "cpu", null, null,
             new string('x', count: 64), false, "auto");

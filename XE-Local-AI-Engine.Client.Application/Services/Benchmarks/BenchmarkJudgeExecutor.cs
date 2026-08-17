@@ -37,6 +37,18 @@ public sealed class BenchmarkJudgeExecutor(
     private const string CapacityRejectedMessage = "The judge could not reserve enough local model capacity.";
     private const string InvocationFailedMessage = "The benchmark judge invocation failed. See local logs for details.";
 
+    /// <summary>
+    ///     The judge turn's constrained-decoding schema, parsed once. Cloned out of its document because a
+    ///     <see cref="JsonElement" /> does not outlive the <see cref="JsonDocument" /> it was read from.
+    /// </summary>
+    private static readonly JsonElement JudgeResponseFormatSchema = ParseJudgeResponseFormatSchema();
+
+    private static JsonElement ParseJudgeResponseFormatSchema()
+    {
+        using var document = JsonDocument.Parse(BenchmarkJudgeOutputSchemaV2.ResponseFormatJson);
+        return document.RootElement.Clone();
+    }
+
     public async Task ExecuteAsync(BenchmarkClaimedWork work, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(work);
@@ -209,7 +221,11 @@ public sealed class BenchmarkJudgeExecutor(
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
-            IsUnattended: true));
+            IsUnattended: true,
+            // The prompt ASKS for this shape and the parser refuses anything else, which cost one judge invocation in
+            // three against a small model. Constraining the decode makes the two agree instead of hoping they do; the
+            // response-format schema drops the string-length bounds the parser still enforces (see the constant).
+            ResponseJsonSchema: JudgeResponseFormatSchema));
     }
 
     /// <summary>

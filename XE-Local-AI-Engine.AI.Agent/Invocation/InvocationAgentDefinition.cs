@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -33,6 +34,14 @@ using Microsoft.Extensions.AI;
 ///     <see cref="InvocationSamplingOptions.NumCtx" /> is not, the factory writes it as the <c>num_ctx</c> chat option so
 ///     the inner provider-round budgeter sizes against the real window; a per-send <c>num_ctx</c> still wins.
 /// </param>
+/// <param name="ResponseJsonSchema">
+///     Optional JSON schema this turn's output is CONSTRAINED to. Null (the default) keeps the unconstrained path
+///     byte-identical: the factory sets no <see cref="ChatOptions.ResponseFormat" />, so no <c>response_format</c>
+///     reaches the wire. When set, the factory maps it through <see cref="ChatResponseFormat.ForJsonSchema" />, which
+///     the MEAI OpenAI adapter emits at <c>response_format.json_schema.schema</c> — the only path llama-server reads
+///     before compiling it into a GBNF grammar. The CALLER owns keeping the schema free of repetition bounds
+///     (<c>minLength</c>/<c>maxLength</c>/<c>pattern</c>/<c>minItems</c>/<c>maxItems</c>), which that grammar rejects.
+/// </param>
 public sealed record InvocationAgentDefinition(
     string ModelId,
     string Instructions,
@@ -42,4 +51,5 @@ public sealed record InvocationAgentDefinition(
     bool SupportsThinking = true,
     InvocationSamplingOptions? Sampling = null,
     IReadOnlyList<InvocationSkill>? Skills = null,
-    int? EffectiveContextTokens = null);
+    int? EffectiveContextTokens = null,
+    JsonElement? ResponseJsonSchema = null);

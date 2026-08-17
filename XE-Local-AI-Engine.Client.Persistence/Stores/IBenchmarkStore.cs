@@ -411,8 +411,8 @@ public sealed record BenchmarkLaunchReceiptCommand(
 /// <param name="State"><c>none</c> when there is no attempt, otherwise the current attempt's status, lowercased.</param>
 /// <param name="RankExclusionReason">
 ///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked. One of <c>no-score</c>,
-///     <c>judge-pending</c>, <c>judge-failed</c>, <c>policy-outdated</c>, <c>generation-stale</c>,
-///     <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>.
+///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
+///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>.
 /// </param>
 public sealed record BenchmarkRunJudgeView(
     string State,
@@ -441,6 +441,9 @@ public static class BenchmarkRunJudgeStates
     public const string ReasonNoScore = "no-score";
     public const string ReasonJudgePending = "judge-pending";
     public const string ReasonJudgeFailed = "judge-failed";
+
+    /// <summary>An operator-cancelled judging is not a failed one: re-judging is all it needs.</summary>
+    public const string ReasonJudgeCancelled = "judge-cancelled";
     public const string ReasonPolicyOutdated = "policy-outdated";
     public const string ReasonGenerationStale = "generation-stale";
     public const string ReasonExecutionKeyMismatch = "execution-key-mismatch";

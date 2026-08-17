@@ -140,6 +140,13 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         // the pre-sampling path — the no-override guarantee.
         ApplySamplingOptions(chatOptions, additionalProperties, definition.Sampling);
 
+        // Constrained decoding. Null (every path but the benchmark judge) leaves ResponseFormat unset, which is what
+        // keeps `response_format` off the wire entirely rather than sending a permissive one.
+        if (definition.ResponseJsonSchema is { } responseSchema)
+        {
+            chatOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(responseSchema);
+        }
+
         // The request budget can never exceed the process that was actually launched. Preserve a smaller explicit
         // num_ctx, but clamp a larger explicit/default budget to the effective process context.
         if (definition.EffectiveContextTokens is { } effectiveContext

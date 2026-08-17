@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -179,6 +180,95 @@ public sealed class BenchmarkJudgeScoringContractsTests
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "rubric");
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "exactly one JSON object");
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "no markdown");
+    }
+
+    // llama.cpp compiles the response-format schema into a GBNF grammar, and a repetition bound in it breaks the
+    // sampler's initialization outright. The constrained-decoding copy therefore carries NO bounds — and must otherwise
+    // be the SAME schema as the one the prompt documents, or the decode and the parser would disagree by construction.
+    [Test]
+    public void ResponseFormatSchema_IsTheDocumentedSchemaWithEveryRepetitionBoundRemoved()
+    {
+        using var responseFormat = JsonDocument.Parse(BenchmarkJudgeOutputSchemaV2.ResponseFormatJson);
+        using var documented = JsonDocument.Parse(BenchmarkJudgeOutputSchemaV2.Json);
+
+        AssertEx.Empty(BoundKeys(responseFormat.RootElement), "The constrained-decoding schema must carry no repetition bounds.");
+        AssertEx.False(BoundKeys(documented.RootElement).Count == 0, "The documented schema is the bounded one.");
+        AssertEx.Equal(JsonSerializer.Serialize(StripBounds(documented.RootElement)),
+            JsonSerializer.Serialize(StripBounds(responseFormat.RootElement)),
+            "The two schemas must differ ONLY by the repetition bounds.");
+
+        // The bounds that are NOT repetition bounds stay: they are what stops a model handing itself an 11.
+        var score = responseFormat.RootElement.GetProperty("properties").GetProperty("criteria")
+                                  .GetProperty("items").GetProperty("properties").GetProperty("score");
+        AssertEx.Equal("integer", score.GetProperty("type").GetString());
+        AssertEx.Equal(BenchmarkJudgeOutputSchemaV2.MinimumCriterionScore, score.GetProperty("minimum").GetInt32());
+        AssertEx.Equal(BenchmarkJudgeOutputSchemaV2.MaximumCriterionScore, score.GetProperty("maximum").GetInt32());
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            responseFormat.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetInt32());
+        AssertEx.False(responseFormat.RootElement.GetProperty("additionalProperties").GetBoolean());
+    }
+
+    private static readonly string[] RepetitionBoundKeys = ["minLength", "maxLength", "minItems", "maxItems"];
+
+    private static List<string> BoundKeys(JsonElement element)
+    {
+        var found = new List<string>();
+        Walk(element, found);
+        return found;
+
+        static void Walk(JsonElement current, List<string> found)
+        {
+            switch (current.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in current.EnumerateObject())
+                    {
+                        if (RepetitionBoundKeys.Contains(property.Name, StringComparer.Ordinal))
+                        {
+                            found.Add(property.Name);
+                        }
+
+                        Walk(property.Value, found);
+                    }
+
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in current.EnumerateArray())
+                    {
+                        Walk(item, found);
+                    }
+
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    /// <summary>The element with every repetition-bound property removed, so the two schemas can be compared directly.</summary>
+    private static JsonNode? StripBounds(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var mapped = new JsonObject();
+                foreach (var property in element.EnumerateObject().Where(static property => !RepetitionBoundKeys.Contains(property.Name, StringComparer.Ordinal)))
+                {
+                    mapped[property.Name] = StripBounds(property.Value);
+                }
+
+                return mapped;
+            case JsonValueKind.Array:
+                var items = new JsonArray();
+                foreach (var item in element.EnumerateArray())
+                {
+                    items.Add(StripBounds(item));
+                }
+
+                return items;
+            default:
+                return JsonNode.Parse(element.GetRawText());
+        }
     }
 
     private static int Compute((string Id, int Weight, int Score)[] criteria) =>
