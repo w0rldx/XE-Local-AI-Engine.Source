@@ -81,7 +81,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         var rejections = new List<string>(plan.Rejections);
         var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
-        var numstat = new Dictionary<string, (int Added, int Removed)>(StringComparer.Ordinal);
+        var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
         foreach (var alias in plan.Aliases)
         {
             var check = await CheckSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
@@ -167,7 +167,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             }
 
             // Populate line counts for the applied files (parity with preview).
-            var numstat = new Dictionary<string, (int Added, int Removed)>(StringComparer.Ordinal);
+            var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
             var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
             if (stats is not null && stats.ExitCode == 0)
             {
@@ -203,7 +203,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--whitespace=nowarn"), cancellationToken).ConfigureAwait(false);
     }
 
-    private static void MergeNumstat(Dictionary<string, (int Added, int Removed)> numstat, string alias, string output)
+    private static void MergeNumstat(Dictionary<string, LineStat> numstat, string alias, string output)
     {
         // git apply --numstat lines: "<added>\t<removed>\t<path>" where <path> is the in-patch b-side path that
         // -p2 has already stripped of the a/ + alias prefix, leaving a folder-relative path. Binary file entries
@@ -219,12 +219,12 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             var added = int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var a) ? a : 0;
             var removed = int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ? r : 0;
             var relative = parts[2].Trim();
-            numstat[string.Create(CultureInfo.InvariantCulture, $"{alias}/{relative}")] = (added, removed);
+            numstat[string.Create(CultureInfo.InvariantCulture, $"{alias}/{relative}")] = new LineStat(added, removed);
         }
     }
 
     private static IReadOnlyList<PatchApplyFileEntry> ApplyNumstat(IReadOnlyList<PatchApplyFileEntry> files,
-        IReadOnlyDictionary<string, (int Added, int Removed)> numstat)
+        IReadOnlyDictionary<string, LineStat> numstat)
     {
         return files
                .Select(file =>
@@ -540,4 +540,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             };
         }
     }
+
+    // Per-file line counts as `git apply --numstat` reports them. Binary entries and unparsable counts land as zeroes.
+    private readonly record struct LineStat(int Added, int Removed);
 }

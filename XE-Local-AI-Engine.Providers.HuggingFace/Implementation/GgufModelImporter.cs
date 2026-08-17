@@ -138,7 +138,7 @@ internal sealed class GgufModelImporter(
         }
         catch (Exception exception)
         {
-            var cleanupFailure = TryDeleteOwnedArtifacts((temporaryPath, true), (temporarySidecarPath, true));
+            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll(new OwnedArtifact(temporaryPath, Owned: true), new OwnedArtifact(temporarySidecarPath, Owned: true));
             if (cleanupFailure is not null)
             {
                 throw new GgufAcquisitionCleanupException("Import cleanup requires recovery.",
@@ -235,8 +235,8 @@ internal sealed class GgufModelImporter(
                     "The committed import registry identity changed during rollback.");
             }
 
-            DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
-                (commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
+            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
+                new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
             return;
         }
 
@@ -265,11 +265,11 @@ internal sealed class GgufModelImporter(
                     "The committed import artifact identity no longer matches the rollback receipt.");
             }
 
-            DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, true));
+            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
         }
         else if (commitReceipt.OwnsFinalGguf && Directory.Exists(commitReceipt.FinalGgufPath))
         {
-            DeleteOwnedArtifacts((commitReceipt.FinalGgufPath, true));
+            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
         }
 
         if (commitReceipt.OwnsFinalSidecar && File.Exists(commitReceipt.FinalSidecarPath))
@@ -286,11 +286,11 @@ internal sealed class GgufModelImporter(
                     "The committed import recovery metadata no longer matches the rollback receipt.");
             }
 
-            DeleteOwnedArtifacts((commitReceipt.FinalSidecarPath, true));
+            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
         }
         else if (commitReceipt.OwnsFinalSidecar && Directory.Exists(commitReceipt.FinalSidecarPath))
         {
-            DeleteOwnedArtifacts((commitReceipt.FinalSidecarPath, true));
+            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
         }
     }
 
@@ -303,7 +303,7 @@ internal sealed class GgufModelImporter(
     public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedImport);
-        DeleteOwnedArtifacts((preparedImport.TemporarySidecarPath, true), (preparedImport.TemporaryGgufPath, true));
+        OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(preparedImport.TemporarySidecarPath, Owned: true), new OwnedArtifact(preparedImport.TemporaryGgufPath, Owned: true));
         return Task.CompletedTask;
     }
 
@@ -429,47 +429,6 @@ internal sealed class GgufModelImporter(
 
         return inspection.Rejections.All(static rejection => rejection == GgufImportRejectionCode.QuantizationRequired)
                && GgufQuantDetector.IsCanonical(selectedQuantization);
-    }
-
-    private static Exception? TryDeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
-    {
-        List<Exception>? failures = null;
-        foreach (var artifact in artifacts)
-        {
-            try
-            {
-                DeleteOwned(artifact.Path, artifact.Owned);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
-            {
-                (failures ??= []).Add(exception);
-            }
-        }
-
-        return failures is null ? null : new AggregateException(failures);
-    }
-
-    private static void DeleteOwnedArtifacts(params (string Path, bool Owned)[] artifacts)
-    {
-        var failure = TryDeleteOwnedArtifacts(artifacts);
-        if (failure is not null)
-        {
-            throw new IOException("One or more import-owned artifacts could not be removed.", failure);
-        }
-    }
-
-    private static void DeleteOwned(string path, bool owned)
-    {
-        if (!owned)
-        {
-            return;
-        }
-
-        File.Delete(path);
-        if (File.Exists(path) || Directory.Exists(path))
-        {
-            throw new IOException("An import-owned artifact could not be removed.");
-        }
     }
 
     // FlushAsync drains managed buffers but exposes no flush-to-disk overload. This short synchronous durability
