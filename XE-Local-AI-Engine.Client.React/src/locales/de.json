@@ -1681,6 +1681,25 @@
 				"cleared": "Token gelöscht.",
 				"clearError": "Das Token konnte nicht gelöscht werden."
 			},
+			"localModelProxyKey": {
+				"title": "Lokaler Modell-Proxy",
+				"configured": "Schlüssel konfiguriert",
+				"none": "Kein Schlüssel",
+				"description": "Erlaube einem externen OpenAI-kompatiblen Tool (LiteLLM, Continue, einem lokalen Agenten), dein lokales Modell über diesen Node als gewöhnlichen OpenAI-Provider zu nutzen — setze dessen base_url auf den Endpunkt unten und dessen API-Schlüssel auf den erzeugten Schlüssel. Bereitgestellt wird nur das reine Modell, ohne Agenten-Tools und ohne Gedächtnis. Gespeichert wird nur ein Einweg-Hash des Schlüssels, daher wird er beim Erzeugen genau einmal angezeigt und kann danach nicht mehr abgerufen werden. Nur Clients auf diesem Rechner können sich verbinden.",
+				"endpointLabel": "base_url",
+				"prefixLabel": "Schlüssel",
+				"notRetrievable": "Es werden nur die ersten Zeichen angezeigt. Der vollständige Schlüssel wird nicht gespeichert und kann nicht erneut angezeigt werden — erzeuge einen neuen, wenn du ihn nicht mehr hast.",
+				"lastUsed": "Zuletzt verwendet {{when}}",
+				"neverUsed": "Noch nie verwendet — es hat sich noch kein Client mit diesem Schlüssel verbunden.",
+				"revealTitle": "Kopiere diesen Schlüssel jetzt",
+				"revealWarning": "Dies ist das einzige Mal, dass dieser Schlüssel angezeigt wird. Er wird nicht gespeichert und kann nicht wiederhergestellt werden — wenn du ihn verlierst, musst du einen neuen erzeugen und jeden Client aktualisieren, der ihn verwendet.",
+				"dismissReveal": "Ich habe ihn kopiert",
+				"clientHint": "Richte deinen OpenAI-kompatiblen Client auf base_url = den Endpunkt oben mit api_key = dem erzeugten Schlüssel. Bereitgestellt wird nur das lokale Modell — keine Agenten-Tools, kein Gedächtnis, keine Wissensdatenbank.",
+				"regenerate": "Schlüssel neu erzeugen",
+				"generate": "Schlüssel erzeugen",
+				"revoke": "Schlüssel widerrufen",
+				"regenerateWarning": "Beim Neuerzeugen wird der Schlüssel sofort ersetzt — jeder Client, der noch mit dem alten konfiguriert ist, funktioniert dann nicht mehr."
+			},
 			"saved": "Knoteneinstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
 			"savedRestartRequired": "Knoteneinstellungen gespeichert. Einige der geänderten Einstellungen werden erst nach einem Neustart des Knotens wirksam.",
 			"fields": {

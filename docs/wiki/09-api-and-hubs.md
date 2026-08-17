@@ -70,7 +70,7 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | **NodeSettings** (`node-settings`) | get/save node settings, including the `VoiceFeatureEnabled` gate | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **CloudSettings** (`cloud-settings*`) | `cloud-settings`, `cloud-settings/entra/device-code/start\|status`, `cloud-settings/entra/auth-code/start\|status` | [Security & Privacy](12-security-and-privacy.md) |
 | **Tutorial** (`tutorial-state`) | `tutorial-state` (GET reads the current user's recorded tour entries; PUT upserts one) | [React Client](10-react-client.md) |
-| **Cloud / Codex** (`cloud/codex/*`) | `cloud/codex/login`, `cloud/codex/status`, `cloud/codex/logout` (ChatGPT OAuth) | [Chat](05-chat.md) |
+| **CloudCodex** (`cloud/codex/*`) | `cloud/codex/login`, `cloud/codex/status`, `cloud/codex/logout` (ChatGPT OAuth) | [Chat](05-chat.md) |
 | **LocalModels** (`models/*`) | `models`, `models/{name}`, `models/{name}/details\|kind\|unload`, `models/select`, `models/running` | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | **Invocations** (`invocations`) | invocation monitor | [Architecture Overview](01-architecture-overview.md) |
 | **Agents** (`agents/*`) | `agents`, `agents/{id}`, `agents/tool-capable-models`, `agents/templates(/import)`, `agents/{id}/playbook(/...)`, `.../golden-conversations(/...)`, `.../feedback-insights`, `.../playbook/monitor`, `.../execution-logs`, `agents/run-envelopes` (operator-gated run-envelope lifecycle list), `agents/usage-summary` (token-usage rollup by model + UTC day, metadata only) | [Agent Mode](04-agent-mode.md) |

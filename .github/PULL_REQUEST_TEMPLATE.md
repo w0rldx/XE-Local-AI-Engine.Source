@@ -18,3 +18,4 @@
 - [ ] No secrets, credentials, or runtime data committed
 - [ ] Generated files (e.g. the hey-api client) were regenerated, not hand-edited
 - [ ] Docs updated if behavior or contracts changed
+- [ ] Docs: wiki inventories updated if hubs/routes/features/projects changed (`python3 scripts/docs-inventory-check.py`)

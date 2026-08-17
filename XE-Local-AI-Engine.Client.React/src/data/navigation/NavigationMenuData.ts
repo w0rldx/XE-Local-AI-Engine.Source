@@ -154,7 +154,7 @@ const allNavigationLinks: INavigationLink[] = [
 		capability: "benchmarks",
 	},
 	// Training group. Each child carries its own capability (like Models / Automation / Preview), so the generic
-	// empty-group filter drops the whole group while `training` is off — which it is until the module can finish a run.
+	// empty-group filter drops the whole group if `training` is ever turned off again — it ships on today.
 	{
 		id: "training",
 		icon: IconSchool,
