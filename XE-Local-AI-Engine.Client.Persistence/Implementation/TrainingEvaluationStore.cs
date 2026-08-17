@@ -12,9 +12,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ITrainingEvaluationStore
 {
-    /// <summary>Matches the <c>error_message</c> column's declared max length.</summary>
-    private const int MaxErrorMessageLength = 1024;
-
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -205,7 +202,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
 
         var now = Now();
         work.Status = status;
-        work.ErrorMessage = Sanitize(errorMessage);
+        work.ErrorMessage = ErrorMessageTruncation.Truncate(errorMessage);
         work.FinishedAtUtc = now;
         work.Version++;
         evaluation.Status = status switch
@@ -214,7 +211,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             TrainingWorkStatus.Cancelled => TrainingEvaluationStatus.Cancelled,
             _ => TrainingEvaluationStatus.Failed
         };
-        evaluation.ErrorMessage = Sanitize(errorMessage);
+        evaluation.ErrorMessage = ErrorMessageTruncation.Truncate(errorMessage);
         evaluation.Version++;
         evaluation.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
@@ -398,16 +395,6 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
 
     private static bool IsTerminal(TrainingWorkStatus status) =>
         status is TrainingWorkStatus.Succeeded or TrainingWorkStatus.Failed or TrainingWorkStatus.Cancelled;
-
-    private static string? Sanitize(string? message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return null;
-        }
-
-        return message.Length > MaxErrorMessageLength ? message[..MaxErrorMessageLength] : message;
-    }
 
     private static void EnsureVersion(long actual, long expected)
     {
