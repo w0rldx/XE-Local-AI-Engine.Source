@@ -12,6 +12,10 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
     HuggingFaceOptions options,
     TimeProvider timeProvider) : IGgufDownloadTransaction
 {
+    // Names this pipeline in the compensation failure so the inner exception still says which transaction
+    // could not clean up after itself.
+    private const string CleanupOwnership = "download";
+
     public async Task<ResolvedGgufDownload> ResolveAsync(GgufModelRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -353,7 +357,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             }
         }
 
-        OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
             new OwnedArtifact(commitReceipt.FinalProjectorPath ?? string.Empty,
                 commitReceipt.FinalProjectorPath is not null && commitReceipt.OwnsFinalProjector),
             new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
@@ -374,7 +378,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             artifacts.Add(new OwnedArtifact(preparedDownload.TemporaryProjectorPath + ".part", Owned: true));
         }
 
-        OwnedArtifactCleanup.DeleteAll([.. artifacts]);
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, [.. artifacts]);
         return Task.CompletedTask;
     }
 

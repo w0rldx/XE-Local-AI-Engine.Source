@@ -12,6 +12,10 @@ internal sealed class GgufModelImporter(
     HuggingFaceOptions options,
     TimeProvider timeProvider) : IGgufModelImporter
 {
+    // Names this pipeline in the compensation failure so the inner exception still says which transaction
+    // could not clean up after itself.
+    private const string CleanupOwnership = "import";
+
     public async Task<PreparedGgufImport> PrepareAsync(GgufImportSource source,
         GgufImportDestination destination,
         IProgress<GgufImportProgress>? progress,
@@ -235,7 +239,7 @@ internal sealed class GgufModelImporter(
                     "The committed import registry identity changed during rollback.");
             }
 
-            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
                 new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
             return;
         }
@@ -265,11 +269,11 @@ internal sealed class GgufModelImporter(
                     "The committed import artifact identity no longer matches the rollback receipt.");
             }
 
-            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
         }
         else if (commitReceipt.OwnsFinalGguf && Directory.Exists(commitReceipt.FinalGgufPath))
         {
-            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
         }
 
         if (commitReceipt.OwnsFinalSidecar && File.Exists(commitReceipt.FinalSidecarPath))
@@ -286,11 +290,11 @@ internal sealed class GgufModelImporter(
                     "The committed import recovery metadata no longer matches the rollback receipt.");
             }
 
-            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
         }
         else if (commitReceipt.OwnsFinalSidecar && Directory.Exists(commitReceipt.FinalSidecarPath))
         {
-            OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
         }
     }
 
@@ -303,7 +307,7 @@ internal sealed class GgufModelImporter(
     public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedImport);
-        OwnedArtifactCleanup.DeleteAll(new OwnedArtifact(preparedImport.TemporarySidecarPath, Owned: true), new OwnedArtifact(preparedImport.TemporaryGgufPath, Owned: true));
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(preparedImport.TemporarySidecarPath, Owned: true), new OwnedArtifact(preparedImport.TemporaryGgufPath, Owned: true));
         return Task.CompletedTask;
     }
 
