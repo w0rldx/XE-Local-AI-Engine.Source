@@ -25,6 +25,31 @@ public interface ILocalModelDeletionJournalReconciler
     Task ReconcileAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+///     Thrown when a base model cannot be deleted because installed LoRA adapters launch against it. An adapter
+///     carries no weights of its own, so removing the base leaves every dependent adapter permanently unlaunchable.
+///     The global <c>ConflictExceptionHandler</c> turns it into a 409 with
+///     <c>conflictType = InstalledModelHasDependentAdapters</c> — endpoints must let it propagate, never catch it.
+/// </summary>
+public sealed class InstalledModelDependentAdaptersException()
+    : InvalidOperationException("Installed LoRA adapters apply to this model. Remove them before deleting it.");
+
+/// <summary>
+///     Thrown when an alias of the model being deleted is mapped to a runtime provider other than llama.cpp, so the
+///     GGUF deletion path is not the owner of that alias. Mapped to a 409 with
+///     <c>conflictType = InstalledModelProviderConflict</c>.
+/// </summary>
+public sealed class InstalledModelProviderConflictException()
+    : InvalidOperationException("The model is mapped to a different runtime provider. Refresh the model list and try again.");
+
+/// <summary>
+///     Thrown when a concurrent model mutation moved the provider map on past the revision this deletion (or its
+///     compensating rollback) read, so the write would clobber someone else's change. Mapped to a 409 with
+///     <c>conflictType = InstalledModelProviderMapSuperseded</c>; the operation is retryable after a refresh.
+/// </summary>
+public sealed class InstalledModelProviderMapSupersededException()
+    : InvalidOperationException("Another model change completed while this delete was running. Refresh the model list and try again.");
+
 public sealed class LocalModelDeletionCoordinator(
     IInstalledModelSnapshotCoordinator snapshotCoordinator,
     IInstalledGgufDeletionStore deletionStore,
@@ -98,7 +123,7 @@ public sealed class LocalModelDeletionCoordinator(
                     case ProviderMapRemovalResult.Absent:
                         break;
                     case ProviderMapRemovalResult.Superseded:
-                        throw new InvalidOperationException("InstalledModelProviderMapSuperseded");
+                        throw new InstalledModelProviderMapSupersededException();
                 }
             }
 
@@ -116,8 +141,21 @@ public sealed class LocalModelDeletionCoordinator(
         }
         catch
         {
-            await RollBackAsync(lease, journal, staged ?? stagePlan, aliasReceipt, mapReceipts, CancellationToken.None)
-                .ConfigureAwait(false);
+            // A failing compensation must never replace the failure that triggered it: the caller needs the original
+            // reason (and the endpoint its 409 mapping), while the rollback failure is what the retained journal and
+            // this log carry for recovery.
+            try
+            {
+                await RollBackAsync(lease, journal, staged ?? stagePlan, aliasReceipt, mapReceipts, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception rollbackFailure)
+            {
+                logger.LogError(rollbackFailure,
+                    "Installed-model deletion rollback failed for {ModelName}; the deletion journal is retained for startup recovery.",
+                    modelName);
+            }
+
             throw;
         }
     }
@@ -188,7 +226,7 @@ public sealed class LocalModelDeletionCoordinator(
         logger.LogWarning("Refused to delete {ModelName}: {DependentCount} installed adapter(s) apply to it.",
             snapshot.ModelName,
             dependents.Length);
-        throw new InvalidOperationException("InstalledModelHasDependentAdapters");
+        throw new InstalledModelDependentAdaptersException();
     }
 
     private async Task<IReadOnlyList<DeletionAliasMapping>> ReadAliasMappingsAsync(InstalledModelMutationLease lease,
@@ -202,7 +240,7 @@ public sealed class LocalModelDeletionCoordinator(
             if (mapping is not null
                 && !string.Equals(mapping.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("InstalledModelProviderConflict");
+                throw new InstalledModelProviderConflictException();
             }
 
             result.Add(new DeletionAliasMapping(aliasModelName, mapping));
@@ -223,7 +261,7 @@ public sealed class LocalModelDeletionCoordinator(
             if (await providerMapStore.TryRestoreAsync(lease, receipt, cancellationToken).ConfigureAwait(false)
                 == ProviderMapRestoreResult.Superseded)
             {
-                throw new InvalidOperationException("InstalledModelProviderMapSuperseded");
+                throw new InstalledModelProviderMapSupersededException();
             }
         }
 
