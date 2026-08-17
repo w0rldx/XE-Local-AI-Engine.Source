@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Covers both interceptor directions for the three encrypted evaluation columns. A column registered for
+///     Covers both interceptor directions for the encrypted evaluation columns. A column registered for
 ///     encryption but not for decryption (or the reverse) round-trips as garbage rather than failing loudly, so each is
 ///     asserted as ciphertext at rest AND as plaintext after a fresh read.
 /// </summary>
@@ -16,6 +16,7 @@ public sealed class TrainingEvaluationEncryptionTests : IDisposable
 {
     private const string MembershipJson = """{"schemaVersion":1,"holdoutSampleIds":["6f9619ff-8b86-d011-b42d-00c04fc964ff"]}""";
     private const string ResultsJson = """{"schemaVersion":1,"entries":[{"sampleId":"6f9619ff-8b86-d011-b42d-00c04fc964ff","passed":true}]}""";
+    private const string ExecutionProvenanceJson = """{"schemaVersion":1,"variant":"cuda","policyVersion":"deterministic-v1"}""";
     private const string DeltasJson = """{"schemaVersion":1,"baseAccuracy":0.5,"tunedAccuracy":0.75}""";
     private const string BaseModelName = "base-model";
     private const string TunedModelName = "tuned-model";
@@ -43,6 +44,7 @@ public sealed class TrainingEvaluationEncryptionTests : IDisposable
             "Evaluation should be readable.");
         AssertEx.Equal(MembershipJson, Encoding.UTF8.GetString(evaluation.MembershipJson));
         AssertEx.Equal(ResultsJson, Encoding.UTF8.GetString(evaluation.ResultsJson!));
+        AssertEx.Equal(ExecutionProvenanceJson, Encoding.UTF8.GetString(evaluation.ExecutionProvenanceJson!));
 
         var report = AssertEx.NotNull(await readContext.TrainingComparisonReports.SingleAsync(), "Report should be readable.");
         AssertEx.Equal(DeltasJson, Encoding.UTF8.GetString(report.DeltasJson));
@@ -62,11 +64,12 @@ public sealed class TrainingEvaluationEncryptionTests : IDisposable
         // One literal statement per table — CA2100 rejects a composed command text, so the columns cannot be looped over.
         await using (var evaluationCommand = connection.CreateCommand())
         {
-            evaluationCommand.CommandText = "SELECT membership_json, results_json FROM training_evaluation_runs WHERE model_name = 'base-model' LIMIT 1;";
+            evaluationCommand.CommandText = "SELECT membership_json, results_json, execution_provenance_json FROM training_evaluation_runs WHERE model_name = 'base-model' LIMIT 1;";
             await using var reader = await evaluationCommand.ExecuteReaderAsync();
             AssertEx.True(await reader.ReadAsync(), "Expected a seeded evaluation to inspect.");
             AssertCiphertext(reader, index: 0, MembershipJson);
             AssertCiphertext(reader, index: 1, ResultsJson);
+            AssertCiphertext(reader, index: 2, ExecutionProvenanceJson);
         }
 
         await using var reportCommand = connection.CreateCommand();
@@ -149,6 +152,7 @@ public sealed class TrainingEvaluationEncryptionTests : IDisposable
             MembershipJson = Encoding.UTF8.GetBytes(MembershipJson),
             Status = TrainingEvaluationStatus.Succeeded,
             ResultsJson = Encoding.UTF8.GetBytes(ResultsJson),
+            ExecutionProvenanceJson = Encoding.UTF8.GetBytes(ExecutionProvenanceJson),
             TotalCount = 1,
             ScoredCount = 1,
             PassedCount = 1,

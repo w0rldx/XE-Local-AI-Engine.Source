@@ -55,6 +55,22 @@ public sealed class StructuredAgentRunnerTests
         AssertEx.True(result.Success, "A non-reasoning teacher is admitted in Constrained mode.");
         _ = AssertEx.NotNull(client.LastOptions?.ResponseFormat as ChatResponseFormatJson, "Constrained mode forwards a json-schema response format.");
         AssertEx.Equal(expected: 41L, client.LastOptions!.Seed!.Value);
+        AssertEx.Equal(expected: 2048, client.LastOptions.MaxOutputTokens!.Value,
+            "Non-interactive training turns must carry the shared output budget.");
+    }
+
+    [Test]
+    public async Task ProviderFailure_IsSanitizedBeforeItLeavesTheTrainingPolicyBoundary()
+    {
+        const string secret = "Authorization: Bearer provider-secret";
+        using var client = new ThrowingChatClient(new HttpRequestException(secret));
+        var runner = CreateRunner(supportsThinking: false);
+
+        var result = await runner.RunAsync(client, Request(TeacherOutputMode.ValidateAfter));
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("The local model provider could not complete this sample.", result.FailureReason!);
+        AssertEx.False(result.FailureReason!.Contains(secret, StringComparison.Ordinal), "Raw provider messages must never enter persisted rejection reasons or hub events.");
     }
 
     [Test]
@@ -178,6 +194,28 @@ public sealed class StructuredAgentRunnerTests
             ArgumentNullException.ThrowIfNull(serviceType);
             return serviceType.IsInstanceOfType(this) && serviceKey is null ? this : null;
         }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class ThrowingChatClient(Exception exception) : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<ChatResponse>(exception);
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask.ConfigureAwait(false);
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
 
         public void Dispose()
         {

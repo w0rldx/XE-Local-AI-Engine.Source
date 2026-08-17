@@ -17,6 +17,19 @@ internal interface ILlamaServerHealthProbe
     Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct);
 
     /// <summary>
+    ///     Waits for readiness and verifies that <c>/v1/models</c> reports the unique alias assigned to this launch.
+    ///     This closes the released-port race: a different process answering on the selected port is never accepted as
+    ///     the newly launched child.
+    /// </summary>
+    Task<bool> WaitForReadyAndVerifyModelAliasAsync(Uri baseAddress,
+        string expectedModelAlias,
+        TimeSpan readinessTimeout,
+        CancellationToken ct)
+    {
+        return Task.FromResult(false);
+    }
+
+    /// <summary>
     ///     Performs a single, fast liveness check against <paramref name="baseAddress" /> (no polling) for the health
     ///     aggregation surface. Returns <see langword="true" /> when the server answered.
     /// </summary>

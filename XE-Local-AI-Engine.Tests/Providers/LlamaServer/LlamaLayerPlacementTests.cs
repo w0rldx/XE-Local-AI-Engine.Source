@@ -147,6 +147,17 @@ public sealed class LlamaLayerPlacementTests
     }
 
     [Test]
+    public void Report_Remove_MatchesSupervisorModelIdentityCasing()
+    {
+        var report = new LlamaLayerPlacementReport();
+        report.Record(ModelRole.Chat, GpuVariant.Cuda, "Qwen3-14B", offloadedLayers: 38, totalLayers: 49);
+
+        report.Remove(ModelRole.Chat, "qwen3-14b");
+
+        AssertEx.Null(report.Current);
+    }
+
+    [Test]
     public void Report_RemovingTheSpilledModel_LeavesEveryOtherModelsReadingIntact()
     {
         var report = new LlamaLayerPlacementReport();

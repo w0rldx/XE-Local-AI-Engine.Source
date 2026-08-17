@@ -473,6 +473,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
         var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         EnsureVersion(artifact.Version, expectedVersion);
+        EnsureArtifactMutable(artifact);
         artifact.Sha256 = sha256;
         artifact.SizeBytes = sizeBytes;
         artifact.Version++;
@@ -500,6 +501,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
         var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         EnsureVersion(artifact.Version, expectedVersion);
+        EnsureArtifactMutable(artifact);
         artifact.SmokeState = state;
         artifact.SmokeReason = ErrorMessageTruncation.Truncate(reason);
         artifact.Version++;
@@ -520,6 +522,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
         var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         EnsureVersion(artifact.Version, expectedVersion);
+        EnsureArtifactMutable(artifact);
         if (committedModelName is not null && artifact.SmokeState is TrainingArtifactSmokeState.Pending or TrainingArtifactSmokeState.Failed)
         {
             throw new TrainingConflictException("SmokeNotPassed");
@@ -534,6 +537,66 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
     public async Task DeleteArtifactAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(artifact.Version, expectedVersion);
+        EnsureArtifactMutable(artifact);
+        if (artifact.CommittedModelName is not null)
+        {
+            throw new TrainingConflictException("ArtifactPromoted");
+        }
+
+        if (artifact.QualityDecisionJson is not null
+            || await _dbContext.TrainingEvaluationRuns.AnyAsync(item => item.SourceArtifactId == artifactId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TrainingConflictException("ArtifactQualityReferenced");
+        }
+
+        _ = _dbContext.TrainingArtifacts.Remove(artifact);
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<TrainingArtifactRecord> SetArtifactQualityDecisionAsync(Guid artifactId,
+        long expectedVersion,
+        Guid comparisonId,
+        ReadOnlyMemory<byte> decisionJson,
+        CancellationToken cancellationToken = default)
+    {
+        if (decisionJson.IsEmpty)
+        {
+            throw new TrainingValidationException("An artifact quality decision cannot be empty.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(artifact.Version, expectedVersion);
+        EnsureArtifactMutable(artifact);
+        if (!await _dbContext.TrainingComparisonReports.AnyAsync(item => item.Id == comparisonId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TrainingNotFoundException("The comparison report was not found.");
+        }
+
+        artifact.QualityComparisonId = comparisonId;
+        artifact.QualityDecisionJson = decisionJson.ToArray();
+        artifact.Version++;
+        artifact.UpdatedAtUtc = Now();
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(artifact);
+    }
+
+    public async Task<TrainingArtifactRecord> DiscardArtifactQualityAsync(Guid artifactId,
+        long expectedVersion,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new TrainingValidationException("A discard reason is required.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         EnsureVersion(artifact.Version, expectedVersion);
         if (artifact.CommittedModelName is not null)
@@ -541,8 +604,56 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingConflictException("ArtifactPromoted");
         }
 
-        _ = _dbContext.TrainingArtifacts.Remove(artifact);
+        if (artifact.DiscardedAtUtc is not null)
+        {
+            throw new TrainingConflictException("ArtifactAlreadyDiscarded");
+        }
+
+        if (artifact.QualityDecisionJson is null || artifact.QualityComparisonId is null)
+        {
+            throw new TrainingConflictException("ArtifactQualityUndecided");
+        }
+
+        artifact.QualityComparisonId = null;
+        artifact.DiscardedAtUtc = Now();
+        artifact.DiscardReason = ErrorMessageTruncation.Truncate(reason.Trim());
+        artifact.DiscardCleanupPending = true;
+        artifact.Version++;
+        artifact.UpdatedAtUtc = artifact.DiscardedAtUtc.Value;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(artifact);
+    }
+
+    public async Task<TrainingArtifactRecord> CompleteArtifactDiscardCleanupAsync(Guid artifactId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(artifact.Version, expectedVersion);
+        if (artifact.DiscardedAtUtc is null)
+        {
+            throw new TrainingConflictException("ArtifactNotDiscarded");
+        }
+
+        if (!artifact.DiscardCleanupPending)
+        {
+            return ToRecord(artifact);
+        }
+
+        artifact.DiscardCleanupPending = false;
+        artifact.Version++;
+        artifact.UpdatedAtUtc = Now();
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(artifact);
+    }
+
+    private static void EnsureArtifactMutable(TrainingArtifact artifact)
+    {
+        if (artifact.DiscardedAtUtc is not null)
+        {
+            throw new TrainingConflictException("ArtifactDiscarded");
+        }
     }
 
     private static void TerminalizeWork(TrainingWorkItem work, TrainingWorkStatus status, string? errorMessage, long now)
@@ -624,5 +735,10 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
     private static TrainingArtifactRecord ToRecord(TrainingArtifact entity) =>
         new(entity.Id, entity.RunId, entity.Kind, entity.Path, entity.Sha256, entity.SizeBytes, entity.SmokeState,
-            entity.SmokeReason, entity.CommittedModelName, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+            entity.SmokeReason, entity.CommittedModelName, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc,
+            entity.QualityComparisonId,
+            OptionalBlob.AsOptionalMemory(entity.QualityDecisionJson),
+            entity.DiscardedAtUtc,
+            entity.DiscardReason,
+            entity.DiscardCleanupPending);
 }

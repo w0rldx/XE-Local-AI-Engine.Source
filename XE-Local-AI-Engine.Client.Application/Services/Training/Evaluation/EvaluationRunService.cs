@@ -17,13 +17,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         a fresh split per side would make the two accuracies incomparable while looking like they compared something.
 ///     </para>
 ///     <para>
-///         <strong>A drifted dataset is refused, not scored.</strong> Scoring reads the LIVE sample rows — the frozen
-///         JSONL is the export format and carries no sample ids, so it cannot answer a hold-out lookup. A review verb
-///         that mutates a sample bumps the dataset's <c>ContentFingerprint</c>, so two evaluations created on opposite
-///         sides of an edit would silently answer different questions while the comparison treated them as the same
-///         frozen membership. Both this service (at create) and <see cref="EvaluationRunExecutor" /> (at scoring, since
-///         the dataset can move in between and again on a resume) refuse with
-///         <see cref="DriftedDatasetReason" /> rather than produce a number nobody can compare.
+///         Scoring replays the encrypted, run-owned frozen corpus rather than live dataset rows. Stable sample ids in
+///         that corpus bind the membership to the exact trajectories that were present when the run was created, so a
+///         later review edit cannot alter or prevent an evaluation of that run.
 ///     </para>
 /// </remarks>
 public interface IEvaluationRunService
@@ -51,15 +47,6 @@ public sealed class EvaluationRunService(
     TrainingRunCancellationRegistry cancellations,
     ITrainingRunQueueSignal signal) : IEvaluationRunService
 {
-    /// <summary>
-    ///     The single operator-facing reason a drifted dataset is refused. Shared with
-    ///     <see cref="EvaluationRunExecutor" /> so the create-time 400 and the scoring-time <c>errorMessage</c> the
-    ///     frontend renders are the same sentence.
-    /// </summary>
-    public const string DriftedDatasetReason =
-        "The dataset was edited after this run froze its hold-out set, so the scores would not be comparable. "
-        + "Re-run the training run to re-freeze the dataset, or evaluate a run made from the current dataset.";
-
     private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
     private readonly ITrainingDatasetStore _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
     private readonly ITrainingEvaluationStore _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
@@ -80,17 +67,10 @@ public sealed class EvaluationRunService(
             throw new EvaluationRejectedException("The training run held nothing back, so there is nothing to evaluate against.");
         }
 
-        var dataset = await _datasets.GetDatasetAsync(run.DatasetId, cancellationToken).ConfigureAwait(false)
-                      ?? throw new EvaluationRejectedException("The dataset this run trained on no longer exists.");
-        if (!string.Equals(dataset.ContentFingerprint, freeze.DatasetContentFingerprint, StringComparison.Ordinal))
-        {
-            throw new EvaluationRejectedException(DriftedDatasetReason);
-        }
+        _ = await _datasets.GetDatasetAsync(run.DatasetId, cancellationToken).ConfigureAwait(false)
+            ?? throw new EvaluationRejectedException("The dataset this run trained on no longer exists.");
 
-        var modelName = await ResolveModelNameAsync(run, command, cancellationToken).ConfigureAwait(false);
-        var installed = await _models.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
-        var descriptor = installed.FirstOrDefault(model => string.Equals(model.ModelName, modelName, StringComparison.Ordinal) && model.IsAvailable)
-                         ?? throw new EvaluationRejectedException($"'{modelName}' is not an installed model on this node.");
+        var target = await ResolveTargetAsync(run, command, cancellationToken).ConfigureAwait(false);
 
         var membership = new TrainingEvaluationMembershipV1
         {
@@ -101,12 +81,14 @@ public sealed class EvaluationRunService(
             HoldoutSampleIds = freeze.HoldoutSampleIds
         };
         var created = await _evaluations.CreateAndEnqueueAsync(new TrainingEvaluationEnqueueCommand(run.Id,
-                                                modelName,
-                                                descriptor.ModelContentFingerprint,
+                                                target.ModelName,
+                                                target.Fingerprint,
                                                 run.DatasetId,
                                                 run.DatasetContentFingerprint,
                                                 JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
-                                                freeze.HoldoutSampleIds.Count),
+                                                freeze.HoldoutSampleIds.Count,
+                                                target.Kind,
+                                                target.ArtifactId),
                                             cancellationToken)
                                         .ConfigureAwait(false);
         _signal.Wake();
@@ -153,25 +135,46 @@ public sealed class EvaluationRunService(
     public Task DeleteAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default) =>
         _evaluations.DeleteAsync(evaluationId, expectedVersion, cancellationToken);
 
-    private async Task<string> ResolveModelNameAsync(TrainingRunRecord run, CreateEvaluationCommand command, CancellationToken cancellationToken)
+    private async Task<EvaluationTargetIdentity> ResolveTargetAsync(TrainingRunRecord run,
+        CreateEvaluationCommand command,
+        CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(command.ModelNameOverride))
+        if (command.Target == EvaluationTarget.Undefined || !Enum.IsDefined(command.Target))
         {
-            return command.ModelNameOverride.Trim();
+            throw new EvaluationRejectedException("An evaluation target is required.");
         }
 
-        if (command.Target == EvaluationTarget.Base)
+        if (command.Target == EvaluationTarget.Tuned)
         {
-            // A run started from a raw Hugging Face checkpoint has no installed GGUF counterpart to evaluate, so the
-            // comparison's accuracy section is marked unavailable rather than silently compared against nothing.
-            return run.LinkedInstalledModelName
-                   ?? throw new EvaluationRejectedException("This run was not started from an installed model, so its base model cannot be evaluated.");
+            var artifactId = command.ArtifactId
+                             ?? throw new EvaluationRejectedException("A staged artifact id is required for tuned evaluation.");
+            var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+                           ?? throw new EvaluationRejectedException("The staged artifact was not found.");
+            if (artifact.RunId != run.Id || artifact.DiscardedAtUtc is not null || artifact.Kind == TrainingArtifactKind.HfAdapterDir
+                || !File.Exists(artifact.Path)
+                || string.IsNullOrWhiteSpace(artifact.Sha256))
+            {
+                throw new EvaluationRejectedException("The tuned evaluation requires a completed staged GGUF from this run.");
+            }
+
+            return new EvaluationTargetIdentity(Path.GetFileName(artifact.Path), artifact.Sha256,
+                EvaluationModelTargetKind.StagedTrainingArtifact, artifact.Id);
         }
 
-        var artifacts = await _runs.ListArtifactsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        return artifacts.Select(artifact => artifact.CommittedModelName).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name))
-               ?? throw new EvaluationRejectedException("No artifact from this run has been promoted to the registry yet.");
+        var selected = string.IsNullOrWhiteSpace(command.ModelNameOverride) ? run.LinkedInstalledModelName : command.ModelNameOverride.Trim();
+        var modelName = selected
+                        ?? throw new EvaluationRejectedException("This run was not started from an installed model, so its base model cannot be evaluated.");
+        var installed = await _models.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var descriptor = installed.FirstOrDefault(model => string.Equals(model.ModelName, modelName, StringComparison.Ordinal) && model.IsAvailable)
+                         ?? throw new EvaluationRejectedException($"'{modelName}' is not an installed model on this node.");
+        return new EvaluationTargetIdentity(modelName, descriptor.ModelContentFingerprint,
+            EvaluationModelTargetKind.InstalledModel, ArtifactId: null);
     }
+
+    private sealed record EvaluationTargetIdentity(string ModelName,
+        string? Fingerprint,
+        EvaluationModelTargetKind Kind,
+        Guid? ArtifactId);
 
     private static T? Read<T>(ReadOnlyMemory<byte>? payload)
         where T : class

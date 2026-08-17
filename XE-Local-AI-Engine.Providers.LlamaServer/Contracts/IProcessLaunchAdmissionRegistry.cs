@@ -9,7 +9,14 @@ public sealed record ProcessLaunchAdmission(
     ProcessContextAllocation Allocation);
 
 /// <summary>A model/role identity tracked by the process-wide admission registry.</summary>
-public readonly record struct ProcessLaunchAdmissionKey(string ModelName, ModelRole Role);
+public readonly record struct ProcessLaunchAdmissionKey(string ModelName, ModelRole Role)
+{
+    public bool Equals(ProcessLaunchAdmissionKey other) =>
+        Role == other.Role && string.Equals(ModelName, other.ModelName, StringComparison.OrdinalIgnoreCase);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), Role);
+}
 
 /// <summary>A lock-consistent registry snapshot used by the capacity decision gate.</summary>
 public sealed record ProcessLaunchAdmissionSnapshot(

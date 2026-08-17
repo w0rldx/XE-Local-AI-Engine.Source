@@ -5,6 +5,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Training;
 
 /// <summary>One teacher turn. The seed is carried as a string for the same 2^53 precision reason the sampling DTO uses.</summary>
 public sealed record StructuredAgentRequest(
@@ -65,7 +66,7 @@ public sealed class StructuredAgentRunner(
     ///     upstream carries a deadline, so this seam owns it. A turn that overruns is that sample's failure, never
     ///     the run's, and never a wedge.
     /// </summary>
-    internal static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(5);
+    internal static readonly TimeSpan TurnTimeout = TrainingAiClientPolicy.TurnTimeout;
 
     private readonly IModelCapabilityResolver _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
     private readonly ILoggerFactory _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -110,11 +111,7 @@ public sealed class StructuredAgentRunner(
             new(ChatRole.User, request.UserPrompt)
         ];
 
-        var chatOptions = new ChatOptions
-        {
-            ModelId = request.ModelName,
-            Temperature = request.Temperature
-        };
+        var chatOptions = TrainingAiClientPolicy.CreateOptions(request.ModelName, request.Temperature);
         if (TryParseSeed(request.Seed, out var seedValue))
         {
             chatOptions.Seed = seedValue;
@@ -125,8 +122,8 @@ public sealed class StructuredAgentRunner(
             chatOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(request.ResponseSchema, "teacher_sample", "one generated training sample");
         }
 
-        using var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        turnCancellation.CancelAfter(_turnTimeout);
+        using var activity = TrainingAiClientPolicy.StartActivity("dataset-generation");
+        using var turnCancellation = TrainingAiClientPolicy.CreateTurnCancellation(cancellationToken, _turnTimeout);
         try
         {
             var response = await agent.RunAsync(seed, session: null, new ChatClientAgentRunOptions
@@ -134,6 +131,7 @@ public sealed class StructuredAgentRunner(
                                           ChatOptions = chatOptions
                                       }, turnCancellation.Token)
                                       .ConfigureAwait(false);
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)
                 ? new StructuredAgentResult(Success: false, string.Empty, "The teacher returned an empty completion.")
@@ -148,7 +146,7 @@ public sealed class StructuredAgentRunner(
         catch (Exception exception) when (exception is not OperationCanceledException and not TrainingValidationException)
         {
             // One turn's transport/model failure is a per-sample failure, never the run's.
-            return new StructuredAgentResult(Success: false, string.Empty, exception.Message);
+            return new StructuredAgentResult(Success: false, string.Empty, TrainingAiClientPolicy.TranslateProviderFailure(activity, exception));
         }
     }
 

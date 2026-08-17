@@ -20,6 +20,11 @@ internal sealed class TrainingArtifactConfiguration : IEntityTypeConfiguration<T
         builder.Property(entity => entity.SmokeState).HasColumnName("smoke_state").HasConversion<string>().HasMaxLength(16);
         builder.Property(entity => entity.SmokeReason).HasColumnName("smoke_reason").HasMaxLength(1024);
         builder.Property(entity => entity.CommittedModelName).HasColumnName("committed_model_name").HasMaxLength(255);
+        builder.Property(entity => entity.QualityComparisonId).HasColumnName("quality_comparison_id");
+        builder.Property(entity => entity.QualityDecisionJson).HasColumnName("quality_decision_json");
+        builder.Property(entity => entity.DiscardedAtUtc).HasColumnName("discarded_at_utc");
+        builder.Property(entity => entity.DiscardReason).HasColumnName("discard_reason").HasMaxLength(1024);
+        builder.Property(entity => entity.DiscardCleanupPending).HasColumnName("discard_cleanup_pending");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
@@ -31,5 +36,6 @@ internal sealed class TrainingArtifactConfiguration : IEntityTypeConfiguration<T
                .HasForeignKey(entity => entity.RunId)
                .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(entity => entity.RunId).HasDatabaseName("ix_training_artifacts_run");
+        builder.HasIndex(entity => entity.QualityComparisonId).HasDatabaseName("ix_training_artifacts_quality_comparison");
     }
 }

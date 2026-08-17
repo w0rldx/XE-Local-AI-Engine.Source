@@ -259,6 +259,7 @@ public sealed class SupervisorGateScopeTests
 
     private sealed class LatchedProcessHandle(int pid, KillLatch? killLatch) : ILlamaServerProcessHandle
     {
+        private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _exited;
         private int _killed;
 
@@ -268,11 +269,25 @@ public sealed class SupervisorGateScopeTests
 
         public bool HasExited => Volatile.Read(ref _exited) != 0;
 
+        public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+        {
+            try
+            {
+                await _exitSignal.Task.WaitAsync(timeout, ct).ConfigureAwait(false);
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
+
         public void TreeKill()
         {
             killLatch?.Wait();
             Interlocked.Exchange(ref _killed, value: 1);
             Interlocked.Exchange(ref _exited, value: 1);
+            _exitSignal.TrySetResult();
         }
 
         public void Dispose()

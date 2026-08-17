@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Export;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>What the operator asked to export out of a finished run.</summary>
@@ -121,7 +122,7 @@ public interface ITrainedModelSmokeGate
 /// </param>
 public sealed record TrainingArtifactRecordView(string ArtifactPath, string? BaseModelFilePath);
 
-/// <summary>Promotes a smoke-passed staged artifact into the local model registry.</summary>
+/// <summary>Promotes a smoke-passed staged artifact with a current successful quality decision into the local model registry.</summary>
 public interface IArtifactPromotionService
 {
     /// <exception cref="TrainingExportRejectedException">The artifact cannot be promoted; the message is operator-facing.</exception>
@@ -152,6 +153,11 @@ public interface ITrainingExportService
     ///     inside the run's own staged directory; anything else is logged and left alone.
     /// </remarks>
     Task DeleteArtifactAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default);
+
+    Task<TrainingArtifactRecord> DiscardArtifactQualityAsync(Guid artifactId,
+        long expectedVersion,
+        string reason,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>A refusal the export surface reports as a 4xx rather than as a fault. Message is operator-facing.</summary>
