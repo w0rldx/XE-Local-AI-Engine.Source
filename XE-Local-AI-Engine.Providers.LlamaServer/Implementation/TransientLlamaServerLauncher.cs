@@ -40,7 +40,7 @@ internal sealed class TransientLlamaServerLauncher(
         // The key's model name is a LABEL here, not a registry lookup: BuildLaunchSpec only ever puts it on the spec
         // for diagnostics, and every file this spawn touches is an explicit path.
         var key = new LlamaServerProcessSupervisor.ProcessKey(modelId, ModelRole.Chat);
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(key,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key,
             binary.ServerExecutablePath,
             request.ModelFilePath,
             AllocatePort(),

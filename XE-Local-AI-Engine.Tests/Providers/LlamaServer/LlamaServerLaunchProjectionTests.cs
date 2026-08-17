@@ -32,7 +32,7 @@ public sealed class LlamaServerLaunchProjectionTests
             CpuThreads: null,
             CpuThreadsBatch: null);
 
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -63,7 +63,7 @@ public sealed class LlamaServerLaunchProjectionTests
             kvTypeV: "q8_0",
             flashAttn: true);
 
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -88,7 +88,7 @@ public sealed class LlamaServerLaunchProjectionTests
         var policy = NewPolicy(cpuThreads: 6, cpuThreadsBatch: 8);
         var resolved = ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24);
 
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -120,7 +120,7 @@ public sealed class LlamaServerLaunchProjectionTests
             CpuThreads: null,
             CpuThreadsBatch: null);
 
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(EmbeddingKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -142,7 +142,7 @@ public sealed class LlamaServerLaunchProjectionTests
     {
         // A pooled role sizes -b/-ub off whichever context the spawn emits, falling back to the frozen replay's own
         // when no plan supplies one. That fallback is load-bearing for input length and must survive the refactor.
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(EmbeddingKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -298,7 +298,7 @@ public sealed class LlamaServerLaunchProjectionTests
             ModelRole.Chat,
             chatCacheReuse: 256,
             chatCacheRamMiB: 512);
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -323,7 +323,7 @@ public sealed class LlamaServerLaunchProjectionTests
         var plan = variant == GpuVariant.Cpu
             ? NewPolicy(cpuThreads: 6, cpuThreadsBatch: 8).ResolveCpuReplayPlan(resolved)
             : (LlamaServerLaunchPlan?)null;
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(EmbeddingKey,
             ExecutablePath,
             ModelFilePath,
             Port,
@@ -352,7 +352,7 @@ public sealed class LlamaServerLaunchProjectionTests
             ModelRole.Chat,
             chatCacheReuse: 256,
             chatCacheRamMiB: 512);
-        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
             ExecutablePath,
             ModelFilePath,
             Port,
