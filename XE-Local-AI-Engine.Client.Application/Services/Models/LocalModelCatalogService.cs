@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 /// <summary>
 ///     Represents local model catalog service. Each source is read independently and degrades on its own, so a
@@ -79,7 +80,7 @@ public sealed class LocalModelCatalogService(
         {
             var models = (await _modelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false)).ToArray();
             var classifications = await _classificationService
-                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(ReadModelName(model), model.Digest)), cancellationToken)
+                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(model.ReadModelName(), model.Digest)), cancellationToken)
                                         .ConfigureAwait(false);
 
             return new OllamaModelListing(models, classifications);
@@ -147,11 +148,6 @@ public sealed class LocalModelCatalogService(
             return false;
         }
     }
-
-    private static string ReadModelName(Model model) =>
-        !string.IsNullOrWhiteSpace(model.ModelName)
-            ? model.ModelName
-            : model.Name ?? string.Empty;
 
     // The Ollama runtime's models and their effective kinds. Models is null — not empty — when the runtime could not
     // be reached, which the catalog renders differently from "reachable, but nothing installed".
