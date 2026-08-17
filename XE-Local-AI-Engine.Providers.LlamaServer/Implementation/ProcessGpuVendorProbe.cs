@@ -243,7 +243,7 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     ///     reading it, so the preferred absolute path — the part that only exists on Windows — is still assertable from
     ///     a test on any host.
     /// </summary>
-    internal static IEnumerable<(string FileName, string Arguments)> WindowsAdapterListCommands(string? systemDirectory)
+    internal static IEnumerable<AdapterListCommand> WindowsAdapterListCommands(string? systemDirectory)
     {
         // -NoProfile so a user profile script cannot slow the probe or change its output; -NonInteractive so nothing
         // can prompt on a headless start. A cmdlet failure (a broken WMI repository) leaves stdout empty, which reads
@@ -252,11 +252,11 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 
         if (!string.IsNullOrEmpty(systemDirectory))
         {
-            yield return (Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"), CimArguments);
+            yield return new AdapterListCommand(Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"), CimArguments);
         }
 
-        yield return ("powershell", CimArguments);
-        yield return ("wmic", "path win32_VideoController get name");
+        yield return new AdapterListCommand("powershell", CimArguments);
+        yield return new AdapterListCommand("wmic", "path win32_VideoController get name");
     }
 
     private async Task<string?> TryRunAsync(string fileName, string arguments, CancellationToken ct)
@@ -336,6 +336,9 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     {
         return new RealProbeProcess(fileName, arguments);
     }
+
+    /// <summary>One Windows adapter-list candidate: the executable to run and its command line.</summary>
+    internal sealed record AdapterListCommand(string FileName, string Arguments);
 
     /// <summary>
     ///     Minimal seam over a spawned probe tool process. Production wraps <see cref="Process" />; tests supply a fake

@@ -87,7 +87,7 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
     ///         path does not go through this wrapper and keeps its system messages.
     ///     </para>
     /// </summary>
-    private (IEnumerable<ChatMessage> Messages, ChatOptions Options) PrepareCodexRequest(IEnumerable<ChatMessage> messages,
+    private CodexRequest PrepareCodexRequest(IEnumerable<ChatMessage> messages,
         ChatOptions? options)
     {
         var result = ApplyStoreDisabled(options);
@@ -102,7 +102,7 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
 
         if (systemTexts.Count == 0)
         {
-            return (materialized, result);
+            return new CodexRequest(materialized, result);
         }
 
         result.Instructions = string.Join("\n\n",
@@ -112,8 +112,11 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
             }.Concat(systemTexts).Where(text => !string.IsNullOrWhiteSpace(text)));
 
         var withoutSystem = materialized.Where(message => message.Role != ChatRole.System).ToList();
-        return (withoutSystem, result);
+        return new CodexRequest(withoutSystem, result);
     }
+
+    /// <summary>The Codex-safe request pair: the input messages with system roles lifted out, and the adjusted options.</summary>
+    private sealed record CodexRequest(IEnumerable<ChatMessage> Messages, ChatOptions Options);
 
     // Dispose is left to the base DelegatingChatClient: the inner MEAI/Responses client does NOT own the
     // factory's shared HttpClient (HttpClientPipelineTransport does not take ownership), so the shared

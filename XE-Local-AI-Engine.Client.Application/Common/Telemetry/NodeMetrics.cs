@@ -487,3 +487,9 @@ public static class NodeMetrics
     /// </summary>
     public sealed record GpuAdmissionGauges(ObservableGauge<long> Active, ObservableGauge<long> Waiting);
 }
+
+/// <summary>
+///     The pair of observable gauges registered for the GPU model-load admission gate. The gate singleton holds them for
+///     its lifetime — an unreferenced <see cref="ObservableGauge{T}" /> stops being observed.
+/// </summary>
+public sealed record GpuAdmissionGauges(ObservableGauge<long> Active, ObservableGauge<long> Waiting);

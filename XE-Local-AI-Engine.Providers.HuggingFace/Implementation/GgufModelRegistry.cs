@@ -533,12 +533,12 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         };
     }
 
-    private async Task<(IReadOnlyList<GgufModelRegistryEntry> Entries, bool Changed)> ReconcileWithSidecarsAsync(IReadOnlyList<GgufModelRegistryEntry> manifestEntries,
+    private async Task<SidecarReconciliation> ReconcileWithSidecarsAsync(IReadOnlyList<GgufModelRegistryEntry> manifestEntries,
         CancellationToken ct)
     {
         if (!Directory.Exists(_modelsDirectory))
         {
-            return ([], manifestEntries.Count != 0);
+            return new SidecarReconciliation([], manifestEntries.Count != 0);
         }
 
         var entries = manifestEntries.ToList();
@@ -635,7 +635,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             }
         }
 
-        return (entries, changed);
+        return new SidecarReconciliation(entries, changed);
     }
 
     /// <summary>
@@ -829,4 +829,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     {
         public List<JsonElement> Models { get; set; } = [];
     }
+
+    /// <summary>The registry rows after the on-disk sidecar sweep, and whether they differ from the manifest that was read.</summary>
+    private sealed record SidecarReconciliation(IReadOnlyList<GgufModelRegistryEntry> Entries, bool Changed);
 }
