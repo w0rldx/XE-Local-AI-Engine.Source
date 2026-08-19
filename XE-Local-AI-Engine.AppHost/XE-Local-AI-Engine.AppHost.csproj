@@ -1,11 +1,15 @@
 <Project>
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6"/>
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0"/>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsAspireHost>true</IsAspireHost>
     <RootNamespace>XE_Local_AI_Engine.AppHost</RootNamespace>
     <UserSecretsId>2b47b277-b0a5-4afd-90bf-b644cb1b1228</UserSecretsId>
+    <!-- ASPIRE010: the AppHost CLI bundle became opt-in in Aspire 13.5.0. The dev scripts always drive
+         this AppHost through the `aspire` CLI on PATH (dev-start.sh hard-requires it), so bundling a
+         second copy of the CLI into the AppHost buys nothing. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

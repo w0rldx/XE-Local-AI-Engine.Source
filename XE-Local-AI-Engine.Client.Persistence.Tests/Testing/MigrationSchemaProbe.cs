@@ -145,6 +145,29 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         return values;
     }
 
+    /// <summary>
+    ///     The <c>detail</c> line of every step SQLite's planner chose for <paramref name="sql" />. An index test needs
+    ///     this and not just <see cref="IndexExistsAsync" />: that an index was created says nothing about whether the
+    ///     planner picks it, and a wrong column order shows up here as a <c>SCAN</c> or a <c>USE TEMP B-TREE</c>.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> QueryPlanAsync(string sql)
+    {
+        await using var command = _connection.CreateCommand();
+#pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value goes in through `configure` as a bound parameter.
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+#pragma warning restore CA2100
+
+        var steps = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        var detail = reader.GetOrdinal("detail");
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            steps.Add(reader.GetString(detail));
+        }
+
+        return steps;
+    }
+
     public async Task<bool> TableExistsAsync(string tableName)
     {
         await using var command = _connection.CreateCommand();
