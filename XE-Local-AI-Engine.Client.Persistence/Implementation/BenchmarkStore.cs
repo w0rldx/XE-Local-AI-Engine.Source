@@ -222,13 +222,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        var records = new List<BenchmarkRunRecord>(runs.Count);
-        foreach (var run in runs)
-        {
-            records.Add(await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false));
-        }
-
-        return records;
+        // One judge read for the whole group, not one per run: the batch was inserted in a single round trip precisely
+        // so a repeat group does not pay N of them, and materializing it per run gave that back.
+        var views = await LoadJudgeViewsAsync([.. runs.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
+        return [.. runs.Select(run => ToRecordWithJudge(run, views))];
     }
 
     public async Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
@@ -1378,7 +1375,15 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// </summary>
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
-        var views = await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false);
+        return ToRecordWithJudge(run, await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    ///     The same record projection against views already loaded, so a batch can read every run's judge state in one
+    ///     query and still produce records identical to the single-run path.
+    /// </summary>
+    private static BenchmarkRunRecord ToRecordWithJudge(BenchmarkRun run, IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views)
+    {
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
             run.UserScore,
             run.IsWarmup,
