@@ -161,6 +161,92 @@ public sealed class HfParallelDownloadTests
     }
 
     [Test]
+    public async Task ParallelDownload_WhenResumeSidecarIsTorn_RefetchesEveryRange()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
+        var destination = dir.FilePath(Infra.FileName);
+        var partPath = destination + ".part";
+        const int chunkSize = 4096;
+
+        // Run 1: chunk 1 ends short, so the attempt fails with a pre-sized (sparse) .part and cursors beside it.
+        using var interrupted = new Infra.ScriptedHandler((request, _) =>
+        {
+            var from = request.Headers.Range!.Ranges.Single().From!.Value;
+            return from == chunkSize ? PartialStreamResponse(Payload, (int)from, deliverBytes: 1024) : RangeResponse(Payload, request);
+        });
+        using var interruptedHttp = new HttpClient(interrupted);
+        var interruptedDownload = Infra.DownloadClient(interruptedHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => interruptedDownload.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None));
+
+        // A crash mid-rewrite leaves the one-line sidecar torn. The .part it describes is full-length but full of holes.
+        AssertEx.Equal(Payload.Length, new FileInfo(partPath).Length);
+        await File.WriteAllTextAsync(partPath + ".ranges.part", "1 81");
+
+        // Run 2: an unreadable cursor line must not be mistaken for "no cursors at all" — every range is refetched.
+        using var resumed = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
+        using var resumedHttp = new HttpClient(resumed);
+        var resumedDownload = Infra.DownloadClient(resumedHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await resumedDownload.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, resumed.CallCount);
+        AssertEx.Equal("bytes=0-0", resumed.Requests[0].Range);
+        var chunkRanges = resumed.Requests.Skip(count: 1).Select(request => request.Range).Order(StringComparer.Ordinal).ToArray();
+        AssertEx.Contains(chunkRanges, string.Create(CultureInfo.InvariantCulture, $"bytes=0-{chunkSize - 1}"));
+        AssertEx.Contains(chunkRanges, string.Create(CultureInfo.InvariantCulture, $"bytes={chunkSize}-{Payload.Length - 1}"));
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(Payload), "A torn cursor line must never let a sparse partial be committed.");
+        AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
+    }
+
+    [Test]
+    public async Task ParallelDownload_WhenFullLengthPartHasNoSidecar_RefetchesEveryRange()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2);
+        var destination = dir.FilePath(Infra.FileName);
+        // A pre-sized parallel .part whose cursors were swept away: its length is the whole file, but its content is
+        // holes. Nothing on disk distinguishes it from a finished single-stream .part, so neither may be adopted.
+        await File.WriteAllBytesAsync(destination + ".part", new byte[Payload.Length]);
+
+        using var handler = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, handler.CallCount);
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(Payload), "A full-length .part with no cursors must be refetched, not trusted.");
+    }
+
+    [Test]
     public async Task ParallelDownload_AdoptsExistingSingleStreamPart_WithoutRefetchingIt()
     {
         using var dir = new Infra.TempModelsDir();

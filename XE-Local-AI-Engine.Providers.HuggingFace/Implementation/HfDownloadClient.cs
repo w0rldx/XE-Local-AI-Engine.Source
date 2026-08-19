@@ -525,8 +525,15 @@ internal sealed class HfDownloadClient
             return 0L;
         }
 
-        var recorded = RangeResumeState.TryReadRecord(partPath + RangeSidecarSuffix);
-        return recorded is not null ? recorded.Value.Cursors.Sum() : GetExistingPartLength(partPath);
+        var sidecarPath = partPath + RangeSidecarSuffix;
+        if (!File.Exists(sidecarPath))
+        {
+            return GetExistingPartLength(partPath);
+        }
+
+        // A sidecar that will not parse buys nothing: the resume path refetches every range, so the guard must size for
+        // the whole file rather than for a pre-sized .part full of holes.
+        return RangeResumeState.TryReadRecord(sidecarPath)?.Cursors.Sum() ?? 0L;
     }
 
     private static bool HasCaseInsensitiveCollision(string destinationPath)
@@ -882,24 +889,39 @@ internal sealed class HfDownloadClient
         }
 
         /// <summary>
-        ///     Loads the cursors for this file. <paramref name="contiguousPartBytes" /> is the length of an existing
-        ///     <c>.part</c> and is honoured ONLY when there is no sidecar at all: such a file was written by the
-        ///     single-stream path, so it is contiguous from byte 0 and its length is a real head start. Once a sidecar
-        ///     exists the <c>.part</c> is sparse and its length means nothing, so an unusable sidecar starts over.
+        ///     Loads the cursors for this file. <paramref name="existingPartBytes" /> is the length of an existing
+        ///     <c>.part</c> and is honoured as a head start ONLY when there is no sidecar and that length is short of the
+        ///     whole file: only the single-stream path writes a <c>.part</c> without cursors, and only while it is still
+        ///     growing is that file unambiguously contiguous from byte 0.
         /// </summary>
-        public static RangeResumeState Create(string sidecarPath, long totalBytes, int chunkCount, long chunkSize, long contiguousPartBytes)
+        public static RangeResumeState Create(string sidecarPath, long totalBytes, int chunkCount, long chunkSize, long existingPartBytes)
         {
-            long[] cursors;
-            if (TryReadRecord(sidecarPath) is not { } record)
+            return new RangeResumeState(sidecarPath, totalBytes, ResolveCursors(sidecarPath, totalBytes, chunkCount, chunkSize, existingPartBytes));
+        }
+
+        /// <summary>
+        ///     Decides how much of the <c>.part</c> the next attempt may keep. Everything hinges on telling "no sidecar"
+        ///     apart from "a sidecar that cannot be believed": the <c>.part</c> beside a sidecar was pre-sized to the full
+        ///     length, so seeding from its length would mark every chunk complete and commit a file of holes.
+        /// </summary>
+        private static long[] ResolveCursors(string sidecarPath, long totalBytes, int chunkCount, long chunkSize, long existingPartBytes)
+        {
+            if (File.Exists(sidecarPath))
             {
-                cursors = SeedFromContiguousPrefix(totalBytes, chunkCount, chunkSize, contiguousPartBytes);
-            }
-            else
-            {
-                cursors = IsUsable(record, totalBytes, chunkCount, chunkSize) ? record.Cursors : new long[chunkCount];
+                // A torn line, a record for a different layout, or a .part that is no longer the pre-sized file those
+                // cursors described: nothing about the partial is trustworthy, so refetch every range into it.
+                return TryReadRecord(sidecarPath) is { } record
+                       && existingPartBytes == totalBytes
+                       && IsUsable(record, totalBytes, chunkCount, chunkSize)
+                    ? record.Cursors
+                    : new long[chunkCount];
             }
 
-            return new RangeResumeState(sidecarPath, totalBytes, cursors);
+            // A full-length .part with no sidecar is ambiguous — a finished-but-uncommitted single-stream download looks
+            // exactly like a sparse parallel partial whose cursors were swept — so it earns no head start.
+            return existingPartBytes < totalBytes
+                ? SeedFromContiguousPrefix(totalBytes, chunkCount, chunkSize, existingPartBytes)
+                : new long[chunkCount];
         }
 
         private static long[] SeedFromContiguousPrefix(long totalBytes, int chunkCount, long chunkSize, long contiguousPartBytes)
