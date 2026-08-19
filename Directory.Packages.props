@@ -5,9 +5,9 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.4.6-preview.1.26319.6" />
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.5.0-preview.1.26417.10" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.0" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.0" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <!-- DefaultAzureCredential for Azure Foundry managed-identity auth (consumed by the Application factory, lane B). -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
