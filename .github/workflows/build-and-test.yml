@@ -149,12 +149,18 @@ jobs:
       # One `dotnet test` per project rather than one over the solution, because MTP resolves
       # --coverage-output relative to --results-directory: a single shared directory would let
       # parallel modules overwrite each other's Cobertura report. Each project therefore gets its
-      # own results directory, and every report is merged afterwards. The trade is the old
-      # --max-parallel-test-modules 2 overlap: modules now run one after another.
+      # own results directory, and every report is merged afterwards.
+      #
+      # Those per-project results directories are also why the projects can run CONCURRENTLY: the
+      # report collision was the only reason this loop was ever serial. Each project's output is
+      # prefixed with its module name so interleaved logs stay attributable, and every background
+      # PID is waited on individually so a failure in any project fails the step.
       #
       # --maximum-parallel-tests caps the width (TUnit's default is ProcessorCount*4, which times
-      # out on shared runners). TZ=Europe/Berlin exposes non-UTC time-zone bugs (e.g.
-      # CapabilityReporterTests). global.json pins the Microsoft.Testing.Platform runner.
+      # out on shared runners). It is divided by the project count so the total number of in-flight
+      # tests stays near the old single-project cap of 8 on a shared runner. TZ=Europe/Berlin
+      # exposes non-UTC time-zone bugs (e.g. CapabilityReporterTests). global.json pins the
+      # Microsoft.Testing.Platform runner.
       - name: Run backend tests with coverage (auto-enrolled)
         env:
           TZ: Europe/Berlin
@@ -173,23 +179,46 @@ jobs:
           fi
           printf 'Enrolled test project: %s\n' "${test_projects[@]}"
 
-          for project in "${test_projects[@]}"; do
-            module="$(basename "$project" .csproj)"
+          parallel_tests=$(( 8 / ${#test_projects[@]} ))
+          if (( parallel_tests < 1 )); then
+            parallel_tests=1
+          fi
+
+          run_project() {
+            local project="$1" module="$2"
             dotnet test "$project" --configuration Release --no-build \
-              --maximum-parallel-tests 8 \
+              --maximum-parallel-tests "$parallel_tests" \
               --coverage --coverage-output coverage.cobertura.xml --coverage-output-format cobertura \
               --report-trx \
               --results-directory "$COVERAGE_ROOT/$module" \
-              | tee "$COVERAGE_ROOT-$module.log"
+              2>&1 | tee "$COVERAGE_ROOT-$module.log" | sed "s/^/[$module] /"
             # Hollow-gate guard: MTP always emits a "Passed!" or "Failed!" summary per suite that
             # ran. A suite that enrolled nothing prints no summary and still exits 0 — this catches
             # that silent green.
             if ! grep -qE 'Passed!|Failed!' "$COVERAGE_ROOT-$module.log"; then
               echo "ERROR: $module produced no test-suite summary — nothing ran." \
                    "Check project names or IsTestingPlatformApplication." >&2
-              exit 1
+              return 1
+            fi
+          }
+
+          declare -A test_pids=()
+          for project in "${test_projects[@]}"; do
+            module="$(basename "$project" .csproj)"
+            run_project "$project" "$module" &
+            test_pids["$module"]=$!
+          done
+
+          failed_modules=()
+          for module in "${!test_pids[@]}"; do
+            if ! wait "${test_pids[$module]}"; then
+              failed_modules+=("$module")
             fi
           done
+          if [[ "${#failed_modules[@]}" -gt 0 ]]; then
+            echo "ERROR: test run failed for: ${failed_modules[*]}" >&2
+            exit 1
+          fi
 
           # Depth 2 only: each report lives at $COVERAGE_ROOT/<module>/coverage.cobertura.xml.
           # --report-trx also copies it as a TRX attachment under

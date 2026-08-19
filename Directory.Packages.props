@@ -5,9 +5,9 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.4.6-preview.1.26319.6" />
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.5.0-preview.1.26417.10" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.0" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.0" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <!-- DefaultAzureCredential for Azure Foundry managed-identity auth (consumed by the Application factory, lane B). -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
@@ -61,6 +61,11 @@
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.3.3" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.30" />
+    <!-- Deliberately behind TUnit (1.65.0) and NOT a lockstep pair here: TUnit.Playwright 1.64.x+ compiles against
+         Microsoft.Playwright 1.62.0, so bumping it alone fails the E2E project with CS1705 against the 1.61.0 pin
+         above. Moving both is a coupled change — a Microsoft.Playwright bump also needs `playwright.ps1 install`
+         to refresh ~/.cache/ms-playwright and CI's browser layer — so do it as its own verified pass, not a
+         drive-by. 1.62.0 is the last TUnit.Playwright that still targets Microsoft.Playwright 1.61.0. -->
     <PackageVersion Include="TUnit.Playwright" Version="1.58.0" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.3" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.9.0" />

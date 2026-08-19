@@ -67,6 +67,21 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
         builder.Property(entity => entity.CompactionSummaryUpdatedAtUtc)
                .HasColumnName("compaction_summary_updated_at_utc");
 
+        // The conversation-list path, both variants: `purged = 0 [AND archived = 0]` ordered by `is_pinned DESC,
+        // last_seen_utc DESC LIMIT n`. `archived` sorts LAST on purpose. Putting it second serves the active-only
+        // query perfectly but leaves the show-all query (which does not constrain it) with a TEMP B-TREE over every
+        // non-purged conversation — and because the list join runs a correlated last-message subquery per row, that
+        // sort costs one subquery per conversation instead of `limit` of them. Trailing, it is still an index-resident
+        // filter for the active query while both queries take the ordered reverse scan.
+        builder.HasIndex(entity => new
+               {
+                   entity.Purged,
+                   entity.IsPinned,
+                   entity.LastSeenUtc,
+                   entity.Archived
+               })
+               .HasDatabaseName("ix_conversations_list");
+
         builder.HasMany(entity => entity.Messages)
                .WithOne(entity => entity.Conversation)
                .HasForeignKey(entity => entity.ConversationId)

@@ -48,6 +48,27 @@ public sealed class HuggingFaceOptions
     public int HeaderReadConcurrency { get; set; } = 6;
 
     /// <summary>
+    ///     Number of parallel HTTP byte-range connections used to fetch ONE large model file. A multi-GB GGUF download
+    ///     from Hugging Face's CDN is per-connection throughput limited, so splitting it across a handful of streams is
+    ///     what <c>hf_transfer</c>/<c>aria2c</c> do and is where the wall-clock win comes from; 4 is the point past
+    ///     which added streams stop paying. Clamped to 1-16 at the point of use (the same convention as
+    ///     <see cref="HeaderReadConcurrency" />): <c>1</c> — or any value below it — is exactly the single-stream
+    ///     download with no range probe and no resume sidecar, and 16 is the ceiling because Hugging Face throttles
+    ///     per-IP well before that, so more sockets buy no throughput and only widen the failure surface. Parallel mode
+    ///     ADDITIONALLY requires a known file size of at least <see cref="ParallelDownloadMinimumBytes" /> and an origin
+    ///     that honours <c>Range</c>; when either does not hold the download falls back to the single stream by itself.
+    /// </summary>
+    public int DownloadConnections { get; set; } = 4;
+
+    /// <summary>
+    ///     Smallest file size (bytes) worth splitting across <see cref="DownloadConnections" /> connections. Below this
+    ///     the extra range probe and the per-connection TLS handshakes cost more than the parallelism returns. 64 MiB
+    ///     sits far under any real GGUF weight file and above the tokenizer/config/companion files that share this
+    ///     download path, so in practice only the weights are parallelised.
+    /// </summary>
+    public long ParallelDownloadMinimumBytes { get; set; } = 64L * 1024 * 1024;
+
+    /// <summary>
     ///     TTL for cached Hugging Face Hub search listings and per-repo blob listings. Both drift slowly (download/like
     ///     counts, occasional new commits), so a multi-hour TTL avoids re-fetching on every advisor refresh. A value
     ///     <c>&lt;= 0</c> disables this cache.
