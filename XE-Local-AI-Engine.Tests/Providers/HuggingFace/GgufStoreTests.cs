@@ -261,9 +261,12 @@ public sealed class GgufStoreTests
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         const int prefix = 1024;
-        // Pre-seed a .part with the first 1024 bytes, simulating an interrupted earlier run.
+        // Pre-seed a .part with the first 1024 bytes, simulating an interrupted earlier run, plus the resume record
+        // that names the commit which wrote them — without it the prefix is unvouched-for and gets refetched.
         var partPath = dir.FilePath(Infra.FileName) + ".part";
         await File.WriteAllBytesAsync(partPath, ModelBytes[..prefix]);
+        await File.WriteAllTextAsync(partPath + ".ranges.part",
+            string.Create(CultureInfo.InvariantCulture, $"2 {ModelBytes.Length} abc123def456 {prefix}"));
 
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => PartialDownload(ModelBytes, prefix));
         using var http = new HttpClient(handler);

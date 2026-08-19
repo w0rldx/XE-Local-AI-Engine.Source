@@ -6,7 +6,7 @@ Read `docs/agent-knowledge.md` before your first non-trivial change in this repo
 - A bare `TODO`/`FIXME` in a C# comment **fails the build** (Sonar S1135 + warnings-as-errors) — but **only in Release**, per the rule above. Write "follow-up:" instead.
 - A green E2E run does **not** typecheck the frontend anymore (the fixture runs `build:e2e`, a bare `vite build`). `pnpm run lint` is the only typecheck.
 - OpenAPI regen without `XE_LAUNCH_MODE=desktop` **silently drops** desktop-only endpoints from the generated client.
-- `aspire stop` is a **no-op** on this stack — use `scripts/dev-stop.sh`, or you leave an orphaned `llama-server` holding a port and VRAM.
+- Stop the stack with `scripts/dev-stop.sh`, not bare `aspire stop`. (The old "`aspire stop` is a **no-op**" claim did not reproduce on 2026-08-19; the fallback stays because the original VRAM/port leak's trigger is still unidentified.)
 - HostAgent was **deliberately removed** — don't reintroduce it. Docker is off the **inference path** and stays there, but is permitted for **Development Mode execution only** (ADR 0004). Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
 - This WSL box **has** an RTX 5090 (32 GB, sm_120) + CUDA. Older notes claiming no GPU — or claiming a 4080/16 GB/sm_89 — are wrong.
 - **NVFP4 GGUFs work** here, on native sm_120 kernels (live-verified; pin `b10201` carries `GGML_TYPE_NVFP4`). Only NVFP4 **safetensors** are unloadable — that's a container limit, not a format one. Don't re-research this.
