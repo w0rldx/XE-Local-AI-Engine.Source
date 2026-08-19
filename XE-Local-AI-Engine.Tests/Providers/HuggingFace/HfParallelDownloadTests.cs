@@ -256,10 +256,11 @@ public sealed class HfParallelDownloadTests
         using var dir = new Infra.TempModelsDir();
         var options = ParallelOptions(dir.Path, connections: 2);
         var destination = dir.FilePath(Infra.FileName);
-        // A .part left by the single-stream path: contiguous from byte 0, and with no cursors beside it. Chunk 0 is
-        // [0, 4096), so 5000 bytes covers all of it and the first 904 of chunk 1.
+        // A .part left by the single-stream path: contiguous from byte 0, with a one-cursor record naming the commit
+        // that wrote it. Chunk 0 is [0, 4096), so 5000 bytes covers all of it and the first 904 of chunk 1.
         const int alreadyFetched = 5000;
         await File.WriteAllBytesAsync(destination + ".part", Payload[..alreadyFetched]);
+        await WriteSidecarAsync(destination, Payload.Length, ProbeCommit, alreadyFetched);
 
         using var handler = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
         using var http = new HttpClient(handler);
@@ -281,6 +282,179 @@ public sealed class HfParallelDownloadTests
         AssertEx.Equal(string.Create(CultureInfo.InvariantCulture, $"bytes={alreadyFetched}-{Payload.Length - 1}"), handler.Requests[1].Range);
         var finalBytes = await File.ReadAllBytesAsync(destination);
         AssertEx.True(finalBytes.SequenceEqual(Payload));
+    }
+
+    [Test]
+    public async Task ParallelDownload_WhenSingleStreamPrefixNamesAnotherCommit_RefetchesEveryRange()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2);
+        var destination = dir.FilePath(Infra.FileName);
+        // A contiguous prefix whose record names a commit the ref has since moved off. Adopting it would splice the old
+        // file's first 5000 bytes onto the new file's tail — exactly the file that never existed upstream.
+        const int alreadyFetched = 5000;
+        await File.WriteAllBytesAsync(destination + ".part", Payload[..alreadyFetched]);
+        await WriteSidecarAsync(destination, Payload.Length, "999888777666", alreadyFetched);
+
+        using var handler = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        // The probe plus both full chunks: nothing of the foreign prefix was kept.
+        AssertEx.Equal(expected: 3, handler.CallCount);
+        var chunkRanges = handler.Requests.Skip(count: 1).Select(request => request.Range).Order(StringComparer.Ordinal).ToArray();
+        AssertEx.Contains(chunkRanges, "bytes=0-4095");
+        AssertEx.Contains(chunkRanges, "bytes=4096-8191");
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(Payload), "A prefix from another commit must never be adopted.");
+    }
+
+    [Test]
+    public async Task ParallelDownload_WhenSingleStreamPrefixHasNoRecord_RefetchesEveryRange()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2);
+        var destination = dir.FilePath(Infra.FileName);
+        // A contiguous prefix with nothing beside it — a .part from before the writing commit was recorded. Which
+        // version of the file it holds is unknowable, so it earns no head start.
+        await File.WriteAllBytesAsync(destination + ".part", Payload[..5000]);
+
+        using var handler = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, handler.CallCount);
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(Payload), "A prefix with no recorded commit must be refetched, not trusted.");
+    }
+
+    [Test]
+    public async Task SingleStreamDownload_Resume_PinsTheRecordedCommit_AndKeepsThePrefix()
+    {
+        using var dir = new Infra.TempModelsDir();
+        // One connection: the single-stream path verbatim, with no range probe in front of it.
+        var options = ParallelOptions(dir.Path, connections: 1);
+        var destination = dir.FilePath(Infra.FileName);
+        const int alreadyFetched = 3000;
+        await File.WriteAllBytesAsync(destination + ".part", Payload[..alreadyFetched]);
+        await WriteSidecarAsync(destination, Payload.Length, ProbeCommit, alreadyFetched);
+
+        var uris = new List<Uri>();
+        using var handler = new Infra.ScriptedHandler((request, _) =>
+        {
+            uris.Add(request.RequestUri!);
+            return RangeTailResponse(Payload, request);
+        });
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        // Exactly one request, for the remainder only, asked of the commit that wrote the prefix — not the mutable ref.
+        AssertEx.Equal(expected: 1, handler.CallCount);
+        AssertEx.Equal(string.Create(CultureInfo.InvariantCulture, $"bytes={alreadyFetched}-"), handler.Requests[0].Range);
+        AssertEx.True(uris[0].AbsolutePath.Contains($"/resolve/{ProbeCommit}/", StringComparison.Ordinal),
+            "A resumed single stream must be pinned to the commit that wrote the partial.");
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(Payload));
+        // A completed single stream cleans up its record exactly as the parallel path does.
+        AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
+    }
+
+    [Test]
+    public async Task SingleStreamDownload_WhenTheRecordedCommitMoved_DiscardsThePartialAndRefetchesFromZero()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 1);
+        var destination = dir.FilePath(Infra.FileName);
+        const int alreadyFetched = 3000;
+        const string movedCommit = "111222333444";
+        // Same length, entirely different content: a spliced file would be visible byte-for-byte.
+        var moved = Payload.Select(value => (byte)~value).ToArray();
+
+        // The partial holds the OLD commit's bytes; the origin now serves only the new one.
+        await File.WriteAllBytesAsync(destination + ".part", Payload[..alreadyFetched]);
+        await WriteSidecarAsync(destination, Payload.Length, ProbeCommit, alreadyFetched);
+
+        using var handler = new Infra.ScriptedHandler((request, _) => request.Headers.Range is null
+            ? FullDownload(moved, movedCommit)
+            : RangeTailResponse(moved, request, movedCommit));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            moved.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        // Attempt 1 asked to resume and was answered by a different commit — discarded. Attempt 2 sent no Range at all.
+        AssertEx.Equal(expected: 2, handler.CallCount);
+        AssertEx.Equal(string.Create(CultureInfo.InvariantCulture, $"bytes={alreadyFetched}-"), handler.Requests[0].Range);
+        AssertEx.Null(handler.Requests[1].Range);
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(moved), "A moved ref must refetch the whole file, never splice two commits.");
+    }
+
+    [Test]
+    public async Task SingleStreamDownload_WhenThePartialHasNoRecord_RefetchesFromZero()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 1);
+        var destination = dir.FilePath(Infra.FileName);
+        // A legacy .part: contiguous, but with no record of what wrote it.
+        await File.WriteAllBytesAsync(destination + ".part", Payload[..3000]);
+
+        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(Payload));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, handler.CallCount);
+        AssertEx.Null(handler.Requests[0].Range);
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(Payload), "An unvouched-for partial must be refetched from byte 0.");
     }
 
     [Test]
@@ -541,6 +715,32 @@ public sealed class HfParallelDownloadTests
         return payload;
     }
 
+    // The v2 resume record both download paths share: "2 <total> <revision> <cursor…>", written beside the .part.
+    private static Task WriteSidecarAsync(string destination, long totalBytes, string revision, params long[] cursors)
+    {
+        var line = string.Join(' ',
+        [
+            "2", totalBytes.ToString(CultureInfo.InvariantCulture), revision,
+            .. cursors.Select(cursor => cursor.ToString(CultureInfo.InvariantCulture))
+        ]);
+        return File.WriteAllTextAsync(destination + ".part" + ".ranges.part", line);
+    }
+
+    // Serves an open-ended "bytes=N-" resume request: everything from N to the end of the file, as a 206.
+    private static HttpResponseMessage RangeTailResponse(byte[] bytes, HttpRequestMessage request, string commit = ProbeCommit)
+    {
+        var from = (int)request.Headers.Range!.Ranges.Single().From!.Value;
+        var slice = bytes[from..];
+        var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+        {
+            Content = new ByteArrayContent(slice)
+        };
+        response.Content.Headers.ContentLength = slice.Length;
+        response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, bytes.Length - 1, bytes.Length);
+        response.Headers.TryAddWithoutValidation("X-Repo-Commit", commit);
+        return response;
+    }
+
     // Serves exactly the requested range as a 206, advertising the full file length via Content-Range.
     private static HttpResponseMessage RangeResponse(byte[] bytes, HttpRequestMessage request, string? lfsSha256 = null, string commit = ProbeCommit)
     {
@@ -590,14 +790,14 @@ public sealed class HfParallelDownloadTests
         return response;
     }
 
-    private static HttpResponseMessage FullDownload(byte[] bytes)
+    private static HttpResponseMessage FullDownload(byte[] bytes, string commit = ProbeCommit)
     {
         var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(bytes)
         };
         response.Content.Headers.ContentLength = bytes.Length;
-        response.Headers.TryAddWithoutValidation("X-Repo-Commit", "abc123def456");
+        response.Headers.TryAddWithoutValidation("X-Repo-Commit", commit);
         return response;
     }
 

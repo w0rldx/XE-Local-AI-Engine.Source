@@ -51,9 +51,9 @@ internal sealed class HfDownloadClient
     // most this much re-downloading, large enough that the sidecar rewrite is noise next to the bytes moved.
     private const long ResumeCursorFlushBytes = 8L * 1024 * 1024;
 
-    // Resume cursors for the parallel path, kept beside the .part. The ".part" tail is deliberate: it makes the file
-    // match the "*.part" glob that GgufAcquisitionArtifactStartupReaper already sweeps, so an abandoned parallel
-    // download leaves nothing the existing startup cleanup misses.
+    // Resume cursors — and the commit that wrote them — kept beside the .part by BOTH download paths. The ".part" tail
+    // is deliberate: it makes the file match the "*.part" glob that GgufAcquisitionArtifactStartupReaper already
+    // sweeps, so an abandoned download leaves nothing the existing startup cleanup misses.
     private const string RangeSidecarSuffix = ".ranges.part";
     private readonly IHfDownloadMetrics _downloadMetrics;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
@@ -187,11 +187,17 @@ internal sealed class HfDownloadClient
         }
 
         // Single stream: either the file was not eligible for parallel mode or the origin turned out not to honour
-        // Range. DownloadRangesAsync has already discarded any pre-sized .part it left behind, so the offset below is a
-        // real byte count and not the length of a file full of holes.
-        var existingPartBytes = GetExistingPartLength(partPath);
+        // Range. Only bytes a RECORDED commit vouches for may be resumed — appending to a prefix a different commit
+        // wrote splices two versions of the file into one that never existed upstream, and there is usually no sha256
+        // to catch it. A .part with no record (one written before this client recorded revisions, or one whose ref has
+        // since moved) is refetched from byte 0 instead: a bounded one-time cost, paid once per abandoned file.
+        var resume = ReadSingleStreamResume(partPath, expectedSizeBytes);
+        var existingPartBytes = resume?.Bytes ?? 0L;
+        // Pin to the recorded commit where it looks like one, exactly as the parallel path does, so the resumed bytes
+        // are asked for at the version that wrote the prefix rather than at whatever the mutable ref points to now.
+        var pinned = resume is not null && IsCommitId(resume.Revision);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        using var request = new HttpRequestMessage(HttpMethod.Get, pinned ? resolveAtCommit(resume!.Revision) : requestUri);
         await ApplyAuthorizationAsync(request, ct).ConfigureAwait(false);
         if (existingPartBytes > 0)
         {
@@ -207,7 +213,16 @@ internal sealed class HfDownloadClient
             // transient failure: the next retry sees no .part, sends no Range, and restarts cleanly from byte 0.
             if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
             {
-                TryDeleteFile(partPath);
+                DiscardPartial(partPath);
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
+                    "The model download could not resume from the partial file. Retrying from the start.");
+            }
+
+            // Against a pinned commit a 404 means the PIN is gone, not the file: the recorded commit is no longer
+            // resolvable. Drop the partial so the retry asks the caller's ref again instead of failing the download.
+            if (pinned && response.StatusCode == HttpStatusCode.NotFound)
+            {
+                DiscardPartial(partPath);
                 throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                     "The model download could not resume from the partial file. Retrying from the start.");
             }
@@ -221,10 +236,35 @@ internal sealed class HfDownloadClient
             // plain ETag (see ReadLinkedSha256).
             expectedSha ??= ReadLinkedSha256(response) ?? fallbackSha;
             var resolvedRevision = ReadRepoCommit(response) ?? string.Empty;
-            var totalBytes = ResolveTotalBytes(response, appending, existingPartBytes, expectedSizeBytes);
 
-            await CopyToPartAsync(response, partPath, appending, modelName, totalBytes, TimeSpan.FromSeconds(_options.DownloadReadIdleTimeoutSeconds), _downloadMetrics, progress, ct)
-                .ConfigureAwait(false);
+            // Backstop for a pin that could not be applied (or did not hold): the body about to be appended belongs to
+            // a different version of the file than the prefix on disk. An origin that names no commit at all compares
+            // equal to a record that named none either — the same residual the parallel path accepts, because there is
+            // nothing left to detect a move with.
+            if (appending && !string.Equals(RangeResumeState.Stamp(resolvedRevision), resume!.Revision, StringComparison.Ordinal))
+            {
+                DiscardPartial(partPath);
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
+                    "The model changed on the server while it was downloading. Please try again.");
+            }
+
+            var totalBytes = ResolveTotalBytes(response, appending, existingPartBytes, expectedSizeBytes);
+            var resumeState = RangeResumeState.CreateSingle(partPath + RangeSidecarSuffix,
+                expectedSizeBytes,
+                resolvedRevision,
+                appending ? existingPartBytes : 0L);
+
+            try
+            {
+                await CopyToPartAsync(response, partPath, appending, modelName, totalBytes, TimeSpan.FromSeconds(_options.DownloadReadIdleTimeoutSeconds), _downloadMetrics, resumeState, progress, ct)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                // The stream above is disposed (and therefore flushed) by now, so the .part length IS this run's
+                // cursor. Recording it on ANY exit is what lets the next attempt trust the prefix it finds.
+                resumeState.Persist(index: 0, GetExistingPartLength(partPath));
+            }
 
             return await CommitAsync(partPath, destinationPath, modelName, expectedSha, resolvedRevision, progress, ct).ConfigureAwait(false);
         }
@@ -315,7 +355,7 @@ internal sealed class HfDownloadClient
         var probe = await ProbeRangeSupportAsync(requestUri, expectedSizeBytes, ct).ConfigureAwait(false);
         if (probe is null)
         {
-            DiscardRangedPartial(partPath);
+            DiscardRangedPartial(partPath, expectedSizeBytes);
             return null;
         }
 
@@ -549,23 +589,53 @@ internal sealed class HfDownloadClient
 
     /// <summary>
     ///     Drops a <c>.part</c> left by an earlier parallel attempt. It is pre-sized and sparse, so its LENGTH is not a
-    ///     byte count: letting the single-stream path resume from it would skip everything the holes cover.
+    ///     byte count: letting the single-stream path resume from it would skip everything the holes cover. A partial
+    ///     whose record says one contiguous run from byte 0 is kept — that is the single-stream path's own file, and it
+    ///     is exactly what the fallback below is about to resume.
     /// </summary>
-    private static void DiscardRangedPartial(string partPath)
+    private static void DiscardRangedPartial(string partPath, long expectedSizeBytes)
     {
-        var sidecarPath = partPath + RangeSidecarSuffix;
-        if (!File.Exists(sidecarPath))
+        if (!File.Exists(partPath + RangeSidecarSuffix) || ReadSingleStreamResume(partPath, expectedSizeBytes) is not null)
         {
             return;
         }
 
-        TryDeleteFile(sidecarPath);
+        DiscardPartial(partPath);
+    }
+
+    /// <summary>Drops a partial and the record beside it, so the next attempt starts from byte 0 with nothing to trust.</summary>
+    private static void DiscardPartial(string partPath)
+    {
+        TryDeleteFile(partPath + RangeSidecarSuffix);
         TryDeleteFile(partPath);
     }
 
     /// <summary>
+    ///     How much of the <c>.part</c> the single-stream path may resume, and which commit wrote it. Non-null only for
+    ///     a record describing ONE contiguous run whose length still matches what is actually on disk; anything else —
+    ///     no partial, no record, a torn one, a record for a different file length, or a pre-sized parallel partial —
+    ///     is <see langword="null" />, meaning refetch from byte 0.
+    /// </summary>
+    private static SingleStreamResume? ReadSingleStreamResume(string partPath, long expectedSizeBytes)
+    {
+        var partBytes = GetExistingPartLength(partPath);
+        if (partBytes <= 0)
+        {
+            return null;
+        }
+
+        return RangeResumeState.TryReadRecord(partPath + RangeSidecarSuffix) is { Cursors.Length: 1 } record
+               && record.Total == expectedSizeBytes
+               && record.Cursors[0] == partBytes
+            ? new SingleStreamResume(partBytes, record.Revision)
+            : null;
+    }
+
+    /// <summary>
     ///     Bytes genuinely present in the partial file, for the pre-download disk guard. A parallel <c>.part</c> is
-    ///     pre-sized to the full length, so only its resume cursors say how much was actually fetched.
+    ///     pre-sized to the full length, so only its resume cursors say how much was actually fetched. (The guard runs
+    ///     before any commit is known, so a partial that later turns out to be from a moved ref is counted here and
+    ///     refetched afterwards — it over-states free space by at most the partial, which the disk margin absorbs.)
     /// </summary>
     private static long GetCompletedPartBytes(string partPath)
     {
@@ -607,11 +677,13 @@ internal sealed class HfDownloadClient
         long? totalBytes,
         TimeSpan readIdleTimeout,
         IHfDownloadMetrics downloadMetrics,
+        RangeResumeState resumeState,
         IProgress<PullProgress>? progress,
         CancellationToken ct)
     {
         var mode = appending ? FileMode.Append : FileMode.Create;
         var completed = appending ? new FileInfo(partPath).Length : 0L;
+        var persistedAt = completed;
 
         FileStream partStream;
         try
@@ -651,6 +723,15 @@ internal sealed class HfDownloadClient
                             TotalBytes = totalBytes,
                             CompletedBytes = completed
                         });
+
+                        if (completed - persistedAt >= ResumeCursorFlushBytes)
+                        {
+                            // Flush BEFORE the cursor: a cursor that outran the buffered bytes would claim a prefix the
+                            // file does not hold, and the resume check compares it against the .part's length.
+                            await partStream.FlushAsync(ct).ConfigureAwait(false);
+                            resumeState.Persist(index: 0, completed);
+                            persistedAt = completed;
+                        }
                     }
 
                     // Flush so the .part length on disk is accurate for a later resume.
@@ -719,8 +800,7 @@ internal sealed class HfDownloadClient
         if (!string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase))
         {
             // Corrupt/truncated download — drop the .part, and its resume cursors with it, so a retry starts clean.
-            TryDeleteFile(partPath + RangeSidecarSuffix);
-            TryDeleteFile(partPath);
+            DiscardPartial(partPath);
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.HashMismatch,
                 "The downloaded model file failed its integrity check and was discarded. Please try again.");
         }
@@ -904,6 +984,9 @@ internal sealed class HfDownloadClient
     /// <summary>What the one-byte range probe learned: the authoritative length, the pinned revision, and any LFS OID.</summary>
     private sealed record RangeProbe(long TotalBytes, string Revision, string? LinkedSha);
 
+    /// <summary>A single-stream partial the record beside it vouches for: its contiguous length and the writing commit.</summary>
+    private sealed record SingleStreamResume(long Bytes, string Revision);
+
     /// <summary>Everything a chunk needs that is identical for every chunk of one parallel download.</summary>
     private sealed record ChunkContext(Uri RequestUri,
         SafeFileHandle Handle,
@@ -919,7 +1002,9 @@ internal sealed class HfDownloadClient
     ///     <para>
     ///         <b>Resume scheme.</b> The chunk layout is derived purely from (total length, connection count), so the
     ///         only state worth keeping is how many bytes each chunk has fetched, and which version of the file they
-    ///         came from. That lives in a one-line sidecar next to the <c>.part</c>:
+    ///         came from. The single-stream path keeps the SAME record with a single cursor — one contiguous run from
+    ///         byte 0 — so both paths answer "which commit wrote these bytes" the same way. That lives in a one-line
+    ///         sidecar next to the <c>.part</c>:
     ///         <c>"2 &lt;total&gt; &lt;revision&gt; &lt;cursor0&gt; &lt;cursor1&gt; …"</c>. A cursor is
     ///         written only AFTER the corresponding positional write returned, and <see cref="RandomAccess" /> keeps no
     ///         user-mode buffer, so a cursor can never claim more bytes than the file holds. The line is rewritten in
@@ -956,9 +1041,7 @@ internal sealed class HfDownloadClient
 
         /// <summary>
         ///     Loads the cursors for this file. <paramref name="existingPartBytes" /> is the length of an existing
-        ///     <c>.part</c> and is honoured as a head start ONLY when there is no sidecar and that length is short of the
-        ///     whole file: only the single-stream path writes a <c>.part</c> without cursors, and only while it is still
-        ///     growing is that file unambiguously contiguous from byte 0.
+        ///     <c>.part</c>, used to check that the sidecar still describes the file that is actually on disk.
         /// </summary>
         public static RangeResumeState Create(string sidecarPath,
             long totalBytes,
@@ -967,7 +1050,7 @@ internal sealed class HfDownloadClient
             long existingPartBytes,
             string revision)
         {
-            var stamped = string.IsNullOrEmpty(revision) ? UnknownRevision : revision;
+            var stamped = Stamp(revision);
             return new RangeResumeState(sidecarPath,
                 totalBytes,
                 stamped,
@@ -975,9 +1058,26 @@ internal sealed class HfDownloadClient
         }
 
         /// <summary>
-        ///     Decides how much of the <c>.part</c> the next attempt may keep. Everything hinges on telling "no sidecar"
-        ///     apart from "a sidecar that cannot be believed": the <c>.part</c> beside a sidecar was pre-sized to the full
-        ///     length, so seeding from its length would mark every chunk complete and commit a file of holes.
+        ///     The single-stream path's state: one cursor, because that path writes one contiguous run from byte 0. It
+        ///     shares the sidecar rather than inventing a second record, so the parallel path can read what wrote a
+        ///     prefix it is thinking of adopting — and so both paths clean up after themselves the same way.
+        /// </summary>
+        public static RangeResumeState CreateSingle(string sidecarPath, long totalBytes, string revision, long cursor)
+        {
+            return new RangeResumeState(sidecarPath, totalBytes, Stamp(revision), [cursor]);
+        }
+
+        /// <summary>The on-disk form of a revision: the fields are space separated, so "the origin named none" needs a token.</summary>
+        public static string Stamp(string? revision)
+        {
+            return string.IsNullOrEmpty(revision) ? UnknownRevision : revision;
+        }
+
+        /// <summary>
+        ///     Decides how much of the <c>.part</c> the next attempt may keep. Nothing on disk distinguishes a sparse
+        ///     pre-sized parallel partial from a contiguous single-stream one, and nothing distinguishes bytes from this
+        ///     commit from bytes from the one the ref moved off — so the record beside the <c>.part</c> is the ONLY
+        ///     thing that may grant a head start, and only when it still describes the file that is actually there.
         /// </summary>
         private static long[] ResolveCursors(string sidecarPath,
             long totalBytes,
@@ -986,22 +1086,25 @@ internal sealed class HfDownloadClient
             long existingPartBytes,
             string revision)
         {
-            if (File.Exists(sidecarPath))
+            // No record, a torn one, a record for a different file length, or one written by a commit this ref has
+            // since moved off: refetch every range. That includes a .part from before this client recorded revisions —
+            // deliberately, since there is no way to learn what wrote it, and the cost is one re-download.
+            if (TryReadRecord(sidecarPath) is not { } record
+                || record.Total != totalBytes
+                || !string.Equals(record.Revision, revision, StringComparison.Ordinal))
             {
-                // A torn line, a record for a different layout, bytes from a commit this ref has since moved off, or a
-                // .part that is no longer the pre-sized file those cursors described: nothing about the partial is
-                // trustworthy, so refetch every range into it.
-                return TryReadRecord(sidecarPath) is { } record
-                       && existingPartBytes == totalBytes
-                       && string.Equals(record.Revision, revision, StringComparison.Ordinal)
-                       && IsUsable(record, totalBytes, chunkCount, chunkSize)
-                    ? record.Cursors
-                    : new long[chunkCount];
+                return new long[chunkCount];
             }
 
-            // A full-length .part with no sidecar is ambiguous — a finished-but-uncommitted single-stream download looks
-            // exactly like a sparse parallel partial whose cursors were swept — so it earns no head start.
-            return existingPartBytes < totalBytes
+            // A ranged partial: usable only while the .part is still the pre-sized file those cursors described.
+            if (record.Cursors.Length == chunkCount && existingPartBytes == totalBytes && IsUsable(record.Cursors, totalBytes, chunkCount, chunkSize))
+            {
+                return record.Cursors;
+            }
+
+            // A single-stream partial written by the SAME commit: one contiguous run from byte 0, so it seeds every
+            // chunk it reaches. Its cursor must still match the file's length, or the run it describes is not there.
+            return record.Cursors.Length == 1 && existingPartBytes == record.Cursors[0] && existingPartBytes < totalBytes
                 ? SeedFromContiguousPrefix(totalBytes, chunkCount, chunkSize, existingPartBytes)
                 : new long[chunkCount];
         }
@@ -1106,17 +1209,12 @@ internal sealed class HfDownloadClient
             return (total, fields[2], cursors);
         }
 
-        private static bool IsUsable((long Total, string Revision, long[] Cursors) record, long totalBytes, int chunkCount, long chunkSize)
+        private static bool IsUsable(long[] cursors, long totalBytes, int chunkCount, long chunkSize)
         {
-            if (record.Total != totalBytes || record.Cursors.Length != chunkCount)
-            {
-                return false;
-            }
-
             for (var index = 0; index < chunkCount; index++)
             {
                 var start = index * chunkSize;
-                if (record.Cursors[index] > Math.Min(totalBytes, start + chunkSize) - start)
+                if (cursors[index] > Math.Min(totalBytes, start + chunkSize) - start)
                 {
                     return false;
                 }

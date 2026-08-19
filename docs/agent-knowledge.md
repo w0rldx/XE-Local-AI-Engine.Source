@@ -376,9 +376,29 @@ Rest of the box, for sizing assumptions: **AMD Ryzen 9 9950X3D** host, **8 proce
 
 No Secret Service daemon (`org.freedesktop.secrets was not provided by any .service files`). MSAL/Azure.Identity token-cache persistence throws `MsalCachePersistenceException`, which **Azure.Identity re-wraps as `AuthenticationFailedException`** — so a handler catching only `CredentialUnavailableException` never sees it. When touching Entra/Azure auth here, walk the `InnerException` chain. Consequence: such sign-ins are in-memory-only on this box and don't survive restart.
 
-### Aspire 13.4 stop needs a worktree-scoped fallback
+### `dev-stop.sh` is the sanctioned stop path — but the leak it guards against no longer reproduces
 
-Every Aspire resource runs as a DCP-owned process in its own process group, detached from the AppHost/CLI's process tree, so `aspire stop`'s tree-kill can't reach it (upstream Aspire CLI bug; fixed only in 13.5+, still preview). A killed session therefore leaves an **orphaned `llama-server` holding its port and GPU VRAM** — it runs under `setsid`, so a parent SIGKILL doesn't touch it.
+**Measured 2026-08-19 on this box, and the old story did not hold up.** Five live cycles — a real
+`llama-server` loaded through `gpu-smoke-driver`, plus the docker `sqlite-web` container — against
+Aspire packages **13.4.6 and 13.5.0** and CLI **13.4.6 and 13.5.0**, including one SIGKILL of the
+`aspire` CLI mid-run: plain `aspire stop` tore down **everything** every time (AppHost, the whole DCP
+tree, the `setsid`'d `llama-server`, the container), and VRAM returned to baseline. So:
+
+- The old claim that **"the fix landed only in 13.5+, still preview"** is **unsupported**. 13.4.6 was
+  already clean in this scenario, so nothing here attributes the behaviour to a version. It is also
+  stale on its face: `Aspire.Hosting.AppHost` is pinned at **13.5.0 GA** (only
+  `Aspire.Hosting.Browsers` is still on a 13.5.0 preview), and the CLI on this box is 13.4.6.
+- The leak itself was **not reproduced** on either version. Every resource does still run as a
+  DCP-owned process in its own process group, detached from the AppHost/CLI process tree — the
+  mechanism that would make an orphan possible is intact; what could not be reproduced is `aspire
+  stop` failing to reach it.
+
+**The fallback stays anyway, and so does the guidance below.** Not reproducing a leak is not the same
+as proving it cannot happen: the original trigger was never identified (candidates: a resource hung
+mid-start, `Ctrl+C` on `aspire run`, a `llama-server` ignoring SIGTERM), and `dev-stop.sh` was
+observed still doing real work — **15 SIGTERMs** when invoked directly against a running stack with
+no prior `aspire stop`. Removing a VRAM/port-leak guard on "could not reproduce" is not a trade worth
+making. Retire the fallback only when a reproducer names the trigger.
 
 **Use `scripts/dev-start.sh`, `scripts/dev-status.sh`, and `scripts/dev-stop.sh`.** They bind every
 operation to the canonical AppHost path for the current checkout; start always uses `--isolated`.
@@ -1125,6 +1145,7 @@ Old notes (and agents who half-remember them) assert these. They are **false tod
 | "The dev box is an RTX 4080 with 16 GB (sm_89 / Ada); build CUDA with `-DCMAKE_CUDA_ARCHITECTURES=89`." | **Wrong since 2026-07-26** — it is an **RTX 5090, 32 GB, sm_120 (Blackwell)**. Read `nvidia-smi`; never hardcode the arch. The source-build fallback includes `120`, but live detection remains authoritative. |
 | "llama.cpp has native MCP support now, so the app could use it." | The MCP client lives in llama-server's **web UI**, which this app never serves; the backend addition is only the experimental `--ui-mcp-proxy` CORS proxy. The .NET `ModelContextProtocol` client remains the correct integration point, and a browser-side host would move tool execution below the approval/sandbox boundary. See `Plans/2026-07-26-llamacpp-native-mcp-decision.md`. |
 | "Ollama was removed from the app." | Removed only from *Aspire dev orchestration*. It remains a supported, gated, opt-in secondary provider with 50+ live call sites. llama.cpp is the *default*, not the *only*, runtime. |
+| "`aspire stop` is a no-op on this stack — it can't reach DCP-owned processes, and the CLI fix only landed in 13.5+ (still preview), so an orphaned `llama-server` holding a port and VRAM is the expected outcome." | **Not reproduced, 2026-08-19.** Five live cycles on this box (real `llama-server` via `gpu-smoke-driver` + the docker `sqlite-web` container), Aspire packages 13.4.6 *and* 13.5.0, CLI 13.4.6 *and* 13.5.0, including one SIGKILL of the CLI: plain `aspire stop` tore down everything each time and VRAM returned to baseline. The version gate is doubly stale — 13.5.0 is **GA** (only `Aspire.Hosting.Browsers` is still preview), and 13.4.6 was already clean, so the fix was never shown to be version-dependent. **`scripts/dev-stop.sh` is still the sanctioned stop path**: the trigger for the original leak was never identified, and the fallback was observed doing real work (15 SIGTERMs) when run directly against a live stack. Don't remove the guard, and don't restate the version claim. See §2. |
 | "NVFP4 isn't supported — llama.cpp can't load it, or it can't be used on this box." | **False since `b4e38978`, and live-proven 2026-07-31.** llama.cpp carries `GGML_TYPE_NVFP4` with sm_120 tensor-core kernels, our pin `b10201` includes them, and a 27B NVFP4 GGUF loaded and generated at 95% GPU utilisation here. The *true* limitation is narrower and is about the **container**: NVFP4 **safetensors** (compressed-tensors/ModelOpt) remain unloadable, since the upstream convert script is still an unmerged PR. Don't restate the narrow fact as the broad one — see §3. |
 | "The inbound MCP key is stored reversibly on purpose, so Node Settings can re-show it and the operator can re-copy it without rotating." | **True until 2026-08-03, false now.** It is stored as a one-way SHA-256 digest. The plaintext is returned exactly once, by the generate endpoint, and is unrecoverable afterwards — `GET` has no key field at all. A lost key means regenerate + reconfigure every client. The old rationale is gone from the code, wiki and runbook; if you find prose still arguing for reversibility, it is a leftover, not a decision. |
 | "`dotnet test` reports zero tests — run the native test-host exe instead." | Fixed by the `global.json` MTP runner pin. `dotnet test` works against the whole solution. Native exe still works, but is no longer required. |
