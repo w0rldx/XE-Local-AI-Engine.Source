@@ -8,7 +8,7 @@ For failures, stop and report the failing command/output before attempting fixes
 
 ## Hard-won knowledge
 
-Read `docs/agent-knowledge.md` before your first non-trivial change. It records the rules, invariants, and traps that are not derivable from the code — each one encodes a bug that was already paid for once (build-breaking `TODO` comments, the OpenAPI regen that silently drops endpoints, `aspire stop` being a no-op, sandbox symlink guards, MAF constructor pitfalls). It also lists beliefs that are now false, so a half-remembered old rule can be corrected.
+Read `docs/agent-knowledge.md` before your first non-trivial change. It records the rules, invariants, and traps that are not derivable from the code — each one encodes a bug that was already paid for once (build-breaking `TODO` comments, the OpenAPI regen that silently drops endpoints, why `dev-stop.sh` is the sanctioned stop path, sandbox symlink guards, MAF constructor pitfalls). It also lists beliefs that are now false, so a half-remembered old rule can be corrected.
 
 `docs/wiki/` is the code-grounded architecture reference.
 
