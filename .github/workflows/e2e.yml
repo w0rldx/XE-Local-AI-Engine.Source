@@ -48,6 +48,26 @@ jobs:
           cache: pnpm
           cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
 
+      # Same key recipe as build-and-test.yml: no packages.lock.json in this repo, so the key hashes
+      # the version manifest plus every project file — the two things that decide what restore pulls.
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'global.json', '**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # Browser binaries are ~400 MB and pinned by the Microsoft.Playwright version, which lives in
+      # Directory.Packages.props — hashing that file is the same key style as the NuGet cache above and
+      # invalidates whenever the pin moves. `playwright install --with-deps` still runs below: the OS
+      # package half is not cacheable, and the browser half is a no-op on a cache hit.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: ${{ runner.os }}-playwright-
+
       - name: Build E2E project
         run: dotnet build XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj -p:RunE2ETests=true --configuration Release
 
