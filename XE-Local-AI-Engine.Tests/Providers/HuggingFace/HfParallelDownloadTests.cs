@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -16,6 +17,9 @@ using Infra = GgufStoreTestInfrastructure;
 /// </summary>
 public sealed class HfParallelDownloadTests
 {
+    // The commit the fake origin reports for the caller's mutable "main" ref.
+    private const string ProbeCommit = "abc123def456";
+
     // A per-position-distinct payload: an off-by-one in the chunk maths corrupts the file visibly, which a repeated
     // filler byte would hide.
     private static readonly byte[] Payload = BuildPayload(8192);
@@ -134,7 +138,7 @@ public sealed class HfParallelDownloadTests
         AssertEx.False(File.Exists(destination), "A truncated range must never be committed.");
         // The cursors survive the interruption and record exactly what landed.
         var cursors = await File.ReadAllTextAsync(destination + ".part" + ".ranges.part");
-        AssertEx.Equal(string.Create(CultureInfo.InvariantCulture, $"1 {Payload.Length} {chunkSize} {chunkOneBytes}"), cursors);
+        AssertEx.Equal(string.Create(CultureInfo.InvariantCulture, $"2 {Payload.Length} {ProbeCommit} {chunkSize} {chunkOneBytes}"), cursors);
 
         // Run 2: a healthy origin. The completed range must not be requested again.
         using var resumed = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
@@ -190,7 +194,7 @@ public sealed class HfParallelDownloadTests
 
         // A crash mid-rewrite leaves the one-line sidecar torn. The .part it describes is full-length but full of holes.
         AssertEx.Equal(Payload.Length, new FileInfo(partPath).Length);
-        await File.WriteAllTextAsync(partPath + ".ranges.part", "1 81");
+        await File.WriteAllTextAsync(partPath + ".ranges.part", "2 81");
 
         // Run 2: an unreadable cursor line must not be mistaken for "no cursors at all" — every range is refetched.
         using var resumed = new Infra.ScriptedHandler((request, _) => RangeResponse(Payload, request));
@@ -359,6 +363,159 @@ public sealed class HfParallelDownloadTests
         AssertEx.Null(handler.Requests[0].Range);
     }
 
+    [Test]
+    public async Task ParallelDownload_PinsEveryChunkToTheProbedCommit_NotTheMutableRef()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2);
+        var destination = dir.FilePath(Infra.FileName);
+        // Chunks run concurrently, so the recorder has to be thread-safe; the probe is still enqueued first.
+        var uris = new ConcurrentQueue<Uri>();
+
+        using var handler = new Infra.ScriptedHandler((request, _) =>
+        {
+            uris.Enqueue(request.RequestUri!);
+            return RangeResponse(Payload, request);
+        });
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        // The probe resolves the caller's ref; every chunk after it names the commit that ref resolved to, so a branch
+        // that advances mid-download cannot hand two chunks bytes from two different commits.
+        var requested = uris.ToArray();
+        AssertEx.Equal(expected: 3, requested.Length);
+        AssertEx.True(requested[0].AbsolutePath.Contains($"/resolve/{Infra.Revision}/", StringComparison.Ordinal),
+            "The range probe must still use the caller's revision.");
+        AssertEx.True(requested.Skip(count: 1).All(uri => uri.AbsolutePath.Contains($"/resolve/{ProbeCommit}/", StringComparison.Ordinal)),
+            "Every chunk must be fetched from the commit the probe resolved.");
+    }
+
+    [Test]
+    public async Task ParallelDownload_WhenChunkContentRangeDoesNotMatchTheRequest_IsRejectedWithoutCommitting()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
+        var destination = dir.FilePath(Infra.FileName);
+
+        // An intermediary that answers each chunk with the right NUMBER of bytes taken from the wrong place. The body
+        // would land at the offset we asked for, so only Content-Range can give it away.
+        using var handler = new Infra.ScriptedHandler((request, _) =>
+        {
+            var range = request.Headers.Range!.Ranges.Single();
+            return range.To == 0 ? RangeResponse(Payload, request) : MisrangedResponse(Payload, request);
+        });
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        var failure = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.Network, failure.Reason);
+        AssertEx.False(File.Exists(destination), "Bytes from the wrong offset must never be committed.");
+        // Rejected before the copy: the pre-sized .part is still untouched, so no mis-ranged body reached the disk.
+        var partBytes = await File.ReadAllBytesAsync(destination + ".part");
+        AssertEx.Equal(Payload.Length, partBytes.Length);
+        AssertEx.True(Array.TrueForAll(partBytes, value => value == 0), "A rejected chunk must be rejected before anything is written.");
+    }
+
+    [Test]
+    public async Task ParallelDownload_WhenAChunkReportsADifferentCommit_IsRejectedWithoutCommitting()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
+        var destination = dir.FilePath(Infra.FileName);
+
+        // The probe pins one commit; the origin then serves a chunk from another (the branch moved under the pin).
+        using var handler = new Infra.ScriptedHandler((request, _) =>
+        {
+            var range = request.Headers.Range!.Ranges.Single();
+            return range.To == 0 ? RangeResponse(Payload, request) : RangeResponse(Payload, request, commit: "999888777666");
+        });
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        var failure = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => download.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.Network, failure.Reason);
+        AssertEx.False(File.Exists(destination), "Chunks from two commits must never be assembled into one file.");
+    }
+
+    [Test]
+    public async Task ParallelDownload_WhenTheRefMovedBetweenAttempts_RefetchesEveryRange()
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = ParallelOptions(dir.Path, connections: 2, retries: 0);
+        var destination = dir.FilePath(Infra.FileName);
+        const int chunkSize = 4096;
+        // What the moved branch now serves: same length, different content.
+        var moved = BuildPayload(Payload.Length).Select(value => (byte)~value).ToArray();
+
+        // Run 1 stops mid-flight against the original commit, leaving cursors that describe ITS bytes.
+        using var interrupted = new Infra.ScriptedHandler((request, _) =>
+        {
+            var from = request.Headers.Range!.Ranges.Single().From!.Value;
+            return from == chunkSize ? PartialStreamResponse(Payload, (int)from, deliverBytes: 1024) : RangeResponse(Payload, request);
+        });
+        using var interruptedHttp = new HttpClient(interrupted);
+        var interruptedDownload = Infra.DownloadClient(interruptedHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => interruptedDownload.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            Payload.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None));
+
+        // Run 2: the mutable ref now resolves to a different commit serving different content. Resuming the old cursors
+        // would splice the two versions together into a file that never existed upstream.
+        const string movedCommit = "111222333444";
+        using var resumed = new Infra.ScriptedHandler((request, _) => RangeResponse(moved, request, commit: movedCommit));
+        using var resumedHttp = new HttpClient(resumed);
+        var resumedDownload = Infra.DownloadClient(resumedHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        _ = await resumedDownload.DownloadAsync(Infra.RepoId,
+            Infra.FileName,
+            Infra.Revision,
+            Infra.ModelName,
+            destination,
+            moved.Length,
+            expectedSha256: null,
+            progress: null,
+            CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, resumed.CallCount);
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(moved), "A revision that moved between attempts must refetch, never splice two commits.");
+    }
+
     private static HuggingFaceOptions ParallelOptions(string modelsDir, int connections, int retries = 2)
     {
         return new HuggingFaceOptions
@@ -385,7 +542,7 @@ public sealed class HfParallelDownloadTests
     }
 
     // Serves exactly the requested range as a 206, advertising the full file length via Content-Range.
-    private static HttpResponseMessage RangeResponse(byte[] bytes, HttpRequestMessage request, string? lfsSha256 = null)
+    private static HttpResponseMessage RangeResponse(byte[] bytes, HttpRequestMessage request, string? lfsSha256 = null, string commit = ProbeCommit)
     {
         var range = request.Headers.Range!.Ranges.Single();
         var from = (int)range.From!.Value;
@@ -397,12 +554,28 @@ public sealed class HfParallelDownloadTests
         };
         response.Content.Headers.ContentLength = slice.Length;
         response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, to, bytes.Length);
-        response.Headers.TryAddWithoutValidation("X-Repo-Commit", "abc123def456");
+        response.Headers.TryAddWithoutValidation("X-Repo-Commit", commit);
         if (lfsSha256 is not null)
         {
             response.Headers.TryAddWithoutValidation("X-Linked-Etag", $"\"{lfsSha256}\"");
         }
 
+        return response;
+    }
+
+    // A 206 of the right LENGTH whose Content-Range describes a different part of the file (the mirror of what was
+    // asked for) — the shape a broken intermediary produces, and the one the assembled file cannot survive.
+    private static HttpResponseMessage MisrangedResponse(byte[] bytes, HttpRequestMessage request)
+    {
+        var range = request.Headers.Range!.Ranges.Single();
+        var from = (int)range.From!.Value;
+        var to = (int)range.To!.Value;
+        var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+        {
+            Content = new ByteArrayContent(bytes[from..(to + 1)])
+        };
+        response.Content.Headers.ContentRange = new ContentRangeHeaderValue(bytes.Length - 1 - to, bytes.Length - 1 - from, bytes.Length);
+        response.Headers.TryAddWithoutValidation("X-Repo-Commit", ProbeCommit);
         return response;
     }
 

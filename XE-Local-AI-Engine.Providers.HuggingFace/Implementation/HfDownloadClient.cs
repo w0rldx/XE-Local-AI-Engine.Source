@@ -140,8 +140,17 @@ internal sealed class HfDownloadClient
             ct.ThrowIfCancellationRequested();
             try
             {
-                return await DownloadOnceAsync(requestUri, expectedSha, fallbackSha, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
-                    .ConfigureAwait(false);
+                return await DownloadOnceAsync(requestUri,
+                                     commit => BuildResolveUri(repoId, commit, fileName),
+                                     expectedSha,
+                                     fallbackSha,
+                                     modelName,
+                                     partPath,
+                                     destinationPath,
+                                     expectedSizeBytes,
+                                     progress,
+                                     ct)
+                                 .ConfigureAwait(false);
             }
             catch (HuggingFaceDownloadException exception) when (IsTransient(exception.Reason) && attempt < _options.MaxDownloadRetries)
             {
@@ -156,6 +165,7 @@ internal sealed class HfDownloadClient
     }
 
     private async Task<HfDownloadResult> DownloadOnceAsync(Uri requestUri,
+        Func<string, Uri> resolveAtCommit,
         string? expectedSha,
         string? fallbackSha,
         string modelName,
@@ -168,7 +178,7 @@ internal sealed class HfDownloadClient
         var connections = ResolveConnections(expectedSizeBytes);
         if (connections > 1)
         {
-            var ranged = await DownloadRangesAsync(requestUri, modelName, partPath, expectedSizeBytes, connections, progress, ct).ConfigureAwait(false);
+            var ranged = await DownloadRangesAsync(requestUri, resolveAtCommit, modelName, partPath, expectedSizeBytes, connections, progress, ct).ConfigureAwait(false);
             if (ranged is not null)
             {
                 return await CommitAsync(partPath, destinationPath, modelName, expectedSha ?? ranged.LinkedSha ?? fallbackSha, ranged.Revision, progress, ct)
@@ -287,8 +297,14 @@ internal sealed class HfDownloadClient
     ///     pre-sized <c>.part</c>, resuming each range from its recorded cursor. Returns the probe result (revision +
     ///     any LFS OID) on success, or <see langword="null" /> when the origin does not honour <c>Range</c> — in which
     ///     case any sparse <c>.part</c> has been discarded and the caller must use the single-stream path.
+    ///     <para>
+    ///         Every chunk is fetched from the COMMIT the probe resolved, not from the caller's ref: <c>main</c> is a
+    ///         mutable branch, and a branch that advances mid-download would otherwise hand different chunks bytes from
+    ///         different commits — a file that never existed upstream, committed as genuine whenever no sha256 is known.
+    ///     </para>
     /// </summary>
     private async Task<RangeProbe?> DownloadRangesAsync(Uri requestUri,
+        Func<string, Uri> resolveAtCommit,
         string modelName,
         string partPath,
         long expectedSizeBytes,
@@ -303,10 +319,15 @@ internal sealed class HfDownloadClient
             return null;
         }
 
+        // Pin only to something that looks like a commit id: an unexpected header value must degrade to the caller's
+        // ref (and the per-chunk commit check below) rather than turn a working download into a 404 on a bogus ref.
+        var pinned = IsCommitId(probe.Revision);
+        var chunkUri = pinned ? resolveAtCommit(probe.Revision) : requestUri;
+
         var total = probe.TotalBytes;
         var chunkSize = Math.Max(val1: 1, (total + connections - 1) / connections);
         var chunkCount = (int)Math.Min(connections, (total + chunkSize - 1) / chunkSize);
-        var state = RangeResumeState.Create(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath));
+        var state = RangeResumeState.Create(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath), probe.Revision);
 
         // ONE handle shared by every chunk. RandomAccess writes are positional and keep no user-mode buffer, so
         // non-overlapping chunks never contend and a cursor written after a completed write can never claim more bytes
@@ -315,7 +336,7 @@ internal sealed class HfDownloadClient
         {
             RandomAccess.SetLength(handle, total);
 
-            var context = new ChunkContext(requestUri, handle, state, modelName, total, chunkSize, progress);
+            var context = new ChunkContext(chunkUri, handle, state, modelName, total, chunkSize, progress, probe.Revision);
             using var failureCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             // Chunks capture their own failure rather than faulting, so one dead connection cannot leave a sibling's
             // exception unobserved and the real cause is still the one that surfaces.
@@ -396,6 +417,8 @@ internal sealed class HfDownloadClient
                     "The model download server stopped serving byte ranges. Please try again.");
             }
 
+            EnsureChunkDescribesRequest(response, context, position, end);
+
             var source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
             await using (source.ConfigureAwait(false))
             {
@@ -413,6 +436,33 @@ internal sealed class HfDownloadClient
             // racing a half-cancelled set of streams.
             await failureCts.CancelAsync().ConfigureAwait(false);
             return exception;
+        }
+    }
+
+    /// <summary>
+    ///     Refuses a <c>206</c> that does not describe EXACTLY the bytes that were asked for, at the commit the probe
+    ///     resolved. The body is about to be written at the offset we requested, not at the offset the response claims,
+    ///     so a shifted range, a different file length, or bytes from a commit the branch has since moved to would be
+    ///     assembled into a file that never existed upstream — and committed as genuine whenever no sha256 is known.
+    ///     Checked BEFORE the copy, so a rejected response leaves the <c>.part</c> exactly as it was and the transient
+    ///     classification lets the retry re-probe, re-pin, and resume from the recorded cursors.
+    /// </summary>
+    private static void EnsureChunkDescribesRequest(HttpResponseMessage response, ChunkContext context, long position, long end)
+    {
+        var range = response.Content.Headers.ContentRange;
+        if (range?.From != position || range.To != end - 1 || range.Length != context.TotalBytes)
+        {
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
+                "The model download server returned the wrong byte range. Please try again.");
+        }
+
+        // A chunk that names a different commit means the pin did not hold (or there was nothing to pin to): its bytes
+        // belong to a different version of the file than its siblings'.
+        var commit = ReadRepoCommit(response);
+        if (context.Revision.Length > 0 && !string.IsNullOrEmpty(commit) && !string.Equals(commit, context.Revision, StringComparison.Ordinal))
+        {
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
+                "The model changed on the server while it was downloading. Please try again.");
         }
     }
 
@@ -806,6 +856,12 @@ internal sealed class HfDownloadClient
         return value is { Length: 64 } && value.All(Uri.IsHexDigit);
     }
 
+    /// <summary>Whether a value can be used as an immutable ref in a resolve URL — a git object id, not a branch.</summary>
+    private static bool IsCommitId(string? value)
+    {
+        return value is { Length: >= 7 and <= 64 } && value.All(Uri.IsHexDigit);
+    }
+
     private static bool IsTransient(HuggingFaceDownloadFailure reason)
     {
         return reason == HuggingFaceDownloadFailure.Network;
@@ -855,35 +911,45 @@ internal sealed class HfDownloadClient
         string ModelName,
         long TotalBytes,
         long ChunkSize,
-        IProgress<PullProgress>? Progress);
+        IProgress<PullProgress>? Progress,
+        string Revision);
 
     /// <summary>
     ///     Per-chunk resume cursors plus the aggregate byte count for one parallel download.
     ///     <para>
     ///         <b>Resume scheme.</b> The chunk layout is derived purely from (total length, connection count), so the
-    ///         only state worth keeping is how many bytes each chunk has fetched. Those cursors live in a one-line
-    ///         sidecar next to the <c>.part</c>: <c>"1 &lt;total&gt; &lt;cursor0&gt; &lt;cursor1&gt; …"</c>. A cursor is
+    ///         only state worth keeping is how many bytes each chunk has fetched, and which version of the file they
+    ///         came from. That lives in a one-line sidecar next to the <c>.part</c>:
+    ///         <c>"2 &lt;total&gt; &lt;revision&gt; &lt;cursor0&gt; &lt;cursor1&gt; …"</c>. A cursor is
     ///         written only AFTER the corresponding positional write returned, and <see cref="RandomAccess" /> keeps no
     ///         user-mode buffer, so a cursor can never claim more bytes than the file holds. The line is rewritten in
     ///         place rather than atomically: a crash mid-write leaves an unparseable line, which
     ///         <see cref="TryReadRecord" /> discards — the partial is lost, but a torn cursor is never trusted. A
-    ///         mismatched total or chunk count is discarded the same way, so changing
-    ///         <see cref="HuggingFaceOptions.DownloadConnections" /> mid-download is safe.
+    ///         mismatched total, chunk count, or revision is discarded the same way, so changing
+    ///         <see cref="HuggingFaceOptions.DownloadConnections" /> mid-download is safe and a mutable ref that moved
+    ///         between attempts refetches rather than splicing two commits together.
     ///     </para>
     /// </summary>
     private sealed class RangeResumeState
     {
-        private const string FormatVersion = "1";
+        // Bumped when the line's shape changed (a revision field was added). An older line fails the version check and
+        // is discarded as untrusted, which costs one re-download of an abandoned partial.
+        private const string FormatVersion = "2";
+
+        // Stands in for "the origin named no commit": the fields are space separated, so no field may be empty.
+        private const string UnknownRevision = "-";
         private readonly long[] _cursors;
         private readonly Lock _gate = new();
+        private readonly string _revision;
         private readonly string _sidecarPath;
         private readonly long _totalBytes;
         private long _completedBytes;
 
-        private RangeResumeState(string sidecarPath, long totalBytes, long[] cursors)
+        private RangeResumeState(string sidecarPath, long totalBytes, string revision, long[] cursors)
         {
             _sidecarPath = sidecarPath;
             _totalBytes = totalBytes;
+            _revision = revision;
             _cursors = cursors;
             _completedBytes = cursors.Sum();
         }
@@ -894,9 +960,18 @@ internal sealed class HfDownloadClient
         ///     whole file: only the single-stream path writes a <c>.part</c> without cursors, and only while it is still
         ///     growing is that file unambiguously contiguous from byte 0.
         /// </summary>
-        public static RangeResumeState Create(string sidecarPath, long totalBytes, int chunkCount, long chunkSize, long existingPartBytes)
+        public static RangeResumeState Create(string sidecarPath,
+            long totalBytes,
+            int chunkCount,
+            long chunkSize,
+            long existingPartBytes,
+            string revision)
         {
-            return new RangeResumeState(sidecarPath, totalBytes, ResolveCursors(sidecarPath, totalBytes, chunkCount, chunkSize, existingPartBytes));
+            var stamped = string.IsNullOrEmpty(revision) ? UnknownRevision : revision;
+            return new RangeResumeState(sidecarPath,
+                totalBytes,
+                stamped,
+                ResolveCursors(sidecarPath, totalBytes, chunkCount, chunkSize, existingPartBytes, stamped));
         }
 
         /// <summary>
@@ -904,14 +979,21 @@ internal sealed class HfDownloadClient
         ///     apart from "a sidecar that cannot be believed": the <c>.part</c> beside a sidecar was pre-sized to the full
         ///     length, so seeding from its length would mark every chunk complete and commit a file of holes.
         /// </summary>
-        private static long[] ResolveCursors(string sidecarPath, long totalBytes, int chunkCount, long chunkSize, long existingPartBytes)
+        private static long[] ResolveCursors(string sidecarPath,
+            long totalBytes,
+            int chunkCount,
+            long chunkSize,
+            long existingPartBytes,
+            string revision)
         {
             if (File.Exists(sidecarPath))
             {
-                // A torn line, a record for a different layout, or a .part that is no longer the pre-sized file those
-                // cursors described: nothing about the partial is trustworthy, so refetch every range into it.
+                // A torn line, a record for a different layout, bytes from a commit this ref has since moved off, or a
+                // .part that is no longer the pre-sized file those cursors described: nothing about the partial is
+                // trustworthy, so refetch every range into it.
                 return TryReadRecord(sidecarPath) is { } record
                        && existingPartBytes == totalBytes
+                       && string.Equals(record.Revision, revision, StringComparison.Ordinal)
                        && IsUsable(record, totalBytes, chunkCount, chunkSize)
                     ? record.Cursors
                     : new long[chunkCount];
@@ -971,7 +1053,10 @@ internal sealed class HfDownloadClient
             {
                 _cursors[index] = cursor;
                 var line = string.Join(' ',
-                    [FormatVersion, _totalBytes.ToString(CultureInfo.InvariantCulture), .. _cursors.Select(value => value.ToString(CultureInfo.InvariantCulture))]);
+                    [
+                        FormatVersion, _totalBytes.ToString(CultureInfo.InvariantCulture), _revision,
+                        .. _cursors.Select(value => value.ToString(CultureInfo.InvariantCulture))
+                    ]);
                 try
                 {
                     File.WriteAllText(_sidecarPath, line);
@@ -984,7 +1069,7 @@ internal sealed class HfDownloadClient
             }
         }
 
-        public static (long Total, long[] Cursors)? TryReadRecord(string sidecarPath)
+        public static (long Total, string Revision, long[] Cursors)? TryReadRecord(string sidecarPath)
         {
             string content;
             try
@@ -1002,26 +1087,26 @@ internal sealed class HfDownloadClient
             }
 
             var fields = content.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (fields.Length < 3
+            if (fields.Length < 4
                 || !string.Equals(fields[0], FormatVersion, StringComparison.Ordinal)
                 || !long.TryParse(fields[1], CultureInfo.InvariantCulture, out var total))
             {
                 return null;
             }
 
-            var cursors = new long[fields.Length - 2];
+            var cursors = new long[fields.Length - 3];
             for (var index = 0; index < cursors.Length; index++)
             {
-                if (!long.TryParse(fields[index + 2], CultureInfo.InvariantCulture, out cursors[index]) || cursors[index] < 0)
+                if (!long.TryParse(fields[index + 3], CultureInfo.InvariantCulture, out cursors[index]) || cursors[index] < 0)
                 {
                     return null;
                 }
             }
 
-            return (total, cursors);
+            return (total, fields[2], cursors);
         }
 
-        private static bool IsUsable((long Total, long[] Cursors) record, long totalBytes, int chunkCount, long chunkSize)
+        private static bool IsUsable((long Total, string Revision, long[] Cursors) record, long totalBytes, int chunkCount, long chunkSize)
         {
             if (record.Total != totalBytes || record.Cursors.Length != chunkCount)
             {
