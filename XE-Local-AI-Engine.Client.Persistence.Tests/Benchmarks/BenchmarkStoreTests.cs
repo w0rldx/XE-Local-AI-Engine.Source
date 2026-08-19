@@ -781,6 +781,24 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.True(created.Select(static run => run.Id).SequenceEqual(commands.Select(static command => command.RunId)),
             "The records come back in the order the commands were given.");
 
+        // The group's judge state is materialized from ONE batched read rather than a query per run, so each record has
+        // to be checked against the single-run path: a mis-keyed lookup would hand every record the first run's derived
+        // view and still produce the right count and order. The warm-up is the discriminator — only it carries a rank
+        // exclusion reason — so this fails loudly if the shared result is applied to the wrong run.
+        foreach (var record in created)
+        {
+            var single = AssertEx.NotNull(await store.GetRunAsync(record.Id));
+            AssertEx.Equal(single.Judge, record.Judge, $"Run {record.Id} must derive the same judge view as the single-run path.");
+            AssertEx.Equal(single.QualityScore, record.QualityScore, $"Run {record.Id} must derive the same quality score as the single-run path.");
+            AssertEx.Equal(single.QualityScoreSource, record.QualityScoreSource, $"Run {record.Id} must derive the same score source as the single-run path.");
+        }
+
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonWarmup,
+            AssertEx.NotNull(created[0].Judge).RankExclusionReason,
+            "The warm-up run of the group must come back excluded from ranking.");
+        AssertEx.True(created.Skip(1).All(static run => AssertEx.NotNull(run.Judge).RankExclusionReason == BenchmarkRunJudgeStates.ReasonNoScore),
+            "The rest of the group is merely unscored, not excluded as warm-ups — the batched read must not smear one view across the group.");
+
         // ONE compare-and-swap for the group, so the version moves by exactly the number of runs created — which is
         // what lets a batch caller chain the next cell's expected version off the returned count.
         AssertEx.Equal<long>(project.Version + 3, AssertEx.NotNull(await store.GetProjectAsync(project.Id)).Version);
