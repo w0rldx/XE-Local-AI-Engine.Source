@@ -36,6 +36,12 @@ updates:
       timezone: Europe/Berlin
     target-branch: develop
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: typescript
+        versions:
+          - ">=7"
     groups:
       frontend-runtime:
         dependency-type: production

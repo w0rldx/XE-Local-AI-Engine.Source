@@ -184,7 +184,8 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             await Expect(applyButton).ToBeDisabledAsync().ConfigureAwait(false);
 
             await Page.GetByTestId("development-preview-patch").ClickAsync().ConfigureAwait(false);
-            await Expect(Page.GetByLabel("Verified patch preview")).ToContainTextAsync("feature.txt", new LocatorAssertionsToContainTextOptions
+            // Monaco applies the label to its empty native edit context, not the rendered diff.
+            await Expect(Page.GetByTestId("development-patch-preview")).ToContainTextAsync("feature.txt", new LocatorAssertionsToContainTextOptions
             {
                 Timeout = 10_000
             }).ConfigureAwait(false);

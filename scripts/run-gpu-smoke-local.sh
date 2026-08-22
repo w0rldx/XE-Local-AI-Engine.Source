@@ -89,7 +89,7 @@
 #   3   — an AppHost for this worktree is already running; refusing to reuse or stop it
 #   4   — could not establish whether an AppHost is running; refusing to start one
 #   5   — INFRASTRUCTURE: the run aborted before any step could be judged (the AppHost failed to
-#         start or never became healthy, the base URL could not be discovered, or authentication
+#         build, start, or become healthy, the base URL could not be discovered, or authentication
 #         failed). No summary is printed. This is deliberately NOT 1.
 #   75  — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
 #   130 — interrupted (Ctrl-C). The AppHost is still torn down; the result is incomplete, not red.
@@ -644,6 +644,7 @@ SAMPLE_FILE="${TEMP_ROOT}/gpu-samples"
 GUARD_STATE=""
 CLEANUP_ARMED="false"
 CLIENT_DEBUG_ROOT="${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.Client/bin/Debug"
+ASPIRE_APPHOST="${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}"
 
 # Invoked indirectly by the EXIT trap immediately below.
 # shellcheck disable=SC2329
@@ -679,6 +680,15 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# Aspire's normal start path builds the AppHost. That legitimate build must finish before the
+# assembly snapshot or the smoke contaminates its own result when the guarded Debug outputs move.
+log "=== Building this worktree's AppHost ==="
+dotnet build "${ASPIRE_APPHOST}" --configuration Debug --nologo || {
+  echo "[gpu-smoke] the AppHost Debug build failed: ${ASPIRE_APPHOST}" >&2
+  echo "[gpu-smoke] Fix the build failure and re-run; no GPU behavior was judged." >&2
+  exit 5
+}
+
 # The baseline MUST be sampled before the AppHost exists: every VRAM assertion is a delta against
 # it, and WSL2 offers no per-process attribution to subtract afterwards.
 BASELINE_VRAM="$(gpu_vram_now)" || prereq_fail \
@@ -694,7 +704,7 @@ fi
 
 log "=== Starting this worktree's AppHost ==="
 CLEANUP_ARMED="true"
-"${GPU_SMOKE_SCRIPT_DIR}/dev-start.sh" >/dev/null || {
+"${GPU_SMOKE_SCRIPT_DIR}/dev-start.sh" --no-build >/dev/null || {
   echo "[gpu-smoke] dev-start.sh failed. If a global instance lock is stale, remove" >&2
   echo "[gpu-smoke]   ~/.local/share/XE-Local-AI-Engine/instance.lock" >&2
   echo "[gpu-smoke] and re-run. Only one host may run at a time." >&2
@@ -702,7 +712,7 @@ CLEANUP_ARMED="true"
 }
 
 timeout "$((READY_TIMEOUT_SECONDS + 15))s" aspire wait app \
-  --apphost "${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}" \
+  --apphost "${ASPIRE_APPHOST}" \
   --status healthy --timeout "${READY_TIMEOUT_SECONDS}" --non-interactive --nologo >/dev/null || {
   echo "[gpu-smoke] the app resource did not become healthy within ${READY_TIMEOUT_SECONDS}s." >&2
   exit 5
