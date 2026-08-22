@@ -8,12 +8,19 @@ identical.
 
 The scripts have no third-party dependencies:
 
-- `scripts/performance/capture_inference_evidence.py` — Linux/WSL baseline,
-  rebaseline, fit/replay capture, and comparison.
+- `scripts/performance/capture_inference_evidence.py` — executable compatibility
+  facade for Linux/WSL baseline, rebaseline, fit/replay capture, comparison,
+  policy gating, and sanitization. It preserves the historical direct-import and
+  arbitrary-name dynamic-loader surface.
+- `scripts/performance/inference_evidence/` — acyclic implementation package:
+  contracts and process helpers at the bottom, then identity, then the capture,
+  policy, and sanitization responsibilities. Package modules never import the
+  facade.
 - `scripts/performance/capture_windows_vram.ps1` — native-Windows idle-versus-game
   global/process-visible VRAM capture.
 - `scripts/performance/tests/test_capture_inference_evidence.py` — deterministic
-  self-tests with fake binaries.
+  self-tests with fake binaries plus facade, direct-import, black-box CLI,
+  dynamic-loader/bootstrap, and dependency-graph compatibility checks.
 
 Generated artifacts belong under the ignored `artifacts/` directory. Do not commit
 machine names, local paths, or raw benchmark output without reviewing it.

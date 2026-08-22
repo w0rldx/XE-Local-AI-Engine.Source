@@ -7,12 +7,6 @@
 			"**/*.gen.ts",
 			"src/core/api/Generated.runtime.ts",
 			"src/core/api/axios/AxiosInstance.ts"
-		],
-		// React Doctor's dependency rules cannot read config-file references, so they false-positive on
-		// intentionally-retained deps: @cspell/dict-en_us & @cspell/dict-de-de are imported by cspell.json,
-		// and @tanstack/react-pacer is the runtime peer of @tanstack/react-pacer-devtools (used in
-		// DevelopmentUi) and is listed in Knip.ts ignoreDependencies. Knip is this project's dependency-hygiene
-		// authority, so these two rules don't apply here — disable them project-wide (dead-code analysis stays on).
-		"rules": ["deslop/unused-dependency", "deslop/unused-dev-dependency"]
+		]
 	}
 }

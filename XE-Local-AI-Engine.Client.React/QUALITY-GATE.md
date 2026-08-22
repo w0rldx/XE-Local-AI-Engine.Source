@@ -36,7 +36,11 @@ pnpm run depcruise:report # full dependency-cruiser diagnostics
 
 dependency-cruiser's native exit code counts **only `error`-severity** violations. The wrapper additionally fingerprints every violation by rule/from/to and fails on any fingerprint absent from `config/dependency-baseline.json`. Paying debt down passes immediately; replacing one removed edge with a different edge still fails even when the total count is unchanged.
 
-Knip follows the same incremental policy: each issue is fingerprinted by file/category/symbol against `config/knip-baseline.json`. The current baseline contains **35 fingerprints**; the separate `pnpm run knip:report` command continues to print every symbol plus configuration hints. Removing debt passes without a baseline edit, while replacement debt fails even when the total count is unchanged. The committed baseline file, rather than this explanatory count, is the gate's authority.
+Knip follows the same incremental policy: each issue is fingerprinted by file/category/symbol against `config/knip-baseline.json`. The current baseline contains **26 fingerprints**; the separate `pnpm run knip:report` command continues to print every symbol plus configuration hints. Removing debt passes without a baseline edit, while replacement debt fails even when the total count is unchanged. The committed baseline file, rather than this explanatory count, is the gate's authority.
+
+React Doctor is separately available as an offline, non-blocking advisory through `pnpm run doctor`; it
+intentionally remains outside `validate`. See `REACT-DOCTOR.md` for its exact artifact, license, security, privacy,
+and overlap evaluation.
 
 ## dependency-cruiser rule severities
 

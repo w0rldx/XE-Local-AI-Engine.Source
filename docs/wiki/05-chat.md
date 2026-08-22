@@ -256,7 +256,7 @@ Organized by concern:
 |---|---|
 | `api/` | `NodeChatAdapter` (REST via hey-api generated clients + the SignalR streaming bridge), `NodeChatConnection` (the persistent local hub connection), `NodeChatMapper` (DTO → view model), `NodeChatStreamGuard` / `NodeChatStreamState` (stream state machine), `useNodeChatConnectionReadiness` |
 | `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge`, `MessageFeedbackControl`, `LocalToolsOverview` |
-| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation` |
+| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation`, and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping |
 | `pages/` | `Chat.tsx` (top-level orchestration), model-picker filters/options |
 | `queries/` | `NodeChatQueryKeys`, `useCodexModelOptions` |
 | `stores/` | `NodeChatPreferencesStore` (model/effort/local-tools selection + `clampReasoningEffort`), `ChatSamplingPreferencesStore` |
