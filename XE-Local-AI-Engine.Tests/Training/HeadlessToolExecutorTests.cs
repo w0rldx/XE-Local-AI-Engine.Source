@@ -14,8 +14,8 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins plan invariant #4: real execution requires <see cref="ToolCategory.ReadLocal" /> AND a composed effective
-///     approval of false, and the executor's own <see cref="IToolApprovalPolicy" /> call is what decides it.
+///     Pins the execution invariant: real execution requires <see cref="ToolCategory.ReadLocal" /> AND a composed
+///     effective approval of false, and the executor's own <see cref="IToolApprovalPolicy" /> call is what decides it.
 /// </summary>
 public sealed class HeadlessToolExecutorTests
 {

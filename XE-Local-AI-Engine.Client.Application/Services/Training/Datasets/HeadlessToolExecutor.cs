@@ -37,15 +37,15 @@ public interface IHeadlessToolExecutor
 }
 
 /// <summary>
-///     The policy-aware execution seam for dataset generation (plan invariant #4). It deliberately does NOT go through
+///     The policy-aware execution seam for dataset generation. It deliberately does NOT go through
 ///     <c>ApiToolCallBridge.ExecuteApiToolCallAsync</c>: that overload is a hub/worker round-trip (it registers a pending
 ///     tool call, sends a payload over SignalR and awaits a remote result) and executes nothing in-process. This resolves
 ///     the executable <see cref="AIFunction" /> from the registry and invokes it directly, after its own
 ///     <see cref="IToolApprovalPolicy.RequiresApproval" /> call — that call is the tested enforcement point.
 ///     <para>
-///         follow-up: generation deliberately does not emit <c>IToolApprovalAuditRecorder</c> records in v1. Every layer
+///         Generation deliberately does not emit <c>IToolApprovalAuditRecorder</c> records in v1. Every layer
 ///         outcome (including this one) is persisted per sample in <c>ValidationJson</c>, which is the audit surface for
-///         generation; wiring the interactive-chat recorder as well is a later consistency choice, not a gap.
+///         generation; the interactive-chat recorder is not part of this audit path.
 ///     </para>
 /// </summary>
 internal sealed class HeadlessToolExecutor(

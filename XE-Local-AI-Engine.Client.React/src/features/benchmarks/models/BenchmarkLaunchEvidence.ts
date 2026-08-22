@@ -2,7 +2,8 @@ import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import type { BenchmarkEvidenceObject, BenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 
 // Launch evidence is rendered and compared field-by-field without the frontend knowing the field set: the node records
-// facts (D12), and a contract addition must show up in the detail blocks and in the compare diff without a UI change.
+// facts rather than verdicts, and a contract addition must show up in the detail blocks and compare diff without a UI
+// change.
 // So everything below walks the decoded objects generically instead of naming their members.
 
 export interface BenchmarkEvidenceEntry {

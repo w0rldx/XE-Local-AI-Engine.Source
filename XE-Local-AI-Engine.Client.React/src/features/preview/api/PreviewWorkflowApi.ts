@@ -18,10 +18,9 @@ import {
 	previewRunSummarySchema,
 } from "@/features/preview/models/PreviewWorkflowModels";
 
-// Hand-wrapped REST surface for the Open Canvas (Preview) endpoints. The generated hey-api SDK does NOT yet
-// include the preview endpoints (the OpenAPI regen runs later against a live host), so this feature talks to the
-// backend directly through the SHARED axios instance + buildLocalApiUrl — exactly the seam scheduler/mcp use for
-// their generated calls, just hand-wired. The shared instance carries the auth request interceptor, the 401
+// Hand-wrapped REST surface for the Open Canvas (Preview) endpoints. The generated hey-api SDK includes these
+// operations, but this wrapper remains to preserve the feature's existing shared-axios, domain-zod-validation and
+// explicit abort behavior. The shared instance carries the auth request interceptor, the 401
 // interceptor, and the ProblemDetails interceptor, so a non-2xx response (incl. 409 on a stale PUT) already
 // surfaces as an ApiError with the parsed ProblemDetails — callers read `error.statusCode === 409`. Every read
 // validates the response against the zod schema so a wire-shape drift fails loudly instead of silently

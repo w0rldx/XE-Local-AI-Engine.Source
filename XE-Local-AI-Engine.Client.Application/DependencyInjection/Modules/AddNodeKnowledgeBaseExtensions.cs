@@ -79,7 +79,7 @@ internal static class AddNodeKnowledgeBaseExtensions
         // serves every scoped search; lets a repeated query skip the embedding round trip.
         builder.Services.AddSingleton<IKnowledgeQueryEmbeddingCache, KnowledgeQueryEmbeddingCache>();
 
-        // Search lane. SCOPED (M3): each retrieval collaborator reads through the request-scoped NodeChatDbContext
+        // Search lane. SCOPED: each retrieval collaborator reads through the request-scoped NodeChatDbContext
         // connection, so all are resolved inside the per-search scope. The vector backend is selected via the
         // scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration that would capture a scoped DbContext.
         builder.Services.AddScoped<IFtsSearch, FtsSearch>();

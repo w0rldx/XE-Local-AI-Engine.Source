@@ -12,7 +12,7 @@ public enum GpuWorkKind
 }
 
 /// <summary>
-///     The node's single admission point for GPU work (ADR 0005 §2, plan decision #13).
+///     The node's single admission point for GPU work (ADR 0005 §2).
 /// </summary>
 /// <remarks>
 ///     <para>

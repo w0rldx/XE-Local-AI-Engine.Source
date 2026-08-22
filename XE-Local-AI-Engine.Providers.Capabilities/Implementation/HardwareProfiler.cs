@@ -19,10 +19,10 @@ using XE_Local_AI_Engine.Providers.Capabilities.Options;
 ///     <list type="bullet">
 ///         <item>RAM — Linux <c>/proc/meminfo</c> (MemTotal/MemAvailable); Windows OS query.</item>
 ///         <item>
-///             VRAM — a SINGLE <c>nvidia-smi --query-gpu=name,memory.total,memory.free</c> invocation (NVIDIA, shared
-///             across both OSes) → else Windows DXGI/WMI seam (operator-filled on Win11, see
-///             <see cref="ProbeWindowsNonNvidiaVramAsync" />) / Linux <c>/sys/class/drm</c> vendor query → else
-///             <see cref="HardwareProfile.VramKnown" /> <see langword="false" />.
+///             VRAM — a SINGLE <c>nvidia-smi --query-gpu=name,memory.total,memory.free</c> invocation for NVIDIA across
+///             both OSes. Otherwise Windows adapter names or Linux <c>/sys/class/drm</c> identify the vendor, but
+///             non-NVIDIA VRAM remains unknown and <see cref="HardwareProfile.VramKnown" /> is
+///             <see langword="false" />.
 ///         </item>
 ///     </list>
 ///     <para>
@@ -118,8 +118,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         }
         else
         {
-            // No NVIDIA GPU (or the probe timed out with no cache): fall back to the OS vendor seam. VRAM stays unknown
-            // on Linux non-NVIDIA and on the not-yet-implemented Windows DXGI seam ⇒ CPU mode.
+            // No NVIDIA GPU (or the probe timed out with no cache): fall back to OS vendor detection. Non-NVIDIA VRAM
+            // stays unknown on Linux and Windows, which keeps the profile in CPU mode.
             vendor = await DetectNonNvidiaVendorAsync(ct).ConfigureAwait(false);
             vramBytes = await DetectNonNvidiaVramAsync(vendor, ct).ConfigureAwait(false);
             availableVramBytes = null;
@@ -199,7 +199,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     {
         if (_environment.IsWindows)
         {
-            // DXGI DedicatedVideoMemory (vendor-neutral) → WMI vendor-name only. Operator-filled seam on Win11.
+            // Windows vendor detection has already run, but AMD/Intel VRAM is unavailable. Returning null keeps the
+            // profile CPU-safe; NVIDIA VRAM is handled earlier by the shared nvidia-smi probe.
             return ProbeWindowsNonNvidiaVramAsync(vendor, ct);
         }
 
@@ -301,24 +302,17 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     }
 
     /// <summary>
-    ///     Windows non-NVIDIA VRAM-bytes seam. Not yet implemented: the eventual implementation would read DXGI
-    ///     <c>IDXGIAdapter::GetDesc().DedicatedVideoMemory</c> (vendor-neutral, accurate &gt;4GB) then WMI
-    ///     <c>Win32_VideoController</c> vendor-name only. This needs validating on a real Win11 box; until then it
-    ///     degrades to <see langword="null" /> (VRAM unknown ⇒ CPU mode). NVIDIA on Windows is already covered by the
-    ///     shared <c>nvidia-smi</c> branch above, so this gap only affects AMD/Intel on Windows.
+    ///     Windows AMD/Intel VRAM probing is not implemented because no vendor-neutral probe has been validated on
+    ///     Windows. It returns <see langword="null" /> (VRAM unknown ⇒ CPU mode), the fail-safe result. NVIDIA on
+    ///     Windows is unaffected because the shared <c>nvidia-smi</c> branch handles it.
     /// </summary>
     private static Task<long?> ProbeWindowsNonNvidiaVramAsync(GpuVendor vendor, CancellationToken ct)
     {
         _ = vendor;
         _ = ct;
 
-        // Known, intentionally-deferred limitation (release cleanup, doc-and-defer): AMD/Intel GPUs on Windows have no
-        // VRAM probe and fall back to CPU mode; NVIDIA on Windows is unaffected (nvidia-smi branch above). The DXGI
-        // P/Invoke can't be live-verified on this Linux/WSL box, so it is deferred to a Windows-capable session.
-        // Win11 follow-up: implement DXGI DedicatedVideoMemory P/Invoke (vendor-neutral, no NuGet) → WMI
-        // Win32_VideoController vendor-name fallback. System.Management is intentionally NOT referenced (avoids a
-        // Windows-only NuGet on this cross-platform project); prefer DXGI P/Invoke validated on a real Win11 box.
-        // Until then this degrades to null (VRAM unknown ⇒ CPU mode) — the always-correct floor.
+        // System.Management is intentionally not referenced solely for this unsupported probe, keeping the project
+        // cross-platform. Unknown VRAM must remain a CPU-mode result rather than an optimistic GPU-memory estimate.
         return Task.FromResult<long?>(null);
     }
 

@@ -36,8 +36,8 @@ function throughputRows(left: BenchmarkRunDetail, right: BenchmarkRunDetail): Be
 
 /**
  * Launch evidence of the two selected runs side by side. Differences are reported as facts and never interpreted: the
- * copy says *what* differs, never whether the two runs may be ranked against each other (D12) — that judgement is not
- * this plan's to make.
+ * copy says *what* differs, never whether the two runs may be ranked against each other; this surface does not make
+ * that judgement.
  */
 export function BenchmarkLaunchCompare({ leftRunId, rightRunId }: { leftRunId: string; rightRunId: string }) {
 	const { t } = useTranslation();

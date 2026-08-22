@@ -3110,7 +3110,7 @@ public sealed class NodeChatStreamServiceTests
     {
         // A "Local runtime default" send (request.Model null) where the resolver finds NO installed GGUF chat model
         // must fail BEFORE any provider invocation with FailureCategory.ModelNotInstalled — never the generic
-        // ProviderUnreachable/Unexpected (the stale-id "Provider unreachable." regression this plan fixes).
+        // ProviderUnreachable/Unexpected (the stale-id "Provider unreachable." regression).
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();

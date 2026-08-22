@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
 ///     Default <see cref="IKnowledgeIngestionDispatcher" />. Owns the background ingestion queue as a BOUNDED
-///     single-reader <see cref="Channel{T}" /> of document ids. Singleton: the queue outlives any request scope. The M2
-///     downstream concurrency bound is still enforced by the worker's <c>SemaphoreSlim</c> (see
+///     single-reader <see cref="Channel{T}" /> of document ids. Singleton: the queue outlives any request scope. The
+///     downstream concurrency bound is enforced by the worker's <c>SemaphoreSlim</c> (see
 ///     <see cref="KnowledgeIngestionWorker" />); the queue's own capacity bound is the admission control that keeps a
 ///     burst of uploads from accreting unbounded pending ids. Admission is non-blocking: a write that arrives while the
 ///     queue is full is rejected (<see cref="KnowledgeIngestionEnqueueResult.QueueFull" />) rather than dropped or awaited,

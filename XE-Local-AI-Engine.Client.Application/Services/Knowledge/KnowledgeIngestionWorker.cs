@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 /// <summary>
 ///     Background worker that drains the <see cref="KnowledgeIngestionDispatcher" /> queue and runs the ingestion state
 ///     machine per document, bounded to <see cref="KnowledgeBaseOptions.MaxConcurrentIngestions" /> concurrent documents
-///     by a <see cref="SemaphoreSlim" /> (M2 — so N uploads cannot spin up N unbounded embedding pipelines). Each document
+///     by a <see cref="SemaphoreSlim" />, so N uploads cannot spin up N unbounded embedding pipelines. Each document
 ///     runs in its own <c>CreateAsyncScope()</c>, mirroring the memory extraction dispatcher: a completed document's index
 ///     write is never lost to a client-side cancellation.
 ///     <para>

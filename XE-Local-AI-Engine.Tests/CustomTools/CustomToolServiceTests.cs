@@ -15,7 +15,7 @@ public sealed class CustomToolServiceTests
     {
         var service = BuildService(out _, out _);
 
-        // M2: the danger acknowledgement is enforced server-side, so a client that skips the checkbox cannot author.
+        // The danger acknowledgement is enforced server-side, so a client that skips the checkbox cannot author.
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
             service.CreateAsync(ValidHttpFetch() with
             {

@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 ///     author-time trust boundary that gates what can ever reach the executors (P2): a MAF-safe <c>custom__</c> name,
 ///     no collision with a built-in or MCP tool name, a shell/interpreter-free absolute command executable, a
 ///     GBNF-safe compiled parameter schema, every template placeholder declared, the mandatory SSRF allow-list for a
-///     parameterized fetch host, and — server-side, not just in the client checkbox — the danger acknowledgement (M2).
+///     parameterized fetch host, and — server-side, not just in the client checkbox — the danger acknowledgement.
 ///     Reads mask secret header/env values so the CRUD path never returns a stored secret.
 /// </summary>
 public interface ICustomToolService

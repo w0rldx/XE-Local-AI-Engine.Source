@@ -62,7 +62,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	chat: {
 		localRuntime: true,
 		localModelManagement: true,
-		// catalog ships with RC (time/date + calculator); toggle OFF by default, user-toggleable
+		// The local-tool catalog and composer controls are available by default for built-in and discovered MCP tools.
 		localTools: true,
 		// Local tool-approval responder: the chat stream surfaces a pending MCP-tool approval and the waiting
 		// tool card renders Approve/Deny controls wired to the loopback resolve endpoint. Enabled by default now that
@@ -103,7 +103,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	modelManagement: true,
 	invocationMonitor: true,
 	benchmarks: true,
-	// Training group (datasets, runs, comparisons): live-verified end to end on this box 2026-08-15 (plan section 14).
+	// Training group (datasets, runs, comparisons): live-verified end to end on this box 2026-08-15.
 	training: true,
 	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,
@@ -154,7 +154,7 @@ export const nodeRoutePaths = {
 	// agent token-usage dashboard (per-provider/model/day rollups) — operator observability, always available like
 	// invocations (both are backed by operator-gated endpoints; the authenticated _layout is the operator gate).
 	usage: "/usage",
-	// local tools catalog page — extension seam: MCP tools will populate the same list later
+	// Local tools catalog page for built-in and discovered MCP tools.
 	tools: "/tools",
 	// Node-wide user-authored slash commands. This belongs to Automation but is not an agent capability: only the
 	// human composer resolves commands, and every authenticated node exposes the management surface.

@@ -12,11 +12,12 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
 ///     Default <see cref="IVectorSearch" />. Streams candidate rows from <c>knowledge_chunk_vectors</c> filtered to the
-///     current embedding model (M1 — never cosine across models), reinterprets each <c>float32</c> BLOB (laid out in the
-///     platform's native byte order) as a <see cref="ReadOnlySpan{Single}" /> over a single reused, pooled buffer (no
-///     per-row allocation), scores it against the query vector, and keeps only the top-k in a bounded min-heap (no full
-///     sort of the whole corpus). Vectors are scored one row at a time; only the resulting scalar score and identifiers
-///     are retained, never the full set of vectors. Scoped: depends on the request-scoped <see cref="NodeChatDbContext" />.
+///     current embedding model, never comparing vectors across models, and reinterprets each <c>float32</c> BLOB (laid
+///     out in the platform's native byte order) as a <see cref="ReadOnlySpan{Single}" /> over a single reused, pooled
+///     buffer (no per-row allocation), scores it against the query vector, and keeps only the top-k in a bounded
+///     min-heap (no full sort of the whole corpus). Vectors are scored one row at a time; only the resulting scalar
+///     score and identifiers are retained, never the full set of vectors. Scoped: depends on the request-scoped
+///     <see cref="NodeChatDbContext" />.
 ///     <para>
 ///         Scoring path: once the legacy-vector normalization backfill has completed (<see cref="IKnowledgeVectorNormalizationState" />),
 ///         every stored vector is unit length and new writes are normalized at ingestion, so the query is normalized once

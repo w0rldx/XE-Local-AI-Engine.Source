@@ -4,11 +4,10 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the RC chat feature surface that <see cref="ChatPageE2ETests" />
+///     Browser-driven E2E for the chat feature surface that <see cref="ChatPageE2ETests" />
 ///     does not exercise: per-message actions (copy / regenerate / revision-nav / branch /
 ///     feedback) and conversation management (rename / pin / archive / show-archived / search /
-///     delete-with-confirm-skip).  These are the capabilities the RC plans shipped but had only
-///     unit/component coverage for.
+///     delete-with-confirm-skip). These capabilities otherwise have only unit/component coverage.
 ///     <para>
 ///         Same host as <see cref="ChatPageE2ETests" /> — <see cref="XENodeE2EWebApplicationFactory" />
 ///         wires FakeOllama as the local provider, so a reply echoing the sent text streams deterministically

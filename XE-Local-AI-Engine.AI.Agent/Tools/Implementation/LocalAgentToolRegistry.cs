@@ -6,8 +6,8 @@ using Microsoft.Extensions.AI;
 
 internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
 {
-    // Every catalog tool ships auto-execute for this RC. The flag is still surfaced per-tool so a future
-    // approval flow can opt individual tools in without changing how they are sourced or executed.
+    // Every descriptor emitted by this registry currently auto-executes. Approval remains a per-tool descriptor
+    // property so the catalog and execution paths do not need to change when a tool requires approval.
     private const bool CatalogRequiresApproval = false;
 
     private static readonly IReadOnlyList<AITool> Tools = BuildTools();

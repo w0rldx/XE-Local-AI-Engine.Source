@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// <summary>
 ///     Semantic retrieval arm of the hybrid search pipeline. Scores stored chunk vectors against a pre-embedded query
 ///     vector and returns the closest chunks. Implementations must only ever compare vectors built by the SAME embedding
-///     model (M1): a same-dimension, different-model vector is incomparable and would rank as valid garbage. Scoped: an
+///     model: a same-dimension, different-model vector is incomparable and would rank as valid garbage. Scoped: an
 ///     implementation reads through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.
 /// </summary>
 public interface IVectorSearch
@@ -13,7 +13,7 @@ public interface IVectorSearch
     ///     best first. Only vectors whose <c>embedding_model</c> equals <paramref name="embeddingModel" /> are considered.
     /// </summary>
     /// <param name="queryVector">The query embedding (already built via the query-intent prefix and the current model).</param>
-    /// <param name="embeddingModel">The current embedding model; the model-scope filter key (M1).</param>
+    /// <param name="embeddingModel">The current embedding model and model-scope filter key.</param>
     /// <param name="limit">Maximum number of hits to return.</param>
     /// <param name="documentId">Optional scope: when set, only chunks of this document are considered.</param>
     /// <param name="cancellationToken">Cancellation token.</param>

@@ -27,8 +27,8 @@ const PASTE_PLACEHOLDER = "---\nname: invoice-review\ndescription: …\n---\n\n#
  * Two-step import of third-party skills: `preview` (writes nothing, returns a report) then `commit` (persists the
  * exact payload behind the report token). The report is the product — the operator approves what they were shown.
  *
- * The security posture this dialog implements, verbatim from the plan: **we refuse code, we show you everything, you
- * decide.** Nothing here validates, scans or sandboxes the content, and no copy may imply otherwise. The real gate is
+ * The security posture is: **we refuse code, we show you everything, you decide.** Nothing here validates, scans or
+ * sandboxes the content, and no copy may imply otherwise. The real gate is
  * that imported skills land DISABLED; the acknowledgement checkbox is a speed bump, not a control.
  */
 export function SkillImportDialog({ opened, onClose }: SkillImportDialogProps) {

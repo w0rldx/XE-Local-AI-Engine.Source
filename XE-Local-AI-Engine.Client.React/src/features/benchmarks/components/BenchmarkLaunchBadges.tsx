@@ -14,7 +14,7 @@ interface BackendBadge {
 	color: MantineColor;
 }
 
-// Facts, never a verdict (D12): the row states which KV cache type was used, whether flash attention was on, where the
+// Facts, never a verdict: the row states which KV cache type was used, whether flash attention was on, where the
 // layers actually landed, and whether an aux asset was attached. Runs frozen before the receipt existed show "—".
 export function BenchmarkLaunchBadges({ launch, "data-testid": testId }: BenchmarkLaunchBadgesProps) {
 	const { t } = useTranslation();

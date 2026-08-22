@@ -2,9 +2,9 @@
 # run-gpu-smoke-local.sh — OPT-IN live GPU smoke for a real, locally started node.
 #
 # Why this exists
-#   The 2026-07-31 live AI evaluation (Plans/2026-07-31-live-ai-evaluation.md) cost most of its
-#   effort DISCOVERING a sequence, not running it. Re-running it is cheap. This is that sequence,
-#   encoded, so the defects it found cannot silently come back.
+#   A one-off live AI evaluation cost most of its effort DISCOVERING a sequence, not running it.
+#   Re-running it is cheap. This script preserves that sequence so the defects it found cannot
+#   silently come back.
 #
 #   The single most valuable thing it caught was a SILENT CPU FALLBACK: a GPU-variant llama.cpp
 #   runtime that enumerated no GPU devices and answered every prompt correctly, just slowly. A

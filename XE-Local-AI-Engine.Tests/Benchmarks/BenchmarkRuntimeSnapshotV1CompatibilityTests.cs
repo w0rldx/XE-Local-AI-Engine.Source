@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The snapshot stays at schema v1 and primary-only: a run's frozen payload must deserialize and re-serialize to
 ///     the same bytes. The literal below is a complete payload — if a member is added, renamed, reordered or re-typed
 ///     anywhere in the snapshot records, this test fails, which is the intended signal that stored rows would stop
-///     replaying. The judge section left the snapshot with the 1–5 judge (plan C4); the migration that removed it
+///     replaying. The judge section left the snapshot with the 1–5 judge; the migration that removed it
 ///     deletes every row that carried one, so no stored payload has to keep reading.
 /// </summary>
 public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests

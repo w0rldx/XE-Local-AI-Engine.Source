@@ -278,7 +278,7 @@ public sealed class GgufImportFoundationTests
     {
         // The manifest row's RegistryRevision is a self-consistency token over its own fields (see
         // GgufRegistryRevision.ComputeV1); it already passed that check when written by CommitAsync. A missing or
-        // corrupt acquisition sidecar afterward must neither delete the entry (Plan §5.2) nor leave a half-state where
+        // corrupt acquisition sidecar afterward must neither delete the entry nor leave a half-state where
         // the model is loadable but the sidecar-requiring mutation/deletion snapshot checks fail with a server error —
         // the registry rewrites the sidecar from the token-verified manifest value, proven by round-tripping the exact
         // revision.
@@ -328,7 +328,7 @@ public sealed class GgufImportFoundationTests
     public async Task Registry_DoesNotRepairSidecar_WhenWeightBytesWereReplaced()
     {
         // Repair reconstructs metadata only; it must never bless replaced bytes. When the weight no longer matches the
-        // manifest's committed size, the entry is kept (manifest stays readable per Plan §5.2) but no sidecar is
+        // manifest's committed size, the entry is kept so the manifest stays readable, but no sidecar is
         // written, so content verification keeps failing closed at every mutation/launch boundary.
         using var paths = new ImportPaths();
         var source = paths.WriteSource(BuildCausalGguf(), "source.gguf");

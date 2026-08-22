@@ -26,7 +26,7 @@ export type MockVerificationState = "Unverified" | "Verified" | "Rejected";
 export type TeacherOutputMode = "Constrained" | "ValidateAfter";
 export type DatasetWorkStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
 
-/** Mirrors the backend's DatasetDefinitionBodyV1 default (plan decision #17). */
+/** Mirrors the backend's DatasetDefinitionBodyV1 default. */
 export const HOLDOUT_FRACTION_DEFAULT = 0.1;
 
 export interface TrainingDefinition {
