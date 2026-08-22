@@ -986,9 +986,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:dompurify@3.4.8",
+			"id": "frontend:dompurify@3.4.13",
 			"name": "dompurify",
-			"version": "3.4.8",
+			"version": "3.4.13",
 			"license": "(MPL-2.0 OR Apache-2.0)",
 			"homepageUrl": "https://github.com/cure53/DOMPurify",
 			"source": "frontend"

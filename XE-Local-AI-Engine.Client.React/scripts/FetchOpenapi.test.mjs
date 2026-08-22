@@ -1,9 +1,15 @@
+import { checkLiveOpenapi, firstDifference } from "./CheckLiveOpenapi.mjs";
+import {
+	createOpenapiHttpsAgent,
+	fetchJson,
+	isLoopbackHostname,
+	normalizeInt64ToNumber,
+	normalizeOpenapiDocument,
+	serializeOpenapi,
+} from "./FetchOpenapi.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
-
-import { fetchJson, normalizeInt64ToNumber, normalizeOpenapiDocument, serializeOpenapi } from "./FetchOpenapi.mjs";
-import { checkLiveOpenapi, firstDifference } from "./CheckLiveOpenapi.mjs";
 
 test("normalizes nested int64 integer schemas without changing other formats", () => {
 	const document = {
@@ -43,12 +49,36 @@ test("requires an explicit URL for the live OpenAPI gate", async () => {
 	await assert.rejects(checkLiveOpenapi({ specUrl: "" }), /OPENAPI_SPEC_URL is required/);
 });
 
+test("recognizes only literal loopback hostnames and addresses", () => {
+	for (const hostname of ["localhost", "LOCALHOST", "127.0.0.1", "127.24.1.9", "[::1]"]) {
+		assert.equal(isLoopbackHostname(hostname), true, hostname);
+	}
+	for (const hostname of ["example.test", "localhost.example.test", "192.168.1.5", "::2"]) {
+		assert.equal(isLoopbackHostname(hostname), false, hostname);
+	}
+});
+
+test("allows insecure TLS only for loopback OpenAPI endpoints", () => {
+	assert.ok(createOpenapiHttpsAgent(new URL("https://localhost:50722/openapi.json"), true));
+	assert.ok(createOpenapiHttpsAgent(new URL("https://127.8.4.2/openapi.json"), true));
+	assert.ok(createOpenapiHttpsAgent(new URL("https://[::1]/openapi.json"), true));
+	assert.equal(createOpenapiHttpsAgent(new URL("https://api.example.test/openapi.json"), false), undefined);
+	assert.throws(
+		() => createOpenapiHttpsAgent(new URL("https://localhost.example.test/openapi.json"), true),
+		/OPENAPI_INSECURE=1 is restricted to loopback HTTPS hosts/,
+	);
+});
+
+test("rejects insecure TLS for non-loopback hosts before initiating a request", async () => {
+	await assert.rejects(
+		fetchJson("https://192.0.2.1/openapi.json", { insecureHttps: true }),
+		/OPENAPI_INSECURE=1 is restricted to loopback HTTPS hosts/,
+	);
+});
+
 test("removes dynamic top-level loopback servers while preserving non-loopback servers", () => {
 	const document = {
-		servers: [
-			{ url: "http://127.0.0.1:38527" },
-			{ url: "https://api.example.test/v1", description: "stable" },
-		],
+		servers: [{ url: "http://127.0.0.1:38527" }, { url: "https://api.example.test/v1", description: "stable" }],
 	};
 
 	normalizeOpenapiDocument(document);
