@@ -12,11 +12,6 @@
 	"[\"src/core/diagnostics/Trace.ts\",\"exports\",\"traceparentFromTraceId\"]",
 	"[\"src/core/diagnostics/collectors/Network.signalr.ts\",\"exports\",\"recordSignalrError\"]",
 	"[\"src/core/diagnostics/collectors/Zustand.ts\",\"exports\",\"withDiagnostics\"]",
-	"[\"src/core/runtime/CapabilityDetector.ts\",\"exports\",\"detectWebSpeech\"]",
-	"[\"src/core/runtime/CapabilityDetector.ts\",\"exports\",\"probeVoiceCapabilities\"]",
-	"[\"src/core/runtime/CapabilityDetector.ts\",\"exports\",\"resetVoiceCapabilitiesCache\"]",
-	"[\"src/core/runtime/VoiceRuntime.ts\",\"exports\",\"createVoiceRuntime\"]",
-	"[\"src/features/app-update/queries/useAppUpdate.ts\",\"exports\",\"getGitHubAuthStatusQueryKey\"]",
 	"[\"src/features/chat/pages/ChatModelOptions.ts\",\"exports\",\"resolveLocalDefaultModel\"]",
 	"[\"src/features/chat/queries/useCodexModelOptions.ts\",\"exports\",\"CODEX_PROVIDER\"]",
 	"[\"src/features/cloud-settings/models/CloudSettingsModel.ts\",\"exports\",\"AZURE_BUILTIN_HOST_SUFFIXES\"]",
@@ -27,11 +22,7 @@
 	"[\"src/features/diagnostics/BuildSnapshot.ts\",\"exports\",\"registerRrwebProvider\"]",
 	"[\"src/features/diagnostics/UseSnapshots.ts\",\"exports\",\"SNAPSHOTS_QUERY_KEY\"]",
 	"[\"src/features/images/models/ImageModels.ts\",\"exports\",\"imageJobStatuses\"]",
-	"[\"src/features/knowledge/models/KnowledgeModels.ts\",\"exports\",\"KNOWLEDGE_ACCEPTED_EXTENSIONS\"]",
 	"[\"src/features/loaded-models/models/RunningModelsModels.ts\",\"exports\",\"ejectRunningModelOutcomes\"]",
-	"[\"src/features/node-settings/models/LocalRuntimeModels.ts\",\"exports\",\"cudaBuildOsLinuxKey\"]",
 	"[\"src/features/node-settings/models/NodeSettingsFieldsModel.ts\",\"exports\",\"isAllowedSpeculativeMode\"]",
-	"[\"src/features/node-settings/models/NodeSettingsFieldsModel.ts\",\"exports\",\"toValidBoundedInt\"]",
-	"[\"src/features/node-settings/models/SourceBuildModels.ts\",\"exports\",\"sourceBuildBackends\"]",
-	"[\"src/features/usage-dashboard/models/UsageDashboardModel.ts\",\"exports\",\"KNOWN_PROVIDERS\"]"
+	"[\"src/features/node-settings/models/NodeSettingsFieldsModel.ts\",\"exports\",\"toValidBoundedInt\"]"
 ]

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import importlib.util
@@ -9,6 +10,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -21,6 +23,7 @@ MODULE_PATH = Path(__file__).parents[1] / "capture_inference_evidence.py"
 REPOSITORY_ROOT = Path(__file__).parents[3]
 POLICY_SCHEMA_PATH = REPOSITORY_ROOT / "docs/performance/schemas/inference-comparison-policy.schema.json"
 POLICY_EXAMPLE_PATH = REPOSITORY_ROOT / "docs/performance/policies/generic-inference-throughput-policy.example.json"
+PACKAGE_PATH = MODULE_PATH.parent / "inference_evidence"
 SPEC = importlib.util.spec_from_file_location("capture_inference_evidence", MODULE_PATH)
 assert SPEC and SPEC.loader
 capture = importlib.util.module_from_spec(SPEC)
@@ -2027,6 +2030,453 @@ class GateInferencePolicyTests(unittest.TestCase):
             {"baseline_median", "candidate_median", "delta_percent"},
             set(comparison["commands"]["chat"]["throughput"]),
         )
+
+
+class CaptureInferenceEvidenceCompatibilityTests(unittest.TestCase):
+    ORIGINAL_DOCSTRING = """Capture reproducible local-inference benchmark and fit/replay evidence.
+
+The tool intentionally uses only the Python standard library. It treats the input
+specification as an immutable experiment contract, verifies every declared file
+hash before executing anything, records exact argv vectors, and writes one stable
+JSON artifact that can later be compared without reconstructing operator state.
+"""
+    EXPECTED_EXPORTS = (
+        "SCHEMA_VERSION",
+        "MAX_CAPTURE_STREAM_BYTES",
+        "PROCESS_CLEANUP_TIMEOUT_SECONDS",
+        "UUID_CORE_PATTERN",
+        "GPU_UUID_PATTERN",
+        "FIT_FLAGS_WITH_VALUE",
+        "FIT_FLAG_CANONICAL",
+        "FIT_HELPER_ARGS_WITH_VALUE",
+        "FIT_HELPER_VALUELESS_ARGS",
+        "FRAMEWORK_COMMAND_PARTITIONS",
+        "FRAMEWORK_PACKAGE_NAMES",
+        "POLICY_SCHEMA_VERSION",
+        "POLICY_FIELDS",
+        "POLICY_REQUIRED_FIELDS",
+        "POLICY_RULE_FIELDS",
+        "POLICY_SAFE_TOKEN_PATTERN",
+        "POLICY_SAFE_TOKEN_MAX_LENGTH",
+        "ALLOWED_IDENTITY_CHANGES",
+        "POLICY_STATISTICS",
+        "POLICY_RULE_KINDS",
+        "CaptureError",
+        "utc_now",
+        "load_json",
+        "write_json",
+        "write_json_atomic",
+        "sha256_file",
+        "sha256_tree",
+        "require_string",
+        "is_finite_number",
+        "is_sha256",
+        "is_safe_policy_token",
+        "verify_identity",
+        "runtime_local_dependencies",
+        "capture_text",
+        "git_text",
+        "central_package_versions",
+        "is_relative_to",
+        "verify_framework_identity",
+        "capture_ambient",
+        "global_gpu_used_mib",
+        "global_gpu_free_mib",
+        "process_budget_free_mib",
+        "capture_host",
+        "validate_spec",
+        "command_argv",
+        "numeric_metrics",
+        "percentile95",
+        "BoundedStreamCapture",
+        "drain_capture_stream",
+        "cleanup_process_group",
+        "run_once",
+        "signal_process_group",
+        "run_command",
+        "capture_baseline",
+        "strip_one_verbose",
+        "extract_fit_flags",
+        "project_fit_helper_arguments",
+        "option_values",
+        "validate_kv_flash_equivalence",
+        "validate_concrete_fit_flags",
+        "normalize_fit_flags",
+        "without_fit_semantics",
+        "capture_fit",
+        "identity_projection",
+        "framework_identity_projection",
+        "verified_runtime_identity_projection",
+        "verified_framework_identity_projection",
+        "immutable_gate_identity_projection",
+        "artifact_commands",
+        "validate_policy",
+        "gate_identity",
+        "unevaluable_rule",
+        "evaluate_policy_rule",
+        "gate_artifacts",
+        "compare_artifacts",
+        "sanitize_artifact",
+        "build_parser",
+        "main",
+    )
+    EXPECTED_CALLABLE_SIGNATURES = {
+        "utc_now": "() -> 'str'",
+        "load_json": "(path: 'Path') -> 'dict[str, Any]'",
+        "write_json": "(path: 'Path', value: 'Any') -> 'None'",
+        "write_json_atomic": "(path: 'Path', value: 'Any') -> 'None'",
+        "sha256_file": "(path: 'Path') -> 'str'",
+        "sha256_tree": "(path: 'Path') -> 'str'",
+        "require_string": "(obj: 'dict[str, Any]', key: 'str', context: 'str') -> 'str'",
+        "is_finite_number": "(value: 'Any') -> 'TypeGuard[int | float]'",
+        "is_sha256": "(value: 'Any') -> 'bool'",
+        "is_safe_policy_token": "(value: 'Any') -> 'TypeGuard[str]'",
+        "verify_identity": "(label: 'str', entry: 'dict[str, Any]') -> 'dict[str, Any]'",
+        "runtime_local_dependencies": "(binary: 'Path') -> 'dict[str, Any]'",
+        "capture_text": "(argv: 'list[str]', timeout_seconds: 'float' = 10) -> 'dict[str, Any]'",
+        "git_text": "(cwd: 'Path', arguments: 'list[str]', context: 'str') -> 'str'",
+        "central_package_versions": "(path: 'Path') -> 'dict[str, str]'",
+        "is_relative_to": "(path: 'Path', parent: 'Path') -> 'bool'",
+        "verify_framework_identity": (
+            "(framework: 'dict[str, Any]', commands: 'list[dict[str, Any]]') -> 'dict[str, Any]'"
+        ),
+        "capture_ambient": "() -> 'dict[str, Any]'",
+        "global_gpu_used_mib": "(ambient: 'dict[str, Any] | None') -> 'int | None'",
+        "global_gpu_free_mib": "(ambient: 'dict[str, Any] | None') -> 'int | None'",
+        "process_budget_free_mib": "(device_probe: 'dict[str, Any]') -> 'int | None'",
+        "capture_host": "(runtime_binary: 'Path') -> 'dict[str, Any]'",
+        "validate_spec": "(spec: 'dict[str, Any]', expected_kind: 'str') -> 'None'",
+        "command_argv": "(command: 'dict[str, Any]', context: 'str') -> 'list[str]'",
+        "numeric_metrics": "(stdout: 'str') -> 'dict[str, float]'",
+        "percentile95": "(values: 'list[float]') -> 'float'",
+        "BoundedStreamCapture": "() -> 'None'",
+        "drain_capture_stream": (
+            "(stream: 'Any', capture: 'BoundedStreamCapture', errors: 'list[BaseException]') -> 'None'"
+        ),
+        "cleanup_process_group": (
+            "(process: 'subprocess.Popen[str]', readers: 'tuple[threading.Thread, threading.Thread]', "
+            "executable: 'str') -> 'None'"
+        ),
+        "run_once": "(argv: 'list[str]', timeout_seconds: 'float', expected_timeout: 'bool', cwd: 'str | None', env: "
+        "'dict[str, str]') -> 'dict[str, Any]'",
+        "signal_process_group": "(process: 'subprocess.Popen[str]', requested_signal: 'signal.Signals') -> 'None'",
+        "run_command": "(command: 'dict[str, Any]', context: 'str') -> 'dict[str, Any]'",
+        "capture_baseline": "(spec_path: 'Path', output_path: 'Path') -> 'None'",
+        "strip_one_verbose": "(argv: 'list[str]') -> 'list[str]'",
+        "extract_fit_flags": "(argv: 'list[str]') -> 'dict[str, list[str]]'",
+        "project_fit_helper_arguments": "(server_argv: 'list[str]') -> 'list[str]'",
+        "option_values": "(argv: 'list[str]', option: 'str') -> 'list[str]'",
+        "validate_kv_flash_equivalence": (
+            "(explore_flags: 'dict[str, list[str]]', replay_flags: 'dict[str, list[str]]') -> 'None'"
+        ),
+        "validate_concrete_fit_flags": "(fitted_flags: 'dict[str, list[str]]') -> 'None'",
+        "normalize_fit_flags": (
+            "(fitted_flags: 'dict[str, list[str]]', verbose_startup: 'str') -> 'dict[str, list[str]]'"
+        ),
+        "without_fit_semantics": "(argv: 'list[str]') -> 'list[str]'",
+        "capture_fit": "(spec_path: 'Path', output_path: 'Path') -> 'None'",
+        "identity_projection": "(artifact: 'dict[str, Any]') -> 'dict[str, Any]'",
+        "framework_identity_projection": "(artifact: 'dict[str, Any]') -> 'dict[str, Any]'",
+        "verified_runtime_identity_projection": "(artifact: 'dict[str, Any]') -> 'dict[str, Any]'",
+        "verified_framework_identity_projection": "(artifact: 'dict[str, Any]') -> 'dict[str, Any]'",
+        "immutable_gate_identity_projection": "(artifact: 'dict[str, Any]') -> 'dict[str, Any]'",
+        "artifact_commands": (
+            "(artifact: 'dict[str, Any]', side: 'str') -> 'tuple[list[dict[str, Any]] | None, dict[str, Any] | None]'"
+        ),
+        "validate_policy": (
+            "(policy: 'dict[str, Any]') -> 'tuple[str | None, list[str] | None, list[dict[str, Any]] | None]'"
+        ),
+        "gate_identity": "(baseline: 'dict[str, Any]', candidate: 'dict[str, Any]', allowed_changes: 'list[str]') -> "
+        "'dict[str, Any]'",
+        "unevaluable_rule": "(rule: 'dict[str, Any]', reason: 'str') -> 'dict[str, Any]'",
+        "evaluate_policy_rule": (
+            "(rule: 'dict[str, Any]', baseline_commands: 'dict[str, dict[str, Any]]', "
+            "candidate_commands: 'dict[str, dict[str, Any]]') -> 'dict[str, Any]'"
+        ),
+        "gate_artifacts": (
+            "(baseline_path: 'Path', candidate_path: 'Path', policy_path: 'Path', output_path: 'Path') -> 'int'"
+        ),
+        "compare_artifacts": "(baseline_path: 'Path', candidate_path: 'Path', output_path: 'Path') -> 'None'",
+        "sanitize_artifact": "(input_path: 'Path', output_path: 'Path', replacements: 'list[str]') -> 'None'",
+        "build_parser": "() -> 'argparse.ArgumentParser'",
+        "main": "() -> 'int'",
+    }
+
+    def test_facade_preserves_established_exports_and_signatures(self) -> None:
+        self.assertEqual(self.ORIGINAL_DOCSTRING, capture.__doc__)
+        self.assertEqual(self.EXPECTED_EXPORTS, tuple(capture.__all__))
+        self.assertTrue(set(self.EXPECTED_EXPORTS).issubset(vars(capture)))
+        actual_signatures = {
+            name: str(inspect.signature(getattr(capture, name))) for name in self.EXPECTED_CALLABLE_SIGNATURES
+        }
+        self.assertEqual(self.EXPECTED_CALLABLE_SIGNATURES, actual_signatures)
+
+    def test_facade_remains_executable_from_an_unrelated_working_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            completed = subprocess.run(
+                [os.fspath(Path(os.sys.executable)), os.fspath(MODULE_PATH), "--help"],
+                cwd=raw,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("baseline", completed.stdout)
+        self.assertIn("sanitize", completed.stdout)
+
+    def test_arbitrary_name_dynamic_loader_preserves_exports_without_preconfigured_path(self) -> None:
+        loader = """
+import importlib.util
+import json
+import os
+import pathlib
+import sys
+
+module_path = pathlib.Path(os.environ["CAPTURE_MODULE"])
+spec = importlib.util.spec_from_file_location("arbitrary_capture_loader_name", module_path)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps({
+    "error": module.CaptureError.__name__,
+    "signature": str(__import__("inspect").signature(module.capture_baseline)),
+    "main": callable(module.main),
+}))
+"""
+        with tempfile.TemporaryDirectory() as raw:
+            environment = os.environ.copy()
+            environment["CAPTURE_MODULE"] = os.fspath(MODULE_PATH)
+            completed = subprocess.run(
+                [os.fspath(Path(os.sys.executable)), "-c", loader],
+                cwd=raw,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual("CaptureError", result["error"])
+        self.assertEqual("(spec_path: 'Path', output_path: 'Path') -> 'None'", result["signature"])
+        self.assertTrue(result["main"])
+
+    def test_qualified_import_uses_the_relative_package_identity(self) -> None:
+        qualified_import = """
+import json
+import scripts.performance.capture_inference_evidence as facade
+
+print(json.dumps({
+    "implementation": facade._implementation.__name__,
+    "capture_module": facade.capture_baseline.__module__,
+}))
+"""
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = os.fspath(REPOSITORY_ROOT)
+        with tempfile.TemporaryDirectory() as raw:
+            completed = subprocess.run(
+                [os.fspath(Path(os.sys.executable)), "-c", qualified_import],
+                cwd=raw,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual("scripts.performance.inference_evidence", result["implementation"])
+        self.assertEqual("scripts.performance.inference_evidence.capture", result["capture_module"])
+
+    def test_arbitrary_loader_ignores_foreign_top_level_package_without_mutating_sys_path(self) -> None:
+        isolated_loader = """
+import importlib.util
+import json
+import os
+import pathlib
+import sys
+import types
+
+foreign = types.ModuleType("inference_evidence")
+foreign.marker = "foreign"
+sys.modules["inference_evidence"] = foreign
+sys.modules["unrelated"] = types.ModuleType("unrelated")
+before = list(sys.path)
+module_path = pathlib.Path(os.environ["CAPTURE_MODULE"])
+spec = importlib.util.spec_from_file_location("unrelated.arbitrary_collision_test", module_path)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps({
+    "foreign_preserved": sys.modules["inference_evidence"].marker,
+    "implementation": module._implementation.__name__,
+    "implementation_file": module._implementation.__file__,
+    "sys_path_unchanged": before == sys.path,
+}))
+"""
+        environment = os.environ.copy()
+        environment["CAPTURE_MODULE"] = os.fspath(MODULE_PATH)
+        with tempfile.TemporaryDirectory() as raw:
+            completed = subprocess.run(
+                [os.fspath(Path(os.sys.executable)), "-c", isolated_loader],
+                cwd=raw,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual("foreign", result["foreign_preserved"])
+        self.assertRegex(result["implementation"], r"^_xe_capture_inference_evidence_[0-9a-f]{64}$")
+        self.assertEqual(PACKAGE_PATH / "__init__.py", Path(result["implementation_file"]))
+        self.assertTrue(result["sys_path_unchanged"])
+
+    def test_two_worktree_copies_load_distinct_exact_sibling_packages_in_one_interpreter(self) -> None:
+        loader = """
+import importlib.util
+import json
+import os
+import pathlib
+import sys
+import types
+
+foreign = types.ModuleType("inference_evidence")
+foreign.marker = "foreign"
+sys.modules["inference_evidence"] = foreign
+before = list(sys.path)
+modules = []
+for index, raw_path in enumerate(json.loads(os.environ["CAPTURE_MODULES"])):
+    path = pathlib.Path(raw_path)
+    spec = importlib.util.spec_from_file_location(f"worktree_copy_{index}", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    modules.append(module)
+print(json.dumps({
+    "foreign_preserved": sys.modules["inference_evidence"].marker,
+    "implementation_names": [module._implementation.__name__ for module in modules],
+    "implementation_files": [module._implementation.__file__ for module in modules],
+    "capture_modules": [module.capture_baseline.__module__ for module in modules],
+    "errors_are_distinct": modules[0].CaptureError is not modules[1].CaptureError,
+    "sys_path_unchanged": before == sys.path,
+}))
+"""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            module_paths = []
+            expected_package_files = []
+            for name in ("first", "second"):
+                performance = root / name / "scripts" / "performance"
+                performance.mkdir(parents=True)
+                shutil.copy2(MODULE_PATH, performance / MODULE_PATH.name)
+                shutil.copytree(PACKAGE_PATH, performance / PACKAGE_PATH.name)
+                module_paths.append(performance / MODULE_PATH.name)
+                expected_package_files.append(performance / PACKAGE_PATH.name / "__init__.py")
+            environment = os.environ.copy()
+            environment["CAPTURE_MODULES"] = json.dumps([os.fspath(path) for path in module_paths])
+            completed = subprocess.run(
+                [os.fspath(Path(os.sys.executable)), "-c", loader],
+                cwd=root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual("foreign", result["foreign_preserved"])
+        self.assertEqual(2, len(set(result["implementation_names"])))
+        self.assertEqual(expected_package_files, [Path(path) for path in result["implementation_files"]])
+        self.assertEqual(2, len(set(result["capture_modules"])))
+        self.assertTrue(result["errors_are_distinct"])
+        self.assertTrue(result["sys_path_unchanged"])
+
+    def test_implementation_modules_import_directly_without_loading_the_facade(self) -> None:
+        direct_import = """
+import json
+import sys
+
+from inference_evidence import capture, contracts, identity, policy, process, sanitize
+
+print(json.dumps({
+    "facade_loaded": "capture_inference_evidence" in sys.modules,
+    "capture": callable(capture.capture_baseline),
+    "contracts": contracts.SCHEMA_VERSION,
+    "identity": callable(identity.verify_identity),
+    "policy": callable(policy.gate_artifacts),
+    "process": callable(process.run_once),
+    "sanitize": callable(sanitize.sanitize_artifact),
+}))
+"""
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = os.fspath(MODULE_PATH.parent)
+        with tempfile.TemporaryDirectory() as raw:
+            completed = subprocess.run(
+                [os.fspath(Path(os.sys.executable)), "-c", direct_import],
+                cwd=raw,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(
+            {
+                "facade_loaded": False,
+                "capture": True,
+                "contracts": "1.0",
+                "identity": True,
+                "policy": True,
+                "process": True,
+                "sanitize": True,
+            },
+            result,
+        )
+
+    def test_implementation_dependency_graph_is_acyclic_and_only_points_downward(self) -> None:
+        allowed_dependencies = {
+            "contracts": set(),
+            "process": {"contracts"},
+            "identity": {"contracts", "process"},
+            "capture": {"contracts", "process", "identity"},
+            "policy": {"contracts", "process", "identity"},
+            "sanitize": {"contracts", "process", "identity"},
+        }
+        dependencies: dict[str, set[str]] = {}
+        for module_name, allowed in allowed_dependencies.items():
+            module_path = PACKAGE_PATH / f"{module_name}.py"
+            tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=os.fspath(module_path))
+            imported = {
+                node.module
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module is not None
+            }
+            dependencies[module_name] = imported
+            self.assertTrue(imported.issubset(allowed), f"{module_name} imports upward: {imported - allowed}")
+            self.assertNotIn("capture_inference_evidence", module_path.read_text(encoding="utf-8"))
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(module_name: str) -> None:
+            self.assertNotIn(module_name, visiting, f"dependency cycle reaches {module_name}")
+            if module_name in visited:
+                return
+            visiting.add(module_name)
+            for dependency in dependencies[module_name]:
+                visit(dependency)
+            visiting.remove(module_name)
+            visited.add(module_name)
+
+        for module_name in dependencies:
+            visit(module_name)
+        self.assertEqual(set(dependencies), visited)
 
 
 if __name__ == "__main__":

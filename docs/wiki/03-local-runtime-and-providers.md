@@ -136,7 +136,12 @@ Context allocation in the composed application is capacity-tiered: chat selects 
 
 - `LlamaServerSupervisorOptions`: `MaxLoadedProcesses`, `IdleTimeToLive` (default **15 min**), `PortRangeStart`/`PortRangeEnd`, `MaxRestartAttempts`, plus the Audit-4 readiness/eject knobs — `ReadinessBaseTimeout` (default 120 s), `ReadinessTimeoutModelSizeThresholdGiB`/`ReadinessTimeoutSecondsPerGiB`/`ReadinessTimeoutCap` (size-aware deadline), `MaxReadinessTimeoutRetries` (default 1 — a readiness timeout is retried at most this many times, NOT `MaxRestartAttempts`), and `EjectDrainTimeout` (bounded graceful-eject drain). `Validate()` fails fast on structurally invalid values. The host overrides cap/TTL/launch-flag knobs from node config (`AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`).
 - `ReapIdleLoopAsync` runs on a background loop (interval = TTL/4, min 1 s) and evicts processes idle beyond `IdleTimeToLive` or already exited.
-- `TryEvictIdleLeastRecentlyUsed` runs synchronously under the admission gate to free a slot for a new admission — it never evicts an in-window process.
+- `TryEvictIdleLeastRecentlyUsed` runs synchronously under the admission gate to free a slot for a new admission. It prefers exited or past-TTL entries, may let an unleased in-window embedding/reranker process yield to a new load, and never selects an in-window chat process or a live leased/profiling-pinned process.
+
+The supervisor's present lifecycle boundaries and remaining concurrency risks are mapped in the read-only
+[Llama server process supervisor decomposition report](../audits/2026-08-22-llama-server-process-supervisor-decomposition.md).
+That report authorizes no production refactor; the existing launch composer, idle reaper, port allocator, and runtime
+mutation gate remain the implemented seams.
 
 ### No-orphan shutdown guarantee
 

@@ -29,7 +29,7 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | Voice / TTS | Browser Web Speech API | Text-to-speech through browser/operating-system voices; availability and network behavior are platform-controlled. No TTS npm runtime or voice-model download. |
 | Onboarding tour | `react-joyride` | Guided first-response walkthrough (see `features/onboarding`). |
 
-Tooling gates (`pnpm build` / `pnpm lint`): `tsc --noEmit`, a custom `scripts/CheckEventCurrentTargetInUpdaters.mjs` guard, Biome lint, Stylelint, plus `knip` and `dependency-cruiser` in `pnpm validate`.
+Tooling gates (`pnpm build` / `pnpm lint`): `tsc --noEmit`, a custom `scripts/CheckEventCurrentTargetInUpdaters.mjs` guard, Biome lint, Stylelint, plus `knip` and `dependency-cruiser` in `pnpm validate`. Knip fingerprints the current unused surface and enforces strict no-growth; reducing that surface passes without a baseline edit. Exact-pinned React Doctor is available separately through `pnpm run doctor` as an offline advisory and is intentionally outside `validate` and CI; `REACT-DOCTOR.md` records its license and compatibility evidence.
 
 ---
 

@@ -28,6 +28,12 @@ import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatC
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
+import {
+	inFlightAssistantMessageId,
+	mergeSelectedConversation,
+	stampVariantGroup,
+	titleFromContent,
+} from "@/features/chat/models/ChatConversationDerivations";
 import type {
 	AgentOption,
 	ChatConversationListModel,
@@ -36,7 +42,6 @@ import type {
 	ChatMessageFeedback,
 	ChatStreamingState,
 	ChatTimelineEntry,
-	MessageStatus,
 	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
@@ -106,34 +111,6 @@ interface PendingStreamCommit {
 	toolTimelineEntries: ChatTimelineEntry[];
 }
 
-function mergeSelectedConversation(
-	conversations: ChatConversationModel[],
-	selectedConversation?: ChatConversationModel,
-): ChatConversationModel[] {
-	if (!selectedConversation) {
-		return conversations;
-	}
-
-	const hasSelectedConversation = conversations.some((conversation) => conversation.id === selectedConversation.id);
-	if (!hasSelectedConversation) {
-		return [selectedConversation, ...conversations];
-	}
-
-	return conversations.map((conversation) => (conversation.id === selectedConversation.id ? selectedConversation : conversation));
-}
-
-// Assistant statuses that mean the persisted turn is still running server-side.
-const liveAssistantStatuses = new Set<MessageStatus>(["pending", "queued", "streaming"]);
-
-// The persisted in-flight assistant row a cold-load resume belongs to. A resumed stream stamps the INVOCATION id as
-// its event message id (the server has no way to know which row a freshly-reloaded client is rendering), so its
-// events are remapped onto this row before they are reduced; unmapped they would append a second, phantom assistant
-// turn beside the one already on screen and replay its content there.
-function inFlightAssistantMessageId(conversation: ChatConversationModel): string | undefined {
-	return conversation.messages.findLast((message) => message.role === "assistant" && liveAssistantStatuses.has(message.status))
-		?.id;
-}
-
 // Strip SignalR's generic HubException wrapper so the bubble/toast lead with the sentence the hub deliberately
 // wrote (e.g. the message-size rejection); anything not matching the wrapper passes through untouched. The regex
 // lives next to isNodeChatReadOnlyConflict, which discriminates on the same stripped text.
@@ -145,39 +122,6 @@ function errorMessage(error: unknown): string {
 
 function createId(): string {
 	return crypto.randomUUID();
-}
-
-function titleFromContent(content: string): string {
-	const normalized = content.replace(/\s+/g, " ").trim();
-	return normalized.length > 48 ? `${normalized.slice(0, 45)}…` : normalized || "New conversation";
-}
-
-// During a regenerate the server-minted variant streams in WITHOUT a variant_group_id (the stream events
-// don't carry it — it only arrives on the post-stream refetch). Left ungrouped, the new turn renders as a
-// second assistant message stacked below the original until the refetch collapses them. Stamping both the
-// original and the streaming variant into a shared group up front collapses them immediately, so the new turn
-// streams in place as the active revision with the prev/next selector. The id is the original's existing group
-// when it already has siblings, otherwise a synthetic group keyed on the original message id; either way the
-// refetch later replaces it with the authoritative server group id.
-function stampVariantGroup(
-	conversation: ChatConversationModel,
-	originalMessageId: string,
-	variantMessageId: string,
-	variantGroupId: string,
-): ChatConversationModel {
-	return {
-		...conversation,
-		messages: conversation.messages.map((message) => {
-			if (message.id === variantMessageId) {
-				return { ...message, variantGroupId };
-			}
-			// Only seed the original when it isn't already part of a group — never clobber a real group id.
-			if (message.id === originalMessageId && !message.variantGroupId) {
-				return { ...message, variantGroupId };
-			}
-			return message;
-		}),
-	};
 }
 
 export function Chat() {
